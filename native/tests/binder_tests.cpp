@@ -12,6 +12,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 namespace {
     int sFailures = 0;
@@ -23,9 +24,10 @@ namespace {
         }
     }
 
-    // What the map's last strike check found.
+    // What the map's last strike check found, and how many checks the binder made.
     HitInfo sHits[64];
     u32 sHitCount = 0;
+    u32 sChecks = 0;
 
     // `count` planes, each its own depth (1, 2, ...) and the floor's normal.
     void strike(u32 count) {
@@ -42,9 +44,11 @@ namespace {
 // The map, as the strike check leaves it.
 namespace Collision {
     s32 checkStrikeBallToMap(const Vec3f&, f32, const CollisionPartsFilterBase*, const TriangleFilterBase*) {
+        sChecks++;
         return static_cast< s32 >(sHitCount);
     }
     s32 checkStrikeBallToMapWithMovingReaction(const Vec3f&, f32, const CollisionPartsFilterBase*, const TriangleFilterBase*) {
+        sChecks++;
         return static_cast< s32 >(sHitCount);
     }
     const HitInfo* getStrikeInfoMap(u32 index) {
@@ -141,6 +145,63 @@ int main() {
     strike(40);
     expect(shared.storeCurrentHitInfo(true) == 40 && shared.mPlaneNum == 40, "a binder without a list keeps 40 planes");
     expect(shared.planes()[39].mDepth == 40.0f, "the shared list holds the 40th plane");
+
+    // A still actor's bind (P-138): the plain module checks its place once, as the second check at the same place
+    // finds what the first found; with a triangle filter (which may act on what it is shown) and in the module with
+    // hook points, both checks are made. Either way the bind ends where it began, with nothing left to move.
+    {
+        struct Filter : TriangleFilterBase {
+            bool isInvalidTriangle(const Triangle*) const override {
+                return false;
+            }
+        } filter;
+        strike(0);
+        Binder still(nullptr, &position, &gravity, 50.0f, 0.0f, 8);
+        const Vec3f places[] = {Vec3f(10.0f, -0.0f, 3.0f), Vec3f(-0.0f, -0.0f, -0.0f)};
+        bool same = true;
+        u32 checksWithout = 0;
+        u32 checksWith = 0;
+        for (int filtered = 0; filtered < 2; filtered++) {
+            still.mTriangleFilter = filtered != 0 ? &filter : nullptr;
+            for (const Vec3f& rPlace : places) {
+                Vec3f place(rPlace);
+                Vec3f movement(0.0f, -0.0f, 0.0f);
+                bool remaining = true;
+                sChecks = 0;
+                const u32 hits = still.findBindedPos(&place, &movement, &remaining, false, false);
+                (filtered != 0 ? checksWith : checksWithout) += sChecks;
+                // The position as the adds of a zero step leave it, sign of zero included.
+                Vec3f expected(rPlace);
+                expected.add(Vec3f(0.0f, -0.0f, 0.0f));
+                same = same && hits == 0 && !remaining && memcmp(&place, &expected, sizeof(Vec3f)) == 0 && movement.x == 0.0f &&
+                       movement.y == 0.0f && movement.z == 0.0f;
+            }
+        }
+        expect(same, "a still bind ends where it began, with nothing left to move");
+#if defined(NEBULA_PLAIN_MODULE)
+        expect(checksWithout == 2, "the plain module checks a still actor's place once");
+#else
+        expect(checksWithout == 4, "the module with hook points makes both checks");
+#endif
+        expect(checksWith == 4, "with a triangle filter both checks are made");
+
+        // A moving one checks each 35 units, as before: 70 units are 3 steps, 4 checks.
+        Vec3f place(0.0f, 0.0f, 0.0f);
+        Vec3f movement(70.0f, 0.0f, 0.0f);
+        bool remaining = true;
+        still.mTriangleFilter = nullptr;
+        sChecks = 0;
+        still.findBindedPos(&place, &movement, &remaining, false, false);
+        expect(sChecks == 4 && place.x == 70.0f, "a moving bind checks every 35 units");
+
+        // A first check that hits ends the bind there.
+        strike(1);
+        place.zero();
+        movement.zero();
+        sChecks = 0;
+        expect(still.findBindedPos(&place, &movement, &remaining, false, true) == 1 && sChecks == 1 && remaining,
+               "a still bind that hits stops at the first check");
+    }
 
     if (sFailures != 0) {
         return 1;
