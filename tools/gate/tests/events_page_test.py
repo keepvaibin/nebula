@@ -29,6 +29,8 @@ def text(path):
 def main():
     failed = []
     work = pathlib.Path(sys.argv[sys.argv.index("--work") + 1]) if "--work" in sys.argv else None
+    if work is not None:
+        work.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=work) as out:
         r = subprocess.run([sys.executable, "-X", "utf8", "-I", str(TOOL), str(TREE), out], capture_output=True,
                            text=True, encoding="utf-8")
