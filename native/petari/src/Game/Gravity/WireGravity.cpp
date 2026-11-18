@@ -39,3 +39,24 @@ bool WireGravity::calcOwnGravityVector(Vec3f* pDest, f32* pScalar, const Vec3f& 
 
     return false;
 }
+
+#if defined(NEBULA_PLAIN_MODULE)
+// The box round the wire's points and the range past it. isInRangeSquare squares the range, so its size counts.
+bool WireGravity::calcBound(Vec3f* pCenter, f32* pRadius) const {
+    if (mRange < 0.0f || mPoints.size() < 2) {
+        return false;
+    }
+
+    Vec3f low(mPoints[0]);
+    Vec3f high(mPoints[0]);
+    for (s32 i = 1; i < mPoints.size(); i++) {
+        const Vec3f& rPoint = mPoints[i];
+        low.set(rPoint.x < low.x ? rPoint.x : low.x, rPoint.y < low.y ? rPoint.y : low.y, rPoint.z < low.z ? rPoint.z : low.z);
+        high.set(rPoint.x > high.x ? rPoint.x : high.x, rPoint.y > high.y ? rPoint.y : high.y, rPoint.z > high.z ? rPoint.z : high.z);
+    }
+
+    *pCenter = (low + high) * 0.5f;
+    *pRadius = 0.5f * (high - low).length() + MR::abs(mRange + mDistant);
+    return true;
+}
+#endif

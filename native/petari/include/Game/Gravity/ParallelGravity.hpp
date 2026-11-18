@@ -12,6 +12,9 @@ public:
 
     virtual void updateMtx(const Pos3f& rMtx) override;
     virtual bool calcOwnGravityVector(Vec3f* pDest, f32* pScalar, const Vec3f& rPosition) const override;
+#if defined(NEBULA_PLAIN_MODULE)
+    virtual bool calcBound(Vec3f* pCenter, f32* pRadius) const override;
+#endif
 
     void setPlane(const Vec3f& rPlaneUp, const Vec3f& rPlanePos);
     void setRangeBox(const Pos3f& rMtx);

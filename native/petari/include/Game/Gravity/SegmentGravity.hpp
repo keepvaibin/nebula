@@ -8,6 +8,9 @@ public:
 
     virtual void updateMtx(const Pos3f& rMtx) override;
     virtual bool calcOwnGravityVector(Vec3f* pDest, f32* pScalar, const Vec3f& rPosition) const override;
+#if defined(NEBULA_PLAIN_MODULE)
+    virtual bool calcBound(Vec3f* pCenter, f32* pRadius) const override;
+#endif
 
     void setGravityPoint(u32 index, const Vec3f& rGravityPoint);
     void setSideVector(const Vec3f& rSideVec);

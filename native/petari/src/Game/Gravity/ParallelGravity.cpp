@@ -53,10 +53,16 @@ void ParallelGravity::setRangeBox(const Pos3f& rMtx) {
 void ParallelGravity::setRangeCylinder(f32 radius, f32 height) {
     mCylinderRadius = radius;
     mCylinderHeight = height;
+#if defined(NEBULA_PLAIN_MODULE)
+    refreshBound();
+#endif
 }
 
 void ParallelGravity::setRangeType(RANGE_TYPE rangeType) {
     mRangeType = rangeType;
+#if defined(NEBULA_PLAIN_MODULE)
+    refreshBound();
+#endif
 }
 
 void ParallelGravity::setBaseDistance(f32 val) {
@@ -168,3 +174,44 @@ bool ParallelGravity::isInRange(const Vec3f& rPosition, f32* pScalar) const {
 
     return false;
 }
+
+#if defined(NEBULA_PLAIN_MODULE)
+// The range itself: the sphere of mRange about the plane's point (mDistant plays no part), the box (half sides the
+// directions' lengths, square corners only, as the test is along each direction alone) or the cylinder over the plane.
+bool ParallelGravity::calcBound(Vec3f* pCenter, f32* pRadius) const {
+    switch (mRangeType) {
+    case RangeType_Sphere:
+        if (mRange < 0.0f) {
+            return false;
+        }
+        *pCenter = mWorldPlanePosition;
+        *pRadius = mRange;
+        return true;
+
+    case RangeType_Box: {
+        Vec3f dirX, dirY, dirZ;
+        mWorldMtx.getXDir(dirX);
+        mWorldMtx.getYDir(dirY);
+        mWorldMtx.getZDir(dirZ);
+        const f32 square = 1.0e-4f;
+        if (!(MR::abs(dirX.dot(dirY)) * MR::abs(dirX.dot(dirY)) <= square * square * mExtentX * mExtentY) ||
+            !(MR::abs(dirY.dot(dirZ)) * MR::abs(dirY.dot(dirZ)) <= square * square * mExtentY * mExtentZ) ||
+            !(MR::abs(dirZ.dot(dirX)) * MR::abs(dirZ.dot(dirX)) <= square * square * mExtentZ * mExtentX)) {
+            return false;
+        }
+        mWorldMtx.getTrans(*pCenter);
+        *pRadius = MR::sqrt(mExtentX + mExtentY + mExtentZ);
+        return true;
+    }
+
+    case RangeType_Cylinder: {
+        const f32 halfHeight = 0.5f * MR::abs(mCylinderHeight);
+        *pCenter = mWorldPlanePosition + mWorldPlaneUpVec * (0.5f * mCylinderHeight);
+        *pRadius = MR::sqrt(mCylinderRadius * mCylinderRadius + halfHeight * halfHeight);
+        return true;
+    }
+    }
+
+    return false;
+}
+#endif

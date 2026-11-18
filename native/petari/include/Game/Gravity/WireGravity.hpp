@@ -8,6 +8,9 @@ public:
     WireGravity();
 
     virtual bool calcOwnGravityVector(Vec3f* pDest, f32* pScalar, const Vec3f& rPosition) const override;
+#if defined(NEBULA_PLAIN_MODULE)
+    virtual bool calcBound(Vec3f* pCenter, f32* pRadius) const override;
+#endif
 
     void setPointListSize(u32);
     void addPoint(const Vec3f&);

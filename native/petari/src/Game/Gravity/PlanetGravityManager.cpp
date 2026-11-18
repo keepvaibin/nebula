@@ -38,6 +38,19 @@ bool PlanetGravityManager::calcTotalGravityVector(Vec3f* pGravity, GravityInfo* 
             break;
         }
 
+#if defined(NEBULA_PLAIN_MODULE)
+        // Outside the gravity's bound its own test gives nothing (P-139).
+        if (!gravity->isInBound(rPosition)) {
+#if defined(NEBULA_GRAVITY_BOUND_VERIFY)
+            Vec3f checkVec;
+            if (gravity->calcGravity(&checkVec, rPosition)) {
+                NEBULA_PANIC("gravity bound left out a gravity that applies at %f %f %f", rPosition.x, rPosition.y, rPosition.z);
+            }
+#endif
+            continue;
+        }
+#endif
+
         Vec3f gravityVec;
         if (!gravity->calcGravity(&gravityVec, rPosition)) {
             continue;

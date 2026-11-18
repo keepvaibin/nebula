@@ -28,6 +28,9 @@ void DiskTorusGravity::setDiskRadius(f32 diskRadius) {
     } else {
         mDiskRadius = diskRadius;
     }
+#if defined(NEBULA_PLAIN_MODULE)
+    refreshBound();
+#endif
 }
 
 void DiskTorusGravity::setEdgeType(s32 edgeType) {
@@ -107,3 +110,19 @@ bool DiskTorusGravity::calcOwnGravityVector(Vec3f* pDest, f32* pScalar, const Ve
 
     return true;
 }
+
+#if defined(NEBULA_PLAIN_MODULE)
+// The edges are at the outer radius and at the outer less the disk's (on the far side when that is below 0).
+bool DiskTorusGravity::calcBound(Vec3f* pCenter, f32* pRadius) const {
+    f32 room;
+    if (!rangeRoom(&room)) {
+        return false;
+    }
+
+    const f32 outer = MR::abs(mWorldRadius);
+    const f32 inner = MR::abs(mWorldRadius - mDiskRadius);
+    *pCenter = mTranslation;
+    *pRadius = (outer > inner ? outer : inner) + room;
+    return true;
+}
+#endif

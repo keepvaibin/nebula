@@ -13,6 +13,12 @@ PlanetGravity::PlanetGravity() {
     mValidFollower = true;
     mIsRegistered = false;
     mAppeared = true;
+#if defined(NEBULA_PLAIN_MODULE)
+    mBoundCenter.zero();
+    mBoundRadiusSquared = -1.0f;
+    mBoundRange = mRange;
+    mBoundDistant = mDistant;
+#endif
 }
 
 void PlanetGravity::setPriority(s32 priority) {
@@ -104,4 +110,26 @@ void PlanetGravity::updateIdentityMtx() {
     Pos3f mtx;
     mtx.identity();
     updateMtx(mtx);
+#if defined(NEBULA_PLAIN_MODULE)
+    refreshBound();
+#endif
 }
+
+#if defined(NEBULA_PLAIN_MODULE)
+void PlanetGravity::refreshBound() {
+    mBoundRange = mRange;
+    mBoundDistant = mDistant;
+
+    Vec3f center;
+    f32 radius;
+    if (!calcBound(&center, &radius) || !(radius >= 0.0f)) {
+        mBoundRadiusSquared = -1.0f;
+        return;
+    }
+
+    // Room over the float rounding of the shapes' own tests.
+    const f32 room = radius * 1.001f + 1.0f;
+    mBoundCenter = center;
+    mBoundRadiusSquared = room * room;
+}
+#endif

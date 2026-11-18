@@ -20,6 +20,9 @@ void GravityFollower::update() {
         calcFollowMatrix(&followMtx);
 
         mGravity->updateMtx(followMtx);
+#if defined(NEBULA_PLAIN_MODULE)
+        mGravity->refreshBound();
+#endif
         mGravity->mValidFollower = true;
     }
 }
