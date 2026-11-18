@@ -139,6 +139,26 @@ class Device:
             time.sleep(0.1)
 
 
+# What a start check that ended without the game's end shows: the system's lines about starting the app and the
+# app's own, from the log since the check's am start.
+START_LOG_TAGS = ("ActivityManager", "ActivityTaskManager", "Zygote", "linker", "nativeloader") + LOG_TAGS
+START_LOG_LINES = 150
+
+
+def device_state(device):
+    """The device at a start check's time-out: the test app's processes, the activity on top, and the log's lines about
+    the start, so a red names whether Android started the process at all and why not."""
+    code, ps = device.shell("ps -A -o PID,PPID,S,NAME")
+    mine = [line for line in ps.splitlines()[1:] if PACKAGE in line]
+    code, top = device.shell("dumpsys activity activities")
+    resumed = [line.strip() for line in top.splitlines() if "ResumedActivity" in line][:4]
+    log = device.adb("logcat", "-d", "-v", "brief", "-s", *START_LOG_TAGS).stdout.decode("utf-8", "replace")
+    lines = log.strip().splitlines()[-START_LOG_LINES:]
+    return ("the test app's processes: %s\nthe activity on top: %s\nthe log since am start (%d lines, the last %d):\n%s"
+            % ("; ".join(" ".join(line.split()) for line in mine) or "none",
+               "; ".join(resumed) or "none", len(log.strip().splitlines()), len(lines), "\n".join(lines)))
+
+
 def start_check(device, frames, limit, clock=time.time, sleep=time.sleep):
     """The start check on the device (start-check above): (code, what was seen). code is the game process's exit code
     from Android's record (0 passes), None when no end was read: the test app missing, a start refused, a process that
@@ -167,10 +187,12 @@ def start_check(device, frames, limit, clock=time.time, sleep=time.sleep):
                 continue  # pidof's answer lost, not the process
             return ended, device.exit_seen
         elif clock() > began + START_SECONDS:
-            return None, "the game process %s never appeared in %d seconds" % (GAME_PROCESS, START_SECONDS)
+            return None, "the game process %s never appeared in %d seconds\n%s" % (GAME_PROCESS, START_SECONDS,
+                                                                                    device_state(device))
         sleep(0.25)
+    seen = device_state(device)
     device.shell("am force-stop " + PACKAGE)
-    return None, "the start check did not end in %d seconds; stopped" % limit
+    return None, "the start check did not end in %d seconds; stopped\n%s" % (limit, seen)
 
 
 def device_lock(path, who):
