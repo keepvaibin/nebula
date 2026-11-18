@@ -7,14 +7,14 @@ contentType: concepts
 
 ## About the game description
 
-The game description is a file named `smg_game.luma-self.json`. Every build of the game module writes it from the game's source. It lists everything a mod can name:
+The game description is the `luma` folder beside the game. Every build of the game module writes it from the game's source: `smg_game.luma-self.json`, and the files LumaLink reads it by (`luma_functions.json`, `luma_types.json`, `luma_services.json`, `luma_numbers.json`, `smg_game.luma-placement.json` and the function rows). It lists everything a mod can name:
 
 * Functions, with their signatures and which hooks they take.
 * Classes, structs and enums, with their fields, sizes and values.
 * Globals and the game's data in code.
 * The game's data names: nerves, messages, and the keys of its tables.
 
-Nebula Setup installs the file beside the game. LumaLink, the LumaScript compiler and the editor support read it. Nothing else is a source of names.
+Nebula Setup installs the folder beside the game. LumaLink, the LumaScript compiler and the editor support read it. Nothing else is a source of names.
 
 ## Why it matters for your mod
 

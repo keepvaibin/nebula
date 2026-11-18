@@ -23,7 +23,7 @@ One problem that the validator reports, at one place in a mod. Each finding has 
 
 ## Game description
 
-The file `smg_game.luma-self.json`, which lists every function, class, field, enum, global, nerve, message and table key that a mod can name. LumaLink checks your mod against it when you build. For more information, see [About the game description](../concepts/the-game-description.md).
+The `luma` folder beside the game (`smg_game.luma-self.json` and the files made with it), which lists every function, class, field, enum, global, nerve, message and table key that a mod can name. LumaLink checks your mod against it when you build. For more information, see [About the game description](../concepts/the-game-description.md).
 
 ## Guard
 

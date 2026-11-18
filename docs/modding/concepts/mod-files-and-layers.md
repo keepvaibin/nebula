@@ -56,6 +56,7 @@ A layer is a folder of content under `layers/`. Most mods have one layer, `base`
 layers/base/
   files/GAME-PATH            a whole file at a game path, new or replacing the game's
   patches/GAME-PATH.json     rows changed, added or removed in a file that has rows
+  merge/GAME-PATH            rows, lines or particles added to a file many mods add to at once
   assets/MOD-PATH            new assets of the mod's own
   textures/TEXTURE.png       the game's textures replaced by name
 ```
@@ -69,6 +70,12 @@ A whole file can be in the game's own format, or in an ordinary format that Nebu
 ### Patching a file with rows
 
 Files with rows are never replaced whole. Tables, stage placements, scenario data and message files are patched by key: a patch names the rows it changes, adds or removes. Two mods can patch different rows of the same file. For more information, see [Patching game tables](../how-tos/patching-game-tables.md).
+
+### Adding to a file many mods add to
+
+Some files take additions from many mods at once, such as the game's messages: a mod's new lines go in
+`merge/MessageData/messages.json`. Each mod brings only what it adds, and the game's file gets all of it. For the files
+that take additions, see [The .luma file format](../reference/luma-file-format.md).
 
 ### Adding new assets
 

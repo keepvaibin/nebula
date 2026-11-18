@@ -32,7 +32,7 @@ LumaScript has no raw pointers and no manual freeing. A handle to a game object 
 
 A script that calls one of the game's own functions runs the game's code, with the game's rules. Nebula does not make a call whose scene objects are missing: the call gives its empty value, and the mod log says `Call.NotNow`. A fault inside the game's code still ends the game. For more information, see [When a mod fails](when-a-mod-fails.md).
 
-LumaScript has no garbage collector. Values belong to their owner and are freed when the owner ends, and temporary values are freed every frame. Nothing pauses the game.
+LumaScript has no garbage collector. Values belong to their owner and are freed when the owner ends, and temporary values are given back as soon as they are used. Nothing pauses the game.
 
 ## What you can write
 
