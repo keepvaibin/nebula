@@ -811,10 +811,9 @@ public:
     IceStep** mIceSteps;  // the ice form's steps, reused in turn
     u16 mIceStepIndex;  // the next ice step
     FireMarioBall* mFireBalls[3];  // the fire form's balls
-    ResTIMG** mSwapTextures;  // the model's textures (swapTextureInit)
     u8 mEyeLidReset;  // the eyelid came from the eye resource: the blink restarts (updateBlink)
     u16 mEyeLidFrame;  // the eyelid texture's frame (swapTexture EyeLid_v)
-    const void** mSwapImages;  // the swap textures' images by slot
+    const void** mSwapImages;  // the eyelid frames' images: Mario's 0-3, the bee's 4-7, the hopper's 8-11 (null: none)
     u32 mEyeLidTexBase;  // the first eyelid texture's index
     u8 mBlinkFrame;  // frames left of the blink
     u16 mBlinkTimer;  // frames until the next blink

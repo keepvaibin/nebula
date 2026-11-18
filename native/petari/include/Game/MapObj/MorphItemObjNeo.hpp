@@ -52,7 +52,9 @@ public:
     bool mIsSwitchAppearOnce;  // Obj_arg0 == 1
     u8 mContainerType;         // Container, from Obj_arg3
     u8 mBoundCount;
-    s8 mIsBind;  // Obj_arg1
+    // Obj_arg1 as given: 1 binds at placement, any other value but 0 when it appears (N-3034: an s8 kept the low byte,
+    // so 256 did not bind).
+    s32 mIsBind;
     Vec3f mZRotation;
     s32 mMorphType;  // PlayerItemStatus
     f32 mAngle;

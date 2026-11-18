@@ -101,6 +101,12 @@ native_test(native_rabbit_run_turn_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/rabb
 native_test(native_mario_model_index_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/mario_model_index_tests.cpp")
 # The dash ring's times hold every time its placement gives (N-3023).
 native_test(native_mario_ring_dash_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/mario_ring_dash_tests.cpp")
+# A member that keeps a placement argument as given holds every s32 (N-3034).
+native_test(native_placement_arg_width_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/placement_arg_width_tests.cpp")
+# Mario's eyelid frames are four of the drawn model's textures, or none (N-3035).
+native_test(native_mario_eyelid_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/mario_eyelid_tests.cpp")
+# A talk flow's reference of none ends the flow (N-3036).
+native_test(native_talk_flow_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/talk_flow_tests.cpp")
 # A sequence's data reads stay in its program, and a tick that never waits ends (N-3025, N-3026).
 native_test(native_seq_read_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/seq_read_tests.cpp")
 # A Me track's note ranges move a note by whole octaves and always end (N-3027).

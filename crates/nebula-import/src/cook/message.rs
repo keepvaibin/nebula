@@ -166,7 +166,74 @@ impl Nmsg {
                 bail!("message {i}'s text at unit {} past the {} units", message.text, nmsg.text.len());
             }
         }
+        nmsg.check_flow()?;
         Ok(nmsg)
+    }
+
+    /// The flow's references as TalkNodeCtrl follows them, so the game never reads past its nodes or branches: a
+    /// message's next node (NONE ends the flow), a branch's two choices (its first branch and the one after), an event's
+    /// first branch, and every branch's node (NONE: none). A mod may give a whole message file; the console followed
+    /// whatever it held.
+    pub fn check_flow(&self) -> Result<()> {
+        let nodes = self.nodes.len();
+        let branches = self.branches.len();
+        for (i, node) in self.nodes.iter().enumerate() {
+            match node.kind {
+                1 if node.next != NONE && node.next as usize >= nodes => {
+                    bail!("FLW1: message node {i} goes on to node {} of {nodes}", node.next)
+                }
+                2 if node.next_group as usize + 1 >= branches => {
+                    bail!("FLW1: branch node {i}'s choices are branches {} and {} of {branches}", node.next_group, node.next_group + 1)
+                }
+                3 if node.index as usize >= branches => bail!("FLW1: event node {i}'s branch {} of {branches}", node.index),
+                _ => {}
+            }
+        }
+        for (b, &node) in self.branches.iter().enumerate() {
+            if node != NONE && node as usize >= nodes {
+                bail!("FLW1: branch {b} goes to node {node} of {nodes}");
+            }
+        }
+        // The talk's loop (TalkMessageCtrl::rootNodePre) goes on, in one step, from a branch to one of its choices (any
+        // branch but a select, which waits for the player) and from an event that goes on by itself (func, none, anime)
+        // to its branch, until it reaches another node: a ring of those never ends.
+        let goes_on = |i: usize| -> Vec<usize> {
+            let node = &self.nodes[i];
+            let to = |b: usize| self.branches.get(b).copied().filter(|&n| n != NONE).map(|n| n as usize);
+            match node.kind {
+                2 if node.index != 0 => [to(node.next_group as usize), to(node.next_group as usize + 1)].into_iter().flatten().collect(),
+                3 if matches!(node.group, 0 | 2 | 4) => to(node.index as usize).into_iter().collect(),
+                _ => Vec::new(),
+            }
+        };
+        // 0: not seen, 1: on the walk, 2: ends.
+        let mut seen = vec![0u8; nodes];
+        for first in 0..nodes {
+            if seen[first] != 0 {
+                continue;
+            }
+            seen[first] = 1;
+            let mut walk = vec![(first, goes_on(first), 0usize)];
+            while let Some(top) = walk.last_mut() {
+                if top.2 == top.1.len() {
+                    let done = top.0;
+                    walk.pop();
+                    seen[done] = 2;
+                    continue;
+                }
+                let next = top.1[top.2];
+                top.2 += 1;
+                match seen[next] {
+                    0 => {
+                        seen[next] = 1;
+                        walk.push((next, goes_on(next), 0));
+                    }
+                    1 => bail!("FLW1: node {next} comes back to itself through branches and events that go on by themselves (the talk would never stop)"),
+                    _ => {}
+                }
+            }
+        }
+        Ok(())
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -390,5 +457,59 @@ mod tests {
         assert_eq!(nmsg.branches, [0, NONE]);
         let cooked = cook(&disc()).unwrap();
         assert_eq!(Nmsg::from_nmsg(&cooked).unwrap(), nmsg);
+    }
+
+    /// The disc file of disc() with its two FLW1 nodes and two branches given (the block's first node at FLW1 + 16).
+    fn disc_with_flow(nodes: [[u8; 8]; 2], branches: [u16; 2]) -> Vec<u8> {
+        let mut bytes = disc();
+        let flw = bytes.windows(4).position(|w| w == b"FLW1").unwrap();
+        bytes[flw + 16..flw + 32].copy_from_slice(&[nodes[0], nodes[1]].concat());
+        bytes[flw + 32..flw + 34].copy_from_slice(&branches[0].to_be_bytes());
+        bytes[flw + 34..flw + 36].copy_from_slice(&branches[1].to_be_bytes());
+        bytes
+    }
+
+    #[test]
+    fn a_flow_that_leads_outside_its_nodes_or_branches_is_refused() {
+        let message_end = [1, 0, 0, 1, 0xFF, 0xFF, 0, 0];
+        let event = [3, 5, 0, 1, 0x12, 0x34, 0x56, 0x78];
+        // The game's own shapes: a message that ends, a message on to node 1, a branch whose choices are branches 0 and 1,
+        // an event on a branch of none.
+        assert!(Nmsg::from_disc(&disc_with_flow([message_end, event], [0, 0xFFFF])).is_ok());
+        assert!(Nmsg::from_disc(&disc_with_flow([[1, 0, 0, 1, 0, 1, 0, 0], event], [0, 0xFFFF])).is_ok());
+        assert!(Nmsg::from_disc(&disc_with_flow([[2, 0, 0, 0, 0, 0, 0, 0], event], [0, 1])).is_ok());
+        // A message on to node 2 of 2.
+        let next = Nmsg::from_disc(&disc_with_flow([[1, 0, 0, 1, 0, 2, 0, 0], event], [0, 0xFFFF]));
+        assert!(format!("{:#}", next.unwrap_err()).contains("message node 0 goes on to node 2 of 2"));
+        // A branch whose second choice is past the two branches.
+        let choice = Nmsg::from_disc(&disc_with_flow([[2, 0, 0, 0, 0, 0, 0, 1], event], [0, 1]));
+        assert!(format!("{:#}", choice.unwrap_err()).contains("branch node 0's choices are branches 1 and 2 of 2"));
+        // An event on branch 2 of 2.
+        let first = Nmsg::from_disc(&disc_with_flow([message_end, [3, 5, 0, 2, 0, 0, 0, 0]], [0, 0xFFFF]));
+        assert!(format!("{:#}", first.unwrap_err()).contains("event node 1's branch 2 of 2"));
+        // A branch to node 5 of 2.
+        let branch = Nmsg::from_disc(&disc_with_flow([message_end, event], [5, 0xFFFF]));
+        assert!(format!("{:#}", branch.unwrap_err()).contains("branch 0 goes to node 5 of 2"));
+    }
+
+    #[test]
+    fn a_ring_of_branches_and_events_that_go_on_by_themselves_is_refused() {
+        // Node 0: a func branch (kind 1) whose choices are branches 0 and 1; node 1: a func event on branch 0.
+        let func_branch = [2, 0, 0, 1, 0, 0, 0, 0];
+        let func_event = [3, 0, 0, 0, 0, 0, 0, 0];
+        // Its choices lead to the event and to none: the event goes on to branch 0, node 1, itself.
+        let ring = Nmsg::from_disc(&disc_with_flow([func_branch, func_event], [1, 0xFFFF]));
+        assert!(format!("{:#}", ring.unwrap_err()).contains("node 1 comes back to itself"));
+        // A branch whose choice is itself.
+        let own = Nmsg::from_disc(&disc_with_flow([func_branch, func_event], [0, 0xFFFF]));
+        assert!(format!("{:#}", own.unwrap_err()).contains("node 0 comes back to itself"));
+        // The same ring through a select (the player chooses) or a func-stop event (it waits) stops: allowed.
+        // A select (node 0) whose choices are the event and itself; the event goes on to branch 1, the select.
+        let select = [2, 0, 0, 0, 0, 0, 0, 0];
+        assert!(Nmsg::from_disc(&disc_with_flow([select, [3, 0, 0, 1, 0, 0, 0, 0]], [1, 0])).is_ok());
+        // The same with a func branch is a ring.
+        assert!(Nmsg::from_disc(&disc_with_flow([func_branch, [3, 0, 0, 1, 0, 0, 0, 0]], [1, 0])).is_err());
+        let func_stop = [3, 1, 0, 0, 0, 0, 0, 0];
+        assert!(Nmsg::from_disc(&disc_with_flow([func_branch, func_stop], [1, 0xFFFF])).is_ok());
     }
 }

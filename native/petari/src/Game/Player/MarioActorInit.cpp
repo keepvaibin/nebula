@@ -241,7 +241,6 @@ void MarioActor::initMember() {
         mFireBalls[i] = 0;
     }
 
-    mSwapTextures = 0;
     mEyeLidReset = 0;
     mEyeLidFrame = 0;
     mSwapImages = 0;

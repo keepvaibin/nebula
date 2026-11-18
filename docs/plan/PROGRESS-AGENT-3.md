@@ -127,13 +127,13 @@ a3-prof/e14-notes.md.
 | Folder | Files | Lines | Read whole | Swept | Rows |
 |---|---|---|---|---|---|
 | Player: the eight files of file 01 (Mario, MarioActor, MarioSwim, MarioJump, MarioCollision, MarioAnimator, MarioEffect, MarioDamage) | 8 | 16901 | 8 | all 8 | N-3015, N-3016, N-3020, N-3021, N-3022, N-3023 (and MarioFoo), N-3024 |
-| Player, the other 99 files | 99 | 38520 | 0 | loops, rate | none yet |
+| Player, the other 99 files | 99 | 38520 | 0 | loops, rate, computed indices of fixed and model-sized tables | N-3035 |
 | Sound (Sound, AudioLib, GameAudio, Speaker, RhythmLib) | 82 | 15431 | 6 (SeqTrack, MeTrack, ChordInfo, RhythmSystem, SoundBank, SoundVoices' oscillator) | all 82: loops, indices and addresses from data, divisions | N-3017, N-3025 to N-3030 |
-| Enemy | 109 | 46301 | 0 | loops, modulos, placement arguments as indices and divisors, counted appends | none |
+| Enemy | 109 | 46301 | 0 | loops, modulos, placement arguments as indices and divisors, counted appends, fixed arrays against their loop bounds, placement arguments kept in narrow members | none |
 | Boss | 166 | 33072 | 0 | as Enemy | none |
-| Ride | 19 | 10583 | 0 | as Enemy | none |
+| Ride | 19 | 10583 | 0 | as Enemy; every point count from a rail, a scale or an argument, with its uses | none |
 | NPC | 76 | 19808 | 0 | as Enemy | N-3018, N-3033 |
-| MapObj | 314 | 64027 | 0 | as Enemy | N-3032 |
+| MapObj | 314 | 64027 | 0 | as Enemy | N-3032, N-3034 |
 | LiveActor | 62 | 8533 | 0 | as Enemy | N-3031 |
 
 Rate dependence, the whole game code: no clock or display rate outside System/LumaTime.cpp (the mods' time service).

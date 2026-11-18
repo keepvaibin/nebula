@@ -1,6 +1,7 @@
 #include "Game/NPC/TalkNodeCtrl.hpp"
 #include "Game/LiveActor/ActorCameraInfo.hpp"
 #include "Game/LiveActor/Nerve.hpp"
+#include "Game/NPC/TalkFlow.hpp"
 #include "Game/NPC/TalkMessageInfo.hpp"
 #include "Game/Screen/MessageTagSkipTagProcessor.hpp"
 #include "Game/System/MessageHolder.hpp"
@@ -112,14 +113,11 @@ void TalkNodeCtrl::forwardFlowNode() {
         return;
     }
 
+    // From a flow's last message, or an event on a branch of none, the flow ends: no node (N-3036).
     if (node->mNodeType == TalkNodeType_Message) {
-        u32 idx = node->mNextIdx;
-        MessageData* msg = MessageSystem::getSceneMessageData();
-        mCurrentNode = msg->getNode(idx);
+        mCurrentNode = MR::talkNodeOrEnd(*MessageSystem::getSceneMessageData(), node->mNextIdx);
     } else if (node->mNodeType == TalkNodeType_Event) {
-        u32 idx = node->mIndex;
-        MessageData* msg = MessageSystem::getSceneMessageData();
-        mCurrentNode = msg->getBranchNode(idx);
+        mCurrentNode = MR::talkBranchNodeOrEnd(*MessageSystem::getSceneMessageData(), node->mIndex);
     }
 
     updateMessage();
@@ -288,15 +286,14 @@ const char16_t* TalkNodeCtrl::getSubMessage() const {
 void TalkNodeCtrl::forwardCurrentBranchNode(bool storeCurrent) {
     TalkNode* cur = mCurrentNode;
 
-    if (storeCurrent) {
-        u32 group = cur->mNextGroup;
-        MessageData* msg = MessageSystem::getSceneMessageData();
-        mCurrentNode = msg->getBranchNode(group);
-    } else {
-        u32 group = cur->mNextGroup;
-        MessageData* msg = MessageSystem::getSceneMessageData();
-        mCurrentNode = msg->getBranchNode(group + 1);
+    // Only a branch node has choices: its first branch and the one after (the cook holds both in the file). From any
+    // other node, or none, the flow stays (N-3036: the console read a message's group as a branch number).
+    if (cur == nullptr || cur->mNodeType != TalkNodeType_Branch) {
+        return;
     }
+
+    const u32 group = storeCurrent ? cur->mNextGroup : cur->mNextGroup + 1;
+    mCurrentNode = MR::talkBranchNodeOrEnd(*MessageSystem::getSceneMessageData(), group);
 
     updateMessage();
 }

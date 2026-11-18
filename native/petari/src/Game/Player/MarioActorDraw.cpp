@@ -7,6 +7,7 @@
 #include "Game/MapObj/IceStep.hpp"
 #include "Game/Player/DrawAdaptor.hpp"
 #include "Game/Player/JetTurtleShadow.hpp"
+#include "Game/Player/MarioEyeLid.hpp"
 #include "Game/Player/PlayerModel.hpp"
 #include "Game/Render/Model.hpp"
 #include "Game/Render/ModelData.hpp"
@@ -597,65 +598,28 @@ bool MarioActor::isAllHidden() const {
 }
 
 // The first of a model's four eyelid textures; texNo when it has none.
-static u32 findEyeLidTexture(ModelData* pModelData, u32 textureNum, u32 texNo) {
-    for (u32 i = 0; i < textureNum; i++) {
-        if (MR::isEqualString(pModelData->getTextureName(i), "mario_eyeLid.0")) {
-            return i;
-        }
-    }
-    return texNo;
-}
-
 void MarioActor::swapTextureInit() {
-    ModelData* actorData = MR::getModelData(this);
-    const u32 textureCount = actorData->getTextureCount();
-    mSwapTextures = new ResTIMG*[textureCount];
     mEyeLidFrame = 0;
-
-    for (u32 i = 0; i < textureCount; i++) {
-        mSwapTextures[i] = MR::getResTIMG(this, i);
-    }
-
+    // The eyelid's four frames of each model, read from the model's own textures: Mario's (slots 0-3), the bee's (4-7),
+    // the hopper's (8-11). A model without the four keeps its own eyelid (N-3035: the console wrote the bee's and the
+    // hopper's textures into a table of Mario's model's size and read the frames past a model's textures).
     mSwapImages = new const void*[12]();
+    const auto loadEyeLid = [](const LiveActor* pModelActor, const void** pImages) {
+        const ModelData* data = MR::getModelData(pModelActor);
+        const s32 first = MR::eyeLidFramesAt(data->findTexture("mario_eyeLid.0"), data->getTextureCount());
+        for (u32 k = 0; first >= 0 && k < MR::cEyeLidFrameNum; k++) {
+            pImages[k] = MR::getResTIMG(pModelActor, first + static_cast< s32 >(k))->image();
+        }
+        return first;
+    };
 
-    u32 texNo = findEyeLidTexture(actorData, textureCount, 0);
-
-    mEyeLidTexBase = texNo;
-    mSwapImages[0] = mSwapTextures[texNo]->image();
-    mSwapImages[1] = mSwapTextures[texNo + 1]->image();
-    mSwapImages[2] = mSwapTextures[texNo + 2]->image();
-    mSwapImages[3] = mSwapTextures[texNo + 3]->image();
-
+    const s32 first = loadEyeLid(this, mSwapImages);
+    mEyeLidTexBase = first >= 0 ? static_cast< u32 >(first) : 0;
     if (mBeeModel != nullptr) {
-        ModelData* beeData = MR::getModelData(mBeeModel);
-        const u32 textureNum = beeData->getTextureCount();
-
-        texNo = findEyeLidTexture(beeData, textureNum, texNo);
-
-        for (u32 i = 0; i < textureNum; i++) {
-            mSwapTextures[i] = MR::getResTIMG(mBeeModel, i);
-        }
-
-        mSwapImages[4] = mSwapTextures[texNo]->image();
-        mSwapImages[5] = mSwapTextures[texNo + 1]->image();
-        mSwapImages[6] = mSwapTextures[texNo + 2]->image();
-        mSwapImages[7] = mSwapTextures[texNo + 3]->image();
+        loadEyeLid(mBeeModel, mSwapImages + 4);
     }
-
     if (mHopperModel != nullptr) {
-        ModelData* hopperData = MR::getModelData(mHopperModel);
-        const u32 textureNum = hopperData->getTextureCount();
-
-        texNo = findEyeLidTexture(hopperData, textureNum, texNo);
-
-        for (u32 i = 0; i < textureNum; i++) {
-            mSwapTextures[i] = MR::getResTIMG(mHopperModel, i);
-        }
-
-        mSwapImages[8] = mSwapTextures[texNo]->image();
-        mSwapImages[9] = mSwapTextures[texNo + 1]->image();
-        mSwapImages[10] = mSwapTextures[texNo + 2]->image();
-        mSwapImages[11] = mSwapTextures[texNo + 3]->image();
+        loadEyeLid(mHopperModel, mSwapImages + 8);
     }
 
     initBlink();
@@ -991,10 +955,14 @@ void MarioActor::swapTexture(const char* pMaterialName, u8 texNo) const {
         }
     }
 
-    ModelData* modelData = MR::getModelData(this);
-    u32 materialNo = MR::getMaterialNo(modelData, pMaterialName);
-
-    mModels[mCurrModel]->mNextImages[materialNo] = mSwapImages[texNo];
+    // The drawn model's own material: the bee's and the hopper's need not be at Mario's model's index, and their image
+    // tables are their own size (N-3035). A model without the material keeps its image.
+    PlayerModel* model = mModels[mCurrModel];
+    const s32 materialNo = model->getModelData()->findMaterial(pMaterialName);
+    if (materialNo < 0) {
+        return;
+    }
+    model->mNextImages[materialNo] = mSwapImages[texNo];
 }
 
 void MarioActor::copyMaterial(Model* pModel, u32 materialNo, s32 packetIndex) {

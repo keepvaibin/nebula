@@ -660,6 +660,8 @@ pub fn merge(message_file: &[u8], id_table: &[u8], json: &[u8], language: &str) 
             walker.nmsg.nodes[node as usize].next = next;
         }
     }
+    // A mod's flows join the game's: the whole flow as the game follows it.
+    nmsg.check_flow()?;
     Ok((nmsg.to_bytes(), ids.to_ntbl()))
 }
 

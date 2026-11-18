@@ -10,6 +10,9 @@
 #include "Game/System/NebulaHost.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
+#if defined(NEBULA_ANIM_WALK_TIMING)
+#include <nebula_format.h>
+#endif
 
 // LiveActor::calcAnim is calcAnmMtx (the model's base scale, calcAndSetBaseMtx, then ModelManager::calcAnim: calc, which
 // is the animation's frame, the visibility animation, the model's joint walk and clearAnm; then updateList), then the
@@ -32,7 +35,11 @@
 namespace {
     // Walks a step thread takes at a time: the pass runs on the game thread when it has no more than this many (condition
     // 1 of P-040: the count at which the measured pass on the step threads is faster, on the PC and on the tablet).
+#if defined(NEBULA_WALK_GRAIN)
+    const u32 sWalkGrain = NEBULA_WALK_GRAIN;
+#else
     const u32 sWalkGrain = 8;
+#endif
 
     struct Walk {
         LiveActor* mActor;
@@ -194,6 +201,51 @@ namespace {
     }
 #endif
 
+#if defined(NEBULA_ANIM_WALK_TIMING)
+    // The grain's measure (P-040 part 3; with NEBULA_STEP_WORKERS_OFF the walks run on the game thread): every batch is
+    // timed, the categories of no more than the grain included, and every 4096 batches a log line gives, by batch size,
+    // the batches, their walks and the walks' cost.
+    const u32 cSizeBands = 8;
+    struct WalkTiming {
+        u64 mNs[cSizeBands];
+        u64 mWalks[cSizeBands];
+        u32 mBatches[cSizeBands];
+        u32 mCount;
+    };
+    WalkTiming sTiming;
+
+    u32 sizeBand(u32 walks) {
+        u32 band = 0;
+        for (u32 most = 2; band + 1 < cSizeBands && walks > most; most *= 2) {
+            band++;
+        }
+        return band;
+    }
+
+    void timeBatch(u64 ns, u32 walks) {
+        const u32 band = sizeBand(walks);
+        sTiming.mNs[band] += ns;
+        sTiming.mWalks[band] += walks;
+        sTiming.mBatches[band]++;
+        if (++sTiming.mCount < 4096) {
+            return;
+        }
+        char text[512];
+        u32 used = static_cast< u32 >(nebula_snprintf(text, sizeof(text), "anim walk timing (grain %u):", ::sWalkGrain));
+        for (u32 b = 0, most = 2; b < cSizeBands && used < sizeof(text); b++, most *= 2) {
+            const u64 each = sTiming.mWalks[b] != 0 ? sTiming.mNs[b] / sTiming.mWalks[b] : 0;
+            used += static_cast< u32 >(nebula_snprintf(text + used, sizeof(text) - used, " [%s%u: %u batches, %llu walks, %llu ns a walk]",
+                                                     b + 1 == cSizeBands ? ">" : "<=", b + 1 == cSizeBands ? most / 2 : most,
+                                                     sTiming.mBatches[b],
+                                                     static_cast< unsigned long long >(sTiming.mWalks[b]),
+                                                     static_cast< unsigned long long >(each)));
+        }
+        const NebulaHostServices* const pHost = nebula_host();
+        pHost->log(pHost->user, text);
+        sTiming = WalkTiming();
+    }
+#endif
+
     // The batch's walks on the step threads, then each actor's draw lists and collision matrix in list order.
     void flush() {
         if (sWalkCount == 0) {
@@ -202,7 +254,14 @@ namespace {
 #if defined(NEBULA_ANIM_WALK_VERIFY)
         keepStarts();
 #endif
+#if defined(NEBULA_ANIM_WALK_TIMING)
+        const NebulaHostServices* const pClock = nebula_host();
+        const u64 start = pClock->clock_ns(pClock->user);
+#endif
         NebulaHost::parallelFor(sWalkCount, ::sWalkGrain, &::walkModels, nullptr);
+#if defined(NEBULA_ANIM_WALK_TIMING)
+        timeBatch(pClock->clock_ns(pClock->user) - start, sWalkCount);
+#endif
 #if defined(NEBULA_ANIM_WALK_VERIFY)
         checkWalks();
 #endif
@@ -236,7 +295,11 @@ namespace {
 
 void ActorAnimPass::execute(NameObjCategoryList::CategoryInfo& rInfo) {
     // end() is read each pass: a call may add to or remove from this category.
+#if defined(NEBULA_ANIM_WALK_TIMING)
+    if (false) {
+#else
     if (static_cast< u32 >(rInfo.mNameObjArr.size()) <= ::sWalkGrain) {
+#endif
         for (NameObj** pNameObj = rInfo.mNameObjArr.begin(); pNameObj != rInfo.mNameObjArr.end(); pNameObj++) {
             (*pNameObj)->calcAnim();
         }
