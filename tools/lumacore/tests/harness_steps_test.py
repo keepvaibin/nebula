@@ -10,7 +10,10 @@ Builds the host half with harness_selftest.cpp (as harness_wait_test.py does) an
 - the runner (luma_test.py) writes the plan lines for "window" and "lose_device", and refuses malformed ones;
 - a picture held while the host's menu has pipelines left holds the steps after it: the picture asked at 20 is taken
   once they are made (frame 40 here, then the settle presents), and the window step at 22 reaches the host after it
-  (N-2062: a run beside others makes pipelines more slowly, and the step ran first).
+  (N-2062: a run beside others makes pipelines more slowly, and the step ran first); the end's fact names the end
+  step's frame, the frames held left out;
+- a menu key the host's menus have not taken holds the steps the same way: a step at 20 reaches the host after the
+  key is taken (game frame 60 here), and the end's fact names the end step's frame.
 Exit 0 when every case holds.
 """
 import json
@@ -26,12 +29,13 @@ import harness_wait_test  # noqa: E402
 import luma_test  # noqa: E402
 
 
-def run(exe, work, name, steps, host, frames=40, pipelines_until=0):
+def run(exe, work, name, steps, host, frames=40, pipelines_until=0, keys_until=0):
     out = work / name
     out.mkdir()
     plan = out / "plan.txt"
     plan.write_text("harness 1\nout %s\nbare 1\n%s" % (out.as_posix(), steps), encoding="utf-8")
     held = ["--pipelines-until", str(pipelines_until)] if pipelines_until else []
+    held += ["--keys-until", str(keys_until)] if keys_until else []
     result = subprocess.run([str(exe)] + (["--host"] + held if host else []) + [str(plan), str(frames)], capture_output=True,
                             text=True)
     facts_file = out / "facts.jsonl"
@@ -70,7 +74,13 @@ def main():
     check(len(taken) == 1 and int(taken[0].split()[2]) >= 40, "the picture waits for the pipelines: %s" % printed)
     check(printed[:1] == taken[:1] and "window 640 360" in printed[1:],
           "the window step after the held picture reaches the host after it: %s" % printed)
-    check(end is not None and end["key"] == "harness.end", "the held run ends: %s" % end)
+    check(end is not None and end["key"] == "harness.end" and end["value"]["frame"] == 80,
+          "the held run ends at its end step's frame (80), the frames held left out: %s" % end)
+
+    end, printed = run(exe, work, "keys_held", "step 20 window 640 360\nstep 30 end\n", True, 120, 0, 60)
+    check(printed == ["window 640 360"], "the window step reaches the host once, after the key: %s" % printed)
+    check(end is not None and end["key"] == "harness.end" and end["value"]["frame"] == 30,
+          "a run held by a menu key ends at its end step's frame (30): %s" % end)
 
     steps = luma_test.read_steps({"steps": [{"at": 5, "window": [640, 360]}, {"at": 10, "lose_device": True},
                                             {"at": 20, "end": True}]}, True, None)

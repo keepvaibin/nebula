@@ -10,6 +10,8 @@
 // without it, no host. With --pipelines-until <frame> after --host, the host shows its settings menu with one pipeline
 // left until that game frame; each frame's picture is asked for as the host does after presenting, and a picture taken
 // prints "picture <file name> <game frame>" (harness_steps_test.py: a picture held for pipelines holds the steps).
+// With --keys-until <frame> after --host (after --pipelines-until when both), the host's menus have a key waiting
+// until that game frame (menu_keys_waiting: a busy window's thread).
 #include "harness.h"
 
 #include <nebula_host_extension.h>
@@ -44,6 +46,7 @@ void lose_gpu_device(void*) {
 
 long g_frame = 0;
 long g_pipelines_until = 0;
+long g_keys_until = 0;
 
 std::uint32_t menu_open(void*) {
     return g_pipelines_until != 0 ? NEBULA_EXT_MENU_SETTINGS : NEBULA_EXT_MENU_NONE;
@@ -51,6 +54,10 @@ std::uint32_t menu_open(void*) {
 
 std::uint32_t pipelines_left(void*) {
     return g_frame < g_pipelines_until ? 1u : 0u;
+}
+
+std::uint32_t menu_keys_waiting(void*) {
+    return g_frame < g_keys_until ? 1u : 0u;
 }
 
 }  // namespace
@@ -66,6 +73,11 @@ int main(int argc, char** argv) {
         argc -= 2;
         argv += 2;
     }
+    if (with_host && argc > 2 && std::string(argv[1]) == "--keys-until") {
+        g_keys_until = std::strtol(argv[2], nullptr, 10);
+        argc -= 2;
+        argv += 2;
+    }
     if (argc < 3) {
         std::fprintf(stderr, "usage: harness_selftest [--host] <plan> <frames> [<log line> ...]\n");
         return 2;
@@ -76,6 +88,9 @@ int main(int argc, char** argv) {
     if (g_pipelines_until != 0) {
         host.menu_open = menu_open;
         host.pipelines_left = pipelines_left;
+    }
+    if (g_keys_until != 0) {
+        host.menu_keys_waiting = menu_keys_waiting;
     }
     if (!harness::start(with_host ? &host : nullptr, argv[1], log, quit)) {
         return 1;

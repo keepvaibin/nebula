@@ -410,7 +410,7 @@ struct Step {
 };
 
 struct Input {
-    std::int64_t start, frames;
+    std::int64_t start, frames;  // game frames: an input lasts its frames of play, held steps or not
     std::uint32_t buttons;
     bool shake, stick, pointer;
     float x, y;
@@ -418,6 +418,7 @@ struct Input {
 
 struct Picture {
     std::uint64_t game_frame;
+    std::int64_t asked;  // the test frame of its step
     std::string name;
     std::optional<std::chrono::steady_clock::time_point> held;  // first present it waited at for prepared graphics
 };
@@ -429,7 +430,10 @@ constexpr std::uint32_t kPictureSettlePresents = 10u;
 struct State {
     const NebulaHostForExtension* host = nullptr;
     std::uint32_t presents_clear = kPictureSettlePresents;  // presents since a menu showed pipelines left
-    std::optional<std::int64_t> held_from;  // the test frame the steps began to wait for a held picture or menu key
+    // Test frames stop while the steps wait for a held picture or a menu key: the game frame they began to wait at,
+    // and the game frames waited before (test_frame).
+    std::optional<std::uint64_t> hold_game_from;
+    std::int64_t held_frames = 0;
     std::optional<std::chrono::steady_clock::time_point> keys_held;  // since when a menu key is waiting
     void (*log)(const std::string&) = nullptr;
     void (*quit)() = nullptr;
@@ -484,8 +488,14 @@ std::uint32_t menu_keys_waiting() {
     return h->menu_keys_waiting(h->host);
 }
 
+// The test's frame: game frames since the base, less every game frame the steps were held (frame()), and standing
+// still while they are held. A step, the end and a fact keep their frame however long this machine holds them.
 std::int64_t test_frame() {
-    return g.base ? static_cast<std::int64_t>(g.game_frame) - static_cast<std::int64_t>(*g.base) : -1;
+    if (!g.base) {
+        return -1;
+    }
+    const std::uint64_t game = g.hold_game_from.value_or(g.game_frame);
+    return static_cast<std::int64_t>(game) - static_cast<std::int64_t>(*g.base) - g.held_frames;
 }
 
 void write_fact(const std::string& key, const std::string& json, std::optional<std::int64_t> frame = std::nullopt) {
@@ -936,12 +946,13 @@ bool holds(const Cond& c) {
 
 void run_step(Step& s, std::int64_t now) {
     g.since_step.clear();
+    const std::int64_t game_now = static_cast<std::int64_t>(g.game_frame);
     switch (s.action) {
-    case Action::Hold: g.inputs.push_back({now, s.frames, s.buttons, false, false, false, 0.0f, 0.0f}); break;
-    case Action::Shake: g.inputs.push_back({now, s.frames, 0u, true, false, false, 0.0f, 0.0f}); break;
-    case Action::Stick: g.inputs.push_back({now, s.frames, 0u, false, true, false, s.x, s.y}); break;
+    case Action::Hold: g.inputs.push_back({game_now, s.frames, s.buttons, false, false, false, 0.0f, 0.0f}); break;
+    case Action::Shake: g.inputs.push_back({game_now, s.frames, 0u, true, false, false, 0.0f, 0.0f}); break;
+    case Action::Stick: g.inputs.push_back({game_now, s.frames, 0u, false, true, false, s.x, s.y}); break;
     // The plan's pointer is in 0..1 of the screen; the host's in -1..1.
-    case Action::Pointer: g.inputs.push_back({now, s.frames, 0u, false, false, true, s.x * 2.0f - 1.0f, s.y * 2.0f - 1.0f}); break;
+    case Action::Pointer: g.inputs.push_back({game_now, s.frames, 0u, false, false, true, s.x * 2.0f - 1.0f, s.y * 2.0f - 1.0f}); break;
     case Action::Key:
         if (g.host == nullptr || g.host->menu_key == nullptr) {
             finish("harness-error", "step " + std::to_string(s.number) + ": this host takes no menu keys");
@@ -987,7 +998,7 @@ void run_step(Step& s, std::int64_t now) {
         }
         g.host->open_settings(g.host->host, s.key);
         break;
-    case Action::Picture: g.pictures.push_back({g.game_frame, s.text, std::nullopt}); break;
+    case Action::Picture: g.pictures.push_back({g.game_frame, now, s.text, std::nullopt}); break;
     case Action::Wait: break;
     case Action::End:
         // A picture asked before the end and not yet taken (the render thread draws behind the game) is the run's
@@ -1301,9 +1312,10 @@ void frame(std::uint64_t game_frames) {
     const std::int64_t now = test_frame();
     sample_memory();
     // A picture held for the menu's pipelines (picture_path) holds the steps after it: what it shows is what the steps
-    // before it left, however long this machine takes to make them (a run beside others takes longer). The frames held
-    // count toward no step's wait (N-2062). So does a menu key the window's thread has not taken yet: a key step's
-    // effect is there for every step after it, however busy the window's thread (6709 beside other runs).
+    // before it left, however long this machine takes to make them (a run beside others takes longer). So does a menu
+    // key the window's thread has not taken yet: a key step's effect is there for every step after it, however busy
+    // the window's thread (6709 beside other runs). Test frames stand still while held (test_frame), so the frames
+    // held count toward no step's wait or frame (N-2062).
     const bool keys = menu_keys_waiting() != 0u;
     if (keys) {
         const auto wall = std::chrono::steady_clock::now();
@@ -1317,22 +1329,14 @@ void frame(std::uint64_t game_frames) {
         g.keys_held.reset();
     }
     if (keys || (!g.pictures.empty() && g.pictures.front().held && g.game_frame >= g.pictures.front().game_frame)) {
-        if (!g.held_from) {
-            g.held_from = now;
+        if (!g.hold_game_from) {
+            g.hold_game_from = g.game_frame;
         }
         return;
     }
-    if (g.held_from) {
-        const std::int64_t held = now - *g.held_from;
-        g.held_from.reset();
-        for (Step& s : g.steps) {
-            if (s.armed && !s.done) {
-                *s.armed += held;
-            }
-            if (s.waiting) {
-                s.wait_from += held;
-            }
-        }
+    if (g.hold_game_from) {
+        g.held_frames += static_cast<std::int64_t>(g.game_frame - *g.hold_game_from);
+        g.hold_game_from.reset();
     }
     bool before_done = true;      // every step written before this one has run
     bool game_waiting = false;    // a game step written before this one is not answered yet
@@ -1412,7 +1416,7 @@ void controls(std::uint64_t game_frames, NebulaExtensionControls* out) {
     if (!g.on || !g.base || out == nullptr) {
         return;
     }
-    const std::int64_t now = static_cast<std::int64_t>(game_frames) - static_cast<std::int64_t>(*g.base);
+    const std::int64_t now = static_cast<std::int64_t>(game_frames);
     for (const Input& i : g.inputs) {
         if (now < i.start || now - i.start >= i.frames) {
             continue;
@@ -1468,7 +1472,7 @@ const char* picture_path(std::uint64_t game_frame, std::uint32_t kind) {
     g.pictures.pop_front();
     g.picture_file = g.out + "/pictures/" + p.name + ".ppm";
     write_fact("picture." + p.name, "{\"game_frame\":" + std::to_string(game_frame) + ",\"asked_at\":" +
-                                        std::to_string(static_cast<long long>(p.game_frame) - static_cast<long long>(g.base.value_or(0u))) +
+                                        std::to_string(static_cast<long long>(p.asked)) +
                                         ",\"pipelines_left\":" + std::to_string(left) + "}");
     if (g.end_at && g.pictures.empty()) {
         finish({}, {});
