@@ -302,7 +302,7 @@ static const LumaExport exports[] = {
 };
 
 static const LumaImport imports[] = {
-    LUMA_SERVICE(harness_table, LUMA_HARNESS_NAME, "1.2"),
+    LT_HARNESS(harness_table, "1.2"),
     LUMA_HOOK_ON("MR::getRandom", "s32(s32, s32)", LUMA_AFTER, after),
 };
 

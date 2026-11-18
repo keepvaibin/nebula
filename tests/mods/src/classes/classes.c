@@ -600,7 +600,7 @@ static int32_t trigger(LumaCall* call, void* user) {
 }
 
 static const LumaImport imports[] = {
-    LUMA_SERVICE(harness_table, LUMA_HARNESS_NAME, "1.2"),
+    LT_HARNESS(harness_table, "1.2"),
     LUMA_HOOK_ON("MR::getRandom", "s32(s32, s32)", LUMA_AFTER, trigger),
     LUMA_HOOK_ON("LiveActor::calcAnim", "void()", LUMA_AFTER, look),
     LUMA_METHOD(m_take, "LiveActor::receiveMsgTake", "bool(HitSensor *, HitSensor *)"),
@@ -645,7 +645,7 @@ static int32_t trigger(LumaCall* call, void* user) {
 }
 
 static const LumaImport imports[] = {
-    LUMA_SERVICE(harness_table, LUMA_HARNESS_NAME, "1.2"),
+    LT_HARNESS(harness_table, "1.2"),
     LUMA_FUNCTION(f_get_creator, "NameObjFactory::getCreator", "CreatorFuncPtr(const char *)"),
     LUMA_HOOK_ON("MR::getRandom", "s32(s32, s32)", LUMA_AFTER, trigger),
 };

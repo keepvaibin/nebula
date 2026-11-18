@@ -133,7 +133,7 @@ static const LumaImport imports[] = {
     LUMA_SERVICE(svc, "test.svc", SVC_VERSION),
 #endif
 #if CASE == 8
-    LUMA_SERVICE(harness_table, LUMA_HARNESS_NAME, "1.1"),
+    LT_HARNESS(harness_table, "1.1"),
 #endif
     LUMA_HOOK_ON("MR::getRandom", "s32(s32, s32)", LUMA_AFTER, trigger),
 };

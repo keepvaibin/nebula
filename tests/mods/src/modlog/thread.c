@@ -28,7 +28,7 @@ static int32_t both(LumaCall* call, void* user) {
 }
 
 static const LumaImport imports[] = {
-    LUMA_SERVICE(harness_table, LUMA_HARNESS_NAME, "1.1"),
+    {LUMA_IMPORT_SERVICE, LUMA_OPTIONAL, LUMA_HARNESS_NAME, "1.1", &harness_table, 0, 0, 0},  /* optional: no catalog has it */
     LUMA_HOOK_ON("MR::getRandom", "s32(s32, s32)", LUMA_AFTER, both),
 };
 

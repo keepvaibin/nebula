@@ -5,7 +5,8 @@ _MAJOR and _MINOR in INCLUDE_DIR/luma_*.h). Exit 0 when the file is in the valid
 every header's service at the header's version, and nothing the headers lack; else 1, each difference named.
 
 One header service is not catalogued, on purpose: "harness", the test extension's (tools/test_driver/extension),
-which only the harness's game half finds by LumaCore.service in a test run; no mod imports it."""
+which only a test run has: the harness's game half finds it by LumaCore.service, and test mods import it as
+optional (tests/mods/src/loader/lt.h LT_HARNESS), since the checker binds a required import against this catalog."""
 import json
 import pathlib
 import re

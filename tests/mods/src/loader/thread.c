@@ -69,7 +69,7 @@ static int32_t report(LumaCall* call, void* user) {
 static const LumaImport imports[] = {
     LUMA_FUNCTION(random2, "MR::getRandom", "s32(s32, s32)"),
     LUMA_FUNCTION(normalized, "CameraLocalUtil::getNormalizedOr", "Vec3f(const Vec3f &, const Vec3f &)"),
-    LUMA_SERVICE(harness_table, LUMA_HARNESS_NAME, "1.1"),
+    LT_HARNESS(harness_table, "1.1"),
     LUMA_HOOK_ON("CameraLocalUtil::getNormalizedOr", "Vec3f(const Vec3f &, const Vec3f &)", LUMA_AFTER, counted),
     LUMA_HOOK_ON("MR::getRandom", "s32(s32, s32)", LUMA_AFTER, report),
 };

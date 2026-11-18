@@ -40,6 +40,10 @@ __attribute__((unused)) static void lt_say(const char* text) {
     lt_core->log(lt_mod, text);
 }
 
+/* The test extension's "harness" service (luma_harness.h): optional, since the game's catalog leaves it out (a test
+   run's extension gives it; tools/lumacore/check_services.py). */
+#define LT_HARNESS(slot, major_minor) {LUMA_IMPORT_SERVICE, LUMA_OPTIONAL, "harness", major_minor, &slot, 0, 0, 0}
+
 #define LT_START(body)                                                 \
     static int32_t start(const LumaCore* core, const LumaMod* mod) {   \
         lt_core = core;                                                \
