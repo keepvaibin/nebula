@@ -194,26 +194,26 @@ bool SceneCamera::record(ID3D12GraphicsCommandList* list, DescriptorRing& ring, 
     view.Texture2D.MipLevels = 1u;
     D3D12_SHADER_RESOURCE_VIEW_DESC exposure_view = view;
     exposure_view.Format = kExposureFormat;
-    device_->CreateShaderResourceView(in.wide, &view, cpu(0));
-    device_->CreateShaderResourceView(exposure_.Get(), &exposure_view, cpu(1));
+    ring.write_view(cpu(0), in.wide, view);
+    ring.write_view(cpu(1), exposure_.Get(), exposure_view);
     D3D12_SHADER_RESOURCE_VIEW_DESC depth_view = view;
     depth_view.Format = kSceneDepthSrvFormat;
-    device_->CreateShaderResourceView(in.depth, &depth_view, cpu(2));
+    ring.write_view(cpu(2), in.depth, depth_view);
     D3D12_UNORDERED_ACCESS_VIEW_DESC storage{};
     storage.Format = kExposureFormat;
     storage.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-    device_->CreateUnorderedAccessView(exposure_.Get(), nullptr, &storage, cpu(3));
+    ring.write_view(cpu(3), exposure_.Get(), storage);
     if (samples) {
         D3D12_SHADER_RESOURCE_VIEW_DESC many{};
         many.Format = kSceneHdrColorFormat;
         many.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMS;
         many.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        device_->CreateShaderResourceView(in.wide_ms, &many, cpu(4));
+        ring.write_view(cpu(4), in.wide_ms, many);
     } else {
-        device_->CreateShaderResourceView(in.wide, &view, cpu(4));
+        ring.write_view(cpu(4), in.wide, view);
     }
-    device_->CreateShaderResourceView(exposure_.Get(), &exposure_view, cpu(5));
-    device_->CreateShaderResourceView(in.depth, &depth_view, cpu(6));
+    ring.write_view(cpu(5), exposure_.Get(), exposure_view);
+    ring.write_view(cpu(6), in.depth, depth_view);
 
     // The meter's inputs and its exposure change in one call.
     BarriersD3D12 to_meter{list};
@@ -274,16 +274,16 @@ bool SceneCamera::widen(ID3D12GraphicsCommandList* list, DescriptorRing& ring, c
     view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     view.Texture2D.MipLevels = 1u;
-    device_->CreateShaderResourceView(in.picture, &view, cpu);
+    ring.write_view(cpu, in.picture, view);
     cpu.ptr += stride;
     D3D12_SHADER_RESOURCE_VIEW_DESC exposure_view = view;
     exposure_view.Format = kExposureFormat;
-    device_->CreateShaderResourceView(exposure_.Get(), &exposure_view, cpu);
+    ring.write_view(cpu, exposure_.Get(), exposure_view);
     cpu.ptr += stride;
     D3D12_UNORDERED_ACCESS_VIEW_DESC storage{};
     storage.Format = kExposureFormat;
     storage.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-    device_->CreateUnorderedAccessView(exposure_.Get(), nullptr, &storage, cpu);
+    ring.write_view(cpu, exposure_.Get(), storage);
     D3D12_GPU_DESCRIPTOR_HANDLE storage_table = table.gpu;
     storage_table.ptr += stride * 2u;
 

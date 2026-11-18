@@ -58,6 +58,7 @@
 #include <condition_variable>
 #include <mutex>
 #include <thread>
+#include <type_traits>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -389,6 +390,11 @@ bool DescriptorRing::initialize(
     frame_ready_ = false;
     bound_list_ = nullptr;
     bound_heap_ = nullptr;
+    views_.clear();
+    view_heap_.Reset();
+    free_view_slots_.clear();
+    view_capacity_ = view_next_ = 0u;
+    view_frame_ = views_made_ = 0u;
     // The null block: typed 2D null views, what any slot a pass leaves unwritten holds.
     D3D12_SHADER_RESOURCE_VIEW_DESC null_view{};
     null_view.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -472,6 +478,161 @@ void DescriptorRing::begin_frame(unsigned frame_slot) {
     cursor_     = frame_base_;
     frame_ready_ = true;
     bound_list_ = nullptr;
+    // The views no frame wrote in the last frames_in_flight + 1 give back their slot and their resource.
+    ++view_frame_;
+    for (auto it = views_.begin(); it != views_.end();) {
+        if (view_frame_ - it->second.written_frame > frames_in_flight_ + 1u) {
+            free_view_slots_.push_back(it->second.slot);
+            it = views_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+namespace {
+// The view cache's first size; it doubles when full.
+constexpr unsigned kFirstViewCache = 64u;
+
+template <typename T>
+void put(std::array<unsigned char, 48>& bytes, std::size_t at, const T& value) {
+    static_assert(std::is_trivially_copyable_v<T>);
+    std::memcpy(bytes.data() + at, &value, sizeof(value));
+}
+
+// Copies the union member `member` (fields of four bytes only, so no padding) to the key's place for it.
+template <typename T>
+void put_member(std::array<unsigned char, 48>& bytes, const T& member) {
+    static_assert(sizeof(T) % 4u == 0u && sizeof(T) <= 32u);
+    put(bytes, 16u, member);
+}
+}  // namespace
+
+std::size_t DescriptorRing::ViewKeyHash::operator()(const ViewKey& key) const noexcept {
+    // FNV-1a.
+    std::uint64_t hash = 14695981039346656037ull;
+    const auto mix = [&hash](const unsigned char* p, std::size_t n) {
+        for (std::size_t i = 0; i < n; ++i) {
+            hash = (hash ^ p[i]) * 1099511628211ull;
+        }
+    };
+    const std::uintptr_t resource = reinterpret_cast<std::uintptr_t>(key.resource);
+    mix(reinterpret_cast<const unsigned char*>(&resource), sizeof(resource));
+    mix(reinterpret_cast<const unsigned char*>(&key.kind), sizeof(key.kind));
+    mix(key.desc.data(), key.desc.size());
+    return static_cast<std::size_t>(hash);
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE DescriptorRing::view_slot(const ViewKey& key, ID3D12Resource* resource, bool& made) {
+    auto found = views_.find(key);
+    made = found == views_.end();
+    if (made) {
+        unsigned slot = 0u;
+        if (!free_view_slots_.empty()) {
+            slot = free_view_slots_.back();
+            free_view_slots_.pop_back();
+        } else {
+            if (view_next_ == view_capacity_) {
+                // A larger CPU-only heap with the views so far: their slots stay.
+                const unsigned capacity = view_capacity_ == 0u ? kFirstViewCache : view_capacity_ * 2u;
+                D3D12_DESCRIPTOR_HEAP_DESC dhd{};
+                dhd.Type = type_;
+                dhd.NumDescriptors = capacity;
+                dhd.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+                Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> heap;
+                if (FAILED(device_->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&heap)))) {
+                    return {};
+                }
+                if (view_capacity_ > 0u) {
+                    device_->CopyDescriptorsSimple(view_capacity_, heap->GetCPUDescriptorHandleForHeapStart(),
+                                                   view_heap_->GetCPUDescriptorHandleForHeapStart(), type_);
+                }
+                view_heap_ = std::move(heap);
+                view_capacity_ = capacity;
+            }
+            slot = view_next_++;
+        }
+        found = views_.emplace(key, KeptView{Microsoft::WRL::ComPtr<ID3D12Resource>(resource), slot, 0u}).first;
+        ++views_made_;
+    }
+    found->second.written_frame = view_frame_;
+    D3D12_CPU_DESCRIPTOR_HANDLE cpu = view_heap_->GetCPUDescriptorHandleForHeapStart();
+    cpu.ptr += static_cast<SIZE_T>(found->second.slot) * increment_;
+    return cpu;
+}
+
+void DescriptorRing::write_view(D3D12_CPU_DESCRIPTOR_HANDLE at, ID3D12Resource* resource,
+                                const D3D12_SHADER_RESOURCE_VIEW_DESC& desc) {
+    ViewKey key;
+    key.resource = resource;
+    key.kind = 0u;
+    put(key.desc, 0u, desc.Format);
+    put(key.desc, 4u, desc.ViewDimension);
+    put(key.desc, 8u, desc.Shader4ComponentMapping);
+    bool known = true;
+    switch (desc.ViewDimension) {
+    case D3D12_SRV_DIMENSION_BUFFER:
+        put(key.desc, 16u, desc.Buffer.FirstElement);
+        put(key.desc, 24u, desc.Buffer.NumElements);
+        put(key.desc, 28u, desc.Buffer.StructureByteStride);
+        put(key.desc, 32u, desc.Buffer.Flags);
+        break;
+    case D3D12_SRV_DIMENSION_TEXTURE1D: put_member(key.desc, desc.Texture1D); break;
+    case D3D12_SRV_DIMENSION_TEXTURE1DARRAY: put_member(key.desc, desc.Texture1DArray); break;
+    case D3D12_SRV_DIMENSION_TEXTURE2D: put_member(key.desc, desc.Texture2D); break;
+    case D3D12_SRV_DIMENSION_TEXTURE2DARRAY: put_member(key.desc, desc.Texture2DArray); break;
+    case D3D12_SRV_DIMENSION_TEXTURE2DMS: put_member(key.desc, desc.Texture2DMS); break;
+    case D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY: put_member(key.desc, desc.Texture2DMSArray); break;
+    case D3D12_SRV_DIMENSION_TEXTURE3D: put_member(key.desc, desc.Texture3D); break;
+    case D3D12_SRV_DIMENSION_TEXTURECUBE: put_member(key.desc, desc.TextureCube); break;
+    case D3D12_SRV_DIMENSION_TEXTURECUBEARRAY: put_member(key.desc, desc.TextureCubeArray); break;
+    default: known = false; break;  // made in place each time
+    }
+    bool made = false;
+    const D3D12_CPU_DESCRIPTOR_HANDLE kept = known ? view_slot(key, resource, made) : D3D12_CPU_DESCRIPTOR_HANDLE{};
+    if (kept.ptr == 0u) {
+        device_->CreateShaderResourceView(resource, &desc, at);
+        return;
+    }
+    if (made) {
+        device_->CreateShaderResourceView(resource, &desc, kept);
+    }
+    device_->CopyDescriptorsSimple(1u, at, kept, type_);
+}
+
+void DescriptorRing::write_view(D3D12_CPU_DESCRIPTOR_HANDLE at, ID3D12Resource* resource,
+                                const D3D12_UNORDERED_ACCESS_VIEW_DESC& desc) {
+    ViewKey key;
+    key.resource = resource;
+    key.kind = 1u;
+    put(key.desc, 0u, desc.Format);
+    put(key.desc, 4u, desc.ViewDimension);
+    bool known = true;
+    switch (desc.ViewDimension) {
+    case D3D12_UAV_DIMENSION_BUFFER:
+        put(key.desc, 16u, desc.Buffer.FirstElement);
+        put(key.desc, 24u, desc.Buffer.NumElements);
+        put(key.desc, 28u, desc.Buffer.StructureByteStride);
+        put(key.desc, 32u, desc.Buffer.CounterOffsetInBytes);
+        put(key.desc, 40u, desc.Buffer.Flags);
+        break;
+    case D3D12_UAV_DIMENSION_TEXTURE1D: put_member(key.desc, desc.Texture1D); break;
+    case D3D12_UAV_DIMENSION_TEXTURE1DARRAY: put_member(key.desc, desc.Texture1DArray); break;
+    case D3D12_UAV_DIMENSION_TEXTURE2D: put_member(key.desc, desc.Texture2D); break;
+    case D3D12_UAV_DIMENSION_TEXTURE2DARRAY: put_member(key.desc, desc.Texture2DArray); break;
+    case D3D12_UAV_DIMENSION_TEXTURE3D: put_member(key.desc, desc.Texture3D); break;
+    default: known = false; break;  // made in place each time
+    }
+    bool made = false;
+    const D3D12_CPU_DESCRIPTOR_HANDLE kept = known ? view_slot(key, resource, made) : D3D12_CPU_DESCRIPTOR_HANDLE{};
+    if (kept.ptr == 0u) {
+        device_->CreateUnorderedAccessView(resource, nullptr, &desc, at);
+        return;
+    }
+    if (made) {
+        device_->CreateUnorderedAccessView(resource, nullptr, &desc, kept);
+    }
+    device_->CopyDescriptorsSimple(1u, at, kept, type_);
 }
 
 DescriptorRing::Persistent DescriptorRing::allocate_persistent(unsigned count) {
@@ -5581,7 +5742,7 @@ void RendererD3D12::present_fg_hudless(const DisplayTexture& source, const D3D12
         sd.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
         sd.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         sd.Texture2D.MipLevels = 1;
-        device_->CreateShaderResourceView(fg_hudless_display_.texture.Get(), &sd, tbl.cpu);
+        srv_ring_.write_view(tbl.cpu, fg_hudless_display_.texture.Get(), sd);
         command_list_->SetGraphicsRootSignature(s_blit_root_sig.Get());
         command_list_->SetPipelineState(blit_pipeline_.Get());
         srv_ring_.bind(command_list_.Get());
@@ -5972,10 +6133,10 @@ void RendererD3D12::end_layer_2d() {
     view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     view.Texture2D.MipLevels = 1;
     view.Format = kSceneColorFormat;
-    device_->CreateShaderResourceView(layer2d_set_.color.Get(), &view, table.cpu);
+    srv_ring_.write_view(table.cpu, layer2d_set_.color.Get(), view);
     D3D12_CPU_DESCRIPTOR_HANDLE second = table.cpu;
     second.ptr += device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    device_->CreateShaderResourceView(layer2d_base_.Get(), &view, second);
+    srv_ring_.write_view(second, layer2d_base_.Get(), view);
     // Into the float set's target (each sample with MSAA, resolved again when next read).
     record_layer_draw(layer_pipeline(true, scene_msaa_.samples), layer2d_merge_root_.Get(), scene_rtv_,
                       static_cast<unsigned>(desc.Width), desc.Height, table.gpu, false);
@@ -6809,7 +6970,7 @@ bool RendererD3D12::present(
         sd.ViewDimension             = D3D12_SRV_DIMENSION_TEXTURE2D;
         sd.Shader4ComponentMapping   = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         sd.Texture2D.MipLevels       = 1;
-        device_->CreateShaderResourceView(source->texture.Get(), &sd, tbl.cpu);
+        srv_ring_.write_view(tbl.cpu, source->texture.Get(), sd);
         command_list_->SetGraphicsRootSignature(s_blit_root_sig.Get());
         command_list_->SetPipelineState(blit_pipeline_.Get());
         srv_ring_.bind(command_list_.Get());

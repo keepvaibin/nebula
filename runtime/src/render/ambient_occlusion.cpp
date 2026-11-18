@@ -267,15 +267,15 @@ bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& r
         return h;
     };
     // 0-2: reads the denoised occlusion (the multiply too); 3-5: the raw.
-    device->CreateShaderResourceView(in.depth, &depth_view, cpu(0));
-    device->CreateShaderResourceView(denoised_.resource.Get(), &denoised_view, cpu(1));
-    device->CreateShaderResourceView(distance_.resource.Get(), &distance_view, cpu(2));
-    device->CreateShaderResourceView(in.depth, &depth_view, cpu(3));
-    device->CreateShaderResourceView(raw_.resource.Get(), &occlusion_view, cpu(4));
-    device->CreateShaderResourceView(distance_.resource.Get(), &distance_view, cpu(5));
-    device->CreateUnorderedAccessView(distance_.resource.Get(), nullptr, &distance_uav, cpu(6));
-    device->CreateUnorderedAccessView(raw_.resource.Get(), nullptr, &uav, cpu(7));
-    device->CreateUnorderedAccessView(denoised_.resource.Get(), nullptr, &denoised_uav, cpu(8));
+    ring.write_view(cpu(0), in.depth, depth_view);
+    ring.write_view(cpu(1), denoised_.resource.Get(), denoised_view);
+    ring.write_view(cpu(2), distance_.resource.Get(), distance_view);
+    ring.write_view(cpu(3), in.depth, depth_view);
+    ring.write_view(cpu(4), raw_.resource.Get(), occlusion_view);
+    ring.write_view(cpu(5), distance_.resource.Get(), distance_view);
+    ring.write_view(cpu(6), distance_.resource.Get(), distance_uav);
+    ring.write_view(cpu(7), raw_.resource.Get(), uav);
+    ring.write_view(cpu(8), denoised_.resource.Get(), denoised_uav);
 
     list->SetComputeRootSignature(root_signature_.Get());
     list->SetComputeRoot32BitConstants(0, sizeof(Constants) / 4u, &c, 0);

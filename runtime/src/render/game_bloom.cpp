@@ -599,12 +599,12 @@ D3D12_GPU_DESCRIPTOR_HANDLE GameBloom::table(DescriptorRing& ring, const std::ar
             view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
             view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
             view.Texture2D.MipLevels = 1;
-            device_->CreateShaderResourceView(srvs[i], &view, h);
+            ring.write_view(h, srvs[i], view);
         } else {
             D3D12_UNORDERED_ACCESS_VIEW_DESC view{};
             view.Format = kWorkFormat;
             view.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-            device_->CreateUnorderedAccessView(uavs[i - 3u], nullptr, &view, h);
+            ring.write_view(h, uavs[i - 3u], view);
         }
     }
     return t.gpu;

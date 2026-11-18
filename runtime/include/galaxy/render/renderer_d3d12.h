@@ -166,8 +166,20 @@ public:
         D3D12_CPU_DESCRIPTOR_HANDLE cpu{};
         D3D12_GPU_DESCRIPTOR_HANDLE gpu{};
     };
-    // Reserves `count` consecutive slots; the caller writes views at `cpu`.
+    // Reserves `count` consecutive slots; the caller writes views at `cpu` (write_view).
     Table allocate(unsigned count);
+    // Writes a view of `resource` (nullptr: a null view) at `at`, a slot of a table of this ring (allocate). A view is
+    // made once, into a CPU-only cache, and copied from there after: the same resource and description again cost a
+    // descriptor copy, not a view creation. The cache holds a reference to each resource it has a view of, so no new
+    // resource takes that address while the view is kept; begin_frame drops the views no frame wrote in the last
+    // frames_in_flight + 1 frames. A UAV has no counter resource.
+    void write_view(D3D12_CPU_DESCRIPTOR_HANDLE at, ID3D12Resource* resource,
+                    const D3D12_SHADER_RESOURCE_VIEW_DESC& desc);
+    void write_view(D3D12_CPU_DESCRIPTOR_HANDLE at, ID3D12Resource* resource,
+                    const D3D12_UNORDERED_ACCESS_VIEW_DESC& desc);
+    // Views made since initialize (the cache's misses) and views kept now: tests and diagnostics.
+    [[nodiscard]] std::uint64_t views_made() const noexcept { return views_made_; }
+    [[nodiscard]] std::size_t views_kept() const noexcept { return views_.size(); }
     // Copies this frame's tables from the shadow heap into the heap (before the frame's command list is submitted).
     void flush();
 
@@ -233,6 +245,34 @@ private:
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE heap_cpu_at(unsigned index) const noexcept;  // a ring index, past the textures
     void fill_null(unsigned index, unsigned count);
     void copy_in(unsigned index, unsigned count);  // shadow -> heap, both by ring index
+    // The view cache (write_view). A key is the resource, the kind of view and the description's fields that its dimension
+    // reads, each at a fixed place in bytes that are otherwise zero (a description's padding never reaches the key).
+    struct ViewKey {
+        ID3D12Resource* resource = nullptr;
+        std::uint32_t kind = 0u;  // 0 SRV, 1 UAV
+        std::array<unsigned char, 48> desc{};
+        bool operator==(const ViewKey& other) const noexcept {
+            return resource == other.resource && kind == other.kind && desc == other.desc;
+        }
+    };
+    struct ViewKeyHash {
+        std::size_t operator()(const ViewKey& key) const noexcept;
+    };
+    struct KeptView {
+        Microsoft::WRL::ComPtr<ID3D12Resource> resource;
+        unsigned slot = 0u;
+        std::uint64_t written_frame = 0u;
+    };
+    // The cache's slot for `key` (`made`: it was missing, and the caller makes the view there); a null handle when the
+    // cache cannot grow (the caller makes the view in place).
+    D3D12_CPU_DESCRIPTOR_HANDLE view_slot(const ViewKey& key, ID3D12Resource* resource, bool& made);
+    std::unordered_map<ViewKey, KeptView, ViewKeyHash> views_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> view_heap_;  // CPU only
+    std::vector<unsigned> free_view_slots_;
+    unsigned view_capacity_ = 0u;
+    unsigned view_next_ = 0u;
+    std::uint64_t view_frame_ = 0u;
+    std::uint64_t views_made_ = 0u;
     ID3D12Device* device_ = nullptr;
     D3D12_DESCRIPTOR_HEAP_TYPE type_{};
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> heap_;
