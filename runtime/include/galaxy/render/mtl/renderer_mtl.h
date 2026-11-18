@@ -272,13 +272,11 @@ public:
     [[nodiscard]] bool record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes, bool compared);
     [[nodiscard]] const float* screen_probes_finished(std::size_t slot);
 
-    // Test captures: the scene target and the presented picture as PPM files (paths from set_debug_capture_paths).
-    bool debug_copy_scene_to_readback();
-    void debug_log_readback();
+    // Test captures: the presented picture as PPM files (paths from set_debug_capture_paths).
     void debug_log_backbuffer_readback();
     bool debug_copy_selected_display_to_readback(const DisplayTexture& source);
     void debug_log_display_readback();
-    void set_debug_capture_paths(std::string scene_ppm_path, std::string backbuffer_ppm_path);
+    void set_debug_capture_paths(std::string backbuffer_ppm_path);
 
     [[nodiscard]] gpu::Device* device() const noexcept { return static_cast<gpu::Device*>(mtl::Context::get().device()); }
     [[nodiscard]] const FrameMap& frame_map() const noexcept { return scene_map_; }
@@ -752,12 +750,7 @@ private:
     static constexpr std::uint64_t kProbesInFrame = ~std::uint64_t{0};
 
     // Captures and telemetry.
-    std::string scene_capture_path_;
     std::string backbuffer_capture_path_;
-    Readback scene_capture_;
-    std::string scene_capture_pending_path_;
-    unsigned scene_capture_width_ = 0;
-    unsigned scene_capture_height_ = 0;
     Readback backbuffer_capture_;
     std::string backbuffer_capture_pending_path_;
     unsigned backbuffer_capture_width_ = 0;

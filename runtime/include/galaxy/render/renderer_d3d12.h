@@ -568,8 +568,6 @@ public:
     // `compared` probes are answered with their depth too: the read breaks no render pass here.
     [[nodiscard]] bool record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes, bool compared);
     [[nodiscard]] const float* screen_probes_finished(std::size_t slot);  // throws when the device is gone
-    bool debug_copy_scene_to_readback();
-    void debug_log_readback();
     void debug_log_backbuffer_readback();
     bool debug_copy_selected_display_to_readback(const DisplayTexture& source);
     void debug_log_selected_display_readback();
@@ -577,9 +575,7 @@ public:
     // its optional readbacks. Paths are retained with the pending readback so
     // a later nonblocking completion cannot write to a subsequent frame's
     // diagnostic file.
-    void set_debug_capture_paths(
-        std::string scene_ppm_path,
-        std::string backbuffer_ppm_path);
+    void set_debug_capture_paths(std::string backbuffer_ppm_path);
 
     [[nodiscard]] ID3D12Device* device() const { return device_.Get(); }
     [[nodiscard]] const FrameMap& frame_map() const noexcept { return frame_; }
@@ -1207,13 +1203,6 @@ private:
     std::uint64_t next_fence_value_ = 0;
 
 
-    // Debug scene target readback (debug_copy_scene_to_readback / debug_log_readback).
-    Microsoft::WRL::ComPtr<ID3D12Resource> readback_buf_;
-    bool readback_pending_ = false;
-    bool readback_wide_ = false;  // the copy is of the wide (RGBA16F) scene target: 8 bytes a pixel
-    std::uint64_t readback_fence_value_ = 0;
-    std::string next_scene_capture_path_;
-    std::string readback_capture_path_;
     Microsoft::WRL::ComPtr<ID3D12Resource> backbuffer_readback_buf_;
     bool backbuffer_readback_pending_ = false;
     std::uint64_t backbuffer_readback_fence_value_ = 0;

@@ -381,7 +381,7 @@ void RendererMtl::shutdown() {
         pictures_.clear();
         frame_pass_targets_.clear();
         capture_target_.reset();
-        scene_capture_ = backbuffer_capture_ = display_capture_ = Readback{};
+        backbuffer_capture_ = display_capture_ = Readback{};
         probe_slots_.clear();
         held_probe_slots_.clear();
         pass_visibility_.reset();
@@ -810,9 +810,6 @@ std::uint64_t RendererMtl::end_frame(bool present_swap_chain, SubmissionCallback
         if (probes.fence == kProbesInFrame) {
             probes.fence = fence;
         }
-    }
-    if (scene_capture_.buffer && scene_capture_.fence == 0u && !scene_capture_pending_path_.empty()) {
-        scene_capture_.fence = fence;
     }
     if (backbuffer_capture_.buffer && backbuffer_capture_.fence == 0u && !backbuffer_capture_pending_path_.empty()) {
         backbuffer_capture_.fence = fence;

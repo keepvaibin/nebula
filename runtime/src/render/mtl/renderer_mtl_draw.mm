@@ -612,13 +612,11 @@ const float* RendererMtl::screen_probes_finished(std::size_t slot) {
 
 void RendererMtl::finish_pictures() {
     wait_for_gpu_idle();
-    debug_log_readback();
     debug_log_backbuffer_readback();
     wait_picture_files();
 }
 
-void RendererMtl::set_debug_capture_paths(std::string scene_ppm_path, std::string backbuffer_ppm_path) {
-    scene_capture_path_ = std::move(scene_ppm_path);
+void RendererMtl::set_debug_capture_paths(std::string backbuffer_ppm_path) {
     backbuffer_capture_path_ = std::move(backbuffer_ppm_path);
 }
 
@@ -652,46 +650,6 @@ void write_rgb(std::string path, const std::uint8_t* rgba, unsigned width, unsig
 }
 
 }  // namespace
-
-bool RendererMtl::debug_copy_scene_to_readback() {
-    debug_log_readback();
-    if (scene_capture_path_.empty() || !scene_capture_pending_path_.empty() || !scene_.color ||
-        scene_.color->format != draw_layout_.scene_color) {
-        return false;
-    }
-    const unsigned w = std::min(scene_map_.width, scene_.color->width);
-    const unsigned h = std::min(scene_map_.height, scene_.color->height);
-    const std::uint64_t bytes = static_cast<std::uint64_t>(w) * h * 4u;
-    if (!scene_capture_.buffer || scene_capture_.buffer->size < bytes) {
-        scene_capture_.buffer = mtl::Context::get().create_buffer(bytes, mtl::Storage::Shared, "scene target capture");
-        if (!scene_capture_.buffer) {
-            return false;
-        }
-    }
-    end_scene_pass();
-    @autoreleasepool {
-        copy_texture_out(commands_of(commands_), texture_of(scene_.color), buffer_of(scene_capture_.buffer), w, h);
-    }
-    scene_capture_.fence = 0u;
-    scene_capture_pending_path_ = scene_capture_path_;
-    scene_capture_width_ = w;
-    scene_capture_height_ = h;
-    reset_draw_bindings();
-    bind_scene();
-    return true;
-}
-
-void RendererMtl::debug_log_readback() {
-    if (scene_capture_pending_path_.empty() || scene_capture_.fence == 0u || completed_fence_value() < scene_capture_.fence) {
-        return;
-    }
-    std::vector<std::uint8_t> rgba(static_cast<std::size_t>(scene_capture_width_) * scene_capture_height_ * 4u);
-    ten_bit_to_rgba8(reinterpret_cast<const std::uint8_t*>(scene_capture_.buffer->mapped), rgba.data(), scene_capture_width_,
-                     scene_capture_height_, scene_capture_width_ * 4u, scene_capture_width_ * 4u);
-    write_rgb(std::move(scene_capture_pending_path_), rgba.data(), scene_capture_width_, scene_capture_height_);
-    scene_capture_pending_path_.clear();
-    scene_capture_.fence = 0u;
-}
 
 bool RendererMtl::debug_copy_selected_display_to_readback(const DisplayTexture& source) {
     if (backbuffer_capture_path_.empty() || !display_capture_pending_path_.empty() || !source.texture || source.width == 0u ||

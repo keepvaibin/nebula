@@ -386,7 +386,7 @@ void RendererD3D11::shutdown() {
         target_slots_.clear();
         pictures_.clear();
         frame_pass_targets_.clear();
-        scene_capture_ = backbuffer_capture_ = display_capture_ = Readback{};
+        backbuffer_capture_ = display_capture_ = Readback{};
         probe_slots_.clear();
         for (Frame& frame : frames_) {
             frame = Frame{};
@@ -723,9 +723,6 @@ std::uint64_t RendererD3D11::end_frame(bool present_swap_chain, SubmissionCallba
         if (probes.fence == kProbesInFrame) {
             probes.fence = fence;
         }
-    }
-    if (scene_capture_.staging && scene_capture_.fence == 0u && !scene_capture_pending_path_.empty()) {
-        scene_capture_.fence = fence;
     }
     if (backbuffer_capture_.staging && backbuffer_capture_.fence == 0u && !backbuffer_capture_pending_path_.empty()) {
         backbuffer_capture_.fence = fence;

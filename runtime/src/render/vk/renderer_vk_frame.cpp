@@ -3524,82 +3524,12 @@ const float* RendererVk::screen_probes_finished(std::size_t slot) {
 
 void RendererVk::finish_pictures() {
     wait_for_gpu_idle();
-    debug_log_readback();
     debug_log_backbuffer_readback();
     wait_picture_files();
 }
 
-void RendererVk::set_debug_capture_paths(std::string scene_ppm_path, std::string backbuffer_ppm_path) {
-    scene_capture_path_ = std::move(scene_ppm_path);
+void RendererVk::set_debug_capture_paths(std::string backbuffer_ppm_path) {
     backbuffer_capture_path_ = std::move(backbuffer_ppm_path);
-}
-
-bool RendererVk::debug_copy_scene_to_readback() {
-    debug_log_readback();
-    if (scene_capture_path_.empty() || !scene_capture_pending_path_.empty()) {
-        return false;
-    }
-    vk::Context& context = vk::Context::get();
-    const unsigned w = scene_map_.width;
-    const unsigned h = scene_map_.height;
-    // The 10-bit scene target, or the wide one (RGBA16F, begin_wide_scene): 8 bytes a pixel, its halves
-    // read as the 10-bit target's words (debug_log_readback). Any other format is not read.
-    const bool wide = scene_.color->format == VK_FORMAT_R16G16B16A16_SFLOAT;
-    if (!wide && scene_.color->format != vk::kSceneColorFormat) {
-        return false;
-    }
-    const std::uint64_t bytes = static_cast<std::uint64_t>(w) * h * (wide ? 8u : 4u);
-    if (!scene_capture_.buffer || scene_capture_.buffer->size < bytes) {
-        scene_capture_.buffer = context.create_readback_buffer(bytes, "scene target capture");
-        if (!scene_capture_.buffer) {
-            return false;
-        }
-    }
-    end_scene_pass();
-    const VkCommandBuffer commands = commands_;
-    image_barrier(commands, scene_.color->image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ColorWrite, gpu::Use::CopySource);
-    VkBufferImageCopy region{};
-    region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-    region.imageExtent = {w, h, 1};
-    vkCmdCopyImageToBuffer(commands, scene_.color->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                           scene_capture_.buffer->buffer, 1, &region);
-    image_barrier(commands, scene_.color->image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::CopySource, gpu::Use::ColorWrite);
-    scene_capture_.fence = 0u;
-    scene_capture_pending_path_ = scene_capture_path_;
-    scene_capture_width_ = w;
-    scene_capture_height_ = h;
-    scene_capture_wide_ = wide;
-    reset_draw_bindings();
-    bind_scene();
-    return true;
-}
-
-void RendererVk::debug_log_readback() {
-    if (scene_capture_pending_path_.empty() || scene_capture_.fence == 0u ||
-        completed_fence_value() < scene_capture_.fence) {
-        return;
-    }
-    vk::Context::get().invalidate(*scene_capture_.buffer);
-    std::vector<std::uint8_t> rgba(static_cast<std::size_t>(scene_capture_width_) * scene_capture_height_ * 4u);
-    const auto* copied = reinterpret_cast<const std::uint8_t*>(scene_capture_.buffer->mapped);
-    std::vector<std::uint8_t> words;
-    if (scene_capture_wide_) {
-        words.resize(rgba.size());
-        half4_to_ten_bit(copied, words.data(), scene_capture_width_, scene_capture_height_, scene_capture_width_ * 8u,
-                         scene_capture_width_ * 4u);
-        copied = words.data();
-    }
-    ten_bit_to_rgba8(copied, rgba.data(), scene_capture_width_, scene_capture_height_, scene_capture_width_ * 4u,
-                     scene_capture_width_ * 4u);
-    std::vector<std::uint8_t> rgb(static_cast<std::size_t>(scene_capture_width_) * scene_capture_height_ * 3u);
-    for (std::size_t i = 0, n = rgb.size() / 3u; i < n; ++i) {
-        rgb[i * 3u] = rgba[i * 4u];
-        rgb[i * 3u + 1u] = rgba[i * 4u + 1u];
-        rgb[i * 3u + 2u] = rgba[i * 4u + 2u];
-    }
-    write_ppm_async(std::move(scene_capture_pending_path_), std::move(rgb), scene_capture_width_, scene_capture_height_);
-    scene_capture_pending_path_.clear();
-    scene_capture_.fence = 0u;
 }
 
 bool RendererVk::debug_copy_selected_display_to_readback(const DisplayTexture& source) {

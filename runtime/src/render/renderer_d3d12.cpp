@@ -1793,9 +1793,6 @@ void RendererD3D12::apply_window_size() {
     for (auto& retired : retired_targets_) {
         retired.clear();
     }
-    readback_buf_.Reset();
-    readback_pending_ = false;
-    readback_fence_value_ = 0u;
     const FrameMap previous = scene_extent_;
     if (format_changes) {
         // The post chain first: a format it cannot take leaves everything as it was.
@@ -2890,7 +2887,7 @@ void RendererD3D12::list_live_objects(Kept& kept) {
 RendererD3D12::Kept RendererD3D12::take_apart_lost_device() {
     keep_window_ = true;
     device_gone_ = true;
-    readback_pending_ = backbuffer_readback_pending_ = selected_display_readback_pending_ = false;
+    backbuffer_readback_pending_ = selected_display_readback_pending_ = false;
     try {
         shutdown();
     } catch (const std::exception& error) {
@@ -2936,9 +2933,6 @@ void RendererD3D12::shutdown() {
     }
     // A diagnostic copy can be the last submitted list: its data goes to the
     // background PPM writers before any D3D resource is released.
-    retain_shutdown_failure("scene target diagnostic readback", [&] {
-        debug_log_readback();
-    });
     retain_shutdown_failure("backbuffer diagnostic readback", [&] {
         debug_log_backbuffer_readback();
     });
@@ -3010,11 +3004,6 @@ void RendererD3D12::shutdown() {
     timestamp_readback_.Reset();
     timestamp_pending_.fill(false);
     timestamp_frequency_ = 0;
-    readback_buf_.Reset();
-    readback_pending_ = false;
-    readback_fence_value_ = 0;
-    next_scene_capture_path_.clear();
-    readback_capture_path_.clear();
     backbuffer_readback_buf_.Reset();
     hdr_capture_target_.Reset();
     hdr_capture_rtv_heap_.Reset();
@@ -4533,9 +4522,6 @@ std::uint64_t RendererD3D12::end_frame(
         d3d_check(signal_hr, "Queue Signal");
     }
     // Readbacks recorded on this list complete at this signal; nothing waits for them here.
-    if (readback_pending_ && readback_fence_value_ == 0u) {
-        readback_fence_value_ = submitted_fence;
-    }
     if (backbuffer_readback_pending_ &&
         backbuffer_readback_fence_value_ == 0u) {
         backbuffer_readback_fence_value_ = submitted_fence;
@@ -6608,16 +6594,12 @@ void RendererD3D12::finish_pictures() {
     if (queue_ && fence_) {
         wait_for_gpu();
     }
-    debug_log_readback();
     debug_log_backbuffer_readback();
     debug_log_selected_display_readback();
     reap_debug_capture_writers(true);
 }
 
-void RendererD3D12::set_debug_capture_paths(
-    std::string scene_ppm_path,
-    std::string backbuffer_ppm_path) {
-    next_scene_capture_path_ = std::move(scene_ppm_path);
+void RendererD3D12::set_debug_capture_paths(std::string backbuffer_ppm_path) {
     next_backbuffer_capture_path_ = std::move(backbuffer_ppm_path);
 }
 
@@ -6729,162 +6711,6 @@ void RendererD3D12::queue_debug_ppm_capture(
             }
         });
     debug_ppm_writers_.push_back(std::move(writer));
-}
-
-bool RendererD3D12::debug_copy_scene_to_readback() {
-    // The scene target as it is: the 10-bit one (R10G10B10A2), or the wide one (RGBA16F, begin_wide_scene),
-    // whose halves debug_log_readback turns into the 10-bit target's words.
-    resolve_scene(false);
-    debug_log_readback();
-    if (readback_pending_) {
-        std::cerr << "[scene-dump] skipped=prior-readback-pending path="
-                  << next_scene_capture_path_ << '\n';
-        return false;
-    }
-    const UINT w = frame_.width;
-    const UINT h = frame_.height;
-    // 8 or 4 bytes a pixel from the target's own format (as the Vulkan side): any other is not read.
-    const DXGI_FORMAT format = scene_color_->GetDesc().Format;
-    const bool wide = format == kSceneHdrColorFormat;
-    if (!wide && format != kSceneColorFormat) {
-        std::cerr << "[scene-dump] skipped=scene-format-not-read format=" << static_cast<unsigned>(format)
-                  << " path=" << next_scene_capture_path_ << '\n';
-        return false;
-    }
-    const UINT row_pitch =
-        (w * (wide ? 8u : 4u) + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u) &
-        ~(D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u);
-
-    if (readback_buf_ && readback_buf_->GetDesc().Width < static_cast<UINT64>(row_pitch) * h) {
-        readback_buf_.Reset();  // made for the 10-bit target or a smaller frame: no copy is pending (checked above)
-    }
-    if (!readback_buf_) {
-        D3D12_HEAP_PROPERTIES hp{};
-        hp.Type = D3D12_HEAP_TYPE_READBACK;
-        D3D12_RESOURCE_DESC rd{};
-        rd.Dimension        = D3D12_RESOURCE_DIMENSION_BUFFER;
-        rd.Width            = static_cast<UINT64>(row_pitch) * h;
-        rd.Height           = 1;
-        rd.DepthOrArraySize = 1;
-        rd.MipLevels        = 1;
-        rd.SampleDesc.Count = 1;
-        rd.Layout           = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        if (FAILED(device_->CreateCommittedResource(
-                &hp, D3D12_HEAP_FLAG_NONE, &rd,
-                D3D12_RESOURCE_STATE_COPY_DEST,
-                nullptr, IID_PPV_ARGS(&readback_buf_)))) {
-            std::cerr << "[scene-dump] skipped=readback-allocation-failed path="
-                      << next_scene_capture_path_ << '\n';
-            return false;
-        }
-    }
-
-    BarriersD3D12 uses{command_list_.Get()};
-    uses.texture(scene_color_.Get(), gpu::Use::ColorWrite, gpu::Use::CopySource);
-    uses.issue();
-
-    D3D12_TEXTURE_COPY_LOCATION src{}, dst{};
-    src.pResource = scene_color_.Get();
-    src.Type      = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-    dst.pResource = readback_buf_.Get();
-    dst.Type      = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-    dst.PlacedFootprint.Footprint.Format   = wide ? kSceneHdrColorFormat : kSceneColorFormat;
-    dst.PlacedFootprint.Footprint.Width    = w;
-    dst.PlacedFootprint.Footprint.Height   = h;
-    dst.PlacedFootprint.Footprint.Depth    = 1;
-    dst.PlacedFootprint.Footprint.RowPitch = row_pitch;
-    command_list_->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
-
-    uses.undo();
-    readback_pending_ = true;
-    readback_wide_ = wide;
-    readback_fence_value_ = 0u;
-    readback_capture_path_ = next_scene_capture_path_;
-    return true;
-}
-
-void RendererD3D12::debug_log_readback() {
-    reap_debug_capture_writers(false);
-    if (!readback_pending_ || !readback_buf_) {
-        return;
-    }
-    if (readback_fence_value_ == 0u ||
-        completed_fence_value() < readback_fence_value_) {
-        return;
-    }
-    readback_pending_ = false;
-    readback_fence_value_ = 0u;
-
-    const UINT w = frame_.width;
-    const UINT h = frame_.height;
-    const UINT copied_pitch =
-        (w * (readback_wide_ ? 8u : 4u) + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u) &
-        ~(D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u);
-
-    void* mapped = nullptr;
-    D3D12_RANGE range{0, static_cast<SIZE_T>(copied_pitch) * h};
-    if (FAILED(readback_buf_->Map(0, &range, &mapped))) {
-        readback_capture_path_.clear();
-        return;
-    }
-    bool mapped_active = true;
-    const D3D12_RANGE no_write{0, 0};
-    const ScopeExit unmap_readback([&]() noexcept {
-        if (mapped_active) readback_buf_->Unmap(0, &no_write);
-    });
-    std::uint64_t nonblack = 0, alpha_hits = 0, rs = 0, gs = 0, bs = 0;
-    std::uint8_t rmax = 0, gmax = 0, bmax = 0, amax = 0;
-    // The wide target's halves as the 10-bit target's words; the rest reads words either way.
-    std::vector<std::uint8_t> words;
-    const auto* base = static_cast<const std::uint8_t*>(mapped);
-    UINT row_pitch = copied_pitch;
-    if (readback_wide_) {
-        row_pitch = w * 4u;
-        words.resize(static_cast<std::size_t>(row_pitch) * h);
-        half4_to_ten_bit(base, words.data(), w, h, copied_pitch, row_pitch);
-        base = words.data();
-    }
-    for (UINT y = 0; y < h; y += 4) {           // sample every 4th row/col
-        const std::uint8_t* row = base + static_cast<std::size_t>(y) * row_pitch;
-        for (UINT x = 0; x < w; x += 4) {
-            std::uint32_t word = 0u;
-            std::memcpy(&word, row + x * 4u, 4u);
-            const auto r = static_cast<std::uint8_t>((word & 1023u) >> 2u);
-            const auto g = static_cast<std::uint8_t>((word >> 10u & 1023u) >> 2u);
-            const auto bl = static_cast<std::uint8_t>((word >> 20u & 1023u) >> 2u);
-            const auto a = static_cast<std::uint8_t>((word >> 30u) * 85u);
-            rs += r; gs += g; bs += bl;
-            rmax = std::max(rmax, r); gmax = std::max(gmax, g);
-            bmax = std::max(bmax, bl); amax = std::max(amax, a);
-            if (r > 8 || g > 8 || bl > 8) ++nonblack;
-            if (a > 8) ++alpha_hits;
-        }
-    }
-    const std::uint64_t samples =
-        (static_cast<std::uint64_t>((h + 3) / 4)) * ((w + 3) / 4);
-
-    if (!readback_capture_path_.empty()) {
-        queue_debug_ppm_capture(
-            "scene-dump",
-            readback_capture_path_,
-            base,
-            w,
-            h,
-            row_pitch,
-            true);
-    }
-
-    readback_buf_->Unmap(0, &no_write);
-    mapped_active = false;
-    readback_capture_path_.clear();
-    std::cerr << "[scene-dump] nonblack=" << nonblack << "/" << samples
-              << " alpha=" << alpha_hits
-              << " mean=(" << rs / samples << "," << gs / samples << ","
-              << bs / samples << ") max=("
-              << static_cast<unsigned>(rmax) << ","
-              << static_cast<unsigned>(gmax) << ","
-              << static_cast<unsigned>(bmax) << ","
-              << static_cast<unsigned>(amax) << ")\n";
 }
 
 bool RendererD3D12::present(

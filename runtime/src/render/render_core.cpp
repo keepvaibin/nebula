@@ -2087,14 +2087,14 @@ void RenderCore::present_black_picture(bool in_frame) {
     }
     const std::string snapshot_path = present_snapshot_path(NEBULA_EXT_PICTURE_GAME);
     if (!snapshot_path.empty()) {
-        renderer_.set_debug_capture_paths({}, snapshot_path);
+        renderer_.set_debug_capture_paths(snapshot_path);
     }
     if (!in_frame) {
         renderer_.begin_frame();
     }
     renderer_.present(layout, !snapshot_path.empty(), true);
     if (!snapshot_path.empty()) {
-        renderer_.set_debug_capture_paths({}, {});
+        renderer_.set_debug_capture_paths({});
     }
     if (!in_frame) {
         renderer_.end_frame();
@@ -2145,7 +2145,7 @@ void RenderCore::present_cached_display_on_thread(
     }
     const std::string snapshot_path = !count_game_display_present ? std::string{} : present_snapshot_path(duplicate_stamp ? NEBULA_EXT_PICTURE_REPEAT : NEBULA_EXT_PICTURE_GAME);
     if (!snapshot_path.empty()) {
-        renderer_.set_debug_capture_paths({}, snapshot_path);
+        renderer_.set_debug_capture_paths(snapshot_path);
     }
     const bool game_frame_only =
         interp_on_ && count_game_display_present && !interp_presenting_real_ && !duplicate_stamp;
@@ -2162,7 +2162,7 @@ void RenderCore::present_cached_display_on_thread(
     // render frames only; otherwise render-then-present would age pictures twice per frame.
     (void)renderer_.present(selected, !snapshot_path.empty());
     if (!snapshot_path.empty()) {
-        renderer_.set_debug_capture_paths({}, {});
+        renderer_.set_debug_capture_paths({});
     }
     renderer_.end_frame();
     galaxy::pacing::drop_description();
@@ -2576,11 +2576,11 @@ void RenderCore::walk_frame(ListEntry& entry, const core::WalkTime& time, bool p
     const std::string snapshot_path = selected != nullptr ? present_snapshot_path(real ? NEBULA_EXT_PICTURE_GAME : NEBULA_EXT_PICTURE_GENERATED) : std::string{};
     if (selected != nullptr) {
         if (!snapshot_path.empty()) {
-            renderer_.set_debug_capture_paths({}, snapshot_path);
+            renderer_.set_debug_capture_paths(snapshot_path);
         }
         renderer_.present(selected, !snapshot_path.empty());
         if (!snapshot_path.empty()) {
-            renderer_.set_debug_capture_paths({}, {});
+            renderer_.set_debug_capture_paths({});
         }
     }
     (void)renderer_.end_frame(
@@ -2713,7 +2713,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     if (present_swap_chain) {
         const std::string snapshot_path = present_snapshot_path(duplicate_display_present ? NEBULA_EXT_PICTURE_REPEAT : NEBULA_EXT_PICTURE_GAME);
         if (!snapshot_path.empty()) {
-            renderer_.set_debug_capture_paths({}, snapshot_path);
+            renderer_.set_debug_capture_paths(snapshot_path);
         }
         {
             const std::int64_t asked = chunk.present_asked_qpc != 0 ? chunk.present_asked_qpc : galaxy::qpc_now();
@@ -2722,7 +2722,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         }
         renderer_.present(selected_display, !snapshot_path.empty());
         if (!snapshot_path.empty()) {
-            renderer_.set_debug_capture_paths({}, {});
+            renderer_.set_debug_capture_paths({});
         }
     } else if (present_black) {
         present_black_picture(true);
