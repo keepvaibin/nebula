@@ -74,12 +74,13 @@ Two frames are in flight (`kFramesInFlight`, `runtime/include/galaxy/render/rend
 | Renderer | Per frame | Inside a frame, the whole GPU |
 | --- | --- | --- |
 | Direct3D 12 | the slot about to be used again (`renderer_d3d12.cpp:3774-3782`); the oldest history ring segment when it is reused (:3952-3956); the frame latency waitable, 100 ms bound (:4364) | `wait_for_gpu` (:916) in `reset_sampler_frame` (:1410), `prepare_temporal_upscaler` (:5034, :5067), `record_temporal_upscale` (:5229), and a capture's readback (:6904, :6907) |
-| Vulkan | the slot (`vk/renderer_vk.cpp:2013`); the history ring segment (:2111) | to be read (1.4 continues) |
-| Direct3D 11 | the slot (`d3d11/renderer_d3d11.cpp:536`); the frame latency waitable, 100 ms bound (:676) | to be read |
+| Vulkan | the slot (`vk/renderer_vk.cpp:2013`); the history ring segment (:2111) | `vkDeviceWaitIdle` when a size no longer matches: the temporal upscaler's preparation and record (`vk/renderer_vk_frame.cpp:922`, :953, :1428) and frame generation's HUD-less targets (:1455, :1495, :1548) |
+| Direct3D 11 | the slot (`d3d11/renderer_d3d11.cpp:536`); the frame latency waitable, 100 ms bound (:676) | none; a window size change waits for the GPU idle (`d3d11/renderer_d3d11_scene.cpp:246`) |
 
 Outside a frame, `wait_for_gpu` drains the GPU at a window size change (:1955), a swap chain's re-creation or resize
 (:3371, :3419), an HDR switch (:4150), shutdown (:3114, :3141) and the pictures at exit (:6769). Those are allowed by the
-rules of part 2; the four inside a frame are not, and go to the list at the end of part 1.
+rules of part 2; the waits inside a frame are not, and are in the list (1.9). Vulkan drains the same way at window size changes,
+a swap chain's re-creation and shutdown (`vk/renderer_vk_frame.cpp:425`, `vk/renderer_vk.cpp:1062`, :3031, :1723).
 
 The game thread waits on the render thread at three places: queue room (1.2 item 3), the render thread idle (1.2 item
 6), and a screen probe's answers for frame F - 2 (`render_core.cpp:2032`, bounded by `kProbeWaitNs`), which waits only
@@ -191,7 +192,7 @@ with no row has a new one.
 | Utility pipelines compiled on the render thread at first use, outside the cache | `core/pipelines.cpp` | P-052 (written, engine/b) |
 | A present waits for every pipeline creation in flight (Direct3D 12) | `core/present_gate.h` | N-1067, E3 step 1 |
 | The sampler heap, full, drains the whole GPU | `renderer_d3d12.cpp:1410` (`reset_sampler_frame`) | P-048, E3 step 2 |
-| Size changes drain the whole GPU inside a frame | `renderer_d3d12.cpp:5034`, :5067, :5229 (the temporal upscaler), :1955 | P-028 (written, engine/b) |
+| Size changes drain the whole GPU inside a frame | `renderer_d3d12.cpp:5034`, :5067, :5229 (the temporal upscaler), :1955; Vulkan's at size changes inside a frame (1.4) | P-028 (written for Direct3D 12 on engine/b; Vulkan's side open) |
 | The game thread waits for frame F - 2's probe answers | `render_core.cpp:2032` | N-1068, E4 |
 | The game thread waits for the whole render queue at an aspect change | `host_main.cpp:3236` | to be given |
 | A capture's readback waits for the GPU inside a frame | `renderer_d3d12.cpp:6904`, :6907 | to be given |
