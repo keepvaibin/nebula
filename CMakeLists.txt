@@ -623,6 +623,8 @@ galaxy_test(galaxy_core_pairing_tests SOURCES ${render_src}/core/pairing_tests.c
     ${render_src}/frame_interpolation.cpp ${render_src}/affine.cpp)
 target_include_directories(galaxy_core_pairing_tests PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src" "${CMAKE_CURRENT_SOURCE_DIR}/native/include")
+# Setup's own code (installer/native): its file helpers and its windows at a changed DPI.
+include(installer/tests/setup_tests.cmake)
 # A frame list let go of with release and taken back with acquire (nebula_frame_list.h, P-005): two threads, so the
 # Linux thread sanitizer job sees the hand-off.
 galaxy_test(galaxy_frame_list_release_tests SOURCES ${render_src}/core/frame_list_release_tests.cpp)

@@ -118,6 +118,9 @@ wstring DirName(const wstring& path);
 wstring FileName(const wstring& path);
 wstring FullPath(const wstring& path);
 wstring Slashes(wstring path);               // '/' to '\'
+// The \\?\ form (\\?\UNC\ for a share) of the full path, for every Win32 file call: a path may pass MAX_PATH (an
+// install folder deep in a tree; named streams lengthen save paths).
+wstring NativePath(const wstring& path);
 bool IsRooted(const wstring& path);
 bool FileExists(const wstring& path);
 bool DirExists(const wstring& path);
