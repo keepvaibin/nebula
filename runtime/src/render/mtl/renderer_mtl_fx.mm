@@ -9,6 +9,8 @@
 
 #include <nebula_frame_list.h>
 
+#include <dlfcn.h>
+
 #include <algorithm>
 #include <bit>
 #include <chrono>
@@ -17,6 +19,52 @@
 namespace galaxy::render {
 
 using namespace mtl_detail;
+
+namespace {
+// draw.native's get_proc_addr: what a freestanding C mod reaches the Objective-C runtime and Metal through.
+void* process_symbol(const char* name) {
+    return name != nullptr ? dlsym(RTLD_DEFAULT, name) : nullptr;
+}
+}  // namespace
+
+void RendererMtl::record_native_call(const NebulaCall& call, LumaDrawNativeFrame& frame, bool scene_point) {
+    if (call.fn == nullptr || !scene_.color) {
+        return;
+    }
+    const GpuPassScope pass_scope{*this, GpuPass::FramePass};
+    end_scene_pass("native_call");
+    settle_depth_clear();
+    const bool msaa = scene_.samples > 1u && scene_.ms_color;
+    const mtl::Texture& target = msaa ? *scene_.ms_color : *scene_.color;
+    const mtl::Texture* depth = scene_point ? (msaa ? scene_.ms_depth.get() : scene_.depth.get()) : nullptr;
+    const mtl::Context& context = mtl::Context::get();
+    frame.backend = LUMA_DRAW_NATIVE_METAL;
+    frame.width = scene_map_.width;
+    frame.height = scene_map_.height;
+    frame.samples = std::max(scene_.samples, 1u);
+    frame.metal.device = context.device();
+    frame.metal.queue = context.queue();
+    frame.metal.command_buffer = commands_;
+    frame.metal.target = target.texture;
+    frame.metal.target_format = static_cast<std::uint32_t>(target.format);
+    if (depth != nullptr) {
+        frame.metal.depth = depth->texture;
+        frame.metal.depth_format = static_cast<std::uint32_t>(depth->format);
+    }
+    frame.metal.get_proc_addr = reinterpret_cast<void*>(&process_symbol);
+    // Metal's clip space is the host's (y up, depth 0 to 1): the projection stands as the walker made it.
+    @autoreleasepool {
+        call.fn(call.user, &frame);
+    }
+    reset_draw_bindings();
+    if (msaa) {
+        // What the function drew into the samples reaches the scene's colour at the end of the scene's pass (its
+        // resolve): the pass opens now, so a picture taken next ends it.
+        scene_.depth_dirty = scene_.depth_dirty || depth != nullptr;
+        begin_scene_pass(nullptr, "native_call");
+    }
+    bind_scene();
+}
 
 // SMAA or FXAA of the 3D scene in the scene target, before the 2D layer draws.
 void RendererMtl::record_scene_aa() {

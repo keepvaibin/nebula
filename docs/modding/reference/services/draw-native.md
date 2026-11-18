@@ -11,13 +11,13 @@ The `draw.native` service gives a C mod direct access to the graphics device. Sc
 
 | Service | Version | Permission | C import | LumaScript |
 |---|---|---|---|---|
-| `draw.native` | 1.0 | `native` | `LUMA_SERVICE(slot, "draw.native", "1.0")` | `use svc.draw.native` |
+| `draw.native` | 1.1 | `native` | `LUMA_SERVICE(slot, "draw.native", "1.1")` | `use svc.draw.native` |
 
 The header is `native/include/luma_draw_native.h`. In LumaScript, a service is called by the last part of its name, such as `native.` for `draw.native`. Each function below shows its LumaScript form first and its C form second. For how the forms are made, see [Calling services](calling-services.md).
 
 ### Details from the header
 
-LumaCore's draw.native service: a mod's own GPU commands at a draw point, with the device's own handles. Import: `LUMA_SERVICE(slot, "draw.native", "1.0")`; permission `native`: a mod the player did not grant it cannot bind the service. A mod's function runs on the host's render thread when the host reaches the point in the frame it draws, once for each picture it draws from the game's frame (interpolated pictures too); never on the game thread, so the mod synchronizes what that function shares with its game-thread code itself. The frame and every handle in it are valid only during the call. The function leaves the target and depth in the states and layouts given, no render pass open, nothing submitted on the host's queue; the host sets its own state again after it. No guard runs there (the `native` permission's consent says the mod has full access): the game skips the function of a stopped mod and waits for one running to return before the mod ends.
+LumaCore's draw.native service: a mod's own GPU commands at a draw point, with the device's own handles. Import: `LUMA_SERVICE(slot, "draw.native", "1.1")` (1.1: Metal); permission `native`: a mod the player did not grant it cannot bind the service. A mod's function runs on the host's render thread when the host reaches the point in the frame it draws, once for each picture it draws from the game's frame (interpolated pictures too); never on the game thread, so the mod synchronizes what that function shares with its game-thread code itself. The frame and every handle in it are valid only during the call. The function leaves the target and depth in the states and layouts given, no render pass open, nothing submitted on the host's queue; the host sets its own state again after it. No guard runs there (the `native` permission's consent says the mod has full access): the game skips the function of a stopped mod and waits for one running to return before the mod ends.
 
 ## Limits and constants
 
@@ -40,6 +40,7 @@ LumaCore's draw.native service: a mod's own GPU commands at a draw point, with t
 | `LUMA_DRAW_NATIVE_D3D12 = 1` |  |
 | `LUMA_DRAW_NATIVE_VULKAN = 2` |  |
 | `LUMA_DRAW_NATIVE_D3D11 = 3` |  |
+| `LUMA_DRAW_NATIVE_METAL = 4` | 1.1: macOS and iOS. |
 
 ## Structures
 
@@ -97,6 +98,21 @@ Direct3D 11's objects (the pointers are the COM interfaces named). The function 
 | `void* depth` | ID3D11Texture2D*; null at the present point. |
 | `void* depth_dsv` | ID3D11DepthStencilView*; null at the present point. |
 
+### `LumaDrawNativeMetal`
+
+1.1. Metal's objects (Objective-C objects as pointers, not retained: valid during the call). No encoder of the host's is open: the function makes its own on `command_buffer` and ends each before it returns. It runs in an autorelease pool of its own.
+
+| Name | Description |
+|---|---|
+| `void* device` | id<MTLDevice>. |
+| `void* queue` | id<MTLCommandQueue>: the host's; nothing committed on it. |
+| `void* command_buffer` | id<MTLCommandBuffer>: the frame's, not committed. |
+| `void* target` | id<MTLTexture>. |
+| `uint32_t target_format` | MTLPixelFormat. |
+| `uint32_t depth_format` | MTLPixelFormat; 0 at the present point. |
+| `void* depth` | id<MTLTexture>; null at the present point. |
+| `void* get_proc_addr` | void* (*)(const char* name): a symbol of the process by name (dlsym's RTLD_DEFAULT): objc_msgSend, sel_registerName, objc_getClass, Metal's functions. |
+
 ### `LumaDrawNativeFrame`
 
 The frame a function draws into (nebula_frame_list.h's NebulaFrame is this struct).
@@ -116,6 +132,7 @@ The frame a function draws into (nebula_frame_list.h's NebulaFrame is this struc
 | `LumaDrawNativeD3D12 d3d12` | Backend D3D12. |
 | `LumaDrawNativeVulkan vulkan` | Backend VULKAN. |
 | `LumaDrawNativeD3D11 d3d11` | Backend D3D11. |
+| `LumaDrawNativeMetal metal` | 1.1, backend METAL. |
 
 ## `draw.native` functions
 

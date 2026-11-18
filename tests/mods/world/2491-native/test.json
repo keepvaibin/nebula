@@ -1,7 +1,7 @@
 {
   "harness": 1,
   "name": "2491-native",
-  "about": "fn-native (native granted): backend names D3D12 or Vulkan, a null out and point 99 refused; its function at PRESENT clears every picture green with the device's own command list (f70 green whole); removed, the game's picture again (f110); the render thread saw frames of the struct's size, the backend's, at PRESENT, 1280x720",
+  "about": "fn-native (native granted): backend names D3D12, Vulkan, D3D11 or Metal, a null out and point 99 refused; its function at PRESENT clears every picture green with the device's own command list (f70 green whole); removed, the game's picture again (f110); the render thread saw frames of the struct's size, the backend's, at PRESENT, 1280x720",
   "proves": [
     "draw.native"
   ],

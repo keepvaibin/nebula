@@ -304,11 +304,10 @@ set(SDL_STATIC OFF CACHE BOOL "" FORCE)
 set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
 set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
 add_subdirectory("${NEBULA_SDL_DIR}" SDL3 EXCLUDE_FROM_ALL)
-if(ANDROID)
-    # luma_capture.cpp asks the player for a microphone or camera through SDL (SDL_RequestAndroidPermission, plan
-    # 8.2 c): SDL's headers here; the function comes with libSDL3.so, which main links.
-    target_link_libraries(galaxy_render_vk PRIVATE SDL3::Headers)
-endif()
+# LumaCore's capture services (luma_capture.cpp) record and film through SDL: SDL's headers here; its functions
+# come with the SDL library main links.
+target_link_libraries(galaxy_render_vk PRIVATE SDL3::Headers)
+set_source_files_properties(${rt}/luma_capture.cpp PROPERTIES COMPILE_DEFINITIONS NEBULA_CAPTURE_SDL=1)
 
 # The native game's host on SDL (native/host/host_main.cpp with NEBULA_HOST_SDL): libmain.so on Android (SDL's
 # activity calls its SDL_main), an executable elsewhere.
@@ -332,8 +331,7 @@ if(ANDROID)
         ${rt}/input/wiimote_input.cpp
         ${rt}/input/wiimote_motion_pointer.cpp)
     add_library(main SHARED ${host_sources})
-    # aaudio, camera2ndk, mediandk: LumaCore's capture services (runtime/src/luma_capture.cpp).
-    target_link_libraries(main PRIVATE android log nativewindow aaudio camera2ndk mediandk)
+    target_link_libraries(main PRIVATE android log nativewindow)
 else()
     add_executable(main ${host_sources})
     set_target_properties(main PROPERTIES OUTPUT_NAME nebula)

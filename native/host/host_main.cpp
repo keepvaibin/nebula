@@ -3405,13 +3405,15 @@ uint32_t svc_option(void*, uint32_t what) {
         return 0;
 #endif
     case NEBULA_OPTION_GRAPHICS_BACKEND:
-        // draw.native's LumaDrawNativeBackend: the renderer this program was built with (one a session). Metal has
-        // none yet (0: draw.native's functions are not called).
+        // draw.native's LumaDrawNativeBackend: the renderer this program was built with (one a session); Vulkan on
+        // Apple's systems too (MoltenVK), Metal in the Metal build.
 #if defined(NEBULA_HOST_RENDERER) && defined(NEBULA_HOST_D3D12)
         return 1u;
 #elif defined(NEBULA_HOST_RENDERER) && defined(NEBULA_GPU_D3D11)
         return 3u;
-#elif defined(NEBULA_HOST_RENDERER) && !defined(__APPLE__)
+#elif defined(NEBULA_HOST_RENDERER) && defined(NEBULA_GPU_METAL)
+        return 4u;
+#elif defined(NEBULA_HOST_RENDERER)
         return 2u;
 #else
         return 0u;

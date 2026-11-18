@@ -6,16 +6,18 @@
 // thread end by itself (it holds the item through a shared_ptr, so nothing it touches is freed under it).
 //
 // Devices: Windows, WASAPI (shared mode, the default capture endpoint) and Media Foundation (the first video
-// capture source, its video processor converting to RGB32); Android, AAudio (the default input) and the NDK's
-// Camera2 (the first camera through an image reader, YUV 4:2:0 converted to RGBA). Other platforms
-// answer LUMA_E_ABSENT until their backends land (Core Audio and AVFoundation on Apple; PipeWire and V4L2 on Linux).
+// capture source, its video processor converting to RGB32); Apple's systems, AVAudioEngine and AVCaptureSession
+// (luma_capture_apple.mm); Android and Linux, SDL's recording streams and cameras (the default recording device; the
+// first camera, converted to RGBA by SDL). The item, its lock and the hand-offs are luma_capture_backend.h's.
 #include "galaxy/luma_capture_service.h"
+#include "luma_capture_backend.h"
 
 #include <luma_capture.h>
 
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <memory>
 #include <mutex>
@@ -45,17 +47,16 @@
 #pragma comment(lib, "mf.lib")
 #pragma comment(lib, "mfreadwrite.lib")
 #pragma comment(lib, "mfuuid.lib")
-#elif defined(__ANDROID__)
-// Android: AAudio (the microphone) and the NDK's Camera2 with an image reader (the camera).
-#include <aaudio/AAudio.h>
-#include <camera/NdkCameraCaptureSession.h>
-#include <camera/NdkCameraDevice.h>
-#include <camera/NdkCameraManager.h>
-#include <camera/NdkCameraMetadata.h>
-#include <camera/NdkCaptureRequest.h>
-#include <media/NdkImage.h>
-#include <media/NdkImageReader.h>
-#include <SDL3/SDL_system.h>  // the system's question to the player for a device (the Android host is the SDL host)
+#elif defined(__APPLE__)
+// AVFoundation: luma_capture_apple.mm.
+#elif defined(NEBULA_CAPTURE_SDL)
+#include <SDL3/SDL_audio.h>
+#include <SDL3/SDL_camera.h>
+#include <SDL3/SDL_init.h>
+#include <SDL3/SDL_pixels.h>
+#include <SDL3/SDL_stdinc.h>
+#include <SDL3/SDL_surface.h>
+#include <SDL3/SDL_timer.h>
 #endif
 
 namespace galaxy::luma_capture {
@@ -64,48 +65,8 @@ namespace {
 static_assert(sizeof(LumaAudioMicrophoneDesc) == 16u, "LumaAudioMicrophoneDesc 1.0 is 16 bytes");
 static_assert(sizeof(LumaCaptureCameraDesc) == 16u, "LumaCaptureCameraDesc 1.0 is 16 bytes");
 
-constexpr std::size_t kBlocks = 8u;  // microphone blocks waiting: 170 ms at 48 kHz
+using namespace backend;
 
-struct Item;
-struct Node {
-    LumaEventNode event;  // first, and both plain members: the kernel's node is the Node
-    Item* item;
-};
-
-// One open device. Members marked g_lock are shared with its thread.
-struct Item {
-    Node node{};
-    const LumaMod* mod = nullptr;
-    LumaHandle handle = 0;
-    LumaEventFn fn = nullptr;
-    void* user = nullptr;
-    bool camera = false;
-    std::atomic<bool> stop{false};  // closed, or its mod gone: the thread ends at its next look
-    bool closed = false;            // g_lock: no event from now on
-    bool posted = false;            // g_lock
-    std::int32_t ended = LUMA_OK;   // g_lock: ENDED to give (its status), not LUMA_OK
-    // Microphone (g_lock): blocks of LUMA_AUDIO_MICROPHONE_BLOCK_FRAMES × channels.
-    std::uint32_t rate = 48000u;
-    std::uint32_t channels = 1u;
-    std::vector<float> blocks;
-    std::size_t ready_first = 0;
-    std::size_t ready_count = 0;
-    bool lost = false;
-    std::vector<float> handing;  // the game thread's copy
-    // Camera (g_lock): the newest picture, swapped in by the thread, out by the delivery.
-    std::uint32_t width = 0;
-    std::uint32_t height = 0;
-    std::uint32_t fps = 0;
-    std::vector<std::uint8_t> ready;
-    bool fresh = false;
-    bool skipped = false;
-    std::uint32_t ready_width = 0;
-    std::uint32_t ready_height = 0;
-    std::uint64_t ready_time = 0;
-    std::vector<std::uint8_t> shown;  // the game thread's
-};
-
-std::mutex g_lock;
 std::vector<std::shared_ptr<Item>> g_items;  // g_lock; an item leaves once closed and not queued
 const Item* g_delivering = nullptr;          // g_lock
 std::atomic<const LumaServiceKernel*> g_kernel{nullptr};
@@ -153,17 +114,6 @@ std::int32_t struct_size(const LumaMod* mod, const char* where, const char* name
     return LUMA_E_ARGUMENT;
 }
 
-// With g_lock: queue the item's node (once). Any thread.
-void post_locked(Item* item) noexcept {
-    if (item->posted || item->closed) {
-        return;
-    }
-    const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
-    if (kernel != nullptr && kernel->post(&item->node.event) == LUMA_OK) {
-        item->posted = true;
-    }
-}
-
 // Game thread, with g_lock: lets go of the closed items no queue or delivery holds (their threads may still run on
 // their own reference).
 void reap_locked() {
@@ -174,81 +124,108 @@ void reap_locked() {
                   g_items.end());
 }
 
-// The device's thread, with g_lock: it ended on its own (status ABSENT or IO).
-[[maybe_unused]] void end_locked(Item* item, std::int32_t status) noexcept {
+}  // namespace
+
+// ---- What the backends share (luma_capture_backend.h) --------------------------------------------------------------
+
+namespace backend {
+
+std::mutex g_lock;
+
+void post_locked(Item* item) noexcept {
+    if (item->posted || item->closed) {
+        return;
+    }
+    const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
+    if (kernel != nullptr && kernel->post(&item->node.event) == LUMA_OK) {
+        item->posted = true;
+    }
+}
+
+void end_locked(Item* item, std::int32_t status) noexcept {
     if (!item->closed && item->ended == LUMA_OK) {
         item->ended = status;
         post_locked(item);
     }
 }
 
-// ---- The microphone's conversion (its thread) ----------------------------------------------------------------------
+std::uint64_t steady_ns() noexcept {
+    return static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
+}
 
-// Device frames (float, `in_channels` each) to the mod's rate and channels, into blocks.
-struct Converter {
-    double place = 0.0;    // between `last` and the next device frame
-    float last[2] = {0.0f, 0.0f};
-    bool started = false;
-    std::vector<float> filling;
-    std::size_t filled = 0;
+void hand_picture(Item& item, std::vector<std::uint8_t>& picture, std::uint32_t width, std::uint32_t height,
+                  std::uint64_t time_ns) {
+    const std::lock_guard<std::mutex> lock(g_lock);
+    if (item.closed) {
+        return;
+    }
+    item.skipped |= item.fresh;
+    item.ready.swap(picture);
+    item.fresh = true;
+    item.ready_width = width;
+    item.ready_height = height;
+    item.ready_time = time_ns;
+    post_locked(&item);
+}
 
-    void push(Item& item, const float* in, std::size_t frames, std::uint32_t in_channels, std::uint32_t in_rate) {
-        const double step = static_cast<double>(in_rate) / static_cast<double>(item.rate);
-        const std::size_t out_channels = item.channels;
-        if (filling.size() != LUMA_AUDIO_MICROPHONE_BLOCK_FRAMES * out_channels) {
-            filling.assign(LUMA_AUDIO_MICROPHONE_BLOCK_FRAMES * out_channels, 0.0f);
-            filled = 0;
-        }
-        for (std::size_t f = 0; f < frames; ++f) {
-            const float* frame = in + f * in_channels;
-            const float left = frame[0];
-            const float right = in_channels >= 2u ? frame[1] : frame[0];
-            if (!started) {
-                last[0] = left;
-                last[1] = right;
-                started = true;
-                continue;
-            }
-            // Outputs between the last device frame and this one.
-            while (place < 1.0) {
-                const auto t = static_cast<float>(place);
-                const float l = last[0] + (left - last[0]) * t;
-                const float r = last[1] + (right - last[1]) * t;
-                float* to = filling.data() + filled * out_channels;
-                if (out_channels == 1u) {
-                    to[0] = 0.5f * (l + r);
-                } else {
-                    to[0] = l;
-                    to[1] = r;
-                }
-                if (++filled == LUMA_AUDIO_MICROPHONE_BLOCK_FRAMES) {
-                    filled = 0;
-                    hand(item);
-                }
-                place += step;
-            }
-            place -= 1.0;
+// The microphone's conversion (its thread): linear between the device's frames.
+void Converter::push(Item& item, const float* in, std::size_t frames, std::uint32_t in_channels, std::uint32_t in_rate) {
+    const double step = static_cast<double>(in_rate) / static_cast<double>(item.rate);
+    const std::size_t out_channels = item.channels;
+    if (filling.size() != LUMA_AUDIO_MICROPHONE_BLOCK_FRAMES * out_channels) {
+        filling.assign(LUMA_AUDIO_MICROPHONE_BLOCK_FRAMES * out_channels, 0.0f);
+        filled = 0;
+    }
+    for (std::size_t f = 0; f < frames; ++f) {
+        const float* frame = in + f * in_channels;
+        const float left = frame[0];
+        const float right = in_channels >= 2u ? frame[1] : frame[0];
+        if (!started) {
             last[0] = left;
             last[1] = right;
+            started = true;
+            continue;
         }
+        // Outputs between the last device frame and this one.
+        while (place < 1.0) {
+            const auto t = static_cast<float>(place);
+            const float l = last[0] + (left - last[0]) * t;
+            const float r = last[1] + (right - last[1]) * t;
+            float* to = filling.data() + filled * out_channels;
+            if (out_channels == 1u) {
+                to[0] = 0.5f * (l + r);
+            } else {
+                to[0] = l;
+                to[1] = r;
+            }
+            if (++filled == LUMA_AUDIO_MICROPHONE_BLOCK_FRAMES) {
+                filled = 0;
+                hand(item);
+            }
+            place += step;
+        }
+        place -= 1.0;
+        last[0] = left;
+        last[1] = right;
     }
+}
 
-    void hand(Item& item) {
-        const std::lock_guard<std::mutex> lock(g_lock);
-        if (item.closed) {
-            return;
-        }
-        if (item.ready_count == kBlocks) {
-            item.lost = true;
-            return;
-        }
-        const std::size_t block = LUMA_AUDIO_MICROPHONE_BLOCK_FRAMES * item.channels;
-        const std::size_t slot = (item.ready_first + item.ready_count) % kBlocks;
-        std::copy(filling.begin(), filling.end(), item.blocks.begin() + static_cast<std::ptrdiff_t>(slot * block));
-        item.ready_count++;
-        post_locked(&item);
+void Converter::hand(Item& item) {
+    const std::lock_guard<std::mutex> lock(g_lock);
+    if (item.closed) {
+        return;
     }
-};
+    if (item.ready_count == kBlocks) {
+        item.lost = true;
+        return;
+    }
+    const std::size_t block = LUMA_AUDIO_MICROPHONE_BLOCK_FRAMES * item.channels;
+    const std::size_t slot = (item.ready_first + item.ready_count) % kBlocks;
+    std::copy(filling.begin(), filling.end(), item.blocks.begin() + static_cast<std::ptrdiff_t>(slot * block));
+    item.ready_count++;
+    post_locked(&item);
+}
 
 #if defined(_WIN32)
 
@@ -451,18 +428,7 @@ void camera_thread(std::shared_ptr<Item> item) {
                             to[x * 4u + 3u] = 255u;
                         }
                     }
-                    const auto now = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
-                        std::chrono::steady_clock::now().time_since_epoch()).count());
-                    const std::lock_guard<std::mutex> lock(g_lock);
-                    if (!item->closed) {
-                        item->skipped |= item->fresh;
-                        item->ready.swap(picture);
-                        item->fresh = true;
-                        item->ready_width = width;
-                        item->ready_height = height;
-                        item->ready_time = now;
-                        post_locked(item.get());
-                    }
+                    hand_picture(*item, picture, width, height, steady_ns());
                     picture.resize(static_cast<std::size_t>(width) * height * 4u);
                 }
                 (void)buffer->Unlock();
@@ -499,302 +465,211 @@ void camera_thread(std::shared_ptr<Item> item) {
 }
 
 constexpr bool kHasDevices = true;
-#elif defined(__ANDROID__)
+#elif defined(__APPLE__)
+constexpr bool kHasDevices = true;  // luma_capture_apple.mm
+#elif defined(NEBULA_CAPTURE_SDL)
 
-// ---- Android: AAudio and the NDK's Camera2 --------------------------------------------------------------------------
+// ---- SDL: Android and Linux ----------------------------------------------------------------------------------
+// SDL's recording streams (AAudio or OpenSL ES, PipeWire, PulseAudio or ALSA, Core Audio) and its cameras (Camera2,
+// V4L2 or PipeWire, AVFoundation). Each asks the system for the device the first time where the system asks the
+// player (Android's RECORD_AUDIO and CAMERA, Apple's microphone and camera privacy); refused: ABSENT.
 
-// The player's answer to the system's question for a device: -1 until it comes.
-struct Asked {
-    std::atomic<int> answer{-1};
-};
+// SDL's camera part, started once on the main thread (SDL_InitSubSystem's rule) when a camera is first opened: a game
+// no mod asks a camera of never starts it. 0 not asked, 1 asked, 2 running, -1 failed.
+std::atomic<int> g_cameras{0};
 
-void asked_answer(void* userdata, const char*, bool granted) {
-    // The callback's own reference: the asking thread may have gone on (stop) before the player answered.
-    auto* const held = static_cast<std::shared_ptr<Asked>*>(userdata);
-    (*held)->answer.store(granted ? 1 : 0, std::memory_order_release);
-    delete held;
+void SDLCALL start_cameras(void*) {
+    g_cameras.store(SDL_InitSubSystem(SDL_INIT_CAMERA) ? 2 : -1, std::memory_order_release);
 }
 
-// Whether the app may use the device `permission` names: the system asks the player the first time (a mod reaches
-// here only after the player consented to its capture permission); false when refused, when the
-// question cannot be asked, or when the item is closed before the answer.
-bool may_use(const Item& item, const char* permission) {
-    const auto asked = std::make_shared<Asked>();
-    auto* const held = new std::shared_ptr<Asked>(asked);
-    if (!SDL_RequestAndroidPermission(permission, asked_answer, held)) {
-        delete held;
-        return false;
+// Whether SDL's cameras run: false when they cannot start, or when the item is closed before they do.
+bool cameras_running(const Item& item) {
+    int expected = 0;
+    if (g_cameras.compare_exchange_strong(expected, 1, std::memory_order_acq_rel)) {
+        if (!SDL_RunOnMainThread(start_cameras, nullptr, false)) {
+            g_cameras.store(-1, std::memory_order_release);
+        }
     }
-    while (asked->answer.load(std::memory_order_acquire) < 0) {
+    for (;;) {
+        const int state = g_cameras.load(std::memory_order_acquire);
+        if (state != 1) {
+            return state == 2;
+        }
         if (item.stop.load(std::memory_order_acquire)) {
             return false;
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
-    return asked->answer.load(std::memory_order_acquire) == 1;
 }
 
-// The default input until stop: ABSENT when there is none or the app may not record (the player refused
-// RECORD_AUDIO), IO when it goes (unplugged, taken by a call).
+// The default recording device until stop, at the mod's rate and channels (SDL converts): ABSENT when there is none
+// or the app may not record.
 void microphone_thread(std::shared_ptr<Item> item) {
-    AAudioStreamBuilder* builder = nullptr;
-    AAudioStream* stream = nullptr;
-    std::int32_t status = LUMA_E_ABSENT;
+    const SDL_AudioSpec wanted{SDL_AUDIO_F32, static_cast<int>(item->channels), static_cast<int>(item->rate)};
+    SDL_AudioStream* const stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_RECORDING, &wanted, nullptr,
+                                                              nullptr);
+    if (stream == nullptr || !SDL_ResumeAudioStreamDevice(stream)) {
+        if (stream != nullptr) {
+            SDL_DestroyAudioStream(stream);
+        }
+        const std::lock_guard<std::mutex> lock(g_lock);
+        end_locked(item.get(), LUMA_E_ABSENT);
+        return;
+    }
     Converter converter;
+    const std::size_t frame_bytes = sizeof(float) * item->channels;
+    std::vector<float> floats(static_cast<std::size_t>(LUMA_AUDIO_MICROPHONE_BLOCK_FRAMES) * item->channels);
+    while (!item->stop.load(std::memory_order_acquire)) {
+        const int got = SDL_GetAudioStreamData(stream, floats.data(), static_cast<int>(floats.size() * sizeof(float)));
+        if (got < 0) {
+            const std::lock_guard<std::mutex> lock(g_lock);
+            end_locked(item.get(), LUMA_E_IO);
+            break;
+        }
+        if (got < static_cast<int>(frame_bytes)) {
+            // A block is a fiftieth of a second at 48 kHz: a look every 5 ms keeps the wait short.
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            continue;
+        }
+        converter.push(*item, floats.data(), static_cast<std::size_t>(got) / frame_bytes, item->channels, item->rate);
+    }
+    SDL_DestroyAudioStream(stream);
+}
+
+// The camera's own spec for the item: the size asked where the camera gives it, else its own (SDL lists its best
+// first); at that size the rate nearest the one asked. MJPEG is passed over (SDL does not decode it). Null: none.
+const SDL_CameraSpec* camera_spec(SDL_CameraSpec** specs, int count, std::uint32_t width, std::uint32_t height,
+                                  std::uint32_t fps) {
+    const SDL_CameraSpec* chosen = nullptr;
+    double chosen_gap = 0.0;
+    for (int i = 0; i < count; ++i) {
+        const SDL_CameraSpec* spec = specs[i];
+        if (spec == nullptr || spec->width <= 0 || spec->height <= 0 || spec->format == SDL_PIXELFORMAT_MJPG) {
+            continue;
+        }
+        if (width != 0u && (static_cast<std::uint32_t>(spec->width) != width ||
+                            static_cast<std::uint32_t>(spec->height) != height)) {
+            continue;
+        }
+        if (chosen != nullptr && (spec->width != chosen->width || spec->height != chosen->height)) {
+            break;  // the first size stands
+        }
+        const double rate = spec->framerate_denominator > 0
+                                ? static_cast<double>(spec->framerate_numerator) / spec->framerate_denominator
+                                : 0.0;
+        const double gap = std::abs(rate - static_cast<double>(fps));
+        if (chosen == nullptr || (fps != 0u && gap < chosen_gap)) {
+            chosen = spec;
+            chosen_gap = gap;
+        }
+    }
+    if (chosen == nullptr && width != 0u) {
+        return camera_spec(specs, count, 0u, 0u, fps);
+    }
+    return chosen;
+}
+
+// Whether camera `id` is still attached.
+bool camera_attached(SDL_CameraID id) {
+    int count = 0;
+    SDL_CameraID* const ids = SDL_GetCameras(&count);
+    bool found = false;
+    for (int i = 0; ids != nullptr && i < count; ++i) {
+        found = found || ids[i] == id;
+    }
+    SDL_free(ids);
+    return found;
+}
+
+// The first camera until stop, converted to RGBA rows top first: ABSENT when there is none or the app may not use
+// it, IO when it goes.
+void camera_thread(std::shared_ptr<Item> item) {
+    SDL_Camera* camera = nullptr;
+    SDL_CameraID id = 0;
+    std::int32_t status = LUMA_E_ABSENT;
     do {
-        if (!may_use(*item, "android.permission.RECORD_AUDIO")) {
+        if (!cameras_running(*item)) {
             break;
         }
-        if (AAudio_createStreamBuilder(&builder) != AAUDIO_OK) {
+        int count = 0;
+        SDL_CameraID* const ids = SDL_GetCameras(&count);
+        id = ids != nullptr && count > 0 ? ids[0] : 0;
+        SDL_free(ids);
+        if (id == 0) {
             break;
         }
-        AAudioStreamBuilder_setDirection(builder, AAUDIO_DIRECTION_INPUT);
-        AAudioStreamBuilder_setFormat(builder, AAUDIO_FORMAT_PCM_FLOAT);
-        AAudioStreamBuilder_setChannelCount(builder, static_cast<std::int32_t>(item->channels));
-        AAudioStreamBuilder_setSharingMode(builder, AAUDIO_SHARING_MODE_SHARED);
-        AAudioStreamBuilder_setPerformanceMode(builder, AAUDIO_PERFORMANCE_MODE_NONE);
-        if (AAudioStreamBuilder_openStream(builder, &stream) != AAUDIO_OK || stream == nullptr) {
+        // RGBA at the camera's own size and rate: SDL converts each frame from the camera's format.
+        SDL_CameraSpec wanted{};
+        wanted.format = SDL_PIXELFORMAT_RGBA32;
+        wanted.colorspace = SDL_COLORSPACE_SRGB;
+        int spec_count = 0;
+        SDL_CameraSpec** const specs = SDL_GetCameraSupportedFormats(id, &spec_count);
+        if (const SDL_CameraSpec* own = specs != nullptr ? camera_spec(specs, spec_count, item->width, item->height, item->fps)
+                                                         : nullptr) {
+            wanted.width = own->width;
+            wanted.height = own->height;
+            wanted.framerate_numerator = own->framerate_numerator;
+            wanted.framerate_denominator = own->framerate_denominator;
+        }
+        SDL_free(specs);
+        camera = SDL_OpenCamera(id, &wanted);
+        if (camera == nullptr) {
             break;
         }
-        const std::int32_t in_rate = AAudioStream_getSampleRate(stream);
-        const std::int32_t in_channels = AAudioStream_getChannelCount(stream);
-        if (in_rate <= 0 || in_channels <= 0 || AAudioStream_getFormat(stream) != AAUDIO_FORMAT_PCM_FLOAT ||
-            AAudioStream_requestStart(stream) != AAUDIO_OK) {
+        // The system's question to the player (the first time), answered on its own thread.
+        SDL_CameraPermissionState allowed = SDL_GetCameraPermissionState(camera);
+        while (allowed == SDL_CAMERA_PERMISSION_STATE_PENDING && !item->stop.load(std::memory_order_acquire)) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            allowed = SDL_GetCameraPermissionState(camera);
+        }
+        if (allowed != SDL_CAMERA_PERMISSION_STATE_APPROVED) {
             break;
         }
         status = LUMA_OK;
-        // A fiftieth of a second a read; a read waits at most a tenth, so stop is seen soon.
-        const std::int32_t frames_a_read = std::max(in_rate / 50, 64);
-        std::vector<float> floats(static_cast<std::size_t>(frames_a_read) * static_cast<std::size_t>(in_channels));
+        std::vector<std::uint8_t> picture;
+        // SDL's frame times count from SDL's start; the service's are the steady clock's.
+        auto last_frame = std::chrono::steady_clock::now();
         while (!item->stop.load(std::memory_order_acquire)) {
-            const aaudio_result_t got = AAudioStream_read(stream, floats.data(), frames_a_read, 100000000);
-            if (got < 0) {
-                status = LUMA_E_IO;  // AAUDIO_ERROR_DISCONNECTED and the like
-                break;
-            }
-            if (got > 0) {
-                converter.push(*item, floats.data(), static_cast<std::size_t>(got), static_cast<std::uint32_t>(in_channels),
-                               static_cast<std::uint32_t>(in_rate));
-            }
-        }
-        (void)AAudioStream_requestStop(stream);
-    } while (false);
-    if (status != LUMA_OK) {
-        const std::lock_guard<std::mutex> lock(g_lock);
-        end_locked(item.get(), status);
-    }
-    if (stream != nullptr) {
-        (void)AAudioStream_close(stream);
-    }
-    if (builder != nullptr) {
-        (void)AAudioStreamBuilder_delete(builder);
-    }
-}
-
-// What the camera's own callbacks tell its thread.
-struct CameraState {
-    std::atomic<bool> gone{false};
-};
-
-void camera_disconnected(void* context, ACameraDevice*) {
-    static_cast<CameraState*>(context)->gone.store(true, std::memory_order_release);
-}
-
-void camera_error(void* context, ACameraDevice*, int) {
-    static_cast<CameraState*>(context)->gone.store(true, std::memory_order_release);
-}
-
-void session_quiet(void*, ACameraCaptureSession*) {}
-
-// One byte of colour from YUV (BT.601, full swing as the camera's JPEG-range output).
-inline std::uint8_t to_byte(int v) noexcept {
-    return static_cast<std::uint8_t>(v < 0 ? 0 : (v > 255 ? 255 : v));
-}
-
-// The first camera until stop, its YUV 4:2:0 pictures converted to RGBA rows top first: ABSENT when there is none or
-// the app may not use it (CAMERA not granted), IO when it goes.
-void camera_thread(std::shared_ptr<Item> item) {
-    ACameraManager* manager = ACameraManager_create();
-    ACameraIdList* ids = nullptr;
-    ACameraMetadata* about = nullptr;
-    ACameraDevice* device = nullptr;
-    AImageReader* reader = nullptr;
-    ACaptureRequest* request = nullptr;
-    ACameraOutputTarget* target = nullptr;
-    ACaptureSessionOutputContainer* outputs = nullptr;
-    ACaptureSessionOutput* output = nullptr;
-    ACameraCaptureSession* session = nullptr;
-    CameraState state;
-    std::int32_t status = LUMA_E_ABSENT;
-    std::vector<std::uint8_t> picture;
-    do {
-        if (!may_use(*item, "android.permission.CAMERA")) {
-            break;
-        }
-        if (manager == nullptr || ACameraManager_getCameraIdList(manager, &ids) != ACAMERA_OK || ids == nullptr ||
-            ids->numCameras < 1) {
-            break;
-        }
-        const char* const id = ids->cameraIds[0];
-        // The size: the one asked when the camera gives it as YUV 4:2:0, else its first such size (its own).
-        std::int32_t width = 0;
-        std::int32_t height = 0;
-        if (ACameraManager_getCameraCharacteristics(manager, id, &about) == ACAMERA_OK && about != nullptr) {
-            ACameraMetadata_const_entry sizes{};
-            if (ACameraMetadata_getConstEntry(about, ACAMERA_SCALER_AVAILABLE_STREAM_CONFIGURATIONS, &sizes) == ACAMERA_OK) {
-                for (std::uint32_t i = 0; i + 3u < sizes.count; i += 4u) {  // format, width, height, input
-                    if (sizes.data.i32[i] != AIMAGE_FORMAT_YUV_420_888 || sizes.data.i32[i + 3u] != 0) {
-                        continue;
-                    }
-                    const std::int32_t w = sizes.data.i32[i + 1u];
-                    const std::int32_t h = sizes.data.i32[i + 2u];
-                    if (width == 0) {
-                        width = w;
-                        height = h;
-                    }
-                    if (static_cast<std::uint32_t>(w) == item->width && static_cast<std::uint32_t>(h) == item->height) {
-                        width = w;
-                        height = h;
+            Uint64 taken = 0;
+            SDL_Surface* const frame = SDL_AcquireCameraFrame(camera, &taken);
+            if (frame == nullptr) {
+                // None yet. A camera silent for a second is looked for; gone: IO.
+                if (std::chrono::steady_clock::now() - last_frame > std::chrono::seconds(1)) {
+                    if (!camera_attached(id)) {
+                        status = LUMA_E_IO;
                         break;
                     }
+                    last_frame = std::chrono::steady_clock::now();
                 }
-            }
-        }
-        if (width <= 0 || height <= 0) {
-            break;
-        }
-        ACameraDevice_StateCallbacks device_calls{};
-        device_calls.context = &state;
-        device_calls.onDisconnected = camera_disconnected;
-        device_calls.onError = camera_error;
-        if (ACameraManager_openCamera(manager, id, &device_calls, &device) != ACAMERA_OK || device == nullptr) {
-            break;  // ACAMERA_ERROR_PERMISSION_DENIED, or in use
-        }
-        if (AImageReader_new(width, height, AIMAGE_FORMAT_YUV_420_888, 2, &reader) != AMEDIA_OK || reader == nullptr) {
-            break;
-        }
-        ANativeWindow* window = nullptr;
-        if (AImageReader_getWindow(reader, &window) != AMEDIA_OK || window == nullptr) {
-            break;
-        }
-        ACameraCaptureSession_stateCallbacks session_calls{};
-        session_calls.context = &state;
-        session_calls.onClosed = session_quiet;
-        session_calls.onReady = session_quiet;
-        session_calls.onActive = session_quiet;
-        if (ACameraDevice_createCaptureRequest(device, TEMPLATE_PREVIEW, &request) != ACAMERA_OK ||
-            ACameraOutputTarget_create(window, &target) != ACAMERA_OK ||
-            ACaptureRequest_addTarget(request, target) != ACAMERA_OK ||
-            ACaptureSessionOutputContainer_create(&outputs) != ACAMERA_OK ||
-            ACaptureSessionOutput_create(window, &output) != ACAMERA_OK ||
-            ACaptureSessionOutputContainer_add(outputs, output) != ACAMERA_OK ||
-            ACameraDevice_createCaptureSession(device, outputs, &session_calls, &session) != ACAMERA_OK ||
-            ACameraCaptureSession_setRepeatingRequest(session, nullptr, 1, &request, nullptr) != ACAMERA_OK) {
-            break;
-        }
-        status = LUMA_OK;
-        const auto w = static_cast<std::size_t>(width);
-        const auto h = static_cast<std::size_t>(height);
-        picture.resize(w * h * 4u);
-        while (!item->stop.load(std::memory_order_acquire)) {
-            if (state.gone.load(std::memory_order_acquire)) {
-                status = LUMA_E_IO;
-                break;
-            }
-            AImage* image = nullptr;
-            if (AImageReader_acquireLatestImage(reader, &image) != AMEDIA_OK || image == nullptr) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(4));  // none yet
+                std::this_thread::sleep_for(std::chrono::milliseconds(4));
                 continue;
             }
-            std::uint8_t* y_plane = nullptr;
-            std::uint8_t* u_plane = nullptr;
-            std::uint8_t* v_plane = nullptr;
-            int y_length = 0;
-            int u_length = 0;
-            int v_length = 0;
-            std::int32_t y_row = 0;
-            std::int32_t uv_row = 0;
-            std::int32_t uv_step = 0;
-            const bool planes = AImage_getPlaneData(image, 0, &y_plane, &y_length) == AMEDIA_OK &&
-                                AImage_getPlaneData(image, 1, &u_plane, &u_length) == AMEDIA_OK &&
-                                AImage_getPlaneData(image, 2, &v_plane, &v_length) == AMEDIA_OK &&
-                                AImage_getPlaneRowStride(image, 0, &y_row) == AMEDIA_OK &&
-                                AImage_getPlaneRowStride(image, 1, &uv_row) == AMEDIA_OK &&
-                                AImage_getPlanePixelStride(image, 1, &uv_step) == AMEDIA_OK;
-            // Every read below stays inside the planes' lengths.
-            const bool whole = planes && y_row >= width && uv_row > 0 && uv_step > 0 &&
-                               static_cast<std::size_t>(y_length) >= static_cast<std::size_t>(y_row) * (h - 1u) + w &&
-                               static_cast<std::size_t>(u_length) >=
-                                   static_cast<std::size_t>(uv_row) * ((h - 1u) / 2u) + ((w - 1u) / 2u) * static_cast<std::size_t>(uv_step) + 1u &&
-                               static_cast<std::size_t>(v_length) >=
-                                   static_cast<std::size_t>(uv_row) * ((h - 1u) / 2u) + ((w - 1u) / 2u) * static_cast<std::size_t>(uv_step) + 1u;
-            if (whole) {
-                for (std::size_t row = 0; row < h; ++row) {
-                    const std::uint8_t* ys = y_plane + row * static_cast<std::size_t>(y_row);
-                    const std::uint8_t* us = u_plane + (row / 2u) * static_cast<std::size_t>(uv_row);
-                    const std::uint8_t* vs = v_plane + (row / 2u) * static_cast<std::size_t>(uv_row);
-                    std::uint8_t* to = picture.data() + row * w * 4u;
-                    for (std::size_t x = 0; x < w; ++x) {
-                        const int luma = ys[x];
-                        const int cb = us[(x / 2u) * static_cast<std::size_t>(uv_step)] - 128;
-                        const int cr = vs[(x / 2u) * static_cast<std::size_t>(uv_step)] - 128;
-                        to[x * 4u] = to_byte(luma + ((cr * 359) >> 8));
-                        to[x * 4u + 1u] = to_byte(luma - ((cb * 88 + cr * 183) >> 8));
-                        to[x * 4u + 2u] = to_byte(luma + ((cb * 454) >> 8));
-                        to[x * 4u + 3u] = 255u;
-                    }
-                }
-                const auto now = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
-                    std::chrono::steady_clock::now().time_since_epoch()).count());
-                const std::lock_guard<std::mutex> lock(g_lock);
-                if (!item->closed) {
-                    item->skipped |= item->fresh;
-                    item->ready.swap(picture);
-                    item->fresh = true;
-                    item->ready_width = static_cast<std::uint32_t>(width);
-                    item->ready_height = static_cast<std::uint32_t>(height);
-                    item->ready_time = now;
-                    post_locked(item.get());
-                }
-                picture.resize(w * h * 4u);
+            last_frame = std::chrono::steady_clock::now();
+            const auto w = static_cast<std::size_t>(frame->w);
+            const auto h = static_cast<std::size_t>(frame->h);
+            picture.resize(w * h * 4u);
+            const bool converted =
+                w > 0u && h > 0u &&
+                SDL_ConvertPixelsAndColorspace(frame->w, frame->h, frame->format, SDL_GetSurfaceColorspace(frame),
+                                               SDL_GetSurfaceProperties(frame), frame->pixels, frame->pitch,
+                                               SDL_PIXELFORMAT_RGBA32, SDL_COLORSPACE_SRGB, 0, picture.data(),
+                                               frame->w * 4);
+            const std::uint64_t now_sdl = SDL_GetTicksNS();
+            const std::uint64_t now = steady_ns();
+            SDL_ReleaseCameraFrame(camera, frame);
+            if (!converted) {
+                continue;
             }
-            AImage_delete(image);
+            hand_picture(*item, picture, static_cast<std::uint32_t>(w), static_cast<std::uint32_t>(h),
+                         taken != 0u && taken <= now_sdl ? now - (now_sdl - taken) : now);
         }
-        (void)ACameraCaptureSession_stopRepeating(session);
     } while (false);
     if (status != LUMA_OK) {
         const std::lock_guard<std::mutex> lock(g_lock);
         end_locked(item.get(), status);
     }
-    if (session != nullptr) {
-        ACameraCaptureSession_close(session);
-    }
-    if (output != nullptr) {
-        ACaptureSessionOutput_free(output);
-    }
-    if (outputs != nullptr) {
-        ACaptureSessionOutputContainer_free(outputs);
-    }
-    if (target != nullptr) {
-        ACameraOutputTarget_free(target);
-    }
-    if (request != nullptr) {
-        ACaptureRequest_free(request);
-    }
-    if (device != nullptr) {
-        (void)ACameraDevice_close(device);
-    }
-    if (reader != nullptr) {
-        AImageReader_delete(reader);
-    }
-    if (about != nullptr) {
-        ACameraMetadata_free(about);
-    }
-    if (ids != nullptr) {
-        ACameraManager_deleteCameraIdList(ids);
-    }
-    if (manager != nullptr) {
-        ACameraManager_delete(manager);
+    if (camera != nullptr) {
+        SDL_CloseCamera(camera);
     }
 }
 
@@ -804,6 +679,10 @@ constexpr bool kHasDevices = false;
 void microphone_thread(std::shared_ptr<Item>) {}
 void camera_thread(std::shared_ptr<Item>) {}
 #endif
+
+}  // namespace backend
+
+namespace {
 
 // ---- Deliveries (game thread) --------------------------------------------------------------------------------------
 

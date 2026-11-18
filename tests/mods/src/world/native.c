@@ -1,9 +1,10 @@
 /* FB's draw.native conformance mod fn-native (plan 2.4 layer 9; native/include/luma_draw_native.h; permission
    native). Run steps call MR::getRandom(0, 2490 + k) and the hook gives 1.
-   2491: k 1 backend ("backend_status", "backend_known": 1 when D3D12, Vulkan or D3D11), a null out ("null_out": E_ARGUMENT),
-   point 99 ("bad_point": E_ARGUMENT), its function at PRESENT ("at"): each picture it clears the whole target green
-   with the device's own commands (D3D12 ClearRenderTargetView; Vulkan vkCmdClearColorImage between barriers; D3D11
-   ClearRenderTargetView on the immediate context).
+   2491: k 1 backend ("backend_status", "backend_known": 1 when D3D12, Vulkan, D3D11 or Metal), a null out ("null_out":
+   E_ARGUMENT), point 99 ("bad_point": E_ARGUMENT), its function at PRESENT ("at"): each picture it clears the whole
+   target green with the device's own commands (D3D12 ClearRenderTargetView; Vulkan vkCmdClearColorImage between
+   barriers; D3D11 ClearRenderTargetView on the immediate context; Metal a render pass of its own that clears, made
+   through the Objective-C runtime the frame's get_proc_addr finds).
    k 2 the function removed ("off"), then what the render thread saw ("calls" at least 1, "same_backend" 1 when every
    frame named backend's backend, "sized" 1 when every frame's size was the struct's, "at_present" 1 when every
    point was PRESENT, "width", "height" the last frame's). */
@@ -85,6 +86,38 @@ static void clear_vulkan(const LumaDrawNativeVulkan* v) {
     vk_barrier(v->command_buffer, TRANSFER, COLOR_ATTACHMENT_OUTPUT, 0, 0, 0, 0, 0, 1, &back);
 }
 
+/* ---- Metal, through the Objective-C runtime (objc/message.h's objc_msgSend cast to each method's own type;
+   MTLLoadActionClear 2, MTLStoreActionStore 1). */
+typedef void* (*Lookup)(const char* name);
+typedef void* (*Named)(const char* name);
+typedef struct MtlClearColor {
+    double red, green, blue, alpha;
+} MtlClearColor;
+typedef void* (*Send0)(void* self, void* sel);
+typedef void* (*SendIndex)(void* self, void* sel, unsigned long index);
+typedef void* (*SendObject)(void* self, void* sel, void* object);
+typedef void (*SendNumber)(void* self, void* sel, unsigned long value);
+typedef void (*SendColour)(void* self, void* sel, MtlClearColor colour);
+
+static void clear_metal(const LumaDrawNativeMetal* m) {
+    const Lookup lookup = (Lookup)m->get_proc_addr;
+    if (lookup == 0) return;
+    void* const send = lookup("objc_msgSend");
+    const Named sel = (Named)lookup("sel_registerName");
+    const Named cls = (Named)lookup("objc_getClass");
+    if (send == 0 || sel == 0 || cls == 0) return;
+    void* const pass = ((Send0)send)(cls("MTLRenderPassDescriptor"), sel("renderPassDescriptor"));
+    void* const colours = ((Send0)send)(pass, sel("colorAttachments"));
+    void* const colour = ((SendIndex)send)(colours, sel("objectAtIndexedSubscript:"), 0);
+    ((SendObject)send)(colour, sel("setTexture:"), m->target);
+    ((SendNumber)send)(colour, sel("setLoadAction:"), 2);
+    ((SendNumber)send)(colour, sel("setStoreAction:"), 1);
+    const MtlClearColor green = {0.0, 1.0, 0.0, 1.0};
+    ((SendColour)send)(colour, sel("setClearColor:"), green);
+    void* const encoder = ((SendObject)send)(m->command_buffer, sel("renderCommandEncoderWithDescriptor:"), pass);
+    if (encoder != 0) ((Send0)send)(encoder, sel("endEncoding"));
+}
+
 /* The render thread: counts go to the game thread through atomics, read at k 2. */
 static void paint(void* user, const LumaDrawNativeFrame* frame) {
     (void)user;
@@ -97,6 +130,7 @@ static void paint(void* user, const LumaDrawNativeFrame* frame) {
     if (frame->backend == LUMA_DRAW_NATIVE_D3D12) clear_d3d12(&frame->d3d12);
     if (frame->backend == LUMA_DRAW_NATIVE_VULKAN) clear_vulkan(&frame->vulkan);
     if (frame->backend == LUMA_DRAW_NATIVE_D3D11) clear_d3d11(&frame->d3d11);
+    if (frame->backend == LUMA_DRAW_NATIVE_METAL) clear_metal(&frame->metal);
 }
 
 static int32_t trigger(LumaCall* call, void* user) {
@@ -106,7 +140,8 @@ static int32_t trigger(LumaCall* call, void* user) {
     if (k == 1) {
         uint32_t b = 0;
         lt_fact("backend_status", native->backend(lt_mod, &b));
-        lt_fact("backend_known", b == LUMA_DRAW_NATIVE_D3D12 || b == LUMA_DRAW_NATIVE_VULKAN || b == LUMA_DRAW_NATIVE_D3D11);
+        lt_fact("backend_known", b == LUMA_DRAW_NATIVE_D3D12 || b == LUMA_DRAW_NATIVE_VULKAN || b == LUMA_DRAW_NATIVE_D3D11 ||
+                                     b == LUMA_DRAW_NATIVE_METAL);
         __atomic_store_n(&backend_now, b, __ATOMIC_RELEASE);
         lt_fact("null_out", native->backend(lt_mod, 0));
         lt_fact("bad_point", native->at(lt_mod, (LumaDrawPoint)99, paint, 0));

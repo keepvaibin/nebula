@@ -64,7 +64,7 @@ namespace luma {
                 {"draw.inst", 1, 0, nullptr, "draw"},
                 {"draw.view", 1, 1, nullptr, "draw"},
                 {"draw.post", 1, 0, nullptr, "draw"},
-                {"draw.native", 1, 0, LUMA_DRAW_NATIVE_PERMISSION, "draw"},
+                {"draw.native", 1, 1, LUMA_DRAW_NATIVE_PERMISSION, "draw"},
                 {"anim", 1, 1, nullptr, "animation"},
                 {"player", 1, 1, nullptr, "services-player"},
                 {"save", 1, 1, nullptr, "services-save"},

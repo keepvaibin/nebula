@@ -34,3 +34,18 @@ M12 platforms for mods; M14 the six reference mods; M11 documentation, from the 
 - Open, waiting on others: M-114's text half (N-4002, `in` marks), M-132 (N-4003, a kernel watch), M-123 (a planner
   question; N-4004, field marks). Host rows M-057, M-058, M-061 to M-063, M-069 wait for Agent 3's app/work; M-068 is
   a request to Agent 1.
+
+## 2026-11-17 M12 platforms for mods
+
+- M-012 fixed: the microphone and camera services on Android and Linux through one SDL backend (SDL's recording
+  stream at the mod's rate and channels, SDL's camera converted to RGBA at the camera's own size), replacing the AAudio
+  and Camera2 code; on macOS and iOS through AVFoundation (runtime/src/luma_capture_apple.mm); the item, its lock and
+  the hand-offs shared in luma_capture_backend.h. Proof: audio/2606-capture-mic and 2607-capture-camera on the tablet
+  (real microphone blocks (48 kHz mono) and real camera pictures (640×480 RGBA) from the tablet's devices); Linux and Apple compile in GitHub's check.
+- M-074 fixed: draw.native 1.1 calls a Metal mod's function (LUMA_DRAW_NATIVE_METAL, LumaDrawNativeMetal with
+  get_proc_addr); world/2491-native's mod clears through Metal too and still passes on d3d12. backend() answers the
+  renderer (2 for Vulkan on MoltenVK, 4 for Metal), not 0 on every Apple build.
+- New N-4005 (open): no Mac in the gate, so draw.native on Metal and the capture services on macOS and iOS have
+  compiled but never run.
+- Files of others touched, one line each: native/petari/src/Game/System/LumaServices.cpp (draw.native's minor 1),
+  native/host/host_main.cpp (backend()), platform/sdl and platform/apple CMake (the capture sources and frameworks).

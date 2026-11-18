@@ -75,7 +75,8 @@ target_link_libraries(galaxy_render_mtl PUBLIC "-framework Metal" "-framework Qu
     "-framework CoreGraphics" "-framework IOSurface")
 # MetalFX is asked for at run time (macOS 13, iOS 16): the program starts without it.
 target_link_libraries(galaxy_render_mtl PUBLIC "-weak_framework MetalFX")
-set_source_files_properties(${nebula_apple_mtl_backend} PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+set_source_files_properties(${nebula_apple_mtl_backend} "${nebula_apple_capture}" PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+target_link_libraries(galaxy_render_mtl PUBLIC "-framework AVFoundation" "-framework CoreMedia")
 # The programs' file in this library is Metal's (core/program_table.cpp includes it): the texts, or with Apple's
 # compiler on the build machine the names of the functions in the app's Metal libraries (CMakeLists.txt).
 set_source_files_properties("${nebula_root}/runtime/src/render/core/program_table.cpp" PROPERTIES

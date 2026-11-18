@@ -236,11 +236,13 @@ public:
     [[nodiscard]] gpu::Address zero_stream(std::uint32_t bytes);
     // The frame so far is the frame's picture now: `fresh` (or a new target) takes its place.
     [[nodiscard]] gpu::TextureRef take_frame_picture(gpu::TextureRef fresh);
-    // draw.post and draw.native (mod_post.h, luma_draw_native.h): not on Metal yet. No compiler is installed, so every
-    // post program is refused at post_register ("no compiler for post programs on this renderer") and no list names
-    // one; draw.native's backend values are D3D12 and Vulkan only, so no native call reaches here.
+    // draw.post (mod_post.h): not on Metal yet. No compiler is installed, so every post program is refused at
+    // post_register ("no compiler for post programs on this renderer") and no list names one.
     void record_mod_post(const ModPostProgram&, ModPostConstants, const gpu::TextureRef&, bool) {}
-    void record_native_call(const NebulaCall&, LumaDrawNativeFrame&, bool) {}
+    // draw.native (luma_draw_native.h 1.1, LUMA_DRAW_NATIVE_METAL): the scene's pass ends, the function encodes on the
+    // frame's command buffer into the scene target (its samples where the scene has them) and its depth, then the
+    // scene's pass opens again with nothing bound.
+    void record_native_call(const NebulaCall& call, LumaDrawNativeFrame& frame, bool scene_point);
     [[nodiscard]] bool can_take_scene() const noexcept;
     // The scene target's colour may trade places with another of its size, for a pass that then writes all of it that
     // is read (the frame, or dynamic resolution's rectangle): can_take_scene less the game's whole-frame need.

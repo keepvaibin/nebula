@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* LumaCore's draw.native service (docs/modding/reference/services/draw.md): a mod's own GPU commands at a draw point, with
-   the device's own handles. Import: LUMA_SERVICE(slot, "draw.native", "1.0"); permission `native` (services-registry
-   5.1): a mod the player did not grant it cannot bind the service.
+   the device's own handles. Import: LUMA_SERVICE(slot, "draw.native", "1.1") (1.1: Metal); permission `native`
+   (services-registry 5.1): a mod the player did not grant it cannot bind the service.
 
    A mod's function runs on the host's render thread when the host reaches the point in the frame it draws, once for
    each picture it draws from the game's frame (interpolated pictures too); never on the game thread, so the mod
@@ -24,7 +24,7 @@ extern "C" {
 
 #define LUMA_DRAW_NATIVE_NAME "draw.native"
 #define LUMA_DRAW_NATIVE_MAJOR 1u
-#define LUMA_DRAW_NATIVE_MINOR 0u
+#define LUMA_DRAW_NATIVE_MINOR 1u
 #define LUMA_DRAW_NATIVE_PERMISSION "native"
 
 /* Functions all mods set at once. */
@@ -33,7 +33,8 @@ extern "C" {
 typedef enum LumaDrawNativeBackend {
     LUMA_DRAW_NATIVE_D3D12 = 1,
     LUMA_DRAW_NATIVE_VULKAN = 2,
-    LUMA_DRAW_NATIVE_D3D11 = 3
+    LUMA_DRAW_NATIVE_D3D11 = 3,
+    LUMA_DRAW_NATIVE_METAL = 4 /* 1.1: macOS and iOS */
 } LumaDrawNativeBackend;
 
 /* D3D12's objects (the pointers are the COM interfaces named). */
@@ -83,6 +84,21 @@ typedef struct LumaDrawNativeD3D11 {
     void* depth_dsv;           /* ID3D11DepthStencilView*; null at the present point */
 } LumaDrawNativeD3D11;
 
+/* 1.1. Metal's objects (Objective-C objects as pointers, not retained: valid during the call). No encoder of the host's
+   is open: the function makes its own on `command_buffer` and ends each before it returns. It runs in an autorelease
+   pool of its own. */
+typedef struct LumaDrawNativeMetal {
+    void* device;              /* id<MTLDevice> */
+    void* queue;               /* id<MTLCommandQueue>: the host's; nothing committed on it */
+    void* command_buffer;      /* id<MTLCommandBuffer>: the frame's, not committed */
+    void* target;              /* id<MTLTexture> */
+    uint32_t target_format;    /* MTLPixelFormat */
+    uint32_t depth_format;     /* MTLPixelFormat; 0 at the present point */
+    void* depth;               /* id<MTLTexture>; null at the present point */
+    void* get_proc_addr;       /* void* (*)(const char* name): a symbol of the process by name (dlsym's RTLD_DEFAULT):
+                                  objc_msgSend, sel_registerName, objc_getClass, Metal's functions */
+} LumaDrawNativeMetal;
+
 /* The frame a function draws into (nebula_frame_list.h's NebulaFrame is this struct). */
 typedef struct LumaDrawNativeFrame {
     uint32_t size;          /* sizeof(LumaDrawNativeFrame) */
@@ -101,6 +117,7 @@ typedef struct LumaDrawNativeFrame {
     LumaDrawNativeD3D12 d3d12;    /* backend D3D12 */
     LumaDrawNativeVulkan vulkan;  /* backend VULKAN */
     LumaDrawNativeD3D11 d3d11;    /* backend D3D11 */
+    LumaDrawNativeMetal metal;    /* 1.1, backend METAL */
 } LumaDrawNativeFrame;
 
 typedef void (*LumaDrawNativeFn)(void* user, const LumaDrawNativeFrame* frame);

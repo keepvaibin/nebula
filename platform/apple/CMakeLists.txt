@@ -82,6 +82,12 @@ target_include_directories(main PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 # Objective-C++ with automatic reference counting (the property is read where the target was made).
 set_source_files_properties(${nebula_apple_host_sources} TARGET_DIRECTORY main PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
 target_link_libraries(main PRIVATE "-framework Foundation" "-framework QuartzCore" "-framework Metal" "-framework CoreVideo")
+# LumaCore's capture services on Apple's systems (runtime/src/luma_capture_apple.mm: AVFoundation), in the renderer's
+# library; metal.cmake's library takes its sources from it.
+set(nebula_apple_capture "${nebula_root}/runtime/src/luma_capture_apple.mm")
+target_sources(galaxy_render_vk PRIVATE "${nebula_apple_capture}")
+set_source_files_properties("${nebula_apple_capture}" TARGET_DIRECTORY galaxy_render_vk PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+target_link_libraries(galaxy_render_vk PUBLIC "-framework AVFoundation" "-framework CoreMedia" "-framework CoreVideo")
 if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     target_link_libraries(main PRIVATE "-framework AppKit" "-framework CoreAudio")
     # Beside the program until it is packed as an app (build_macos.sh), where it lies in Contents/Frameworks.
