@@ -869,7 +869,18 @@ pub fn record_level0(record: &[u8]) -> Option<(u32, u32, Vec<[u8; 4]>)> {
     let h = u32::from_le_bytes(record[20..24].try_into().ok()?);
     let layout = record[28];
     let texels = &record[HEADER..];
-    let n = (w * h) as usize;
+    // The header's size is checked against the texels the record holds before anything is made from it: w * h in 32
+    // bits wrapped, and a size with no texels behind it asked for its whole picture first (M-166).
+    let n = (w as usize).checked_mul(h as usize)?;
+    let need = match layout {
+        LAYOUT_BLOCK4 => (w.div_ceil(4) as usize).checked_mul(h.div_ceil(4) as usize)?.checked_mul(8)?,
+        LAYOUT_L8 => n,
+        LAYOUT_LA8 => n.checked_mul(2)?,
+        _ => n.checked_mul(4)?,
+    };
+    if texels.len() < need {
+        return None;
+    }
     let out = match layout {
         LAYOUT_BLOCK4 => {
             let mut out = vec![[0u8; 4]; n];
@@ -921,6 +932,25 @@ mod tests {
         assert_eq!(values.len(), 70000);
         assert_eq!(values[69999], [255, 0, 127, 255]);
         assert!(cook_rgba(70000, 1, &rgba[..rgba.len()-4]).is_err());
+    }
+
+    /// M-166: a record's size is checked against its texels before its picture is made: 65 536 x 65 536 wrapped to 0
+    /// in 32 bits, and a size with no texels behind it was made whole first.
+    #[test]
+    fn a_records_size_must_have_its_texels() {
+        let record = cook_rgba(1, 1, &[1, 2, 3, 4]).unwrap();
+        let sized = |w: u32, h: u32, layout: u8| {
+            let mut r = record.clone();
+            r[16..20].copy_from_slice(&w.to_le_bytes());
+            r[20..24].copy_from_slice(&h.to_le_bytes());
+            r[28] = layout;
+            r
+        };
+        for layout in [LAYOUT_RGBA8, LAYOUT_L8, LAYOUT_LA8, LAYOUT_BLOCK4] {
+            assert!(record_level0(&sized(65536, 65536, layout)).is_none(), "layout {layout}");
+            assert!(record_level0(&sized(4096, 4096, layout)).is_none(), "layout {layout}");
+        }
+        assert_eq!(record_level0(&record).unwrap().2, [[1, 2, 3, 4]]);
     }
 
     #[test]
