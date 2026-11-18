@@ -2146,6 +2146,9 @@ std::atomic<int> s_mii_count{-1};
 std::atomic<bool> s_mii_dialog_open{false};
 
 // A picker or Explorer may open on the player's desktop: never from a hidden test run (logged instead).
+// A pick with no picker to show (host_window::PickDone): the player is told what still works.
+constexpr const char kNoPicker[] = "NO FILE PICKER ON THIS SYSTEM: DROP THE FILES ON THE WINDOW";
+
 bool opens_on_desktop(const char* what) {
     if (!hidden_window_mode_enabled()) {
         return true;
@@ -2162,7 +2165,11 @@ void start_mii_import_dialog() {
     if (s_mii_dialog_open.exchange(true, std::memory_order_acq_rel)) {
         return;
     }
-    host_window::pick_files(host_window::FilePick::Miis, [](std::vector<std::filesystem::path> files) {
+    host_window::pick_files(host_window::FilePick::Miis, [](std::vector<std::filesystem::path> files, bool failed) {
+        if (failed) {
+            const std::lock_guard<std::mutex> lock(s_mii_mutex);
+            s_mii_status = kNoPicker;
+        }
         if (!files.empty()) {
             std::string message;
             (void)galaxy::host::import_mii_files(files, &message);
@@ -2404,8 +2411,9 @@ void start_saves_import() {
     if (!opens_on_desktop("the save picker")) return;
     ui::SavesStep idle = ui::SavesStep::Idle;
     if (!s_saves_step.compare_exchange_strong(idle, ui::SavesStep::Choosing, std::memory_order_acq_rel)) return;
-    host_window::pick_files(host_window::FilePick::Saves, [](std::vector<std::filesystem::path> files) {
+    host_window::pick_files(host_window::FilePick::Saves, [](std::vector<std::filesystem::path> files, bool failed) {
         if (files.empty()) {
+            if (failed) saves_import_status(kNoPicker);
             s_saves_step.store(ui::SavesStep::Idle, std::memory_order_release);
             return;
         }
@@ -3481,8 +3489,12 @@ void start_mod_import_dialog(bool folders) {
     if (s_mod_dialog_open.exchange(true, std::memory_order_acq_rel)) {
         return;
     }
-    host_window::pick_files(folders ? host_window::FilePick::ModFolders : host_window::FilePick::ModArchives, [](std::vector<std::filesystem::path> picked) {
+    host_window::pick_files(folders ? host_window::FilePick::ModFolders : host_window::FilePick::ModArchives, [](std::vector<std::filesystem::path> picked, bool failed) {
         s_mod_dialog_open.store(false, std::memory_order_release);
+        if (failed) {
+            const std::lock_guard<std::mutex> lock(s_mod_import_mutex);
+            s_mod_import_message = kNoPicker;
+        }
         run_mod_imports(std::move(picked));
     });
 }

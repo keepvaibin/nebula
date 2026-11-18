@@ -1882,12 +1882,12 @@ void resize_window_client(unsigned width, unsigned height) noexcept {
 // (nativeFilesPicked). One picker at a time; a second ask while one is open answers nothing.
 namespace {
 std::mutex g_pick_mutex;
-std::function<void(std::vector<std::filesystem::path>)> g_pick_done;
+PickDone g_pick_done;
 }  // namespace
 
-void pick_files(FilePick kind, std::function<void(std::vector<std::filesystem::path>)> done) {
+void pick_files(FilePick kind, PickDone done) {
     if (kind == FilePick::ModFolders) {
-        done({});
+        done({}, false);
         return;
     }
     bool open = false;
@@ -1897,7 +1897,7 @@ void pick_files(FilePick kind, std::function<void(std::vector<std::filesystem::p
         if (!open) g_pick_done = std::move(done);
     }
     if (open) {
-        done({});
+        done({}, false);
         return;
     }
     galaxy::sdl::call_activity(
@@ -1968,13 +1968,13 @@ extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeFile
         env->DeleteLocalRef(bytes);
         files.emplace_back(std::move(text));
     }
-    std::function<void(std::vector<std::filesystem::path>)> done;
+    PickDone done;
     {
         const std::lock_guard<std::mutex> lock(g_pick_mutex);
         done = std::move(g_pick_done);
         g_pick_done = nullptr;
     }
-    if (done) done(std::move(files));
+    if (done) done(std::move(files), false);
 }
 
 void open_folder(const std::filesystem::path&) {}
@@ -1987,20 +1987,26 @@ bool folders_open() noexcept {
 // SDL's or of the window's.
 namespace {
 struct PickRequest {
-    std::function<void(std::vector<std::filesystem::path>)> done;
+    PickDone done;
 };
 
 void SDLCALL picked(void* userdata, const char* const* files, int) {
     std::unique_ptr<PickRequest> request(static_cast<PickRequest*>(userdata));
+    // No list at all: no dialog could be shown (on Linux, neither a desktop portal nor Zenity is there).
+    if (files == nullptr) {
+        std::fprintf(stderr, "[sdl] the file picker did not open: %s\n", SDL_GetError());
+        request->done({}, true);
+        return;
+    }
     std::vector<std::filesystem::path> chosen;
-    for (const char* const* file = files; file != nullptr && *file != nullptr; ++file) {
+    for (const char* const* file = files; *file != nullptr; ++file) {
         chosen.emplace_back(*file);
     }
-    request->done(std::move(chosen));
+    request->done(std::move(chosen), false);
 }
 }  // namespace
 
-void pick_files(FilePick kind, std::function<void(std::vector<std::filesystem::path>)> done) {
+void pick_files(FilePick kind, PickDone done) {
     auto* request = new PickRequest{std::move(done)};
     if (kind == FilePick::ModFolders) {
         SDL_ShowOpenFolderDialog(picked, request, galaxy::sdl::g_window, nullptr, true);

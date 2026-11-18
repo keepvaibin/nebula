@@ -119,9 +119,12 @@ struct SettingsMonitor {
 // The window's inside to that size in pixels, from any thread (an extension's resize_window).
 void resize_window_client(unsigned width, unsigned height) noexcept;
 enum class FilePick { Miis, ModArchives, ModFolders, Saves };
-// The platform's file picker; `done` runs off the window's thread with what was chosen. Android picks documents
-// (no folders: ModFolders is not offered there) and hands over copies the game can read by path. Saves picks one file.
-void pick_files(FilePick kind, std::function<void(std::vector<std::filesystem::path>)> done);
+// The platform's file picker; `done` runs off the window's thread with what was chosen (nothing: cancelled). Android
+// picks documents (no folders: ModFolders is not offered there) and hands over copies the game can read by path. Saves
+// picks one file. `failed`: there was no picker to show (Linux with no desktop portal and no Zenity); the game tells the
+// player to drop the files on the window, which every desktop host takes.
+using PickDone = std::function<void(std::vector<std::filesystem::path> files, bool failed)>;
+void pick_files(FilePick kind, PickDone done);
 // The platform's save dialog for a file the game made (an export): the player chooses where it goes, under `file`'s
 // name, and it is copied there. `done` runs off the window's thread.
 enum class SaveCopy { Saved, Cancelled, Failed };

@@ -1510,13 +1510,15 @@ void resize_window_client(unsigned width, unsigned height) noexcept {
 }
 
 // The file picker on its own thread, a COM apartment of its own.
-void pick_files(FilePick kind, std::function<void(std::vector<std::filesystem::path>)> done) {
+void pick_files(FilePick kind, PickDone done) {
     const HWND owner = reinterpret_cast<HWND>(settings_window.load(std::memory_order_acquire));
     std::thread([owner, kind, done = std::move(done)] {
         const HRESULT com = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
         std::vector<std::filesystem::path> files;
         IFileOpenDialog* dialog = nullptr;
-        if (SUCCEEDED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog)))) {
+        // No dialog, or one that would not show (anything but the player's cancel).
+        HRESULT shown = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog));
+        if (SUCCEEDED(shown)) {
             DWORD options = 0u;
             dialog->GetOptions(&options);
             options |= FOS_ALLOWMULTISELECT | FOS_FORCEFILESYSTEM;
@@ -1552,7 +1554,8 @@ void pick_files(FilePick kind, std::function<void(std::vector<std::filesystem::p
             }
             dialog->SetOptions(options);
             IShellItemArray* items = nullptr;
-            if (SUCCEEDED(dialog->Show(owner)) && SUCCEEDED(dialog->GetResults(&items))) {
+            shown = dialog->Show(owner);
+            if (SUCCEEDED(shown) && SUCCEEDED(dialog->GetResults(&items))) {
                 DWORD count = 0u;
                 items->GetCount(&count);
                 for (DWORD i = 0; i < count; ++i) {
@@ -1573,7 +1576,12 @@ void pick_files(FilePick kind, std::function<void(std::vector<std::filesystem::p
         if (SUCCEEDED(com)) {
             CoUninitialize();
         }
-        done(std::move(files));
+        const bool failed = FAILED(shown) && shown != HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        if (failed) {
+            std::cerr << "[window] the file picker did not open: 0x" << std::hex << static_cast<unsigned long>(shown)
+                      << std::dec << '\n';
+        }
+        done(std::move(files), failed);
     }).detach();
 }
 
