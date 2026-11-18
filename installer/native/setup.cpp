@@ -314,8 +314,13 @@ void SetupForm::OnStart() {
             return;
         }
         if (installed_ && modeRestore_ && Checked(modeRestore_)) {
-            wstring version = integration::Rollback(layout_);
-            Message(this, Of(L"Nebula {0} was restored.", {version}), Of(L"Nebula Setup"));
+            const integration::Restored restored = integration::Rollback(layout_);
+            wstring text = Of(L"Nebula {0} was restored.", {restored.version});
+            if (!restored.shortcutFailures.empty()) {
+                text += L"\r\n\r\n" + Of(L"Some shortcuts could not be made. Nebula.exe is in {0}.", {layout_.root});
+                for (const wstring& failure : restored.shortcutFailures) text += L"\r\n" + failure;
+            }
+            Message(this, text, Of(L"Nebula Setup"));
             Close();
             return;
         }
@@ -633,7 +638,7 @@ static int Unattended(const Options& options) {
             CreateDirs(paths::SetupLogs());
             wstring log = PathCombine(paths::SetupLogs(), L"unattended-errors.log");
             std::string line = Narrow(UtcNowIso() + L" " + ErrorText(error) + L"\r\n");
-            HANDLE file = CreateFileW(log.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+            HANDLE file = CreateFileW(NativePath(log).c_str(), FILE_APPEND_DATA, FILE_SHARE_READ, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
             if (file != INVALID_HANDLE_VALUE) {
                 DWORD written = 0;
                 WriteFile(file, line.data(), DWORD(line.size()), &written, nullptr);

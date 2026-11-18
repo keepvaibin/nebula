@@ -1,5 +1,6 @@
 // A small Win32 window toolkit for Nebula Setup: fixed-layout forms in 96-DPI units scaled to the
-// display, the common controls they use, events as callbacks, modal windows and calls from worker threads.
+// display, the common controls they use, events as callbacks, modal windows and calls from worker threads. Each window
+// is laid out at its monitor's scale, and again when it moves to a monitor of another scale (WM_DPICHANGED).
 #pragma once
 
 #include "common.h"
@@ -9,7 +10,8 @@
 namespace nebula::ui {
 
 void Init();                                  // DPI awareness, visual styles, common controls, COM
-int Px(int value);                            // 96-DPI units to pixels
+int Px(int value);                            // 96-DPI units to pixels at the scale new windows open at
+// A font at the scale new windows open at; a window moved to another scale makes its own of the same.
 HFONT Font(double points, int weight = FW_NORMAL, const wchar_t* face = L"Segoe UI");
 
 using Handler = std::function<void()>;
@@ -37,6 +39,7 @@ public:
 
     HWND Handle() const { return hwnd_; }
     HFONT DefaultFont() const { return font_; }
+    UINT Dpi() const { return dpi_; }
 
     // Controls; x, y, width and height in 96-DPI units relative to `parent` (the form or a tab page).
     HWND Label(HWND parent, const wstring& text, int x, int y, int w, int h, DWORD style = 0);
@@ -87,13 +90,22 @@ public:
 
     static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
     LRESULT Handle(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+    // A control of this window to (x, y, w, h) in 96-DPI units, kept for a change of scale (Move).
+    void Place(HWND control, int x, int y, int w, int h);
 
 private:
     HWND Make(HWND parent, const wchar_t* cls, const wstring& text, DWORD style, int x, int y, int w, int h, DWORD exStyle = 0);
     int NextId();
+    int Scaled(int value) const { return MulDiv(value, int(dpi_), 96); }
+    // Everything at the window's new scale: the controls' places and fonts, the tab pages, the list columns.
+    void Rescale();
+    void PlacePages(const std::vector<HWND>& pages, HWND tabs);
 
     HWND hwnd_ = nullptr;
     HFONT font_ = nullptr;
+    UINT dpi_ = 96;
+    UINT previousDpi_ = 96;  // before the last change of scale
+    std::map<HWND, RECT> layout_;  // each control's place in 96-DPI units: left, top, width, height
     Form* owner_ = nullptr;
     bool closed_ = false;
     bool shown_ = false;

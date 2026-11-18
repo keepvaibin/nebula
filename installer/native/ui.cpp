@@ -1,15 +1,18 @@
 #include "ui.h"
 
+#include <shellscalingapi.h>
 #include <shobjidl.h>
 #include <uxtheme.h>
 #include <windowsx.h>
 
 #include <cmath>
+#include <tuple>
 
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "uxtheme.lib")
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
+#pragma comment(lib, "shcore.lib")
 
 namespace nebula::ui {
 
@@ -18,8 +21,55 @@ const wchar_t* const kFormClass = L"NebulaForm";
 const wchar_t* const kPageClass = L"NebulaPage";
 const UINT kPostMessage = WM_APP + 1;
 const UINT kInvokeMessage = WM_APP + 2;
-UINT g_dpi = 96;
+UINT g_dpi = 96;  // the scale new windows open at: the monitor under the cursor's, or the last a window moved to
 int g_nextId = 1000;
+
+// Every font Font made, by what it is and its scale, so that a window at another scale finds or makes its twin.
+struct FontSpec {
+    double points;
+    int weight;
+    wstring face;
+    UINT dpi;
+    auto Key() const { return std::tie(points, weight, face, dpi); }
+    bool operator<(const FontSpec& other) const { return Key() < other.Key(); }
+};
+std::map<FontSpec, HFONT> g_fontsBySpec;
+std::map<HFONT, FontSpec> g_specsByFont;
+
+HFONT MakeFont(const FontSpec& spec) {
+    auto found = g_fontsBySpec.find(spec);
+    if (found != g_fontsBySpec.end()) return found->second;
+    LOGFONTW font{};
+    font.lfHeight = -LONG(std::lround(spec.points * spec.dpi / 72.0));
+    font.lfWeight = spec.weight;
+    font.lfCharSet = DEFAULT_CHARSET;
+    font.lfQuality = CLEARTYPE_QUALITY;
+    wcscpy_s(font.lfFaceName, spec.face.c_str());
+    HFONT made = CreateFontIndirectW(&font);
+    g_fontsBySpec[spec] = made;
+    g_specsByFont[made] = spec;
+    return made;
+}
+
+// `font` at `dpi`: itself when Font did not make it.
+HFONT FontAt(HFONT font, UINT dpi) {
+    auto spec = g_specsByFont.find(font);
+    if (spec == g_specsByFont.end() || spec->second.dpi == dpi) return font;
+    FontSpec scaled = spec->second;
+    scaled.dpi = dpi;
+    return MakeFont(scaled);
+}
+
+UINT MonitorDpi(HMONITOR monitor) {
+    UINT x = 96, y = 96;
+    return GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &x, &y) == S_OK && x > 0 ? x : GetDpiForSystem();
+}
+
+HMONITOR CursorMonitor() {
+    POINT cursor;
+    GetCursorPos(&cursor);
+    return MonitorFromPoint(cursor, MONITOR_DEFAULTTOPRIMARY);
+}
 std::function<bool(MSG&)> g_filter;
 
 LRESULT CALLBACK PageProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -45,7 +95,8 @@ LRESULT CALLBACK PageProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 void Init() {
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-    g_dpi = GetDpiForSystem();
+    // The first window opens on the monitor under the cursor, at that monitor's scale (Form::Form).
+    g_dpi = MonitorDpi(CursorMonitor());
     INITCOMMONCONTROLSEX controls{sizeof(controls), ICC_STANDARD_CLASSES | ICC_TAB_CLASSES | ICC_BAR_CLASSES | ICC_PROGRESS_CLASS |
                                                         ICC_LISTVIEW_CLASSES | ICC_UPDOWN_CLASS | ICC_LINK_CLASS};
     InitCommonControlsEx(&controls);
@@ -70,15 +121,7 @@ void Init() {
 
 int Px(int value) { return MulDiv(value, int(g_dpi), 96); }
 
-HFONT Font(double points, int weight, const wchar_t* face) {
-    LOGFONTW font{};
-    font.lfHeight = -LONG(std::lround(points * g_dpi / 72.0));
-    font.lfWeight = weight;
-    font.lfCharSet = DEFAULT_CHARSET;
-    font.lfQuality = CLEARTYPE_QUALITY;
-    wcscpy_s(font.lfFaceName, face);
-    return CreateFontIndirectW(&font);
-}
+HFONT Font(double points, int weight, const wchar_t* face) { return MakeFont({points, weight, face, g_dpi}); }
 
 // ---- NumberBox ---------------------------------------------------------------------------------------------------
 
@@ -111,13 +154,15 @@ void NumberBox::Enable(bool enabled) {
 Form::Form(const wstring& title, int width, int height, HFONT font, Form* owner, bool minimizeBox) : font_(font), owner_(owner) {
     DWORD style = WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN | (minimizeBox ? WS_MINIMIZEBOX : 0);
     DWORD exStyle = WS_EX_CONTROLPARENT | (owner ? WS_EX_DLGMODALFRAME : 0);
-    RECT rect{0, 0, Px(width), Px(height)};
-    AdjustWindowRectExForDpi(&rect, style, FALSE, exStyle, g_dpi);
+    // At the scale of the monitor it opens on (an owned window: its owner's).
+    const HMONITOR where = owner && owner->Handle() ? MonitorFromWindow(owner->Handle(), MONITOR_DEFAULTTOPRIMARY) : CursorMonitor();
+    dpi_ = MonitorDpi(where);
+    font_ = FontAt(font, dpi_);
+    RECT rect{0, 0, Scaled(width), Scaled(height)};
+    AdjustWindowRectExForDpi(&rect, style, FALSE, exStyle, dpi_);
     int w = rect.right - rect.left, h = rect.bottom - rect.top;
-    POINT cursor;
-    GetCursorPos(&cursor);
     MONITORINFO monitor{sizeof(monitor)};
-    GetMonitorInfoW(MonitorFromPoint(cursor, MONITOR_DEFAULTTOPRIMARY), &monitor);
+    GetMonitorInfoW(where, &monitor);
     int x = monitor.rcWork.left + (monitor.rcWork.right - monitor.rcWork.left - w) / 2;
     int y = monitor.rcWork.top + (monitor.rcWork.bottom - monitor.rcWork.top - h) / 2;
     hwnd_ = CreateWindowExW(exStyle, kFormClass, title.c_str(), style, x, std::max<int>(monitor.rcWork.top, y), w, h,
@@ -135,10 +180,51 @@ int Form::NextId() { return g_nextId++; }
 
 HWND Form::Make(HWND parent, const wchar_t* cls, const wstring& text, DWORD style, int x, int y, int w, int h, DWORD exStyle) {
     int id = NextId();
-    HWND control = CreateWindowExW(exStyle, cls, text.c_str(), WS_CHILD | WS_VISIBLE | style, Px(x), Px(y), Px(w), Px(h),
-                                   parent ? parent : hwnd_, reinterpret_cast<HMENU>(INT_PTR(id)), GetModuleHandleW(nullptr), nullptr);
+    HWND control = CreateWindowExW(exStyle, cls, text.c_str(), WS_CHILD | WS_VISIBLE | style, Scaled(x), Scaled(y), Scaled(w),
+                                   Scaled(h), parent ? parent : hwnd_, reinterpret_cast<HMENU>(INT_PTR(id)),
+                                   GetModuleHandleW(nullptr), nullptr);
     SendMessageW(control, WM_SETFONT, reinterpret_cast<WPARAM>(font_), TRUE);
+    layout_[control] = RECT{x, y, w, h};
     return control;
+}
+
+void Form::Place(HWND control, int x, int y, int w, int h) {
+    layout_[control] = RECT{x, y, w, h};
+    MoveWindow(control, Scaled(x), Scaled(y), Scaled(w), Scaled(h), TRUE);
+}
+
+void Form::PlacePages(const std::vector<HWND>& pages, HWND tabs) {
+    RECT area;
+    GetClientRect(tabs, &area);
+    TabCtrl_AdjustRect(tabs, FALSE, &area);
+    MapWindowPoints(tabs, GetParent(tabs), reinterpret_cast<POINT*>(&area), 2);
+    for (HWND page : pages) MoveWindow(page, area.left, area.top, area.right - area.left, area.bottom - area.top, TRUE);
+}
+
+void Form::Rescale() {
+    font_ = FontAt(font_, dpi_);
+    // Fonts first (a control's text may size its parts), then places, outermost first: a tab control's pages follow it.
+    EnumChildWindows(
+        hwnd_,
+        [](HWND child, LPARAM self) -> BOOL {
+            auto* form = reinterpret_cast<Form*>(self);
+            HFONT font = reinterpret_cast<HFONT>(SendMessageW(child, WM_GETFONT, 0, 0));
+            if (font) SendMessageW(child, WM_SETFONT, reinterpret_cast<WPARAM>(FontAt(font, form->dpi_)), FALSE);
+            wchar_t cls[32] = L"";
+            GetClassNameW(child, cls, 32);
+            if (_wcsicmp(cls, WC_LISTVIEWW) == 0) {
+                HWND header = ListView_GetHeader(child);
+                const int columns = header ? Header_GetItemCount(header) : 0;
+                for (int i = 0; i < columns; i++)
+                    ListView_SetColumnWidth(child, i, MulDiv(ListView_GetColumnWidth(child, i), int(form->dpi_), int(form->previousDpi_)));
+            }
+            return TRUE;
+        },
+        reinterpret_cast<LPARAM>(this));
+    for (const auto& [control, place] : layout_)
+        MoveWindow(control, Scaled(place.left), Scaled(place.top), Scaled(place.right), Scaled(place.bottom), TRUE);
+    for (const TabSet& set : tabSets_) PlacePages(set.pages, set.tabs);
+    InvalidateRect(hwnd_, nullptr, TRUE);
 }
 
 HWND Form::Label(HWND parent, const wstring& text, int x, int y, int w, int h, DWORD style) {
@@ -221,13 +307,9 @@ HWND Form::Page(HWND tabs, const wstring& title) {
     item.pszText = const_cast<wchar_t*>(title.c_str());
     int index = int(set->pages.size());
     TabCtrl_InsertItem(tabs, index, &item);
-    RECT area;
-    GetClientRect(tabs, &area);
-    TabCtrl_AdjustRect(tabs, FALSE, &area);
-    MapWindowPoints(tabs, GetParent(tabs), reinterpret_cast<POINT*>(&area), 2);
     HWND page = CreateWindowExW(WS_EX_CONTROLPARENT, kPageClass, L"", WS_CHILD | WS_CLIPCHILDREN | (index == 0 ? WS_VISIBLE : 0),
-                                area.left, area.top, area.right - area.left, area.bottom - area.top, GetParent(tabs), nullptr,
-                                GetModuleHandleW(nullptr), nullptr);
+                                0, 0, 0, 0, GetParent(tabs), nullptr, GetModuleHandleW(nullptr), nullptr);
+    PlacePages({page}, tabs);
     SetWindowLongPtrW(page, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
     SetWindowPos(page, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
     set->pages.push_back(page);
@@ -466,6 +548,19 @@ LRESULT Form::Handle(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
         case DM_GETDEFID:
             if (accept_) return MAKELRESULT(accept_, DC_HASDEFID);
             return 0;
+        case WM_DPICHANGED: {
+            // Moved to a monitor of another scale (or the scale changed): the size Windows proposes, everything in it
+            // at the new scale. Windows opened after this open at it too.
+            if (hwnd != hwnd_) break;
+            previousDpi_ = dpi_;
+            dpi_ = HIWORD(wParam);
+            g_dpi = dpi_;
+            const RECT* suggested = reinterpret_cast<const RECT*>(lParam);
+            SetWindowPos(hwnd, nullptr, suggested->left, suggested->top, suggested->right - suggested->left,
+                         suggested->bottom - suggested->top, SWP_NOZORDER | SWP_NOACTIVATE);
+            Rescale();
+            return 0;
+        }
         case WM_TIMER: {
             auto it = timers_.find(UINT(wParam));
             if (it != timers_.end() && it->second) { Handler copy = it->second; copy(); }
@@ -678,11 +773,12 @@ void SetMarquee(HWND bar, bool marquee) {
 }
 
 void ListColumns(HWND list, const std::vector<std::pair<wstring, int>>& columns) {
+    const int dpi = int(GetDpiForWindow(list));
     for (size_t i = 0; i < columns.size(); i++) {
         LVCOLUMNW column{};
         column.mask = LVCF_TEXT | LVCF_WIDTH;
         column.pszText = const_cast<wchar_t*>(columns[i].first.c_str());
-        column.cx = Px(columns[i].second);
+        column.cx = MulDiv(columns[i].second, dpi, 96);
         ListView_InsertColumn(list, int(i), &column);
     }
 }
@@ -705,13 +801,20 @@ int ListSelected(HWND list) {
     return ListView_GetNextItem(list, -1, LVNI_SELECTED);
 }
 
-void Move(HWND control, int x, int y, int w, int h) { MoveWindow(control, Px(x), Px(y), Px(w), Px(h), TRUE); }
+void Move(HWND control, int x, int y, int w, int h) {
+    if (auto* form = reinterpret_cast<Form*>(GetWindowLongPtrW(GetAncestor(control, GA_ROOT), GWLP_USERDATA))) {
+        form->Place(control, x, y, w, h);
+        return;
+    }
+    const int dpi = int(GetDpiForWindow(control));
+    MoveWindow(control, MulDiv(x, dpi, 96), MulDiv(y, dpi, 96), MulDiv(w, dpi, 96), MulDiv(h, dpi, 96), TRUE);
+}
 
 int TopOf(HWND control) {
     RECT rect;
     GetWindowRect(control, &rect);
     MapWindowPoints(nullptr, GetParent(control), reinterpret_cast<POINT*>(&rect), 2);
-    return MulDiv(rect.top, 96, int(g_dpi));
+    return MulDiv(rect.top, 96, int(GetDpiForWindow(control)));
 }
 
 void AppendText(HWND edit, const wstring& text) {

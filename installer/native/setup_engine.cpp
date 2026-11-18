@@ -217,7 +217,7 @@ using Engine = InstallEngine;
 
 // game.pak starts with "NBSTORE\0" and this build's store version.
 bool CurrentStoreValid(const wstring& content) {
-    HANDLE file = CreateFileW(PathCombine(content, L"game.pak").c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    HANDLE file = CreateFileW(NativePath(PathCombine(content, L"game.pak")).c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
     if (file == INVALID_HANDLE_VALUE) return false;
     uint8_t header[12] = {};
     DWORD read = 0;
@@ -332,7 +332,7 @@ void Prune(const wstring& keep, const std::function<void(const wstring&)>& log) 
     for (const wstring& dir : ListDirs(Folder(), false)) {
         if (EndsWith(dir, L".partial")) continue;
         WIN32_FILE_ATTRIBUTE_DATA data{};
-        if (GetFileAttributesExW(dir.c_str(), GetFileExInfoStandard, &data)) copies.push_back({dir, data.ftCreationTime});
+        if (GetFileAttributesExW(NativePath(dir).c_str(), GetFileExInfoStandard, &data)) copies.push_back({dir, data.ftCreationTime});
     }
     std::sort(copies.begin(), copies.end(), [](const Copy& a, const Copy& b) { return CompareFileTime(&a.created, &b.created) > 0; });
     for (size_t i = kKeptCopies; i < copies.size(); i++) {
@@ -456,7 +456,7 @@ struct InstallEngine::Impl {
         }
         CreateDirs(paths::SetupLogs());
         owner.LogPath = PathCombine(paths::SetupLogs(), UtcStamp(true) + L"-" + NewGuidN() + L".log");
-        logFile = CreateFileW(owner.LogPath.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+        logFile = CreateFileW(NativePath(owner.LogPath).c_str(), FILE_APPEND_DATA, FILE_SHARE_READ, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
         if (logFile == INVALID_HANDLE_VALUE) FailWin32(GetLastError(), owner.LogPath);
     }
 
@@ -804,7 +804,7 @@ struct InstallEngine::Impl {
         try {
             payload::Extract(L"start/Nebula.exe", next);
             for (int attempt = 0;; attempt++) {
-                if (MoveFileExW(next.c_str(), layout.Starter().c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) return;
+                if (MoveFileExW(NativePath(next).c_str(), NativePath(layout.Starter()).c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) return;
                 if (attempt >= 20) FailWin32(GetLastError(), layout.Starter());
                 Sleep(250);
             }
@@ -1017,7 +1017,7 @@ void SwapContent(const InstallLayout& layout, long long format, long long active
 }
 }  // namespace
 
-wstring Rollback(const InstallLayout& layout) {
+Restored Rollback(const InstallLayout& layout) {
     RequireClosed(layout.root);
     auto current = InstalledInfo::Read(layout);
     if (!current || !current->Previous) Fail(ErrorKind::InvalidOperation, Of(L"No previous version is available."));
@@ -1040,8 +1040,7 @@ wstring Rollback(const InstallLayout& layout) {
         if (swap) SwapContent(layout, active, format);
         throw;
     }
-    Register(layout, previous, false);
-    return previous;
+    return {previous, Register(layout, previous, false)};
 }
 
 void Uninstall(const InstallLayout& layout, bool removeUserData) {
