@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/Map/CollisionPartIndex.hpp"
 #include "Game/Map/HitInfo.hpp"
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/Util/Array.hpp"
@@ -63,4 +64,10 @@ public:
     f32 mRadius;
     Vec3f mMin;
     Vec3f mMax;
+#if defined(NEBULA_PLAIN_PATHS)
+    // The parts by place (P-129), and the count of changes to them: a part taken or let go, or one that moved or
+    // changed its radius.
+    CollisionPartIndex mIndex;
+    u32 mChanges;
+#endif
 };

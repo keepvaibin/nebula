@@ -24,12 +24,23 @@ namespace {
             CollisionChanges::note(pParts->getTrans(), pParts->mBoundingRadius);
         }
     }
+
+    // The zone that lists a part makes its index again at its next query (P-129), valid or not: a part that
+    // moved while left out is taken again where it is.
+    void noteMoved(CollisionParts* pParts) {
+        if (pParts->mListZone != nullptr) {
+            pParts->mListZone->mChanges++;
+        }
+    }
 }  // namespace
 #endif
 
 CollisionParts::CollisionParts()
     : mFollowMtx(), mHitSensor(), mIsValid(), mIsUpdate(true), mIsUpdateOnce(), mUseEqualScale(), mIsNotUsingScale(), mStillCount(), mBoundingRadius(-1.0f), mScale(1.0f), mKeeperIndex(-1), mZone() {
     mServer = new KCollisionServer();
+#if defined(NEBULA_PLAIN_PATHS)
+    mListZone = nullptr;
+#endif
 
     mPrevBaseMatrix.identity();
     mBaseMatrix.identity();
@@ -152,6 +163,7 @@ void CollisionParts::resetAllMtxPrivate(const Pos3f& rMatrix) {
     NebulaMtxInverse(mBaseMatrix.toMtxPtr(), mInvBaseMatrix.toMtxPtr());
 #if defined(NEBULA_PLAIN_PATHS)
     noteParts(this);
+    noteMoved(this);
 #endif
 }
 
@@ -208,6 +220,7 @@ void CollisionParts::updateMtx() {
 #if defined(NEBULA_PLAIN_PATHS)
             if (moved) {
                 noteParts(this);
+                noteMoved(this);
             }
 #endif
         }
@@ -269,6 +282,7 @@ void CollisionParts::updateBoundingSphereRangePrivate(f32 scale) {
     mBoundingRadius = scale * mServer->mMaxVertexDistance;
 #if defined(NEBULA_PLAIN_PATHS)
     noteParts(this);
+    noteMoved(this);
 #endif
 }
 
