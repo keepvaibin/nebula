@@ -1,5 +1,7 @@
 // Picture serial accounting, the scene target conversion shader, and scene target-copy geometry tests.
 
+#include "galaxy/render/d3d11/d3d11_context.h"
+#include "galaxy/render/device_memory.h"
 #include "galaxy/render/frame_pass.h"
 #include "galaxy/render/renderer_d3d12.h"
 #include "galaxy/render/texture_store.h"
@@ -83,8 +85,29 @@ bool compiles_scene_conversion_shader(std::string& diagnostics) {
 
 }  // namespace
 
+// N-1050: Direct3D 11 reads an adapter without video memory of its own as unified (WARP's desc), a discrete card's
+// 8 GB as not, and what it reads is what the benchmark and the first calibration see (device_unified_memory).
+bool test_d3d11_unified_memory() {
+    using Microsoft::WRL::ComPtr;
+    ComPtr<IDXGIFactory4> factory;
+    ComPtr<IDXGIAdapter1> warp;
+    DXGI_ADAPTER_DESC1 desc{};
+    if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))) || FAILED(factory->EnumWarpAdapter(IID_PPV_ARGS(&warp))) ||
+        FAILED(warp->GetDesc1(&desc))) {
+        return expect(false, "the WARP adapter's desc");
+    }
+    bool ok = expect(galaxy::render::d3d11::unified_memory(desc.DedicatedVideoMemory),
+                     "WARP (no video memory of its own) is unified memory on Direct3D 11");
+    ok &= expect(!galaxy::render::d3d11::unified_memory(std::uint64_t{8} << 30u), "a card's own 8 GB is not");
+    galaxy::render::set_device_unified_memory(galaxy::render::d3d11::unified_memory(desc.DedicatedVideoMemory));
+    ok &= expect(galaxy::render::device_unified_memory(), "the renderer's answer is what device_unified_memory reports");
+    galaxy::render::set_device_unified_memory(false);
+    return ok;
+}
+
 int main() {
     bool passed = true;
+    passed &= test_d3d11_unified_memory();
 
     {
         std::string diagnostics;
