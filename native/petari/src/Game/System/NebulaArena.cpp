@@ -34,6 +34,27 @@ NebulaArena* NebulaArena::sCurrent;
 NebulaArena* NebulaArena::sRoot;
 
 namespace {
+    // The arenas have no lock: only the game thread allocates and frees (NebulaArena.hpp). Two threads inside the
+    // global new or delete at once would corrupt a free list without a sign; this flag makes the overlap a stop that
+    // says so (P-012). Plain stores: no cost a lock or an atomic would add to every allocation. The thread
+    // sanitizer's build reports the same overlap as a race on it.
+    volatile bool sArenaBusy = false;
+
+    struct ArenaUse {
+        ArenaUse() {
+            if (sArenaBusy) {
+                sArenaBusy = false;
+                NEBULA_PANIC("the game's memory was used by two threads at once (only the game thread allocates)");
+            }
+            sArenaBusy = true;
+        }
+        ~ArenaUse() {
+            sArenaBusy = false;
+        }
+    };
+}  // namespace
+
+namespace {
     // Addresses each arena has to itself, not memory: only what it uses is committed.
     const u64 cSpan = 1ull << 32;
     const u64 cCommitStep = 1ull << 20;
@@ -304,6 +325,7 @@ void NebulaArena::destroyOwned() {
 }
 
 void* NebulaArena::alloc(u32 size, int alignment, NebulaArena* pArena) {
+    const ArenaUse use;
     if (pArena == nullptr) {
         pArena = sCurrent;
     }
@@ -316,6 +338,7 @@ void* NebulaArena::alloc(u32 size, int alignment, NebulaArena* pArena) {
 }
 
 void NebulaArena::free(void* pData, NebulaArena* pArena) {
+    const ArenaUse use;
     // A file's view lies in no arena: it stays until its arena goes, as a freed block's bytes did.
     NebulaArena* const pOwner = findFromRoot(pData);
     if (pOwner != nullptr) {
