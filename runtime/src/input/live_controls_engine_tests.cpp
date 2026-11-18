@@ -20,6 +20,7 @@ struct Host final : LiveControlsHost {
     PointerSample state{};
     NativeMousePointerProjection fallback{};
     bool injected_move = false, injected_button = false;
+    int looks = 0;  // look() calls
     std::uint64_t now_ms() override { return clock / 1000; }
     std::uint64_t now_us() override { return clock; }
     bool injected(bool button) override { return button ? injected_button : injected_move; }
@@ -29,6 +30,7 @@ struct Host final : LiveControlsHost {
         return sample;
     }
     NativeMousePointerProjection cursor() override { return fallback; }
+    LookSample look() override { ++looks; return {}; }
     void advance(std::uint64_t us = 16'667) { clock += us; }
 };
 
@@ -224,10 +226,20 @@ void stick_direction() {
           "a small diagonal push keeps its direction");
     check(near(std::hypot(result.input.stick_x, result.input.stick_y), 0.2f), "and its length");
 }
+// No mod's look, no host look work (M-069): the host's look motion is never asked (on Windows it took the raw mouse's
+// lock; on SDL hosts it projected the finger), however many reads.
+void no_look_no_host_work() {
+    auto config = default_controls_config();
+    LiveControlsEngine engine; Host host;
+    LiveControlsFrame frame{config}; frame.window_focused = true; frame.use_keyboard = true;
+    frame.allow_absolute_pointer = true;
+    for (int i = 0; i < 10; ++i) { host.advance(); (void)engine.sample(frame, host); }
+    check(host.looks == 0, "with no look, the host's look motion is never asked");
+}
 int main() {
     try {
         families_and_keyboard(); mouse_samples(); motion_context_and_instances(); host_controls_and_device_motion();
-        stick_direction();
+        stick_direction(); no_look_no_host_work();
         std::cout << "live controls families, mouse, motion, context, host controls and independent state passed\n";
         return 0;
     } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }

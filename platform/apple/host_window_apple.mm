@@ -309,6 +309,15 @@ void update_cursor() {
     const bool hold = front && g_mouse_look_wanted.load(std::memory_order_acquire);
     if (hold != g_mouse_look_held) {
         g_mouse_look_held = hold;
+        if (hold && g_view != nil) {
+            // M-058: the cursor goes to the picture's middle before it is detached, so the look's clicks land in the
+            // game wherever the cursor stood (the title bar, the menu bar, another display). Global display
+            // coordinates run down from the main screen's top.
+            NSView* const view = (NSView*)g_view;
+            const NSRect on_screen = [g_window convertRectToScreen:[view convertRect:view.bounds toView:nil]];
+            const CGFloat top = NSScreen.screens.firstObject.frame.size.height;
+            (void)CGWarpMouseCursorPosition(CGPointMake(NSMidX(on_screen), top - NSMidY(on_screen)));
+        }
         (void)CGAssociateMouseAndMouseCursorPosition(hold ? false : true);
         const std::lock_guard<std::mutex> lock(g_input_mutex);
         g_input.mouse_dx = g_input.mouse_dy = 0.0f;

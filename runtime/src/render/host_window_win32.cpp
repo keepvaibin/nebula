@@ -12,6 +12,7 @@
 #include "galaxy/windows_power.h"
 #include "galaxy/path_text.h"
 #include "galaxy/controller_hid.h"
+#include "galaxy/input/mouse_look_hold.h"
 #include "galaxy/input/raw_mouse_win32.h"
 
 #include "galaxy/render/display_modes.h"
@@ -757,6 +758,44 @@ static void raw_mouse_detach(HWND hwnd) noexcept {
     galaxy::host::remove_native_raw_mouse(reinterpret_cast<std::uintptr_t>(hwnd));
 }
 
+// A mod's first-person look's mouse hold (galaxy/input/mouse_look_hold.h, M-061), on this thread only: the cursor kept in
+// a small box at the picture's middle (the window hides it over the picture) and the mouse's counts read from WM_INPUT,
+// both only while held, so a game with no look registers no raw input (M-069). `front_lost`: the message says another
+// window takes the front, which GetForegroundWindow may not show yet.
+static galaxy::input::MouseLookHold s_mouse_look;
+static ULONGLONG s_mouse_look_checked = 0;  // GetTickCount64 of the last check from WM_INPUT
+static void act_mouse_look(HWND hwnd, galaxy::input::MouseLookHold::Act act, bool was_held) noexcept {
+    using Act = galaxy::input::MouseLookHold::Act;
+    if (act == Act::Release) {
+        (void)ClipCursor(nullptr);
+        raw_mouse_detach(hwnd);
+        return;
+    }
+    if (act != Act::Hold) return;
+    if (!was_held) raw_mouse_attach(hwnd);
+    RECT client{};
+    POINT centre{};
+    if (!GetClientRect(hwnd, &client)) return;
+    centre.x = (client.left + client.right) / 2;
+    centre.y = (client.top + client.bottom) / 2;
+    if (!ClientToScreen(hwnd, &centre)) return;
+    const RECT box{centre.x - 8, centre.y - 8, centre.x + 8, centre.y + 8};
+    // Windows drops a clip when another window takes the front, and at a few system events besides: set again when
+    // it is not this one.
+    RECT now{};
+    if (!GetClipCursor(&now) || !EqualRect(&now, &box)) (void)ClipCursor(&box);
+}
+static void apply_mouse_look(HWND hwnd, bool front_lost = false) noexcept {
+    galaxy::input::MouseLookWindow window;
+    window.wanted = galaxy::host::native_mouse_look_wanted();
+    window.foreground = !front_lost && GetForegroundWindow() == hwnd;
+    window.minimized = IsIconic(hwnd) != FALSE;
+    window.moving = host_window::move_size_active.load(std::memory_order_acquire) ||
+                    s_system_menu_active.load(std::memory_order_acquire);
+    const bool was_held = s_mouse_look.held();
+    act_mouse_look(hwnd, s_mouse_look.update(window), was_held);
+}
+
 LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_NCDESTROY) {
         (void)RemovePropW(hwnd, kInstanceProperty);
@@ -766,6 +805,16 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         // LumaCore's display snapshot (services-system 4), where the window's changes arrive.
         galaxy::luma_system::win32_window_changed(hwnd, msg == WM_ACTIVATE ? (LOWORD(wp) != WA_INACTIVE ? 1 : 0) : -1,
                                                   msg == WM_DISPLAYCHANGE || msg == WM_DPICHANGED);
+        // The look's mouse hold follows the window: given back when it is minimised or loses the front, its box moved
+        // with it. Nothing to do with no look.
+        if (s_mouse_look.held() || galaxy::host::native_mouse_look_wanted()) {
+            apply_mouse_look(hwnd, msg == WM_KILLFOCUS || (msg == WM_ACTIVATE && LOWORD(wp) == WA_INACTIVE));
+        }
+    }
+    if (msg == galaxy::host::kNativeMouseLookMessage) {
+        // The game's controller read changed what the look wants.
+        apply_mouse_look(hwnd);
+        return 0;
     }
     if (msg == kUncloakMessage) {
         const BOOL cloak = FALSE;
@@ -870,11 +919,22 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         galaxy::luma_input::set_text_entry_available(true);
         host_window::pointer_hwnd.store(reinterpret_cast<std::uintptr_t>(hwnd),
                              std::memory_order_release);
-        raw_mouse_attach(hwnd);
+        // Raw input is registered only while a look holds the mouse (apply_mouse_look); a look wanted before the window
+        // existed is taken up now.
+        galaxy::host::set_native_mouse_look_window(reinterpret_cast<std::uintptr_t>(hwnd));
+        if (galaxy::host::native_mouse_look_wanted()) apply_mouse_look(hwnd);
     }
     if (msg == WM_INPUT) {
-        // Relative motion for the pointer paths that ask for raw movement; DefWindowProc releases the packet.
+        // The look's relative motion (registered only while it holds the mouse); DefWindowProc releases the packet.
         galaxy::host::publish_native_raw_mouse(reinterpret_cast<std::uintptr_t>(hwnd), static_cast<std::uintptr_t>(lp));
+        // The clip checked again as the mouse moves, at most every 100 ms: the cheapest place to see one Windows dropped.
+        if (s_mouse_look.held()) {
+            const ULONGLONG now = GetTickCount64();
+            if (now - s_mouse_look_checked >= 100) {
+                s_mouse_look_checked = now;
+                apply_mouse_look(hwnd);
+            }
+        }
         return DefWindowProcW(hwnd, msg, wp, lp);
     }
     if (msg == WM_ENTERMENULOOP || msg == WM_ENTERSIZEMOVE) {
@@ -883,6 +943,8 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         galaxy::host::clear_native_window_key_presses();
         invalidate_pointer_focus_once();
         clear_pointer_buttons();
+        // The player moves the window or uses its menu with the mouse: the look gives it back until that ends.
+        if (s_mouse_look.held()) apply_mouse_look(hwnd);
     }
     if (msg == WM_EXITSIZEMOVE) {
         // Where the player dragged the window to, and its size, become the setting.
@@ -894,6 +956,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         s_pointer_focus_valid.store(GetForegroundWindow() == hwnd,
                                     std::memory_order_release);
         seed_pointer_from_client(hwnd, false);
+        if (galaxy::host::native_mouse_look_wanted()) apply_mouse_look(hwnd);
     }
     // LumaCore's text entry (input.text_request): while a request is open the keyboard types into it, not into the game.
     // The system's input method composes in its own window and hands each result here as WM_CHAR (TranslateMessage
@@ -1165,7 +1228,6 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_SETFOCUS) {
         s_pointer_focused.store(true, std::memory_order_relaxed);
         s_pointer_focus_valid.store(true, std::memory_order_release);
-        raw_mouse_attach(hwnd);
         seed_pointer_from_client(hwnd, false);
         maybe_hide_os_cursor();
         return 0;
@@ -1178,7 +1240,6 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
     if (msg == WM_KILLFOCUS) {
         galaxy::host::clear_native_window_key_presses();
-        raw_mouse_detach(hwnd);
         s_pointer_focused.store(false, std::memory_order_relaxed);
         invalidate_pointer_focus_once();
         clear_pointer_window_state(hwnd);
@@ -1187,14 +1248,13 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
     if (msg == WM_ACTIVATEAPP) {
         s_pointer_focused.store(wp != 0, std::memory_order_relaxed);
+        if (s_mouse_look.held() || galaxy::host::native_mouse_look_wanted()) apply_mouse_look(hwnd, wp == 0);
         if (wp != 0) {
             s_pointer_focus_valid.store(true, std::memory_order_release);
-            raw_mouse_attach(hwnd);
             seed_pointer_from_client(hwnd, false);
             maybe_hide_os_cursor();
         } else {
             galaxy::host::clear_native_window_key_presses();
-            raw_mouse_detach(hwnd);
             invalidate_pointer_focus_once();
             clear_pointer_window_state(hwnd);
             SetCursor(LoadCursorA(nullptr, IDC_ARROW));
@@ -1225,6 +1285,9 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         save_native_settings_now();
         host_window::quit_request.store(true, std::memory_order_release);
         wake_main_thread();
+        // A look's hold ends with the window, whatever the game's thread does next.
+        galaxy::host::set_native_mouse_look_window(0u);
+        act_mouse_look(hwnd, s_mouse_look.end(), true);
         raw_mouse_detach(hwnd);
         invalidate_pointer_focus_once();
         clear_pointer_buttons();

@@ -86,4 +86,18 @@ void clear_native_raw_mouse() noexcept {
     absolute.reset();
 }
 galaxy::input::RawMouseMotion sample_native_raw_mouse() noexcept { return motion.sample(); }
+
+namespace {
+std::atomic<bool> look_wanted{false};
+std::atomic<HWND> look_window{nullptr};
+}
+void want_native_mouse_look(bool wanted) noexcept {
+    if (look_wanted.exchange(wanted, std::memory_order_acq_rel) == wanted) return;
+    if (const HWND window = look_window.load(std::memory_order_acquire); window != nullptr)
+        (void)PostMessageW(window, kNativeMouseLookMessage, 0, 0);
+}
+bool native_mouse_look_wanted() noexcept { return look_wanted.load(std::memory_order_acquire); }
+void set_native_mouse_look_window(std::uintptr_t window) noexcept {
+    look_window.store(reinterpret_cast<HWND>(window), std::memory_order_release);
+}
 }  // namespace galaxy::host

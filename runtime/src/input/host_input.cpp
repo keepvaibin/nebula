@@ -981,7 +981,8 @@ public:
                 false};
     }
     LookSample look() override {
-        // The mouse's own counts since the last sample (WM_INPUT): taken always, used only while a look holds it.
+        // The mouse's own counts since the last sample (WM_INPUT), asked only while a mod's look is on; they are counted
+        // only while the window holds the mouse for it (raw input is registered then alone).
         const galaxy::input::RawMouseMotion motion = sample_native_raw_mouse();
         LookSample sample;
         sample.mouse_x = static_cast<float>(motion.x);
@@ -1008,32 +1009,11 @@ private:
     bool focused_;
 };
 
-// A mod's first-person look holds the mouse (LiveControlsResult::mouse_look): the cursor kept in the middle of the
-// window's picture (Windows gives up a clip whenever the window loses the front, so it is set again each sample while
-// held); the window already hides it over the picture. Its counts come from WM_INPUT (raw_mouse_win32).
+// A mod's first-person look holds the mouse (LiveControlsResult::mouse_look). The game's thread only says whether the
+// look wants it; the window's thread holds and gives it back (host_window_win32.cpp apply_mouse_look), at its own
+// messages too, so a minimised or held game, a hang or a quit never leaves the cursor clipped (M-061).
 void hold_mouse_for_look(HWND window, bool hold) {
-    static bool s_held = false;
-    if (hold && window != nullptr) {
-        RECT client{};
-        POINT centre{};
-        if (GetClientRect(window, &client)) {
-            centre.x = (client.left + client.right) / 2;
-            centre.y = (client.top + client.bottom) / 2;
-            if (ClientToScreen(window, &centre)) {
-                const RECT box{centre.x - 8, centre.y - 8, centre.x + 8, centre.y + 8};
-                RECT now{};
-                if (!s_held || !GetClipCursor(&now) || !EqualRect(&now, &box)) {
-                    (void)ClipCursor(&box);
-                }
-                s_held = true;
-                return;
-            }
-        }
-    }
-    if (s_held) {
-        (void)ClipCursor(nullptr);
-        s_held = false;
-    }
+    want_native_mouse_look(hold && window != nullptr);
 }
 
 // The live controls as the player's input: the bindings of every connected controller and of the keyboard and mouse,
