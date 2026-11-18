@@ -156,7 +156,8 @@ namespace {
 
 std::int32_t load_status(const std::int32_t* status) noexcept {
 #if defined(__cpp_lib_atomic_ref)
-    return std::atomic_ref<const std::int32_t>(*status).load(std::memory_order_acquire);
+    // atomic_ref of a const type is C++26 (P3323), which Apple's libc++ does not build; the load writes nothing.
+    return std::atomic_ref<std::int32_t>(*const_cast< std::int32_t* >(status)).load(std::memory_order_acquire);
 #else  // libc++ without atomic_ref (Android NDK r28): the compiler's builtin, the same acquire load.
     return __atomic_load_n(status, __ATOMIC_ACQUIRE);
 #endif
