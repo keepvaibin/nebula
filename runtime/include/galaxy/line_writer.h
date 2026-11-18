@@ -48,6 +48,7 @@ public:
         }
         running_ = true;
         thread_ = std::thread([this] { run(); });
+        writer_ = thread_.get_id();
     }
 
     // Queues the text; false when the writer is not running (not started or stopped): the caller writes it itself.
@@ -84,7 +85,7 @@ public:
         if (written_ >= want) {
             return true;
         }
-        if (std::this_thread::get_id() == thread_.get_id()) {
+        if (std::this_thread::get_id() == writer_) {
             return false;
         }
         return done_.wait_until(lock, until, [&] { return written_ >= want; });
@@ -103,6 +104,21 @@ public:
         }
         wake_.notify_one();
         return flush(bound);
+    }
+
+    // stop(), then the thread is joined once it has written all it took, or let go when `bound` passed first (a stuck
+    // output): an owner that keeps the writer for the life of the process calls it as the process ends, so no thread
+    // is left unjoined (a sanitizer's thread leak). On one thread only, and not the writer's.
+    bool finish(std::chrono::milliseconds bound = std::chrono::milliseconds(2000)) {
+        const bool done = stop(bound);
+        if (thread_.joinable()) {
+            if (done) {
+                thread_.join();  // nothing left: the writer returns as soon as it sees stopping_
+            } else {
+                thread_.detach();
+            }
+        }
+        return done;
     }
 
 private:
@@ -146,7 +162,8 @@ private:
     std::uint64_t handed_ = 0;      // texts handed so far
     std::uint64_t written_ = 0;     // of those, written and flushed
     std::string batch_;             // the writer's thread only
-    std::thread thread_;
+    std::thread thread_;            // start, finish and the destructor only
+    std::thread::id writer_;        // thread_'s, set under mutex_ (flush reads it while finish may join)
 };
 
 }  // namespace galaxy
