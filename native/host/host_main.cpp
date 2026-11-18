@@ -5923,7 +5923,7 @@ int main(int argc, char** argv) {
         }
     }
 #endif
-#if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
+#if defined(NEBULA_HOST_RENDERER)
     // --diagnostics timeline: the frame pipeline's events (frame_timeline.h), written at exit.
     galaxy::timeline::initialize();
 #endif
@@ -6674,7 +6674,7 @@ int main(int argc, char** argv) {
 #if defined(NEBULA_HOST_RENDERER)
     galaxy::loss::report();
 #endif
-#if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
+#if defined(NEBULA_HOST_RENDERER)
     galaxy::timeline::dump();
 #endif
 #if defined(NEBULA_HOST_RENDERER)

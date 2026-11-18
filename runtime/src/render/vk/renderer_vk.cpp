@@ -2001,7 +2001,15 @@ void RendererVk::begin_frame() {
     vk::Context& context = vk::Context::get();
     const VkDevice device = context.device();
     if (frame.fence != 0u) {
+        // --diagnostics timeline: a wait for the slot's last frame, as Direct3D 12 records it (a = its fence value).
+        const bool timeline_slot_wait = galaxy::timeline::enabled() && completed_fence_value() < frame.fence;
+        if (timeline_slot_wait) {
+            galaxy::timeline::record(galaxy::timeline::Event::SlotWaitBegin, frame.fence);
+        }
         wait_for_fence_value(frame.fence);
+        if (timeline_slot_wait) {
+            galaxy::timeline::record(galaxy::timeline::Event::SlotWaitEnd, frame.fence);
+        }
     }
     if (timestamp_pending_[frame_slot_] && timestamps_ != VK_NULL_HANDLE) {
         std::uint64_t ticks[2]{};
@@ -3177,8 +3185,11 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
     VkResult result = VK_SUCCESS;
     {
         const galaxy::bench::RenderSpan span(galaxy::bench::RenderPart::Acquire);
+        galaxy::timeline::record(galaxy::timeline::Event::AcquireBegin);
         result = swapchain_calls_.acquire(context.device(), swapchain_.handle, kAcquireTimeoutNs, frame.acquired, VK_NULL_HANDLE,
                                           &image);
+        const bool acquired = result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR;
+        galaxy::timeline::record(galaxy::timeline::Event::AcquireEnd, acquired ? image : 0u, acquired ? 0u : 1u);
     }
     vk::note_driver_cpu(vk::DriverCall::Acquire, vk::thread_cpu_ns() - acquire_cpu);
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_ERROR_SURFACE_LOST_KHR || result == VK_TIMEOUT ||

@@ -5,6 +5,7 @@
 #include "galaxy/pacing_recorder.h"
 
 #include "galaxy/benchmark.h"
+#include "galaxy/frame_timeline.h"
 #include "galaxy/content_viewport.h"
 #include "galaxy/display_aspect.h"
 #include "galaxy/render/present_clock.h"
@@ -588,7 +589,15 @@ void RendererMtl::begin_frame() {
     frame_ = &frame;
     mtl::Context& context = mtl::Context::get();
     if (frame.fence != 0u) {
+        // --diagnostics timeline: a wait for the slot's last frame, as Direct3D 12 records it (a = its fence value).
+        const bool timeline_slot_wait = galaxy::timeline::enabled() && completed_fence_value() < frame.fence;
+        if (timeline_slot_wait) {
+            galaxy::timeline::record(galaxy::timeline::Event::SlotWaitBegin, frame.fence);
+        }
         wait_for_fence_value(frame.fence);
+        if (timeline_slot_wait) {
+            galaxy::timeline::record(galaxy::timeline::Event::SlotWaitEnd, frame.fence);
+        }
         // The GPU's time on the slot's last frame: from its first command buffer's start to its last one's end.
         const double start = (*frame.gpu_time)[0].exchange(0.0, std::memory_order_acq_rel);
         const double end = (*frame.gpu_time)[1].exchange(0.0, std::memory_order_acq_rel);
@@ -1200,7 +1209,9 @@ bool RendererMtl::present(const DisplayTexture* source, bool capture_backbuffer,
     @autoreleasepool {
         // The drawable is taken as late as the frame allows: it is one of a few, and held until it is shown.
         const std::int64_t asked = galaxy::qpc_now();
+        galaxy::timeline::record_at(galaxy::timeline::Event::AcquireBegin, static_cast<std::uint64_t>(asked));
         id<CAMetalDrawable> const drawable = [(__bridge CAMetalLayer*)layer_.layer nextDrawable];
+        galaxy::timeline::record(galaxy::timeline::Event::AcquireEnd, 0u, drawable == nil ? 1u : 0u);
         const double waited = static_cast<double>(galaxy::qpc_now() - asked) * 1000.0 / static_cast<double>(galaxy::qpc_frequency());
         stats_.drawable_wait_ms += waited;
         stats_.drawable_wait_max_ms = std::max(stats_.drawable_wait_max_ms, waited);
