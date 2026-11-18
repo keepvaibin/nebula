@@ -44,6 +44,10 @@ native_test(native_arena_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/arena_tests.cp
     "${game_src}/System/NebulaArena.cpp")
 # The binder keeps every plane a bind meets (P-166), on the game's arenas.
 native_test(native_binder_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/binder_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/arena_test_host.c"
-    "${game_src}/LiveActor/Binder.cpp" "${game_src}/System/NebulaArena.cpp")
+    "${CMAKE_CURRENT_LIST_DIR}/arena_test_tables.cpp" "${game_src}/LiveActor/Binder.cpp" "${game_src}/System/NebulaArena.cpp")
+# A sensor keeps every sensor it touches (P-148), on the game's arenas.
+native_test(native_hit_sensor_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/hit_sensor_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/arena_test_host.c" "${CMAKE_CURRENT_LIST_DIR}/arena_test_tables.cpp"
+    "${game_src}/LiveActor/HitSensor.cpp" "${game_src}/System/NebulaArena.cpp")
 # The frame-list writer, against the list the renderer reads.
 native_test(native_frame_list_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/frame_list_tests.cpp" "${game_src}/Render/FrameList.cpp")
