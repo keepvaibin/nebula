@@ -42,6 +42,11 @@ if(NOT WIN32)
         "${galaxy_root}/platform/sdl/output_log.cpp")
     target_include_directories(galaxy_output_log_tests PRIVATE "${galaxy_root}/platform/sdl")
 endif()
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    # The Linux package's install.sh with a stand-in package (P-126).
+    add_test(NAME nebula_linux_install_tests
+        COMMAND sh "${galaxy_root}/installer/tests/linux_install_test.sh" "${galaxy_root}/installer/linux")
+endif()
 
 # Files and saves.
 galaxy_test(galaxy_atomic_file_tests SOURCES ${rt}/atomic_file_tests.cpp LIBS galaxy_atomic_file)
