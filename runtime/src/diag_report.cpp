@@ -137,7 +137,7 @@ const Rule& benchmark_schema() {
                                       {"ambient_occlusion", boolean()}, {"ambient_occlusion_ssao", boolean()},
                                       {"enhanced_lighting", boolean()}, {"per_pixel_lighting", boolean()},
                                       {"bloom", integer()}, {"vsync_interval", integer()}, {"max_fps", n},
-                                      {"frame_generation", integer()}, {"ray_tracing", boolean()},
+                                      {"frame_generation", integer()},
                                       {"display_mode", integer()}});
         const Rule spread = nullable(object({{"average", n}, {"p99", n}, {"worst", n}}));
         const Rule limiter = one_of({"gpu", "render thread", "game thread", "display", "game frames", "waiting"});

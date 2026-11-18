@@ -5,7 +5,6 @@
 
 #include <volk.h>
 
-#include "galaxy/render/rt/rt_denoiser.h"
 
 #include <array>
 #include <cstdint>
@@ -60,8 +59,6 @@ public:
     // The narrowest render width it evaluates for the output it was made for (dynamic resolution's floor); 0: any width
     // down to the renderer's own lowest step.
     [[nodiscard]] virtual unsigned smallest_render_width() const noexcept { return 0u; }
-    // The tracer's outside denoiser, when this upscaler is one (rt_denoiser.h): null for the others.
-    [[nodiscard]] virtual rt::Denoiser* denoiser() noexcept { return nullptr; }
 };
 
 // Every input to its compute read state and the output to general (back: to their steady layouts again).

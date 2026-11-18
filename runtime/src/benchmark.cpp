@@ -34,7 +34,7 @@
 #include "galaxy/render/host_window.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/resolution_fit.h"
-#include "galaxy/render/rt_caps.h"
+#include "galaxy/render/device_memory.h"
 #include "galaxy/render_api.h"
 #include "galaxy/runtime_settings.h"
 #include "nebula_game_api.h"
@@ -1015,7 +1015,6 @@ void write_settings(JsonWriter& j, std::string_view key, const render::RenderCon
     j.whole("vsync_interval", c.vsync_interval);
     j.number("max_fps", c.max_fps);  // null: unlimited (render_config.h kUnlimitedFrameRate)
     j.whole("frame_generation", c.frame_generation);
-    j.boolean("ray_tracing", c.ray_tracing_enabled);
     j.whole("display_mode", c.display_mode);
     j.end_object();
 }
@@ -1320,7 +1319,7 @@ void write_result(bool complete) {
     } else {
         j.text("driver_version", adapter.driver);
     }
-    j.boolean("shared_memory", render::rt_caps().unified_memory);
+    j.boolean("shared_memory", render::device_unified_memory());
     j.whole("gpu_budget_mb", budget >> 20u);
     j.text("cpu", cpu_brand());
     j.whole("logical_cores", logical_cores());
@@ -1537,7 +1536,6 @@ void hold_settings() {
     r.chosen = render::get_render_config_chosen();
     r.yours = r.chosen;
     r.yours.frame_generation = 0u;
-    r.yours.ray_tracing_enabled = false;
     render::apply_benchmark_presenting(r.yours);
     render::set_render_config(r.yours);
 }

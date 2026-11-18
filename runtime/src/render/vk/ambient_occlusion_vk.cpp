@@ -369,7 +369,7 @@ void AmbientOcclusionVk::draw(VkCommandBuffer commands, VkPipeline pipeline, VkD
 }
 
 bool AmbientOcclusionVk::prepare(VkCommandBuffer commands, const Texture& depth, VkImageLayout depth_layout,
-                                 unsigned part_width, unsigned part_height, unsigned lowest_sixteenths, const RtView& view,
+                                 unsigned part_width, unsigned part_height, unsigned lowest_sixteenths, const SceneView& view,
                                  bool ssao, std::span<const ao::ObjectOccluder> objects, UploadRing& ring,
                                  const SetAllocator& allocate, const StageMarker& mark) {
     if (!ready_) {

@@ -73,6 +73,8 @@ Any key that is not on this page, anywhere in the file, stops the test with an e
 | `safe_start` | No | `asked` starts the game in safe mode. `crash` starts it as after a crash with mods on that named no mod while no mod's code ran: every mod is off for the start, and the **Mods** page says why. `crash-code` starts it as after such a crash while mods' code ran: every mod's code is off for the start. To test the start after a crash that names your mod, end one test with `"ends": "crash"` and continue from it (`continue_from`). |
 | `fresh` | No | `true` starts with no shader cache, as on a first start. |
 | `time` | No | `steps` (the default) or `real`. See [The test clock](#the-test-clock). |
+| `clock` | No | `title` (the default) or `start`, for a test with no `stage`. See [The test clock](#the-test-clock). |
+| `saves` | No | A folder in the test's folder holding the saves the run starts with. It is laid out as the game's save folder: the save of the USA disc is `RMGE/Nebula.sav`. |
 | `visible` | No | `true` shows the game's window. The default is a hidden window. Use it only to measure how pictures are shown. |
 | `settings` | No | Game settings for the run, as a list of `"GALAXY_NAME=value"` (`"GALAXY_VSYNC_INTERVAL=1"`). Each name must be one the game's settings file takes; the list is `tools/verify/settings_args.py` in Nebula's source. Any other name stops the test with a harness error. |
 | `diagnostics` | No | The game's own records for the run, as a list of the names its `--diagnostics` option takes (`present-stats`, `frame-times`, `timeline`; the list is `runtime/include/galaxy/launch_args.h`). With `timeline`, the record is the run folder's `timeline.bin`. |
@@ -135,7 +137,7 @@ Applied after the stage is ready, then read back.
 
 ## The test clock
 
-Frame 0 is the first game frame after every setup item is set and read back. The clock counts game frames, one fixed step each, so a test runs the same on a slow computer and a fast one. A test with no `stage` starts its clock on the first frame of the title screen.
+Frame 0 is the first game frame after every setup item is set and read back. The clock counts game frames, one fixed step each, so a test runs the same on a slow computer and a fast one. A test with no `stage` starts its clock on the first frame of the title screen; with `"clock": "start"` it starts on the game's first frame, for what the game shows before the title (a window about the save).
 
 With `"time": "real"`, the game steps on the computer's own clock, as when you play, and the display paces the pictures. Steps still count game frames, but two runs no longer match frame for frame. Use it only to measure pacing.
 
@@ -265,6 +267,15 @@ For `near` and `far`, a value that is not a number or `[x, y, z]` is neither nea
 |---|---|
 | `{"log": "PATTERN"}` | A line of the game's log matches the regular expression. With `"times": N`, exactly N lines match. |
 | `{"no_log": "PATTERN"}` | No line matches. |
+
+### Save file checks
+
+| Check | Holds when |
+|---|---|
+| `{"save_file": "RMGE/Nebula.sav", "is": "same"}` | At the end, the file is as the test's `saves` folder placed it. |
+| `{"save_file": "RMGE/Nebula.sav.1", "is": "absent"}` | At the end, the save folder has no such file. |
+
+The path is inside the run's save folder, with forward slashes.
 
 ### Picture checks
 

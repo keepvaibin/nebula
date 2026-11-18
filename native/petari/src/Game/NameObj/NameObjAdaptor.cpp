@@ -38,13 +38,22 @@ void NameObjAdaptor::draw() const {
 }
 
 void NameObjAdaptor::connectToMovement(const MR::FunctorBase& rFunctor) {
+    // The functor connected before is deleted (P-183), after the copy: `rFunctor` may be it.
+    MR::FunctorBase* const pBefore = mMovementFunc;
     mMovementFunc = rFunctor.clone(nullptr);
+    delete pBefore;
 }
 
 void NameObjAdaptor::connectToCalcAnim(const MR::FunctorBase& rFunctor) {
+    // The functor connected before is deleted (P-183), after the copy: `rFunctor` may be it.
+    MR::FunctorBase* const pBefore = mCalcAnimFunc;
     mCalcAnimFunc = rFunctor.clone(nullptr);
+    delete pBefore;
 }
 
 void NameObjAdaptor::connectToDraw(const MR::FunctorBase& rFunctor) {
+    // The functor connected before is deleted (P-183), after the copy: `rFunctor` may be it.
+    MR::FunctorBase* const pBefore = mDrawAnimFunc;
     mDrawAnimFunc = rFunctor.clone(nullptr);
+    delete pBefore;
 }

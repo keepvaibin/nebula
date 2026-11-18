@@ -243,6 +243,7 @@ def run_on_device(lt, device, test, args, run_folder, previous):
             shutil.rmtree(run_folder / sub)
             shutil.copytree(previous / sub, run_folder / sub)
         lt.carry_data(previous, run_folder)
+    lt.place_saves(test, run_folder)
     # The libraries the app carries are the ones the run starts; their hashes are the bin folder's, built with them.
     frozen = {name: lt.sha256(bin_folder / name) for name in (lt.HOST["game"], lt.HOST["extension"])}
     if not test["bare"]:

@@ -5,7 +5,9 @@
 #include "../dxgi_pacing.h"
 
 #include "galaxy/content_viewport.h"
+#include "galaxy/crash_report.h"
 #include "galaxy/display_aspect.h"
+#include "galaxy/render/device_memory.h"
 #include "galaxy/benchmark.h"
 #include "galaxy/frame_timeline.h"
 #include "galaxy/launch_args.h"
@@ -56,6 +58,10 @@ bool fsr_frame_generation_compiled() noexcept { return false; }
 // presenting, which goes through the same recovery as a real removal (render_core.cpp restart_device).
 void RendererD3D11::lose_device() {
     loss_asked_ = true;
+}
+
+void RendererD3D11::allocation_failed(const char* what) const {
+    throw std::runtime_error(galaxy::crash::gpu_allocation_failure(what, gpu::device_removed(d3d11::Context::get().device())));
 }
 
 bool RendererD3D11::initialize(int window_width, int window_height, const FrameMap& frame) {
@@ -244,7 +250,8 @@ void RendererD3D11::report_adapter() {
     DXGI_ADAPTER_DESC1 desc{};
     IDXGIAdapter1* const adapter = context.adapter();
     const bool described = adapter != nullptr && SUCCEEDED(adapter->GetDesc1(&desc));
-    record_render_adapter(name.c_str(), vendor, described ? desc.DeviceId : 0u, described ? desc.SubSysId : 0u, false);
+    set_device_unified_memory(context.caps().unified_memory);
+    record_render_adapter(name.c_str(), vendor, described ? desc.DeviceId : 0u, described ? desc.SubSysId : 0u);
     record_render_driver(dxgi_driver_version(adapter));
     RenderFeatureCaps caps{};
     caps.adapter_vendor_id = vendor;
@@ -253,7 +260,6 @@ void RendererD3D11::report_adapter() {
     caps.msaa = make_render_feature_status(true, msaa, true, true,
                                            msaa ? "the scene target is multisampled" : "the GPU has no multisampled scene target formats");
     caps.taa = make_render_feature_status(false, false, false, false, "temporal upscaling runs on Direct3D 12 and Vulkan");
-    caps.dxr = make_render_feature_status(false, false, false, false, "ray tracing runs on Direct3D 12");
     caps.streamline_bridge_built = false;
     caps.streamline = make_render_feature_status(false, false, false, false, "NVIDIA Streamline runs on Direct3D 12");
     caps.reflex = make_render_feature_status(false, false, false, false, "Reflex runs on Direct3D 12");
@@ -1310,7 +1316,8 @@ gpu::Address RendererD3D11::zero_stream(std::uint32_t bytes) {
         zero_stream_bytes_ = std::max(bytes, 1u << 16u);
         UploadBuffer memory = gpu::create_upload_memory(device(), zero_stream_bytes_, "zero stream");
         if (!memory) {
-            throw std::runtime_error("the zero stream could not be made");
+            zero_stream_bytes_ = 0u;
+            allocation_failed("the zero stream");
         }
         std::memset(memory.cpu, 0, zero_stream_bytes_);
         zero_vertices_ = std::move(memory.buffer);

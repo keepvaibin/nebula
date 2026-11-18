@@ -5,7 +5,7 @@
 // pixel's size. ambient_occlusion.hlsl has the method.
 
 #include "galaxy/render/resolution_governor.h"
-#include "galaxy/render/rt_types.h"
+#include "galaxy/render/scene_view.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -61,7 +61,7 @@ struct Field {
 }
 
 // The shaders' constants: false for a view with no picture.
-[[nodiscard]] inline bool make_constants(const RtView& view, unsigned width, unsigned height, unsigned divisor, bool ssao,
+[[nodiscard]] inline bool make_constants(const SceneView& view, unsigned width, unsigned height, unsigned divisor, bool ssao,
                                          Constants& c) noexcept {
     // A scene target pixel centre's eye ray (z = -1): NDC from the viewport, then through the projection.
     const float a = view.projection[0];

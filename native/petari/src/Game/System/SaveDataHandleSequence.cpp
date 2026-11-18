@@ -96,6 +96,7 @@ void SaveDataHandleSequence::startReload() {
     mSaveDataHandler->initializeAllUserFileMemory(mCurrentUserFile);
     mSaveCopyLoading = 0;
     mSaveDamaged = false;
+    mSaveIsNewer = false;
     mPreLoadState = 0;
     startPreLoad();
 }
@@ -140,7 +141,7 @@ void SaveDataHandleSequence::startSaveAll() {
 }
 
 bool SaveDataHandleSequence::startQuietSave() {
-    if (isActive() || mPreLoadState != 1 || mIsNoSaveMode || mIsCorrupted) {
+    if (isActive() || mPreLoadState != 1 || mIsNoSaveMode || mIsCorrupted || mSaveIsNewer) {
         return false;
     }
     setNerve(GET_NERVE_ANON(SaveDataHandleSequenceQuietSave));
@@ -279,6 +280,15 @@ void SaveDataHandleSequence::exeSaveConfirm() {
 }
 
 void SaveDataHandleSequence::exeSave() {
+    if (mSaveIsNewer) {
+        // The file on the drive is a newer Nebula's: said again, and nothing is written.
+        mSucceeded = true;
+        mNerveForError = GET_NERVE_ANON(SaveDataHandleSequenceNoOperation);
+        mSaveErrorSequence->startNewer();
+        setNerve(GET_NERVE_ANON(SaveDataHandleSequenceErrorHandling));
+        return;
+    }
+
     if (MR::isFirstStep(this)) {
         mSaveDataHandler->storeUserFile(mWorkUserFile);
     }
@@ -426,6 +436,18 @@ void SaveDataHandleSequence::tryNextSaveCopy() {
 
 void SaveDataHandleSequence::exePreLoadDone() {
     if (!mSaveDataHandler->acceptLoaded()) {
+        if (mSaveDataHandler->getNewerFormat() != 0) {
+            // A newer Nebula's save: its copies are older progress, and a save from them would replace it. Nothing is
+            // read; the player is told, and the game does not save.
+            mSaveCopyLoading = 0;
+            mSaveDamaged = false;
+            mSaveIsNewer = true;
+            mPreLoadState = 2;
+            mNerveForError = GET_NERVE_ANON(SaveDataHandleSequenceNoOperation);
+            mSaveErrorSequence->startNewer();
+            setNerve(GET_NERVE_ANON(SaveDataHandleSequenceErrorHandling));
+            return;
+        }
         mSaveDamaged = true;
         tryNextSaveCopy();
     } else {

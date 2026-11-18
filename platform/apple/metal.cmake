@@ -30,9 +30,7 @@ add_custom_command(OUTPUT "${nebula_apple_utility_msl_dir}/utility_msl_data.h"
 get_target_property(nebula_apple_vk_sources galaxy_render_vk SOURCES)
 set(nebula_apple_mtl_sources)
 foreach(source IN LISTS nebula_apple_vk_sources)
-    # The tracer's shader table is the other renderers' bytes (rt_shaders.cpp): Metal's has none (mtl/rt_backend_mtl.cpp).
-    if(source MATCHES "/render/vk/" OR source MATCHES "_vk\\.cpp$" OR source MATCHES "utility_spirv_data\\.h$"
-       OR source MATCHES "/render/rt/rt_shaders\\.cpp$" OR source MATCHES "rt_shaders_spirv\\.h$")
+    if(source MATCHES "/render/vk/" OR source MATCHES "_vk\\.cpp$" OR source MATCHES "utility_spirv_data\\.h$")
         continue()
     endif()
     list(APPEND nebula_apple_mtl_sources "${source}")

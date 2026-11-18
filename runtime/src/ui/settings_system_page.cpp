@@ -175,14 +175,6 @@ std::vector<SettingsRow> system_page(const render::RenderFeatureCaps& caps, std:
         }
     }
     if (renderers != nullptr) renderer_rows(rows, *renderers);
-    char text[64]{};
-    if (caps.dxr_raytracing_tier != 0u) {
-        std::snprintf(text, sizeof(text), "TIER %u.%u %s", caps.dxr_raytracing_tier / 10u, caps.dxr_raytracing_tier % 10u,
-                      exposed_text(caps.dxr));
-    } else {
-        std::snprintf(text, sizeof(text), "NONE");
-    }
-    rows.push_back({"RAY TRACING HARDWARE", text, nullptr, "DIRECTX RAYTRACING ON THIS GPU"});
     rows.push_back({"NVIDIA STREAMLINE", exposed_text(caps.streamline), nullptr, "LOADS DLSS FROM THE NVIDIA DOWNLOAD"});
     rows.push_back({"NVIDIA REFLEX", exposed_text(caps.reflex), nullptr, "LOW LATENCY WITH FRAME GENERATION"});
     rows.push_back({"DLSS", exposed_text(caps.dlss_super_resolution), nullptr, "UPSCALING ON NVIDIA RTX GPUS"});

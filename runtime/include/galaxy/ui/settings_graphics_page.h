@@ -19,8 +19,6 @@ struct GraphicsPageState {
     bool dlss_installed = false;
     bool xess_supported = false;
     bool xess_installed = false;
-    bool ray_tracing_offered = false;
-    bool traced_temporal = false;  // FSR 3 runs here: with ray tracing on it anti-aliases the scene
     bool temporal_upscaling = false;
     bool spatial_upscaling = false;
     bool curved_surfaces_offered = false;

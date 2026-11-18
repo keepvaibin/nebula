@@ -69,7 +69,7 @@ data class Install(
         val file = GameFiles.install(context)
         val temporary = File(file.parentFile, ".${file.name}.writing")
         temporary.outputStream().use { properties.store(it, "Nebula setup") }
-        temporary.renameTo(file)
+        replaceFile(temporary, file)
     }
 }
 
@@ -86,6 +86,14 @@ object Storage {
     fun removeGame(context: Context) {
         GameFiles.install(context).delete()
         File(GameFiles.data(context), "game").deleteRecursively()
+    }
+
+    /** The bytes a setup may take back: the game in place and a cut-off setup's leftovers (GameSwap). */
+    fun reclaimableBytes(context: Context): Long = GameSwap.reclaimable(GameFiles.pak(context).parentFile!!)
+
+    /** A cut-off setup's leftovers removed (GameSwap.sweep); not while a setup runs. */
+    fun sweepSetup(context: Context) {
+        GameSwap.sweep(GameFiles.pak(context).parentFile!!)
     }
 }
 

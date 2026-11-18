@@ -63,9 +63,6 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                         "LOWERS THE RESOLUTION WHEN THE GRAPHICS CARD FALLS BEHIND AND RAISES IT AGAIN WHEN IT HAS ROOM"});
     }
     const unsigned render_percent = state.render_percent;
-    // Ray tracing replaces MSAA, ambient occlusion and the lighting modes: their rows are hidden while it is on.
-    const bool rt_offered = state.ray_tracing_offered;
-    const bool rt_on = rt_offered && render.ray_tracing_enabled;
     if (upscaling) {
         // By the config's numbers (render_config.h temporal_quality: 5 ultra quality came last), shown sharpest first.
         static constexpr const char* kTemporal[] = {"NATIVE AA", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE", "ULTRA QUALITY"};
@@ -108,20 +105,14 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
     // A temporal upscaler antialiases the scene itself: anti-aliasing and MSAA have no part in its picture (the
     // renderers skip both under it), so their rows go while it runs.
     const bool temporal = state.temporal_upscaling;
-    // With ray tracing on and no temporal upscaler chosen, FSR 3 anti-aliases the scene: the row says so,
-    // and MSAA and SMAA have no part in the picture until ray tracing is off again.
-    const bool traced_temporal = rt_on && !temporal && state.traced_temporal;
-    if (traced_temporal) {
-        rows.push_back({"ANTI-ALIASING", "TEMPORAL (RAY TRACING)", nullptr, "SMOOTHED OVER SEVERAL FRAMES WHILE RAY TRACING IS ON"});
-    }
-    if (!temporal && !traced_temporal) {
+    if (!temporal) {
         std::string value = state.anti_aliasing_text;
         if (const std::size_t colon = value.find(": "); colon != std::string::npos) value.erase(0, colon + 2u);
         rows.push_back({"ANTI-ALIASING", value,
                         [&host](RenderConfig& draft, int delta) { draft.aa_mode = settings_step(std::min(draft.aa_mode, 3u), 4u, delta); },
                         "SMOOTHS EDGES. AUTO SKIPS IT WHEN THE IMAGE IS ALREADY SUPERSAMPLED"});
     }
-    if (!temporal && !traced_temporal && (render.aa_mode == 1u || render.aa_mode == 2u)) {
+    if (!temporal && (render.aa_mode == 1u || render.aa_mode == 2u)) {
         static constexpr const char* kQuality[] = {"LOW", "MEDIUM", "HIGH", "ULTRA"};
         rows.push_back({"SMAA QUALITY", kQuality[std::min(render.smaa_quality, 3u)],
                         [&host](RenderConfig& draft, int delta) {
@@ -129,7 +120,7 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                         },
                         "HIGHER FINDS MORE EDGES"});
     }
-    if (!rt_on && !temporal) {
+    if (!temporal) {
         const unsigned samples = std::bit_floor(std::clamp(render.msaa_samples, 1u, 8u));
         const std::string value = samples <= 1u ? "OFF" : std::to_string(samples) + "X";
         rows.push_back({"MSAA", value,
@@ -139,53 +130,6 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                             draft.msaa_samples = 1u << settings_step(index, 4u, delta);
                         },
                         "SAMPLES EACH EDGE OF THE 3D SCENE SEVERAL TIMES. COSTS GPU TIME"});
-    }
-
-    if (rt_offered) {
-        rows.push_back({"RAY TRACING", {}, nullptr, {}, true});
-        rows.push_back({"RAY TRACING", render.ray_tracing_enabled ? "ON" : "OFF",
-                        [&host](RenderConfig& draft, int) { draft.ray_tracing_enabled = !draft.ray_tracing_enabled; },
-                        "TRACED SHADOWS, SKY AND BOUNCE LIGHT, GLOWS THAT LIGHT THE WORLD"});
-    }
-    if (rt_on) {
-        // The preset sets every part; a part changed by itself makes it CUSTOM. All switch live.
-        static constexpr unsigned kOrder[] = {2u, 0u, 1u, kRtPresetReference};  // low, medium, high, reference
-        static constexpr const char* kNames[] = {"MEDIUM", "HIGH", "LOW", "REFERENCE", "CUSTOM"};
-        rows.push_back({"RAY TRACING QUALITY", kNames[std::min(render.rt_quality, kRtPresetCustom)],
-                        [](RenderConfig& draft, int delta) {
-                            const unsigned quality = std::min(draft.rt_quality, kRtPresetCustom);
-                            const unsigned at = quality == 2u ? 0u : quality == 1u ? 2u : quality == kRtPresetReference ? 3u : 1u;
-                            draft.rt_quality = kOrder[settings_step(at, 4u, delta)];
-                            draft.rt_chosen = true;
-                            rt_apply_preset(draft);
-                        },
-                        "SETS EVERY PART BELOW. REFERENCE: PATH TRACED, FOR COMPARISON"});
-        static constexpr const char* kLevels[] = {"OFF", "LOW", "MEDIUM", "HIGH"};
-        const auto part_row = [&](const char* name, RtPart part, const char* help) {
-            rows.push_back({name, kLevels[rt_part(render, part)],
-                            [part](RenderConfig& draft, int delta) {
-                                const auto at = static_cast<std::size_t>(part);
-                                draft.rt_parts[at] = static_cast<std::uint8_t>(settings_step(rt_part(draft, part), 4u, delta));
-                                draft.rt_quality = kRtPresetCustom;
-                                draft.rt_chosen = true;
-                            },
-                            help});
-        };
-        part_row("SUN SHADOWS", RtPart::Sun, "THE SUN'S SHADOWS, TRACED. HIGH: TINTED THROUGH GLASS AND WATER");
-        part_row("LOCAL LIGHTS", RtPart::Lights, "LAMPS AND GLOWING THINGS LIGHT THE WORLD AND CAST SHADOWS. HIGH: HIGHLIGHTS");
-        part_row("SKY AND BOUNCE LIGHT", RtPart::Indirect, "THE SKY'S LIGHT AND LIGHT BOUNCED OFF SURFACES");
-        part_row("REFLECTIONS", RtPart::Reflect, "TRACED REFLECTIONS ON METAL, GLOSSY FLOORS, GLASS AND CRYSTAL");
-        part_row("GLASS AND WATER", RtPart::Transmit, "LIGHT THROUGH GLASS, CRYSTAL AND WATER. HIGH: REFRACTION");
-        part_row("LIGHT IN THE AIR", RtPart::Volume, "LIGHT THE AIR SCATTERS. HIGH: SHAFTS OF LIGHT");
-        rows.push_back({"LENS BLOOM", render.rt_lens_bloom ? "ON" : "OFF",
-                        [](RenderConfig& draft, int) { draft.rt_lens_bloom = !draft.rt_lens_bloom; },
-                        "LIGHT THE LENS SCATTERS AROUND EVERY BRIGHT SURFACE"});
-        rows.push_back({"LANDING SHADOW", render.rt_landing_shadow ? "ON" : "OFF",
-                        [](RenderConfig& draft, int) { draft.rt_landing_shadow = !draft.rt_landing_shadow; },
-                        "A SOFT SHADOW UNDER THE PLAYER, TO JUDGE A LANDING"});
-        rows.push_back({"LIGHTING STYLE", render.rt_style == 1u ? "PHYSICAL" : "PAINTED",
-                        [](RenderConfig& draft, int) { draft.rt_style = draft.rt_style == 1u ? 0u : 1u; },
-                        "PAINTED: THE ART'S OWN LIGHT. PHYSICAL: THE REAL SUN ON SIMPLY PAINTED SURFACES"});
     }
 
     rows.push_back({"FRAME RATE", {}, nullptr, {}, true});
@@ -301,7 +245,7 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                         [&host](RenderConfig& draft, int) { draft.curved_surfaces = !draft.curved_surfaces; },
                         "ROUNDS THE OUTLINES OF CURVED MODELS"});
     }
-    if (!rt_on) {
+    {
         static constexpr const char* kLighting[] = {"PER VERTEX", "PER PIXEL", "ENHANCED"};
         rows.push_back({"LIGHTING", kLighting[lighting_mode(render)],
                         [&host](RenderConfig& draft, int delta) {
@@ -313,7 +257,7 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                             ? "HIGHLIGHTS, SOFT SKY LIGHT AND SHINIER METALS FROM THE GAME'S OWN LIGHTS"
                             : "PER PIXEL LIGHTS EVERY PIXEL INSTEAD OF EVERY CORNER"});
     }
-    if (!rt_on) {
+    {
         static constexpr const char* kOcclusion[] = {"OFF", "SSAO", "GTAO"};
         const auto occlusion_mode = [](const RenderConfig& config) {
             return !config.ambient_occlusion ? 0u : config.ambient_occlusion_ssao ? 1u : 2u;

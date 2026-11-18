@@ -11,9 +11,7 @@
 namespace {
 class Host final : public galaxy::ui::GraphicsPageHost {
 public:
-    bool rt = false;
     bool temporal = false;
-    bool traced = false;  // FSR 3 runs: with ray tracing on it anti-aliases the scene
     bool folders = true;
     unsigned refresh_hz = 144;
     mutable int opened = -1;
@@ -22,9 +20,7 @@ public:
         state.upscalers = {0, 1, 5};
         state.render_percent = 50;
         state.frame_rates.refresh_hz = refresh_hz;
-        state.ray_tracing_offered = rt;
         state.temporal_upscaling = temporal;
-        state.traced_temporal = traced;
         state.folders_open = folders;
         state.anti_aliasing_text = "ANTI-ALIASING: OFF";
         state.texture_packs = {7, 2, true, {}, {}};
@@ -94,34 +90,11 @@ int main() {
         host.refresh_hz = 144;
         host.folders = true;
 
-        host.rt = true; config.ray_tracing_enabled = true;
-        rows = galaxy::ui::graphics_page(config, host);
-        check(row(rows, "RAY TRACING").value == "ON", "ray tracing capability row");
-        check(std::none_of(rows.begin(), rows.end(), [](const auto& r) { return r.label == "MSAA" || r.label == "AMBIENT OCCLUSION"; }), "exclusive graphics row visibility");
-        // The preset and every part: a part changed alone makes the preset custom; a preset sets them all.
-        {
-            auto quality = row(rows, "RAY TRACING QUALITY");
-            check(quality.value == "MEDIUM" && row(rows, "SUN SHADOWS").value == "MEDIUM" && has(rows, "LIGHT IN THE AIR") &&
-                      has(rows, "GLASS AND WATER") && has(rows, "SKY AND BOUNCE LIGHT") && has(rows, "LOCAL LIGHTS") &&
-                      has(rows, "REFLECTIONS") && has(rows, "LENS BLOOM"),
-                  "ray tracing's preset and parts rows");
-            galaxy::ui::RenderConfig draft = config;
-            row(rows, "LOCAL LIGHTS").change(draft, -1);
-            check(draft.rt_quality == galaxy::render::kRtPresetCustom && draft.rt_parts[1] == 1u && draft.rt_chosen,
-                  "a part alone makes it custom, and the player's");
-            quality.change(draft, 1);
-            check(draft.rt_quality != galaxy::render::kRtPresetCustom && draft.rt_parts[1] == draft.rt_parts[0], "a preset sets every part");
-        }
-        host.traced = true;
         config.aa_mode = 1u;
         rows = galaxy::ui::graphics_page(config, host);
-        check(row(rows, "ANTI-ALIASING").value == "TEMPORAL (RAY TRACING)" && !row(rows, "ANTI-ALIASING").change &&
-                  !has(rows, "SMAA QUALITY") && !has(rows, "MSAA"),
-              "with ray tracing on FSR 3 anti-aliases the scene and the row says so");
-        config.ray_tracing_enabled = false;
-        rows = galaxy::ui::graphics_page(config, host);
-        check(row(rows, "ANTI-ALIASING").value != "TEMPORAL (RAY TRACING)" && has(rows, "SMAA QUALITY") && has(rows, "MSAA"),
-              "ray tracing off gives the anti-aliasing rows back");
+        check(!has(rows, "RAY TRACING") && !has(rows, "RAY TRACING QUALITY") && has(rows, "SMAA QUALITY") && has(rows, "MSAA") &&
+                  has(rows, "LIGHTING") && has(rows, "AMBIENT OCCLUSION"),
+              "no ray tracing rows; anti-aliasing, MSAA, lighting and occlusion are always offered");
         std::cout << "graphics page: passed\n";
         return 0;
     } catch (const std::exception& error) {

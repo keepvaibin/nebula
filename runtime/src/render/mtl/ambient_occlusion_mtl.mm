@@ -193,7 +193,7 @@ void AmbientOcclusion::dispatch(Object compute_encoder, Pass pass, const Texture
 }
 
 bool AmbientOcclusion::prepare(Object commands, const Texture& depth, unsigned part_width, unsigned part_height,
-                               unsigned lowest_sixteenths, const RtView& view, bool ssao,
+                               unsigned lowest_sixteenths, const SceneView& view, bool ssao,
                                std::span<const ao::ObjectOccluder> objects, UploadRing& ring, const StageMarker& mark) {
     if (!ready_) {
         return false;

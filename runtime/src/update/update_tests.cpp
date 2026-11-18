@@ -62,13 +62,14 @@ constexpr std::string_view kReplayedSignature =
     "DHz4p/cbg2N7IELusDnMNsos7ikcqBKSTu5BGHgLVLIDtjpZvurk39zKVhNl7rjBISmOh+625rCyaU3YNdzttujVPPuaASPXL+f41g==";
 
 constexpr std::string_view kAsset = "Nebula-Beta-Test.pkg";
+constexpr std::string_view kRelease = "Nebula-Test.pkg";
 
-std::string listing(const std::string& version, const std::string& notes) {
+std::string listing(const std::string& version, const std::string& notes, const std::string& asset = std::string(kAsset)) {
     const std::string base = "https://example.org/" + version + "/";
     return "[{\"tag_name\": \"v" + version + "\", \"draft\": false, \"prerelease\": true, \"body\": \"" + notes +
-           "\", \"assets\": [{\"name\": \"Nebula-Beta-Test.pkg\", \"size\": " + std::to_string(kPackage.size()) +
-           ", \"browser_download_url\": \"" + base + "pkg\"}, {\"name\": \"Nebula-Beta-Test.pkg.manifest\", \"browser_download_url\": \"" +
-           base + "manifest\"}, {\"name\": \"Nebula-Beta-Test.pkg.manifest.sig\", \"browser_download_url\": \"" + base + "sig\"}]}]";
+           "\", \"assets\": [{\"name\": \"" + asset + "\", \"size\": " + std::to_string(kPackage.size()) +
+           ", \"browser_download_url\": \"" + base + "pkg\"}, {\"name\": \"" + asset + ".manifest\", \"browser_download_url\": \"" +
+           base + "manifest\"}, {\"name\": \"" + asset + ".manifest.sig\", \"browser_download_url\": \"" + base + "sig\"}]}]";
 }
 
 // What the stand-in server answers, set per case.
@@ -160,21 +161,31 @@ int main(int argc, char** argv) {
 
     // Listing selection.
     bool is_list = false;
-    auto found = select_newer(listing("9.9.9-beta.1", "## News\\n\\n* One **fix**, [notes](https://example.org/n)."), "2.0.8-beta.1", kAsset, is_list);
+    auto found = select_newer(listing("9.9.9-beta.1", "## News\\n\\n* One **fix**, [notes](https://example.org/n)."), "2.0.8-beta.1", kRelease, kAsset, is_list);
     check(is_list && found && found->version == "9.9.9-beta.1" && found->package_bytes == kPackage.size() &&
               found->manifest_url.ends_with("/manifest") && found->manifest_signature_url.ends_with("/sig"),
           "a newer beta with its package, manifest and signature is selected");
     check(found && found->notes == "News\n\n- One fix, notes (https://example.org/n).", "its notes as plain text: " + (found ? found->notes : ""));
-    check(!select_newer(listing("9.9.9", "x"), "2.0.8-beta.1", kAsset, is_list) && is_list, "a release is not offered to a beta install");
-    check(!select_newer(listing("2.0.7-beta.1", "x"), "2.0.8-beta.1", kAsset, is_list), "an older beta is not offered");
-    check(!select_newer("{\"message\": \"API rate limit exceeded\"}", "2.0.8-beta.1", kAsset, is_list) && !is_list,
+    // P-092: a beta install is offered the final release after it, with the release's package.
+    found = select_newer(listing("9.9.9", "x", std::string(kRelease)), "2.0.8-beta.1", kRelease, kAsset, is_list);
+    check(is_list && found && found->version == "9.9.9" && found->manifest_url.ends_with("/manifest"),
+          "a release after a beta install is offered to it");
+    check(!select_newer(listing("9.9.9", "x"), "2.0.8-beta.1", kRelease, kAsset, is_list),
+          "a release is offered only with the release's package");
+    check(!select_newer(listing("9.9.9-beta.1", "x"), "2.0.8", kRelease, kAsset, is_list) && is_list,
+          "a beta is not offered to a release install");
+    check(takes("2.0.8-beta.1", "2.0.8") && takes("2.0.8-beta.1", "2.0.9-beta.1") && takes("2.0.8", "2.0.9") &&
+              !takes("2.0.8", "2.0.9-beta.1"),
+          "channels: a beta takes betas and releases, a release takes releases");
+    check(!select_newer(listing("2.0.7-beta.1", "x"), "2.0.8-beta.1", kRelease, kAsset, is_list), "an older beta is not offered");
+    check(!select_newer("{\"message\": \"API rate limit exceeded\"}", "2.0.8-beta.1", kRelease, kAsset, is_list) && !is_list,
           "a rate limit's message is no listing");
-    check(!select_newer("<html>Sign in to the network</html>", "2.0.8-beta.1", kAsset, is_list) && !is_list, "a captive portal's page is no listing");
-    check(!select_newer("[1, \"text\", null, {\"tag_name\": 5, \"assets\": [7, null]}]", "2.0.8-beta.1", kAsset, is_list) && is_list,
+    check(!select_newer("<html>Sign in to the network</html>", "2.0.8-beta.1", kRelease, kAsset, is_list) && !is_list, "a captive portal's page is no listing");
+    check(!select_newer("[1, \"text\", null, {\"tag_name\": 5, \"assets\": [7, null]}]", "2.0.8-beta.1", kRelease, kAsset, is_list) && is_list,
           "items that are not releases are passed over");
     std::string plain = listing("9.9.9-beta.1", "x");
     for (std::size_t at; (at = plain.find("https://example.org")) != std::string::npos;) plain.replace(at, 5, "http");
-    check(!select_newer(plain, "2.0.8-beta.1", kAsset, is_list), "a release not served over HTTPS is not offered");
+    check(!select_newer(plain, "2.0.8-beta.1", kRelease, kAsset, is_list), "a release not served over HTTPS is not offered");
     check(plain_notes(std::string(3000, 'a'), 1500).size() <= 1500u + 4u, "notes are cut at their limit");
 
     // Crypto.

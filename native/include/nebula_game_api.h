@@ -1093,6 +1093,9 @@ typedef struct NebulaHostServices {
     /* The finger on a touch screen, for Nebula's menus (NebulaMenuFinger): 1 and `finger` filled while a finger is the
        pointer, 0 while a mouse moved last or none has touched. Game thread. */
     int32_t (*menu_finger)(void* user, NebulaMenuFinger* finger);
+    /* Returns once a save_request's `status` has left NEBULA_SAVE_PENDING, the thread asleep meanwhile (an acquire
+       load: the request's buffer and length are the host's result). Game thread. */
+    void (*save_wait)(void* user, const int32_t* status);
 } NebulaHostServices;
 
 

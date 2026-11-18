@@ -162,8 +162,11 @@ std::string lower_extension(const std::filesystem::path& path) {
     return ext;
 }
 
+// `mutex` guards the state, held only to read or set it: the game's thread asks for Miis under it (mii_count,
+// mii_record). `importing` makes imports one at a time; an import reads, copies and writes its files under that alone.
 struct Library {
     std::mutex mutex;
+    std::mutex importing;
     std::filesystem::path file;
     std::filesystem::path console_database;
     std::filesystem::path folder;
@@ -422,18 +425,29 @@ std::filesystem::path mii_import_folder() {
 
 MiiMergeResult import_mii_files(std::span<const std::filesystem::path> files, std::string* message) {
     Library& lib = library();
-    const std::lock_guard<std::mutex> lock(lib.mutex);
+    const std::lock_guard<std::mutex> one_at_a_time(lib.importing);
     MiiMergeResult total;
-    if (lib.file.empty()) {
-        if (message != nullptr) *message = "NO MII LIBRARY";
-        return total;
+    // The library as it is now; the files are read, copied and merged without the state's lock (P-085: the game's
+    // thread waited for every file of an import, up to 64 MB each).
+    MiiCollection miis;
+    std::filesystem::path library_file, folder;
+    MiiPreparer prepare;
+    {
+        const std::lock_guard<std::mutex> lock(lib.mutex);
+        if (lib.file.empty()) {
+            if (message != nullptr) *message = "NO MII LIBRARY";
+            return total;
+        }
+        load(lib);
+        if (lib.damaged) {
+            if (message != nullptr) *message = "THE MII LIBRARY FILE IS DAMAGED";
+            return total;
+        }
+        miis = lib.miis;
+        library_file = lib.file;
+        folder = lib.folder;
+        prepare = lib.prepare;
     }
-    load(lib);
-    if (lib.damaged) {
-        if (message != nullptr) *message = "THE MII LIBRARY FILE IS DAMAGED";
-        return total;
-    }
-    MiiCollection miis = lib.miis;
     unsigned unreadable = 0u;
     unsigned unkept = 0u;
     std::vector<std::pair<unsigned, MiiFields>> placed;
@@ -444,10 +458,10 @@ MiiMergeResult import_mii_files(std::span<const std::filesystem::path> files, st
             ++unreadable;
             continue;
         }
-        if (!keep_in_library(lib.folder, file, bytes)) {
+        if (!keep_in_library(folder, file, bytes)) {
             ++unkept;
         }
-        const MiiMergeResult r = merge_miis(miis, contents.miis, lib.prepare, &placed);
+        const MiiMergeResult r = merge_miis(miis, contents.miis, prepare, &placed);
         total.added += r.added;
         total.updated += r.updated;
         total.duplicates += r.duplicates;
@@ -455,13 +469,17 @@ MiiMergeResult import_mii_files(std::span<const std::filesystem::path> files, st
         total.converted += contents.converted;
     }
     if (!placed.empty()) {
-        if (!io::write_file_atomically(lib.file, write_mii_library(miis))) {
+        if (!io::write_file_atomically(library_file, write_mii_library(miis))) {
             if (message != nullptr) *message = "COULD NOT WRITE THE MII LIBRARY";
             return MiiMergeResult{};
         }
-        lib.miis = std::move(miis);
-        lib.installs.insert(lib.installs.end(), placed.begin(), placed.end());
-        lib.pending.store(true, std::memory_order_release);
+        const std::lock_guard<std::mutex> lock(lib.mutex);
+        // The library set again meanwhile (a new start's set_mii_library): it reads the file written above.
+        if (lib.file == library_file && lib.loaded) {
+            lib.miis = std::move(miis);
+            lib.installs.insert(lib.installs.end(), placed.begin(), placed.end());
+            lib.pending.store(true, std::memory_order_release);
+        }
     }
     if (message != nullptr) {
         *message = result_text(total);

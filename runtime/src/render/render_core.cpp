@@ -33,7 +33,7 @@
 #include "galaxy/launch_args.h"
 #include "galaxy/render/host_window.h"
 #include "galaxy/render/resolution_fit.h"
-#include "galaxy/render/rt_caps.h"
+#include "galaxy/render/device_memory.h"
 #if defined(NEBULA_GPU_METAL)
 #include "galaxy/render/mtl/mtl_context.h"
 #endif
@@ -215,7 +215,6 @@ bool RenderCore::initialize(int w, int h) {
     registries_.initialize(renderer_.device(), device_gate_);
     pipelines_.initialize(renderer_.device(), renderer_.pipeline_root(), renderer_.pipeline_backend());
     boot_step("pipelines");
-    rt_start();
     cap_texture_packs();
 
     // The first start (no config.ini, and no back end chose for it): a conservative height now, measured in the first 3D scene.
@@ -223,11 +222,7 @@ bool RenderCore::initialize(int w, int h) {
     if (const RenderConfig chosen = get_render_config_chosen();
         render_config_first_start() && chosen.upscaler == 0u && chosen.internal_height == 0u && start_frame.height > 0u &&
         galaxy::ordinary_start() && !galaxy::bench::running()) {
-#if defined(NEBULA_GPU_METAL)
-        const bool shared = mtl::Context::get().caps().unified_memory;
-#else
-        const bool shared = rt_caps().unified_memory;
-#endif
+        const bool shared = device_unified_memory();
         calibration_ = {};
         // The picture's size on the window (the renderer's output, which internal_extent scales).
         calibration_.width = start_frame.width;
@@ -705,13 +700,13 @@ void RenderCore::wait_for_render_idle() {
 // A perspective draw in the temporal scene: the clip-space offset that moves
 // the image by the scene jitter in render pixels at this draw's viewport.
 // The first such draw also supplies the camera planes and field of view.
-RtView RenderCore::scene_depth_view(const float terms[6], const ScaledViewport& viewport) const {
+SceneView RenderCore::scene_depth_view(const float terms[6], const ScaledViewport& viewport) const {
     const auto projection = [terms](unsigned i) {
         return terms[i];
     };
     // fill_vs_projection: D3D clip z = -(z E + F) (1 - 1e-7).
     constexpr float kFarEps = 1.0f - 1e-7f;
-    RtView view{};
+    SceneView view{};
     view.projection = {projection(0u), projection(1u), projection(2u), projection(3u)};
     // The scene's depth is drawn with the temporal upscaler's jitter (clip x + jx w, so the
     // projection's x offset B becomes B - jx; y likewise). Passes rebuild every sample's position from that depth, so
@@ -1568,7 +1563,8 @@ bool RenderCore::bear_device_loss(std::exception_ptr error) {
     try {
         std::rethrow_exception(error);
     } catch (const std::exception& lost) {
-        if (!galaxy::crash::is_gpu_lost(lost.what())) {
+        // By its text, or by the device itself (a failure the device's removal caused, whatever it says: P-062).
+        if (!galaxy::crash::is_gpu_lost(lost.what()) && !gpu::device_removed(renderer_.device())) {
             return false;
         }
         std::cerr << "[render] the graphics card was reset: " << lost.what() << '\n';
@@ -1594,7 +1590,7 @@ void RenderCore::drop_device_state() {
         const std::lock_guard<std::mutex> lock(queue_mutex_);
         for (const FrameChunk& queued : frame_queue_) {
             if (queued.list != nullptr) {
-                queued.list->released = 1u;
+                nebula_frame_list_release(queued.list);
             }
         }
         frame_queue_.clear();
@@ -1602,11 +1598,11 @@ void RenderCore::drop_device_state() {
         queue_space_cv_.notify_all();
     }
     if (in_hand_list_ != nullptr) {
-        in_hand_list_->released = 1u;
+        nebula_frame_list_release(in_hand_list_);
         in_hand_list_ = nullptr;
     }
     for (const std::unique_ptr<ListEntry>& entry : lists_) {
-        entry->data.list->released = 1u;
+        nebula_frame_list_release(entry->data.list);
     }
     lists_.clear();
     free_lists_.clear();
@@ -1680,7 +1676,6 @@ bool RenderCore::restart_device() {
         pipelines_.shutdown();
         movie_playback_.shutdown();
         texture_store_.shutdown();
-        rt_stop();
         registries_.lose_device();
         display_pictures_.shutdown();
         drop_device_state();
@@ -1701,7 +1696,6 @@ bool RenderCore::restart_device() {
         texture_store_.restart(renderer_.device());
         registries_.restart(renderer_.device());
         pipelines_.initialize(renderer_.device(), renderer_.pipeline_root(), renderer_.pipeline_backend());
-        rt_start();
         cap_texture_packs();
         device_gate_.end_rebuild(rebuilding);
     } catch (...) {
@@ -1865,7 +1859,7 @@ void RenderCore::render_loop() {
             } else if (frame_queue_.front().list != nullptr && frame_queue_.front().device_epoch != device_gate_.epoch()) {
                 // Made for the card that was lost.
                 probes_released(frame_queue_.front().list->game_frame);
-                frame_queue_.front().list->released = 1u;
+                nebula_frame_list_release(frame_queue_.front().list);
                 frame_queue_.pop_front();
                 queue_space_cv_.notify_all();
                 continue;
@@ -2192,12 +2186,6 @@ RenderCore::ListEntry& RenderCore::list_arrived(FrameChunk& chunk) {
     entry->data.list = chunk.list;
     entry->data.serial = ++list_serial_;
     entry->before = lists_.empty() ? nullptr : lists_.back().get();
-    if (::galaxy::diagnosing(::galaxy::kDiagnoseRtInputs)) {
-        world_light_stats_.add(*chunk.list, entry->before != nullptr ? entry->before->data.list : nullptr);
-        if (world_light_stats_.lists >= 300u) {
-            world_light_stats_.report();
-        }
-    }
     entry->pointer_response = chunk.pointer_response;
     entry->prerecorded_movie = chunk.prerecorded_movie;
     entry->movie_frame = chunk.movie_frame;
@@ -2214,7 +2202,7 @@ void RenderCore::release_lists_before(const ListEntry& entry) noexcept {
         // The game writes the list's memory again once it sees the flag: every read of it comes first, on every CPU.
         std::atomic_thread_fence(std::memory_order_release);
         probes_released(lists_.front()->data.list->game_frame);
-        lists_.front()->data.list->released = 1u;
+        nebula_frame_list_release(lists_.front()->data.list);
         lists_[1]->before = nullptr;
         free_lists_.push_back(std::move(lists_.front()));
         lists_.pop_front();
@@ -2281,17 +2269,8 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
     enhanced_lighting_ = render.enhanced_lighting;
     pixel_lit_ = lights_at_pixel(render);
     curved_refine_ = render.curved_surfaces;
-    rt_follow_setting(render);
-    // After the tracer follows the setting: a frame that starts it is drawn wide.
-    wide_scene_ = scene_wide(render, render.ray_tracing_enabled && rt_backend_.started());
-    // Ray tracing's sky and bounce light shades what screen-space occlusion would darken a second time; with that part
-    // off nothing traced darkens it (the light pass's O is 1: 22.10), so the occlusion runs as without ray tracing.
-    ambient_occlusion_ = render.ambient_occlusion && renderer_.ambient_occlusion_ready() &&
-                         !(render.ray_tracing_enabled && rt_backend_.started() && rt_part(render, RtPart::Indirect) != 0u);
-    rt_quality_ = render.rt_quality;
-    for (unsigned part = 0; part < 6u; ++part) {
-        rt_levels_[part] = static_cast<std::uint8_t>(rt_part(render, static_cast<RtPart>(part)));
-    }
+    wide_scene_ = scene_wide(render);
+    ambient_occlusion_ = render.ambient_occlusion && renderer_.ambient_occlusion_ready();
     // The complete native list is available before begin_frame can resize a
     // ring. Include all eye/world rows, even rows a particular program omits.
     const NebulaFrameList& list = *entry.data.list;
@@ -2321,15 +2300,6 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
         matrix_bytes += std::size_t{core::light_set_rows(list.light_sets[s].count)} * 16u;
     }
     matrix_bytes += std::size_t{list.instance_row_count} * 16u;
-    if (rt_backend_.started()) {
-        // The scene's instances, and the ring draws' triangles as the tracer takes them.
-        matrix_bytes += std::size_t{list.item_count} * sizeof(rt::Instance) + 64u;
-        matrix_bytes += std::size_t{list.ring_index_count} * 12u + static_cast<std::size_t>(list.ring_vertex_bytes);
-        // The drop shadows' pass: its drops, each item's slot, and the screen's tiles with their entries (a drop that
-        // covers the screen fills every tile).
-        const std::size_t tiles = (std::size_t{renderer_.frame_map().width} / 16u + 2u) * (std::size_t{renderer_.frame_map().height} / 16u + 2u);
-        matrix_bytes += std::size_t{list.shadow_drop_count} * (48u + tiles * 4u) + tiles * 8u + std::size_t{list.item_count} * 4u + 2048u;
-    }
     std::size_t constant_bytes = std::size_t{list.view_count} * (sizeof(core::ViewRows) + 255u);
     for (std::uint32_t c = 0; c < list.constants_count; ++c) {
         const auto& constants = list.constants[c];
@@ -2338,9 +2308,6 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
     renderer_.matrix_ring().require_frame_bytes(matrix_bytes);
     renderer_.vertex_ring().require_frame_bytes(list.ring_vertex_bytes);
     renderer_.index_ring().require_frame_bytes(std::size_t{list.ring_index_count} * sizeof(std::uint32_t));
-    if (rt_backend_.started()) {
-        constant_bytes += 1024u + std::size_t{list.item_count} * 256u;  // the tracer's passes' constants (a skinned draw's)
-    }
     renderer_.constant_ring().require_frame_bytes(constant_bytes);
     // A ring gives memory back only on a frame without the 3D scene (a load's, a fade's): making it again there shows nothing.
     const bool shrink_moment = (list.flags & NEBULA_FRAME_HAS_SCENE) == 0u;
@@ -2417,19 +2384,7 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
         galaxy::timeline::record(galaxy::timeline::Event::ListOpsBegin, entry.data.serial, 0u);
         g_drawn_game_frame = entry.data.list->game_frame;
         advance_idle_clock(entry.data.serial);
-        if (rt_backend_.started()) {
-            for (const auto& [id, mesh] : entry.registry_ops.meshes) {
-                rt_want(id, mesh);
-            }
-        }
         registries_.apply(entry.registry_ops, renderer_.submitted_fence_value());
-        if (rt_backend_.started()) {
-            // A retired mesh's vertices go once the GPU is past the work submitted so far: nothing is built from them now.
-            for (const std::uint32_t id : registries_.take_retired_meshes()) {
-                rt_geometry_.forget(std::uint64_t{id} * 2u);
-                rt_geometry_.forget(std::uint64_t{id} * 2u + 1u);
-            }
-        }
         freed_textures_.clear();
         if (entry.texture_ops != nullptr) {
             texture_store_.apply_ops(*entry.texture_ops, freed_textures_);
@@ -2519,9 +2474,6 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
         galaxy::timeline::record(galaxy::timeline::Event::ListOpsEnd, entry.data.serial, 0u);
     }
     registries_.reclaim(renderer_.completed_fence_value());
-    if (rt_backend_.started()) {
-        rt_frame(list);
-    }
     // Finished replacements upload here and take the place of their originals.
     texture_store_.apply_texture_packs();
     // The movie frame this walk draws, as the movie quad's planes.
@@ -2557,8 +2509,7 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
         const bool layer = motion && renderer_.has_layer_targets();
         const unsigned samples = renderer_.scene_samples_log2();
         const std::uint32_t settings =
-            samples | (wide ? 4u : 0u) | (motion ? 8u : 0u) | (pixel_lit_ ? 16u : 0u) | (one_pass ? 32u : 0u) |
-            (rt_backend_.started() ? 64u : 0u);  // tracing turned on: every pipeline again, with its traced forms
+            samples | (wide ? 4u : 0u) | (motion ? 8u : 0u) | (pixel_lit_ ? 16u : 0u) | (one_pass ? 32u : 0u);
         if (settings != pipelines_settings_) {
             pipelines_settings_ = settings;
             pipelines_queued_.store(0u, std::memory_order_relaxed);
@@ -2577,7 +2528,7 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
                 }
                 entries.push_back({id, std::make_shared<const core::PipelineEntry>(pipeline)});
             }
-            pipelines_.prepare(entries, variants, motion, layer, one_pass, rt_backend_.started());
+            pipelines_.prepare(entries, variants, motion, layer, one_pass);
             pipelines_queued_.store(count, std::memory_order_relaxed);
         }
     }
@@ -2598,10 +2549,6 @@ void RenderCore::walk_frame(ListEntry& entry, const core::WalkTime& time, bool p
     const bool real = time.t >= 1.0f;
     const DisplayTexture* selected = present ? display_pictures_.latest() : nullptr;
     const std::string snapshot_path = selected != nullptr ? present_snapshot_path(real ? NEBULA_EXT_PICTURE_GAME : NEBULA_EXT_PICTURE_GENERATED) : std::string{};
-    if (!snapshot_path.empty() && real && rt_holds()) {
-        rt_hold(entry, time, snapshot_path);
-        selected = display_pictures_.latest();
-    }
     if (selected != nullptr) {
         if (!snapshot_path.empty()) {
             renderer_.set_debug_capture_paths({}, snapshot_path);
@@ -2740,10 +2687,6 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     }
     if (present_swap_chain) {
         const std::string snapshot_path = present_snapshot_path(duplicate_display_present ? NEBULA_EXT_PICTURE_REPEAT : NEBULA_EXT_PICTURE_GAME);
-        if (!snapshot_path.empty() && !duplicate_display_present && rt_holds()) {
-            rt_hold(entry, core::WalkTime{}, snapshot_path);
-            selected_display = display_pictures_.latest();
-        }
         if (!snapshot_path.empty()) {
             renderer_.set_debug_capture_paths({}, snapshot_path);
         }
@@ -2788,7 +2731,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
 void RenderCore::calibrate_first_start(bool scene, double walk_ms) {
     constexpr unsigned kCalibrationSettle = 45u;  // 0.9^45: under 1 % of the height before left in the timers' average
     // Timings started again for changed settings before the start's height is left and nothing is measured: each costs at
-    // most two heights' 75 frames, and ray tracing's own measurement after the player turns it on is one of them.
+    // most two heights' 75 frames.
     constexpr unsigned kCalibrationRestarts = 3u;
     constexpr unsigned kCalibrationSamples = 30u;
     FirstStartCalibration& c = calibration_;
@@ -2803,7 +2746,7 @@ void RenderCore::calibrate_first_start(bool scene, double walk_ms) {
             end_first_start_calibration(0u, nullptr);
             return;
         }
-        // Another setting (the player's, or ray tracing's measurement after the player turned it on) is taken in. The
+        // Another setting the player chose is taken in. The
         // pictures timed so far were another config's: timed again from the first height.
         c.armed = chosen;
         c.changed = true;

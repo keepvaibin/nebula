@@ -13,6 +13,9 @@
     "talk-balloon-edge",
     "luigi-stages",
     "save-files",
-    "save-files-again"
+    "save-files-again",
+    "save-newer",
+    "save-slow-exit",
+    "save-slow-exit-again"
   ]
 }

@@ -4805,7 +4805,9 @@ namespace {
     const u32 cCreateIndexRoom = 4096;
     static_assert(ARRAY_SIZEU(cCreateTable) * 2 <= cCreateIndexRoom, "the index stays at most half full");
     u16 sCreateIndex[cCreateIndexRoom];
-    bool sCreateIndexBuilt = false;
+    // 0 not built, 1 being built, 2 built (P-183): the first lookup builds the index, on whichever thread it comes
+    // (a scene load, the mod loader); a lookup on another thread meanwhile waits the few microseconds it takes.
+    u32 sCreateIndexState = 0;
 
     u32 hashNameCase(const char* pName) {
         u32 hash = 2166136261u;
@@ -4834,7 +4836,20 @@ namespace {
                 sCreateIndex[slot] = static_cast< u16 >(i + 1);
             }
         }
-        sCreateIndexBuilt = true;
+    }
+
+    void ensureCreateIndex() {
+        if (__atomic_load_n(&sCreateIndexState, __ATOMIC_ACQUIRE) == 2) {
+            return;
+        }
+        u32 notBuilt = 0;
+        if (__atomic_compare_exchange_n(&sCreateIndexState, &notBuilt, 1u, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
+            buildCreateIndex();
+            __atomic_store_n(&sCreateIndexState, 2u, __ATOMIC_RELEASE);
+            return;
+        }
+        while (__atomic_load_n(&sCreateIndexState, __ATOMIC_ACQUIRE) != 2) {
+        }
     }
 };  // namespace
 
@@ -4876,9 +4891,7 @@ namespace NameObjFactory {
     }
 
     const Name2CreateFunc* getName2CreateFunc(const char* pName) {
-        if (!::sCreateIndexBuilt) {
-            ::buildCreateIndex();
-        }
+        ::ensureCreateIndex();
 
         for (u32 slot = ::hashNameCase(pName) & (::cCreateIndexRoom - 1); ::sCreateIndex[slot] != 0; slot = (slot + 1) & (::cCreateIndexRoom - 1)) {
             const Name2CreateFunc* const pName2CreateFunc = &::cCreateTable[::sCreateIndex[slot] - 1];

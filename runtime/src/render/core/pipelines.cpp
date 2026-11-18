@@ -124,18 +124,14 @@ void Pipelines::shutdown() noexcept {
     for (auto& root : directories_) {
         if (Directory* directory = root.exchange(nullptr)) {
             for (auto& page : directory->pages) { delete page.load(); }
-            for (auto& page : directory->traced_pages) { delete page.load(); }
-            for (auto& page : directory->exchange_pages) { delete page.load(); }
             delete directory;
         }
     }
 }
 
 std::atomic<gpu::Pipeline*>* Pipelines::cell(std::uint64_t id, unsigned variant, unsigned aux) {
-    static_assert(kExchangeBit == kAuxExchange && kExchangeBit > kAuxTraced + 4u, "the exchange's aux bit");
     const std::uint32_t key = key_of(variant, aux);
-    const unsigned which = key / kKeys;
-    Page* page = page_of(id, which);
+    Page* page = page_of(id);
     if (page == nullptr) {
         const auto root = static_cast<std::size_t>(id >> (kPageBits + kDirectoryBits));
         if (root >= directories_.size()) { throw std::out_of_range("pipeline ID outside the native namespaces"); }
@@ -145,11 +141,11 @@ std::atomic<gpu::Pipeline*>* Pipelines::cell(std::uint64_t id, unsigned variant,
             directory = new Directory();
             directories_[root].store(directory, std::memory_order_release);
         }
-        auto& at = directory->set(which)[(id >> kPageBits) & (kDirectorySize - 1u)];
+        auto& at = directory->pages[(id >> kPageBits) & (kDirectorySize - 1u)];
         page = at.load(std::memory_order_acquire);
         if (page == nullptr) { page = new Page(); at.store(page, std::memory_order_release); }
     }
-    return &page->rows[id & kPageMask][key & (kKeys - 1u)];
+    return &page->rows[id & kPageMask][key];
 }
 
 gpu::Pipeline* Pipelines::publish(std::atomic<gpu::Pipeline*>& at, gpu::Pipeline* built) noexcept {
@@ -287,20 +283,6 @@ gpu::Pipeline* Pipelines::create_now(std::uint64_t id, const PipelineEntry& entr
     return published;
 }
 
-// Whether the tracer's prepass draws this entry: an opaque surface that writes depth through a test that passes an equal
-// depth (the pass after it finds its own depth there), and no stencil (its marks are the scene pass's).
-bool prepass_draws(std::uint32_t state) noexcept {
-    const std::uint32_t test = (state >> 11u) & 7u;  // the game's: 3 less or equal, 6 greater or equal, 7 always
-    return (state & NEBULA_STATE_COLOR_WRITE) != 0u && (state & 3u) == NEBULA_BLEND_REPLACE && (state & (1u << 10u)) != 0u &&
-           (state & (1u << 14u)) != 0u && test == 3u && ((state >> 20u) & 3u) == 0u && ((state >> 15u) & 3u) != NEBULA_CULL_ALL;
-}
-
-bool blended_prepass_draws(std::uint32_t state) noexcept {
-    return (state & NEBULA_STATE_COLOR_WRITE) != 0u && (state & 3u) == NEBULA_BLEND_ADD && ((state >> 2u) & 15u) == NEBULA_FACTOR_SRC_ALPHA &&
-           ((state >> 6u) & 15u) == NEBULA_FACTOR_INV_SRC_ALPHA && (state & (1u << 10u)) != 0u && ((state >> 20u) & 3u) == 0u &&
-           ((state >> 15u) & 3u) != NEBULA_CULL_ALL;
-}
-
 std::uint8_t scene_aux(std::uint32_t state, bool layer_window) noexcept {
     if ((state & NEBULA_STATE_COLOR_WRITE) == 0u) {
         return 0u;
@@ -316,17 +298,8 @@ std::uint8_t scene_aux(std::uint32_t state, bool layer_window) noexcept {
     return 2u;
 }
 
-bool added_prepass_draws(std::uint32_t state) noexcept {
-    // Added (dst one), or tinting what is behind and adding (dst source colour: the air bubble, the Undergrunt Gunner's
-    // capsule).
-    const std::uint32_t dst = (state >> 6u) & 15u;
-    return (state & NEBULA_STATE_COLOR_WRITE) != 0u && (state & 3u) == NEBULA_BLEND_ADD &&
-           (dst == NEBULA_FACTOR_ONE || dst == NEBULA_FACTOR_SRC_COLOR) && (state & (1u << 10u)) != 0u &&
-           ((state >> 20u) & 3u) == 0u && ((state >> 15u) & 3u) != NEBULA_CULL_ALL;
-}
-
 void Pipelines::prepare(const std::vector<Prepared>& entries, const std::vector<unsigned>& variants, bool motion, bool layer,
-                        bool one_pass, bool traced) {
+                        bool one_pass) {
     // The start's settings, which the targets file keeps (decide_warm): the first list's targets and passes. Set before its
     // jobs are queued, so the worker that takes one sees it.
     if (start_settings_.load(std::memory_order_relaxed) == 0u) {
@@ -339,7 +312,7 @@ void Pipelines::prepare(const std::vector<Prepared>& entries, const std::vector<
         for (const unsigned variant : variants) {
             add_word(variant);
         }
-        add_word((motion ? 1u : 0u) | (layer ? 2u : 0u) | (one_pass ? 4u : 0u) | (traced ? 8u : 0u));
+        add_word((motion ? 1u : 0u) | (layer ? 2u : 0u) | (one_pass ? 4u : 0u));
         std::uint64_t none = 0u;
         (void)start_settings_.compare_exchange_strong(none, settings != 0u ? settings : 1u, std::memory_order_release);
     }
@@ -349,78 +322,39 @@ void Pipelines::prepare(const std::vector<Prepared>& entries, const std::vector<
         const std::uint32_t id = prepared.id;
         const PipelineEntry& entry = *prepared.entry;
         const auto add = [&](unsigned variant, unsigned aux) { now.push_back(Job{id, prepared.entry, variant, aux}); };
-        // The tracer's forms of a scene draw (no target, one sample): its prepass, and a lit program's traced forms under
-        // the aux the scene pass gives an opaque draw.
-        // An added state: its prepass and exchange forms, for the glass rows' shells among its draws.
-        const bool added = traced && added_prepass_draws(entry.desc.state);
-        const bool prepass = traced && (prepass_draws(entry.desc.state) || blended_prepass_draws(entry.desc.state) || added);
-        const bool lit = prepass && program_traced(entry.desc.pixel);
-        const bool blended = blended_prepass_draws(entry.desc.state) || added;
-        const unsigned exchange = added ? kAuxExchange : 0u;
         for (const unsigned variant : variants) {
             add(variant, 0u);
             const bool scene = (variant & kSceneVariantTarget) == 0u && (variant & kSceneVariantSamplesMask) == 0u;
-            if (scene && prepass) {
-                // The aux the scene pass gives it (draw_walker scene_aux): with motion written, an opaque draw the
-                // motion (1), a blended one the reactive mask (2; 3 in a layer window too), or with one pass for the
-                // scene the motion target left alone (4); without motion, none. The prepass runs the same vertex form.
-                const bool writes_motion = motion && !blended;
-                add(variant, writes_motion ? kAuxPrepassMotion : kAuxPrepass);
-                if (lit) {
-                    if (!motion || !blended) {
-                        add(variant, kAuxTraced | exchange | (writes_motion ? 1u : 0u));
-                    } else if (one_pass) {
-                        add(variant, kAuxTraced | exchange | 4u);
-                    } else {
-                        add(variant, kAuxTraced | exchange | 2u);
-                        if (layer) {
-                            add(variant, kAuxTraced | exchange | 3u);
-                        }
-                    }
-                }
-            }
             if (!motion || !scene) {
                 continue;
             }
-            if (!traced) {
-                // The motion forms a scene draw of this state can take (draw_walker: scene_aux, which one pass for the scene
-                // turns into 4 unless it is the motion), out of a layer window and, with `layer`, in one; aux 0 is above.
-                const auto scene_form = [&](bool layer_window) -> unsigned {
-                    const unsigned aux = scene_aux(entry.desc.state, layer_window);
-                    return one_pass && aux != 1u ? 4u : aux;
-                };
-                const unsigned out_of_window = scene_form(false);
-                const unsigned in_window = layer ? scene_form(true) : out_of_window;
-                // With the wide variant listed, walk_scene_begin draws every scene wide unless the wide targets cannot be
-                // had (begin_wide_scene: memory, the camera pass): the narrow variant's motion forms are left for after the
-                // first scene, made then or by such a draw.
-                const bool left = (variant & kSceneVariantHdr) == 0u &&
-                                  std::any_of(variants.begin(), variants.end(),
-                                              [](unsigned listed) { return (listed & kSceneVariantHdr) != 0u; });
-                const auto motion_form = [&](unsigned aux) {
-                    if (aux == 0u) {
-                        return;
-                    }
-                    if (left) {
-                        later.push_back(Job{id, prepared.entry, variant, aux, false, true});
-                    } else {
-                        add(variant, aux);
-                    }
-                };
-                motion_form(out_of_window);
-                if (in_window != out_of_window) {
-                    motion_form(in_window);
+            // The motion forms a scene draw of this state can take (draw_walker: scene_aux, which one pass for the scene
+            // turns into 4 unless it is the motion), out of a layer window and, with `layer`, in one; aux 0 is above.
+            const auto scene_form = [&](bool layer_window) -> unsigned {
+                const unsigned aux = scene_aux(entry.desc.state, layer_window);
+                return one_pass && aux != 1u ? 4u : aux;
+            };
+            const unsigned out_of_window = scene_form(false);
+            const unsigned in_window = layer ? scene_form(true) : out_of_window;
+            // With the wide variant listed, walk_scene_begin draws every scene wide unless the wide targets cannot be
+            // had (begin_wide_scene: memory, the camera pass): the narrow variant's motion forms are left for after the
+            // first scene, made then or by such a draw.
+            const bool left = (variant & kSceneVariantHdr) == 0u &&
+                              std::any_of(variants.begin(), variants.end(),
+                                          [](unsigned listed) { return (listed & kSceneVariantHdr) != 0u; });
+            const auto motion_form = [&](unsigned aux) {
+                if (aux == 0u) {
+                    return;
                 }
-                continue;
-            }
-            add(variant, 1u);
-            if (one_pass) {
-                add(variant, 4u);
-                continue;
-            }
-            add(variant, 2u);
-            if (layer) {
-                add(variant, 3u);
+                if (left) {
+                    later.push_back(Job{id, prepared.entry, variant, aux, false, true});
+                } else {
+                    add(variant, aux);
+                }
+            };
+            motion_form(out_of_window);
+            if (in_window != out_of_window) {
+                motion_form(in_window);
             }
         }
     }
@@ -700,7 +634,7 @@ std::uint64_t Pipelines::form_key(const PipelineEntry& entry, unsigned variant, 
     const unsigned samples_log2 = variant & kSceneVariantSamplesMask;
     const unsigned program =
         program_variant(desc.pixel, aux, (desc.state & NEBULA_STATE_PIXEL_SHADING) != 0u ? 0u : samples_log2);
-    const ProgramBytes vs = program_bytes(desc.vertex, aux == kAuxPrepassMotion ? unsigned{kProgramTracedMotion} : program, false);
+    const ProgramBytes vs = program_bytes(desc.vertex, program, false);
     const ProgramBytes ps = program_bytes(desc.pixel, program, true);
     if (vs.size == 0u || ps.size == 0u) {
         return 0u;
@@ -776,7 +710,7 @@ bool Pipelines::left_to_cache(std::uint64_t form) {
 }
 
 void Pipelines::note_target_drawn(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux) {
-    Page* page = page_of(id, key_of(variant, aux) / kKeys);
+    Page* page = page_of(id);
     if (page == nullptr || page->drawn[id & kPageMask].exchange(1u, std::memory_order_relaxed) != 0u) {
         return;
     }

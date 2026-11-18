@@ -1,0 +1,27 @@
+{
+  "harness": 1,
+  "name": "save-slow-exit-again",
+  "about": "The saves save-slow-exit left, read by a new start: file 3, the copy its end waited for, loads.",
+  "continue_from": "save-slow-exit",
+  "limit_seconds": 240,
+  "steps": [
+    {
+      "at": 60,
+      "load_file": 3
+    },
+    {
+      "after": {
+        "fact": "file.loaded",
+        "is": 3
+      },
+      "end": true,
+      "timeout": 900
+    }
+  ],
+  "expect": [
+    {
+      "fact": "file.loaded",
+      "is": 3
+    }
+  ]
+}

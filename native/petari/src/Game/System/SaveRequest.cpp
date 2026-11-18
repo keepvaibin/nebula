@@ -21,6 +21,14 @@ bool SaveRequest::isDone() const {
     return mStatus != NEBULA_SAVE_PENDING;
 }
 
+void SaveRequest::wait() const {
+    if (isDone()) {
+        return;
+    }
+    const NebulaHostServices* const host = nebula_host();
+    host->save_wait(host->user, reinterpret_cast< const int32_t* >(&mStatus));
+}
+
 SaveRequest::Result SaveRequest::getResult() const {
     switch (static_cast< s32 >(mStatus)) {
     case NEBULA_SAVE_DONE:

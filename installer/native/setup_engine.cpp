@@ -1,4 +1,5 @@
 #include "setup_engine.h"
+#include "release_channel.h"
 
 #include "text.h"
 
@@ -1140,9 +1141,9 @@ std::optional<wstring> SetupVersion(const wstring& file) {
     return wstring(value);
 }
 
+// The channels: release_channel.h.
 std::optional<ReleaseInfo> SelectNewer(const wstring& json, const wstring& installedVersion) {
     const bool beta = IsBetaVersion(installedVersion);
-    const wstring setupName = beta ? L"Nebula-Beta-Setup.exe" : L"Nebula-Setup.exe";
     std::optional<ReleaseInfo> best;
     Json releases = ParseJson(json);
     if (!releases.IsArray()) Fail(ErrorKind::InvalidData, L"The release list is not a list.");
@@ -1150,8 +1151,9 @@ std::optional<ReleaseInfo> SelectNewer(const wstring& json, const wstring& insta
         if (JBool(&release, L"draft")) continue;
         wstring tag = JStr(&release, L"tag_name").value_or(L"");
         wstring version = StartsWith(tag, L"v") ? tag.substr(1) : tag;
-        if (IsBetaVersion(version) != beta) continue;
+        if (!TakesRelease(beta, IsBetaVersion(version))) continue;
         if (CompareVersions(version, best ? best->Version : installedVersion) <= 0) continue;
+        const wstring setupName = SetupAssetName(IsBetaVersion(version));
         std::optional<wstring> setup, signature;
         long long size = 0;
         if (const Json* assets = JList(&release, L"assets")) {

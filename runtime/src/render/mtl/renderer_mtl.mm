@@ -7,6 +7,7 @@
 #include "galaxy/benchmark.h"
 #include "galaxy/content_viewport.h"
 #include "galaxy/display_aspect.h"
+#include "galaxy/render/device_memory.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/whole_lines.h"
 #include "galaxy/platform_time.h"
@@ -202,7 +203,8 @@ void RendererMtl::report_adapter() {
     const std::string& name = context.device_name();
     const unsigned vendor = vendor_of(name);
     host_window::rtx_adapter.store(false, std::memory_order_relaxed);
-    record_render_adapter(name.c_str(), vendor, 0u, 0u, false);
+    set_device_unified_memory(context.caps().unified_memory);
+    record_render_adapter(name.c_str(), vendor, 0u, 0u);
     RenderFeatureCaps caps{};
     caps.adapter_vendor_id = vendor;
     std::snprintf(caps.adapter_description.data(), caps.adapter_description.size(), "%s", name.c_str());
@@ -211,7 +213,6 @@ void RendererMtl::report_adapter() {
                                            msaa ? "the scene target is multisampled"
                                                 : "the GPU has no multisampled scene target formats");
     caps.taa = make_render_feature_status(false, false, false, false, "motion vectors, jitter, and history resources are not built");
-    caps.dxr = make_render_feature_status(false, false, false, false, "ray tracing runs on Direct3D 12");
     caps.streamline_bridge_built = false;
     caps.streamline = make_render_feature_status(false, false, false, false, "NVIDIA Streamline is not running");
     caps.reflex = make_render_feature_status(false, false, false, false, "Streamline Reflex integration is not built");
@@ -532,7 +533,7 @@ void pipeline_compile_stats(std::uint64_t out[5]) noexcept;  // pipelines_mtl.mm
 
 namespace {
 constexpr const char* kPassTimeNames[] = {"scene", "resolve", "frame read", "display copy", "bloom", "scene aa", "scene ao",
-                                          "upscale", "ray tracing", "present", "camera", "ao distance", "ao occlusion",
+                                          "upscale", "present", "camera", "ao distance", "ao occlusion",
                                           "ao denoise", "ao upsample", "ao apply", "uploads"};
 }  // namespace
 
@@ -540,7 +541,8 @@ void RendererMtl::next_command_buffer(GpuPass pass) {
     @autoreleasepool {
         id<MTLCommandBuffer> const made = [queue() commandBuffer];
         if (made == nil) {
-            throw std::runtime_error("no command buffer");
+            // The queue gives none only when the device is gone (P-008).
+            throw std::runtime_error("device lost: the Metal queue gave no command buffer");
         }
         list_pass_ = pass == GpuPass::Count ? GpuPass::Scene : pass;
         if (profile_frame_) {

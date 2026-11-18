@@ -24,11 +24,11 @@ int main() {
     try {
         galaxy::render::RenderFeatureCaps caps;
         std::memcpy(caps.adapter_description.data(), "TEST GPU  ", 11);
-        caps.dxr_raytracing_tier = 11;
-        caps.dxr.settings_exposed = true;
+        caps.streamline.settings_exposed = false;
         auto rows = galaxy::ui::system_page(caps, "POST: SMAA", record);
         check(row(rows, "GRAPHICS CARD").value == "TEST GPU", "adapter description trimmed");
-        check(row(rows, "RAY TRACING HARDWARE").value == "TIER 1.1 READY", "feature tier and visibility");
+        check(std::none_of(rows.begin(), rows.end(), [](const auto& r) { return r.label == "RAY TRACING HARDWARE"; }),
+              "no ray tracing row");
         check(row(rows, "NVIDIA STREAMLINE").value == "HIDDEN", "unexposed feature");
         check(row(rows, "POST-PROCESS").value == "SMAA", "post-process label");
         galaxy::ui::RenderConfig config;

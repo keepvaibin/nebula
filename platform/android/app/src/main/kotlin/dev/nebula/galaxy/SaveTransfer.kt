@@ -40,13 +40,17 @@ object SaveTransfer {
     fun noSavesYet(context: Context) =
         TransferResult(false, context.getString(R.string.NoSavesYet), context.getString(R.string.PlayFirst))
 
-    /** Every save file as one .zip at [uri], the document the player just created; removed again when not written. */
+    /**
+     * Every save file as one .zip at [uri], the document the player just created, with the achievements and stats
+     * (P-119); removed again when not written.
+     */
     fun export(context: Context, uri: Uri): TransferResult {
-        val files = saveFiles(GameFiles.saves(context))
-        if (files.none { SAVE_NAMES.matches(it.second.name) }) {
+        val saves = saveFiles(GameFiles.saves(context))
+        if (saves.none { SAVE_NAMES.matches(it.second.name) }) {
             discard(context, uri)
             return noSavesYet(context)
         }
+        val files = saves + progressFiles(GameFiles.data(context))
         try {
             val output = context.contentResolver.openOutputStream(uri, "wt") ?: throw IOException(context.getString(R.string.FileUnwritable))
             output.use { zip(files, it) }
@@ -100,6 +104,7 @@ object SaveTransfer {
                     else -> return TransferResult(false, context.getString(R.string.NotASave), context.getString(singleFileProblem(bytes)))
                 }
             }
+            val progress = files.filter { it.first in PROGRESS }
             val saves = files.filter { SAVE_NAMES.matches(it.first.substringAfterLast('/')) }
             if (saves.isEmpty()) {
                 return TransferResult(false, context.getString(R.string.NoSavesInFile), context.getString(R.string.NoSavesInFileText))
@@ -119,10 +124,11 @@ object SaveTransfer {
                 return TransferResult(false, context.getString(R.string.SaveDamaged), context.getString(R.string.NotMiiLibrary, MII_LIBRARY))
             }
             val staged = File(incoming, "saves")
-            stage(GameFiles.saves(context), staged, files)
+            stage(GameFiles.saves(context), staged, files.filter { it.first !in PROGRESS })
             val backedUp = backUp(context)
             val placed = saves.joinToString(", ") { it.first.substringAfterLast('/') }
             replaceSaves(context, GameFiles.saves(context), staged)
+            handOver(data, progress)
             return TransferResult(
                 true, context.getString(R.string.SavesImported),
                 context.getString(if (miis != null) R.string.SavesAndMiisInPlace else R.string.SavesInPlace, placed) +
@@ -197,6 +203,10 @@ object SaveTransfer {
     // The .zip's files under the save folder's own top folders, with one shared outer folder (a zipped "saves", or "nand" from earlier builds) taken
     // off. Paths that leave the folder, and sizes past any save's, refuse the whole file.
     private fun unzipSaves(context: Context, bytes: ByteArray): List<Pair<String, ByteArray>> {
+        return savePaths(unzipAll(context, bytes))
+    }
+
+    private fun unzipAll(context: Context, bytes: ByteArray): List<Pair<String, ByteArray>> {
         val entries = ArrayList<Pair<String, ByteArray>>()
         var total = 0L
         ZipInputStream(bytes.inputStream()).use { zip ->
@@ -211,10 +221,53 @@ object SaveTransfer {
                 entries += path to content
             }
         }
-        val first = entries.map { it.first.substringBefore('/', "") }.distinct()
-        val strip = first.size == 1 && first[0].isNotEmpty() && !isSaveTopFolder(first[0]) && entries.all { it.first.contains('/') }
-        return entries.map { (path, content) -> (if (strip) path.substringAfter('/') else path) to content }
-            .filter { it.first == MII_LIBRARY || isSaveTopFolder(it.first.substringBefore('/', "")) }
+        return entries
+    }
+
+    /**
+     * A .zip's entries by their path in the save folder: a Nebula saves archive's (nebula-saves.json, its files under
+     * saves/, as Nebula on a computer exports) or a zipped save folder's; the Mii library and the achievements and stats
+     * at its top. Everything else is left out.
+     */
+    internal fun savePaths(entries: List<Pair<String, ByteArray>>): List<Pair<String, ByteArray>> {
+        val archive = entries.any { it.first.equals(ARCHIVE_MANIFEST, ignoreCase = true) }
+        val inside = if (archive) {
+            entries.filter { it.first.startsWith("saves/", ignoreCase = true) }.map { it.first.substring(6) to it.second }
+        } else {
+            entries
+        }
+        val first = inside.map { it.first.substringBefore('/', "") }.distinct()
+        val strip = first.size == 1 && first[0].isNotEmpty() && !isSaveTopFolder(first[0]) && inside.all { it.first.contains('/') }
+        return inside.map { (path, content) -> (if (strip) path.substringAfter('/') else path) to content }
+            .filter { it.first == MII_LIBRARY || it.first in PROGRESS || isSaveTopFolder(it.first.substringBefore('/', "")) }
+    }
+
+    // The achievements and stats files the game keeps in its data folder (achievements.cpp, stats.cpp), by their name
+    // in an export (save_transfer.cpp kAchievementsPath, kStatsPath).
+    private val PROGRESS = mapOf("nebula-achievements.ini" to "achievements.ini", "nebula-stats.ini" to "stats.ini")
+    private const val ARCHIVE_MANIFEST = "nebula-saves.json"
+
+    internal fun progressFiles(dataDir: File): List<Pair<String, File>> =
+        PROGRESS.mapNotNull { (name, file) -> File(dataDir, file).takeIf { it.isFile && it.length() > 0 }?.let { name to it } }
+
+    /**
+     * An import's achievements and stats, for the game's process: each beside its file as <file>.import, which the game
+     * merges at its next start (achievements.cpp, stats.cpp: the earlier unlock, the larger count) and removes. One not
+     * yet merged keeps its lines ahead of the new ones; the file is replaced by a rename, never left half written.
+     */
+    internal fun handOver(dataDir: File, progress: List<Pair<String, ByteArray>>) {
+        for ((name, content) in progress) {
+            val file = File(dataDir, (PROGRESS[name] ?: continue) + ".import")
+            val earlier = if (file.isFile) file.readBytes() else ByteArray(0)
+            val joined = if (earlier.isEmpty() || earlier.last() == '\n'.code.toByte()) earlier + content
+                         else earlier + '\n'.code.toByte() + content
+            val writing = File(dataDir, ".${file.name}.writing")
+            writing.writeBytes(joined)
+            if (!replaceFile(writing, file)) {
+                writing.delete()
+                throw IOException("${file.name} could not be written")
+            }
+        }
     }
 
     // The Mii library the game's icon picker reads (host_main.cpp mii_library_path), at the save folder's top, and its

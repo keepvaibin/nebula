@@ -2,8 +2,10 @@
 // writes and deletes. The results are the native game's save request results (NEBULA_SAVE_*).
 #pragma once
 
+#include <condition_variable>
 #include <cstdint>
 #include <filesystem>
+#include <mutex>
 #include <string>
 #include <string_view>
 
@@ -44,9 +46,24 @@ struct SaveFolders {
 [[nodiscard]] Result read(const std::filesystem::path& folder, std::string_view name, void* buffer,
                           std::uint32_t capacity, std::uint32_t* length) noexcept;
 // Replaces the whole file: a reader sees the old contents or the new, never a part (galaxy/atomic_file.h). With
-// Backups::kKeep the two files it replaced last stay beside it as <name>.1 and <name>.2.
+// Backups::kKeep the two files it replaced last stay beside it as <name>.1 and <name>.2, and a file a newer build wrote
+// (the same 4-byte tag, a higher little-endian format word after it) is first kept as <name>.v<format> (keep_newer).
 [[nodiscard]] Result write(const std::filesystem::path& folder, std::string_view name, const void* data,
                            std::uint32_t size, Backups backups = Backups::kKeep) noexcept;
 [[nodiscard]] Result remove(const std::filesystem::path& folder, std::string_view name) noexcept;
+
+// The status words of the game's save requests: the save worker stores each result, the game's thread sleeps until
+// its request's word leaves `pending` (the host's save_wait), never spinning.
+class StatusBoard {
+public:
+    // A release store, then every waiter woken.
+    void store(std::int32_t* status, std::int32_t value) noexcept;
+    // Returns once *status is not `pending` (an acquire load), asleep meanwhile; true when it had to sleep.
+    bool wait(const std::int32_t* status, std::int32_t pending) noexcept;
+
+private:
+    std::mutex mutex_;
+    std::condition_variable stored_;
+};
 
 }  // namespace galaxy::saves

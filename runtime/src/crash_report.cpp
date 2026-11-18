@@ -131,6 +131,11 @@ bool is_gpu_lost(const char* text) noexcept {
     return text != nullptr && gpu_lost(text);
 }
 
+std::string gpu_allocation_failure(std::string_view what, bool device_removed) {
+    return device_removed ? "the graphics device was lost while making " + std::string(what)
+                          : std::string(what) + " could not be made: out of memory";
+}
+
 Report classify(const Facts& facts) noexcept {
     Report r;
     const std::string_view text = facts.text;

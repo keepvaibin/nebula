@@ -76,6 +76,21 @@ class UpdatesTest {
     }
 
     @Test
+    fun aBetaInstallIsOfferedItsFinalRelease() {
+        val json = listOf(
+            release("v2.1.0-beta.1", "Nebula-Beta-Android.apk", "https://h/b1", "https://h/b1.sig"),
+            release("v2.1.0", "Nebula-Android.apk", "https://h/210", "https://h/210.sig"),
+            release("v2.2.0-beta.1", "Nebula-Android.apk", "https://h/x", "https://h/x.sig"),  // a beta under the release's name
+        ).joinToString(",", "[", "]")
+        val offered = Updates.selectNewer(json, "2.1.0-beta.1")
+        assertEquals("2.1.0", offered?.version)
+        assertEquals("https://h/210", offered?.apkUrl)
+        assertEquals("2.1.0", Updates.selectNewer(json, "2.0.0")?.version)
+        assertNull("a release install is not offered a beta", Updates.selectNewer(json, "2.1.0"))
+        assertTrue(Updates.takes("2.1.0-beta.1", "2.1.0") && !Updates.takes("2.1.0", "2.2.0-beta.1"))
+    }
+
+    @Test
     fun notesAsPlainText() {
         val notes = Updates.plainNotes("# Title\r\n\r\n* item **bold** [link](https://x)\n> quote `code`\n\n---\n")
         assertEquals("Title\n\n- item bold link (https://x)\nquote code", notes)
