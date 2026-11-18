@@ -73,6 +73,9 @@ struct OpenedWindow {
 [[nodiscard]] OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_height);
 // Ends the window (the renderer's shutdown).
 void close_game_window(WindowOwner& owner) noexcept;
+// Before the process ends at once (std::_Exit): what the host wrote is out. Android's stdout and stderr reach logcat and
+// game.log through a pipe that a thread reads; its last lines are written first (at most a second is waited).
+void finish_output() noexcept;
 // The window's first picture is presented: the player sees the window from now (open_game_window). Any thread.
 void show_window(NativeWindow window) noexcept;
 // A shown window the player cannot see now: hidden, minimised or cloaked (Windows), hidden or minimised (SDL), not

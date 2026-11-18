@@ -445,6 +445,7 @@ void report_crash_facts(const fs::path& dump) {
     report_crash_facts({});
 #if defined(NEBULA_HOST_RENDERER)
     flush_progress_bounded(1500u);
+    galaxy::render::host_window::finish_output();
 #endif
     std::fflush(stdout);
     std::_Exit(3);
@@ -1879,6 +1880,9 @@ void svc_fatal(void*, const char* text) {
     report_crash_facts({});
 #endif
     std::fflush(stdout);
+#if defined(NEBULA_HOST_RENDERER)
+    galaxy::render::host_window::finish_output();
+#endif
     std::_Exit(3);
 }
 
@@ -4902,6 +4906,9 @@ void hand_off_to(galaxy::render::RendererKind kind, const char* why) {
     if (restart && gHandOver != nullptr) hand_over(gHandOver, gHandOverCooked);
     TerminateProcess(GetCurrentProcess(), 0);
 #endif
+#if defined(NEBULA_HOST_RENDERER)
+    galaxy::render::host_window::finish_output();
+#endif
     std::_Exit(0);
 }
 
@@ -6055,8 +6062,7 @@ int main(int argc, char** argv) {
     if (const unsigned frames = ::galaxy::launch_args().start_check; frames != 0u) {
         // The process ends here without the renderer's shutdown, as a game's end does (finish_and_exit).
         const int code = run_start_check(frames);
-        std::fflush(stdout);
-        std::fflush(stderr);
+        galaxy::render::host_window::finish_output();
         std::_Exit(code);
     }
     if (benchmark) {
