@@ -253,6 +253,10 @@ void RendererMtl::reset_sampler_frame() {
         if (sampler_slots_ready_ && config == sampler_config_ && !full) {
             return;
         }
+        if (sampler_slots_ready_ && full) {
+            std::fprintf(stderr, "[samplers] %u of %u slots made: the array starts again once the GPU is past them\n",
+                         sampler_slots_.used(), sampler_array_slots_);
+        }
         if (sampler_slots_ready_ && last_submitted_ != 0u) {
             wait_for_fence_value(last_submitted_);
         }

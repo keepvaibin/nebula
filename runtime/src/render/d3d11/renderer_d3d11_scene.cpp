@@ -728,10 +728,11 @@ void RendererD3D11::begin_scene_rectangle() {
                                                       native_scene_gpu_ema_ms_, resolution_budget_ms(rate, display_refresh_hz_));
         if (::galaxy::diagnosing(::galaxy::kDiagnoseResolutionSteps | ::galaxy::kDiagnosePresentStats) &&
             dynamic_resolution_.sixteenths() != before) {
-            std::fprintf(stderr, "[dynres] frame %llu: %u/16, %ux%u of %ux%u (floor %u/16)\n",
+            // With the samplers made so far, so what a step adds shows.
+            std::fprintf(stderr, "[dynres] frame %llu: %u/16, %ux%u of %ux%u (floor %u/16), samplers %zu\n",
                          static_cast<unsigned long long>(frame_index_), dynamic_resolution_.sixteenths(),
                          scene_rectangle_.width, scene_rectangle_.height, scene_extent_.width, scene_extent_.height,
-                         dynamic_resolution_.lowest_sixteenths());
+                         dynamic_resolution_.lowest_sixteenths(), samplers_.size());
         }
     }
     if (!(scene_rectangle_.width <= frame_extent_.width && scene_rectangle_.height <= frame_extent_.height) ||
