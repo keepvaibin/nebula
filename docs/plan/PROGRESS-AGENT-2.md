@@ -288,3 +288,13 @@ One dated entry per package step. Newest last. Ledger rows are in ledger.tsv (ag
 - M-129: a service's call of a mod's function makes its guard name once per service and kind and finds the mod's record
   through a cache. Test time 2219-calls-cost: at most 8 texts and 8 scans in the first 1000 calls; before, no fact (a
   text and a scan each call).
+
+## 2026-11-17 M-013 is not proved yet: 2493 waits for N-1056
+
+- The b540dd3a1 entry above says 2493 proves M-013 on d3d12. It does not: its fact ticks_while_held counts
+  LiveActor::calcAnim calls (about 130 a frame), not frames, and on every renderer the game thread stops about one
+  frame into a render-thread hold. Rerun three times on the bins of b540dd3a1: stopped_seen 0 each time. The two
+  passes before fell inside that one frame by chance.
+- The cause is the render queue (Agent 1, N-1056; 77e311fe0 did not change it in 2493). 2493 is in
+  world/pending.json, without a renderer list, and M-013 is open until it passes on all three renderers. The kernel
+  side of M-013 stays: a take-out no longer waits for the call itself.

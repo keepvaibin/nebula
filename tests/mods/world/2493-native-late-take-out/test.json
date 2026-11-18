@@ -68,8 +68,5 @@
       "fact": "mod.fn-late-clock.dependent_gone",
       "is": 1
     }
-  ],
-  "renderers": [
-    "d3d12"
   ]
 }
