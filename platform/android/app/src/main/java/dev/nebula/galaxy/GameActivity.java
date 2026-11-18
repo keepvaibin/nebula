@@ -45,6 +45,8 @@ import org.libsdl.app.SDLSurface;
  */
 public class GameActivity extends SDLActivity implements SensorEventListener {
     private static final String TAG = "Nebula";
+    // The starts made again before this one, in the extras restartGame hands the launcher for the next run.
+    private static final String EXTRA_STARTED_AGAIN = "nebula.started_again";
     private SensorManager sensors;
     private final float[] phoneGyro = new float[3];
     // Controllers' own motion sensors, every sample, to libmain.so.
@@ -138,7 +140,7 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
         // A test runner's run (test builds only): its own command line.
         final String[] harness = Harness.arguments(this);
         if (harness != null) {
-            return harness;
+            return withStartedAgain(new ArrayList<>(Arrays.asList(harness)));
         }
         // Record diagnostics (the launcher's, or the game's restart for it): the next normal run only.
         final boolean record = isProfileRun() || GameFiles.recordNextRun(this);
@@ -159,6 +161,22 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
             args.add(shipped.getPath());
         }
         addDriver(args);
+        return withStartedAgain(args);
+    }
+
+    // The starts this run's game made again before this one (restartGame counts them in the extras the launcher starts
+    // the next run with): the host's --started-again (launch_args.h), as a desktop start-again passes it, so the host
+    // and its extensions know a start that takes over from one that ended.
+    private int startedAgain() {
+        return Math.max(0, getIntent().getIntExtra(EXTRA_STARTED_AGAIN, 0));
+    }
+
+    private String[] withStartedAgain(List<String> args) {
+        final int count = startedAgain();
+        if (count > 0) {
+            args.add("--started-again");
+            args.add(String.valueOf(count));
+        }
         return args.toArray(new String[0]);
     }
 
@@ -719,9 +737,11 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
             if (kind == 2) {
                 GameFiles.setRecordNextRun(this, true);
             }
+            final Bundle extras = getIntent().getExtras() != null ? new Bundle(getIntent().getExtras()) : new Bundle();
+            extras.putInt(EXTRA_STARTED_AGAIN, startedAgain() + 1);
             final Intent restart = new Intent(this, LauncherActivity.class)
                     .setAction(LauncherActivity.ACTION_RESTART)
-                    .putExtra(LauncherActivity.EXTRA_GAME_EXTRAS, getIntent().getExtras())
+                    .putExtra(LauncherActivity.EXTRA_GAME_EXTRAS, extras)
                     .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
             startActivity(restart);
             overridePendingTransition(0, 0);

@@ -1,0 +1,28 @@
+{
+  "harness": 1,
+  "name": "restarts",
+  "about": "The game started again 3 times in a row, as Nebula Settings' Restart starts it: the launcher starts each new process after the old one ended, the last one knows 3 came before it and reaches the title.",
+  "bare": true,
+  "limit_seconds": 120,
+  "starts": 4,
+  "steps": [
+    {
+      "at": 120,
+      "restart": 3
+    },
+    {
+      "at": 600,
+      "picture": "title"
+    },
+    {
+      "at": 660,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "log": "harness: starts made again before this one: 3$",
+      "times": 1
+    }
+  ]
+}

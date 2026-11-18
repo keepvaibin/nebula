@@ -2,6 +2,7 @@
   "harness": 1,
   "tests": [
     "boot",
+    "restarts",
     "walk"
   ]
 }
