@@ -19,7 +19,10 @@
 
 #include "test_support.h"
 
+#include <algorithm>
+#include <chrono>
 #include <stdint.h>
+#include <vector>
 #include <stdio.h>
 #include <string.h>
 
@@ -286,6 +289,101 @@ int main() {
         NebulaArena::destroy(pScene);
         expect(NebulaArena::current() == pRoot, "the root is current when it has no child");
         expect(arena_test_reserved == rootReserved, "only the root's addresses are held");
+    }
+
+    // Many arenas made and destroyed in a mixed order: findFromRoot finds the arena that holds an address, its first and
+    // last byte included, and none past its end or for a destroyed one (P-013: a halving search over the arenas by
+    // address). Timed against a walk over every arena, as findFromRoot was before.
+    {
+        const int cMany = 300;
+        std::vector< NebulaArena* > live;
+        u64 random = 0x2545F4914F6CDD1Dull;
+        auto next = [&random]() {
+            random ^= random << 13;
+            random ^= random >> 7;
+            random ^= random << 17;
+            return random;
+        };
+        auto walk = [&live, pRoot](const void* pData) -> NebulaArena* {
+            if (pData >= pRoot->getStartAddr() && pData < pRoot->getEndAddr()) {
+                return pRoot;
+            }
+            for (NebulaArena* pArena : live) {
+                if (pData >= pArena->getStartAddr() && pData < pArena->getEndAddr()) {
+                    return pArena;
+                }
+            }
+            return nullptr;
+        };
+        std::vector< const void* > gone;
+        std::vector< NebulaArena* > parents;  // each live arena's parent
+        for (int i = 0; i < cMany; i++) {
+            NebulaArena* const pParent = live.empty() || next() % 2 == 0 ? pRoot : live[next() % live.size()];
+            live.push_back(NebulaArena::create(pParent));
+            parents.push_back(pParent);
+            if (next() % 3 == 0) {
+                // A childless one goes: its children would go with it.
+                const size_t index = next() % live.size();
+                NebulaArena* const pArena = live[index];
+                if (std::find(parents.begin(), parents.end(), pArena) == parents.end()) {
+                    gone.push_back(pArena->getStartAddr());
+                    live.erase(live.begin() + static_cast< long >(index));
+                    parents.erase(parents.begin() + static_cast< long >(index));
+                    NebulaArena::destroy(pArena);
+                }
+            }
+        }
+        bool found = true;
+        for (NebulaArena* pArena : live) {
+            const u8* const pStart = static_cast< const u8* >(pArena->getStartAddr());
+            const u8* const pEnd = static_cast< const u8* >(pArena->getEndAddr());
+            const void* const probes[] = {pStart, pStart + 1, pEnd - 1, pEnd, pStart - 1, pStart + (pEnd - pStart) / 2};
+            for (const void* pProbe : probes) {
+                found = found && NebulaArena::findFromRoot(const_cast< void* >(pProbe)) == walk(pProbe);
+            }
+            found = found && NebulaArena::findFromRoot(const_cast< u8* >(pStart)) == pArena &&
+                    NebulaArena::findFromRoot(const_cast< u8* >(pEnd - 1)) == pArena;
+        }
+        for (const void* pStart : gone) {
+            found = found && NebulaArena::findFromRoot(const_cast< void* >(pStart)) == walk(pStart);
+        }
+        found = found && NebulaArena::findFromRoot(nullptr) == nullptr &&
+                NebulaArena::findFromRoot(reinterpret_cast< void* >(~static_cast< uintptr_t >(0))) == nullptr;
+        expect(found, "findFromRoot finds each address's arena among many, made and destroyed in a mixed order");
+
+        // Each live arena's addresses, asked in a mixed order, as deletes ask.
+        std::vector< void* > asks;
+        for (int i = 0; i < 1 << 16; i++) {
+            NebulaArena* const pArena = live[next() % live.size()];
+            asks.push_back(static_cast< u8* >(const_cast< void* >(pArena->getStartAddr())) + next() % (1u << 30));
+        }
+        uintptr_t sum = 0;
+        double searchBest = 1e30;
+        double walkBest = 1e30;
+        for (int run = 0; run < 5; run++) {
+            const auto start = std::chrono::steady_clock::now();
+            for (void* pAsk : asks) {
+                sum += reinterpret_cast< uintptr_t >(NebulaArena::findFromRoot(pAsk));
+            }
+            const auto middle = std::chrono::steady_clock::now();
+            for (void* pAsk : asks) {
+                sum -= reinterpret_cast< uintptr_t >(walk(pAsk));
+            }
+            const auto end = std::chrono::steady_clock::now();
+            const double searchTime = std::chrono::duration< double, std::nano >(middle - start).count() / asks.size();
+            const double walkTime = std::chrono::duration< double, std::nano >(end - middle).count() / asks.size();
+            searchBest = searchTime < searchBest ? searchTime : searchBest;
+            walkBest = walkTime < walkBest ? walkTime : walkBest;
+        }
+        expect(sum == 0, "the search and the walk find the same arenas");
+        printf("findFromRoot over %zu arenas: walk %.1f ns, search %.1f ns a lookup\n", live.size() + 1, walkBest, searchBest);
+
+        // Last made first: each arena's children were made after it, so each goes childless.
+        while (!live.empty()) {
+            NebulaArena::destroy(live.back());
+            live.pop_back();
+        }
+        expect(arena_test_reserved == rootReserved, "every arena's addresses go back to the host");
     }
 
     if (sFailures == 0) {
