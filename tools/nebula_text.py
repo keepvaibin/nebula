@@ -129,8 +129,9 @@ def generate():
            'const char* const cNebulaTextLanguages[cNebulaTextLanguageNum] = {',
            '    ' + ', '.join('"%s"' % name for name in languages) + ',',
            '};',
+           '// In byte order of their ids: NebulaText.cpp finds a row by binary search (strcmp).',
            'const NebulaTextRow cNebulaTextRows[] = {']
-    for key, texts in rows:
+    for key, texts in sorted(rows, key=lambda row: row[0].encode('utf-8')):
         if key.startswith(NOT_THE_GAMES):
             continue
         out.append('    {"%s",' % key)
