@@ -1660,7 +1660,10 @@ def coverage_check(g, bin_dir, tour):
             return False, "no game wrote counts; runs: " + "; ".join(said)
         llvm = LLVM_BIN
         merged = out / "game.profdata"
-        if run([llvm / "llvm-profdata.exe", "merge", "-o", merged] + raws, log) != 0:
+        # Hundreds of files: their names in a list, past the command line's length.
+        listed = out / "counts.txt"
+        listed.write_text("".join("%s\n" % r for r in raws), encoding="utf-8")
+        if run([llvm / "llvm-profdata.exe", "merge", "-o", merged, "-f", listed], log) != 0:
             return False, "llvm-profdata merge failed"
         modules = [pathlib.Path(bin_dir) / m for m in ("smg_game.dll", "smg_game_plain.dll")
                    if (pathlib.Path(bin_dir) / m).exists()]
