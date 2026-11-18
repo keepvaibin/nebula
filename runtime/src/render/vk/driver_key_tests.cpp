@@ -91,8 +91,27 @@ bool quirks_follow_the_driver() {
     return ok;
 }
 
+// VMA is told the version both the instance and the device have (P-058): 1.1 before, whatever they were.
+bool the_allocator_gets_the_version_in_use() {
+    using galaxy::render::vk::allocator_api_version;
+    bool ok = true;
+    ok &= expect(allocator_api_version(VK_API_VERSION_1_3, VK_MAKE_API_VERSION(0, 1, 3, 280)) == VK_API_VERSION_1_3,
+                 "a 1.3 instance and device: 1.3");
+    ok &= expect(allocator_api_version(VK_API_VERSION_1_2, VK_MAKE_API_VERSION(0, 1, 3, 250)) == VK_API_VERSION_1_2,
+                 "a 1.2 instance on a 1.3 device: 1.2");
+    ok &= expect(allocator_api_version(VK_API_VERSION_1_3, VK_MAKE_API_VERSION(0, 1, 1, 128)) == VK_API_VERSION_1_1,
+                 "a 1.1 device: 1.1");
+    ok &= expect(allocator_api_version(VK_API_VERSION_1_3, VK_MAKE_API_VERSION(0, 1, 0, 61)) == VK_API_VERSION_1_0,
+                 "a 1.0 device: 1.0");
+    ok &= expect(allocator_api_version(VK_MAKE_API_VERSION(0, 1, 4, 0), VK_MAKE_API_VERSION(0, 1, 4, 309)) ==
+                     VK_API_VERSION_1_3,
+                 "1.4 on both: 1.3, the newest asked for");
+    return ok;
+}
+
 int main() {
     bool ok = true;
+    ok &= the_allocator_gets_the_version_in_use();
     ok &= quirks_follow_the_driver();
     ok &= the_key_holds_every_part();
     ok &= different_devices_and_drivers_have_different_keys();

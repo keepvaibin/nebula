@@ -182,6 +182,12 @@ std::string describe(const DeviceQuirks& quirks) {
     return text.empty() ? "none" : text;
 }
 
+std::uint32_t allocator_api_version(std::uint32_t instance_version, std::uint32_t device_version) noexcept {
+    const std::uint32_t version = instance_version < device_version ? instance_version : device_version;
+    const std::uint32_t minor = VK_API_VERSION_MAJOR(version) > 1u ? 3u : VK_API_VERSION_MINOR(version);
+    return VK_MAKE_API_VERSION(0u, 1u, minor < 3u ? minor : 3u, 0u);
+}
+
 std::string driver_key(const DeviceIdentity& id) {
     std::string key;
     char part[64];

@@ -1282,7 +1282,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     functions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
     functions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
     VmaAllocatorCreateInfo allocator_info{};
-    allocator_info.vulkanApiVersion = vulkan_1_0 ? VK_API_VERSION_1_0 : VK_API_VERSION_1_1;
+    allocator_info.vulkanApiVersion = allocator_api_version(app.apiVersion, properties_.apiVersion);
     if (dedicated_extension) {
         allocator_info.flags |= VMA_ALLOCATOR_CREATE_KHR_DEDICATED_ALLOCATION_BIT;
     }
