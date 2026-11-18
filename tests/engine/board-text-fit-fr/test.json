@@ -1,0 +1,248 @@
+{
+  "harness": 1,
+  "name": "board-text-fit-fr",
+  "about": "The Observatory's achievement board in French in the smallest window: every tab, stat value and label keeps to the one rule (narrowed to 0.6 at most, then cut short); none is narrowed further or runs past its room (N-3001). Every count is past two thousand million (the longest values). The board's Luma is there once the first Grand Star is held.",
+  "language": "EuFrench",
+  "disc": "RMGP01",
+  "window": [
+    320,
+    240
+  ],
+  "stage": {
+    "name": "AstroGalaxy",
+    "scenario": 1
+  },
+  "limit_seconds": 300,
+  "steps": [
+    {
+      "after": {
+        "fact": "stage.ready",
+        "has": {
+          "name": "AstroGalaxy"
+        }
+      },
+      "call": "GameDataFunction::setGameFlagPowerStarSuccess",
+      "signature": "void(const char *, s32, bool)",
+      "args": [
+        "HeavensDoorGalaxy",
+        1,
+        true
+      ],
+      "timeout": 4000
+    },
+    {
+      "after": {
+        "fact": "stage.ready",
+        "has": {
+          "name": "AstroGalaxy"
+        }
+      },
+      "call": "NebulaAchievements::countStat",
+      "signature": "void(s32, s32)",
+      "args": [
+        0,
+        2147483647
+      ],
+      "timeout": 4000
+    },
+    {
+      "after": {
+        "fact": "stage.ready",
+        "has": {
+          "name": "AstroGalaxy"
+        }
+      },
+      "call": "NebulaAchievements::countStat",
+      "signature": "void(s32, s32)",
+      "args": [
+        1,
+        2147483647
+      ],
+      "timeout": 4000
+    },
+    {
+      "after": {
+        "fact": "stage.ready",
+        "has": {
+          "name": "AstroGalaxy"
+        }
+      },
+      "call": "NebulaAchievements::countStat",
+      "signature": "void(s32, s32)",
+      "args": [
+        2,
+        2147483647
+      ],
+      "timeout": 4000
+    },
+    {
+      "after": {
+        "fact": "stage.ready",
+        "has": {
+          "name": "AstroGalaxy"
+        }
+      },
+      "call": "NebulaAchievements::countStat",
+      "signature": "void(s32, s32)",
+      "args": [
+        3,
+        2147483647
+      ],
+      "timeout": 4000
+    },
+    {
+      "after": {
+        "fact": "stage.ready",
+        "has": {
+          "name": "AstroGalaxy"
+        }
+      },
+      "call": "NebulaAchievements::countStat",
+      "signature": "void(s32, s32)",
+      "args": [
+        4,
+        2147483647
+      ],
+      "timeout": 4000
+    },
+    {
+      "after": {
+        "fact": "stage.ready",
+        "has": {
+          "name": "AstroGalaxy"
+        }
+      },
+      "call": "NebulaAchievements::countStat",
+      "signature": "void(s32, s32)",
+      "args": [
+        5,
+        2147483647
+      ],
+      "timeout": 4000
+    },
+    {
+      "after": {
+        "fact": "stage.ready",
+        "has": {
+          "name": "AstroGalaxy"
+        }
+      },
+      "call": "NebulaAchievements::countStat",
+      "signature": "void(s32, s32)",
+      "args": [
+        6,
+        2147483647
+      ],
+      "timeout": 4000
+    },
+    {
+      "after": {
+        "fact": "stage.ready",
+        "has": {
+          "name": "AstroGalaxy"
+        }
+      },
+      "call": "NebulaAchievements::countStat",
+      "signature": "void(s32, s32)",
+      "args": [
+        7,
+        2147483647
+      ],
+      "timeout": 4000
+    },
+    {
+      "after": {
+        "fact": "stage.ready",
+        "has": {
+          "name": "AstroGalaxy"
+        }
+      },
+      "stage": {
+        "name": "AstroGalaxy",
+        "scenario": 1
+      },
+      "timeout": 60
+    },
+    {
+      "after": {
+        "log": "NebulaAchievementBoard: [0-9]+ cards"
+      },
+      "call": "GameSceneFunction::requestShowNebulaBoard",
+      "signature": "void()",
+      "timeout": 4000
+    },
+    {
+      "after": {
+        "log": "NebulaAchievementBoard: open"
+      },
+      "wait": true,
+      "timeout": 1200
+    },
+    {
+      "at": 900,
+      "picture": "board"
+    },
+    {
+      "at": 910,
+      "hold": [
+        "PLUS"
+      ],
+      "frames": 2
+    },
+    {
+      "at": 970,
+      "picture": "tab-2"
+    },
+    {
+      "at": 980,
+      "hold": [
+        "PLUS"
+      ],
+      "frames": 2
+    },
+    {
+      "at": 1040,
+      "picture": "tab-3"
+    },
+    {
+      "at": 1050,
+      "hold": [
+        "MINUS"
+      ],
+      "frames": 2
+    },
+    {
+      "at": 1060,
+      "hold": [
+        "MINUS"
+      ],
+      "frames": 2
+    },
+    {
+      "at": 1070,
+      "hold": [
+        "MINUS"
+      ],
+      "frames": 2
+    },
+    {
+      "at": 1130,
+      "picture": "stats"
+    },
+    {
+      "at": 1140,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "no_log": "runs past its room"
+    },
+    {
+      "no_log": "narrowed past the floor"
+    },
+    {
+      "log": "NebulaAchievementBoard: open"
+    }
+  ]
+}

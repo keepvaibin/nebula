@@ -114,13 +114,18 @@ namespace NebulaUi {
         bool mTold;  // the log has it past its room
     };
     // `pString` as the line's whole text in `pBox`, set and measured at the box's style (set the style first); its
-    // width. The next fitLine lays it out again.
+    // width. A line fitted before is fitted again at its room until the next fitLine.
     f32 setFitLine(FitLine& rLine, TextBox* pBox, const char16_t* pString);
     // The line in `pBox` within `room` wide: the whole text or its cut start, and the narrowing as the box's x scale,
     // which it returns. Measures only when the room changed since the last fit.
     f32 fitLine(FitLine& rLine, TextBox* pBox, f32 room);
     // The narrowing that brings a line `width` wide into `room`, cMinSqueeze at least (1 when it fits).
     f32 squeezeTo(f32 width, f32 room);
+    // Moves whenever fitLine fits a line again: a screen checks its texts (checkNarrowing) only when it moved.
+    u32 fitGeneration();
+    // The rule's floor over every shown text under `pRoot`, whoever narrowed it: one narrowed further than cMinSqueeze
+    // is logged, once per text box (the menu and board tests look for this).
+    void checkNarrowing(Pane* pRoot);
     // A box's font size for picture-font glyphs `size` high.
     Ui::Size glyphFontSize(const TextBox* pText, f32 size);
     // The game's picture font: a glyph sized like text, centred on its place.
