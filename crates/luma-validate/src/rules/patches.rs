@@ -71,14 +71,36 @@ fn fits(v: &Value, column: ColumnType) -> bool {
     }
 }
 
-/// `*` any run of characters, `?` one, as the applier's select does (it compares bytes; a selector is UTF-8).
-fn glob(pattern: &[u8], word: &[u8]) -> bool {
-    match pattern.split_first() {
-        None => word.is_empty(),
-        Some((b'*', rest)) => (0..=word.len()).any(|skip| glob(rest, &word[skip..])),
-        Some((b'?', rest)) => !word.is_empty() && glob(rest, &word[1..]),
-        Some((c, rest)) => word.first() == Some(c) && glob(rest, &word[1..]),
+/// A patch selector's `glob`: `*` any run of bytes, `?` one, any other byte itself (a selector is UTF-8; the cook's
+/// applier compares the same bytes with this function). Without recursion: only the last `*` is ever returned to, since
+/// a later one can take up whatever an earlier one could, so a match costs at most the pattern's length times the
+/// word's. A copy that tried every split for every `*` overflowed the stack at about 20 000 `*`s and took about
+/// 5 x 10^13 steps for `*a` fifteen times then `*b` against sixty `a`s (M-167).
+pub fn glob(pattern: &[u8], word: &[u8]) -> bool {
+    let (mut p, mut w) = (0, 0);
+    // After the last `*` met: where the pattern goes on, and the word's byte that `*` would take next.
+    let mut back: Option<(usize, usize)> = None;
+    while w < word.len() {
+        match pattern.get(p) {
+            Some(b'*') => {
+                p += 1;
+                back = Some((p, w));
+            }
+            Some(&c) if c == b'?' || c == word[w] => {
+                p += 1;
+                w += 1;
+            }
+            _ => match back {
+                Some((after, taken)) => {
+                    p = after;
+                    w = taken + 1;
+                    back = Some((after, taken + 1));
+                }
+                None => return false,
+            },
+        }
     }
+    pattern[p.min(pattern.len())..].iter().all(|&c| c == b'*')
 }
 
 pub(crate) fn check(ctx: &mut Ctx) {
@@ -695,5 +717,54 @@ fn one(pc: &mut P, root: &Value, target: &str) {
                 pc.at(407, m, &format!("/select/{i}/match"), vec![("target", t(target.to_string()))]);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::glob;
+
+    /// The matcher this one replaced: every split for every `*`, by recursion.
+    fn every_split(pattern: &[u8], word: &[u8]) -> bool {
+        match pattern.split_first() {
+            None => word.is_empty(),
+            Some((b'*', rest)) => (0..=word.len()).any(|skip| every_split(rest, &word[skip..])),
+            Some((b'?', rest)) => !word.is_empty() && every_split(rest, &word[1..]),
+            Some((c, rest)) => word.first() == Some(c) && every_split(rest, &word[1..]),
+        }
+    }
+
+    /// Every pattern of `*`, `?`, `a` and `b` up to five long against every word of `a` and `b` up to six long: the
+    /// same answer as trying every split.
+    #[test]
+    fn glob_answers_as_every_split_does() {
+        fn all(alphabet: &[u8], up_to: usize) -> Vec<Vec<u8>> {
+            let mut out = vec![Vec::new()];
+            let mut last: Vec<Vec<u8>> = vec![Vec::new()];
+            for _ in 0..up_to {
+                last = last.iter().flat_map(|w| alphabet.iter().map(move |&c| [w.as_slice(), &[c]].concat())).collect();
+                out.extend(last.iter().cloned());
+            }
+            out
+        }
+        let words = all(b"ab", 6);
+        for pattern in all(b"*?ab", 5) {
+            for word in &words {
+                let (p, w) = (String::from_utf8_lossy(&pattern), String::from_utf8_lossy(word));
+                assert_eq!(glob(&pattern, word), every_split(&pattern, word), "{p:?} {w:?}");
+            }
+        }
+        assert!(glob(b"Kuri*", b"Kuribo") && glob("テ*ト".as_bytes(), "テスト".as_bytes()) && !glob(b"T?n", b"Twin"));
+    }
+
+    /// M-167: 20 000 `*`s overflowed the stack (an abort no catch stops, at every start); `*a` fifteen times then `*b`
+    /// against sixty `a`s took about 5 x 10^13 steps. Both answer at once now.
+    #[test]
+    fn a_hostile_glob_answers_at_once() {
+        let started = std::time::Instant::now();
+        assert!(glob(&[b'*'; 20_000], b"Kuribo"));
+        assert!(!glob(&[b"*a".repeat(15), b"*b".to_vec()].concat(), &[b'a'; 60]));
+        assert!(!glob(&[b"*a".repeat(2000), b"*b".to_vec()].concat(), &[b'a'; 10_000]));
+        assert!(started.elapsed() < std::time::Duration::from_secs(5), "{:?}", started.elapsed());
     }
 }

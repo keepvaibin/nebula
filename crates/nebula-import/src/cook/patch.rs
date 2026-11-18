@@ -528,7 +528,7 @@ impl Applier<'_> {
                 if kind == "prefix" {
                     word.starts_with(pattern.as_bytes())
                 } else {
-                    glob(pattern.as_bytes(), word)
+                    luma_validate::glob(pattern.as_bytes(), word)
                 }
             }
             _ => false,
@@ -615,15 +615,6 @@ fn usual(c: &Column, text: &str) -> Cell {
     }
 }
 
-/// `*` any run of bytes, `?` one byte.
-fn glob(pattern: &[u8], word: &[u8]) -> bool {
-    match pattern.split_first() {
-        None => word.is_empty(),
-        Some((b'*', rest)) => (0..=word.len()).any(|skip| glob(rest, &word[skip..])),
-        Some((b'?', rest)) => !word.is_empty() && glob(rest, &word[1..]),
-        Some((c, rest)) => word.first() == Some(c) && glob(rest, &word[1..]),
-    }
-}
 
 #[cfg(test)]
 mod tests {

@@ -11,6 +11,7 @@ mod patches;
 
 pub use layers::{cooked_source, loose_movie, mergeable, MERGE_TABLES, SOURCE_ENDINGS, WHERE};
 pub use manifest::save_problem;
+pub use patches::glob;
 
 use crate::json::{self, Pos};
 use crate::source::{Mod, OpenError};
