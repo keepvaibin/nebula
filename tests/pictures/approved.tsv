@@ -260,6 +260,12 @@ picture	tour	029-FactoryGalaxy-3	d3d12	after	1280	720	477851a8d569fe8fcefd3487fd
 picture	tour	029-FactoryGalaxy-3	d3d12	arrive	1280	720	68505087e3ae9582ee3ce45349bfa1e0665838da0c919e9f9fda2f208cc5d3d1
 picture	tour	029-FactoryGalaxy-3	vulkan	after	1280	720	ae49a9f22865c1ffab1b50dee894472c37558e802ee6166ed731e79e9389bce7
 picture	tour	029-FactoryGalaxy-3	vulkan	arrive	1280	720	0ca6b28df54dc77be55c7d7774b4a7ba6a9e04192f72cc73b84ec17fb4adffaa
+picture	tour	030-FactoryGalaxy-4	d3d11	after	1280	720	1b013c0fcd8f6f22980c48cec52a3e3582a56881c21edc87c19bcec3548120e5
+picture	tour	030-FactoryGalaxy-4	d3d11	arrive	1280	720	bf0650be38dfd077f045ae19f6c9eb4972a2b92199b406ccef86fcfe5ac29d98
+picture	tour	030-FactoryGalaxy-4	d3d12	after	1280	720	4f7d2605f8e339f5a9a53808965d82cdfae49dc6b1c78101bb6fa8d96d7558f5
+picture	tour	030-FactoryGalaxy-4	d3d12	arrive	1280	720	8640f3af21d52e975d18b1e2c6111177830090e92d2c9dd27db052a7c8004f80
+picture	tour	030-FactoryGalaxy-4	vulkan	after	1280	720	f23df407a459891d38963f722a68e123e9beb83b3672f5638c314a023c57e603
+picture	tour	030-FactoryGalaxy-4	vulkan	arrive	1280	720	eea25ff7568170f766346e5e3f1b984a9e577a41f9202db3da03c2c4c38e6a5c
 picture	tour	031-FactoryGalaxy-5	d3d11	after	1280	720	7a5c9d5984b9494f6f2bcc2e26ad2925e582ed7fe46e0c863a994cc8970917dd
 picture	tour	031-FactoryGalaxy-5	d3d11	arrive	1280	720	5833e979ca3bd6b01215f8e560ddedb47213cd1077a69713bb782004d45f4b37
 picture	tour	031-FactoryGalaxy-5	d3d12	after	1280	720	7a5c9d5984b9494f6f2bcc2e26ad2925e582ed7fe46e0c863a994cc8970917dd
@@ -866,6 +872,8 @@ picture	tour-RMGJ01	RMGJ01-029-FactoryGalaxy-3	d3d12	after	1280	720	12fdcd5ce06d
 picture	tour-RMGJ01	RMGJ01-029-FactoryGalaxy-3	d3d12	arrive	1280	720	19b77dc39fceb274e241ec3b6147853e3cdd0ea4e107b7e83d7c36e80a6b8a92
 picture	tour-RMGJ01	RMGJ01-029-FactoryGalaxy-3	vulkan	after	1280	720	08491db4044ae52ba95a837722713952acaec438083c2aef2eedbae624ebda17
 picture	tour-RMGJ01	RMGJ01-029-FactoryGalaxy-3	vulkan	arrive	1280	720	524c5abf6d50dd5975b58dcccf47ccb7a98aca7e6bf155be8e0935a00b451d5b
+picture	tour-RMGJ01	RMGJ01-030-FactoryGalaxy-4	d3d12	after	1280	720	4f7d2605f8e339f5a9a53808965d82cdfae49dc6b1c78101bb6fa8d96d7558f5
+picture	tour-RMGJ01	RMGJ01-030-FactoryGalaxy-4	d3d12	arrive	1280	720	505f3247d5d0ffdbe6cb8649b00827891aad40753714c7037e07a88dfafdc2ba
 picture	tour-RMGJ01	RMGJ01-031-FactoryGalaxy-5	d3d11	after	1280	720	7a5c9d5984b9494f6f2bcc2e26ad2925e582ed7fe46e0c863a994cc8970917dd
 picture	tour-RMGJ01	RMGJ01-031-FactoryGalaxy-5	d3d11	arrive	1280	720	92732ffc371ee095ad46bcf745cc24afab051189d68ac9e2178c2f11b59e2640
 picture	tour-RMGJ01	RMGJ01-031-FactoryGalaxy-5	d3d12	after	1280	720	7a5c9d5984b9494f6f2bcc2e26ad2925e582ed7fe46e0c863a994cc8970917dd
@@ -1472,6 +1480,8 @@ picture	tour-RMGP01	RMGP01-029-FactoryGalaxy-3	d3d12	after	1280	720	477851a8d569
 picture	tour-RMGP01	RMGP01-029-FactoryGalaxy-3	d3d12	arrive	1280	720	68505087e3ae9582ee3ce45349bfa1e0665838da0c919e9f9fda2f208cc5d3d1
 picture	tour-RMGP01	RMGP01-029-FactoryGalaxy-3	vulkan	after	1280	720	ae49a9f22865c1ffab1b50dee894472c37558e802ee6166ed731e79e9389bce7
 picture	tour-RMGP01	RMGP01-029-FactoryGalaxy-3	vulkan	arrive	1280	720	0ca6b28df54dc77be55c7d7774b4a7ba6a9e04192f72cc73b84ec17fb4adffaa
+picture	tour-RMGP01	RMGP01-030-FactoryGalaxy-4	d3d12	after	1280	720	4f7d2605f8e339f5a9a53808965d82cdfae49dc6b1c78101bb6fa8d96d7558f5
+picture	tour-RMGP01	RMGP01-030-FactoryGalaxy-4	d3d12	arrive	1280	720	8640f3af21d52e975d18b1e2c6111177830090e92d2c9dd27db052a7c8004f80
 picture	tour-RMGP01	RMGP01-031-FactoryGalaxy-5	d3d11	after	1280	720	7a5c9d5984b9494f6f2bcc2e26ad2925e582ed7fe46e0c863a994cc8970917dd
 picture	tour-RMGP01	RMGP01-031-FactoryGalaxy-5	d3d11	arrive	1280	720	5833e979ca3bd6b01215f8e560ddedb47213cd1077a69713bb782004d45f4b37
 picture	tour-RMGP01	RMGP01-031-FactoryGalaxy-5	d3d12	after	1280	720	7a5c9d5984b9494f6f2bcc2e26ad2925e582ed7fe46e0c863a994cc8970917dd
