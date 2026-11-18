@@ -6,6 +6,9 @@
 // their slots and the runs are linked beside them, and two tables find a packet by its entry and by its light control,
 // so an add walks the runs only (one a light), and a remove and a light re-sort walk nothing. Every packet carries an
 // order key, so "the first packet in draw order" with an entry or a control is the least key among a few.
+// A draw walks ordered(): the packets in draw order one after another, copied from the links at the first read after
+// a change. Packets change on few frames (an actor clipping in or out, a light change) and are drawn on every one, so
+// the frame's walk reads one array in order instead of following links through scattered slots.
 class DrawRunList {
 public:
     struct Packet {
@@ -47,6 +50,8 @@ public:
     s32 count() const {
         return mCount;
     }
+    // The count() packets in draw order, one after another; valid until the next add, remove or re-sort.
+    const Packet* ordered() const;
 
 private:
     struct Link {
@@ -90,4 +95,8 @@ private:
     s32 mFree;
     Table mByEntry;
     Table mByCtrl;
+    // ordered()'s copy, and whether a change came after it.
+    mutable Packet* mOrdered;
+    mutable s32 mOrderedRoom;
+    mutable bool mOrderedStale;
 };

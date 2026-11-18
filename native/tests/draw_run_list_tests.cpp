@@ -123,7 +123,19 @@ namespace {
             }
             slot = rList.next(slot);
         }
-        return slot < 0;
+        if (slot >= 0) {
+            return false;
+        }
+        // The draw's copy: the same packets in the same order.
+        const DrawRunList::Packet* const pOrdered = rList.ordered();
+        for (size_t i = 0; i < rArray.mPackets.size(); i++) {
+            const DrawRunList::Packet& rPacket = rArray.mPackets[i];
+            if (pOrdered[i].mEntry != rPacket.mEntry || pOrdered[i].mLightCtrl != rPacket.mLightCtrl ||
+                pOrdered[i].mLightLoader != rPacket.mLightLoader) {
+                return false;
+            }
+        }
+        return true;
     }
 
     // Actors of `shapes` packets each (a drawer that holds several of a model's materials), some with no light

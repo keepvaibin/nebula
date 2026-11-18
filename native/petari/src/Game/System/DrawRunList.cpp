@@ -71,7 +71,7 @@ void DrawRunList::Table::erase(const void* pKey) {
 
 DrawRunList::DrawRunList()
     : mPackets(nullptr), mLinks(nullptr), mMax(0), mCount(0), mHead(-1), mTail(-1), mFirstRun(-1), mLastRun(-1), mFree(-1), mByEntry(),
-      mByCtrl() {
+      mByCtrl(), mOrdered(nullptr), mOrderedRoom(0), mOrderedStale(false) {
 }
 
 DrawRunList::~DrawRunList() {
@@ -81,6 +81,23 @@ DrawRunList::~DrawRunList() {
     delete[] mByEntry.mSlots;
     delete[] mByCtrl.mKeys;
     delete[] mByCtrl.mSlots;
+    delete[] mOrdered;
+}
+
+const DrawRunList::Packet* DrawRunList::ordered() const {
+    if (mOrderedStale) {
+        if (mOrderedRoom < mCount) {
+            delete[] mOrdered;
+            mOrdered = makeRoom< Packet >(this, static_cast< u32 >(mMax));
+            mOrderedRoom = mMax;
+        }
+        s32 at = 0;
+        for (s32 slot = mHead; slot >= 0; slot = mLinks[slot].mNext) {
+            mOrdered[at++] = mPackets[slot];
+        }
+        mOrderedStale = false;
+    }
+    return mOrdered;
 }
 
 void DrawRunList::reserve(s32 maxPackets) {
@@ -222,6 +239,7 @@ s32 DrawRunList::firstOfChain(const Table& rTable, s32 Link::* pNextOf, const vo
 }
 
 void DrawRunList::add(const void* pEntry, const void* pCtrl, SameLight sameLight, Blending blending) {
+    mOrderedStale = true;
     // DrawBufferShapeDrawer::findLightSortIndex, over the runs instead of every packet.
     s32 before = -1;
     bool loads = false;
@@ -325,6 +343,7 @@ void DrawRunList::remove(const void* pEntry) {
     const s32 slot = firstOfChain(mByEntry, &Link::mNextSameEntry, pEntry);
     if (slot >= 0) {
         removeSlot(slot);
+        mOrderedStale = true;
     }
 }
 

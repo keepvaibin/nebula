@@ -66,8 +66,10 @@ void DrawBufferShapeDrawer::draw() const {
     MaterialDraw draw(pShared);
 
 #if defined(NEBULA_PLAIN_PATHS)
-    for (s32 slot = mList.first(); slot >= 0; slot = mList.next(slot)) {
-        const DrawRunList::Packet& rPacket = mList.at(slot);
+    const DrawRunList::Packet* const pPackets = mList.ordered();
+    const s32 count = mList.count();
+    for (s32 idx = 0; idx < count; idx++) {
+        const DrawRunList::Packet& rPacket = pPackets[idx];
         MeshEntry* packet = static_cast< MeshEntry* >(const_cast< void* >(rPacket.mEntry));
 
         if (rPacket.mLightLoader != nullptr) {
