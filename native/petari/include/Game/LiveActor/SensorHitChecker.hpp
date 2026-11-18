@@ -60,6 +60,7 @@ public:
     void remove(HitSensor*);
     void clear() const;
     void gatherActive();
+    void layOutSweep();
 
     s32 mMaxSensors;
     s32 mSensorCount;
@@ -69,7 +70,8 @@ public:
     s32 mActiveCount;
     SensorHitEntry* mActive;
     // The active sensors with a finite place and radius, by where their extent starts; and the others' places in
-    // mActive. Made and grown with mActive.
+    // mActive. Made and grown with mActive; laid out on a frame's first sweep of the group (mSweepMade).
+    bool mSweepMade;
     s32 mSweepCount;
     SensorSweepItem* mSweep;
     s32 mUnplacedCount;

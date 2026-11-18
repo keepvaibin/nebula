@@ -52,9 +52,19 @@ namespace {
     }
 
 #if defined(NEBULA_PLAIN_MODULE)
-    // The pairs of a group pair (or of one group) walked one by one when there are this few; past it, the sweep finds
-    // the candidates (P-039).
-    const s64 cPairsWalked = 64;
+    // The steps of laying out a group of `count` sensors for the sweep, as the sort's comparisons: count times the bits
+    // of count. None when the group is laid out this frame already.
+    inline s64 layOutSteps(const SensorGroup* pGroup) {
+        if (pGroup->mSweepMade) {
+            return 0;
+        }
+
+        s64 bits = 0;
+        for (u32 count = static_cast< u32 >(pGroup->mActiveCount); count != 0; count >>= 1) {
+            bits++;
+        }
+        return static_cast< s64 >(pGroup->mActiveCount) * bits;
+    }
 
     // A number that is neither infinite nor NaN (both give NaN here).
     inline bool isFiniteValue(f32 value) {
@@ -79,49 +89,56 @@ namespace {
 SensorGroup::SensorGroup(int maxSensors)
     : mMaxSensors(maxSensors), mSensorCount(0), mSensors(new HitSensor*[maxSensors]()), mActiveCount(0),
 #if defined(NEBULA_PLAIN_MODULE)
-      mActive(new SensorHitEntry[maxSensors]), mSweepCount(0), mSweep(new SensorSweepItem[maxSensors]), mUnplacedCount(0),
-      mUnplaced(new s32[maxSensors]) {
+      mActive(new SensorHitEntry[maxSensors]), mSweepMade(false), mSweepCount(0), mSweep(new SensorSweepItem[maxSensors]),
+      mUnplacedCount(0), mUnplaced(new s32[maxSensors]) {
 #else
-      mActive(nullptr), mSweepCount(0), mSweep(nullptr), mUnplacedCount(0), mUnplaced(nullptr) {
+      mActive(nullptr), mSweepMade(false), mSweepCount(0), mSweep(nullptr), mUnplacedCount(0), mUnplaced(nullptr) {
 #endif
 }
 
 // Once a frame, before any pair: nothing in the pass changes a sensor's validity, place or radius or an actor's clipping
 // (a hit only adds to the sensors' hit lists), so the sensors active here are the ones the pairs would find active.
-// The plain module also lays the placed ones out along x, sorted by where each starts, for the sweep (P-039).
 void SensorGroup::gatherActive() {
     mActiveCount = 0;
-    mSweepCount = 0;
-    mUnplacedCount = 0;
+    mSweepMade = false;
     for (s32 i = 0; i < mSensorCount; i++) {
         HitSensor* const pSensor = mSensors[i];
-        if (!::isSensorActive(pSensor)) {
-            continue;
+        if (::isSensorActive(pSensor)) {
+            mActive[mActiveCount++] = ::entryOf(pSensor);
         }
+    }
+}
 
-        const SensorHitEntry entry = ::entryOf(pSensor);
-        mActive[mActiveCount] = entry;
 #if defined(NEBULA_PLAIN_MODULE)
-        if (::isPlaced(entry)) {
+// The plain module's sweep (P-039): the active sensors with a place laid out along x, sorted by where each starts, once a
+// frame, on the group's first sweep; a frame whose pairs are all walked lays out nothing.
+void SensorGroup::layOutSweep() {
+    if (mSweepMade) {
+        return;
+    }
+
+    mSweepCount = 0;
+    mUnplacedCount = 0;
+    for (s32 i = 0; i < mActiveCount; i++) {
+        const SensorHitEntry& rEntry = mActive[i];
+        if (::isPlaced(rEntry)) {
             // Wider than the sphere: the test's float rounding can find a pair touching whose true distance is a few
             // parts in ten million past the radii's sum, so the extent is grown by far more than that (a part in a
             // hundred thousand of the radius, a part in a billion of the place). A wider extent only adds candidates
             // the test then turns away.
-            const f64 x = entry.mX;
-            const f64 reach = static_cast< f64 >(entry.mRadius) * (1.0 + 1e-5) + (x < 0.0 ? -x : x) * 1e-9;
-            mSweep[mSweepCount++] = {x - reach, x + reach, mActiveCount};
+            const f64 x = rEntry.mX;
+            const f64 reach = static_cast< f64 >(rEntry.mRadius) * (1.0 + 1e-5) + (x < 0.0 ? -x : x) * 1e-9;
+            mSweep[mSweepCount++] = {x - reach, x + reach, i};
         } else {
-            mUnplaced[mUnplacedCount++] = mActiveCount;
+            mUnplaced[mUnplacedCount++] = i;
         }
-#endif
-        mActiveCount++;
     }
-#if defined(NEBULA_PLAIN_MODULE)
     std::sort(mSweep, mSweep + mSweepCount, [](const SensorSweepItem& rA, const SensorSweepItem& rB) {
         return rA.mLow < rB.mLow || (rA.mLow == rB.mLow && rA.mIndex < rB.mIndex);
     });
-#endif
+    mSweepMade = true;
 }
+#endif
 
 void SensorGroup::add(HitSensor* pSensor) {
     if (mSensorCount >= mMaxSensors) {
@@ -229,8 +246,9 @@ void SensorHitChecker::testPair(const SensorHitEntry* pActive1, s32 first, const
 #endif
 
 // Every active pair in the order of the groups' sensors. The plain module walks each group's array of active sensors when
-// the pairs are few; past that it sweeps the two groups' sensors along x, tests only the pairs whose extents overlap
-// there (and the unplaced sensors with every sensor), and makes the hits' calls in the walk's order (P-039). A module
+// the pairs are no more than the sweep's steps (laying out the groups not yet laid out this frame, then one pass over
+// both); past that it sweeps the two groups' sensors along x, tests only the pairs whose extents overlap there (and the
+// unplaced sensors with every sensor), and makes the hits' calls in the walk's order (P-039). A module
 // with hook points calls isSensorActive and checkAttack for every pair, as the game does, so a mod that hooks them sees
 // every pair.
 void SensorHitChecker::doObjColGroup(SensorGroup* pGroup1, SensorGroup* pGroup2) const {
@@ -239,7 +257,8 @@ void SensorHitChecker::doObjColGroup(SensorGroup* pGroup1, SensorGroup* pGroup2)
     const s32 group2Count = pGroup2->mActiveCount;
     const SensorHitEntry* const pActive1 = pGroup1->mActive;
     const SensorHitEntry* const pActive2 = pGroup2->mActive;
-    if (static_cast< s64 >(group1Count) * group2Count <= cPairsWalked) {
+    if (static_cast< s64 >(group1Count) * group2Count <=
+        ::layOutSteps(pGroup1) + ::layOutSteps(pGroup2) + group1Count + group2Count) {
         for (s32 i = 0; i < group1Count; i++) {
             for (s32 j = 0; j < group2Count; j++) {
                 ::checkAttackEntries(pActive1[i], pActive2[j]);
@@ -250,6 +269,8 @@ void SensorHitChecker::doObjColGroup(SensorGroup* pGroup1, SensorGroup* pGroup2)
 
     // Each pair of placed sensors whose extents overlap, once: the one of the two that starts first meets every sensor
     // of the other group that starts before it ends.
+    pGroup1->layOutSweep();
+    pGroup2->layOutSweep();
     mFoundCount = 0;
     const SensorSweepItem* const pSweep1 = pGroup1->mSweep;
     const SensorSweepItem* const pSweep2 = pGroup2->mSweep;
@@ -310,7 +331,7 @@ void SensorHitChecker::doObjColInSameGroup(SensorGroup* pSensorGroup) const {
 #if defined(NEBULA_PLAIN_MODULE)
     const s32 count = pSensorGroup->mActiveCount;
     const SensorHitEntry* const pActive = pSensorGroup->mActive;
-    if (static_cast< s64 >(count) * (count + 1) / 2 <= cPairsWalked) {
+    if (static_cast< s64 >(count) * (count + 1) / 2 <= ::layOutSteps(pSensorGroup) + count) {
         for (s32 i = 0; i < count; i++) {
             for (s32 j = i; j < count; j++) {
                 ::checkAttackEntries(pActive[i], pActive[j]);
@@ -320,6 +341,7 @@ void SensorHitChecker::doObjColInSameGroup(SensorGroup* pSensorGroup) const {
     }
 
     // Each pair of placed sensors whose extents overlap, once, the lower index first as in the walk.
+    pSensorGroup->layOutSweep();
     mFoundCount = 0;
     const SensorSweepItem* const pSweep = pSensorGroup->mSweep;
     const s32 sweepCount = pSensorGroup->mSweepCount;
