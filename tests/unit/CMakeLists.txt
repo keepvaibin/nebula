@@ -6,6 +6,17 @@
 #   ctest --test-dir <build> --output-on-failure
 cmake_minimum_required(VERSION 3.22)
 project(NebulaUnitTests LANGUAGES C CXX ASM)
+# What the host computes for the game (a stick's position above all) is the same bits on every CPU: no multiply and
+# add is fused into one rounding. Clang fuses them by default on CPUs with a fused multiply-add (arm64, and x86-64 at
+# AVX2): a tablet's stick then differed from a computer's by one ulp, and its replay from the computer's (N-1064). The
+# game module is built the same way (native/CMakeLists.txt). MSVC fuses none at /fp:precise without /fp:contract.
+if(MSVC)
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/clang:-ffp-contract=off>)
+    endif()
+else()
+    add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:-ffp-contract=off>)
+endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
