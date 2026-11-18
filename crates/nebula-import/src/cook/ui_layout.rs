@@ -9,7 +9,7 @@
 
 use super::material::layout as material_layout;
 use anyhow::{bail, Context, Result};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 pub const LAYOUT_MAGIC: u32 = 0x5459_4C4E; // NLYT
 pub const ANIMATION_MAGIC: u32 = 0x4E41_4C4E; // NLAN
@@ -902,6 +902,26 @@ fn is_step(kind: &[u8; 4]) -> bool {
     kind == b"RLVI" || kind == b"RLTP"
 }
 
+/// The bytes of a layout animation's records read so far (M-157). Every content, info, target and run of keys is read
+/// once: an offset that names a record already read, or a record that overlaps one, is refused. Offsets that all named
+/// one record made a few hundred kilobytes read as billions of targets; with each record read once, what the cook
+/// keeps and writes grows with the file.
+#[derive(Default)]
+struct Records(BTreeMap<usize, usize>);
+
+impl Records {
+    fn claim(&mut self, at: usize, len: usize, what: &str) -> Result<()> {
+        let end = at.checked_add(len.max(1)).with_context(|| format!("{what} at {at:#x} past the file's end"))?;
+        let before = self.0.range(..=at).next_back().filter(|(_, &e)| e > at);
+        let after = self.0.range(at..).next().filter(|(&s, _)| s < end);
+        if let Some((&other, _)) = before.or(after) {
+            bail!("{what} at {at:#x} overlaps the record at {other:#x}: each record is read once");
+        }
+        self.0.insert(at, end);
+        Ok(())
+    }
+}
+
 /// A source layout animation's animation block (pai1), as AnimTransformBasic reads it.
 pub fn read_animation(bytes: &[u8]) -> Result<UiAnimationIr> {
     if bytes.len() < 16 || !bytes.starts_with(b"RLAN") || bytes[4..6] != [0xFE, 0xFF] {
@@ -924,22 +944,27 @@ pub fn read_animation(bytes: &[u8]) -> Result<UiAnimationIr> {
             let files = (0..file_count)
                 .map(|i| c_string(block, table + be32(block, table + 4 * i)? as usize))
                 .collect::<Result<Vec<_>>>()?;
-            let mut contents = Vec::with_capacity(content_count);
+            let mut records = Records::default();
+            let mut contents = Vec::with_capacity(content_count.min(block.len() / 24));
             for c in 0..content_count {
                 let ca = be32(block, contents_at + 4 * c)? as usize;
                 let name = name_field(block, ca, 20)?;
                 let info_count = *block.get(ca + 20).context("a short animation content")? as usize;
+                records.claim(ca, 24 + 4 * info_count, "an animation content")?;
                 let material = block[ca + 21] != 0;
                 let mut infos = Vec::with_capacity(info_count);
                 for k in 0..info_count {
                     let ia = ca + be32(block, ca + 24 + 4 * k)? as usize;
                     let kind: [u8; 4] = bytes4(block, ia)?;
                     let target_count = *block.get(ia + 4).context("a short animation info")? as usize;
+                    records.claim(ia, 8 + 4 * target_count, "an animation info")?;
                     let mut targets = Vec::with_capacity(target_count);
                     for t in 0..target_count {
                         let ta = ia + be32(block, ia + 8 + 4 * t)? as usize;
                         let key_count = be16(block, ta + 4)? as usize;
                         let keys_at = ta + be32(block, ta + 8)? as usize;
+                        records.claim(ta, 12, "an animation target")?;
+                        records.claim(keys_at, key_count * if is_step(&kind) { 8 } else { 12 }, "an animation curve's keys")?;
                         let keys = if is_step(&kind) {
                             UiKeys::Step(
                                 (0..key_count)
@@ -1040,6 +1065,56 @@ mod disc_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A layout animation of one pai1 block: the content offsets `contents` (block coordinates; 28 is a content with
+    /// one info at 60, one target at 72 and one hermite key at 84).
+    fn brlan(contents: &[u32]) -> Vec<u8> {
+        // The offsets' table: at 20 for up to two, after the records for more.
+        let table = if contents.len() <= 2 { 20 } else { 96 };
+        let mut b = vec![0u8; 96.max(table + 4 * contents.len())];
+        b[..4].copy_from_slice(b"pai1");
+        let size = b.len() as u32;
+        b[4..8].copy_from_slice(&size.to_be_bytes());
+        b[14..16].copy_from_slice(&(contents.len() as u16).to_be_bytes());
+        b[16..20].copy_from_slice(&(table as u32).to_be_bytes());
+        for (i, c) in contents.iter().enumerate() {
+            b[table + 4 * i..table + 4 * i + 4].copy_from_slice(&c.to_be_bytes());
+        }
+        b[28..32].copy_from_slice(b"Pane");
+        b[48] = 1;
+        b[52..56].copy_from_slice(&32u32.to_be_bytes());
+        b[60..64].copy_from_slice(b"RLPA");
+        b[64] = 1;
+        b[68..72].copy_from_slice(&12u32.to_be_bytes());
+        b[76..78].copy_from_slice(&1u16.to_be_bytes());
+        b[80..84].copy_from_slice(&12u32.to_be_bytes());
+        b[88..92].copy_from_slice(&1.5f32.to_be_bytes());
+        let mut f = vec![0u8; 16];
+        f[..4].copy_from_slice(b"RLAN");
+        f[4..6].copy_from_slice(&[0xFE, 0xFF]);
+        f[0xC..0xE].copy_from_slice(&16u16.to_be_bytes());
+        f[0xE..0x10].copy_from_slice(&1u16.to_be_bytes());
+        f.extend_from_slice(&b);
+        f
+    }
+
+    /// M-157: offsets that name one record more than once are refused (65 535 of them, each to a content of 255 infos
+    /// each of 255 targets, read as 4.3 billion targets); a record read once is read as before.
+    #[test]
+    fn a_layout_animations_records_are_each_read_once() {
+        let one = read_animation(&brlan(&[28])).unwrap();
+        assert_eq!(one.contents.len(), 1);
+        assert_eq!(one.contents[0].infos[0].targets.len(), 1);
+        let error = format!("{:#}", read_animation(&brlan(&[28, 28])).unwrap_err());
+        assert!(error.contains("read once"), "{error}");
+        let error = format!("{:#}", read_animation(&brlan(&vec![28; 65535])).unwrap_err());
+        assert!(error.contains("read once"), "{error}");
+        // A content whose info is its own name: two records over the same bytes.
+        let mut overlapping = brlan(&[28]);
+        overlapping[16 + 52..16 + 56].copy_from_slice(&4u32.to_be_bytes());
+        overlapping[16 + 32..16 + 36].copy_from_slice(b"RLPA");
+        assert!(read_animation(&overlapping).is_err());
+    }
 
     #[test]
     fn hash_table_finds_every_first_name() {
