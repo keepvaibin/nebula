@@ -5,6 +5,7 @@
 #include "Game/Player/MarioDamage.hpp"
 #include "Game/Player/MarioState.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/FrameCount.hpp"
 
 bool Mario::doFlipJump(const Vec3f& rVec) {
     if (isAnimationRun("壁はじき")) {
@@ -70,7 +71,7 @@ bool MarioFlip::update() {
         changeAnimationNonStop("はねとばされ");
     }
 
-    mTimer++;
+    MR::countUp(mTimer);
     Vec3f velocity(mVelocity);
     Vec3f direction(mVelocity);
     MR::normalizeOrZero(&direction);

@@ -1,6 +1,7 @@
 #include "Game/Player/MarioMagic.hpp"
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Player/MarioModule.hpp"
+#include "Game/Util/FrameCount.hpp"
 
 void Mario::stopPunch() {
     if (isStatusActive(MarioStatus_Magic)) {
@@ -70,7 +71,7 @@ bool MarioMagic::update() {
         return false;
     }
 
-    mTimer++;
+    MR::countUp(mTimer);
 
     if (mTimer == 25) {
         stopEffect("スピンライト");

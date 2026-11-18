@@ -46,6 +46,7 @@
 #include "Game/Player/MarioWall.hpp"
 #include "Game/Player/MarioWarp.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/FrameCount.hpp"
 
 Mario::Mario(MarioActor* pActor) : MarioModule(pActor) {
     initMember();
@@ -359,7 +360,7 @@ void Mario::checkKeyLock() {
 
 void Mario::updateTimers() {
     if (mMovementStates.onGround) {
-        mLandTimer++;
+        MR::countUp(mLandTimer);
     }
 
     if (mLedgeFallTimer != 0) {
@@ -1714,7 +1715,7 @@ void Mario::actionMain() {
         mSlopeSideSpeed = 0.0f;
         mSlopeSideDir.zero();
     } else {
-        mSlopeTimer++;
+        MR::countUp(mSlopeTimer);
     }
 
     if (mSlopeSteerInhibitTimer != 0) {
@@ -1753,7 +1754,7 @@ void Mario::updateGroundInfo() {
         mMovementStates.onGround = checkGround();
 
         if (mDrawStates.edgePushBack) {
-            mEdgePushTimer++;
+            MR::countUp(mEdgePushTimer);
         } else {
             mEdgePushTimer = 0;
         }

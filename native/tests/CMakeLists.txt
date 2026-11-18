@@ -53,5 +53,7 @@ native_test(native_hit_sensor_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/hit_senso
 native_test(native_mario_messenger_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/mario_messenger_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/arena_test_host.c" "${CMAKE_CURRENT_LIST_DIR}/arena_test_tables.cpp"
     "${game_src}/Player/MarioMessenger.cpp" "${game_src}/System/NebulaArena.cpp")
+# Mario's state timers stop at their top instead of reading 0 after 65536 steps (N-3011).
+native_test(native_frame_count_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/frame_count_tests.cpp")
 # The frame-list writer, against the list the renderer reads.
 native_test(native_frame_list_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/frame_list_tests.cpp" "${game_src}/Render/FrameList.cpp")

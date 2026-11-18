@@ -18,6 +18,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/System/NebulaAchievements.hpp"
+#include "Game/Util/FrameCount.hpp"
 
 namespace {
     f32 cDropFrontSpeed = 2.0f;
@@ -1225,7 +1226,7 @@ void Mario::procJump(bool atStart) {
             }
         }
 
-        mJumpTimer++;
+        MR::countUp(mJumpTimer);
     } else {
         f32 ceilDist = calcDistToCeil(false);
         if (ceilDist < 160.0f) {
@@ -1432,7 +1433,7 @@ void Mario::procJump(bool atStart) {
         doAirWalk();
     }
 
-    mAirTimer++;
+    MR::countUp(mAirTimer);
     return;
 }
 
@@ -1781,7 +1782,7 @@ void Mario::procHipDrop() {
 
         mJumpVec.zero();
     } else {
-        mAirTimer++;
+        MR::countUp(mAirTimer);
 
         if (MR::isNearZero(mActor->getLastMove())) {
             mHipDropStillTimer++;
@@ -1973,7 +1974,7 @@ void Mario::doAirWalk() {
         if (!isRising() && mVerticalSpeed < mActor->getConst().getTable()->mLandTurnHeight && (mMovementStates.beeFly) == 0) {
             mMovementStates.turnStickNeutral = true;
         } else {
-            mBackJumpTimer++;
+            MR::countUp(mBackJumpTimer);
         }
 
         if (isAnimationRun("ターンジャンプ")) {
@@ -2362,7 +2363,7 @@ void Mario::doLanding() {
                     stopWalk();
                     startCamVib(4);
                     changeAnimation("ハード着地", "基本");
-                    mLandTimer += 0x10;
+                    MR::countUp(mLandTimer, 0x10);
                     forceSetHeadVecKeepSide(mGroundNorm);
                 }
 
@@ -2583,7 +2584,7 @@ void Mario::doLanding() {
             playSound("重い着地");
             playSound("声着地停止");
             startCamVib(4);
-            mLandTimer += 0x10;
+            MR::countUp(mLandTimer, 0x10);
         }
 
         if (mActor->mBeeWallWalk != 0) {
