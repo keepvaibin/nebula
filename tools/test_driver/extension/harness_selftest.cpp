@@ -6,8 +6,9 @@
 // <JSON>") is given before the first frame, or before game frame <frame> when it starts "@<frame>:". The facts go to
 // the plan's out folder; the test reads them. The first line on standard output is the plan's clock: "clock steps" or
 // "clock real" (tools/lumacore/tests/harness_time_test.py). With --host before the plan, the half is given a host
-// that sizes its window and loses its device by printing "window <w> <h>" and "lose_device" (harness_steps_test.py);
-// without it, no host.
+// that sizes its window, loses its device and starts the game again by printing "window <w> <h>", "lose_device" and
+// "restart" (harness_steps_test.py); --again <n> after it makes that host's start the one with n starts before it.
+// Without --host, no host.
 #include "harness.h"
 
 #include <nebula_host_extension.h>
@@ -40,6 +41,12 @@ void lose_gpu_device(void*) {
     std::fflush(stdout);
 }
 
+std::uint32_t restart(void*) {
+    std::printf("restart\n");
+    std::fflush(stdout);
+    return 1u;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -48,6 +55,12 @@ int main(int argc, char** argv) {
         --argc;
         ++argv;
     }
+    std::uint32_t again = 0u;
+    if (with_host && argc > 2 && std::string(argv[1]) == "--again") {
+        again = static_cast<std::uint32_t>(std::strtoul(argv[2], nullptr, 10));
+        argc -= 2;
+        argv += 2;
+    }
     if (argc < 3) {
         std::fprintf(stderr, "usage: harness_selftest [--host] <plan> <frames> [<log line> ...]\n");
         return 2;
@@ -55,6 +68,8 @@ int main(int argc, char** argv) {
     static NebulaHostForExtension host{NEBULA_HOST_EXTENSION_VERSION, sizeof(NebulaHostForExtension)};
     host.resize_window = resize_window;
     host.lose_gpu_device = lose_gpu_device;
+    host.restart = restart;
+    host.started_again = again;
     if (!harness::start(with_host ? &host : nullptr, argv[1], log, quit)) {
         return 1;
     }

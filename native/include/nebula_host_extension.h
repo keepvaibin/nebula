@@ -126,6 +126,10 @@ typedef struct NebulaHostForExtension {
        does): taken out with the mods that use it, loaded again, then they are; the harness fact reload.<id> once it
        ends. Null in a host without mods. */
     void (*reload_mod)(void* host, const char* mod_id);
+    /* The game ends as Nebula Settings' Restart ends it and starts again with this start's arguments, its
+       started_again one more (NebulaHostExtension.ending's `again` nonzero). 0: this host cannot start the game again
+       (an iOS app), and nothing happens. Null in a host without it. */
+    uint32_t (*restart)(void* host);
 } NebulaHostForExtension;
 
 /* What the extension offers. Each function may be null. */

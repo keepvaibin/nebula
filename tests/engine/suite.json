@@ -3,6 +3,7 @@
   "tests": [
     "boot",
     "device-lost",
+    "restarts",
     "window-small",
     "window-wide",
     "window-tall",
