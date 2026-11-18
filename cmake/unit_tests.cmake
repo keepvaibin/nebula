@@ -146,6 +146,8 @@ galaxy_test(galaxy_discord_presence_tests SOURCES ${rt}/discord_presence_tests.c
 galaxy_test(galaxy_frame_interpolation_tests SOURCES ${render_src}/frame_interpolation_tests.cpp
     ${render_src}/frame_interpolation.cpp ${render_src}/affine.cpp)
 galaxy_test(galaxy_present_slots_tests SOURCES ${render_src}/present_slots_tests.cpp ${render_src}/present_slots.cpp)
+# The temporal upscaler's hold on generated frames ends (header-only).
+galaxy_test(galaxy_temporal_hold_tests SOURCES ${render_src}/temporal_hold_tests.cpp)
 # The game thread's place in the render queue (header-only).
 galaxy_test(galaxy_render_queue_tests SOURCES ${render_src}/render_queue_tests.cpp)
 # The vsync grid the Android and Apple display clocks run the game's frames on (header-only).

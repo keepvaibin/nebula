@@ -1081,19 +1081,20 @@ void RendererMtl::end_output_scene() {
 bool RendererMtl::interpolation_mode() const {
     const RenderConfig cfg = get_render_config();
     const double rate = present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, display_refresh_hz_);
-    if (temporal_mode() && temporal_interp_suspended_) {
+    if (temporal_mode() && temporal_interp_hold_.held()) {
         return false;
     }
     return interpolated_frames_per_game_frame(rate) != 0u;
 }
 
 void RendererMtl::suspend_temporal_interpolation(double ms_per_frame) {
-    if (temporal_interp_suspended_) {
+    if (temporal_interp_hold_.held()) {
         return;
     }
-    temporal_interp_suspended_ = true;
+    temporal_interp_hold_.hold(galaxy::qpc_to_ns(galaxy::qpc_now()));
     temporal_interp_key_ = temporal_interp_key();
-    std::cerr << "[interp] temporal upscaling of generated frames off: " << ms_per_frame << " ms GPU per presented frame\n";
+    std::cerr << "[interp] temporal upscaling of generated frames off: " << ms_per_frame
+              << " ms GPU per presented frame; tried again in " << temporal_interp_hold_.wait_ns() / 1000000000 << " s\n";
 }
 
 RendererMtl::TemporalInterpKey RendererMtl::temporal_interp_key() const {

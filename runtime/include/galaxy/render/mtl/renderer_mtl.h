@@ -16,6 +16,7 @@
 
 #include "galaxy/platform_time.h"
 #include "galaxy/content_viewport.h"
+#include "galaxy/render/temporal_hold.h"
 #include "galaxy/render/ambient_occlusion_objects.h"
 #include "galaxy/render/display_modes.h"
 #include "galaxy/render/frame_pass.h"
@@ -627,7 +628,7 @@ private:
         friend bool operator==(const TemporalInterpKey&, const TemporalInterpKey&) = default;
     };
     [[nodiscard]] TemporalInterpKey temporal_interp_key() const;
-    bool temporal_interp_suspended_ = false;
+    TemporalInterpHold temporal_interp_hold_;
     TemporalInterpKey temporal_interp_key_{};
     std::array<float, 12> scene_view_{};
     bool scene_view_known_ = false;

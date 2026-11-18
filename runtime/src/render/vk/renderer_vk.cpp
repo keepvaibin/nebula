@@ -1980,9 +1980,14 @@ void RendererVk::begin_frame() {
     apply_dynamic_resolution();
     // draw.post: a program reading motion registers only while a temporal upscaler makes it.
     set_mod_post_motion(temporal_ != nullptr && temporal_mode());
-    if (temporal_interp_suspended_ && temporal_interp_key() != temporal_interp_key_) {
-        // The settings changed: decided again.
-        temporal_interp_suspended_ = false;
+    if (temporal_interp_hold_.held()) {
+        if (temporal_interp_key() != temporal_interp_key_) {
+            temporal_interp_hold_.settings_changed();  // the settings changed: decided again
+        } else if (temporal_interp_hold_.lift_if_due(galaxy::qpc_to_ns(galaxy::qpc_now()))) {
+            // Its wait passed: the governor measures generated frames again, not by the cost that held it.
+            reset_generated_gpu_ema();
+            std::cerr << "[interp] temporal upscaling of generated frames tried again\n";
+        }
     }
     sync_post_process();
     bloom_.poll_ready();

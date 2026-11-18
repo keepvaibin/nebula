@@ -3565,9 +3565,14 @@ void RendererD3D12::begin_frame() {
     apply_dynamic_resolution();
     sync_post_process_settings();
     {
-        if (temporal_interp_suspended_ && temporal_interp_key() != temporal_interp_key_) {
-            // The settings changed: decided again.
-            temporal_interp_suspended_ = false;
+        if (temporal_interp_hold_.held()) {
+            if (temporal_interp_key() != temporal_interp_key_) {
+                temporal_interp_hold_.settings_changed();  // the settings changed: decided again
+            } else if (temporal_interp_hold_.lift_if_due(galaxy::qpc_to_ns(galaxy::qpc_now()))) {
+                // Its wait passed: the governor measures generated frames again, not by the cost that held it.
+                reset_generated_gpu_ema();
+                std::cerr << "[interp] temporal upscaling of generated frames tried again\n";
+            }
         }
         // A ring whose frames took over half their budget (or spilled) grows before the next frame; one whose last 30 seconds
         // (and 600 frames) stayed under a quarter of it gives half of its memory back on a frame without the scene
@@ -4777,7 +4782,7 @@ bool RendererD3D12::interpolation_mode() const {
     const double rate = present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, display_refresh_hz_);
     // With a temporal upscaler every presented frame is upscaled, its motion from the frame presented before (any
     // rate: the slots' t need not divide the game frame evenly), unless the GPU could not afford it.
-    if (temporal_mode() && temporal_interp_suspended_) {
+    if (temporal_mode() && temporal_interp_hold_.held()) {
         return false;
     }
     return interpolated_frames_per_game_frame(rate) != 0u;
@@ -4797,13 +4802,13 @@ RendererD3D12::TemporalInterpKey RendererD3D12::temporal_interp_key() const {
 }
 
 void RendererD3D12::suspend_temporal_interpolation(double ms_per_frame) {
-    if (temporal_interp_suspended_) {
+    if (temporal_interp_hold_.held()) {
         return;
     }
-    temporal_interp_suspended_ = true;
+    temporal_interp_hold_.hold(galaxy::qpc_to_ns(galaxy::qpc_now()));
     temporal_interp_key_ = temporal_interp_key();
     std::cerr << "[interp] temporal upscaling of generated frames off: " << ms_per_frame
-              << " ms GPU per presented frame\n";
+              << " ms GPU per presented frame; tried again in " << temporal_interp_hold_.wait_ns() / 1000000000 << " s\n";
 }
 
 bool RendererD3D12::begin_motion_scene() {

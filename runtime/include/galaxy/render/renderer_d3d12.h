@@ -21,6 +21,7 @@
 #include <d3d12sdklayers.h>
 #include <wrl/client.h>
 
+#include "galaxy/render/temporal_hold.h"
 #include "galaxy/render/fsr_frame_generation.h"
 #include "galaxy/render/utility_shaders.h"
 #include "galaxy/render/frame_pass.h"
@@ -1105,7 +1106,7 @@ private:
         friend bool operator==(const TemporalInterpKey&, const TemporalInterpKey&) = default;
     };
     [[nodiscard]] TemporalInterpKey temporal_interp_key() const;
-    bool temporal_interp_suspended_ = false;
+    TemporalInterpHold temporal_interp_hold_;
     TemporalInterpKey temporal_interp_key_{};
     double generated_gpu_ms_ = 0.0;
     std::uint64_t generated_gpu_samples_ = 0;
