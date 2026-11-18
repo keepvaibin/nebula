@@ -35,7 +35,7 @@ The module's source is `lumakit/source/screen.lum`.
 | [`alive`](#alive) | Function |  |
 | [`layout`](#layout) | Function | A mod's own layout as a screen: opened on the pause layer, the world held while it is open when `pauses`; the screen is the caller's to close (ui.close), and the world goes on when it does or its mod stops. |
 | [`close_layout`](#close_layout) | Function | A layout the calling mod opened through layout(), closed (the kit opened it, so the kit closes it; the world goes on once no pausing one is left). Another mod's, or one already closed: nothing. |
-| [`loading`](#loading) | Function | The tips shown while stages load, one each load in turn, with a picture over them; the newest caller's . An empty list takes them away. |
+| [`loading`](#loading) | Function | The tips shown while stages load, one each load in turn, with a picture over them; the newest caller's list. An empty list takes them away. |
 
 ### `ListScreen`
 
@@ -122,7 +122,7 @@ A layout the calling mod opened through layout(), closed (the kit opened it, so 
 pub fn loading(t: list<text>, picture: draw.Texture? = none)
 ```
 
-The tips shown while stages load, one each load in turn, with a picture over them; the newest caller's . An empty list takes them away.
+The tips shown while stages load, one each load in turn, with a picture over them; the newest caller's list. An empty list takes them away.
 
 ## Further reading
 
