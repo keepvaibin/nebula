@@ -62,6 +62,15 @@ native_test(native_sensor_hit_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/sensor_hi
     "${CMAKE_CURRENT_LIST_DIR}/arena_test_host.c" "${CMAKE_CURRENT_LIST_DIR}/arena_test_tables.cpp"
     "${game_src}/LiveActor/SensorHitChecker.cpp" "${game_src}/LiveActor/HitSensor.cpp" "${game_src}/System/NebulaArena.cpp")
 target_compile_definitions(native_sensor_hit_tests PRIVATE NEBULA_PLAIN_MODULE=1)
+# The plain module's gravity and area bounds hold every point a gravity or a form takes (P-139, P-152).
+native_test(native_gravity_bound_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/gravity_bound_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/arena_test_host.c" "${CMAKE_CURRENT_LIST_DIR}/arena_test_tables.cpp"
+    "${game_src}/Gravity/PlanetGravity.cpp" "${game_src}/Gravity/PointGravity.cpp" "${game_src}/Gravity/SegmentGravity.cpp"
+    "${game_src}/Gravity/DiskGravity.cpp" "${game_src}/Gravity/DiskTorusGravity.cpp" "${game_src}/Gravity/ConeGravity.cpp"
+    "${game_src}/Gravity/CubeGravity.cpp" "${game_src}/Gravity/ParallelGravity.cpp" "${game_src}/Gravity/WireGravity.cpp"
+    "${game_src}/AreaObj/AreaForm.cpp" "${game_src}/Util/MathUtil.cpp" "${game_src}/Util/MtxUtil.cpp"
+    "${game_src}/System/NebulaArena.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/math/src/nebula_math.c")
+target_compile_definitions(native_gravity_bound_tests PRIVATE NEBULA_PLAIN_MODULE=1)
 # Every message Mario sends in a step goes out (N-3006).
 native_test(native_mario_messenger_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/mario_messenger_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/arena_test_host.c" "${CMAKE_CURRENT_LIST_DIR}/arena_test_tables.cpp"
