@@ -43,6 +43,8 @@ struct Validator {
 // Null when the importer's library is missing or lacks luma_validate (said once on stderr).
 const Validator* validator();
 
+struct Description;
+
 // What a check's findings and kept reports depend on beyond the package: the platform with its processor
 // ("windows-x64", luma.md 6), the disc ("RMGE01"; empty: none, and the rules on the game's files go unchecked),
 // the played language folder, and the game's own files (docs/modding/reference/validator-rules.md: the rules on game paths, rows
@@ -56,6 +58,8 @@ struct Game {
     // The "test." services this process's host extensions give (services/registry.md 14), bound as the catalog's rows
     // (LumaValidateInput.test_services): only a test run has any. Their texts live as long as the process.
     std::vector<LumaTestService> test_services;
+    // The game's self-description the check reads: null for the game's own (description()); a unit test's otherwise.
+    const struct Description* self = nullptr;
 };
 
 // What identifies a store's content for a kept report (LumaValidateInput.store_key): its version and the game it came
@@ -90,10 +94,12 @@ struct Kept {
 
 // One luma_validate call on the package in `folder`: `installed` the other packages (with `kept_in` empty: every rule,
 // alone), `position` its place among them (UINT32_MAX alone). Its kept report into `kept_out`, its findings (when
-// asked) in English and the played language. False: the validator did not run (no library, or the package unreadable).
+// asked) in English and the played language. False: the check did not finish (no validator, or the validator did not
+// take the input or failed), and `why` (when given) says why in English. A failure is never checked again with less
+// (M-161): the caller treats the package as not checked.
 bool validate_package(const Validator* v, std::string_view id, const std::filesystem::path& folder, const Game& game,
                       const std::vector<LumaInstalledMod>& installed, std::uint32_t position, const std::string& kept_in,
-                      std::string& kept_out, std::vector<Kept>* findings);
+                      std::string& kept_out, std::vector<Kept>* findings, std::string* why = nullptr);
 
 // A file's bytes; empty when it cannot be read.
 std::string read_file(const std::filesystem::path& path);

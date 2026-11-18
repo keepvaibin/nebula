@@ -1,0 +1,41 @@
+{
+  "harness": 1,
+  "name": "6106-import-unchecked",
+  "about": "jv-good imported with the checker's library gone: the check did not run, so nothing is added (FAILED, no folder, not checked; before, the mod was added unchecked). Bare: with no importer every mod is off that start, the test's own code too",
+  "proves": [
+    "import.unchecked"
+  ],
+  "bare": true,
+  "hide_game_files": [
+    "nebula_import.dll"
+  ],
+  "renderers": [
+    "d3d12"
+  ],
+  "mods": [
+    {
+      "path": "../../startval/mods/jv-good",
+      "install": "import",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "import.jv-good",
+      "has": {
+        "line": 1,
+        "text": "FAILED",
+        "id": "",
+        "checked": false,
+        "refused": false
+      },
+      "when": "any"
+    }
+  ]
+}

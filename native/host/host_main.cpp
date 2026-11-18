@@ -5212,13 +5212,13 @@ void prepare_mod_files(const fs::path& settings_folder, const std::string& game_
     for (const galaxy::mods::ModInfo& mod : mods) {
         if (mod.package) gStartPackages.push_back({mod.id, mod.path, mod.enabled});
     }
-    // The validator's errors refuse a package at each start as at import (one reading, validator.md 2); its findings go
-    // to the mod log once the log exists (add_start_findings).
+    // The validator's errors refuse a package at each start as at import (one reading, validator.md 2), and a package
+    // the check cannot finish does not start either (M-150); its findings go to the mod log once the log exists
+    // (add_start_findings).
     galaxy::modlog::check_packages(gStartPackages, game_id, language);
     for (galaxy::mods::ModInfo& mod : mods) {
-        if (mod.package && mod.problem.empty() && galaxy::modlog::package_refused(mod.id)) {
-            mod.problem = galaxy::modlog::refused_sentence();
-        }
+        if (!mod.package || !mod.problem.empty()) continue;
+        if (const char* const problem = galaxy::modlog::start_problem(mod.id)) mod.problem = problem;
     }
     gModsOn = static_cast<std::uint32_t>(
         std::count_if(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& mod) { return mod.enabled; }));
@@ -5641,13 +5641,7 @@ int run_mods_tool() {
         for (const galaxy::mods::ModInfo& mod : galaxy::mods::scan_mods()) {
             if (mod.package && mod.id != id) others.push_back({mod.id, mod.path, mod.enabled});
         }
-        const galaxy::modlog::ImportCheck found = galaxy::modlog::check_import(staged, others);
-        result.checked = found.ran;
-        result.refused = found.refused;
-        for (const galaxy::modlog::ImportFinding& f : found.findings) {
-            result.findings.push_back({f.error, f.code, f.file, f.text, f.line, f.column});
-        }
-        return !found.refused;
+        return galaxy::modlog::take_import_check(galaxy::modlog::check_import(staged, others), result);
     };
     for (std::size_t i = 0; i < sources.size(); ++i) {
         const galaxy::mods::ImportResult result = galaxy::mods::import_mod(sources[i], settings_folder / "mods", {}, nullptr, check);

@@ -5,6 +5,7 @@
     "6102-import-refused",
     "6103-import-needs",
     "6104-import-already",
-    "6105-import-takes-over"
+    "6105-import-takes-over",
+    "6106-import-unchecked"
   ]
 }

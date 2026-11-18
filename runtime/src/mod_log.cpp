@@ -28,6 +28,7 @@
 
 #include "galaxy/luma.h"
 #include "galaxy/mods.h"
+#include "galaxy/path_text.h"
 #if defined(NEBULA_HOST_RENDERER)
 #include "galaxy/runtime_settings.h"
 #endif
@@ -457,6 +458,14 @@ std::string hex(std::uint64_t v) {
     return text;
 }
 
+// A path under a package's folder as UTF-8 with / between steps, on every host (path.generic_string() is the code page
+// on Windows and throws on a name it cannot hold).
+std::string inside(const std::filesystem::path& path, const std::filesystem::path& folder) {
+    std::error_code e;
+    const std::u8string text = std::filesystem::relative(path, folder, e).generic_u8string();
+    return std::string(reinterpret_cast<const char*>(text.data()), text.size());
+}
+
 // A package's files: every name under its folder with its size and time, in name order. Empty when it cannot be read.
 std::string files_stamp(const std::filesystem::path& folder) {
     std::vector<std::string> rows;
@@ -466,7 +475,7 @@ std::string files_stamp(const std::filesystem::path& folder) {
         if (!it->is_regular_file(e)) continue;
         const auto size = it->file_size(e);
         const auto time = it->last_write_time(e).time_since_epoch().count();
-        rows.push_back(std::filesystem::relative(it->path(), folder, e).generic_string() + "\t" + std::to_string(size) +
+        rows.push_back(inside(it->path(), folder) + "\t" + std::to_string(size) +
                        "\t" + std::to_string(static_cast<long long>(time)));
     }
     if (error) return {};
@@ -477,23 +486,28 @@ std::string files_stamp(const std::filesystem::path& folder) {
 }
 
 // A package's bytes: every file's name and content under its folder, in name order. Read only when files_stamp changed
-// (a copy, a touch, an unpack keeps the bytes and so the verdict). Empty when a file cannot be read.
-std::string content_hash(const std::filesystem::path& folder) {
+// (a copy, a touch, an unpack keeps the bytes and so the verdict). Empty when a file cannot be read, and `unread` then
+// names it (the folder itself: "").
+std::string content_hash(const std::filesystem::path& folder, std::string& unread) {
     std::vector<std::filesystem::path> files;
     std::error_code error;
     for (std::filesystem::recursive_directory_iterator it(folder, error), end; !error && it != end; it.increment(error)) {
         std::error_code e;
         if (it->is_regular_file(e)) files.push_back(it->path());
     }
+    unread.clear();
     if (error) return {};
     std::sort(files.begin(), files.end());
     std::uint64_t h = kFnvStart;
     std::vector<char> chunk(64 * 1024);
     for (const std::filesystem::path& file : files) {
-        std::error_code e;
-        h = fnv(fnv(h, std::filesystem::relative(file, folder, e).generic_string()), "\n");
+        const std::string name = inside(file, folder);
+        h = fnv(fnv(h, name), "\n");
         std::ifstream in(file, std::ios::binary);
-        if (!in) return {};
+        if (!in) {
+            unread = name;
+            return {};
+        }
         while (in) {
             in.read(chunk.data(), static_cast<std::streamsize>(chunk.size()));
             h = fnv(h, std::string_view(chunk.data(), static_cast<std::size_t>(in.gcount())));
@@ -542,7 +556,8 @@ std::vector<std::string> split_tabs(const std::string& line) {
 bool write_file(const std::filesystem::path& path, std::string_view bytes) {
     std::error_code error;
     std::filesystem::create_directories(path.parent_path(), error);
-    const std::filesystem::path temp = path.string() + ".new";
+    std::filesystem::path temp = path;
+    temp += ".new";
     {
         std::ofstream out(temp, std::ios::binary | std::ios::trunc);
         if (!out) return false;
@@ -616,8 +631,16 @@ struct StartResult {
     std::string id;
     std::vector<Kept> findings;
 };
+// A package placed and on at the start that the check could not finish (M-150): it does not start, and its log says
+// why with `row` (Mods.NotChecked, Mods.NotCheckedFile, Mods.NotCheckedFolder) and `value` ({detail} or {file}).
+struct Unchecked {
+    std::string id;
+    const char* row;
+    std::string value;
+};
 std::mutex g_start_lock;
 std::vector<StartResult> g_start_results;
+std::vector<Unchecked> g_start_unchecked;
 std::vector<AfterStartRow> g_after_start;  // after_start_rows's; under g_start_lock
 
 CheckGame g_check_game;  // the last start's check's, for check_import; under g_start_lock
@@ -687,6 +710,7 @@ void check_packages(const std::vector<StartPackage>& packages, std::string_view 
     {
         const std::lock_guard<std::mutex> lock(g_start_lock);
         g_start_results.clear();
+        g_start_unchecked.clear();
         g_after_start.clear();
         g_check_game = side;
     }
@@ -708,79 +732,101 @@ void check_packages(const std::vector<StartPackage>& packages, std::string_view 
         Check check;
         std::string kept;
         std::string content;  // the content key: the package's identity for the others' keys
+        // Not checked (M-150): the log's row and its value; null while the check may still finish.
+        const char* row = nullptr;
+        std::string why;
+        bool named = true;  // its kept report names an id
     };
     std::vector<Placed> placed;
     placed.reserve(packages.size());
-    const Validator* v = nullptr;
-    bool looked = false;
-    const auto run = [&](const StartPackage& p, const std::vector<LumaInstalledMod>& installed, std::uint32_t position,
+    const Validator* const v = validator();
+    const auto run = [&](Placed& one, const std::vector<LumaInstalledMod>& installed, std::uint32_t position,
                          const std::string& kept_in, std::string& kept_out, std::vector<Kept>* findings) -> bool {
-        if (!looked) {
-            looked = true;
-            v = validator();
+        if (validate_package(v, one.package->id, one.package->folder, side, installed, position, kept_in, kept_out,
+                             findings, &one.why)) {
+            return true;
         }
-        return validate_package(v, p.id, p.folder, side, installed, position, kept_in, kept_out, findings);
+        one.row = "Mods.NotChecked";
+        return false;
+    };
+    // A kept report as the validator reads it back: 1 it names an id, 0 it names none (its luma.json gives none: it
+    // was refused, it never starts, and the others see it off, as the validator takes it), -1 it does not read (cut
+    // short or changed on disk; the package is checked again rather than its report handed on, which the validator
+    // would refuse for every other package). 1 with a validator that cannot read reports back.
+    const auto read_back = [v](const std::string& kept) {
+        if (kept.empty()) return -1;
+        if (v == nullptr || v->read_kept == nullptr || v->id == nullptr) return 1;
+        LumaReport* const read = v->read_kept(reinterpret_cast<const std::uint8_t*>(kept.data()), kept.size());
+        const char* const id = v->state(read) == 2 ? v->id(read) : nullptr;
+        const int answer = v->state(read) != 2 ? -1 : id != nullptr && id[0] != 0 ? 1 : 0;
+        v->release(read);
+        return answer;
     };
     for (const StartPackage& p : packages) {
-        Placed one{&p, files_stamp(p.folder), read_check(folder / (p.id + ".check")), read_file(folder / (p.id + ".kept")), {}};
+        Placed one{&p, files_stamp(p.folder), read_check(folder / (p.id + ".check")), read_file(folder / (p.id + ".kept")),
+                   {}, nullptr, {}, true};
         const std::string files_key = hex(fnv(fnv(kFnvStart, one.files), game));
+        int named = read_back(one.kept);
         if (one.files.empty()) {
             std::fprintf(stderr, "[modlog] %s: its folder cannot be read; not checked\n", p.id.c_str());
             one.kept.clear();
-        } else if (one.check.files == files_key && !one.check.content.empty() && !one.kept.empty()) {
+            one.row = "Mods.NotCheckedFolder";
+        } else if (named >= 0 && one.check.files == files_key && !one.check.content.empty()) {
             one.content = one.check.content;
         } else {
-            const std::string bytes = content_hash(p.folder);
+            std::string unread;
+            const std::string bytes = content_hash(p.folder, unread);
             const std::string content_key = bytes.empty() ? std::string() : hex(fnv(fnv(kFnvStart, bytes), game));
-            if (!content_key.empty() && one.check.content == content_key && !one.kept.empty()) {
+            if (content_key.empty()) {
+                std::fprintf(stderr, "[modlog] %s: %s cannot be read; not checked\n", p.id.c_str(), unread.c_str());
+                one.kept.clear();
+                one.row = unread.empty() ? "Mods.NotCheckedFolder" : "Mods.NotCheckedFile";
+                one.why = unread;
+            } else if (named >= 0 && one.check.content == content_key) {
                 // Touched, not changed: the verdict stands; only the stamp is new.
                 one.check.files = files_key;
                 (void)write_file(folder / (p.id + ".check"), check_text(one.check));
                 one.content = content_key;
             } else {
                 std::string kept;
-                if (!content_key.empty() && run(p, {}, UINT32_MAX, {}, kept, nullptr)) {
+                if (run(one, {}, UINT32_MAX, {}, kept, nullptr) && (named = read_back(kept)) >= 0) {
                     one.kept = std::move(kept);
                     one.check = Check{files_key, content_key, {}};
                     one.content = content_key;
                     (void)write_file(folder / (p.id + ".kept"), one.kept);
                 } else {
+                    if (one.row == nullptr) {
+                        one.row = "Mods.NotChecked";
+                        one.why = "its kept report does not read back";
+                    }
                     one.kept.clear();
                 }
             }
         }
+        one.named = named != 0;
         one.files = files_key;
         placed.push_back(std::move(one));
     }
 
-    // A package whose kept report names no id was refused (its luma.json gives none): it never starts, so the others
-    // see it off, as the validator takes it ("it can only be off").
-    std::vector<bool> named(placed.size(), true);
-    if (const Validator* const found = validator(); found != nullptr && found->read_kept != nullptr && found->id != nullptr) {
-        for (std::size_t j = 0; j < placed.size(); ++j) {
-            if (placed[j].kept.empty()) continue;
-            LumaReport* const read = found->read_kept(reinterpret_cast<const std::uint8_t*>(placed[j].kept.data()),
-                                                      placed[j].kept.size());
-            const char* const id = found->state(read) == 2 ? found->id(read) : "";
-            named[j] = id != nullptr && id[0] != 0;
-            found->release(read);
-        }
-    }
+    std::vector<bool> named(placed.size());
+    for (std::size_t j = 0; j < placed.size(); ++j) named[j] = placed[j].named;
 
     // Pass 2: each against the others (L8xx), from its kept report; again only when its key changed. In rounds: a
     // package on that a round refuses is off for the others in the next (a mod that loses what it needs takes with it
     // the mods that need it) and stays refused with that round's findings, so the rounds end, one at most a package.
-    // With nothing refused there is one round.
+    // With nothing refused there is one round. A package whose check does not finish is off for the others too, from
+    // the next round, as a refused one is: it does not start.
     std::vector<bool> off(placed.size());
     for (std::size_t j = 0; j < placed.size(); ++j) off[j] = !named[j];
     std::vector<bool> refused(placed.size(), false);
     std::vector<bool> checked(placed.size(), false);
+    std::vector<bool> unfinished(placed.size(), false);
     std::vector<std::vector<Kept>> verdict_of(placed.size());  // each package's findings from its last round
     for (std::size_t round = 0; round <= placed.size(); ++round) {
         bool more = false;
         for (std::size_t i = 0; i < placed.size(); ++i) {
             Placed& one = placed[i];
-            if (one.kept.empty() || refused[i]) continue;
+            if (one.kept.empty() || refused[i] || unfinished[i]) continue;
             std::vector<LumaInstalledMod> installed;
             std::vector<std::string> files;
             std::uint64_t h = fnv(kFnvStart, one.content);
@@ -811,7 +857,12 @@ void check_packages(const std::vector<StartPackage>& packages, std::string_view 
             } else {
                 std::string kept;
                 std::vector<Kept> findings;
-                if (!run(*one.package, installed, position, one.kept, kept, &findings)) continue;
+                if (!run(one, installed, position, one.kept, kept, &findings)) {
+                    checked[i] = false;
+                    unfinished[i] = true;
+                    more = more || one.package->on;
+                    continue;
+                }
                 verdict_of[i] = findings;
                 one.check.files = one.files;
                 one.check.content = one.content;
@@ -827,11 +878,19 @@ void check_packages(const std::vector<StartPackage>& packages, std::string_view 
             }
         }
         if (!more) break;
-        for (std::size_t j = 0; j < placed.size(); ++j) off[j] = !named[j] || refused[j];
+        for (std::size_t j = 0; j < placed.size(); ++j) off[j] = !named[j] || refused[j] || unfinished[j];
     }
     std::vector<StartResult> results;
+    std::vector<Unchecked> unchecked;
     for (std::size_t i = 0; i < placed.size(); ++i) {
-        if (checked[i]) results.push_back({placed[i].package->id, std::move(verdict_of[i])});
+        if (checked[i]) {
+            results.push_back({placed[i].package->id, std::move(verdict_of[i])});
+        } else if (placed[i].package->on) {
+            const Placed& one = placed[i];
+            const char* const row = one.row != nullptr ? one.row : "Mods.NotChecked";
+            unchecked.push_back({one.package->id, row,
+                                 one.why.empty() && row != std::string_view("Mods.NotCheckedFolder") ? "no reason given" : one.why});
+        }
     }
     // The placements of classes only code makes, from the kept reports of the packages that are in the game, for the
     // game's check after the mods' start (luma_refs.h).
@@ -839,7 +898,7 @@ void check_packages(const std::vector<StartPackage>& packages, std::string_view 
     if (const Validator* const found = validator();
         found != nullptr && found->read_kept != nullptr && found->after_start != nullptr) {
         for (std::size_t i = 0; i < placed.size(); ++i) {
-            if (placed[i].kept.empty() || !placed[i].package->on || !named[i] || refused[i]) continue;
+            if (placed[i].kept.empty() || !placed[i].package->on || !named[i] || refused[i] || !checked[i]) continue;
             LumaReport* const read = found->read_kept(reinterpret_cast<const std::uint8_t*>(placed[i].kept.data()),
                                                       placed[i].kept.size());
             if (found->state(read) >= 0) {
@@ -856,6 +915,7 @@ void check_packages(const std::vector<StartPackage>& packages, std::string_view 
     }
     const std::lock_guard<std::mutex> lock(g_start_lock);
     g_start_results = std::move(results);
+    g_start_unchecked = std::move(unchecked);
     g_after_start = std::move(after_start);
 }
 
@@ -867,12 +927,25 @@ std::vector<AfterStartRow> after_start_rows() {
 void add_start_findings() {
     if (g_add.load(std::memory_order_acquire) == nullptr) return;
     std::vector<StartResult> results;
+    std::vector<Unchecked> unchecked;
     {
         const std::lock_guard<std::mutex> lock(g_start_lock);
         results = g_start_results;
+        unchecked = g_start_unchecked;
     }
     for (const StartResult& result : results) {
         for (const Kept& k : result.findings) add_kept(result.id, k);
+    }
+    // The packages the check could not finish: off, as a refused one (M-150).
+    for (const Unchecked& one : unchecked) {
+        const std::string_view row(one.row);
+        if (row == "Mods.NotCheckedFile") {
+            add_row(LUMA_MODLOG_LOADER, LUMA_MODLOG_ERROR, one.id, 0u, one.value, one.row, {{"file", one.value}});
+        } else if (row == "Mods.NotCheckedFolder") {
+            add_row(LUMA_MODLOG_LOADER, LUMA_MODLOG_ERROR, one.id, 0u, "", one.row, {});
+        } else {
+            add_row(LUMA_MODLOG_LOADER, LUMA_MODLOG_ERROR, one.id, 0u, "", one.row, {{"detail", one.value}});
+        }
     }
     // A number option's kept value outside its range or off its steps: it reads its default.
     for (const galaxy::mods::OptionReset& reset : galaxy::mods::option_resets()) {
@@ -1035,15 +1108,22 @@ void add_cook_facts(const std::filesystem::path& facts_file, const std::vector<s
     }
 }
 
-bool package_refused(std::string_view id) {
+const char* start_problem(std::string_view id) {
     const std::lock_guard<std::mutex> lock(g_start_lock);
+    for (const Unchecked& one : g_start_unchecked) {
+        if (one.id == id) return "THIS MOD WAS NOT CHECKED. ITS LOG SAYS WHY";
+    }
     for (const StartResult& result : g_start_results) {
         if (result.id != id) continue;
         for (const Kept& k : result.findings) {
-            if (k.level == 0) return true;
+            if (k.level == 0) return "THIS MOD HAS ERRORS. ITS LOG SAYS WHY";
         }
     }
-    return false;
+    return nullptr;
+}
+
+bool package_refused(std::string_view id) {
+    return start_problem(id) != nullptr;
 }
 
 ImportCheck check_import(const std::filesystem::path& folder, const std::vector<StartPackage>& others) {
@@ -1068,8 +1148,5 @@ ImportCheck check_import(const std::filesystem::path& folder, const std::vector<
     return check::import(folder, others, side, [](std::string_view id) { return package_refused(id); });
 }
 
-const char* refused_sentence() {
-    return "THIS MOD HAS ERRORS. ITS LOG SAYS WHY";
-}
 
 }  // namespace galaxy::modlog

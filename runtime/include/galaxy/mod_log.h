@@ -15,6 +15,7 @@
 
 namespace galaxy::mods {
 struct ModInfo;
+struct ImportResult;
 }
 
 namespace galaxy::assets {
@@ -85,13 +86,20 @@ struct ImportFinding {
     std::uint32_t column = 0;
 };
 
-// An import's check (validator 2 "at import"): `ran` false when the validator did not run (the importer's
-// library is missing; nothing is refused then, as at the start); `refused` when it found an Error.
+// An import's check (validator 2 "at import"): `ran` false when it did not finish (no validator, or the validator did
+// not take the input or failed), `why` then saying why in English; `refused` when it found an Error. An import goes
+// on only when it ran and refused nothing (take_import_check; M-144).
 struct ImportCheck {
     bool ran = false;
     bool refused = false;
     std::vector<ImportFinding> findings;
+    std::string why;
 };
+
+// An import's check into the import's result (its `checked`, `refused` and findings): true lets the import go on, only
+// when the check ran and refused nothing. Every import's check (the Mods page, --import, the Android launcher) answers
+// through it.
+[[nodiscard]] bool take_import_check(const ImportCheck& found, galaxy::mods::ImportResult& result);
 
 // The validator on a package staged for import (`folder`, laid out as a placed mod), once: every rule (no kept report
 // of its own), last in the list after `others`, the packages placed now in list order, each by its kept report from
@@ -115,11 +123,13 @@ void add_start_findings();
 void add_cook_facts(const std::filesystem::path& facts_file,
                     const std::vector<std::pair<std::string, std::string>>& owners = {});
 
-// The start's check found an Error in the package `id`: it is refused (the validator's errors refuse, as at import).
+// The start's check refused the package `id` (an Error, as at import) or could not finish it: either way it does not
+// start (M-150).
 [[nodiscard]] bool package_refused(std::string_view id);
 
-// The Mods page's sentence for a package refused by the start's check (a host sentence: S. row in 14 languages).
-[[nodiscard]] const char* refused_sentence();
+// The Mods page's sentence for a package the start's check refused or could not finish (a host sentence: an S. row in
+// 14 languages); null when it passed, or was not placed at the start.
+[[nodiscard]] const char* start_problem(std::string_view id);
 
 // The permission as the player reads it when the mod's code did not start for an L506 and its answer kept at the start
 // is Declined (the Mods page then says Consent.OffDeclined, as the log does); "" otherwise. Any thread.

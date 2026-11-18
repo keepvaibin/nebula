@@ -1,0 +1,39 @@
+{
+  "harness": 1,
+  "name": "3137-start-unchecked",
+  "about": "A package with a file no program can read (held locked) cannot be checked at the start: it stays off, its code does not run, and its log says which file (M-150; before, it started unchecked)",
+  "proves": [
+    "validator.start.unchecked"
+  ],
+  "mods": [
+    {
+      "path": "../../loader/mods/lt-frame",
+      "unreadable": [
+        "source/lt-frame.c"
+      ],
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "lt-frame",
+        "source": "loader",
+        "level": "error",
+        "row": "Mods.NotCheckedFile"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "mod.lt-frame.sum",
+      "absent": true
+    }
+  ]
+}

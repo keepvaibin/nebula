@@ -553,13 +553,15 @@ ImportResult import_mod(const fs::path& source, const fs::path& mods_folder,
         result.message = "ALREADY IN YOUR MODS: " + result.title;
         return result;
     }
-    // A package passes the check before anything is placed (validator.md 2 "at import"): refused, nothing is added.
-    if (manifest && check && !check(writer.staging, result.id, result) && result.refused) {
+    // A package passes the check before anything is placed (validator.md 2 "at import"): refused, or not checked (the
+    // check did not finish: M-144), nothing is added.
+    if (manifest && check && !check(writer.staging, result.id, result)) {
         fs::remove_all(writer.staging, error);
         result.ok = false;
         const std::string name = manifest->name.fallback.empty() ? manifest->id : manifest->name.fallback;
         result.title = name;
-        result.message = "NOT IMPORTED: " + name;  // the result page lists the findings under it
+        // A refusal's findings are listed under it on the result page.
+        result.message = result.refused ? "NOT IMPORTED: " + name : "NOT IMPORTED: " + name + ". IT COULD NOT BE CHECKED";
         return result;
     }
     // In place: an existing mod of that name is replaced (its settings, kept by name, stay).

@@ -16,6 +16,8 @@
 #include "galaxy/mod_crash.h"
 #include "galaxy/mods.h"
 
+#include "mod_check.h"
+
 #include <archive.h>
 #include <archive_entry.h>
 
@@ -41,6 +43,69 @@ namespace fs = std::filesystem;
 bool expect(bool condition, const char* message) {
     if (!condition) std::cerr << "FAIL: " << message << '\n';
     return condition;
+}
+
+// A validator that does not take an input naming the game's functions (as a validator failing in the rules that read
+// them answers, state -1) and passes one without: check_is_never_made_weaker's.
+namespace weak_check {
+int calls = 0;
+bool named = false;
+LumaReport* const kRefused = reinterpret_cast<LumaReport*>(std::uintptr_t{1});
+LumaReport* const kPassed = reinterpret_cast<LumaReport*>(std::uintptr_t{2});
+LumaReport* validate(const LumaValidateInput* input) {
+    ++calls;
+    named = input->names != nullptr;
+    return named ? kRefused : kPassed;
+}
+std::int32_t state(const LumaReport* report) {
+    return report == kRefused ? -1 : 0;
+}
+const char* invalid(const LumaReport* report) {
+    return report == kRefused ? "the validator failed (a bug): index 7 past 3" : nullptr;
+}
+std::uint32_t count(const LumaReport*) {
+    return 0;
+}
+const LumaFinding* at(const LumaReport*, std::uint32_t, const char*) {
+    return nullptr;
+}
+const std::uint8_t* kept(const LumaReport*, std::uint64_t* size) {
+    static const std::uint8_t bytes[] = {'k', 'e', 'p', 't'};
+    *size = sizeof(bytes);
+    return bytes;
+}
+void release(LumaReport*) {}
+}  // namespace weak_check
+
+// M-161: a check the validator does not finish with the game's self-description is not made again without it, which
+// would pass a mod that fails only the rules that read it (L505, L508). validate_package fails after the one call and
+// says why; with no description given, the one call passes.
+bool check_is_never_made_weaker() {
+    bool ok = true;
+    const fs::path root = galaxy::test_temp_path("nebula_mods_check_weaker");
+    std::error_code ec;
+    fs::create_directories(root, ec);
+    namespace check = galaxy::modlog::check;
+    const check::Validator v{&weak_check::validate, &weak_check::state, &weak_check::invalid, &weak_check::count,
+                             &weak_check::at, &weak_check::kept, &weak_check::release};
+    check::Description self;
+    self.names = "Mario::update\tvoid ()\tf\t1\n";
+    check::Game game{"windows-x64", "RMGE01", "UsEnglish", nullptr, {}, &self};
+    std::string kept;
+    std::string why;
+    const bool with = check::validate_package(&v, "m", root, game, {}, UINT32_MAX, {}, kept, nullptr, &why);
+    ok &= expect(!with && weak_check::calls == 1 && weak_check::named && why == "the validator failed (a bug): index 7 past 3" &&
+                     kept.empty(),
+                 "a check that fails with the game's description is not made again without it");
+    const check::Description none;
+    game.self = &none;
+    weak_check::calls = 0;
+    why.clear();
+    const bool without = check::validate_package(&v, "m", root, game, {}, UINT32_MAX, {}, kept, nullptr, &why);
+    ok &= expect(without && weak_check::calls == 1 && !weak_check::named && kept == "kept" && why.empty(),
+                 "with no description, one call checks the mod");
+    fs::remove_all(root, ec);
+    return ok;
 }
 
 void write(const fs::path& path, std::string_view text) {
@@ -589,6 +654,35 @@ bool luma_import() {
     const galaxy::mods::ImportResult beside = galaxy::mods::import_mod(root / "Kaizo v2.luma", root / "mods");
     ok &= expect(beside.ok && beside.id == "kaizo-2" && !beside.replaced, "with its name taken by another mod, a name of its own");
     ok &= expect(galaxy::mods::import_mod(root / "Kaizo v2.luma", root / "mods").already, "the same .luma again: nothing added");
+    {
+        // M-144: an import goes on only when its check ran and refused nothing. A check that did not finish (no
+        // validator, or one that failed) adds nothing, as a refusal does; before, the mod was added unchecked.
+        const fs::path checked = root / "checked";
+        fs::create_directories(checked, ec);
+        const galaxy::mods::ImportCheck unfinished = [](const fs::path&, const std::string&, galaxy::mods::ImportResult& result) {
+            result.checked = false;
+            return false;
+        };
+        const galaxy::mods::ImportResult not_checked =
+            galaxy::mods::import_mod(root / "Kaizo v1.luma", checked, {}, nullptr, unfinished);
+        ok &= expect(!not_checked.ok && !not_checked.refused && not_checked.message == "NOT IMPORTED: Kaizo. IT COULD NOT BE CHECKED" &&
+                         fs::is_empty(checked, ec),
+                     "an import whose check did not finish adds nothing");
+        const galaxy::mods::ImportCheck refusing = [](const fs::path&, const std::string&, galaxy::mods::ImportResult& result) {
+            result.checked = true;
+            result.refused = true;
+            return false;
+        };
+        const galaxy::mods::ImportResult refused = galaxy::mods::import_mod(root / "Kaizo v1.luma", checked, {}, nullptr, refusing);
+        ok &= expect(!refused.ok && refused.refused && refused.message == "NOT IMPORTED: Kaizo" && fs::is_empty(checked, ec),
+                     "a refused import adds nothing");
+        const galaxy::mods::ImportCheck passing = [](const fs::path&, const std::string&, galaxy::mods::ImportResult& result) {
+            result.checked = true;
+            return true;
+        };
+        const galaxy::mods::ImportResult passed = galaxy::mods::import_mod(root / "Kaizo v1.luma", checked, {}, nullptr, passing);
+        ok &= expect(passed.ok && passed.checked && fs::exists(checked / "kaizo" / "luma.json"), "a checked import is added");
+    }
 #if defined(_WIN32)
     // A mod whose folder Windows won't move (a file in it open in another program): the update waits as
     // .update-<name> and takes its place at the next start; removing it leaves it whole.
@@ -1102,7 +1196,7 @@ int main() {
     // Every test runs, whichever fail.
     const bool results[] = {texture_names(), xml(), importing(), code_patch_notes(), setting_overlaps(), patches_by_key_in_the_plan(), layer_only_mods(), layer_assets(), libraries_load_when_needed(), libraries_act_with_their_users_permissions(), galaxy_saves(),
                             luma_rules(), folder_movies_go_to_the_cook(), luma_import(), text_options(), crash_record_text(),
-                            crash_record_files()};
+                            crash_record_files(), check_is_never_made_weaker()};
     bool ok = true;
     for (const bool passed : results) ok = ok && passed;
     std::cout << (ok ? "mods tests passed" : "mods tests FAILED") << '\n';

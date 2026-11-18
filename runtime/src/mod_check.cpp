@@ -5,7 +5,9 @@
 
 #include "galaxy/asset_store.h"
 #include "galaxy/luma_game_store.h"
+#include "galaxy/mod_import.h"
 #include "galaxy/mods.h"
+#include "galaxy/path_text.h"
 #include "galaxy/platform_paths.h"
 
 #include <luma.h>
@@ -102,22 +104,22 @@ bool read_description(const std::filesystem::path& folder, Description& out, std
         } else if (name == "luma_types.json" || name == "luma_services.json" || name == "luma_renderer.json") {
             std::filesystem::path& one = name == "luma_types.json" ? types : name == "luma_services.json" ? services : renderer;
             if (!one.empty()) {
-                why = "a second " + name.string() + " under " + folder.string();
+                why = "a second " + galaxy::path_text(name) + " under " + galaxy::path_text(folder);
                 return false;
             }
             one = path;
         }
     }
     if (error) {
-        why = folder.string() + ": " + error.message();
+        why = galaxy::path_text(folder) + ": " + error.message();
         return false;
     }
     std::sort(rows.begin(), rows.end(),
-              [](const std::filesystem::path& a, const std::filesystem::path& b) { return a.generic_string() < b.generic_string(); });
+              [](const std::filesystem::path& a, const std::filesystem::path& b) { return a.generic_u8string() < b.generic_u8string(); });
     const auto read = [&why](const std::filesystem::path& path, std::string& into) {
         std::ifstream in(path, std::ios::binary);
         if (!in) {
-            why = path.string() + " cannot be read";
+            why = galaxy::path_text(path) + " cannot be read";
             return false;
         }
         std::ostringstream text;
@@ -151,7 +153,7 @@ const Description& description() {
         if (folder.empty() || !std::filesystem::is_directory(folder, error)) {
             // A development build or a device with no self-description: as before, those rules go unchecked.
         } else if (!read_description(folder, d, why) || d.names.empty()) {
-            if (why.empty()) why = "no function rows under " + folder.string();
+            if (why.empty()) why = "no function rows under " + galaxy::path_text(folder);
             std::fprintf(stderr, "[modlog] the game's self-description is not used: %s\n", why.c_str());
             d = Description{};
         }
@@ -174,9 +176,14 @@ const Description& description() {
 
 bool validate_package(const Validator* v, std::string_view id, const std::filesystem::path& folder, const Game& game,
                       const std::vector<LumaInstalledMod>& installed, std::uint32_t position, const std::string& kept_in,
-                      std::string& kept_out, std::vector<Kept>* findings) {
-    if (v == nullptr) return false;
-    const std::string path = folder.string();
+                      std::string& kept_out, std::vector<Kept>* findings, std::string* why) {
+    const auto failed = [why](std::string text) {
+        if (why != nullptr) *why = std::move(text);
+        return false;
+    };
+    if (v == nullptr) return failed("the importer's library has no luma_validate");
+    // UTF-8, as the validator reads it: the code page's bytes named another folder, or none (M-150).
+    const std::string path = galaxy::path_text(folder);
     LumaValidateInput input{};
     input.size = sizeof(input);
     input.path = path.c_str();
@@ -192,7 +199,7 @@ bool validate_package(const Validator* v, std::string_view id, const std::filesy
     // The game's self-description, as LumaLink's check reads it: the code's names and types, the services catalog, and
     // the factory's classes, so only a placement of a class no list names waits for the check after the mods' start.
     // The validator takes the others only with the names.
-    const Description& self = description();
+    const Description& self = game.self != nullptr ? *game.self : description();
     if (!self.names.empty()) {
         input.names = self.names.data();
         input.names_size = self.names.size();
@@ -234,34 +241,15 @@ bool validate_package(const Validator* v, std::string_view id, const std::filesy
         input.store_key = key.c_str();
     }
     LumaReport* report = v->validate(&input);
-    if (v->state(report) < 0 && input.names != nullptr) {
-        // The self-description is the game's own: one the validator does not take (a file of another release) is a
-        // fault of the install, said; the mod is still checked as without it.
-        const char* why = v->invalid(report);
-        std::fprintf(stderr, "[modlog] %.*s: checked without the game's self-description, which the validator refuses: %s\n",
-                     static_cast<int>(id.size()), id.data(), why != nullptr ? why : "?");
-        v->release(report);
-        input.names = nullptr;
-        input.names_size = 0;
-        input.types = nullptr;
-        input.types_size = 0;
-        input.services = nullptr;
-        input.services_size = 0;
-        input.test_services = nullptr;
-        input.test_service_count = 0;
-        input.placement = nullptr;
-        input.placement_size = 0;
-        input.renderer = nullptr;
-        input.renderer_size = 0;
-        input.device_features = nullptr;
-        report = v->validate(&input);
-    }
     if (v->state(report) < 0) {
-        const char* why = v->invalid(report);
-        std::fprintf(stderr, "[modlog] %.*s: the check did not run: %s\n", static_cast<int>(id.size()), id.data(),
-                     why != nullptr ? why : "?");
+        // Not checked again without the game's self-description (M-161): a mod that fails the rules that read it would
+        // pass without them. A description the validator does not take (a file of another release) is a fault of the
+        // install, and every package is then off with this reason in its log.
+        const char* const said = v->invalid(report);
+        const std::string text = said != nullptr && said[0] != 0 ? said : "no reason given";
+        std::fprintf(stderr, "[modlog] %.*s: the check did not finish: %s\n", static_cast<int>(id.size()), id.data(), text.c_str());
         v->release(report);
-        return false;
+        return failed(text);
     }
     std::uint64_t size = 0;
     const std::uint8_t* bytes = v->kept(report, &size);
@@ -292,7 +280,10 @@ ImportCheck import(const std::filesystem::path& folder, const std::vector<StartP
                    const std::function<bool(std::string_view)>& refused_at_start) {
     ImportCheck out;
     const Validator* const v = validator();
-    if (v == nullptr) return out;
+    if (v == nullptr) {
+        out.why = "the importer's library has no luma_validate";
+        return out;
+    }
     // The packages placed now, each by its kept report: the last start's, else (placed since, or before any start's
     // check) one made now, alone. On as the list has it, but off when it would not start: refused at the last start, a
     // report made now with an Error, or a report naming no id (the validator takes those only off).
@@ -328,7 +319,7 @@ ImportCheck import(const std::filesystem::path& folder, const std::vector<StartP
     // One call at import (validator.md 2: no kept report of its own, every rule), last in the list, against them all.
     std::string kept;
     std::vector<Kept> findings;
-    if (!validate_package(v, "import", folder, game, installed, UINT32_MAX, {}, kept, &findings)) return out;
+    if (!validate_package(v, "import", folder, game, installed, UINT32_MAX, {}, kept, &findings, &out.why)) return out;
     out.ran = true;
     for (const Kept& k : findings) {
         out.findings.push_back({k.code, k.level == 0, k.file, k.played, k.line, k.column});
@@ -338,3 +329,20 @@ ImportCheck import(const std::filesystem::path& folder, const std::vector<StartP
 }
 
 }  // namespace galaxy::modlog::check
+
+namespace galaxy::modlog {
+
+bool take_import_check(const ImportCheck& found, galaxy::mods::ImportResult& result) {
+    result.checked = found.ran;
+    result.refused = found.refused;
+    for (const ImportFinding& f : found.findings) {
+        result.findings.push_back({f.error, f.code, f.file, f.text, f.line, f.column});
+    }
+    if (!found.ran) {
+        std::fprintf(stderr, "[mods] not imported: the check did not finish: %s\n",
+                     found.why.empty() ? "no reason given" : found.why.c_str());
+    }
+    return found.ran && !found.refused;
+}
+
+}  // namespace galaxy::modlog

@@ -102,7 +102,10 @@ galaxy_test(galaxy_precise_wait_tests SOURCES ${rt}/precise_wait_tests.cpp)
 galaxy_test(galaxy_luma_tests SOURCES ${rt}/luma_tests.cpp ${rt}/luma.cpp)
 galaxy_test(galaxy_luma_net_reach_tests SOURCES ${rt}/luma_net_reach_tests.cpp ${rt}/luma_net_reach.cpp)
 galaxy_test(galaxy_mods_tests SOURCES ${rt}/mods_tests.cpp ${rt}/mod_xml.cpp ${rt}/mods.cpp ${rt}/mod_consent.cpp ${rt}/luma.cpp
-    ${rt}/mod_import.cpp ${rt}/texture_categories.cpp ${rt}/dolphin_pack.cpp ${rt}/asset_store.cpp LIBS galaxy_atomic_file nebula_archive)
+    ${rt}/mod_import.cpp ${rt}/texture_categories.cpp ${rt}/dolphin_pack.cpp ${rt}/asset_store.cpp ${rt}/mod_check.cpp
+    ${rt}/luma_game_store.cpp LIBS galaxy_atomic_file nebula_archive ${CMAKE_DL_LIBS})
+# mod_check.cpp's validator call (M-161) with a stand-in validator; the program's version as the root build gives it.
+target_compile_definitions(galaxy_mods_tests PRIVATE NEBULA_VERSION="${PROJECT_VERSION}")
 # The consent store (docs/modding/concepts/permissions.md): answers, digests and their round trip through the mod settings.
 galaxy_test(galaxy_mod_consent_tests SOURCES ${rt}/mod_consent_tests.cpp ${rt}/mod_consent.cpp ${rt}/mods.cpp ${rt}/mod_xml.cpp
     ${rt}/luma.cpp ${rt}/mod_import.cpp ${rt}/texture_categories.cpp ${rt}/dolphin_pack.cpp ${rt}/asset_store.cpp

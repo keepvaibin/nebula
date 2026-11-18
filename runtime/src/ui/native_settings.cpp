@@ -2653,14 +2653,13 @@ std::shared_ptr<const NativeSettingsPicture> read_menu_picture(const std::filesy
 }
 
 // With s_mods_mutex held.
-// The packages this start's check refused (modlog::check_packages, validator.md 2) say so on their rows, as the start
-// did: the list's own pass leaves the validator's findings to it. The check ran before the game started; read only
-// after.
+// The packages this start's check refused or could not finish (modlog::check_packages, validator.md 2) say so on their
+// rows, as the start did: the list's own pass leaves the validator's findings to it. The check ran before the game
+// started; read only after.
 void mark_refused(std::vector<galaxy::mods::ModInfo>& mods) {
     for (galaxy::mods::ModInfo& mod : mods) {
-        if (mod.package && mod.problem.empty() && galaxy::modlog::package_refused(mod.id)) {
-            mod.problem = galaxy::modlog::refused_sentence();
-        }
+        if (!mod.package || !mod.problem.empty()) continue;
+        if (const char* const problem = galaxy::modlog::start_problem(mod.id)) mod.problem = problem;
     }
 }
 
@@ -3381,13 +3380,7 @@ bool check_import_package(const std::filesystem::path& staged, const std::string
             if (mod.package && mod.id != id) others.push_back({mod.id, mod.path, mod.enabled});
         }
     }
-    const galaxy::modlog::ImportCheck found = galaxy::modlog::check_import(staged, others);
-    result.checked = found.ran;
-    result.refused = found.refused;
-    for (const galaxy::modlog::ImportFinding& f : found.findings) {
-        result.findings.push_back({f.error, f.code, f.file, f.text, f.line, f.column});
-    }
-    return !found.refused;
+    return galaxy::modlog::take_import_check(galaxy::modlog::check_import(staged, others), result);
 }
 
 // False when it did not begin (nothing to import, or an import running).

@@ -1,0 +1,40 @@
+{
+  "harness": 1,
+  "name": "3138-start-any-name",
+  "about": "A package with a file named in any script (here a star, which no Windows code page for Western languages holds) is checked at the start like any other: its Note L218, no Error (before, the name ended the start's check)",
+  "proves": [
+    "validator.start"
+  ],
+  "mods": [
+    {
+      "path": "../mods/jv-star",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "jv-star",
+        "source": "validator",
+        "level": "note",
+        "code": 218
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jv-star",
+        "level": "error"
+      },
+      "absent": true
+    }
+  ]
+}

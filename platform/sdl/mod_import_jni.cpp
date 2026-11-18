@@ -57,13 +57,7 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_dev_nebula_galaxy_ModImport_importF
                 if (mod.package && mod.id != id) others.push_back({mod.id, mod.path, mod.enabled});
             }
             // No start's verdicts outside the game: a placed package is off only by its own report.
-            const galaxy::modlog::ImportCheck found = galaxy::modlog::check::import(staged, others, game, {});
-            result.checked = found.ran;
-            result.refused = found.refused;
-            for (const galaxy::modlog::ImportFinding& f : found.findings) {
-                result.findings.push_back({f.error, f.code, f.file, f.text, f.line, f.column});
-            }
-            return !found.refused;
+            return galaxy::modlog::take_import_check(galaxy::modlog::check::import(staged, others, game, {}), result);
         };
         std::atomic<bool> cancel{false};
         jmethodID update = nullptr;

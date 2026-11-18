@@ -1,0 +1,57 @@
+{
+  "harness": 1,
+  "name": "3133-start-kept-cut",
+  "about": "A kept report cut short on disk is made again at the next start: the refused mod keeps its finding, and a mod added beside it is checked against it (its Note L218), nothing called not checked (before, the added mod's check did not finish and it went unchecked)",
+  "proves": [
+    "validator.start.kept"
+  ],
+  "continue_from": "3131-start-refused",
+  "cut_files": [
+    "mods/.cooked/validate/jv-bad.kept"
+  ],
+  "mods": [
+    {
+      "path": "../mods/jv-bad",
+      "loads": false
+    },
+    {
+      "path": "../mods/jv-none",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "jv-bad",
+        "source": "validator",
+        "level": "error",
+        "code": 204
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "jv-none",
+        "source": "validator",
+        "level": "note",
+        "code": 218
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "source": "loader"
+      },
+      "absent": true
+    }
+  ]
+}

@@ -61,7 +61,8 @@ struct ImportResult {
 };
 
 // Checks a package staged for import (`staged`, laid out as a placed mod) under the folder name `id` it will take
-// (an update's: the mod it replaces). Sets result.checked, refused and findings; true lets the import go on.
+// (an update's: the mod it replaces). Sets result.checked, refused and findings; true lets the import go on, false
+// (refused, or the check did not finish) adds nothing.
 using ImportCheck = std::function<bool(const std::filesystem::path& staged, const std::string& id, ImportResult& result)>;
 
 // True when `path` is an archive the importer can read. Checked by content, so a fake .zip is refused.
