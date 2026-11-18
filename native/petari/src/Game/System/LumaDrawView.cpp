@@ -10,11 +10,13 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/System/LumaCore.hpp"
 #include "Game/System/LumaDraw.hpp"
+#include "Game/System/LumaMainCameraCuts.hpp"
 #include "Game/System/LumaModLog.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/MotionSignal.hpp"
 #include <luma_draw_view.h>
 #include <luma_modlog.h>
 #include <luma_services.h>
@@ -76,6 +78,12 @@ namespace luma {
                 Pos3f sGameView;
                 f32 sGameFov = 45.0f;
                 const CameraContext* sGameContext = nullptr;
+                // The game's own camera under the mod's view, as MR::getCamZdir and MR::getCamPos read it: taken with
+                // sGameView, for the player's camera rules (gameCamera).
+                Vec3f sGameZdir;
+                Vec3f sGamePos;
+                // The main camera's cuts (M-068).
+                MainCuts sCuts;
                 // main_rig: the rig (its actor's pose read at each apply; a null actor: it left the game), the mod's look
                 // and up (none: the rig's), the eye moved `ahead` along the look, the main near plane (0: the game's).
                 // The point the held main camera looks at (main_eye's at, a rig's actor place or joint look) and whether
@@ -618,6 +626,9 @@ namespace luma {
                 }
 
                 void mainGiveBack() {
+                    if (sCuts.givenBack()) {
+                        MotionSignal::cameraCut();  // the game's own view again: nothing blends from the mod's
+                    }
                     CameraContext* const pContext = cameraContext();
                     if (pContext != nullptr && pContext == sGameContext) {
                         MR::setCameraViewMtx(sGameView);
@@ -692,6 +703,11 @@ namespace luma {
                     const Pos3f& rNow = MR::getCameraViewMtx();
                     if (fresh || memcmp(&rNow, &sApplied, sizeof(Pos3f)) != 0) {
                         sGameView.set(rNow);  // the game moved its camera since: that is its own now
+                        sGameZdir = MR::getCamZdir();
+                        sGamePos = MR::getCamPos();
+                    }
+                    if (fresh) {
+                        (void)sCuts.asked(sMainMod);  // a new scene's context: the held view there is a cut
                     }
                     if (fresh || pContext->mFovy != sAppliedFov) {
                         sGameFov = pContext->mFovy;
@@ -707,6 +723,9 @@ namespace luma {
                     sAppliedFov = pContext->mFovy;
                     sAppliedNear = pContext->mNearZ;
                     sMainApplied = true;
+                    if (sCuts.shownNow()) {
+                        MotionSignal::cameraCut();  // nothing blends into this view
+                    }
                     mirrorFollow();
                 }
 
@@ -735,6 +754,7 @@ namespace luma {
                     sMainView.setInline(camera);
                     sMainAt.set(pEye->at[0], pEye->at[1], pEye->at[2]);
                     sMainFov = pEye->fov_y;
+                    sCuts.held(pMod);
                     sMainMod = pMod;
                     sMainOnRig = false;
                     sMainNear = 0.0f;
@@ -789,9 +809,17 @@ namespace luma {
                     sMainFov = pCamera->fov_y;
                     sMainNear = pCamera->rig == LUMA_DRAW_VIEW_RIG_JOINT ? pCamera->near_z : 0.0f;
                     sMainOnRig = true;
+                    sCuts.held(pMod);
                     sMainMod = pMod;
                     (void)mainRigNow();  // the view from the poses now; worked out again at each apply
                     return LUMA_OK;
+                }
+
+                int32_t svcMainCut(const LumaMod* pMod) {
+                    if (const s32 status = enter(pMod, "draw.view.main_cut"); status != LUMA_OK) {
+                        return status;
+                    }
+                    return sCuts.asked(pMod) ? LUMA_OK : LUMA_E_STATE;
                 }
 
                 const LumaDrawViewService cTable = {
@@ -806,6 +834,7 @@ namespace luma {
                     svcEyeOf,
                     svcMainEye,
                     svcMainRig,
+                    svcMainCut,
                 };
 
                 // ---- The provider ----
@@ -882,6 +911,19 @@ namespace luma {
 
             const Vec3f* mainWatchPos() {
                 return sMainApplied && sMainMod != nullptr ? &sMainAt : nullptr;
+            }
+
+            bool gameCamera(Vec3f* pZdir, Vec3f* pPos) {
+                if (sMainMod == nullptr || !sCuts.shown() || cameraContext() != sGameContext) {
+                    return false;
+                }
+                *pZdir = sGameZdir;
+                *pPos = sGamePos;
+                return true;
+            }
+
+            u32 mainCuts() {
+                return sCuts.count();
             }
 
             void render() {

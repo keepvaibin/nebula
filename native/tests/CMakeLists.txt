@@ -44,3 +44,5 @@ native_test(native_arena_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/arena_tests.cp
     "${game_src}/System/NebulaArena.cpp")
 # The frame-list writer, against the list the renderer reads.
 native_test(native_frame_list_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/frame_list_tests.cpp" "${game_src}/Render/FrameList.cpp")
+# The main camera's cuts as draw.view counts them (Game/System/LumaMainCameraCuts.hpp, header only).
+native_test(native_main_camera_cut_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/main_camera_cut_tests.cpp")

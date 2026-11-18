@@ -6,9 +6,10 @@
                 (behind him at this start, where the game's camera is), looking at his middle, fov 50 ("camera"). k 3 set_on 0 ("off") and the camera turned to look away ("camera_off"):
                 the texture keeps its picture. k 4 set_on 1 ("on"), a WORLD rig at the player, offset (0, 150, 400), fov
                 50 ("rig"); eye_of that rig: "eye_dx", "eye_dy", "eye_dz" (the eye less the player's place, rounded),
-                "at_d2" (|at - place| squared, rounded), "eye_status". k 5 main_eye 600 to the player's side and 200 up, looking at
-                him ("main"). k 6 the game's MR::getCameraWatchPos is the point that main camera looks at ("main_watch_d2": the
-                distance squared, rounded), then main_eye null ("main_back"); k 7 the watch point is the game's camera's
+                "at_d2" (|at - place| squared, rounded), "eye_status"; main_cut while the mod holds no main camera
+                ("cut_unheld": E_STATE, not reported). k 5 main_eye 600 to the player's side and 200 up, looking at
+                him ("main"), main_cut ("cut": OK). k 6 the game's MR::getCameraWatchPos is the point that main camera looks at ("main_watch_d2": the
+                distance squared, rounded), then main_eye null ("main_back"), main_cut ("cut_back": E_STATE); k 7 the watch point is the game's camera's
                 again, away from that point ("back_watch_d2" over 100). k 7 release ("release"), again ("release2": E_HANDLE); the
                 draw of its texture after: E_HANDLE ("image_after").
    fv-args (2) 2472: the refusals at k 1, each reported: create 0 wide ("zero": E_ARGUMENT), past 1024 ("wide"), a null
@@ -129,15 +130,18 @@ static int32_t trigger(LumaCall* call, void* user) {
         const float dx = eye.at[0] - p.x, dy = eye.at[1] - p.y, dz = eye.at[2] - p.z;
         lt_fact("at_d2", rounded(dx * dx + dy * dy + dz * dz));
         lt_fact("eye_fov", rounded(eye.fov_y));
+        lt_fact("cut_unheld", view->main_cut(lt_mod));
     }
     if (k == 5) {
         const LumaDrawViewEye eye = {{p.x + 600.0f, p.y + 200.0f, p.z}, {p.x, p.y + 80.0f, p.z}, {0.0f, 1.0f, 0.0f}, 50.0f};
         main_at = (Vec3){eye.at[0], eye.at[1], eye.at[2]};
         lt_fact("main", view->main_eye(lt_mod, &eye));
+        lt_fact("cut", view->main_cut(lt_mod));
     }
     if (k == 6) {
         lt_fact("main_watch_d2", rounded(watch_d2(main_at)));
         lt_fact("main_back", view->main_eye(lt_mod, 0));
+        lt_fact("cut_back", view->main_cut(lt_mod));
     }
     if (k == 7) {
         lt_fact("back_watch_d2", rounded(watch_d2(main_at)));
@@ -198,7 +202,7 @@ static int32_t trigger(LumaCall* call, void* user) {
 
 static const LumaImport imports[] = {
     LUMA_SERVICE(draw, LUMA_DRAW_NAME, "1.0"),
-    LUMA_SERVICE(view, LUMA_DRAW_VIEW_NAME, "1.0"),
+    LUMA_SERVICE(view, LUMA_DRAW_VIEW_NAME, "1.2"),
     LUMA_FUNCTION(player_of, "MR::getPlayerDemoActor", "LiveActor *()"),
     LUMA_FUNCTION(get_player_pos, "MR::getPlayerPos", "Vec3f *()"),
     LUMA_FUNCTION(watch_pos, "MR::getCameraWatchPos", "const Vec3f &()"),

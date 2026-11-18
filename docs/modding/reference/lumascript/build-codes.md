@@ -177,6 +177,7 @@ Codes S0901 and above are script errors while the game runs, not build codes. Fo
 | S0155 | error | `can` takes one game function's name, as `can(MR::isPlayerDead)` |
 | S0156 | error | `holds` takes the name of a set the game proves: {sets}, as `holds("player")` |
 | S0157 | error | `svc.{found}` may not be given (`use optional`): test it first with `if {alias} != none` or `guard {alias} != none` |
+| S0158 | error | this match is too large to check that it covers every value: add `else` |
 | S0160 | error | {need} was built with another LumaLink (runtime layout {found}, this one {layout}); rebuild {need} with a current LumaLink |
 | S0800 | error | LumaLink cannot build {what} yet |
 

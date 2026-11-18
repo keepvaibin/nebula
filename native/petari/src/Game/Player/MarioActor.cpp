@@ -50,6 +50,7 @@
 #include "Game/System/NebulaAchievements.hpp"
 #include "Game/System/GameRules.hpp"
 #include "Game/System/LumaCore.hpp"
+#include "Game/System/LumaDrawView.hpp"
 
 namespace {
     // The air the player has under water (8).
@@ -2816,16 +2817,58 @@ void MarioActor::forceGameOverSink() {
     setNerve(GET_NERVE(MarioActor, MarioActorNrvGameOverSink));
 }
 
+// The player's camera rules (a cut: a turn of 30 degrees or a move of 500 in one step; the turn hold: 45 degrees, Mario::
+// fixHeadFrontVecByGravity) are the game's, on the game's own camera. Under a mod's main camera (draw.view) they read the
+// game's camera underneath, which the mod's view never moves: the mod's view turns and moves as the mod and the player's
+// look turn it, so it cuts only where draw.view says it does (its showing, its end, main_cut); at such a cut the hold
+// reads the main camera's own jump, as the game's rule does at its cuts (M-068). With no mod's view the members are read
+// exactly as before. One player at a time.
+namespace {
+    struct GameCameraSeen {
+        bool modView;      // the last update read a mod's view (the game's own camera from luma::draw::view::gameCamera)
+        bool statedCut;    // the last update saw a cut draw.view said
+        u32 cuts;          // draw.view's cuts seen
+        Vec3f zdir;        // the game's own camera at the last two updates
+        Vec3f prevZdir;
+        Vec3f pos;
+    };
+    GameCameraSeen sSeen;
+}  // namespace
+
+f32 MarioActor::getCameraTurn() const {
+    if (sSeen.modView && !sSeen.statedCut) {
+        return MR::diffAngleAbs(sSeen.zdir, sSeen.prevZdir);
+    }
+    return MR::diffAngleAbs(mCamDirZ, mPrevCamDirZ);
+}
+
 void MarioActor::updateCameraInfo() {
     mCameraCut = false;
 
-    if (MR::diffAngleAbs(mCamDirZ, MR::getCamZdir()) >= PI / 6.0f) {
+    Vec3f gameZdir = MR::getCamZdir();
+    Vec3f gamePos = MR::getCamPos();
+    const bool modView = luma::draw::view::gameCamera(&gameZdir, &gamePos);
+    const Vec3f& rSeenZdir = sSeen.modView || modView ? sSeen.zdir : mCamDirZ;
+    const Vec3f& rSeenPos = sSeen.modView || modView ? sSeen.pos : mCamPos;
+
+    if (MR::diffAngleAbs(rSeenZdir, gameZdir) >= PI / 6.0f) {
         mCameraCut = true;
     }
 
-    if ((mCamPos - MR::getCamPos()).length() > 500.0f) {
+    if ((rSeenPos - gamePos).length() > 500.0f) {
         mCameraCut = true;
     }
+
+    const u32 cuts = luma::draw::view::mainCuts();
+    sSeen.statedCut = cuts != sSeen.cuts;
+    sSeen.cuts = cuts;
+    if (sSeen.statedCut) {
+        mCameraCut = true;
+    }
+    sSeen.modView = modView;
+    sSeen.prevZdir = sSeen.zdir;
+    sSeen.zdir = gameZdir;
+    sSeen.pos = gamePos;
 
     if (mCameraCut) {
         mMario->changeAnimationInterpoleFrame(0);

@@ -505,7 +505,7 @@ void Mario::checkForceGrounding() {
 void Mario::fixHeadFrontVecByGravity() {
     Vec3f startGroundNorm(mGroundNorm);
 
-    if (MR::diffAngleAbs(mActor->mCamDirZ, mActor->mPrevCamDirZ) >= MR::toRadian(45.0f) && isStickOn()) {
+    if (mActor->getCameraTurn() >= MR::toRadian(45.0f) && isStickOn()) {
         mCameraTurnHold = true;
         mDrawStates.moveDirKept = true;
 

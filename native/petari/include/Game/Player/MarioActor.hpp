@@ -182,6 +182,9 @@ public:
     void forceGameOverSink();
 
     void updateCameraInfo();
+    // The camera's turn since the last update for the turn hold (Mario::fixHeadFrontVecByGravity): the main camera's, or
+    // under a mod's main camera the game's own one's, the main camera's at a cut draw.view states (M-068).
+    f32 getCameraTurn() const;
     bool binderFilter(const Triangle*);
 
     void setPunchHitTimer(u8);

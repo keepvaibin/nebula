@@ -14,7 +14,11 @@
    before the game's camera works (so the game's camera works out its pose from its own, never from the mod's), then sets
    the main camera right after the game's camera has moved, before anything reads it (the player's stick directions,
    clipping, the pointer, sound), and again before the scene's models take their poses (a rig on this frame's joints).
-   Import 1.1 for main_rig: LUMA_SERVICE(slot, "draw.view", "1.1"). */
+   Import 1.1 for main_rig: LUMA_SERVICE(slot, "draw.view", "1.1"); 1.2 for main_cut.
+   The main camera's cuts: nothing blends across them, neither the picture between two frames nor the player's
+   animation. Its view showing first, another mod taking it, its showing in a new scene and the game's own view showing
+   again are cuts LumaCore says itself; a turn or a move of the view is never one, however fast (the player's look);
+   main_cut says one for a mod's own jump (a cutscene's new shot). */
 #ifndef LUMA_DRAW_VIEW_H
 #define LUMA_DRAW_VIEW_H
 
@@ -30,7 +34,7 @@ extern "C" {
 
 #define LUMA_DRAW_VIEW_NAME "draw.view"
 #define LUMA_DRAW_VIEW_MAJOR 1u
-#define LUMA_DRAW_VIEW_MINOR 1u
+#define LUMA_DRAW_VIEW_MINOR 2u
 
 /* Views one mod has at once, and all mods together. */
 #define LUMA_DRAW_VIEWS_MOST 2u
@@ -146,6 +150,10 @@ typedef struct LumaDrawViewService {
        naming it, reported; a look or up not finite or zero, an up along the look, an ahead out of range:
        LUMA_E_ARGUMENT naming it, reported. Ends with the mod. */
     int32_t (*main_rig)(const LumaMod* mod, const LumaDrawViewCamera* camera, const LumaDrawViewLook* look);
+    /* 1.2. Game thread. The main camera's next view is a cut (the header's first comment): nothing blends into it.
+       LUMA_OK. The mod does not hold the main camera: LUMA_E_STATE, not reported (the view it would cut is the game's
+       own or another mod's). */
+    int32_t (*main_cut)(const LumaMod* mod);
 } LumaDrawViewService;
 
 #ifdef __cplusplus

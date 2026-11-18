@@ -62,7 +62,7 @@ namespace luma {
                 {"draw", 1, 0, nullptr, "draw"},
                 {"movie", 1, 0, nullptr, "movies"},
                 {"draw.inst", 1, 0, nullptr, "draw"},
-                {"draw.view", 1, 1, nullptr, "draw"},
+                {"draw.view", 1, 2, nullptr, "draw"},
                 {"draw.post", 1, 0, nullptr, "draw"},
                 {"draw.native", 1, 1, LUMA_DRAW_NATIVE_PERMISSION, "draw"},
                 {"anim", 1, 1, nullptr, "animation"},

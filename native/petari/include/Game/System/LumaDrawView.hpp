@@ -29,6 +29,13 @@ namespace luma {
             // game's camera's own), so everything placed by the camera's watch point (sound emitters, the ocean ring,
             // a mod's read of the camera) follows the main camera as the view does.
             const Vec3f* mainWatchPos();
+            // The player's camera rules (MarioActor::updateCameraInfo, M-068): true while the scene's context holds a
+            // mod's main camera, with the game's own camera underneath in *pZdir and *pPos (as MR::getCamZdir and
+            // MR::getCamPos read it); false: the context holds the game's own (nothing written).
+            bool gameCamera(Vec3f* pZdir, Vec3f* pPos);
+            // The main camera's cuts so far (Game/System/LumaMainCameraCuts.hpp): a change since a reader's last look is
+            // a cut.
+            u32 mainCuts();
             // NebulaArena::destroy: views following an actor in [pStart, pEnd) stop following (the camera stays); a
             // main rig on one gives the game its camera back at the next apply.
             void released(const void* pStart, const void* pEnd);

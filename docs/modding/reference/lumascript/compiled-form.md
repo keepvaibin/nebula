@@ -86,6 +86,7 @@ bytes.
 | struct `S`, enum `E` of module `m` | `lm_m__S`, `lm_m__E` |
 | a hook | `lm_hook_<n>` (n: the hook's place in the module, from 0) |
 | a task | `lm_task_<n>` and its frame struct `lm_task_<n>_frame` |
+| `==` on a struct or an enum with values | `lm_eq_<n>` in `lm.h`, one function per type, calling those of the types it holds |
 | `export c fn f` | `f`, hidden visibility: callable from the mod's own C, never from the game |
 | run-time support | `lumart_*` |
 

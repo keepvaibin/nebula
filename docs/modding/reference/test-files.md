@@ -48,7 +48,7 @@ Any key that is not on this page, anywhere in the file, stops the test with an e
 | Key | Required | Description |
 |---|---|---|
 | `harness` | Yes | `1`. |
-| `name` | Yes | The test's name: letters, digits, `-`, `_` and `.`. Unique within a suite. |
+| `name` | Yes | The test's name: letters, digits, `-`, `_` and `.`, not dots alone. A test's runs are kept in a folder of this name, so it is unique within a suite whatever its case; `lumalink test` refuses a mod with two tests of one name. |
 | `about` | Yes | One line that says what the test shows. |
 | `steps` | Yes | What happens, on the test clock. See [Steps](#steps). Exactly one step is an `end` step. |
 | `expect` | Yes | What must hold after the run. See [Checks](#checks). It can be empty for a test that only has to reach its end. |

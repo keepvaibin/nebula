@@ -364,6 +364,10 @@ around `proceed` saves and restores it: `let was = current; current = self; proc
   interpolation, and each node an operator or a postfix wraps around what came before (`a + b + c` is two deep,
   `f` two, `x as A as B` two). Past it is S0022 at the place, and the parse goes on. The compiler works on a stack
   of its own (64 MB), so any program within the limit is read in any build.
+- Structs and enums nest through their fields within the same limit. A struct is one level more than its deepest
+  field's type, and a type inside a type is one level (`list<S>` is one more than `S`). Structs that reach each other
+  through a list count the sum of their levels. Past it is S0022, once, at the struct or enum that starts the chain,
+  and the fields of each one past it are not checked further.
 - A line end after `>` or `>>` is not dropped by the lexer, so a type ending in them ends its
   line (`items: list<int>`, `target: ref<Actor>`, `var m: map<text, list<int>>`). As operators they still go on to the
   next line (`a >` / `b` is one comparison, `a >>` / `b` one shift): the parser skips the line end after them.
