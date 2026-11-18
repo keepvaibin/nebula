@@ -1580,6 +1580,11 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
     return {(__bridge void*)g_window, false};
 }
 
+void finish_output() noexcept {
+    std::fflush(stdout);
+    std::fflush(stderr);
+}
+
 void close_game_window(WindowOwner& owner) noexcept {
     using namespace galaxy::sdl;
     owner.window = nullptr;

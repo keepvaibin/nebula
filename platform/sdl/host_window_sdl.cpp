@@ -61,6 +61,7 @@ namespace galaxy::render::vk {
 #if defined(__ANDROID__)
 #include <android/log.h>
 #include <android/native_window.h>
+#include <fcntl.h>
 #include <jni.h>
 #include <unistd.h>
 #endif
@@ -230,6 +231,11 @@ void finger_speed(std::uint64_t now_us, float& vx, float& vy) {
 }
 
 #if defined(__ANDROID__)
+// forward_output_to_logcat's pipe end that stdout and stderr write to, and whether its reader has written all of it
+// (finish_forwarded_output).
+int g_output_write = -1;
+std::atomic<bool> g_output_read{false};
+
 // stdout and stderr to logcat and to <data>/logs/game.log, line by line (the host and the renderer log there).
 void forward_output_to_logcat() {
     static int pipe_fds[2];
@@ -248,6 +254,7 @@ void forward_output_to_logcat() {
     setvbuf(stderr, nullptr, _IONBF, 0);
     dup2(pipe_fds[1], STDOUT_FILENO);
     dup2(pipe_fds[1], STDERR_FILENO);
+    g_output_write = pipe_fds[1];
     // A crash's report goes to the file itself: the thread below stops with the rest when the system dumps the process.
     install_crash_log(file != nullptr ? fileno(file) : -1);
     std::thread([file] {
@@ -264,6 +271,12 @@ void forward_output_to_logcat() {
         for (;;) {
             const ssize_t n = read(pipe_fds[0], line + used, sizeof(line) - 1 - used);
             if (n <= 0) {
+                // The end (finish_forwarded_output): a last line with no line end is written too.
+                if (used != 0) {
+                    line[used] = '\0';
+                    emit(line);
+                }
+                g_output_read.store(true, std::memory_order_release);
                 return;
             }
             used += static_cast<std::size_t>(n);
@@ -285,6 +298,28 @@ void forward_output_to_logcat() {
             }
         }
     }).detach();
+}
+
+// Before the process ends at once (std::_Exit): the pipe's writers are closed, so the reader writes what is still in the
+// pipe and ends; at most a second is waited for it (a reader held in logcat is left).
+void finish_forwarded_output() noexcept {
+    if (g_output_write < 0) {
+        return;
+    }
+    std::fflush(stdout);
+    std::fflush(stderr);
+    const int none = open("/dev/null", O_WRONLY | O_CLOEXEC);
+    if (none < 0) {
+        return;
+    }
+    dup2(none, STDOUT_FILENO);
+    dup2(none, STDERR_FILENO);
+    close(none);
+    close(g_output_write);
+    g_output_write = -1;
+    for (int waited = 0; waited < 1000 && !g_output_read.load(std::memory_order_acquire); ++waited) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
 }
 
 // A method of the activity (GameActivity.java) on its UI thread's terms: it posts the work itself. `method` is a
@@ -2042,6 +2077,15 @@ void close_game_window(WindowOwner& owner) noexcept {
         owner.window = nullptr;
     }
     galaxy::sdl::g_window = nullptr;
+}
+
+void finish_output() noexcept {
+#if defined(__ANDROID__)
+    galaxy::sdl::finish_forwarded_output();
+#else
+    std::fflush(stdout);
+    std::fflush(stderr);
+#endif
 }
 
 void show_window(NativeWindow window) noexcept {
