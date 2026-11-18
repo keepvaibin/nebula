@@ -6,20 +6,23 @@
 class SaveDataHandleSequence;
 class SysInfoWindow;
 
-// What the game shows when its save cannot be used: a damaged file (start a new one, or play without saving), or a
-// save the drive refused (said once; the game goes on).
+// What the game shows when its save cannot be used: a damaged file (start a new one, or play without saving), a file a
+// newer Nebula wrote (said, then the game plays without saving), or a save the drive refused (said once; the game goes
+// on).
 class SaveErrorSequence : public ActorStateBase< SaveDataHandleSequence > {
 public:
     SaveErrorSequence(SaveDataHandleSequence*, SysInfoWindow*);
 
     void startSaveFailed();
     void startDamaged();
+    void startNewer();
     bool tryUnrecoverable(SaveRequest::Result);
     void restoreFromReset();
     void exeIdle();
     void exeError();
     void exeDamagedConfirm();
     void exeNoSaveConfirm();
+    void exeNewer();
     bool isEnablePointer() const;
     bool isResultFileCorrupted() const;
 

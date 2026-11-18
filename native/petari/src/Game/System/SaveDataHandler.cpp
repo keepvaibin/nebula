@@ -143,7 +143,12 @@ bool SaveDataHandler::requestLoadSaveData(int index) {
 
 bool SaveDataHandler::acceptLoaded() {
     const char* const pName = cReadNames[mReadIndex];
-    return readNative(mBuffer, mReadLength, pName, mFiles) || readOld(mBuffer, mReadLength, pName, mFiles);
+    mNewerFormat = 0;
+    if (readNative(mBuffer, mReadLength, pName, mFiles)) {
+        return true;
+    }
+    // A newer Nebula's save is not an old one either.
+    return mNewerFormat == 0 && readOld(mBuffer, mReadLength, pName, mFiles);
 }
 
 bool SaveDataHandler::readNative(const u8* pBytes, u32 length, const char* pName, File* pFiles) {
@@ -153,6 +158,12 @@ bool SaveDataHandler::readNative(const u8* pBytes, u32 length, const char* pName
 
     const u32 version = readU32(pBytes + 4);
     const u32 count = readU32(pBytes + 12);
+    if (version > cVersion) {
+        // Not damaged: a later Nebula's format, which this build cannot read and must never write over.
+        nebula_log("save: %s was written by a newer Nebula (save format %u; this one reads %u)\n", pName, version, cVersion);
+        mNewerFormat = version;
+        return false;
+    }
     if (version != cVersion || count > (length - cHeaderSize) / cRowSize ||
         readU32(pBytes + 8) != crc32(pBytes + cHeaderSize, length - cHeaderSize)) {
         nebula_log("save: %s is damaged\n", pName);

@@ -139,6 +139,14 @@ def load_json(path):
         raise HarnessError("%s cannot be read as JSON: %s" % (path, error))
 
 
+def place_saves(test, run_folder):
+    """The test's own start saves (its "saves" folder) into the run's save folder."""
+    if test.get("saves"):
+        for f in sorted((test["folder"] / test["saves"]).iterdir()):
+            if f.is_file():
+                shutil.copyfile(f, run_folder / "saves" / f.name)
+
+
 def keys_known(obj, path, known):
     if not isinstance(obj, dict):
         raise HarnessError("%s is not an object" % (path or "the test"))
@@ -260,7 +268,7 @@ def read_test(folder, types=None):
     keys_known(t, "", {"harness", "name", "about", "proves", "mods", "code", "language", "seed", "continue_from",
                        "renderers", "limit_seconds", "bare", "save", "stage", "player", "steps", "expect",
                        "faults", "hide_game_files", "safe_start", "device", "ends", "starts", "fresh", "window",
-                       "time", "visible", "settings", "diagnostics", "disc", "memory"})
+                       "time", "visible", "settings", "diagnostics", "disc", "memory", "saves"})
     for key in ("harness", "name", "about", "steps", "expect"):
         if key not in t:
             raise HarnessError("the test has no %s" % key)
@@ -442,14 +450,26 @@ def read_test(folder, types=None):
     starts = whole(t, "starts", "") if "starts" in t else None
     if starts is not None and starts < 1:
         raise HarnessError("starts must be 1 or more")
+    # "saves": a folder of the test's whose files the run's save folder holds at the start (a save made by hand: a
+    # damaged one, another build's). Not with continue_from, whose saves are the earlier test's.
+    saves = None
+    if "saves" in t:
+        saves = text(t, "saves", "")
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+", saves) or saves in (".", ".."):
+            raise HarnessError("saves names a folder in the test's own folder")
+        if "continue_from" in t:
+            raise HarnessError("saves and continue_from both name the start's saves")
+        if not (folder / saves).is_dir() or not any((folder / saves).iterdir()):
+            raise HarnessError("saves: the test has no folder %s with files in it" % saves)
     setup = read_setup(t, bare, seed, language, classes)
     steps = read_steps(t, bare, classes)
-    expect, not_here = read_expect(t, bare, steps)
+    expect, not_here = read_expect(t, bare, steps, folder)
     if ends != "end" and not any(c["kind"] == "log" and c["pattern"].startswith("crash: ") for c in expect):
         raise HarnessError("a test that ends in a crash expects its crash line: a log expectation starting \"crash: \"")
     return {"folder": folder, "raw": t, "name": t["name"], "proves": proves, "bare": bare, "mods": mods,
             "language": language, "seed": seed, "renderers": renderers, "limit": limit, "window": window,
-            "continue_from": continue_from, "faults": faults, "setup": setup, "steps": steps, "expect": expect,
+            "continue_from": continue_from, "saves": saves, "faults": faults, "setup": setup, "steps": steps,
+            "expect": expect,
             "has_stage": "stage" in t, "hidden": hidden, "safe_start": safe_start, "device": device, "ends": ends,
             "time": clock, "visible": visible, "settings": run_settings, "diagnostics": diagnostics,
             "starts": starts, "fresh": fresh, "not_here": not_here, "disc": disc, "memory": memory}
@@ -835,7 +855,7 @@ def scope_of(c, path):
         raise HarnessError("%s.scope is \"installation\" or absent" % path)
 
 
-def read_expect(t, bare, steps):
+def read_expect(t, bare, steps, folder):
     expect = t["expect"]
     if not isinstance(expect, list):
         raise HarnessError("expect must be a list")
@@ -934,6 +954,18 @@ def read_expect(t, bare, steps):
                 raise HarnessError("%s.%s needs rmse" % (path, limit_key))
             out.append({"kind": mode, "picture": name, "ref": text(c, mode, path), "rmse": number(c[limit_key], "rmse", path + "." + limit_key),
                         "box": box, "source": c})
+        elif "save_file" in c:
+            # A file of the run's save folder at the end: "same" as the test's own copy (saves), or "absent".
+            keys_known(c, path, {"save_file", "is"})
+            name = text(c, "save_file", path)
+            if "/" in name or "\\" in name or name in ("", ".", ".."):
+                raise HarnessError("%s.save_file is a plain file name" % path)
+            state = text(c, "is", path) if "is" in c else ""
+            if state not in ("same", "absent"):
+                raise HarnessError("%s.is must be same or absent" % path)
+            if state == "same" and ("saves" not in t or not (folder / str(t["saves"]) / name).is_file()):
+                raise HarnessError("%s: same needs the file in the test's saves folder" % path)
+            out.append({"kind": "save_file", "name": name, "is": state, "source": c})
         elif "sound" in c:
             keys_known(c, path, {"sound", "rms"})
             s, r = c["sound"], c.get("rms")
@@ -943,7 +975,7 @@ def read_expect(t, bare, steps):
                 raise HarnessError("%s.rms must be [low, high] in dBFS" % path)
             out.append({"kind": "sound", "frames": s, "rms": r, "source": c})
         else:
-            raise HarnessError("%s is not a check this harness knows (fact, log, no_log, picture, sound)" % path)
+            raise HarnessError("%s is not a check this harness knows (fact, log, no_log, picture, save_file, sound)" % path)
     return out, not_here
 
 
@@ -1570,6 +1602,7 @@ def run_one(test, renderer, args, run_folder, previous):
             shutil.rmtree(run_folder / sub)
             shutil.copytree(previous / sub, run_folder / sub)
         carry_data(previous, run_folder)
+    place_saves(test, run_folder)
     frozen = {}
     # The plain module when the bin folder has it: without it the game loads the rows module and says so.
     plain = (HOST["plain"],) if (bin_folder / HOST["plain"]).is_file() else ()
@@ -2243,6 +2276,15 @@ def evaluate(test, renderer, run_folder, ran):
                 add("log matches %s" % c["pattern"], bool(hits), hits[:1])
             else:
                 add("no log line matches %s" % c["pattern"], not hits, hits[:3])
+        elif c["kind"] == "save_file":
+            have = run_folder / "saves" / c["name"]
+            if c["is"] == "absent":
+                add("the save folder has no %s" % c["name"], not have.exists(), None)
+            else:
+                wanted = test["folder"] / test["saves"] / c["name"]
+                add("the save folder's %s is as the test placed it" % c["name"],
+                    have.is_file() and have.read_bytes() == wanted.read_bytes(),
+                    "%d bytes" % have.stat().st_size if have.is_file() else "missing")
         elif c["kind"] in ("like", "unlike", "mean_rgb"):
             png = run_folder / "pictures" / (c["picture"] + ".png")
             if not png.exists():

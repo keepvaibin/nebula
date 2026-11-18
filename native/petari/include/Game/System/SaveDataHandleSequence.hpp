@@ -30,7 +30,7 @@ public:
     bool startQuietSave();
     // True when startQuietSave never writes: the start read nothing usable, saves are off, or the save is damaged.
     bool isQuietSaveOff() const {
-        return mPreLoadState == 2 || mIsNoSaveMode || mIsCorrupted;
+        return mPreLoadState == 2 || mIsNoSaveMode || mIsCorrupted || mSaveIsNewer;
     }
     void exeQuietSave();
     // A save was read at the start or written since (1), or the start read none (2: no file, damaged, or saves off);
@@ -101,4 +101,6 @@ public:
     int mSaveCopyLoading = 0;
     bool mSaveDamaged = false;
     int mPreLoadState = 0;
+    // The start found a save a newer Nebula wrote: nothing is written until the next start (each save says so instead).
+    bool mSaveIsNewer = false;
 };
