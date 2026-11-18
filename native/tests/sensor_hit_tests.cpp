@@ -68,12 +68,16 @@ void NameObj::movement() {}
 void NameObj::draw() const {}
 void NameObj::calcAnim() {}
 void NameObj::calcViewAndEntry() {}
+SceneObjHolder::SceneObjHolder() : mObj() {}
 NameObj* SceneObjHolder::getObj(int) const {
     return sChecker;
 }
 namespace MR {
+    // A holder of the test's (its getObj gives the checker): a call through a null holder is undefined, and the
+    // sanitizer job stops on it.
     SceneObjHolder* getSceneObjHolder() {
-        return nullptr;
+        static SceneObjHolder sHolder;
+        return &sHolder;
     }
     void connectToScene(NameObj*, int, int, int, int) {}
     bool isClipped(const LiveActor* pActor) {
