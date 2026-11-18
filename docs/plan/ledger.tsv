@@ -220,7 +220,7 @@ P-041	1	E6 pacing and in-between pictures	open		(console-era remnant) Several ho
 P-042	1	E6 pacing and in-between pictures	open		(console-era remnant, a decision for the owner) The default frame-rate setting is 60, the game step, on every platform.	Owner did not answer; the recommendation stands: a 120 Hz display starts at 120 once the measures hold.
 P-043	1	E0 gate	open		(untested) This extends P-023 with two facts it did not have. The three code checks are enforced only by one machine's local hook. The SDL and Apple b	
 P-044	1	E0 gate	open		(untested) The engine's riskiest shared code has no unit test: the game arena, the frame-list writer, the draw walker, the display clocks and the Andr	
-P-045	1	E1 data safety	open		(wrong behaviour, rare) After a dump request times out, the next request can take the previous dump's answer as its own.	
+P-045	1	E1 data safety	fixed	907b5104a; galaxy_crash_watch_tests (a real watcher process; the old watcher fails it)	(wrong behaviour, rare) After a dump request times out, the next request can take the previous dump's answer as its own.	
 P-046	1	E3 render data path	open		(performance, small) Ring-run merging patches matrix numbers and indices in place in write-combined upload memory, the access pattern the walker avoid	
 P-047	1	E2 crashes and wrong behaviour	open		(maintainability) A pointer into `walk_lerped_` is valid only until the next walk_material_rows call. walk_same_material carries a comment-enforced wo	
 P-048	1	E5 hitches and GPU waits	open		(performance) The D3D12 sampler heap is drained with a full GPU wait when it fills. Sampler keys include the dynamic-resolution line ratio and the ups	
