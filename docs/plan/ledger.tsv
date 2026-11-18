@@ -193,7 +193,7 @@ P-014	1	E0 gate	open		(maintainability) The Windows release links a stored PGO p
 P-015	1	E12 Windows, Linux, Mac	open		(platform gap) macOS and iOS write no crash report of Nebula's own.	
 P-016	1	E12 Windows, Linux, Mac	open		(platform gap, Linux) A Linux start from the app menu keeps no log file, so a crash report goes nowhere.	
 P-017	1	E12 Windows, Linux, Mac	open		(crash reporting) The SDL crash handler sets `SA_ONSTACK` but the render thread and game thread have no alternate stack of their own, so a stack overf	
-P-018	1	E1 data safety	open		(wrong behaviour, rare) At exit or restart the host waits at most 5 s for pending saves, then ends the process anyway.	
+P-018	1	E1 data safety	open		(wrong behaviour, rare) At exit or restart the host waits at most 5 s for pending saves, then ends the process anyway.	code in eb5247a91; its tests tests/engine/save-slow-exit and save-slow-exit-again run after the build
 P-019	1	E11 Android app	open		(platform gap, Android) Corrected in Round 2. The app gives the system a performance hint, but it never reads the thermal state, and its hint reports 	Corrected: the hint exists; its fault is P-069.
 P-020	1	E11 Android app	open		(wrong behaviour, suspected) Android's restart starts the new activity in the `:game` process and kills that same process in the same UI-thread task.	
 P-021	1	E4 the frame	open		(console-era remnant) A frame copy asked before the frame's first draw returns the previous shown picture, "as the console's frame buffer still held i	
@@ -254,9 +254,9 @@ P-075	1	E10 audio, input, menus, text	open		wrong behaviour. Short controller pr
 P-076	1	E10 audio, input, menus, text	open		platform gap (the host half of the mouse-held look). The look's mouse motion is unusable or differs between platforms:	
 P-077	1	E10 audio, input, menus, text	open		performance. The Windows HID worker registers a new thread-pool wait for every report: UnregisterWait, then RegisterWaitForSingleObject with WT_EXECUT	
 P-078	1	E6 pacing and in-between pictures	open		wrong behaviour (suspected). The star pointer and the mod look are sampled once per game step. Above 60 Hz the pointer the player aims with moves at 6	
-P-079	1	E1 data safety	open		wrong behaviour (data loss after a downgrade). A Nebula.sav written by a newer Nebula (version above 4) is reported to the player as damaged. The play	
+P-079	1	E1 data safety	open		wrong behaviour (data loss after a downgrade). A Nebula.sav written by a newer Nebula (version above 4) is reported to the player as damaged. The play	code in e7a300379 (save_files_tests: keep_newer fails on the old code); its game test tests/engine/save-newer and the step-hash replay run after the build
 P-080	1	E1 data safety	open		performance. SaveDataHandler::waitRequest spins the game thread with a pause/yield loop, without sleeping, while an earlier save request is in flight.	
-P-081	1	E1 data safety	open		wrong behaviour (rare data loss). A whole-save import moves the existing files aside and then moves the new ones in, one rename at a time, with no jou	
+P-081	1	E1 data safety	fixed	7f30290ce; runtime/src/save_transfer_tests.cpp (the import stopped at each of its four moves, then recover_import: every file back; the old code has no journal, so nothing to recover)	wrong behaviour (rare data loss). A whole-save import moves the existing files aside and then moves the new ones in, one rename at a time, with no jou	
 P-082	1	E1 data safety	open		wrong behaviour (suspected). The in-game import's write is not ordered against the game's own save worker. The merged file is built from the save as t	Withdrawn by the reader. Confirm by test and close.
 P-083	1	E10 audio, input, menus, text	open		performance (input stalls on Windows). The HID worker's own comment says it never stalls on a busy radio (controller_hid.cpp:1193-1196). Several paths	
 P-084	1	E10 audio, input, menus, text	open		wrong behaviour (it widens P-073 to every platform). On every host, every stick source goes through a second per-axis dead zone and per-axis clamp bef	
