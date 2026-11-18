@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // MR::stepHealthTo (Game/Player/MarioLife.hpp, N-3015): MarioActor::changeMaxLife moves the health to the new most one
-// point at a time and stops when a step is refused. A Life Up's demo starts in a later step than its pickup; a press
+// point at a time and stops when a step is refused. MR::loseHealthToPress (N-3021): a press takes all the health, more
+// than the console's six when a mod's rules give more. A Life Up's demo starts in a later step than its pickup; a press
 // between them puts the player in TimeWait with no health, incLife refuses there, and the console's loop never ended.
 // The test's actor refuses as the game's does; past cCallBound calls the actor gives the health itself, so a loop that
 // never ends shows as a failure, not a hang.
@@ -75,6 +76,22 @@ int main() {
     // Already there: no step.
     Actor same = changeMaxLife(6, 6, false, false);
     expect(same.mCalls == 0, "health at the most takes no step");
+    // A press (N-3021): the console's health (6 at most) takes its six losses, as the console did.
+    Actor pressedSix;
+    pressedSix.mHealth = 3;
+    MR::loseHealthToPress(pressedSix);
+    expect(pressedSix.mHealth == 0 && pressedSix.mCalls == 6, "a press at 3 takes the console's six losses");
+    // A mod's rules give 9: the press takes all of it.
+    Actor pressedNine;
+    pressedNine.mHealth = 9;
+    MR::loseHealthToPress(pressedNine);
+    expect(pressedNine.mHealth == 0, "a press at a mod's 9 leaves no health (six fixed left 3 through the game over)");
+    // Invincible: every loss refused, as before.
+    Actor pressedStar;
+    pressedStar.mHealth = 3;
+    pressedStar.mInvincible = true;
+    MR::loseHealthToPress(pressedStar);
+    expect(pressedStar.mHealth == 3 && pressedStar.mCalls == 6, "an invincible press loses nothing");
     if (sFailures == 0) {
         printf("native_mario_life_tests: all passed\n");
     }

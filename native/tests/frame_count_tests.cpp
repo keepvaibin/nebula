@@ -54,6 +54,30 @@ int main() {
     MR::countUp(plain);
     expect(plain == 8, "counting from 7 gives 8");
 
+    // N-3022: Mario's oxygen recovers by 32 at the surface up to its most; with a most near the u16's top the sum
+    // stops at the most and reports it went past, it does not wrap to near 0.
+    u16 oxygen = 0xFFF0;
+    expect(MR::countUpTo(oxygen, 32, 0xFFFF) && oxygen == 0xFFFF, "oxygen near the top recovers to the most");
+    u16 coin = 60000;
+    MR::countUpTo(coin, 0xFFFF / 8, 0xFFFF);
+    expect(coin == 0xFFFF, "a coin's eighth of a most near the top recovers to the most");
+    u16 game = 1700;
+    expect(!MR::countUpTo(game, 32, 1800) && game == 1732, "under the most the add is plain and not past");
+    u16 exact = 1768;
+    expect(!MR::countUpTo(exact, 32, 1800) && exact == 1800, "a sum equal to the most is not past it");
+    u16 over = 1790;
+    expect(MR::countUpTo(over, 32, 1800) && over == 1800, "a sum past the most stops at it");
+
+    // N-3024: the slide task's countdown: 0 frames slide one step and end, N frames slide N steps.
+    u16 none = 0;
+    expect(!MR::countDownLeft(none) && none == 0, "a slide of 0 frames ends after its step, it does not start over");
+    u16 three = 3;
+    u32 steps = 1;
+    while (MR::countDownLeft(three) && steps < 100) {
+        steps++;
+    }
+    expect(steps == 3 && three == 0, "a slide of 3 frames takes 3 steps");
+
     if (sFailures != 0) {
         return 1;
     }

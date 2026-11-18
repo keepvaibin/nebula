@@ -191,9 +191,11 @@ public:
     u16 mSpinDashTimer;
     u8 mJetKind;  // the jet's kind (startJet)
     u16 mJetTimer;
-    u16 mRingDashTimer;
+    // The dash ring's times come from its placement's s32 arguments (DashRing::mBoostTime, mMaxDuration); as u16 a mod
+    // stage's ring time past 65535 wrapped, 65536 giving no dash (N-3023).
+    u32 mRingDashTimer;
     u16 mRingDashChargeTimer;
-    u16 mRingDashMaxDuration;
+    u32 mRingDashMaxDuration;
     f32 mRingDashSpeedScale;
     f32 mBlurOffset;
     bool mPaddleReleased;  // A was let go since the last paddle

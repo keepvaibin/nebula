@@ -2708,9 +2708,7 @@ void MarioActor::setPress(u8 kind, s32 frames) {
         mPressTimer = 1000;
     }
 
-    for (u32 idx = 0; idx < 6; idx++) {
-        decLife(0);
-    }
+    MR::loseHealthToPress(*this);
 
     if (!mExtra) {
         MR::startStarPointerModeDemoMarioDeath(this);
