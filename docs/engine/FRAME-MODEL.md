@@ -14,7 +14,10 @@ rules the later stages hold (07-BASE-FIRST, stage 2 item 1). Part 1 grows sectio
 | Game ("Nebula Game") | `native/host/host_main.cpp:6538`, running `gModule.run()`; the host's main thread (:6527) only waits for messages, the game's end and the once-a-second report (:6628) | the game's state, the frame list it writes | a written list to the render thread (1.2) |
 | Render | `runtime/src/render/render_core.cpp:259` (`RenderCore::render_thread_main`, :1550) | the device, every GPU object, the lists it walks | released lists back to the game (1.2); pictures to the display |
 | Window owner | `runtime/src/render/window_owner.cpp:20` | the OS window and its message loop | size, focus and input to the game and render threads |
-| Display clock | `runtime/src/render/vblank_clock_win32.cpp:175` | the vertical blank's time | the moment a picture is due (pacing) |
+| Display clock, Windows | `runtime/src/render/vblank_clock_win32.cpp:175` | the vertical blank's time | the moment a picture is due (pacing) |
+| Display clock, Android | `platform/sdl/display_clock.cpp:30` on (Choreographer's callbacks on a looper thread of their own) | the vsync grid (CLOCK_MONOTONIC) | slots predicted on the grid under `g_mutex`, so a late callback delays nothing |
+| Display clock, Apple | `platform/apple/display_clock_apple.mm` (the display link) | the vsync times and interval on Mach time | the same grid as Android |
+| Display clock, Linux | none: `wait_display_frame` returns false (`platform/sdl/display_clock.cpp:202-212`) | — | the step keeps the host clock (I-005) |
 | Pipeline workers | `runtime/src/render/core/pipelines.cpp:104` | compiling pipeline states | finished pipelines to the render thread |
 | Record workers | `runtime/src/render/core/draw_record.h:279` | building draw records | records to the render thread's walk |
 | Texture pack workers | `runtime/src/render/texture_pack.cpp:176` (below normal priority, :225) | reading and decoding replacements | decoded pixels, picked up at `pump` once a frame |
@@ -77,10 +80,12 @@ Two frames are in flight (`kFramesInFlight`, `runtime/include/galaxy/render/rend
 | Direct3D 12 | the slot about to be used again (`renderer_d3d12.cpp:3774-3782`); the oldest history ring segment when it is reused (:3952-3956); the frame latency waitable, 100 ms bound (:4364) | `wait_for_gpu` (:916) in `reset_sampler_frame` (:1410), `prepare_temporal_upscaler` (:5034, :5067), `record_temporal_upscale` (:5229), and a capture's readback (:6904, :6907) |
 | Vulkan | the slot (`vk/renderer_vk.cpp:2013`); the history ring segment (:2111) | `vkDeviceWaitIdle` when a size no longer matches: the temporal upscaler's preparation and record (`vk/renderer_vk_frame.cpp:922`, :953, :1428) and frame generation's HUD-less targets (:1455, :1495, :1548) |
 | Direct3D 11 | the slot (`d3d11/renderer_d3d11.cpp:536`); the frame latency waitable, 100 ms bound (:676) | none; a window size change waits for the GPU idle (`d3d11/renderer_d3d11_scene.cpp:246`) |
+| Metal | the slot (`mtl/renderer_mtl.mm:597`, `wait_for_fence_value`); a drawable (`nextDrawable`, :1213, in `present`) | `wait_for_gpu_idle` (:499) when the temporal upscaler's size no longer matches (`mtl/renderer_mtl_draw.mm:736`, :757); the sampler array restarts when nearly full, its slots written once the GPU is past the frames that read them (:245-249; P-066 names its waits) |
 
 Outside a frame, `wait_for_gpu` drains the GPU at a window size change (:1955), a swap chain's re-creation or resize
 (:3371, :3419), an HDR switch (:4150), shutdown (:3114, :3141) and the pictures at exit (:6769). Those are allowed by the
-rules of part 2; the waits inside a frame are not, and are in the list (1.9). Vulkan drains the same way at window size changes,
+rules of part 2; the waits inside a frame are not, and are in the list (1.9). Metal drains at a window size change (`mtl/renderer_mtl_scene.mm:353`), the pictures at exit
+(`mtl/renderer_mtl_draw.mm:618`) and shutdown (`mtl/renderer_mtl.mm:366`). Vulkan drains the same way at window size changes,
 a swap chain's re-creation and shutdown (`vk/renderer_vk_frame.cpp:425`, `vk/renderer_vk.cpp:1062`, :3031, :1723).
 
 The game thread waits on the render thread at three places: queue room (1.2 item 3), the render thread idle (1.2 item
@@ -209,7 +214,50 @@ with no row has a new one.
 | Vulkan's bloom and post-process pipelines built on the render thread in the first frame that needs them | `vk/renderer_vk.cpp:1998`, :2871 | P-052 (its Vulkan half: open) |
 | Metal's own programs (post-process, bloom, ambient occlusion, MetalFX depth copy) compiled from source at first use | `mtl/*_mtl.mm` (1.9) | P-065 |
 
-Every file stage 2 item 1 names has been read for this list. The three parts that had no row are N-1081 to N-1083.
+This list covers the render path as read for this file: every file of 1.1 to 1.8, with the files stage 2 item 1
+names (draw_walker.cpp whole; the post-process, upscaler and frame-generation files for waits, compiles and file
+reads). The three parts that had no row are N-1081 to N-1083. Beyond the frame's rules, 1.10 lists the console's shape
+elsewhere.
+
+### 1.10 The console's shape outside the frame's rules
+
+The owner's standard is wider than the frame's rules: no part of the engine shaped by the console. Every open row
+whose title names the console:
+
+| Row | Title, short | Pile | Step |
+| --- | --- | --- | --- |
+| P-142 | lights loaded per draw in the console's eight-register model | B | F4, E3 step 6 |
+| P-143 | shadow volumes drawn twice with vertices rebuilt | B | F4, E3 step 4 |
+| P-149 | particles built as eye-space matrices on the CPU | B | F4, E3 step 4 |
+| P-150 | the particle material copies GX alpha-compare and combiner settings | B | F4, E3 step 4 |
+| P-151 | the material path keeps the console's per-draw register model | B | F4, E3 step 3 |
+| P-154 | the "site" draws work as the console's immediate mode | B | F4, E3 step 4 |
+| P-155 | a texture known by its bytes' address and the console's header | B | F4, E3 step 2 |
+| P-156 | each picture recomputes eye-space matrices on the CPU | B | F4, E3 step 5 |
+| P-157 | the imported material format stores the console's register layout | B | F4, E3 step 1 |
+| P-173 | a material touched once never returns to its slot | B | F4, E3 step 3 |
+| P-059 | texture records analysed on the game thread at registration | B | F4, E3 step 2 |
+| P-042 | the default frame rate is the game step, 60, everywhere | A | after the foundation (the owner's decision) |
+| P-134 | collision prisms store one vertex, the other two rebuilt per query | A | after the foundation: the step's speed |
+| P-118 | the THP movie decoder keeps the SDK's IDCT column swap | A | after the foundation (E8) |
+| P-148 | a sensor's touching list fixed at its group size | A | after the foundation (E8; gameplay, the owner's call) |
+| P-166 | Binder keeps every plane: push-out can differ from the console's | A | after the foundation (E8; gameplay) |
+| P-168 | collision arithmetic rounds differently from the console | A | after the foundation (E8; gameplay) |
+| P-074 | a Wii Remote Nunchuk takes its centre from the first report | A | after the foundation |
+
+The engine's areas this file does not walk, by what the ledger and the audit's master report (sections 6 and 10)
+hold of the console's shape there:
+
+| Area | The console's shape known | Read |
+| --- | --- | --- |
+| The game's arenas | the console's heaps are gone (NebulaArena); objects and deletes search every arena linearly (P-013), new and delete belong to one thread (P-012, fixed) | read whole for P-012 and P-013 |
+| Sound | none known; the mixer has rows (P-037, P-071, P-072) | the mixer read; the game's own sound code not read (master report 10) |
+| Input | sampled once a game step for the star pointer and the menu (P-078, P-163; F6); the Nunchuk's centre (P-074) | read (master report 6) |
+| Files and archives | the step copies its loads from the mapped store on the game thread (N-1083) | the store's read path read for this file; the archive code not read whole |
+| Saves | none known; the faults that lose data are section 4.6's rows | read (master report 6) |
+| Text | none known; the game's messages stay in the disc's format and are converted where the host shows them (`message_utf8`, `host_main.cpp:2159`) | not read whole |
+| Layouts and fonts | the owner's order of 11-04 names both for rewriting; no open row in this ledger names them | not read whole |
+| The game's actor classes | E14's read is paused; its rows (N-3xxx) are in its branch | not read whole (master report 10) |
 
 ## Part 2. The target
 
@@ -397,9 +445,22 @@ it. Pile A: the foundation does not touch its code; it comes after. Where this d
 | P-058 | A | after the foundation | VMA is told Vulkan 1.1 even when the device and instance are 1.2 or 1. |  |
 | P-117 | A | after the foundation | AV1 movie decode is plain C and can stall the render thread. |  |
 | P-042 | A | after the foundation | The default frame-rate setting is 60, the game step, on every platform |  |
+| P-005 | B | F0 (fixed) | the game side reused a frame list's store after reading `released` with no acquire | fixed on rows/p005; the test now runs under the thread sanitizer |
+| P-012 | B | F0 (fixed) | the game's `operator new`/`delete` are not thread-safe | fixed on rows/p012; the game's unit tests run under the thread sanitizer |
+| P-183 | B | F0 (fixed) | the creator index built lazily with no lock | fixed on rows/p183 (`NebulaOnce`) |
+| P-044 | C | F2 | no unit test of the draw walker's planners, the display clocks or the Android layer | the arena and frame-list halves are done; F2 tests today's walker; E3's steps change the walker, so each step changes its tests with it |
+| P-009 | C | after the foundation (E9) | D3D11 and Metal lack features the other two have; three silently (Metal drops mod post programs and native draws) | E4's pass list does not change its code: it makes mod post and native draws passes every renderer is asked to run, so a renderer that cannot run one says so instead of dropping it; Metal's own running of them stays its backend's work, written once on F3's shared code |
+| P-032 | A | after the foundation (E9) | neither Metal nor D3D11 offers HDR output | E4's pass list does not change its code: HDR output is the Show pass's swap chain format and colour space, each backend's own; after F3 the shared part is written once |
+| P-087 | A | after the foundation (E9) | options offered where the platform or renderer cannot do them |  |
+| P-175 | A | after the foundation (E9) | FSR 3 runs with a moving render size but is never told it moves |  |
+| P-176 | A | after the foundation (E9) | SGSR 2 and MetalFX temporal get wide scene colour with no HDR mode |  |
+| N-1017 | A | after the foundation (E0) | the ending movie, the Mii picker and the full-screen switch have no harness test |  |
+| P-014 | A | after the foundation (E0) | the Windows release links a stored PGO profile with its staleness warnings off | a profile taken before the foundation is stale after it: retaken after F7 |
+| P-023 | A | after the foundation (E0) | release.yml builds from any v* tag and never starts what it built | the push workflow half is done (N-1045) |
 | N-1081: the aspect latch's whole-queue wait (`host_main.cpp:3236`) | B | F5, E4 | the game holds for the render queue | rule 2 |
 | N-1082: a capture's readback inside a frame (`renderer_d3d12.cpp:6904`) | B | F5, E4 | a capture answered by its frame later | rule 1 |
 | N-1083: loads read from the mapped store on the game thread (`host_main.cpp:3152`) | B | F7 | read ahead by the loader | rule 3 |
 
-The list of 1.9 holds nothing that P-022, E3, E4, E6b and the step's threading do not cover: the three new rows
-fall in E4 and F7. So these are the last rewrites the frame's rules ask for.
+Of the render path as read for this file (1.9), nothing falls outside P-022, E3, E4, E6b and the step's threading: the
+three new rows fall in E4 and F7. The areas 1.10 lists as not read whole may hold more; E14's read, paused, is where
+they would come from.
