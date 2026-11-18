@@ -13,7 +13,30 @@ namespace {
 }  // namespace
 
 KCollisionServer::KCollisionServer() : mFile(), mapInfo(new Table()), mMaxVertexDistance(1.0f), mModel() {
+#if defined(NEBULA_PLAIN_PATHS)
+    mCorners = nullptr;
+    mStamps = nullptr;
+    mStamp = 0;
+#endif
 }
+
+#if defined(NEBULA_PLAIN_PATHS)
+// A new stamp for a query's visits; false for a model the game built (its prisms may change), which takes the
+// search over its hits.
+bool KCollisionServer::beginVisits() {
+    if (mStamps == nullptr || mFile != &mModel) {
+        return false;
+    }
+    if (++mStamp == 0) {
+        const u32 count = static_cast< u32 >(mModel.mTriangleNum) + 1u;
+        for (u32 i = 0; i < count; i++) {
+            mStamps[i] = 0;
+        }
+        mStamp = 1;
+    }
+    return true;
+}
+#endif
 
 void KCollisionServer::init(void* pData, const void* pMapData) {
     setData(pData);
@@ -89,6 +112,22 @@ bool KCollisionServer::calcFarthestVertexDistance() {
     }
 
     mMaxVertexDistance = MR::sqrt(maxDistanceSq);
+#if defined(NEBULA_PLAIN_PATHS)
+    // The prisms are final here (near-parallel ones flattened, by this server or another of the same file).
+    if (mFile == &mModel && mCorners == nullptr) {
+        const u32 count = static_cast< u32 >(triCount) + 1u;
+        Vec3f* const pCorners = new Vec3f[count * 2u];
+        u32* const pStamps = new u32[count];
+        for (u32 i = 0; i < count; i++) {
+            pCorners[i * 2u] = getPos(&mFile->mPrisms[i], 1);
+            pCorners[i * 2u + 1u] = getPos(&mFile->mPrisms[i], 2);
+            pStamps[i] = 0;
+        }
+        mCorners = pCorners;
+        mStamps = pStamps;
+        mStamp = 0;
+    }
+#endif
     return isAllAttributed;
 }
 
@@ -260,12 +299,28 @@ u32 KCollisionServer::checkArea3D(const Vec3f* pMin, const Vec3f* pMax, KC_Prism
         return 0;
     }
 
+#if defined(NEBULA_PLAIN_PATHS)
+    const bool stamped = beginVisits();
+#endif
     visitPrismsInBlocks(pointMin, pointMax, [&](KC_PrismData* prism) {
         KC_PrismData** end = pOut + foundCount;
 
+#if defined(NEBULA_PLAIN_PATHS)
+        // A prism visited before in this query was taken or missed then, and would be again (P-133).
+        if (stamped) {
+            u32& rStamp = mStamps[prism - mFile->mPrisms];
+            if (rStamp == mStamp) {
+                return false;
+            }
+            rStamp = mStamp;
+        } else if (std::find(pOut, end, (KC_PrismData* const&)prism) != end) {
+            return false;
+        }
+#else
         if (std::find(pOut, end, (KC_PrismData* const&)prism) != end) {
             return false;
         }
+#endif
 
         Vec3f verts[3];
         verts[0] = getPos(prism, 0);
@@ -318,12 +373,28 @@ u32 KCollisionServer::checkSpherePrisms(const Vec3f* pCenter, f32 radius, f32 th
 
     u32 foundCount = 0;
 
+#if defined(NEBULA_PLAIN_PATHS)
+    const bool stamped = beginVisits();
+#endif
     visitPrismsInBlocks(pointMin, pointMax, [&](KC_PrismData* prism) {
         KC_PrismData** end = pOut + foundCount;
 
+#if defined(NEBULA_PLAIN_PATHS)
+        // A prism visited before in this query was taken or missed then, and would be again (P-133).
+        if (stamped) {
+            u32& rStamp = mStamps[prism - mFile->mPrisms];
+            if (rStamp == mStamp) {
+                return false;
+            }
+            rStamp = mStamp;
+        } else if (std::find(pOut, end, (KC_PrismData* const&)prism) != end) {
+            return false;
+        }
+#else
         if (std::find(pOut, end, (KC_PrismData* const&)prism) != end) {
             return false;
         }
+#endif
 
         f32 dist;
         u8 hitPart;
@@ -792,6 +863,11 @@ void KCollisionServer::calXvec(const Vec3f* pVecA, const Vec3f* pVecB, Vec3f* pD
 }
 
 Vec3f KCollisionServer::getPos(const KC_PrismData* pPrism, int vertexIndex) const {
+#if defined(NEBULA_PLAIN_PATHS)
+    if (mCorners != nullptr && mFile == &mModel && (vertexIndex == 1 || vertexIndex == 2)) {
+        return mCorners[static_cast< u32 >(pPrism - mFile->mPrisms) * 2u + static_cast< u32 >(vertexIndex - 1)];
+    }
+#endif
     switch (vertexIndex) {
     case 0: {
         Vec3f* pos = &mFile->mPos[pPrism->mPositionIndex];
