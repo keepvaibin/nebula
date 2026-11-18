@@ -157,7 +157,7 @@ struct PadSample {
     bool connected = false;
     ControlScheme scheme = ControlScheme::Xbox;
     std::uint32_t buttons = 0;
-    // Sticks -1..1 after the scheme's deadzone; triggers 0..1.
+    // Sticks -1..1 after the scheme's dead zones (pointer_control.h shape_pad_sticks); triggers 0..1.
     std::array<float, kPadAxisCount> axes{};
 };
 

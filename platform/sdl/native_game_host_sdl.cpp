@@ -516,12 +516,7 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
         const sdl::PadMotion& motion = state.motion[i];
         controls::LivePad& live = pads[pad_count++];
         live.sample = sample;
-        const in::StickVector left = in::apply_radial_deadzone(sample.axes[0], sample.axes[1], tuning.stick_deadzone);
-        const in::StickVector right = in::apply_radial_deadzone(sample.axes[2], sample.axes[3], tuning.pointer_deadzone);
-        live.sample.axes[0] = left.x;
-        live.sample.axes[1] = left.y;
-        live.sample.axes[2] = right.x;
-        live.sample.axes[3] = right.y;
+        in::shape_pad_sticks(live.sample, tuning);
         live.device_slot = static_cast<std::uint8_t>(i);
         live.imu_live = motion.imu_live;
         live.gyro_x = motion.gyro_x;

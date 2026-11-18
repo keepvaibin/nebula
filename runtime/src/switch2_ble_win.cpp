@@ -16,6 +16,7 @@
 #include <condition_variable>
 #include <cstring>
 #include <deque>
+#include <functional>
 #include <iostream>
 #include <map>
 #include <mutex>
@@ -105,10 +106,10 @@ public:
 
     const Calibration& calibration() const noexcept override { return calibration_; }
 
-    void set_event(void* event) noexcept override {
+    void set_signal(std::function<void()> signal) noexcept override {
         const std::lock_guard lock(lock_);
-        event_ = event;
-        if (!reports_.empty() || lost_) SetEvent(event_);
+        signal_ = std::move(signal);
+        if (signal_ && (!reports_.empty() || lost_)) signal_();
     }
 
     bool next_report(std::array<std::uint8_t, 64>& report) noexcept override {
@@ -133,7 +134,7 @@ private:
     void lose() {
         lost_.store(true, std::memory_order_release);
         const std::lock_guard lock(lock_);
-        if (event_ != nullptr) SetEvent(event_);
+        if (signal_) signal_();
         SetEvent(changed_);
     }
 
@@ -143,7 +144,7 @@ private:
         const std::lock_guard lock(lock_);
         if (reports_.size() >= 32u) reports_.pop_front();
         reports_.push_back(*report);
-        if (event_ != nullptr) SetEvent(event_);
+        if (signal_) signal_();
     }
 
     void take_reply(const IBuffer& value) {
@@ -206,7 +207,7 @@ private:
     winrt::event_token input_token_{};
     Calibration calibration_{};
     std::mutex lock_;
-    HANDLE event_ = nullptr;
+    std::function<void()> signal_;  // under lock_
     std::deque<std::array<std::uint8_t, 64>> reports_;
     std::atomic<bool> lost_{false};
     std::mutex reply_lock_;

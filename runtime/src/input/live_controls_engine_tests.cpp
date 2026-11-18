@@ -44,7 +44,7 @@ void families_and_keyboard() {
         LiveControlsFrame frame{config}; frame.pads = std::span(&pad, 1);
         frame.use_pads = true; frame.window_focused = true;
         auto result = engine.sample(frame, host);
-        check(result.input.buttons.a && result.input.stick_x == nunchuk_stick(0.6f, 0).x, "family buttons and stick");
+        check(result.input.buttons.a && result.input.stick_x == 0.6f, "family buttons and stick");
         check(result.rumble.device == DeviceKey{scheme, 2} && result.rumble.focused, "rumble follows active family/slot");
         frame.use_keyboard = true; frame.keyboard_levels.set_position('D', true);
         frame.keyboard_levels.set_key(0x20, true);
@@ -152,7 +152,7 @@ void host_controls_and_device_motion() {
     LiveControlsFrame frame{config}; frame.window_focused = true;
     frame.extra.pressed = game_input_bit(GameInput::A); frame.extra.stick_x = 0.5f;
     auto result = engine.sample(frame, host);
-    check(result.input.buttons.a && result.input.stick_x == nunchuk_stick(0.5f, 0).x, "on-screen controls merge");
+    check(result.input.buttons.a && result.input.stick_x == 0.5f, "on-screen controls merge (the stick as given: not a Nunchuk)");
     frame.extra = {};
     frame.device_shake = true;
     const tilt::Vec3 up{0.0f, 1.0f, 0.0f};
@@ -208,9 +208,26 @@ void host_controls_and_device_motion() {
           "turned back, the pointer is where the controller points");
 }
 }
+// A controller's stick reaches the game radially, with no second dead zone (P-084): a small push at 20 degrees keeps
+// its direction and its length.
+void stick_direction() {
+    auto config = default_controls_config();
+    LiveControlsEngine engine; Host host;
+    LivePad pad; pad.sample.connected = true; pad.sample.scheme = ControlScheme::Xbox;
+    const float angle = 20.0f * 3.14159265f / 180.0f;
+    pad.sample.axes[0] = 0.2f * std::cos(angle);
+    pad.sample.axes[1] = 0.2f * std::sin(angle);
+    LiveControlsFrame frame{config}; frame.pads = std::span(&pad, 1);
+    frame.use_pads = true; frame.window_focused = true;
+    const auto result = engine.sample(frame, host);
+    check(std::fabs(std::atan2(result.input.stick_y, result.input.stick_x) - angle) < 1e-4f,
+          "a small diagonal push keeps its direction");
+    check(near(std::hypot(result.input.stick_x, result.input.stick_y), 0.2f), "and its length");
+}
 int main() {
     try {
         families_and_keyboard(); mouse_samples(); motion_context_and_instances(); host_controls_and_device_motion();
+        stick_direction();
         std::cout << "live controls families, mouse, motion, context, host controls and independent state passed\n";
         return 0;
     } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }

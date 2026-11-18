@@ -81,8 +81,9 @@ void set_pointer(PlayerInput& input, float x, float y, bool active) noexcept;
 // Ball) or flat on its back it has no pointer. True when `gravity` allows one.
 [[nodiscard]] bool remote_faces_screen(const Gravity& gravity) noexcept;
 
-// A stick (-1..1 each, after its own dead zone) as the Nunchuk's: per axis nothing up to 15/101 of the travel, all
-// from 71/101, linear between; then no longer than 1. The game's stick thresholds are tuned to this response.
+// A Nunchuk's stick (-1..1 each = 101 counts, as an extension gives it) with the Nunchuk's response: per axis nothing
+// up to 15/101 of the travel, all from 71/101, linear between; then no longer than 1. Controllers, keys and the touch
+// controls have their own dead zones and take game_stick (pointer_control.h).
 struct StickValue {
     float x = 0.0f;
     float y = 0.0f;

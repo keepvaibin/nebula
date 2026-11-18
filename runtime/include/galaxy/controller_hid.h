@@ -37,6 +37,9 @@ struct HidPadState {
     input::switch_hid::StickCal right{};
     // Motion shake held until this steady-clock microsecond (0: none).
     std::uint64_t shake_until_us = 0;
+    // Every button a report showed down since the previous consuming read (P-075): a press that came and went between
+    // two reads still reaches the game. read_hid_pads adds them to decoded.buttons.
+    std::uint32_t pressed = 0;
     // Pointer movement from the gyro since the previous consuming read
     // (pointer units, 2 = picture width; up positive), integrated per IMU
     // sample in world yaw/pitch (switch_controller.h SwitchMotion).
@@ -109,6 +112,11 @@ std::size_t hid_controllers(std::span<input::ControllerInfo> out) noexcept;
 inline constexpr unsigned kXInputProbeMs = 2000u;
 [[nodiscard]] std::uint32_t xinput_present_mask() noexcept;
 void xinput_slot_lost(std::uint32_t slot) noexcept;
+// XInput answers only with levels when asked, so a press that starts and ends between two of the game's reads would be
+// lost (P-075). While the game reads controllers (within the last second), a thread of its own asks the present slots
+// every kXInputPressMs and keeps every button seen down; the game's read of a slot takes them (XINPUT_GAMEPAD_* bits).
+inline constexpr unsigned kXInputPressMs = 4u;
+[[nodiscard]] std::uint16_t take_xinput_presses(std::uint32_t slot) noexcept;
 
 // Joy-Con halves: those connected, whether a left half's L or a right half's R is held, and the pairs (each pair is
 // one controller; a half without its partner is none). `paired` grows with every pair made. While the Pair Joy-Con

@@ -1,4 +1,5 @@
 #include "galaxy/pointer_control.h"
+#include "galaxy/input_bindings.h"
 
 #include <algorithm>
 #include <cmath>
@@ -71,6 +72,26 @@ StickVector apply_radial_deadzone(float x, float y, float deadzone) noexcept {
     }
     const float scaled = std::min((magnitude - deadzone) / (1.0f - deadzone), 1.0f);
     return {x / magnitude * scaled, y / magnitude * scaled};
+}
+
+StickVector game_stick(float x, float y) noexcept {
+    if (!std::isfinite(x) || !std::isfinite(y)) {
+        return {};
+    }
+    const float length = std::sqrt(x * x + y * y);
+    if (length <= 1.0f) {
+        return {x, y};
+    }
+    return {x / length, y / length};
+}
+
+void shape_pad_sticks(PadSample& sample, const SchemeTuning& tuning) noexcept {
+    const StickVector left = apply_radial_deadzone(sample.axes[0], sample.axes[1], tuning.stick_deadzone);
+    const StickVector right = apply_radial_deadzone(sample.axes[2], sample.axes[3], tuning.pointer_deadzone);
+    sample.axes[0] = left.x;
+    sample.axes[1] = left.y;
+    sample.axes[2] = right.x;
+    sample.axes[3] = right.y;
 }
 
 LookTurn look_turn(const LookMotion& motion) noexcept {
