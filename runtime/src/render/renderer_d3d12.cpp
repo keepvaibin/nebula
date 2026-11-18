@@ -2,6 +2,7 @@
 #include "galaxy/render/present_clock.h"
 #include "galaxy/render/utility_shaders.h"
 #include "dxgi_pacing.h"
+#include "galaxy/host_extension.h"
 #include "galaxy/benchmark.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/render/renderer_d3d12.h"
@@ -5546,7 +5547,9 @@ bool RendererD3D12::begin_target_pass(std::uint64_t key, std::uint32_t width, st
     }
     TargetSlot& slot = target_slots_[key];
     const FrameMap map(width, height);
-    const bool kept = slot.set.color && slot.set.map == map;
+    // The test hook NEBULA_EXT_REMAKE_TARGETS makes it again at the same size, as a size change does (P-028).
+    const bool kept = slot.set.color && slot.set.map == map &&
+                      (galaxy::extensions::flags() & NEBULA_EXT_REMAKE_TARGETS) == 0u;
     // A new set starts as a render target; the pass's first clear (RenderCore) fills it. Its copy views are written
     // per use (no persistent descriptors per key).
     if (!kept) {
