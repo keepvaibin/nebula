@@ -102,45 +102,6 @@ namespace MR {
     }
 }  // namespace MR
 
-// What NebulaArena::destroy tells; no arena is destroyed here.
-namespace lumacore {
-    void released(const void*, const void*) {}
-}  // namespace lumacore
-namespace luma {
-    namespace content {
-        namespace fx {
-            void released(const void*, const void*) {}
-        }  // namespace fx
-        namespace model {
-            void released(const void*, const void*) {}
-        }  // namespace model
-    }  // namespace content
-    namespace draw {
-        void released(const void*, const void*) {}
-        namespace inst {
-            void released(const void*, const void*) {}
-        }  // namespace inst
-        namespace view {
-            void released(const void*, const void*) {}
-        }  // namespace view
-    }  // namespace draw
-    namespace ui {
-        void released(const void*, const void*) {}
-    }  // namespace ui
-    namespace anim {
-        void released(const void*, const void*) {}
-    }  // namespace anim
-    namespace player {
-        void released(const void*, const void*) {}
-    }  // namespace player
-}  // namespace luma
-namespace RenderTexture {
-    void forget(uintptr_t, uintptr_t) {}
-}  // namespace RenderTexture
-namespace GameAssets {
-    void unloadArena(const NebulaArena*) {}
-}  // namespace GameAssets
-
 int main() {
     NebulaArena::create(nullptr);
     const Vec3f position(0.0f, 0.0f, 0.0f);

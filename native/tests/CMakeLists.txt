@@ -44,10 +44,14 @@ native_test(native_arena_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/arena_tests.cp
     "${game_src}/System/NebulaArena.cpp")
 # The binder keeps every plane a bind meets (P-166), on the game's arenas.
 native_test(native_binder_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/binder_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/arena_test_host.c"
-    "${game_src}/LiveActor/Binder.cpp" "${game_src}/System/NebulaArena.cpp")
+    "${CMAKE_CURRENT_LIST_DIR}/arena_test_tables.cpp" "${game_src}/LiveActor/Binder.cpp" "${game_src}/System/NebulaArena.cpp")
+# Every message Mario sends in a step goes out (N-3006).
+native_test(native_mario_messenger_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/mario_messenger_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/arena_test_host.c" "${CMAKE_CURRENT_LIST_DIR}/arena_test_tables.cpp"
+    "${game_src}/Player/MarioMessenger.cpp" "${game_src}/System/NebulaArena.cpp")
 if(NEBULA_SANITIZE AND WIN32)
     # NebulaArena.cpp defines operator new/delete, as in the module: the sanitizer runtime's own give way (N-1062).
-    foreach(arena_test native_arena_tests native_binder_tests)
+    foreach(arena_test native_arena_tests native_binder_tests native_mario_messenger_tests)
         target_link_options(${arena_test} PRIVATE LINKER:/force:multiple)
     endforeach()
 endif()

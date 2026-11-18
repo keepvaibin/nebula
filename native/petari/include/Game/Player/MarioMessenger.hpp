@@ -18,4 +18,5 @@ private:
     HitSensor** mReceiverArray;
     u32* mMsgArray;
     u32 mArraySize;
+    u32 mArrayRoom;  // grows as a step asks for more (N-3006)
 };

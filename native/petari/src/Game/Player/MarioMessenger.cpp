@@ -1,14 +1,18 @@
 #include "Game/Player/MarioMessenger.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
-#define MSG_SIZE 32
+namespace {
+    const u32 cFirstRoom = 32;  // the console's whole room
+}  // namespace
 
 MarioMessenger::MarioMessenger(HitSensor* pSender) : NameObj("マリオメッセンジャー"), mSender(pSender) {
-    mReceiverArray = new HitSensor*[MSG_SIZE];
-    mMsgArray = new u32[MSG_SIZE];
+    mReceiverArray = new HitSensor*[cFirstRoom];
+    mMsgArray = new u32[cFirstRoom];
     mArraySize = 0;
+    mArrayRoom = cFirstRoom;
 
     MR::connectToScene(this, MR::MovementType_PlayerMessenger, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
 }
@@ -21,9 +25,13 @@ void MarioMessenger::movement() {
     mArraySize = 0;
 }
 
+// Every message Mario sends this step goes out at the next movement; past the room it grows (N-3006). The console
+// dropped any message past 32 without a word.
 void MarioMessenger::addRequest(HitSensor* pReceiver, u32 msg) {
-    if (mArraySize == MSG_SIZE) {
-        return;
+    if (mArraySize == mArrayRoom) {
+        mReceiverArray = MR::growArray(mReceiverArray, static_cast< s32 >(mArrayRoom));
+        mMsgArray = MR::growArray(mMsgArray, static_cast< s32 >(mArrayRoom));
+        mArrayRoom *= 2;
     }
 
     mReceiverArray[mArraySize] = pReceiver;

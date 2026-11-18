@@ -331,9 +331,6 @@ namespace {
     const f32 cTableHeadingGap = 7.0f;  // over a heading that is not its list's first line
     const f32 cTableGap = 26.0f;        // between two columns
     const f32 cTableGroupGap = 48.0f;   // between two groups side by side; half of it between them one under the other
-    const s32 cTableColumnsMax = 8;
-    const s32 cTableLinesMax = 64;
-    const s32 cTableCellsMax = 256;
     const s32 cTableCellsFirst = 48;    // the cells' boxes made with the screen; more when a page has more
     const f32 cGraphLabelSize = 10.5f;
     const f32 cGraphLabelGap = 6.0f;    // the scale's values and the lines' names from the picture
@@ -1402,8 +1399,8 @@ private:
     s32 mTableLines;
     s32 mTableColumns;
     bool mTableGrouped;
-    f32 mColumnX[cTableColumnsMax];
-    f32 mColumnWidth[cTableColumnsMax];
+    MR::GrowBuffer< f32 > mColumnX;
+    MR::GrowBuffer< f32 > mColumnWidth;
     f32 mTableScale;  // the cells' text size as set, of cTableSize
     // The summary's graph: the plot inside the picture (texels), its scale, the stages' first columns, and its labels.
     bool mGraph;
@@ -1656,8 +1653,8 @@ NebulaSettingsScreen::NebulaSettingsScreen()
     mTableLines = 0;
     mTableColumns = 0;
     mTableGrouped = false;
-    memset(mColumnX, 0, sizeof(mColumnX));
-    memset(mColumnWidth, 0, sizeof(mColumnWidth));
+    memset(&mColumnX, 0, sizeof(mColumnX));
+    memset(&mColumnWidth, 0, sizeof(mColumnWidth));
     mTableScale = 1.0f;
     mGraph = false;
     mGraphLeft = mGraphTop = mGraphRight = mGraphBottom = 0;
@@ -3107,7 +3104,7 @@ void NebulaSettingsScreen::readTable(const char* pTable) {
     mTableGrouped = false;
     mTableScale = 1.0f;
     const char* p = pTable != nullptr ? pTable : "";
-    while (mTableLines < cTableLinesMax) {
+    for (;;) {
         const char* pLineEnd = p;
         while (*pLineEnd != 0 && *pLineEnd != '\n') {
             pLineEnd++;
@@ -3115,7 +3112,7 @@ void NebulaSettingsScreen::readTable(const char* pTable) {
         mLineKinds.room(static_cast< u32 >(mTableLines) + 1)[mTableLines] = 0;
         s32 column = 0;
         const char* pCell = p;
-        while (column < cTableColumnsMax) {
+        for (;;) {
             const char* pCellEnd = pCell;
             while (pCellEnd < pLineEnd && *pCellEnd != '\t') {
                 pCellEnd++;
@@ -3136,6 +3133,8 @@ void NebulaSettingsScreen::readTable(const char* pTable) {
         }
         p = pLineEnd + 1;
     }
+    mColumnX.room(static_cast< u32 >(mTableColumns) + 1);
+    mColumnWidth.room(static_cast< u32 >(mTableColumns) + 1);
     // Two groups side by side: four columns, a third that is left aligned.
     for (s32 i = 0; i < mCellCount; i++) {
         if (mTableColumns == 4 && mCells[i].mColumn == 2 && mCells[i].mLeft) {
@@ -3165,7 +3164,7 @@ void NebulaSettingsScreen::readTable(const char* pTable) {
 // A cell from `pBegin` to `pEnd`: its marks ('*' the shown run, '#' a heading, '<' left aligned), then a stage's id
 // ('@'), a name as it is ('"') or the host's capitals, translated as the rows are. False when no box is left for it.
 bool NebulaSettingsScreen::addCell(s32 line, s32 column, const char* pBegin, const char* pEnd) {
-    if (mCellCount >= cTableCellsMax || (mCellCount >= mCellBoxesMade && !addCellBox())) {
+    if (mCellCount >= mCellBoxesMade && !addCellBox()) {
         return false;
     }
     TableCell& rCell = mCells.room(static_cast< u32 >(mCellCount) + 1)[mCellCount];
@@ -3265,15 +3264,15 @@ void NebulaSettingsScreen::readGraph(const NebulaSettingsView& rView) {
 // column's place and width (mColumnX, mColumnWidth: the second group's columns are 2 and 3 side by side, 0 and 1 under
 // the first), each line's top in its list (mLineTops), its size, and where the second list starts under the first.
 f32 NebulaSettingsScreen::measureTable(s32 shape, f32* pWidth, f32* pHeight, f32* pSecondTop) {
-    const s32 columns = shape == 2 ? 2 : mTableColumns < cTableColumnsMax ? mTableColumns : cTableColumnsMax;
-    for (s32 c = 0; c < cTableColumnsMax; c++) {
+    const s32 columns = shape == 2 ? 2 : mTableColumns;
+    for (s32 c = 0; c < mTableColumns; c++) {
         mColumnWidth[c] = 0.0f;
     }
     // A column is as wide as its widest cell that does not span.
     for (s32 i = 0; i < mCellCount; i++) {
         const TableCell& rCell = mCells[i];
         const s32 column = shape == 2 && rCell.mColumn >= 2 ? rCell.mColumn - 2 : rCell.mColumn;
-        if (rCell.mLast == rCell.mColumn && column < cTableColumnsMax && rCell.mWidth > mColumnWidth[column]) {
+        if (rCell.mLast == rCell.mColumn && rCell.mWidth > mColumnWidth[column]) {
             mColumnWidth[column] = rCell.mWidth;
         }
     }
@@ -3417,7 +3416,7 @@ void NebulaSettingsScreen::placeResults(f32 panelWidth, f32 height, f32 answersY
         const s32 first = rCell.mColumn - shift;
         const s32 last = rCell.mLast - shift;
         TextBox* const pBox = mCellBoxes[i];
-        if (first < 0 || last >= cTableColumnsMax) {
+        if (first < 0 || last >= mTableColumns) {
             pBox->SetVisible(false);
             continue;
         }
