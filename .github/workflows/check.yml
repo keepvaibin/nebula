@@ -190,8 +190,9 @@ jobs:
           path: ${{ runner.temp }}/sccache
           key: ${{ steps.cache.outputs.key }}
   # The unit tests under the address and undefined-behaviour sanitizers, and under the thread sanitizer (file 00
-  # section 4.2); the game's own tests under the first (its arenas poison what is free, NebulaArena.cpp). A finding
-  # ends the test that made it (no recovery), so ctest fails. The tour under the sanitizers runs in the local gate.
+  # section 4.2); the game's own tests under both (its arenas poison what is free under the first, NebulaArena.cpp; the
+  # second sees the game's hand-offs between threads, P-012 and P-183). A finding ends the test that made it (no
+  # recovery), so ctest fails. The tour under the sanitizers runs in the local gate.
   linux-sanitizers:
     name: Linux sanitizers (${{ matrix.sanitize }})
     runs-on: ubuntu-24.04
@@ -233,7 +234,6 @@ jobs:
           cmake --build "$RUNNER_TEMP/unit" -- -k 0
           ctest --test-dir "$RUNNER_TEMP/unit" --output-on-failure --timeout 1200
       - name: The game's unit tests
-        if: matrix.sanitize == 'address,undefined'
         run: |
           cmake -S native -B "$RUNNER_TEMP/game" -G Ninja -DCMAKE_BUILD_TYPE=Release \
             "-DCMAKE_TOOLCHAIN_FILE=$PWD/platform/linux/llvm-toolchain.cmake" '-DNEBULA_SANITIZE=${{ matrix.sanitize }}'
