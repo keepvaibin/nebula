@@ -534,24 +534,12 @@ namespace {
         f32 mWordWidth;
     };
 
-    // UTF-8 (the host's text) as the game's 16-bit text, after the first `used` units of `rDst`.
+    // UTF-8 (the host's text) as the game's 16-bit text, after the first `used` units of `rDst` (MR::utf8ToText: a
+    // character past U+FFFF is one U+FFFD, P-160).
     void fromUtf8(MR::Text16& rDst, u32 used, const char* pSrc) {
         // A unit takes at least one byte.
         char16_t* const pDst = rDst.grow(used, used + static_cast< u32 >(strlen(pSrc)) + 1);
-        u32 length = used;
-        const u8* p = reinterpret_cast< const u8* >(pSrc);
-        while (*p != 0) {
-            u32 c = *p++;
-            if (c >= 0xE0 && p[0] != 0 && p[1] != 0) {
-                c = ((c & 0x0F) << 12) | ((p[0] & 0x3F) << 6) | (p[1] & 0x3F);
-                p += 2;
-            } else if (c >= 0xC0 && p[0] != 0) {
-                c = ((c & 0x1F) << 6) | (p[0] & 0x3F);
-                p += 1;
-            }
-            pDst[length++] = static_cast< char16_t >(c);
-        }
-        pDst[length] = 0;
+        MR::utf8ToText(pDst + used, pSrc);
     }
 
     // The argument a {n}, {0}, {1}... at `s` names (past {3}: one the text has), its index; -1 when `s` is none. *pLength

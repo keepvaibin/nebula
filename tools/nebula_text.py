@@ -27,9 +27,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TABLE = os.path.join(ROOT, 'localization', 'NebulaText.tsv')
 OUTPUT = os.path.join(ROOT, 'native', 'petari', 'src', 'Game', 'System', 'NebulaTextTable.inc')
 CRASH_OUTPUT = os.path.join(ROOT, 'runtime', 'src', 'crash_text_table.inc')
-HOST_TEXT = ['runtime/src/ui/settings_*_page.cpp', 'runtime/src/ui/settings_model.cpp', 'runtime/src/render/host_window_win32.cpp',
-             'runtime/src/ui/native_settings.cpp', 'runtime/src/mod_import.cpp', 'runtime/src/mods.cpp', 'runtime/src/luma.cpp',
-             'runtime/src/mod_plugins.cpp']
+# Every source whose capitals reach the settings menu (P-086, P-160): a new one goes here, or its texts go unchecked.
+HOST_TEXT = ['runtime/src/ui/*.cpp', 'runtime/src/render/host_window_win32.cpp', 'runtime/src/mod_import.cpp',
+             'runtime/src/mods.cpp', 'runtime/src/luma.cpp', 'runtime/src/mod_plugins.cpp', 'runtime/src/mii_import.cpp',
+             'platform/sdl/host_window_sdl.cpp', 'platform/apple/host_window_apple.mm']
 INSTALLER_TEXT = 'installer/native/*.cpp'
 # Capitals the menu does not show as text: pad names, a disc id, the home overlay and the DLSS footer the game replaces.
 HOST_NOT_SHOWN = {'SSAO', 'GTAO', 'SB4', 'SB5', '(BLUETOOTH)', '(BT)', '-OPTIONS', 'AIS', 'OL', 'LB/RB', 'RMGE01', 'S ARE', 'SHARE+OPTIONS',
@@ -43,7 +44,10 @@ HOST_NOT_SHOWN = {'SSAO', 'GTAO', 'SB4', 'SB5', '(BLUETOOTH)', '(BT)', '-OPTIONS
                   # the mods: unavailable buttons, hex digits, the game's id, the head of "ON (1 OF 2)"
                   '-ABOUT', '-DETAILS', '-PICK', '0123456789ABCDEF', 'RMG', 'ON (',
                   # HDR CALIBRATION's button while the picture is not HDR (the CALIBRATE row is its text)
-                  '-CALIBRATE'}
+                  '-CALIBRATE',
+                  # log lines and names the menu never shows: an environment variable, the log's HDR result, SDL's
+                  # own controller names
+                  'LUMA_HARNESS_PLAN', 'SAVED', '/SDL('}
 
 
 def unescape(cell):
