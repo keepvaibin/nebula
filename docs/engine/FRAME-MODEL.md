@@ -242,7 +242,8 @@ The threads stay as 1.1 lists them. What changes is what crosses between them:
 
 ### 2.3 What the records must allow later
 
-Model format 12 is designed once for these; no code for them now, and ray tracing stays off main.
+The next model format is designed once for these (file 01 calls it 12; main's model is 12 since b6f26c82a, so
+it is 13); no code for them now, and ray tracing stays off main.
 
 - Nothing in a record is computed for one camera on the CPU: billboards, particles and coordinates that read the eye
   are marked and resolved per view on the GPU (today: calc mode 1's view inside the joints, `draw_walker.cpp:309-313`;
@@ -255,12 +256,30 @@ Model format 12 is designed once for these; no code for them now, and ray tracin
 - An object outside the view can stay in the list, marked (today: culled on the CPU, `draw_walker.cpp:482`).
 - Both poses of each object (E3 step 5).
 - The importer writes normals where a mesh has none.
-- A later field does not make a format 13, and a mod's cooked model keeps loading: the format carries a table of
+- A later field does not make a format 14, and a mod's cooked model keeps loading: the format carries a table of
   sections by name and size, and a reader skips what it does not know.
 
-### 2.4 Model format 12
+What the removed tracer had to guess or rebuild, each a line here (its commits 7ecc72a4c, ca78c16cd, b6f26c82a; P-172
+is the first case):
+- a material's surface kind: alpha-tested by look rules, water from a hand table (`rt_water.tsv`) and five code-drawn
+  water classes by name: the form names its kind (opaque, alpha-tested, blended glass, water);
+- which colour of a material carries its unlit look and which material of a model glows (`rt_glow.tsv`, glow_source),
+  read from the draw's live row so it follows the animation: the form names its glow row (E3 step 1);
+- a glowing mesh's shape (wider than 6 m in two axes is no point light): emitters are records with their shape;
+- a painted environment map, and a painted surface that holds its own shadows: the form names a coordinate source that
+  reads the eye and a texture or vertex colour that is baked light;
+- the generated programs' light sums, with the ambient term added by hand (AMBIENT_TERM): a form's lighting names
+  its ambient and its light terms apart;
+- actors outside the view kept drawn up to 30 m for shadows and mirrors: an object outside the view stays in the
+  list, marked;
+- a hit record per material and its twins, found by reading every model once more before a cook: a material form has
+  one id across the models that share it;
+- the stage's and the effects' light (`RtStages.tsv`, `RtEffects.tsv`): a stage's sky and sun, and an effect that
+  lights, are records.
 
-What the importer writes, by E3's steps (file 01, E3):
+### 2.4 Model format 13
+
+What the importer writes, by E3's steps (file 01, E3, where it is named 12):
 
 | Step | Written at cook | Ends in the engine |
 | --- | --- | --- |
