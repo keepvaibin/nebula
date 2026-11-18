@@ -29,8 +29,13 @@ public:
     }
     // Rear speakers are wanted, where the device has them.
     virtual void set_surround(bool) {}
-    // The frames given to the device that it has not played yet, as of the last call of the render function.
+    // The frames given to the device that it has not played yet, as of the last call of the render function, the
+    // output's own latency included where the system states it.
     [[nodiscard]] virtual std::uint32_t queued_frames() const { return 0u; }
+    // The times the device found nothing to play since it was made (an output that cannot tell: 0), and the frames it
+    // keeps queued now (0: not stated). For the sound line of the log and the gate.
+    [[nodiscard]] virtual std::uint64_t underruns() const { return 0u; }
+    [[nodiscard]] virtual std::uint32_t fill_frames() const { return 0u; }
 };
 
 // The system's default output, followed when it changes; with none, the clock pulls until one appears.
