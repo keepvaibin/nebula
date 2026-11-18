@@ -6,6 +6,7 @@
 #include "galaxy/render/game_bloom_shape.h"
 #include "galaxy/render/frame_pass.h"
 #include "galaxy/render/renderer_d3d12.h"
+#include "render/core/utility_pipeline_d3d12.h"
 #include "galaxy/render/idle_clock.h"
 
 #include <algorithm>
@@ -89,7 +90,7 @@ bool GameBloom::initialize(ID3D12Device* device) {
     };
     for (const auto& pass : passes) {
         cd.CS = pass.shader;
-        if (FAILED(device_->CreateComputePipelineState(&cd, IID_PPV_ARGS(&*pass.pipeline)))) {
+        if (FAILED(core::utility_pipeline(device_, cd, &*pass.pipeline))) {
             std::cerr << "[bloom] compute pipeline failed\n";
             return false;
         }
@@ -157,7 +158,7 @@ ID3D12PipelineState* GameBloom::composite_pipeline(unsigned samples, bool hdr) {
     pd.NumRenderTargets = 1;
     pd.RTVFormats[0] = hdr ? kSceneHdrColorFormat : kSceneColorFormat;
     pd.SampleDesc.Count = 1u << (index & 3u);
-    if (FAILED(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&composite_[index])))) {
+    if (FAILED(core::utility_pipeline(device_, pd, &composite_[index]))) {
         std::cerr << "[bloom] composite pipeline failed for " << (1u << (index & 3u)) << " samples\n";
         composite_failed_ |= 1u << index;
         return nullptr;

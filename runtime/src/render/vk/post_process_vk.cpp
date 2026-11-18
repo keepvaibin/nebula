@@ -249,7 +249,7 @@ VkPipeline PostProcessorVk::create_pipeline(Program vs_program, Program ps_progr
         info.pDynamicState = &dynamic;
         info.layout = layout_;
         info.renderPass = pass;
-        if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &pipeline) != VK_SUCCESS) {
+        if (vkCreateGraphicsPipelines(device, shared_pipeline_cache(), 1, &info, nullptr, &pipeline) != VK_SUCCESS) {
             pipeline = VK_NULL_HANDLE;
         }
     }

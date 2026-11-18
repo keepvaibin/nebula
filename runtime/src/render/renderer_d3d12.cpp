@@ -5,6 +5,7 @@
 #include "galaxy/benchmark.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/render/renderer_d3d12.h"
+#include "render/core/utility_pipeline_d3d12.h"
 #include "galaxy/render/program_table.h"
 #include <nebula_frame_list.h>
 #include "galaxy/render/host_window_win32.h"
@@ -1217,7 +1218,7 @@ void RendererD3D12::record_scene_resolve(ID3D12GraphicsCommandList* list, bool c
             pd.NumRenderTargets = 0;
             pd.DSVFormat = kSceneDepthFormat;
             pd.SampleDesc.Count = 1;
-            d3d_check(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&depth_resolve_pso_)),
+            d3d_check(core::utility_pipeline(device_.Get(), pd, &depth_resolve_pso_),
                       "depth resolve PSO");
         }
         if (!msaa.depth_srv) {
@@ -1503,19 +1504,15 @@ bool RendererD3D12::create_conversion_pipeline() {
         pd.NumRenderTargets      = 1;
         pd.RTVFormats[0]         = kSceneColorFormat;
         pd.SampleDesc.Count      = 1;
-        d3d_check(device_->CreateGraphicsPipelineState(
-            &pd, IID_PPV_ARGS(&conv_pipeline_)), "CreateConvPSO");
+        d3d_check(core::utility_pipeline(device_.Get(), pd, &conv_pipeline_), "CreateConvPSO");
         pd.RTVFormats[0] = kSceneHdrColorFormat;
-        d3d_check(device_->CreateGraphicsPipelineState(
-            &pd, IID_PPV_ARGS(&conv_pipeline_wide_)), "CreateConvPSO wide");
+        d3d_check(core::utility_pipeline(device_.Get(), pd, &conv_pipeline_wide_), "CreateConvPSO wide");
         const UtilityShaderBytes filter = utility_shader(UtilityShader::DisplayFilterPs);
         pd.PS = {filter->GetBufferPointer(), filter->GetBufferSize()};
         pd.RTVFormats[0] = kSceneColorFormat;
-        d3d_check(device_->CreateGraphicsPipelineState(
-            &pd, IID_PPV_ARGS(&display_filter_pipeline_)), "CreateDisplayFilterPSO");
+        d3d_check(core::utility_pipeline(device_.Get(), pd, &display_filter_pipeline_), "CreateDisplayFilterPSO");
         pd.RTVFormats[0] = kSceneHdrColorFormat;
-        d3d_check(device_->CreateGraphicsPipelineState(
-            &pd, IID_PPV_ARGS(&display_filter_pipeline_wide_)), "CreateDisplayFilterPSO wide");
+        d3d_check(core::utility_pipeline(device_.Get(), pd, &display_filter_pipeline_wide_), "CreateDisplayFilterPSO wide");
     }
 
     // Screen probes: b0 the count, t0 the depth (a table), t1 the pixels and u0 the values (root views).
@@ -1545,7 +1542,7 @@ bool RendererD3D12::create_conversion_pipeline() {
         D3D12_COMPUTE_PIPELINE_STATE_DESC cd{};
         cd.pRootSignature = probe_root_signature_.Get();
         cd.CS = {cs->GetBufferPointer(), cs->GetBufferSize()};
-        d3d_check(device_->CreateComputePipelineState(&cd, IID_PPV_ARGS(&probe_pipeline_)), "CreateProbePSO");
+        d3d_check(core::utility_pipeline(device_.Get(), cd, &probe_pipeline_), "CreateProbePSO");
     }
 
     // CPU-only RTV slot reused after each conversion bind is recorded.
@@ -1691,7 +1688,7 @@ bool RendererD3D12::publish_scene_depth_copy(std::uint64_t key, TextureStore& te
         pd.NumRenderTargets = 1;
         pd.RTVFormats[0] = DXGI_FORMAT_R32_FLOAT;
         pd.SampleDesc.Count = 1;
-        d3d_check(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&depth_copy_pso_)), "depth copy PSO");
+        d3d_check(core::utility_pipeline(device_.Get(), pd, &depth_copy_pso_), "depth copy PSO");
     }
     // Its own key beside the colour captures' (channels in bits 48 and up, at most 4): freed with the texture's id.
     const std::uint64_t dest_key = static_cast<std::uint64_t>(static_cast<std::uint32_t>(key)) | (0xFFull << 48);
@@ -2075,7 +2072,7 @@ ID3D12PipelineState* RendererD3D12::clear_pipeline(bool color) {
     pd.BlendState.RenderTarget[0].RenderTargetWriteMask = color
         ? D3D12_COLOR_WRITE_ENABLE_RED | D3D12_COLOR_WRITE_ENABLE_GREEN | D3D12_COLOR_WRITE_ENABLE_BLUE
         : D3D12_COLOR_WRITE_ENABLE_ALPHA;
-    d3d_check(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&pipeline)),
+    d3d_check(core::utility_pipeline(device_.Get(), pd, &pipeline),
               color ? "CreateClearRgbPSO" : "CreateClearAlphaPSO");
     return pipeline.Get();
 }
@@ -2622,7 +2619,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             pd.NumRenderTargets      = 1;
             pd.RTVFormats[0]         = kBackbufferFormat;
             pd.SampleDesc.Count      = 1;
-            d3d_check(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&blit_pipeline_)), "CreateBlitPSO");
+            d3d_check(core::utility_pipeline(device_.Get(), pd, &blit_pipeline_), "CreateBlitPSO");
         }
 
         frame_pass_heap_.initialize(device_.Get());
@@ -6011,7 +6008,7 @@ ID3D12PipelineState* RendererD3D12::layer_pipeline(bool merge, unsigned samples)
     pd.NumRenderTargets = 1;
     pd.RTVFormats[0] = merge ? kSceneHdrColorFormat : kSceneColorFormat;
     pd.SampleDesc.Count = samples;
-    if (FAILED(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&slot)))) {
+    if (FAILED(core::utility_pipeline(device_.Get(), pd, &slot))) {
         slot.Reset();
         return nullptr;
     }

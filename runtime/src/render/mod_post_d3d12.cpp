@@ -3,6 +3,7 @@
 // program drawn full screen over the frame (RenderCore::walk_post), and a mod's native function given the device, the
 // open command list and the target at its draw point (RenderCore::walk_native).
 #include "galaxy/render/renderer_d3d12.h"
+#include "render/core/utility_pipeline_d3d12.h"
 
 #include "barriers_d3d12.h"
 #include "galaxy/render/mod_post.h"
@@ -121,7 +122,7 @@ ID3D12PipelineState* RendererD3D12::mod_post_pipeline(const ModPostProgram& prog
     pd.NumRenderTargets = 1;
     pd.RTVFormats[0] = format;
     pd.SampleDesc.Count = samples;
-    const HRESULT result = device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&made.pipeline));
+    const HRESULT result = core::utility_pipeline(device_.Get(), pd, &made.pipeline);
     if (FAILED(result)) {
         // Kept empty: the pass draws nothing for it from now on, and the log says why once.
         std::cerr << "[draw.post] program " << program.id << " pipeline failed " << std::hex << static_cast<unsigned long>(result)

@@ -3,6 +3,7 @@
 #include "galaxy/render/scene_camera_shape.h"
 
 #include "galaxy/render/renderer_d3d12.h"
+#include "render/core/utility_pipeline_d3d12.h"
 #include "barriers_d3d12.h"
 
 #include <algorithm>
@@ -66,7 +67,7 @@ bool SceneCamera::initialize(ID3D12Device* device) {
     D3D12_COMPUTE_PIPELINE_STATE_DESC cd{};
     cd.pRootSignature = root_signature_.Get();
     cd.CS = code(g_camera_meter_cs, sizeof(g_camera_meter_cs));
-    if (FAILED(device_->CreateComputePipelineState(&cd, IID_PPV_ARGS(&meter_)))) {
+    if (FAILED(core::utility_pipeline(device_, cd, &meter_))) {
         std::cerr << "[scene-camera] meter pipeline failed\n";
         return false;
     }
@@ -125,7 +126,7 @@ ID3D12PipelineState* SceneCamera::camera_pipeline(unsigned samples, bool resolve
     pd.NumRenderTargets = 1;
     pd.RTVFormats[0] = kSceneColorFormat;
     pd.SampleDesc.Count = resolve ? 1u : 1u << index;
-    if (FAILED(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&output)))) {
+    if (FAILED(core::utility_pipeline(device_, pd, &output))) {
         std::cerr << "[scene-camera] pipeline failed for " << (1u << index) << " samples\n";
         return nullptr;
     }
@@ -151,7 +152,7 @@ ID3D12PipelineState* SceneCamera::widen_pipeline(unsigned samples) {
     pd.NumRenderTargets = 1;
     pd.RTVFormats[0] = kSceneHdrColorFormat;
     pd.SampleDesc.Count = 1u << index;
-    if (FAILED(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&widen_[index])))) {
+    if (FAILED(core::utility_pipeline(device_, pd, &widen_[index]))) {
         std::cerr << "[scene-camera] widen pipeline failed for " << (1u << index) << " samples\n";
         return nullptr;
     }

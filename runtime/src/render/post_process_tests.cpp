@@ -2,6 +2,7 @@
 // anti-aliasing on the WARP software device (no GPU or window needed).
 #include "galaxy/render/post_process.h"
 #include "galaxy/render/renderer_d3d12.h"
+#include "render/core/utility_pipeline_d3d12.h"
 
 #include <dxgi1_4.h>
 
@@ -13,6 +14,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -717,9 +719,51 @@ void view_cache_on_warp() {
     expect(device->GetDeviceRemovedReason() == S_OK, "device alive after the view cache");
 }
 
+// P-052: the passes' pipelines go through the driver cache: a second post-processor loads every pipeline the first
+// made and makes none, and the loaded pipelines pass the self-test. (A second device on one adapter is the same device
+// in Direct3D 12, so the cache's guard against another device is not reached here.)
+void utility_pipelines_on_warp() {
+    using Microsoft::WRL::ComPtr;
+    const auto warp = [](ComPtr<ID3D12Device>& device, ComPtr<ID3D12CommandQueue>& queue) {
+        ComPtr<IDXGIFactory4> factory;
+        ComPtr<IDXGIAdapter> adapter;
+        D3D12_COMMAND_QUEUE_DESC qd{};
+        return SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))) &&
+               SUCCEEDED(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter))) &&
+               SUCCEEDED(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&device))) &&
+               SUCCEEDED(device->CreateCommandQueue(&qd, IID_PPV_ARGS(&queue)));
+    };
+    ComPtr<ID3D12Device> device;
+    ComPtr<ID3D12CommandQueue> queue;
+    if (!warp(device, queue)) {
+        std::cerr << "FAILED: WARP device\n";
+        ++failures;
+        return;
+    }
+    using galaxy::render::core::utility_pipeline_counts;
+    galaxy::render::PostProcessor first;
+    expect(first.initialize(device.Get(), queue.Get(), PostProcessSettings{}), "first post-processor on WARP");
+    const auto made = utility_pipeline_counts();
+    expect(made.made > 0u, "the first post-processor makes its pipelines");
+    galaxy::render::PostProcessor second;
+    expect(second.initialize(device.Get(), queue.Get(), PostProcessSettings{}), "second post-processor on WARP");
+    const auto loaded = utility_pipeline_counts();
+    expect(loaded.made == made.made, "the second makes none");
+    expect(loaded.loaded > made.loaded, "the second loads them from the cache");
+    expect(second.status().smaa_ok && second.status().fxaa_ok, "loaded pipelines pass the self-test");
+}
+
 }  // namespace
 
 int main() {
+    // The driver cache reads its file from the data folder: a folder of this run's own, never the user's.
+    const std::filesystem::path data = std::filesystem::temp_directory_path() / "nebula-post-process-tests";
+    std::error_code ignored;
+    std::filesystem::remove_all(data, ignored);
+    std::filesystem::create_directories(data, ignored);
+    SetEnvironmentVariableW(L"LOCALAPPDATA", data.c_str());
+    // First: the driver cache opens on the first device a pipeline is made on.
+    utility_pipelines_on_warp();
     hdr_output();
     plans();
     texts();

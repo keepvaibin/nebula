@@ -5,6 +5,7 @@
 #include "galaxy/render/ambient_occlusion_shape.h"
 
 #include "galaxy/render/renderer_d3d12.h"
+#include "render/core/utility_pipeline_d3d12.h"
 #include "galaxy/render/idle_clock.h"
 
 #include <cstring>
@@ -76,22 +77,22 @@ bool AmbientOcclusion::initialize(ID3D12Device* device) {
     D3D12_COMPUTE_PIPELINE_STATE_DESC cd{};
     cd.pRootSignature = root_signature_.Get();
     cd.CS = code(g_ao_distance_cs, sizeof(g_ao_distance_cs));
-    if (FAILED(device_->CreateComputePipelineState(&cd, IID_PPV_ARGS(&distance_pass_)))) {
+    if (FAILED(core::utility_pipeline(device_, cd, &distance_pass_))) {
         std::cerr << "[ambient-occlusion] distance pipeline failed\n";
         return false;
     }
     cd.CS = code(g_ao_occlusion_cs, sizeof(g_ao_occlusion_cs));
-    if (FAILED(device_->CreateComputePipelineState(&cd, IID_PPV_ARGS(&occlusion_)))) {
+    if (FAILED(core::utility_pipeline(device_, cd, &occlusion_))) {
         std::cerr << "[ambient-occlusion] occlusion pipeline failed\n";
         return false;
     }
     cd.CS = code(g_ao_ssao_cs, sizeof(g_ao_ssao_cs));
-    if (FAILED(device_->CreateComputePipelineState(&cd, IID_PPV_ARGS(&ssao_)))) {
+    if (FAILED(core::utility_pipeline(device_, cd, &ssao_))) {
         std::cerr << "[ambient-occlusion] SSAO pipeline failed\n";
         return false;
     }
     cd.CS = code(g_ao_denoise_cs, sizeof(g_ao_denoise_cs));
-    if (FAILED(device_->CreateComputePipelineState(&cd, IID_PPV_ARGS(&denoise_)))) {
+    if (FAILED(core::utility_pipeline(device_, cd, &denoise_))) {
         std::cerr << "[ambient-occlusion] denoise pipeline failed\n";
         return false;
     }
@@ -145,7 +146,7 @@ ID3D12PipelineState* AmbientOcclusion::apply_pipeline(unsigned samples, bool hdr
     pd.NumRenderTargets = 1;
     pd.RTVFormats[0] = hdr ? kSceneHdrColorFormat : kSceneColorFormat;
     pd.SampleDesc.Count = 1u << (index & 3u);
-    if (FAILED(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&apply_[index])))) {
+    if (FAILED(core::utility_pipeline(device_, pd, &apply_[index]))) {
         std::cerr << "[ambient-occlusion] multiply pipeline failed for " << (1u << (index & 3u)) << " samples\n";
         return nullptr;
     }
