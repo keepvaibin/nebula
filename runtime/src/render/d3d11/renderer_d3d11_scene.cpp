@@ -19,6 +19,7 @@
 #include <nebula_frame_list.h>
 
 #include <algorithm>
+#include <atomic>
 #include <bit>
 #include <cmath>
 #include <cstring>
@@ -601,7 +602,17 @@ bool RendererD3D11::publish_picture(std::uint64_t key, std::uint32_t width, std:
             picture.sampled =
                 d3d11::Context::get().create_texture(whole.width, whole.height, 1u, whole.format, kTargetBinds, "picture channels");
             if (!picture.sampled) {
-                throw std::runtime_error("a picture's channel copy could not be made");
+                // Not published this time (P-062): the next publish tries again; a removed device is a device loss.
+                if (gpu::device_removed(d3d11::Context::get().device())) {
+                    allocation_failed("a picture's channel copy");
+                }
+                drop_picture(picture, textures);
+                pictures_.erase(key);
+                static std::atomic<unsigned> reported{0u};
+                if (reported.fetch_add(1u, std::memory_order_relaxed) < 8u) {
+                    std::cerr << "[picture] a channel copy " << width << 'x' << height << " could not be made; not published\n";
+                }
+                return false;
             }
         }
         conversion_draw(whole.view.Get(), *picture.sampled, whole.width, whole.height, channels, 0.0f, 0.0f, 1.0f, 1.0f);
@@ -842,7 +853,7 @@ gpu::TextureRef RendererD3D11::swap_scene_color(gpu::TextureRef fresh) {
         fresh = d3d11::Context::get().create_texture(picture.width, picture.height, 1u, picture.format, kTargetBinds,
                                                      "scene target color");
         if (!fresh) {
-            throw std::runtime_error("scene target colour unavailable");
+            allocation_failed("the scene target colour");
         }
     }
     gpu::TextureRef handed = std::move(scene_.color);
@@ -1193,8 +1204,12 @@ bool RendererD3D11::record_screen_probes(std::size_t slot, std::span<const Scree
         desc.StructureByteStride = 0u;
         made = made && SUCCEEDED(device->CreateBuffer(&desc, nullptr, &out.readback));
         if (!made) {
+            // No answers this time (P-062): the probes are asked again; a removed device is a device loss.
             out = ProbeSlot{};
-            throw std::runtime_error("the screen probe buffers could not be made");
+            if (gpu::device_removed(device)) {
+                allocation_failed("the screen probe buffers");
+            }
+            return false;
         }
         out.capacity = count;
     }

@@ -150,6 +150,9 @@ public:
 
     // An extension's lose_gpu_device, on the render thread: the next present reports a removed device.
     void lose_device();
+    // A GPU allocation inside the frame failed: thrown as a device loss when the device is gone (the renderer is made
+    // again), as memory run out otherwise (P-062).
+    [[noreturn]] void allocation_failed(const char* what) const;
     void begin_frame();
     std::uint64_t end_frame(bool present_swap_chain = true, SubmissionCallback on_submitted = nullptr,
                             void* submission_context = nullptr, bool generated = false);

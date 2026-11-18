@@ -73,6 +73,9 @@ struct Report {
 Report classify(const Facts& facts) noexcept;
 // A failure's text says the graphics card was reset or lost (NEB-G01).
 bool is_gpu_lost(const char* text) noexcept;
+// The text of a GPU allocation (`what`) that failed inside a frame: with the device removed, a device loss
+// (is_gpu_lost: the renderer is made again and the game goes on); otherwise the memory ran out (NEB-R01).
+[[nodiscard]] std::string gpu_allocation_failure(std::string_view what, bool device_removed);
 
 // The report as the text file and dialog show it: "NEB-xxx: title", the detail, the advice, then `technical`
 // (the exception line, the dump's path) and the session's mods. Returns the length written (without the terminator).

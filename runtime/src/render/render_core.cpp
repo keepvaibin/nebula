@@ -1568,7 +1568,8 @@ bool RenderCore::bear_device_loss(std::exception_ptr error) {
     try {
         std::rethrow_exception(error);
     } catch (const std::exception& lost) {
-        if (!galaxy::crash::is_gpu_lost(lost.what())) {
+        // By its text, or by the device itself (a failure the device's removal caused, whatever it says: P-062).
+        if (!galaxy::crash::is_gpu_lost(lost.what()) && !gpu::device_removed(renderer_.device())) {
             return false;
         }
         std::cerr << "[render] the graphics card was reset: " << lost.what() << '\n';
