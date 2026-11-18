@@ -30,6 +30,7 @@
 #include "galaxy/render/present_clock.h"
 #include "galaxy/portable.h"
 #include "galaxy/render/render_core.h"
+#include "galaxy/render/render_queue.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/render/host_window.h"
 #include "galaxy/render/resolution_fit.h"
@@ -146,6 +147,12 @@ std::int64_t vblanks_per_slot(double refresh, double rate) {
         slot = std::max<std::int64_t>(1, static_cast<std::int64_t>(refresh / (kGameStepRate + 1.0)));
     }
     return slot;
+}
+
+// The steady clock in nanoseconds (the render queue's work clock, render_queue.h).
+std::uint64_t steady_now_ns() noexcept {
+    return static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
 }
 
 // Adds its lifetime to the game thread's time blocked on the render thread (RenderCore::game_wait_qpc_).
@@ -608,22 +615,18 @@ void RenderCore::render_frame(bool present_swap_chain, bool black) {
             if (stop_render_thread_ || render_thread_error_ != nullptr) {
                 break;
             }
-            const std::size_t queued = queued_render_chunks();
-            if (queued < queue_depth_limit) {
+            const std::uint64_t now = steady_now_ns();
+            const QueuePlace place = queue_place(queued_render_chunks(), queue_depth_limit, stalled_depth_limit,
+                                                 render_work_started_ns_.load(std::memory_order_acquire), now,
+                                                 kRenderStallNs);
+            if (place.take) {
                 break;
             }
-            if (queued >= stalled_depth_limit || render_chunk_started_ns_ == 0u) {
+            if (place.until_ns == 0u) {
                 queue_space_cv_.wait(lock);
-                continue;
+            } else {
+                queue_space_cv_.wait_for(lock, std::chrono::nanoseconds(place.until_ns - now));
             }
-            const std::uint64_t now = static_cast<std::uint64_t>(
-                std::chrono::duration_cast<std::chrono::nanoseconds>(
-                    std::chrono::steady_clock::now().time_since_epoch()).count());
-            const std::uint64_t stalled_at = render_chunk_started_ns_ + kRenderStallNs;
-            if (now >= stalled_at) {
-                break;
-            }
-            queue_space_cv_.wait_for(lock, std::chrono::nanoseconds(stalled_at - now));
         }
         if (render_thread_error_ != nullptr) {
             // Rethrow the render thread's failure here rather than leave a frozen display.
@@ -638,6 +641,14 @@ void RenderCore::render_frame(bool present_swap_chain, bool black) {
     }
     queue_cv_.notify_one();
     galaxy::timeline::record(galaxy::timeline::Event::SubmitEnd, 0u, 0u);
+}
+
+void RenderCore::render_work_begins() noexcept {
+    render_work_started_ns_.store(steady_now_ns(), std::memory_order_release);
+}
+
+void RenderCore::render_work_ends() noexcept {
+    render_work_started_ns_.store(0u, std::memory_order_release);
 }
 
 void RenderCore::finish_pictures_here() {
@@ -1594,7 +1605,7 @@ void RenderCore::drop_device_state() {
             }
         }
         frame_queue_.clear();
-        render_chunk_started_ns_ = 0u;
+        render_work_started_ns_.store(0u, std::memory_order_release);
         queue_space_cv_.notify_all();
     }
     if (in_hand_list_ != nullptr) {
@@ -1842,14 +1853,19 @@ void RenderCore::render_loop() {
             };
             if (interp_sequence_.active && !stop_render_thread_ &&
                 (frame_queue_.empty() || due_slot_first())) {
+                // An interpolation step walks a list too (its draw.native calls among it): work the producer may
+                // run ahead of when it holds the thread.
+                render_work_begins();
                 lock.unlock();
                 try {
                     advance_interp_sequence(false);
                 } catch (...) {
+                    render_work_ends();
                     std::lock_guard<std::mutex> relock(queue_mutex_);
                     fail_queued_utilities(std::current_exception());
                     break;
                 }
+                render_work_ends();
                 continue;
             }
             if (frame_queue_.empty()) {
@@ -1877,19 +1893,21 @@ void RenderCore::render_loop() {
                     chunk.present_asked_qpc = present.present_asked_qpc;
                     chunk.step_moment_qpc = present.step_moment_qpc;
                 }
+                render_work_begins();
                 if (chunk.present_only) {
                     ++present_chunks_in_flight_;
                 } else {
                     galaxy::timeline::record(galaxy::timeline::Event::RenderBegin, 0u, 0u);
-                    render_chunk_started_ns_ = static_cast<std::uint64_t>(
-                        std::chrono::duration_cast<std::chrono::nanoseconds>(
-                            std::chrono::steady_clock::now().time_since_epoch()).count());
                     ++render_chunks_in_flight_;
                 }
                 have_chunk = true;
             }
         }
 
+        // A present of the latest picture again is work too (a chunk's began as it was taken).
+        if (!have_chunk && (idle_present || overlay_idle)) {
+            render_work_begins();
+        }
         try {
             if (have_chunk) {
                 queue_space_cv_.notify_all();
@@ -1958,6 +1976,7 @@ void RenderCore::render_loop() {
             break;
         }
 
+        render_work_ends();
         if (have_chunk && chunk.present_only) {
             std::lock_guard<std::mutex> lock(queue_mutex_);
             if (present_chunks_in_flight_ != 0u) {
@@ -1966,7 +1985,6 @@ void RenderCore::render_loop() {
             queue_space_cv_.notify_all();
         } else if (have_chunk) {
             std::lock_guard<std::mutex> lock(queue_mutex_);
-            render_chunk_started_ns_ = 0u;
             if (render_chunks_in_flight_ != 0u) {
                 --render_chunks_in_flight_;
             }

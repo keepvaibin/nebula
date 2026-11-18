@@ -603,11 +603,13 @@ private:
     std::condition_variable queue_cv_;        // consumer: work or stop
     std::condition_variable queue_space_cv_;  // producer: slot free
     std::deque<FrameChunk> frame_queue_;
-    // Steady-clock time the render thread has spent on its current chunk (0 between chunks), written
-    // under queue_mutex_. While one chunk has run for kRenderStallNs (a burst of first-use textures or
-    // pipelines), the producer may queue up to kStalledRenderQueueDepth chunks. The game then reaches
-    // its own GPU wait, where its audio thread keeps running, instead of blocking here.
-    std::uint64_t render_chunk_started_ns_ = 0;
+    // When the render thread's current piece of work began (steady clock; 0 between pieces): a frame's list, an
+    // interpolation step, a present. While one has run for kRenderStallNs (a burst of first-use textures or pipelines,
+    // a mod's draw.native function holding the thread), the producer may queue up to kStalledRenderQueueDepth chunks
+    // (render_queue.h queue_place). The game then reaches its own GPU wait, where its audio thread keeps running.
+    std::atomic<std::uint64_t> render_work_started_ns_{0};
+    void render_work_begins() noexcept;
+    void render_work_ends() noexcept;
     static constexpr std::uint64_t kRenderStallNs = 20'000'000u;
     static constexpr std::size_t kStalledRenderQueueDepth = 8u;
     // Probes in flight, oldest first, each with the game frame whose list asked it; their answers go to probe_book_, the
