@@ -44,7 +44,7 @@ void ZipReader::Load(const wstring& what) {
 
 std::unique_ptr<ZipReader> ZipReader::OpenFile(const wstring& path) {
     std::unique_ptr<ZipReader> reader(new ZipReader());
-    if (_wfopen_s(&reader->state_->file, path.c_str(), L"rb") != 0 || !reader->state_->file) {
+    if (_wfopen_s(&reader->state_->file, NativePath(path).c_str(), L"rb") != 0 || !reader->state_->file) {
         DWORD error = GetLastError();
         FailWin32(error ? error : ERROR_FILE_NOT_FOUND, path);
     }
@@ -104,7 +104,7 @@ size_t WriteSink(void* opaque, mz_uint64, const void* buffer, size_t size) {
 
 void ZipReader::ExtractTo(const Entry& entry, const wstring& path, bool overwrite) const {
     CreateDirs(DirName(path));
-    HANDLE h = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, overwrite ? CREATE_ALWAYS : CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+    HANDLE h = CreateFileW(NativePath(path).c_str(), GENERIC_WRITE, 0, nullptr, overwrite ? CREATE_ALWAYS : CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (h == INVALID_HANDLE_VALUE) FailWin32(GetLastError(), path);
     FileSink sink{h};
     bool ok = mz_zip_reader_extract_to_callback(&state_->zip, entry.index, WriteSink, &sink, 0) != 0;
@@ -123,7 +123,7 @@ struct ZipWriter::State {
 ZipWriter::ZipWriter(const wstring& path) : state_(std::make_unique<State>()) {
     state_->path = path;
     if (FileExists(path)) Fail(ErrorKind::Io, L"The file " + path + L" already exists.");
-    if (_wfopen_s(&state_->file, path.c_str(), L"wb") != 0 || !state_->file) FailWin32(GetLastError(), path);
+    if (_wfopen_s(&state_->file, NativePath(path).c_str(), L"wb") != 0 || !state_->file) FailWin32(GetLastError(), path);
     if (!mz_zip_writer_init_cfile(&state_->zip, state_->file, 0)) Fail(ErrorKind::Io, L"Could not write " + path + L".");
     state_->open = true;
 }
@@ -140,7 +140,7 @@ void ZipWriter::Add(const std::string& name, const void* data, size_t size) {
 
 void ZipWriter::AddFile(const std::string& name, const wstring& file) {
     FILE* source = nullptr;
-    if (_wfopen_s(&source, file.c_str(), L"rb") != 0 || !source) FailWin32(GetLastError(), file);
+    if (_wfopen_s(&source, NativePath(file).c_str(), L"rb") != 0 || !source) FailWin32(GetLastError(), file);
     _fseeki64(source, 0, SEEK_END);
     long long size = _ftelli64(source);
     _fseeki64(source, 0, SEEK_SET);
@@ -359,7 +359,7 @@ static void Transfer(const wstring& url, const wstring& partial, long long expec
     request.Send();
     if (request.Status() >= 400) FailStatus(url, request.Status());
     bool resumed = existing > 0 && request.Status() == 206;
-    HANDLE output = CreateFileW(partial.c_str(), FILE_APPEND_DATA | GENERIC_WRITE, 0, nullptr, resumed ? OPEN_ALWAYS : CREATE_ALWAYS,
+    HANDLE output = CreateFileW(NativePath(partial).c_str(), FILE_APPEND_DATA | GENERIC_WRITE, 0, nullptr, resumed ? OPEN_ALWAYS : CREATE_ALWAYS,
                                 FILE_ATTRIBUTE_NORMAL, nullptr);
     if (output == INVALID_HANDLE_VALUE) FailWin32(GetLastError(), partial);
     struct Closer { HANDLE h; ~Closer() { CloseHandle(h); } } closer{output};

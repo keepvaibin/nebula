@@ -167,8 +167,6 @@ pub enum Input {
     Coord(u8),
     Tangent,
     Binormal,
-    /// The painted light's de-light gain (nebula_model.h NEBULA_INPUT_GAIN; model_write.rs debake_gains).
-    Gain,
 }
 
 #[derive(Default, Clone)]
@@ -812,10 +810,10 @@ fn alpha_test_lines(p: &mut Pixel, always: bool) -> bool {
     if !(comp0 == 7 && comp1 == 7) && !(op == 1 && (comp0 == 7 || comp1 == 7)) {
         tested = true;
         // A test its own references pass for every value prev.a can take discards nothing: the raster forms leave it
-        // out (early depth stays on). Ray tracing's forms and the per-sample form keep it (their compiled bytes, and the
-        // per-sample form's presence that marks a cutout, stay as they were); so does the material's alpha-test flag.
+        // out (early depth stays on). The per-sample form keeps it (its presence marks a cutout), and so does the
+        // material's alpha-test flag.
         if always {
-            p.lines.push("#if NATIVE_TRACED || NATIVE_PREPASS || NATIVE_SAMPLE".into());
+            p.lines.push("#if NATIVE_SAMPLE".into());
         }
         let logic = ["&&", "||", "!=", "=="][op as usize & 3];
         let refs = p.rows.at(ROW_ALPHA_REF);
@@ -883,89 +881,6 @@ fn surface_globals(p: &mut Pixel, sf: &SurfaceIr) -> String {
     out
 }
 
-/// A surface shader's ray-hit form (materials.md section 3.4, layer 3): the same `surface` run at a ray's hit, in a
-/// namespace of its own (`RT_MOD_SURFACE_NS`, `rt_mod` unless the includer names another), so the tracer can include
-/// every mod material's form in one program. The includer gives, before it:
-/// - `struct RtModHit { float2 uv; float4 color; float3 normal; float3 world_position; float3 view; float time; float lod; }`:
-///   the hit's first coordinate (the tracer's vertices carry no second: uv1 is uv0), its vertex colour (1 without),
-///   its smooth normal and the way back to the ray's start (world space, unit), its place (game units), the frame's
-///   time (view_scale.y) and the ray cone's map level;
-/// - `struct RtModSurface { float3 base; float alpha; float3 normal; float roughness; float metal; float3 emission; }`:
-///   in, what the hit record says (base x the vertex colour where the record says so, not x a map; display-encoded);
-///   out, what the shader made of it;
-/// - `float4 rt_mod_place(uint place)`: the material's place on this hit's item (0 to 2 registers, -4 to 4; 3 to 6
-///   constant colours, 0 to 1), as content.model set_param leaves it;
-/// - `float4 rt_mod_map(uint slot, float2 uv, float lod)`: the material's map `slot` at `uv`, level `lod`.
-/// It calls `RT_MOD_SURFACE_NS::surface_hit(RtModHit h, inout RtModSurface o)`. A texture function samples at the
-/// cone's level; `ddx`, `ddy` and `fwidth` are 0 (a hit has no neighbours); `discard` and `clip` leave alpha 0, which the
-/// tracer reads as no surface there. Class and through stay the record's (shader.json `ray`).
-pub fn ray_hit_form(sf: &SurfaceIr) -> String {
-    use super::surface_shader::{READ_NORMAL, READ_TIME, READ_VIEW, READ_WORLD};
-    let mut out = String::from("#ifndef RT_MOD_SURFACE_NS\n#define RT_MOD_SURFACE_NS rt_mod\n#endif\nnamespace RT_MOD_SURFACE_NS {\n");
-    out.push_str("struct SurfaceIn {\n    float2 uv0;\n    float2 uv1;\n    float4 color;\n");
-    for (bit, field) in [(READ_NORMAL, "float3 normal"), (READ_WORLD, "float3 world_position"), (READ_VIEW, "float3 view"), (READ_TIME, "float time")] {
-        if sf.reads & bit != 0 {
-            let _ = writeln!(out, "    {field};");
-        }
-    }
-    out.push_str("};\nstruct Surface {\n    float3 base;\n    float alpha;\n    float3 normal;\n    float roughness;\n    float metal;\n    float3 emission;\n};\n");
-    for (name, four, _) in &sf.params {
-        let _ = writeln!(out, "static {} {name};", if *four { "float4" } else { "float" });
-    }
-    out.push_str("static float rt_mod_lod_;\nstatic bool rt_mod_cut_;\n");
-    for (name, slot) in &sf.textures {
-        let _ = writeln!(out, "float4 {name}(float2 uv) {{ return rt_mod_map({slot}u, uv, rt_mod_lod_); }}");
-        let _ = writeln!(out, "float4 {name}_level(float2 uv, float lod) {{ return rt_mod_map({slot}u, uv, lod); }}");
-    }
-    // What a pixel has and a hit does not: neighbours (ddx, ddy, fwidth: 0) and an end that drops it (no surface there).
-    out.push_str(concat!(
-        "#define ddx(v) ((v) - (v))\n#define ddy(v) ((v) - (v))\n#define ddx_coarse(v) ((v) - (v))\n#define ddy_coarse(v) ((v) - (v))\n",
-        "#define ddx_fine(v) ((v) - (v))\n#define ddy_fine(v) ((v) - (v))\n#define fwidth(v) ((v) - (v))\n",
-        "#define discard rt_mod_cut_ = true\n#define clip(v) (rt_mod_cut_ = rt_mod_cut_ || any((v) < 0))\n",
-    ));
-    let file = sf.file.replace(['"', '\\'], "_");
-    let _ = writeln!(out, "#line 1 \"{file}\"");
-    out.push_str(&sf.code);
-    if !sf.code.ends_with('\n') {
-        out.push('\n');
-    }
-    out.push_str("#line 1 \"program\"\n");
-    out.push_str("#undef ddx\n#undef ddy\n#undef ddx_coarse\n#undef ddy_coarse\n#undef ddx_fine\n#undef ddy_fine\n#undef fwidth\n#undef discard\n#undef clip\n");
-    out.push_str("void surface_hit(RtModHit h, inout RtModSurface o) {\n");
-    for (name, four, place) in &sf.params {
-        let _ = writeln!(out, "    {name} = rt_mod_place({place}u){};", if *four { "" } else { ".x" });
-    }
-    out.push_str("    rt_mod_lod_ = h.lod;\n    rt_mod_cut_ = false;\n");
-    out.push_str("    const float3 rt_n_ = dot(h.normal, h.normal) > 0.0 ? normalize(h.normal) : float3(0.0, 0.0, 1.0);\n");
-    out.push_str("    SurfaceIn si = (SurfaceIn)0;\n");
-    for k in 0..2 {
-        if sf.uv[k] {
-            let _ = writeln!(out, "    si.uv{k} = h.uv;");
-        }
-    }
-    out.push_str("    si.color = h.color;\n");
-    if sf.reads & READ_NORMAL != 0 {
-        out.push_str("    si.normal = rt_n_;\n");
-    }
-    if sf.reads & READ_WORLD != 0 {
-        out.push_str("    si.world_position = h.world_position;\n");
-    }
-    if sf.reads & READ_VIEW != 0 {
-        out.push_str("    si.view = dot(h.view, h.view) > 0.0 ? normalize(h.view) : rt_n_;\n");
-    }
-    if sf.reads & READ_TIME != 0 {
-        out.push_str("    si.time = h.time;\n");
-    }
-    out.push_str(concat!(
-        "    Surface s;\n    s.base = o.base;\n    s.alpha = o.alpha;\n    s.normal = rt_n_;\n    s.roughness = o.roughness;\n",
-        "    s.metal = o.metal;\n    s.emission = o.emission;\n    surface(si, s);\n",
-        "    o.base = saturate(s.base);\n    o.alpha = rt_mod_cut_ ? 0.0 : saturate(s.alpha);\n",
-        "    o.normal = dot(s.normal, s.normal) > 0.0 ? normalize(s.normal) : rt_n_;\n",
-        "    o.roughness = saturate(s.roughness);\n    o.metal = saturate(s.metal);\n    o.emission = max(s.emission, 0.0);\n",
-        "}\n}\n",
-    ));
-    out
-}
 
 /// A surface shader's call, before the material's light (it may turn the normal): its parameters from their places,
 /// the factors, SurfaceIn, Surface from the material's colour, metal, roughness and glow, `surface`, its normal.
@@ -1031,9 +946,8 @@ fn surface_tail_lines(p: &mut Pixel, fog_type: u8) -> bool {
 }
 
 /// A map sampled at the same varying coordinate by more than one stage: one tap, taken once before the stages, in the
-/// raster forms. Each such sample becomes `TAP(name, sample)`; ray tracing's forms read the sample itself (TAP's
-/// definition, `TAP_DEFINE`), so their compiled bytes stay as they were. A varying is never written in a pixel stage and
-/// no stage branches, so the tap and its derivatives are the ones each stage took. Returns the taps' declarations.
+/// raster forms. Each such sample becomes the tap's name. A varying is never written in a pixel stage and no stage
+/// branches, so the tap and its derivatives are the ones each stage took. Returns the taps' declarations.
 fn shared_taps(lines: &mut [String]) -> Vec<String> {
     const OPEN: &str = "TEX(";
     let mut found: Vec<(String, usize)> = Vec::new();
@@ -1055,7 +969,7 @@ fn shared_taps(lines: &mut [String]) -> Vec<String> {
         }
         let name = format!("tap{}", declarations.len());
         for line in lines.iter_mut() {
-            *line = line.replace(&expr, &format!("TAP({name}, {expr})"));
+            *line = line.replace(&expr, &name);
         }
         declarations.push(format!("    const float4 {name} = {expr};"));
     }
@@ -1085,8 +999,6 @@ fn plain_sample(text: &str) -> Option<String> {
     Some(text[..text.len() - tail.len() + 1].to_string())
 }
 
-/// TAP(name, sample) of shared_taps: the tap in the raster forms, the sample in ray tracing's.
-const TAP_DEFINE: &str = "#if NATIVE_TRACED || NATIVE_PREPASS\n#define TAP(name, sample) (sample)\n#else\n#define TAP(name, sample) name\n#endif\n";
 
 /// Whether the material's alpha test passes every value round(prev.a * 255) can take (`range`, inclusive) with its own
 /// references: then the program needs no discard.
@@ -1165,9 +1077,7 @@ fn channel_lines(m: &MaterialIr, ch: usize, names: &Channel, eye: &str, nrm: &st
         let terms: Vec<String> =
             light_list(c).iter().map(|(n, atten, diffuse)| format!("light_term({base}, {n}u, {atten}u, {diffuse}u, {eye}, {nrm}).{part}")).collect();
         let terms = if terms.is_empty() { "0.0".to_string() } else { terms.join(" + ") };
-        // Channel 0's light level, which the traced form keeps (program.hlsli TRACED_LEVEL: the added light's base).
         let level = format!("saturate((AMBIENT_TERM({amb}) * 255.0 + {terms}) / 255.0)");
-        let level = if ch == 0 && part == "rgb" { format!("TRACED_LEVEL({level})") } else { level };
         out.push(format!("    {target}.{part} = {mat} * {level};"));
     }
 }
@@ -1198,7 +1108,6 @@ fn enhanced_channel_lines(m: &MaterialIr, ch: usize, names: &Channel, eye: &str,
         }
         out.push("        enh_acc *= enh_sky_reflection(g_enh, enh_amb_lin);".into());
         let level = "enh_srgb(enh_shoulder(max(enh_acc, 0.0)))";
-        let level = if ch == 0 { format!("TRACED_LEVEL({level})") } else { level.to_string() };
         out.push(format!("        {target}.rgb = enh_mat * {level};"));
         out.push("    }".into());
     } else {
@@ -1220,7 +1129,7 @@ fn enhanced_channel_lines(m: &MaterialIr, ch: usize, names: &Channel, eye: &str,
 
 /// A glTF material's lit channel 0 (program_pbr.hlsli): the light set's ambient and lights summed apart from the
 /// material's colour, which the channel passes on unlit so that the stages make the base colour; the alpha as
-/// channel_lines writes it. Channel 0's light level goes to the traced form (TRACED_LEVEL).
+/// channel_lines writes it.
 fn pbr_channel_lines(m: &MaterialIr, eye: &str, base: &str, rows: &mut Rows, out: &mut Vec<String>) {
     let names = Channel { target: "lit0", vertex: "i.color" };
     if m.channel_count == 0 {
@@ -1241,7 +1150,6 @@ fn pbr_channel_lines(m: &MaterialIr, eye: &str, base: &str, rows: &mut Rows, out
                 if k == 0 { "true" } else { "false" },
             ));
         }
-        out.push("        TRACED_LEVEL(pbr_level());".into());
         out.push("    }".into());
     } else {
         out.push("    pbr_begin(float3(1.0, 1.0, 1.0));".into());
@@ -1284,7 +1192,7 @@ pub fn has_lit_form(m: &MaterialIr) -> Result<bool> {
 /// The program's varyings. Its own coordinates take TEXCOORD0 up; the lit varyings (three, five with a normal map's
 /// tangent and bitangent) and the motion varyings (two) follow them in that order, so their places move with the
 /// coordinate count; a surface shader's own varyings after them; `gain` after the motion pair.
-fn varyings(uv_kinds: &[bool], color: [bool; 2], lit: bool, normal_mapped: bool, surface: &[(&str, String)], gain: bool) -> String {
+fn varyings(uv_kinds: &[bool], color: [bool; 2], lit: bool, normal_mapped: bool, surface: &[(&str, String)]) -> String {
     let lit_first = uv_kinds.len();
     let surface_first = lit_first + if lit { 3 } else { 0 } + if normal_mapped { 2 } else { 0 };
     let motion_first = surface_first + surface.len();
@@ -1308,11 +1216,6 @@ fn varyings(uv_kinds: &[bool], color: [bool; 2], lit: bool, normal_mapped: bool,
     }
     for (k, three) in uv_kinds.iter().enumerate() {
         let _ = writeln!(s, "    PER_SAMPLE {} uv{k} : TEXCOORD{k};", if *three { "float3" } else { "float2" });
-    }
-    // The de-light gain of a mesh painted by its map alone, after the motion pair's indices and before
-    // VARYINGS_MOTION (the prepass's primitive number stays the last input); in every form, so all keep one interface.
-    if gain {
-        let _ = writeln!(s, "    PER_SAMPLE float3 gain : TEXCOORD{};", motion_first + 2);
     }
     s.push_str("    VARYINGS_MOTION\n};\n");
     s
@@ -1452,13 +1355,6 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
         }
     }
 
-    // Whether the lit form's colour sums the key (light 0 in a lit colour channel it reads, as channel_lines writes
-    // it): only then does its traced form take V and O in its sums (program_lit.hlsli TRACED_UNKEYED).
-    let keyed = lit_channels
-        && (0..2usize).any(|ch| {
-            p.color_read[ch] && ch < m.channel_count as usize && channel_is_lit(&m.channels[2 * ch]) && m.channels[2 * ch].light_mask & 1 != 0
-        });
-
     // Vertex stage: writes exactly what the pixel stage reads, numbered as it reads them.
     let coords_read: Vec<u8> = p.coords.0.clone();
     let mut v_rows = Rows::default();
@@ -1580,24 +1476,6 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
         uv_kinds.push(projective);
     }
 
-    // An unlit channel's vertex colour de-lit by the cooker's gain, by kDebake (program.hlsli traced_vertex_gain):
-    // in the traced form alone (compile_programs.py gives such a stage its traced forms), so a draw without ray tracing
-    // runs what it ran before.
-    // Every form that reads colour 0: the gain word is the cooker's say (0, a gain of 1, where its rgb is lit).
-    // A painted material with no vertex colour (model_write debakes_map) whose mesh holds light in its first
-    // map: its traced vertex forms pass the gain as a multiplier (traced_map_gain: 1 unless the relight de-lights), and
-    // its traced pixel forms take what the pixel shows through it. The material's own stages only (no replace pass, no
-    // pass edit).
-    let map_gained = form.pass == 0 && form.replace == 0 && !reads_color[0] && super::model_write::debakes_map(m);
-    let gained = reads_color[0] || map_gained;
-    if reads_color[0] {
-        for (k, line) in ["#if NATIVE_TRACED", "    v.color0.rgb = traced_vertex_gain(v.color0.rgb, v.gain);", "#endif"].into_iter().enumerate() {
-            body.insert(k, line.into());
-        }
-    }
-    if map_gained {
-        body.extend(["#if NATIVE_TRACED".into(), "    o.gain = traced_map_gain(v.gain);".into(), "#endif".into()]);
-    }
     // Lit lines name the turned normal; only a stage that reads it pays for it.
     if body.iter().any(|l| l.contains(", nrm)") || l.contains("= nrm;")) {
         body.insert(0, "    const float3 nrm = lit_normal(p, v.nrm);".into());
@@ -1625,7 +1503,7 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
         }
     }
     let read_normal = body.iter().any(|l| l.contains("v.nrm"));
-    let vary = varyings(&uv_kinds, color_written, form.lit, normal_map.is_some(), &surface_vary, map_gained);
+    let vary = varyings(&uv_kinds, color_written, form.lit, normal_map.is_some(), &surface_vary);
     let mut vertex_in = String::from("struct VertexIn {\n    float3 pos : POSITION;\n    uint draw_matrix : BLENDINDICES;\n");
     let mut final_inputs = Vec::new();
     if read_normal {
@@ -1637,12 +1515,6 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
             let _ = writeln!(vertex_in, "    float4 color{ch} : COLOR{ch};");
             final_inputs.push(if ch == 0 { Input::Color0 } else { Input::Color1 });
         }
-    }
-    if gained {
-        // Read by the traced forms alone (above): declared there alone, so no other form's module has an input it
-        // never reads (compile_programs.py refuses one).
-        vertex_in.push_str("#if NATIVE_TRACED\n    uint gain : BLENDWEIGHT;\n#endif\n");
-        final_inputs.push(Input::Gain);
     }
     let mut uv = 0;
     for i in &inputs {
@@ -1687,30 +1559,14 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
     pixel.push_str(&p.rows.declare(2, "MaterialPixel"));
     pixel.push_str(&vary);
     let taps = shared_taps(&mut p.lines);
-    if !taps.is_empty() {
-        pixel.push_str(TAP_DEFINE);
-    }
     pixel.push_str(&surface_text);
     pixel.push_str("NativeOut program_ps(Varyings i) {\n");
     if form.lit {
-        if !keyed {
-            pixel.push_str("    TRACED_UNKEYED;\n");
-        }
-        // A character's face part (skinned, by its name) takes the face's light (program_lit.hlsli
-        // TRACED_FACE: the eye's floor, the face's softened shadow).
-        let face = if skinned { super::hit_record::face_kind(&m.name) } else { 0 };
-        if face != 0 {
-            pixel.push_str(&format!("    TRACED_FACE({face}u);\n"));
-        }
         for l in normal_lines.iter().chain(&surface_head) {
             pixel.push_str(l);
             pixel.push('\n');
         }
         pixel.push_str("    g_enh = enh_begin(i.lit_eye, i.lit_nrm);\n");
-        if !m.highlight_maps.is_empty() {
-            // The enhanced highlight as the sprite painted it (its roughness and peak), under the relight.
-            pixel.push_str(&format!("    enh_sprite({:.3}, {:.3});\n", m.highlight_rough, m.highlight_gain));
-        }
     }
     if lit_rows_used {
         for l in &lit_body {
@@ -1726,20 +1582,13 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
     } else if form.lit && form.replace == 0 {
         pixel.push_str("    if (enh_on()) enh_key_highlight(i.lit_light, g_enh, i.lit_eye);\n");
     }
-    if !taps.is_empty() {
-        pixel.push_str("#if !(NATIVE_TRACED || NATIVE_PREPASS)\n");
-        for l in &taps {
-            pixel.push_str(l);
-            pixel.push('\n');
-        }
-        pixel.push_str("#endif\n");
+    for l in &taps {
+        pixel.push_str(l);
+        pixel.push('\n');
     }
     for l in &p.lines {
         pixel.push_str(l);
         pixel.push('\n');
-    }
-    if map_gained {
-        pixel.push_str("#if NATIVE_TRACED\n    prev.rgb = traced_map_shown(prev.rgb, i.gain);\n#endif\n");
     }
     if form.lit {
         pixel.push_str("    PROGRAM_RETURN(float4(max(prev.rgb, 0.0), saturate(prev.a)));\n}\n");
@@ -1767,7 +1616,6 @@ pub fn input_code(input: &Input) -> u8 {
         Input::Color1 => 2,
         Input::Tangent => 3,
         Input::Binormal => 4,
-        Input::Gain => 7,
         Input::Coord(k) => 16 + *k,
     }
 }
@@ -1782,13 +1630,9 @@ pub fn written_or_unknown() -> Written {
 /// Every animation that can write a register, for the store's whole cook.
 pub fn prepare_written_files(files: &[super::PakFile], read: &mut dyn FnMut(&super::PakFile) -> Result<Vec<u8>>) -> Result<()> {
     let mut written = Written::default();
-    // Every model read once before the cook (hit_record.rs TWINS: the near and far twins, the bloom twins).
-    super::hit_record::twins_begin();
     walk_partition_files(files, read, &mut |name, bytes| {
         if name.to_ascii_lowercase().ends_with(".brk") {
             written.add(&clip::read(&bytes).with_context(|| name.to_string())?);
-        } else if super::native_data::is_model_file(&bytes) {
-            super::hit_record::twins_add(name, &bytes);
         }
         Ok(())
     })?;
@@ -1813,8 +1657,7 @@ pub fn text_flags(pixel: bool, text: &str) -> u32 {
         return if text.contains("world_") { FLAG_READS_WORLD } else { 0 };
     }
     let lit = if text.contains("program_lit.hlsli") { FLAG_LIT } else { 0 };
-    let keyed = ["light_term(i.lit_light, 0u", "enh_add_light(i.lit_light, 0u", "pbr_add_light(i.lit_light, 0u"].iter().any(|w| text.contains(w))
-        && !text.contains("TRACED_UNKEYED;");
+    let keyed = ["light_term(i.lit_light, 0u", "enh_add_light(i.lit_light, 0u", "pbr_add_light(i.lit_light, 0u"].iter().any(|w| text.contains(w));
     let written_lit = text.lines().any(|line| {
         let words: Vec<&str> = line.trim_start().trim_start_matches('#').split_whitespace().collect();
         line.trim_start().starts_with('#') && words.len() >= 3 && words[0] == "define" && words[1] == "NATIVE_LIT" && words[2] == "1"
@@ -2190,7 +2033,7 @@ mod tests {
         .collect();
         let taps = shared_taps(&mut lines);
         assert_eq!(taps, vec!["    const float4 tap0 = TEX(1).Sample(SAMP(1), i.uv1);".to_string()]);
-        assert_eq!(lines[0], "    const float4 t = TAP(tap0, TEX(1).Sample(SAMP(1), i.uv1)).rgba;");
+        assert_eq!(lines[0], "    const float4 t = tap0.rgba;");
         assert_eq!(lines[4], lines[0]);
         // A divided coordinate, another varying, a warp and a scaled coordinate stay as they were.
         for i in [1, 2, 3, 5, 6] {

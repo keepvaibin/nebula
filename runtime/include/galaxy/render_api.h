@@ -205,9 +205,14 @@ void native_settings_files_dropped(std::vector<std::filesystem::path> files);
 // that restarts the game is not made again.
 [[nodiscard]] std::vector<std::filesystem::path> native_settings_take_launch_imports();
 [[nodiscard]] bool native_settings_launch_imports_taken() noexcept;
-void native_settings_window_resized(unsigned width, unsigned height);
+// The player placed the window by hand: its client size and the monitor it is on (a device name) become the setting.
+void native_settings_window_placed(unsigned width, unsigned height, const char* monitor);
+// The player took the window to full screen or out of it through the system (P-105): DISPLAY MODE follows.
+void native_settings_display_mode_placed(unsigned mode);
 // The graphics device lost at the renderer's next frame, as a driver reset loses it (an extension's lose_gpu_device).
 void lose_gpu_device() noexcept;
+// True while the renderer makes a new graphics device after a loss (a test run's stall watchdog leaves that time out).
+[[nodiscard]] bool device_rebuilding() noexcept;
 // Delivers an overlay key to the window thread (controller navigation).
 void native_settings_post_key(std::uintptr_t virtual_key) noexcept;
 // Delivers a keyboard key to the window thread, as the keyboard gives it (a harness's `key` step): a keyboard binding
@@ -257,7 +262,6 @@ enum class NativeSettingsStatus : unsigned {
     Leave,            // leaving with changes not applied: apply or discard them first
     ModsRestartAsk,   // mod changes applied: restart now? (yes: Apply, later: Close)
     JoyCon,           // Pair Joy-Con: status_number has the halves (kJoyCon* bits); Close leaves
-    RtRestartAsk,     // ray tracing turned on before its shaders are prepared: restart now? (yes: Apply, later: Close)
     DiagnosticsAsk,   // restart and record a diagnostics run? (yes: Apply, no: Close)
     ModsCodeAsk,      // a mod turned on brings code: allow it? (status_text: its name; yes: Apply, no: Close)
     XessAsk,          // download XeSS? (yes: Apply, its license: Revert, no: Close)

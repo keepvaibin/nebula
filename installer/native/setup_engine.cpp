@@ -173,7 +173,9 @@ std::vector<wstring> InstallEngine::CheckRequirements(const wstring& installRoot
     if (!IsProcessorFeaturePresent(PF_SSE4_2_INSTRUCTIONS_AVAILABLE)) problems.push_back(Of(L"Nebula requires a CPU with SSE4.2."));
     try {
         wstring fs = FileSystemName(installRoot);
-        if (!IEquals(fs, L"NTFS")) problems.push_back(Of(L"The install folder must be on an NTFS drive. This drive uses {0}.", {fs}));
+        if (!FileSystemHoldsGame(fs)) {
+            problems.push_back(Of(L"The install folder cannot be on a {0} drive: no file there can reach 4 GB, and the game's file nearly does. Choose an NTFS or exFAT drive.", {fs}));
+        }
         long long free = FreeBytes(installRoot);
         if (free < kRequiredFreeBytes) problems.push_back(Of(L"Setup needs {0} of free space. The drive has {1}.", {FormatBytes(kRequiredFreeBytes), FormatBytes(free)}));
     } catch (const std::exception& error) {
@@ -217,7 +219,7 @@ using Engine = InstallEngine;
 
 // game.pak starts with "NBSTORE\0" and this build's store version.
 bool CurrentStoreValid(const wstring& content) {
-    HANDLE file = CreateFileW(PathCombine(content, L"game.pak").c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    HANDLE file = CreateFileW(NativePath(PathCombine(content, L"game.pak")).c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
     if (file == INVALID_HANDLE_VALUE) return false;
     uint8_t header[12] = {};
     DWORD read = 0;
@@ -332,7 +334,7 @@ void Prune(const wstring& keep, const std::function<void(const wstring&)>& log) 
     for (const wstring& dir : ListDirs(Folder(), false)) {
         if (EndsWith(dir, L".partial")) continue;
         WIN32_FILE_ATTRIBUTE_DATA data{};
-        if (GetFileAttributesExW(dir.c_str(), GetFileExInfoStandard, &data)) copies.push_back({dir, data.ftCreationTime});
+        if (GetFileAttributesExW(NativePath(dir).c_str(), GetFileExInfoStandard, &data)) copies.push_back({dir, data.ftCreationTime});
     }
     std::sort(copies.begin(), copies.end(), [](const Copy& a, const Copy& b) { return CompareFileTime(&a.created, &b.created) > 0; });
     for (size_t i = kKeptCopies; i < copies.size(); i++) {
@@ -429,6 +431,24 @@ void Swap(const wstring& fresh, const wstring& destination, const wstring& aside
     }
 }
 
+// The importer's refusal (crates/nebula-import Refusal::id: its REFUSED line, identify's "reason") in the player's
+// words; empty for an id this Setup does not know, which then shows what the importer said. A stopped import is
+// Setup's own cancel.
+wstring RefusalText(const wstring& id) {
+    if (id == L"folders-only") return Of(L"This version of Nebula sets up the game from an extracted game folder, not from a disc image.");
+    if (id == L"not-a-disc") return Of(L"This file is not a Wii disc image.");
+    if (id == L"missing") return Of(L"The file could not be found.");
+    if (id == L"not-a-folder") return Of(L"This folder is not an extracted Wii game. Choose the folder that holds the sys and files folders.");
+    if (id == L"damaged") return Of(L"This disc image is damaged or incomplete. Make a new copy of the disc, then try again.");
+    if (id == L"gamecube") return Of(L"This is a GameCube game, not Super Mario Galaxy.");
+    if (id == L"galaxy-2") return Of(L"This is Super Mario Galaxy 2. Nebula plays Super Mario Galaxy.");
+    if (id == L"not-galaxy") return Of(L"This is not Super Mario Galaxy.");
+    if (id == L"region") return Of(L"It is not Super Mario Galaxy for North America, Europe or Japan.");
+    if (id == L"changed") return Of(L"This copy of Super Mario Galaxy is changed or another revision. Nebula needs an unchanged copy of the disc.");
+    if (id == L"no-space") return Of(L"The drive is full. Free up space, then try again.");
+    return {};
+}
+
 }  // namespace
 
 struct InstallEngine::Impl {
@@ -440,6 +460,7 @@ struct InstallEngine::Impl {
     std::mutex logLock;
     ULONGLONG started = GetTickCount64();
     wstring staging;
+    wstring refused;  // the importer's last REFUSED id (RefusalText)
     double stageBase = 0, stageWeight = 0;
     wstring stepText;
     InstallEngine& owner;
@@ -456,7 +477,7 @@ struct InstallEngine::Impl {
         }
         CreateDirs(paths::SetupLogs());
         owner.LogPath = PathCombine(paths::SetupLogs(), UtcStamp(true) + L"-" + NewGuidN() + L".log");
-        logFile = CreateFileW(owner.LogPath.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+        logFile = CreateFileW(NativePath(owner.LogPath).c_str(), FILE_APPEND_DATA, FILE_SHARE_READ, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
         if (logFile == INVALID_HANDLE_VALUE) FailWin32(GetLastError(), owner.LogPath);
     }
 
@@ -537,8 +558,22 @@ struct InstallEngine::Impl {
     int RunTool(const std::vector<wstring>& arguments, const std::function<void(const wstring&)>& onLine) {
         wstring importer = ImporterPath();
         Log(L"> nebula-import.exe " + JoinArgs(arguments));
+        refused.clear();
         ProcessRunner runner;
-        return runner.Run(importer, arguments, staging, nullptr, onLine, cancel);
+        return runner.Run(importer, arguments, staging, nullptr, [&](const wstring& line) {
+            if (StartsWith(line, L"REFUSED ")) {
+                refused = line.substr(8);
+                Log(line);
+                return;
+            }
+            onLine(line);
+        }, cancel);
+    }
+
+    // A failed import's words: the refusal's in the player's language, else `otherwise`.
+    [[noreturn]] void FailImport(const wstring& otherwise) {
+        const wstring text = RefusalText(refused);
+        Fail(ErrorKind::InvalidOperation, text.empty() ? otherwise : text);
     }
 
     // The importer's output: PROGRESS done total, STEP n text, and log lines.
@@ -570,19 +605,22 @@ struct InstallEngine::Impl {
             size_t brace = json.find(L'{');
             identity = ParseJson(brace == wstring::npos ? json : json.substr(brace));
         } catch (const std::exception&) {
-            Fail(ErrorKind::InvalidOperation, !lines.empty() ? lines.back() : Of(L"The selected file could not be read."));
+            FailImport(!lines.empty() ? lines.back() : Of(L"The selected file could not be read."));
         }
-        if (code != 0 || !JBool(&identity, L"supported")) Fail(ErrorKind::InvalidOperation, JStr(&identity, L"message").value_or(Of(L"The selected file could not be read.")));
+        if (code != 0 || !JBool(&identity, L"supported")) {
+            if (const auto reason = JStr(&identity, L"reason")) refused = *reason;
+            FailImport(JStr(&identity, L"message").value_or(Of(L"The selected file could not be read.")));
+        }
     }
 
     void Import(const wstring& input, const wstring& content) {
         int code = RunTool({L"import", input, L"--output", content}, ImportLines());
-        if (code != 0) Fail(ErrorKind::InvalidOperation, Of(L"Could not read the game (error {0}). See the Setup log.", {Num(code)}));
+        if (code != 0) FailImport(Of(L"Could not read the game (error {0}). See the Setup log.", {Num(code)}));
     }
 
     void Cook(const wstring& content, const wstring& output) {
         int code = RunTool({L"cook", content, L"--output", output}, ImportLines());
-        if (code != 0) Fail(ErrorKind::InvalidOperation, Of(L"Could not pack the game (error {0}). See the Setup log.", {Num(code)}));
+        if (code != 0) FailImport(Of(L"Could not pack the game (error {0}). See the Setup log.", {Num(code)}));
     }
 
     void RememberSource(const wstring& input) {
@@ -804,7 +842,7 @@ struct InstallEngine::Impl {
         try {
             payload::Extract(L"start/Nebula.exe", next);
             for (int attempt = 0;; attempt++) {
-                if (MoveFileExW(next.c_str(), layout.Starter().c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) return;
+                if (MoveFileExW(NativePath(next).c_str(), NativePath(layout.Starter()).c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) return;
                 if (attempt >= 20) FailWin32(GetLastError(), layout.Starter());
                 Sleep(250);
             }
@@ -1017,7 +1055,7 @@ void SwapContent(const InstallLayout& layout, long long format, long long active
 }
 }  // namespace
 
-wstring Rollback(const InstallLayout& layout) {
+Restored Rollback(const InstallLayout& layout) {
     RequireClosed(layout.root);
     auto current = InstalledInfo::Read(layout);
     if (!current || !current->Previous) Fail(ErrorKind::InvalidOperation, Of(L"No previous version is available."));
@@ -1040,8 +1078,7 @@ wstring Rollback(const InstallLayout& layout) {
         if (swap) SwapContent(layout, active, format);
         throw;
     }
-    Register(layout, previous, false);
-    return previous;
+    return {previous, Register(layout, previous, false)};
 }
 
 void Uninstall(const InstallLayout& layout, bool removeUserData) {

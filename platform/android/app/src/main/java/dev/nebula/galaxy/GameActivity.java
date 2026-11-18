@@ -45,6 +45,8 @@ import org.libsdl.app.SDLSurface;
  */
 public class GameActivity extends SDLActivity implements SensorEventListener {
     private static final String TAG = "Nebula";
+    // The starts made again before this one, in the extras restartGame hands the launcher for the next run.
+    private static final String EXTRA_STARTED_AGAIN = "nebula.started_again";
     private SensorManager sensors;
     private final float[] phoneGyro = new float[3];
     // Controllers' own motion sensors, every sample, to libmain.so.
@@ -73,9 +75,6 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
     static native int nativeTouchWanted(int which);
     static native void nativeInputDevices(boolean keyboard, boolean mouse);
     static native int nativeInputMode();
-    // As RuntimeInputMode.
-    private static final int INPUT_AUTO = 0;
-    private static final int INPUT_PHONE = 4;
     static native void nativePointer(int action, int id, float x, float y);
     static native boolean nativeMenuContext();
     static native boolean nativeTitleScreen();
@@ -104,7 +103,6 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
 
     private TouchControlsView controls;
     private boolean menuOpen;
-    private String controlsMode = "auto";
     private boolean realWiimote;  // a real Wii Remote (WiimoteUsb) is in the player's hand
     private boolean controlsWanted = true;   // the player's choice in the HOME Menu
 
@@ -142,7 +140,7 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
         // A test runner's run (test builds only): its own command line.
         final String[] harness = Harness.arguments(this);
         if (harness != null) {
-            return harness;
+            return withStartedAgain(new ArrayList<>(Arrays.asList(harness)));
         }
         // Record diagnostics (the launcher's, or the game's restart for it): the next normal run only.
         final boolean record = isProfileRun() || GameFiles.recordNextRun(this);
@@ -163,6 +161,22 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
             args.add(shipped.getPath());
         }
         addDriver(args);
+        return withStartedAgain(args);
+    }
+
+    // The starts this run's game made again before this one (restartGame counts them in the extras the launcher starts
+    // the next run with): the host's --started-again (launch_args.h), as a desktop start-again passes it, so the host
+    // and its extensions know a start that takes over from one that ended.
+    private int startedAgain() {
+        return Math.max(0, getIntent().getIntExtra(EXTRA_STARTED_AGAIN, 0));
+    }
+
+    private String[] withStartedAgain(List<String> args) {
+        final int count = startedAgain();
+        if (count > 0) {
+            args.add("--started-again");
+            args.add(String.valueOf(count));
+        }
         return args.toArray(new String[0]);
     }
 
@@ -328,7 +342,7 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
             @Override
             public void onInputDeviceAdded(int deviceId) {
                 reportInputDevices();
-                if (nativeInputMode() == INPUT_AUTO && isController(InputDevice.getDevice(deviceId))) {
+                if (nativeInputMode() == ControlsRules.INPUT_AUTO && isController(InputDevice.getDevice(deviceId))) {
                     hideControlsForController();
                 }
             }
@@ -336,7 +350,7 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
             @Override
             public void onInputDeviceRemoved(int deviceId) {
                 reportInputDevices();
-                if (nativeInputMode() == INPUT_AUTO && !controllerConnected()) {
+                if (nativeInputMode() == ControlsRules.INPUT_AUTO && !controllerConnected()) {
                     revealControls();
                 }
             }
@@ -472,7 +486,7 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
     // What the input mode says of the on-screen controls: Phone always, Auto while no controller is in hand, others never.
     private void applyInputMode() {
         final int mode = nativeInputMode();
-        controlsWanted = mode == INPUT_PHONE || (mode == INPUT_AUTO && !controllerConnected() && !realWiimote);
+        controlsWanted = ControlsRules.controlsWanted(mode, controllerConnected() || realWiimote);
         applyControlsVisibility();
     }
 
@@ -715,18 +729,23 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
     }
 
     // Called by libmain.so (host_window.h Restart, on SDL's thread): the game starts again, straight back into the game, as
-    // `kind` asks: 1 a normal start, 2 one that records diagnostics. One game per process, so a new process takes over
-    // this one's task.
+    // `kind` asks: 1 a normal start, 2 one that records diagnostics. One game per process: the launcher, in the app's
+    // main process, starts the next run once this process has ended (P-020), so the launcher stays under it and watches
+    // it as any run (P-099). This activity finishes, and its onDestroy ends the process.
     public void restartGame(int kind) {
         runOnUiThread(() -> {
-            final Intent intent = new Intent(getIntent());
             if (kind == 2) {
                 GameFiles.setRecordNextRun(this, true);
             }
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-            startActivity(intent);
+            final Bundle extras = getIntent().getExtras() != null ? new Bundle(getIntent().getExtras()) : new Bundle();
+            extras.putInt(EXTRA_STARTED_AGAIN, startedAgain() + 1);
+            final Intent restart = new Intent(this, LauncherActivity.class)
+                    .setAction(LauncherActivity.ACTION_RESTART)
+                    .putExtra(LauncherActivity.EXTRA_GAME_EXTRAS, extras)
+                    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            startActivity(restart);
             overridePendingTransition(0, 0);
-            Process.killProcess(Process.myPid());
+            finish();
         });
     }
 
@@ -754,14 +773,15 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
     }
 
     private void revealControls() {
-        if (nativeInputMode() == INPUT_AUTO && !controlsWanted) {
+        if (nativeInputMode() == ControlsRules.INPUT_AUTO && !controlsWanted) {
             controlsWanted = true;
             applyControlsVisibility();
         }
     }
 
+    // In Auto only: Phone keeps them whatever is in hand (ControlsRules).
     private void hideControlsForController() {
-        if (controlsWanted) {
+        if (controlsWanted && ControlsRules.controllerHidesControls(nativeInputMode())) {
             controlsWanted = false;
             applyControlsVisibility();
         }
@@ -800,7 +820,7 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
             }
             return true;
         }
-        if (fromController(event.getSource()) && "auto".equals(controlsMode)) {
+        if (fromController(event.getSource())) {
             hideControlsForController();
         }
         return super.dispatchKeyEvent(event);
@@ -808,7 +828,7 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
 
     @Override
     public boolean dispatchGenericMotionEvent(MotionEvent event) {
-        if (fromController(event.getSource()) && "auto".equals(controlsMode)) {
+        if (fromController(event.getSource())) {
             hideControlsForController();
         }
         return super.dispatchGenericMotionEvent(event);

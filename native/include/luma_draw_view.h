@@ -5,7 +5,7 @@
    What a view shows: the scene's models (every list the game draws its world's models from: the map, objects, the
    player, enemies, the sky's models; opaque, then translucent) as this frame's poses have them, lit by the game's light
    sets, through the view's camera; cleared first to the view's colour. Not in it: particles, the game's shadow volumes,
-   drawn lines and shapes, 2-D, the ray tracer's light (a view is drawn as with ray tracing off), and what the game's
+   drawn lines and shapes, 2-D, and what the game's
    clipping left out of this frame for its own camera (a view shows what the game draws this frame). Drawn once a frame
    before the scene, so a view's texture drawn at a world point or on the HUD shows this frame. A view the mod has not
    given a camera draws nothing; its texture stays as last drawn (black at first).

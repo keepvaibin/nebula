@@ -139,11 +139,12 @@ class ImportService : Service() {
                 error == null -> Imports.publish(ImportState.Failed(getString(R.string.SetupSwapFailed)))
                 Imports.cancelRequested -> Imports.publish(ImportState.Cancelled)
                 GameSwap.isNoSpace(error) -> Imports.publish(ImportState.Failed(getString(R.string.StorageLow)))
-                else -> Imports.publish(ImportState.Failed(sentence(error)))
+                else -> Imports.publish(ImportState.Failed(ImportRefusals.failure(this, error)))
             }
         } catch (failure: Exception) {
             val text = failure.message ?: failure.toString()
-            Imports.publish(ImportState.Failed(if (GameSwap.isNoSpace(text)) getString(R.string.StorageLow) else sentence(text)))
+            val words = if (GameSwap.isNoSpace(text)) getString(R.string.StorageLow) else ImportRefusals.failure(this, text)
+            Imports.publish(ImportState.Failed(words))
         } finally {
             GameSwap.abandon(folder)
             if (wake.isHeld) wake.release()
@@ -152,8 +153,6 @@ class ImportService : Service() {
             stopSelf()
         }
     }
-
-    private fun sentence(text: String) = text.replaceFirstChar { it.uppercase() }.let { if (it.endsWith(".")) it else "$it." }
 
     private fun notification(done: Long, total: Long): Notification {
         val open = PendingIntent.getActivity(

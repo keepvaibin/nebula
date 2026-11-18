@@ -2,11 +2,12 @@
 
 // Switch Pro Controller, Switch 2 Pro Controller, PlayStation (DualShock 4,
 // DualSense, DualSense Edge), Steam Controller and generic game controller
-// (generic_hid.h) input over Windows HID. One worker thread blocks on an
-// overlapped ReadFile per device plus a device-change event
-// (CM_Register_Notification on the HID interface class), so it costs nothing
-// while idle and wakes at the controller's report rate. The input consumer
-// only copies the latest decoded state.
+// (generic_hid.h) input over Windows HID. One worker thread waits on one I/O
+// completion port for every device's reads and writes, so it costs nothing
+// while idle and wakes at the controllers' report rates; a setup thread lists
+// and opens devices at each device change (CM_Register_Notification on the
+// HID interface class). The input consumer only copies the latest decoded
+// state.
 
 #include "galaxy/controller_roster.h"
 #include "galaxy/input_bindings.h"
@@ -21,8 +22,8 @@
 
 namespace galaxy::host {
 
-// The HID worker's pads. The worker waits on four handles whatever the number of pads: each pad's read and write completions
-// reach it through the thread pool (controller_hid.cpp IoWait), so the Windows wait limit of 64 handles does not set the count.
+// The HID worker's pads. The worker waits on its completion port whatever the number of pads, so the Windows wait limit of
+// 64 handles does not set the count.
 // A pad's slot is the u32 of input::DeviceKey and ControllerInfo (the top two values are the phone's screen and the keyboard);
 // kMaxHidPads is the size of this worker's tables (published pads, rumble handles), not a limit of the key.
 inline constexpr std::size_t kMaxHidPads = 256;
@@ -37,6 +38,9 @@ struct HidPadState {
     input::switch_hid::StickCal right{};
     // Motion shake held until this steady-clock microsecond (0: none).
     std::uint64_t shake_until_us = 0;
+    // Every button a report showed down since the previous consuming read (P-075): a press that came and went between
+    // two reads still reaches the game. read_hid_pads adds them to decoded.buttons.
+    std::uint32_t pressed = 0;
     // Pointer movement from the gyro since the previous consuming read
     // (pointer units, 2 = picture width; up positive), integrated per IMU
     // sample in world yaw/pitch (switch_controller.h SwitchMotion).
@@ -91,6 +95,17 @@ void stop_all_rumble() noexcept;
 
 // Starts the worker on first use; later calls are free.
 void ensure_controller_hid_started() noexcept;
+// Tests only: the controllers the worker opens in place of the system's, each a path CreateFileW opens (a pipe's) with
+// the ids and report lengths a device's HID description would give. Before the worker starts; it then starts no
+// Bluetooth LE scan.
+struct HidStandIn {
+    std::wstring path;
+    std::uint16_t vendor = 0;
+    std::uint16_t product = 0;
+    std::uint16_t input_length = 0;
+    std::uint16_t output_length = 0;
+};
+void use_hid_stand_ins(std::vector<HidStandIn> pads);
 // Replaces `out` with every connected pad; `consume_gyro` clears the gyro and
 // touch accumulators. Returns the number written. Never blocks on device I/O.
 std::size_t read_hid_pads(std::vector<HidPadState>& out, bool consume_gyro) noexcept;
@@ -109,6 +124,11 @@ std::size_t hid_controllers(std::span<input::ControllerInfo> out) noexcept;
 inline constexpr unsigned kXInputProbeMs = 2000u;
 [[nodiscard]] std::uint32_t xinput_present_mask() noexcept;
 void xinput_slot_lost(std::uint32_t slot) noexcept;
+// XInput answers only with levels when asked, so a press that starts and ends between two of the game's reads would be
+// lost (P-075). While the game reads controllers (within the last second), a thread of its own asks the present slots
+// every kXInputPressMs and keeps every button seen down; the game's read of a slot takes them (XINPUT_GAMEPAD_* bits).
+inline constexpr unsigned kXInputPressMs = 4u;
+[[nodiscard]] std::uint16_t take_xinput_presses(std::uint32_t slot) noexcept;
 
 // Joy-Con halves: those connected, whether a left half's L or a right half's R is held, and the pairs (each pair is
 // one controller; a half without its partner is none). `paired` grows with every pair made. While the Pair Joy-Con

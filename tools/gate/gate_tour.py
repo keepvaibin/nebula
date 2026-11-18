@@ -29,8 +29,26 @@ FRAMES = 600
 
 def stops():
     """(index, stage, scenario) for every line of the tour list."""
-    lines = [l for l in LIST.read_text(encoding="utf-8").splitlines() if l.strip() and not l.startswith("#")]
-    return [(i, l.split()[0], int(l.split()[1])) for i, l in enumerate(lines)]
+    return [(i, stage, scenario) for i, (stage, scenario, _) in enumerate(stops_with_save())]
+
+
+def stops_with_save():
+    """(stage, scenario, save) for every line of the tour list: "Stage scenario [tico_seed=N:COUNT ...]"; save holds
+    what a line's extra words add to the stop's save ({"tico_seeds": {"N": COUNT}})."""
+    out = []
+    for line in LIST.read_text(encoding="utf-8").splitlines():
+        if not line.strip() or line.startswith("#"):
+            continue
+        words = line.split()
+        save = {}
+        for word in words[2:]:
+            key, _, value = word.partition("=")
+            seed, _, count = value.partition(":")
+            if key != "tico_seed" or not seed.isdigit() or not count.isdigit():
+                raise SystemExit("tour list: %r is not tico_seed=N:COUNT" % word)
+            save.setdefault("tico_seeds", {})[seed] = int(count)
+        out.append((words[0], int(words[1]), save))
+    return out
 
 
 def test_for(index, stage, scenario, disc=None, window=None):
@@ -59,7 +77,7 @@ def test_for(index, stage, scenario, disc=None, window=None):
     test = {"harness": 1, "name": name,
             "about": "%s scenario %d%s: %d frames of seeded random play" % (stage, scenario, " on %s" % disc if disc else "",
                                                                              FRAMES),
-            "save": {"spin": True}, "stage": {"name": stage, "scenario": scenario},
+            "save": dict({"spin": True}, **stops_with_save()[index][2]), "stage": {"name": stage, "scenario": scenario},
             "limit_seconds": 240, "steps": steps, "expect": []}
     if disc:
         test["disc"] = disc

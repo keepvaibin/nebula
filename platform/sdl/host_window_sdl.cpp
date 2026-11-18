@@ -10,6 +10,7 @@
 #include "galaxy/steam_controller.h"
 #include "galaxy/controller_hid.h"
 #include "galaxy/input/host_input.h"
+#include "galaxy/input/press_latch.h"
 #include "galaxy/mod_import.h"
 #include "galaxy/native_settings_pad.h"
 #include "galaxy/render_api.h"
@@ -21,6 +22,7 @@
 #include "sdl_host.h"
 
 #include "galaxy/render/display_modes.h"
+#include "galaxy/render/display_reconcile.h"
 #include "galaxy/render/host_window.h"
 #if defined(NEBULA_GPU_METAL)
 #include <cstdint>
@@ -38,10 +40,12 @@ namespace galaxy::render::vk {
 #include "galaxy/render_api.h"
 #include "galaxy/input_bindings.h"
 #include "galaxy/game_paths.h"
+#include "galaxy/host_text.h"
 #include "galaxy/runtime_settings.h"
 #include "galaxy/path_text.h"
 #include "galaxy/platform_paths.h"
 #include "galaxy/platform_time.h"
+#include "galaxy/thermal_state.h"
 #include "galaxy/virtual_keys.h"
 
 #include <SDL3/SDL.h>
@@ -57,6 +61,7 @@ namespace galaxy::render::vk {
 #if defined(__ANDROID__)
 #include <android/log.h>
 #include <android/native_window.h>
+#include <fcntl.h>
 #include <jni.h>
 #include <unistd.h>
 #endif
@@ -226,6 +231,11 @@ void finger_speed(std::uint64_t now_us, float& vx, float& vy) {
 }
 
 #if defined(__ANDROID__)
+// forward_output_to_logcat's pipe end that stdout and stderr write to, and whether its reader has written all of it
+// (finish_forwarded_output).
+int g_output_write = -1;
+std::atomic<bool> g_output_read{false};
+
 // stdout and stderr to logcat and to <data>/logs/game.log, line by line (the host and the renderer log there).
 void forward_output_to_logcat() {
     static int pipe_fds[2];
@@ -244,6 +254,7 @@ void forward_output_to_logcat() {
     setvbuf(stderr, nullptr, _IONBF, 0);
     dup2(pipe_fds[1], STDOUT_FILENO);
     dup2(pipe_fds[1], STDERR_FILENO);
+    g_output_write = pipe_fds[1];
     // A crash's report goes to the file itself: the thread below stops with the rest when the system dumps the process.
     install_crash_log(file != nullptr ? fileno(file) : -1);
     std::thread([file] {
@@ -260,6 +271,12 @@ void forward_output_to_logcat() {
         for (;;) {
             const ssize_t n = read(pipe_fds[0], line + used, sizeof(line) - 1 - used);
             if (n <= 0) {
+                // The end (finish_forwarded_output): a last line with no line end is written too.
+                if (used != 0) {
+                    line[used] = '\0';
+                    emit(line);
+                }
+                g_output_read.store(true, std::memory_order_release);
                 return;
             }
             used += static_cast<std::size_t>(n);
@@ -281,6 +298,28 @@ void forward_output_to_logcat() {
             }
         }
     }).detach();
+}
+
+// Before the process ends at once (std::_Exit): the pipe's writers are closed, so the reader writes what is still in the
+// pipe and ends; at most a second is waited for it (a reader held in logcat is left).
+void finish_forwarded_output() noexcept {
+    if (g_output_write < 0) {
+        return;
+    }
+    std::fflush(stdout);
+    std::fflush(stderr);
+    const int none = open("/dev/null", O_WRONLY | O_CLOEXEC);
+    if (none < 0) {
+        return;
+    }
+    dup2(none, STDOUT_FILENO);
+    dup2(none, STDERR_FILENO);
+    close(none);
+    close(g_output_write);
+    g_output_write = -1;
+    for (int waited = 0; waited < 1000 && !g_output_read.load(std::memory_order_acquire); ++waited) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
 }
 
 // A method of the activity (GameActivity.java) on its UI thread's terms: it posts the work itself. `method` is a
@@ -867,8 +906,52 @@ void sample_pad_motion(std::size_t index, SDL_Gamepad* gamepad) {
     }
 }
 
-void sample_gamepads() {
+// Each pad's presses since the game last took the input (P-075): from every sample and every button event. Guarded by
+// g_input_mutex.
+std::array<galaxy::input::PressLatch, kMaxPads> g_pad_presses;
+
+// The unified layout's bit for one of SDL's buttons on a controller of `scheme` (0: not used). Back buttons: SDL's upper
+// pair is the Edge's paddles (the Steam controllers' L4 R4), its lower pair the Edge's Fn buttons (L5 R5).
+std::uint32_t pad_bit(galaxy::input::ControlScheme scheme, SDL_GamepadButton button) {
     namespace pad = galaxy::input::pad;
+    const bool steam = scheme == galaxy::input::ControlScheme::Steam;
+    const bool back = steam || scheme == galaxy::input::ControlScheme::PlayStation;
+    switch (button) {
+    case SDL_GAMEPAD_BUTTON_DPAD_UP: return pad::bit(pad::kDpadUpBit);
+    case SDL_GAMEPAD_BUTTON_DPAD_DOWN: return pad::bit(pad::kDpadDownBit);
+    case SDL_GAMEPAD_BUTTON_DPAD_LEFT: return pad::bit(pad::kDpadLeftBit);
+    case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: return pad::bit(pad::kDpadRightBit);
+    case SDL_GAMEPAD_BUTTON_START: return pad::bit(pad::kStartBit);
+    case SDL_GAMEPAD_BUTTON_BACK: return pad::bit(pad::kBackBit);
+    case SDL_GAMEPAD_BUTTON_LEFT_STICK: return pad::bit(pad::kLeftStickBit);
+    case SDL_GAMEPAD_BUTTON_RIGHT_STICK: return pad::bit(pad::kRightStickBit);
+    case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER: return pad::bit(pad::kLeftShoulderBit);
+    case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: return pad::bit(pad::kRightShoulderBit);
+    case SDL_GAMEPAD_BUTTON_GUIDE: return pad::bit(pad::kHomeBit);
+    case SDL_GAMEPAD_BUTTON_MISC1: return pad::bit(pad::kCaptureBit);
+    case SDL_GAMEPAD_BUTTON_LEFT_PADDLE1: return back ? pad::bit(pad::kGripLeftBit) : 0u;
+    case SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1: return back ? pad::bit(pad::kGripRightBit) : 0u;
+    case SDL_GAMEPAD_BUTTON_LEFT_PADDLE2: return back ? pad::bit(steam ? pad::kGripLeft2Bit : pad::kFnLeftBit) : 0u;
+    case SDL_GAMEPAD_BUTTON_RIGHT_PADDLE2: return back ? pad::bit(steam ? pad::kGripRight2Bit : pad::kFnRightBit) : 0u;
+    case SDL_GAMEPAD_BUTTON_SOUTH: return pad::bit(pad::kSouthBit);
+    case SDL_GAMEPAD_BUTTON_EAST: return pad::bit(pad::kEastBit);
+    case SDL_GAMEPAD_BUTTON_WEST: return pad::bit(pad::kWestBit);
+    case SDL_GAMEPAD_BUTTON_NORTH: return pad::bit(pad::kNorthBit);
+    default: return 0u;
+    }
+}
+
+// A button's press event, between two samples. Called with g_input_mutex held.
+void pad_button_event(const SDL_GamepadButtonEvent& event) {
+    for (std::size_t i = 0; i < kMaxPads; ++i) {
+        if (g_gamepads[i] != nullptr && SDL_GetGamepadID(g_gamepads[i]) == event.which) {
+            g_pad_presses[i].press(pad_bit(scheme_of(g_gamepads[i]), static_cast<SDL_GamepadButton>(event.button)));
+            return;
+        }
+    }
+}
+
+void sample_gamepads() {
     for (std::size_t i = 0; i < kMaxPads; ++i) {
         SDL_Gamepad* gamepad = g_gamepads[i];
         galaxy::input::PadSample& sample = g_input.pads[i];
@@ -882,34 +965,14 @@ void sample_gamepads() {
         sample.connected = true;
         sample.scheme = scheme_of(gamepad);
         g_input.pad_icons[i] = icon_model_of(gamepad);
-        const auto button = [gamepad](SDL_GamepadButton b) { return SDL_GetGamepadButton(gamepad, b); };
         std::uint32_t bits = 0;
-        if (button(SDL_GAMEPAD_BUTTON_DPAD_UP)) bits |= pad::bit(pad::kDpadUpBit);
-        if (button(SDL_GAMEPAD_BUTTON_DPAD_DOWN)) bits |= pad::bit(pad::kDpadDownBit);
-        if (button(SDL_GAMEPAD_BUTTON_DPAD_LEFT)) bits |= pad::bit(pad::kDpadLeftBit);
-        if (button(SDL_GAMEPAD_BUTTON_DPAD_RIGHT)) bits |= pad::bit(pad::kDpadRightBit);
-        if (button(SDL_GAMEPAD_BUTTON_START)) bits |= pad::bit(pad::kStartBit);
-        if (button(SDL_GAMEPAD_BUTTON_BACK)) bits |= pad::bit(pad::kBackBit);
-        if (button(SDL_GAMEPAD_BUTTON_LEFT_STICK)) bits |= pad::bit(pad::kLeftStickBit);
-        if (button(SDL_GAMEPAD_BUTTON_RIGHT_STICK)) bits |= pad::bit(pad::kRightStickBit);
-        if (button(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER)) bits |= pad::bit(pad::kLeftShoulderBit);
-        if (button(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)) bits |= pad::bit(pad::kRightShoulderBit);
-        if (button(SDL_GAMEPAD_BUTTON_GUIDE)) bits |= pad::bit(pad::kHomeBit);
-        if (button(SDL_GAMEPAD_BUTTON_MISC1)) bits |= pad::bit(pad::kCaptureBit);
-        // Back buttons: SDL's upper pair is the Edge's paddles (the Steam controllers' L4 R4), its lower pair the Edge's
-        // Fn buttons (L5 R5).
-        if (sample.scheme == galaxy::input::ControlScheme::PlayStation || sample.scheme == galaxy::input::ControlScheme::Steam) {
-            const bool steam = sample.scheme == galaxy::input::ControlScheme::Steam;
-            if (button(SDL_GAMEPAD_BUTTON_LEFT_PADDLE1)) bits |= pad::bit(pad::kGripLeftBit);
-            if (button(SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1)) bits |= pad::bit(pad::kGripRightBit);
-            if (button(SDL_GAMEPAD_BUTTON_LEFT_PADDLE2)) bits |= pad::bit(steam ? pad::kGripLeft2Bit : pad::kFnLeftBit);
-            if (button(SDL_GAMEPAD_BUTTON_RIGHT_PADDLE2)) bits |= pad::bit(steam ? pad::kGripRight2Bit : pad::kFnRightBit);
+        for (int b = 0; b < SDL_GAMEPAD_BUTTON_COUNT; ++b) {
+            if (SDL_GetGamepadButton(gamepad, static_cast<SDL_GamepadButton>(b))) {
+                bits |= pad_bit(sample.scheme, static_cast<SDL_GamepadButton>(b));
+            }
         }
-        if (button(SDL_GAMEPAD_BUTTON_SOUTH)) bits |= pad::bit(pad::kSouthBit);
-        if (button(SDL_GAMEPAD_BUTTON_EAST)) bits |= pad::bit(pad::kEastBit);
-        if (button(SDL_GAMEPAD_BUTTON_WEST)) bits |= pad::bit(pad::kWestBit);
-        if (button(SDL_GAMEPAD_BUTTON_NORTH)) bits |= pad::bit(pad::kNorthBit);
         sample.buttons = bits;
+        g_pad_presses[i].press(bits);
         // SDL's Y axes grow downward; the unified layout's grow upward.
         sample.axes[0] = axis(gamepad, SDL_GAMEPAD_AXIS_LEFTX);
         sample.axes[1] = -axis(gamepad, SDL_GAMEPAD_AXIS_LEFTY);
@@ -963,6 +1026,7 @@ void open_gamepad(SDL_JoystickID id) {
                 g_accel_valid[index] = false;
                 g_touch_down[index] = false;
                 g_input.motion[index] = {};
+                g_input.pad_names[index] = galaxy::input::kept_model_name(SDL_GetGamepadName(slot) != nullptr ? SDL_GetGamepadName(slot) : "");
                 PadMotionSource& source = g_motion_source[index];
                 source = {};
 #if defined(__ANDROID__)
@@ -1065,6 +1129,223 @@ void update_window_size() {
     }
 }
 
+#if !defined(__ANDROID__) && !(defined(__APPLE__) && TARGET_OS_IPHONE)
+// The display setting on the desktop (P-103): MONITOR, DISPLAY MODE and RESOLUTION, applied on SDL's thread at each
+// pump by the rule the Windows host keeps (display_reconcile.h). A size or display the player gives the window by hand
+// is written back once the window has stopped changing for kPlacedByHandSettle, so a drag writes the settings once.
+struct SdlDisplay {
+    SDL_DisplayID id = 0;
+    std::string key;   // RenderConfig::monitor: the name, with " (2)" for a second screen of one name
+    bool primary = false;
+    unsigned width = 0, height = 0, refresh_hz = 0;  // the desktop mode, in pixels
+    long max_client_width = 0, max_client_height = 0;
+    std::vector<std::pair<unsigned, unsigned>> resolutions;
+};
+
+std::mutex g_display_mutex;            // g_displays: written on SDL's thread, read by the settings
+std::vector<SdlDisplay> g_displays;
+bool g_displays_changed = true;        // SDL's thread only: displays came, went or changed mode (the window placed again)
+bool g_displays_stale = false;         // SDL's thread only: a scale changed (the sizes read again, the window left)
+galaxy::render::host_window::AppliedDisplay g_applied_display;  // SDL's thread only
+bool g_placed_by_hand = false;         // SDL's thread only
+bool g_full_screen_seen = false;       // SDL's thread only: the window entered or left full screen (its events)
+std::chrono::steady_clock::time_point g_placed_by_hand_at{};
+constexpr auto kPlacedByHandSettle = std::chrono::milliseconds(300);
+
+std::vector<SdlDisplay> read_displays() {
+    std::vector<SdlDisplay> out;
+    int count = 0;
+    SDL_DisplayID* const ids = SDL_GetDisplays(&count);
+    if (ids == nullptr) {
+        return out;
+    }
+    const SDL_DisplayID primary = SDL_GetPrimaryDisplay();
+    std::vector<std::string> names;
+    for (int i = 0; i < count; ++i) {
+        const char* const name = SDL_GetDisplayName(ids[i]);
+        names.emplace_back(name != nullptr && name[0] != '\0' ? name : "Display");
+    }
+    const std::vector<std::string> keys = galaxy::render::host_window::display_keys(names);
+    // The window's frame, as Windows takes it from the monitor's work area (settings_monitors).
+    int top = 0, left = 0, bottom = 0, right = 0;
+    if (g_window == nullptr || !SDL_GetWindowBordersSize(g_window, &top, &left, &bottom, &right)) {
+        top = left = bottom = right = 0;
+    }
+    const float density = g_window != nullptr ? std::max(SDL_GetWindowPixelDensity(g_window), 1.0f) : 1.0f;
+    const auto pixels = [](int points, float scale) { return static_cast<unsigned>(std::lround(static_cast<float>(points) * scale)); };
+    for (int i = 0; i < count; ++i) {
+        SdlDisplay display;
+        display.id = ids[i];
+        display.key = keys[static_cast<std::size_t>(i)];
+        display.primary = ids[i] == primary;
+        if (const SDL_DisplayMode* desktop = SDL_GetDesktopDisplayMode(ids[i]); desktop != nullptr) {
+            const float scale = std::max(desktop->pixel_density, 1.0f);
+            display.width = pixels(desktop->w, scale);
+            display.height = pixels(desktop->h, scale);
+            display.refresh_hz = static_cast<unsigned>(std::lround(desktop->refresh_rate));
+        }
+        SDL_Rect usable{};
+        if (SDL_GetDisplayUsableBounds(ids[i], &usable)) {
+            display.max_client_width = static_cast<long>(pixels(std::max(usable.w - left - right, 0), density));
+            display.max_client_height = static_cast<long>(pixels(std::max(usable.h - top - bottom, 0), density));
+        } else {
+            display.max_client_width = static_cast<long>(display.width);
+            display.max_client_height = static_cast<long>(display.height);
+        }
+        int modes = 0;
+        if (SDL_DisplayMode** const list = SDL_GetFullscreenDisplayModes(ids[i], &modes); list != nullptr) {
+            for (int m = 0; m < modes; ++m) {
+                const float scale = std::max(list[m]->pixel_density, 1.0f);
+                const std::pair<unsigned, unsigned> size{pixels(list[m]->w, scale), pixels(list[m]->h, scale)};
+                if (std::find(display.resolutions.begin(), display.resolutions.end(), size) == display.resolutions.end()) {
+                    display.resolutions.push_back(size);
+                }
+            }
+            SDL_free(list);
+        }
+        if (display.resolutions.empty() && display.width > 0) {
+            display.resolutions.emplace_back(display.width, display.height);
+        }
+        out.push_back(std::move(display));
+    }
+    SDL_free(ids);
+    std::stable_sort(out.begin(), out.end(), [](const SdlDisplay& a, const SdlDisplay& b) { return a.primary > b.primary; });
+    return out;
+}
+
+const SdlDisplay* find_display(const std::vector<SdlDisplay>& displays, const char* key) {
+    for (const SdlDisplay& display : displays) {
+        if (display.key == key) return &display;
+    }
+    for (const SdlDisplay& display : displays) {
+        if (display.primary) return &display;
+    }
+    return displays.empty() ? nullptr : &displays.front();
+}
+
+std::string window_display_key() {
+    const SDL_DisplayID id = SDL_GetDisplayForWindow(g_window);
+    const std::lock_guard<std::mutex> lock(g_display_mutex);
+    for (const SdlDisplay& display : g_displays) {
+        if (display.id == id) return display.key;
+    }
+    return {};
+}
+
+galaxy::render::host_window::DisplayState display_state_of(const galaxy::render::RenderConfig& cfg) {
+    galaxy::render::host_window::DisplayState state;
+    state.mode = std::min(cfg.display_mode, galaxy::render::kDisplayBorderless);
+    state.monitor = cfg.monitor;
+    state.window_width = cfg.window_width;
+    state.window_height = cfg.window_height;
+    return state;
+}
+
+// SDL's thread, each pump: the displays read again when they changed, then the window placed for the setting.
+void reconcile_display() {
+    using namespace galaxy::render::host_window;
+    if (g_window == nullptr || hidden_window_mode_enabled()) {
+        return;
+    }
+    const bool monitors_changed = g_displays_changed;
+    if (monitors_changed || g_displays_stale) {
+        std::vector<SdlDisplay> displays = read_displays();
+        const std::lock_guard<std::mutex> lock(g_display_mutex);
+        g_displays = std::move(displays);
+        g_displays_changed = false;
+        g_displays_stale = false;
+    }
+    const galaxy::render::RenderConfig cfg = galaxy::render::get_render_config();
+    const DisplayState wanted = display_state_of(cfg);
+    const bool windowed = wanted.mode == galaxy::render::kDisplayWindowed;
+    // A drag never differs from the setting here: what the player places is written to both (keep_placed_by_hand).
+    if (!display_needs_placing(g_applied_display, wanted, monitors_changed, windowed, false)) {
+        return;
+    }
+    SdlDisplay target;
+    {
+        const std::lock_guard<std::mutex> lock(g_display_mutex);
+        const SdlDisplay* const found = find_display(g_displays, wanted.monitor.data());
+        if (found == nullptr) {
+            return;
+        }
+        target = *found;
+    }
+    if (windowed) {
+        const float density = std::max(SDL_GetWindowPixelDensity(g_window), 1.0f);
+        const auto points = [density](unsigned pixels, long most) {
+            const long fit = most > 0 ? std::min(static_cast<long>(pixels), most) : static_cast<long>(pixels);
+            return std::max(static_cast<int>(std::lround(static_cast<float>(std::max(fit, 1L)) / density)), 1);
+        };
+        (void)SDL_SetWindowFullscreen(g_window, false);
+        (void)SDL_SetWindowSize(g_window, points(wanted.window_width, target.max_client_width),
+                                points(wanted.window_height, target.max_client_height));
+        (void)SDL_SetWindowPosition(g_window, SDL_WINDOWPOS_CENTERED_DISPLAY(target.id), SDL_WINDOWPOS_CENTERED_DISPLAY(target.id));
+    } else {
+        // Borderless: the desktop's own mode on that display (a null fullscreen mode). A Wayland compositor picks the
+        // display itself; elsewhere the window is moved there first.
+        if (SDL_GetDisplayForWindow(g_window) != target.id) {
+            (void)SDL_SetWindowFullscreen(g_window, false);
+            (void)SDL_SetWindowPosition(g_window, SDL_WINDOWPOS_CENTERED_DISPLAY(target.id),
+                                        SDL_WINDOWPOS_CENTERED_DISPLAY(target.id));
+        }
+        (void)SDL_SetWindowFullscreenMode(g_window, nullptr);
+        (void)SDL_SetWindowFullscreen(g_window, true);
+    }
+    // A window not shown yet (until its first picture) takes the placement when shown: an X server answers nothing
+    // for it, so there is nothing to wait for.
+    if ((SDL_GetWindowFlags(g_window) & SDL_WINDOW_HIDDEN) == 0u) {
+        (void)SDL_SyncWindow(g_window);
+    }
+    g_applied_display = {true, wanted};
+    std::fprintf(stderr, "[window] display %s %s\n", windowed ? "windowed" : "borderless", target.key.c_str());
+}
+
+// The window manager took the window to full screen or out of it (a key or a menu of its own): DISPLAY MODE follows, as
+// on the Mac (P-105). The host's own changes have ended before their events are read (SDL_SyncWindow), so the window is
+// then as the setting has it and nothing is written.
+void keep_full_screen_by_hand() {
+    if (!std::exchange(g_full_screen_seen, false) || g_window == nullptr ||
+        galaxy::render::host_window::hidden_window_mode_enabled()) {
+        return;
+    }
+    const bool full = (SDL_GetWindowFlags(g_window) & SDL_WINDOW_FULLSCREEN) != 0u;
+    const unsigned mode = full ? galaxy::render::kDisplayBorderless : galaxy::render::kDisplayWindowed;
+    if (std::min(galaxy::render::get_render_config().display_mode, galaxy::render::kDisplayBorderless) == mode) {
+        return;
+    }
+    galaxy::render::native_settings_display_mode_placed(mode);
+    g_applied_display = {true, display_state_of(galaxy::render::get_render_config())};
+}
+
+// A size or display the player gave the window: noted at its events, written once the window has settled.
+void note_placed_by_hand() {
+    if ((SDL_GetWindowFlags(g_window) & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_MINIMIZED | SDL_WINDOW_MAXIMIZED)) != 0u ||
+        galaxy::render::get_render_config().display_mode != galaxy::render::kDisplayWindowed) {
+        return;
+    }
+    g_placed_by_hand = true;
+    g_placed_by_hand_at = std::chrono::steady_clock::now();
+}
+
+void keep_placed_by_hand() {
+    using namespace galaxy::render::host_window;
+    if (!g_placed_by_hand || std::chrono::steady_clock::now() - g_placed_by_hand_at < kPlacedByHandSettle) {
+        return;
+    }
+    g_placed_by_hand = false;
+    int width = 0, height = 0;
+    if (g_window == nullptr || !SDL_GetWindowSizeInPixels(g_window, &width, &height) || width <= 0 || height <= 0) {
+        return;
+    }
+    const std::string key = window_display_key();
+    galaxy::render::native_settings_window_placed(static_cast<unsigned>(width), static_cast<unsigned>(height), key.c_str());
+    g_applied_display = {true, placed_by_player(display_state_of(galaxy::render::get_render_config()),
+                                                static_cast<unsigned>(width), static_cast<unsigned>(height), key)};
+}
+
+#endif
+
 }  // namespace
 
 bool start() noexcept {
@@ -1072,6 +1353,7 @@ bool start() noexcept {
 #if defined(__ANDROID__)
     forward_output_to_logcat();
 #else
+    keep_output_in_log(galaxy::nebula_data_directory());
     install_crash_log(-1);
 #endif
     // Landscape either way up: the game lays out for shapes from 4:3 wide; taller ones come with Vert+ framing.
@@ -1097,6 +1379,8 @@ bool start() noexcept {
         std::fprintf(stderr, "[sdl] SDL_Init failed: %s\n", SDL_GetError());
         return false;
     }
+    // The system's heat, logged as it changes (Android; Linux reports none).
+    galaxy::host::thermal_watch_start();
     return true;
 }
 
@@ -1191,6 +1475,11 @@ void pump_events(int timeout_ms) noexcept {
     static std::uint32_t waits = 0;
     static auto report_time = std::chrono::steady_clock::now();
     const std::int64_t wait_start = galaxy::render::vk::thread_cpu_ns();
+#if !defined(__ANDROID__) && !(defined(__APPLE__) && TARGET_OS_IPHONE)
+    keep_full_screen_by_hand();
+    reconcile_display();
+    keep_placed_by_hand();
+#endif
 #if defined(__ANDROID__)
     sync_display_rate();
     // SDL's timed event wait polls without sleeping on Android, keeping a core busy: the events are pumped here and
@@ -1265,6 +1554,29 @@ void pump_events(int timeout_ms) noexcept {
         case SDL_EVENT_WINDOW_RESTORED:
             g_background.store(false, std::memory_order_release);
             break;
+#if !(defined(__APPLE__) && TARGET_OS_IPHONE)
+        case SDL_EVENT_DISPLAY_ADDED:
+        case SDL_EVENT_DISPLAY_REMOVED:
+        case SDL_EVENT_DISPLAY_DESKTOP_MODE_CHANGED:
+        case SDL_EVENT_DISPLAY_CURRENT_MODE_CHANGED:
+            g_displays_changed = true;
+            break;
+        case SDL_EVENT_DISPLAY_CONTENT_SCALE_CHANGED:
+        case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED:
+            g_displays_stale = true;
+            break;
+        case SDL_EVENT_WINDOW_RESIZED:
+            note_placed_by_hand();
+            break;
+        case SDL_EVENT_WINDOW_DISPLAY_CHANGED:
+            g_displays_stale = true;
+            note_placed_by_hand();
+            break;
+        case SDL_EVENT_WINDOW_ENTER_FULLSCREEN:
+        case SDL_EVENT_WINDOW_LEAVE_FULLSCREEN:
+            g_full_screen_seen = true;
+            break;
+#endif
 #endif
         case SDL_EVENT_WINDOW_MOUSE_ENTER:
             g_input.mouse_inside = true;
@@ -1392,6 +1704,9 @@ void pump_events(int timeout_ms) noexcept {
         case SDL_EVENT_GAMEPAD_SENSOR_UPDATE:
             pad_sensor_event(event.gsensor);
             break;
+        case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+            pad_button_event(event.gbutton);
+            break;
         case SDL_EVENT_GAMEPAD_REMOVED:
             close_gamepad(event.gdevice.which);
             break;
@@ -1506,6 +1821,10 @@ InputState input_state() noexcept {
 InputState take_input_state() noexcept {
     std::lock_guard<std::mutex> lock(g_input_mutex);
     InputState state = g_input;
+    for (std::size_t i = 0; i < kMaxPads; ++i) {
+        const std::uint32_t buttons = g_pad_presses[i].take(state.pads[i].buttons);
+        if (state.pads[i].connected) state.pads[i].buttons = buttons;
+    }
     state.touch_buttons |= g_touch_pressed | (g_back_held ? kTouchHome : 0u);
     g_touch_pressed = 0u;
     for (PadMotion& motion : g_input.motion) {
@@ -1760,6 +2079,15 @@ void close_game_window(WindowOwner& owner) noexcept {
     galaxy::sdl::g_window = nullptr;
 }
 
+void finish_output() noexcept {
+#if defined(__ANDROID__)
+    galaxy::sdl::finish_forwarded_output();
+#else
+    std::fflush(stdout);
+    std::fflush(stderr);
+#endif
+}
+
 void show_window(NativeWindow window) noexcept {
     // On the main thread, as SDL asks for a window's changes; it takes the focus as a new window does.
     (void)SDL_RunOnMainThread(
@@ -1805,6 +2133,29 @@ bool present_grid(std::int64_t& slot_ns, std::int64_t& period_ns, std::int64_t& 
 
 // What the settings menu asks of its platform (host_window.h).
 std::vector<SettingsMonitor> settings_monitors() {
+#if !defined(__ANDROID__) && !(defined(__APPLE__) && TARGET_OS_IPHONE)
+    // The desktop's displays as SDL's thread last read them (reconcile_display), each with its own sizes.
+    {
+        std::vector<SettingsMonitor> out;
+        const std::lock_guard<std::mutex> lock(galaxy::sdl::g_display_mutex);
+        for (const galaxy::sdl::SdlDisplay& display : galaxy::sdl::g_displays) {
+            SettingsMonitor entry;
+            entry.id = display.key;
+            entry.name = display.key;
+            entry.width = display.width;
+            entry.height = display.height;
+            entry.refresh_hz = display.refresh_hz;
+            entry.max_client_width = display.max_client_width;
+            entry.max_client_height = display.max_client_height;
+            entry.primary = display.primary;
+            entry.resolutions = display.resolutions;
+            out.push_back(std::move(entry));
+        }
+        if (!out.empty()) {
+            return out;
+        }
+    }
+#endif
     const galaxy::sdl::InputState state = galaxy::sdl::input_state();
     SettingsMonitor monitor;
     monitor.id = "display";
@@ -1849,12 +2200,12 @@ void resize_window_client(unsigned width, unsigned height) noexcept {
 // (nativeFilesPicked). One picker at a time; a second ask while one is open answers nothing.
 namespace {
 std::mutex g_pick_mutex;
-std::function<void(std::vector<std::filesystem::path>)> g_pick_done;
+PickDone g_pick_done;
 }  // namespace
 
-void pick_files(FilePick kind, std::function<void(std::vector<std::filesystem::path>)> done) {
+void pick_files(FilePick kind, PickDone done) {
     if (kind == FilePick::ModFolders) {
-        done({});
+        done({}, false);
         return;
     }
     bool open = false;
@@ -1864,7 +2215,7 @@ void pick_files(FilePick kind, std::function<void(std::vector<std::filesystem::p
         if (!open) g_pick_done = std::move(done);
     }
     if (open) {
-        done({});
+        done({}, false);
         return;
     }
     galaxy::sdl::call_activity(
@@ -1935,13 +2286,13 @@ extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeFile
         env->DeleteLocalRef(bytes);
         files.emplace_back(std::move(text));
     }
-    std::function<void(std::vector<std::filesystem::path>)> done;
+    PickDone done;
     {
         const std::lock_guard<std::mutex> lock(g_pick_mutex);
         done = std::move(g_pick_done);
         g_pick_done = nullptr;
     }
-    if (done) done(std::move(files));
+    if (done) done(std::move(files), false);
 }
 
 void open_folder(const std::filesystem::path&) {}
@@ -1954,38 +2305,66 @@ bool folders_open() noexcept {
 // SDL's or of the window's.
 namespace {
 struct PickRequest {
-    std::function<void(std::vector<std::filesystem::path>)> done;
+    PickDone done;
+    // The filters SDL reads until it answers; their names are the host's words (host_text), static storage.
+    std::array<SDL_DialogFileFilter, 2> filters{};
 };
+
+// One of SDL's dialogs titled in the host's language (host_text, P-106).
+void show_dialog(SDL_FileDialogType type, SDL_DialogFileCallback callback, void* request, const char* title,
+                 const SDL_DialogFileFilter* filters, int count, const char* location, bool many) {
+    const SDL_PropertiesID props = SDL_CreateProperties();
+    SDL_SetPointerProperty(props, SDL_PROP_FILE_DIALOG_WINDOW_POINTER, galaxy::sdl::g_window);
+    SDL_SetStringProperty(props, SDL_PROP_FILE_DIALOG_TITLE_STRING, title);
+    if (count > 0) {
+        SDL_SetPointerProperty(props, SDL_PROP_FILE_DIALOG_FILTERS_POINTER, const_cast<SDL_DialogFileFilter*>(filters));
+        SDL_SetNumberProperty(props, SDL_PROP_FILE_DIALOG_NFILTERS_NUMBER, count);
+    }
+    if (location != nullptr) SDL_SetStringProperty(props, SDL_PROP_FILE_DIALOG_LOCATION_STRING, location);
+    SDL_SetBooleanProperty(props, SDL_PROP_FILE_DIALOG_MANY_BOOLEAN, many);
+    SDL_ShowFileDialogWithProperties(type, callback, request, props);
+    SDL_DestroyProperties(props);  // what the dialog keeps of them it has copied, as SDL_ShowOpenFileDialog does
+}
 
 void SDLCALL picked(void* userdata, const char* const* files, int) {
     std::unique_ptr<PickRequest> request(static_cast<PickRequest*>(userdata));
+    // No list at all: no dialog could be shown (on Linux, neither a desktop portal nor Zenity is there).
+    if (files == nullptr) {
+        std::fprintf(stderr, "[sdl] the file picker did not open: %s\n", SDL_GetError());
+        request->done({}, true);
+        return;
+    }
     std::vector<std::filesystem::path> chosen;
-    for (const char* const* file = files; file != nullptr && *file != nullptr; ++file) {
+    for (const char* const* file = files; *file != nullptr; ++file) {
         chosen.emplace_back(*file);
     }
-    request->done(std::move(chosen));
+    request->done(std::move(chosen), false);
 }
 }  // namespace
 
-void pick_files(FilePick kind, std::function<void(std::vector<std::filesystem::path>)> done) {
+void pick_files(FilePick kind, PickDone done) {
+    namespace text = galaxy::host_text;
     auto* request = new PickRequest{std::move(done)};
+    const char* const language = text::language();
+    const auto say = [language](const char* english) { return text::translated(english, language).data(); };
     if (kind == FilePick::ModFolders) {
-        SDL_ShowOpenFolderDialog(picked, request, galaxy::sdl::g_window, nullptr, true);
+        show_dialog(SDL_FILEDIALOG_OPENFOLDER, picked, request, say(text::kImportModFolders), nullptr, 0, nullptr, true);
         return;
     }
     // As Windows' picker lists them (host_window_win32.cpp).
-    static constexpr SDL_DialogFileFilter kMiis[] = {
-        {"Mii files (Wii, DS, 3DS, Wii U, Switch, Mii Studio, Mii Creator)",
-         "mii;rcd;rsd;mae;miigx;ncd;nsd;cfcd;cfsd;ffcd;ffsd;charinfo;nfsd;nfcd;mnms;emnms;miic;dat;bin;txt"},
-        {"All files", "*"}};
-    static constexpr SDL_DialogFileFilter kMods[] = {
-        {"Mods and texture packs (luma, zip, 7z, rar, tar)", "luma;zip;7z;rar;tar;tgz;gz;txz;xz;tbz2;bz2;tzst;zst"},
-        {"All files", "*"}};
-    static constexpr SDL_DialogFileFilter kSaves[] = {
-        {"Saves (zip, Nebula.sav, GameData.bin, Wii SD data.bin)", "zip;sav;bin"},
-        {"All files", "*"}};
-    const SDL_DialogFileFilter* filters = kind == FilePick::Miis ? kMiis : kind == FilePick::Saves ? kSaves : kMods;
-    SDL_ShowOpenFileDialog(picked, request, galaxy::sdl::g_window, filters, 2, nullptr, kind != FilePick::Saves);
+    const char* const patterns = kind == FilePick::Miis ? "mii;rcd;rsd;mae;miigx;ncd;nsd;cfcd;cfsd;ffcd;ffsd;charinfo;nfsd;"
+                                                          "nfcd;mnms;emnms;miic;dat;bin;txt"
+                                 : kind == FilePick::Saves ? "zip;sav;bin"
+                                                           : "luma;zip;7z;rar;tar;tgz;gz;txz;xz;tbz2;bz2;tzst;zst";
+    const char* const name = say(kind == FilePick::Miis    ? text::kMiiFiles
+                                 : kind == FilePick::Saves ? text::kSaveFiles
+                                                           : text::kModFiles);
+    request->filters = {{{name, patterns}, {say(text::kAllFiles), "*"}}};
+    const char* const title = say(kind == FilePick::Miis    ? text::kImportMiis
+                                  : kind == FilePick::Saves ? text::kImportSaves
+                                                            : text::kImportMods);
+    show_dialog(SDL_FILEDIALOG_OPENFILE, picked, request, title, request->filters.data(), 2, nullptr,
+                kind != FilePick::Saves);
 }
 
 // SDL's save dialog; the file is copied where the player chose (a ".zip" added when the name has no extension).
@@ -1993,6 +2372,7 @@ namespace {
 struct SaveRequest {
     std::filesystem::path file;
     std::function<void(SaveCopy)> done;
+    SDL_DialogFileFilter zip{};  // read by SDL until it answers
 };
 
 void SDLCALL save_chosen(void* userdata, const char* const* files, int) {
@@ -2014,10 +2394,13 @@ void SDLCALL save_chosen(void* userdata, const char* const* files, int) {
 }  // namespace
 
 void save_copy(const std::filesystem::path& file, std::function<void(SaveCopy)> done) {
-    static constexpr SDL_DialogFileFilter kZip[] = {{"Zip archive", "zip"}};
+    namespace text = galaxy::host_text;
+    const char* const language = text::language();
     auto* request = new SaveRequest{file, std::move(done)};
+    request->zip = {text::translated(text::kZipArchive, language).data(), "zip"};
     const std::string name = galaxy::path_text(file.filename());
-    SDL_ShowSaveFileDialog(save_chosen, request, galaxy::sdl::g_window, kZip, 1, name.c_str());
+    show_dialog(SDL_FILEDIALOG_SAVEFILE, save_chosen, request, text::translated(text::kExportSaves, language).data(),
+                &request->zip, 1, name.c_str(), false);
 }
 
 // The file manager at the folder (made first, as on Windows).
@@ -2246,9 +2629,10 @@ std::size_t connected_controllers(std::span<input::ControllerInfo> out) noexcept
             info.scheme = state.pads[i].scheme;
             info.slot = static_cast<std::uint8_t>(i);
             info.icons = state.pad_icons[i];
-            info.model = state.pads[i].scheme == input::ControlScheme::PlayStation ? "PlayStation controller"
-                         : state.pads[i].scheme == input::ControlScheme::SwitchPro  ? "Switch controller"
-                                                                                    : "Controller";
+            // The system's own name for it, as Windows shows the device's (P-106); a translated word without one.
+            info.model = state.pad_names[i] != nullptr
+                             ? state.pad_names[i]
+                             : galaxy::host_text::translated("Controller", galaxy::host_text::language()).data();
             info.gyro = state.motion[i].has_gyro;
             info.sensors = state.motion[i].has_gyro || state.motion[i].has_accel;
             info.touch = state.motion[i].has_touch;

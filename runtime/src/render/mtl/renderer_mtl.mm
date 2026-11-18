@@ -5,9 +5,12 @@
 #include "galaxy/pacing_recorder.h"
 
 #include "galaxy/benchmark.h"
+#include "galaxy/frame_timeline.h"
 #include "galaxy/content_viewport.h"
 #include "galaxy/display_aspect.h"
+#include "galaxy/render/present_clock.h"
 #include "galaxy/render/device_memory.h"
+#include "galaxy/render/first_start_scale.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/whole_lines.h"
 #include "galaxy/platform_time.h"
@@ -246,26 +249,33 @@ void RendererMtl::read_display_hdr() {
 // Apple GPU keep the display's own pixels: the Radeon Pro 560 draws the heavier galaxies at 3360 by 1856 in 7.9 ms.
 void RendererMtl::choose_first_start_scale() {
 #if TARGET_OS_OSX
-    if (!galaxy::ordinary_start() || galaxy::bench::running()) {
-        // A hidden, timed or extension-driven start (a test's, a tool's), or a benchmark, which measures the settings
-        // as they are: the first start stays the player's.
+    // The decision is galaxy/render/first_start_scale.h's, tested on every platform.
+    galaxy::render::FirstStartFacts facts;
+    facts.ordinary_start = galaxy::ordinary_start();
+    facts.benchmark = galaxy::bench::running();
+    if (!facts.ordinary_start || facts.benchmark) {
         return;
     }
     std::error_code ignored;
     const std::filesystem::path settings = render_config_path();
     const mtl::DeviceCaps& caps = mtl::Context::get().caps();
-    // Integrated graphics on an Intel Mac: not Apple's GPU, and one memory with the CPU.
-    if (settings.empty() || std::filesystem::exists(settings, ignored) || caps.apple_gpu || !caps.unified_memory ||
-        layer_.layer == nullptr) {
+    facts.settings_path = !settings.empty();
+    facts.settings_exist = facts.settings_path && std::filesystem::exists(settings, ignored);
+    facts.apple_gpu = caps.apple_gpu;
+    facts.unified_memory = caps.unified_memory;
+    facts.layer = layer_.layer != nullptr;
+    RenderConfig cfg = get_render_config_chosen();
+    facts.upscaler = cfg.upscaler;
+    facts.internal_height = cfg.internal_height;
+    facts.spatial_quality = cfg.spatial_quality;
+    if (facts.layer) {
+        facts.contents_scale = static_cast<double>(((__bridge CAMetalLayer*)layer_.layer).contentsScale);
+    }
+    if (!galaxy::render::first_start_draws_at_points(facts)) {
         return;
     }
-    RenderConfig cfg = get_render_config_chosen();
-    if (cfg.upscaler != 0u || cfg.internal_height != 0u || cfg.spatial_quality != 0u ||
-        ((__bridge CAMetalLayer*)layer_.layer).contentsScale < 1.5) {
-        return;  // a choice made another way (a test's), or a display whose pixels are its points
-    }
-    cfg.upscaler = 1u;         // FSR 1
-    cfg.spatial_quality = 3u;  // performance: half the output's size each way
+    cfg.upscaler = galaxy::render::kFirstStartUpscaler;                 // FSR 1
+    cfg.spatial_quality = galaxy::render::kFirstStartSpatialQuality;  // performance: half the output's size each way
     set_render_config(cfg);
     (void)save_render_config_to_file();
     std::fprintf(stderr, "[metal] first start on integrated graphics: the scene at the display's size in points, FSR 1 to its pixels\n");
@@ -381,7 +391,7 @@ void RendererMtl::shutdown() {
         pictures_.clear();
         frame_pass_targets_.clear();
         capture_target_.reset();
-        scene_capture_ = backbuffer_capture_ = display_capture_ = Readback{};
+        backbuffer_capture_ = display_capture_ = Readback{};
         probe_slots_.clear();
         held_probe_slots_.clear();
         pass_visibility_.reset();
@@ -563,15 +573,20 @@ void RendererMtl::next_command_buffer(GpuPass pass) {
 }
 
 void RendererMtl::begin_frame() {
-    host_window::poll_render_config_file();
+    host_window::watch_render_config_file();
     follow_window_and_resize();
     apply_window_size();
     grow_rings();
     prepare_temporal_upscaler();
     apply_dynamic_resolution();
-    if (temporal_interp_suspended_ && temporal_interp_key() != temporal_interp_key_) {
-        // The settings changed: decided again.
-        temporal_interp_suspended_ = false;
+    if (temporal_interp_hold_.held()) {
+        if (temporal_interp_key() != temporal_interp_key_) {
+            temporal_interp_hold_.settings_changed();  // the settings changed: decided again
+        } else if (temporal_interp_hold_.lift_if_due(galaxy::qpc_to_ns(galaxy::qpc_now()))) {
+            // Its wait passed: the governor measures generated frames again, not by the cost that held it.
+            reset_generated_gpu_ema();
+            std::cerr << "[interp] temporal upscaling of generated frames tried again\n";
+        }
     }
     sync_post_process();
     bloom_.poll_ready();
@@ -582,7 +597,15 @@ void RendererMtl::begin_frame() {
     frame_ = &frame;
     mtl::Context& context = mtl::Context::get();
     if (frame.fence != 0u) {
+        // --diagnostics timeline: a wait for the slot's last frame, as Direct3D 12 records it (a = its fence value).
+        const bool timeline_slot_wait = galaxy::timeline::enabled() && completed_fence_value() < frame.fence;
+        if (timeline_slot_wait) {
+            galaxy::timeline::record(galaxy::timeline::Event::SlotWaitBegin, frame.fence);
+        }
         wait_for_fence_value(frame.fence);
+        if (timeline_slot_wait) {
+            galaxy::timeline::record(galaxy::timeline::Event::SlotWaitEnd, frame.fence);
+        }
         // The GPU's time on the slot's last frame: from its first command buffer's start to its last one's end.
         const double start = (*frame.gpu_time)[0].exchange(0.0, std::memory_order_acq_rel);
         const double end = (*frame.gpu_time)[1].exchange(0.0, std::memory_order_acq_rel);
@@ -811,9 +834,6 @@ std::uint64_t RendererMtl::end_frame(bool present_swap_chain, SubmissionCallback
             probes.fence = fence;
         }
     }
-    if (scene_capture_.buffer && scene_capture_.fence == 0u && !scene_capture_pending_path_.empty()) {
-        scene_capture_.fence = fence;
-    }
     if (backbuffer_capture_.buffer && backbuffer_capture_.fence == 0u && !backbuffer_capture_pending_path_.empty()) {
         backbuffer_capture_.fence = fence;
     }
@@ -1027,6 +1047,7 @@ void RendererMtl::refresh_display_rate() {
         }
     }
     variable_refresh_ = variable;
+    g_variable_refresh.store(variable, std::memory_order_relaxed);
     if (std::abs(hz - display_refresh_hz_) >= 0.1) {
         if (!variable) {
             std::cerr << "[display] refresh-hz=" << hz << '\n';
@@ -1196,7 +1217,9 @@ bool RendererMtl::present(const DisplayTexture* source, bool capture_backbuffer,
     @autoreleasepool {
         // The drawable is taken as late as the frame allows: it is one of a few, and held until it is shown.
         const std::int64_t asked = galaxy::qpc_now();
+        galaxy::timeline::record_at(galaxy::timeline::Event::AcquireBegin, static_cast<std::uint64_t>(asked));
         id<CAMetalDrawable> const drawable = [(__bridge CAMetalLayer*)layer_.layer nextDrawable];
+        galaxy::timeline::record(galaxy::timeline::Event::AcquireEnd, 0u, drawable == nil ? 1u : 0u);
         const double waited = static_cast<double>(galaxy::qpc_now() - asked) * 1000.0 / static_cast<double>(galaxy::qpc_frequency());
         stats_.drawable_wait_ms += waited;
         stats_.drawable_wait_max_ms = std::max(stats_.drawable_wait_max_ms, waited);

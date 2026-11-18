@@ -38,6 +38,26 @@ void FailWin32(DWORD code, const wstring& context) {
     throw Error(kind, context.empty() ? Win32Message(code) : context + L": " + Win32Message(code), code);
 }
 
+namespace {
+// A file's handle, closed however the code using it ends.
+struct FileHandle {
+    HANDLE h = INVALID_HANDLE_VALUE;
+    explicit FileHandle(HANDLE handle) : h(handle) {}
+    ~FileHandle() { if (h != INVALID_HANDLE_VALUE) CloseHandle(h); }
+    FileHandle(const FileHandle&) = delete;
+    FileHandle& operator=(const FileHandle&) = delete;
+};
+
+// A directory listing's handle, closed however its walk ends (a failure throws out of it).
+struct FindHandle {
+    HANDLE h = INVALID_HANDLE_VALUE;
+    explicit FindHandle(HANDLE handle) : h(handle) {}
+    ~FindHandle() { if (h != INVALID_HANDLE_VALUE) FindClose(h); }
+    FindHandle(const FindHandle&) = delete;
+    FindHandle& operator=(const FindHandle&) = delete;
+};
+}  // namespace
+
 wstring ErrorText(const std::exception& error) {
     if (auto* nebulaError = dynamic_cast<const Error*>(&error)) return nebulaError->message;
     if (dynamic_cast<const std::bad_alloc*>(&error)) return L"Not enough memory.";
@@ -390,8 +410,7 @@ wstring Slashes(wstring path) {
     return path;
 }
 
-// \\?\ form for every Win32 call that may pass MAX_PATH (named streams lengthen save paths).
-static wstring NativePath(const wstring& path) {
+wstring NativePath(const wstring& path) {
     if (StartsWith(path, L"\\\\?\\")) return path;
     wstring full = FullPath(path);
     return StartsWith(full, L"\\\\") ? L"\\\\?\\UNC\\" + full.substr(2) : L"\\\\?\\" + full;
@@ -424,14 +443,18 @@ bool IsReparsePoint(const wstring& path) {
 }
 
 wstring FinalPath(const wstring& path) {
-    HANDLE handle = CreateFileW(path.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+    HANDLE handle = CreateFileW(NativePath(path).c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
                                 FILE_FLAG_BACKUP_SEMANTICS, nullptr);
     if (handle == INVALID_HANDLE_VALUE) FailWin32(GetLastError(), path);
-    wstring buffer(1024, L'\0');
+    FileHandle closer(handle);
+    // Asked with too small a buffer, the call gives the size it needs (the terminator counted).
+    wstring buffer(MAX_PATH, L'\0');
     DWORD length = GetFinalPathNameByHandleW(handle, buffer.data(), DWORD(buffer.size()), 0);
-    DWORD error = GetLastError();
-    CloseHandle(handle);
-    if (length == 0 || length >= buffer.size()) FailWin32(error, path);
+    if (length >= buffer.size()) {
+        buffer.resize(length);
+        length = GetFinalPathNameByHandleW(handle, buffer.data(), DWORD(buffer.size()), 0);
+    }
+    if (length == 0 || length >= buffer.size()) FailWin32(GetLastError(), path);
     buffer.resize(length);
     if (StartsWith(buffer, L"\\\\?\\UNC\\", true)) return L"\\\\" + buffer.substr(8);
     if (StartsWith(buffer, L"\\\\?\\")) return buffer.substr(4);
@@ -467,8 +490,7 @@ void DeleteFileQuietly(const wstring& path) {
 static void DeleteTreeOnce(const wstring& path) {
     wstring native = TrimEnd(NativePath(path), L"\\");
     WIN32_FIND_DATAW data;
-    HANDLE find = FindFirstFileW((native + L"\\*").c_str(), &data);
-    if (find != INVALID_HANDLE_VALUE) {
+    if (FindHandle find(FindFirstFileW((native + L"\\*").c_str(), &data)); find.h != INVALID_HANDLE_VALUE) {
         do {
             wstring name = data.cFileName;
             if (name == L"." || name == L"..") continue;
@@ -482,12 +504,9 @@ static void DeleteTreeOnce(const wstring& path) {
                     DeleteTreeOnce(child);
                 }
             } else if (!DeleteFileW(child.c_str())) {
-                DWORD error = GetLastError();
-                FindClose(find);
-                FailWin32(error, L"Could not delete " + child.substr(4));
+                FailWin32(GetLastError(), L"Could not delete " + child.substr(4));
             }
-        } while (FindNextFileW(find, &data));
-        FindClose(find);
+        } while (FindNextFileW(find.h, &data));
     }
     DWORD a = GetFileAttributesW(native.c_str());
     if (a != INVALID_FILE_ATTRIBUTES && (a & FILE_ATTRIBUTE_READONLY)) SetFileAttributesW(native.c_str(), a & ~FILE_ATTRIBUTE_READONLY);
@@ -515,27 +534,29 @@ void RemoveEmptyDirectory(const wstring& path) {
 }
 
 static void List(const wstring& directory, bool files, bool dirs, bool recursive, std::vector<wstring>& out) {
-    WIN32_FIND_DATAW data;
-    HANDLE find = FindFirstFileW((TrimEnd(NativePath(directory), L"\\") + L"\\*").c_str(), &data);
-    if (find == INVALID_HANDLE_VALUE) {
-        DWORD error = GetLastError();
-        if (error == ERROR_FILE_NOT_FOUND || error == ERROR_NO_MORE_FILES) return;
-        FailWin32(error, directory);
-    }
     std::vector<wstring> subdirectories;
-    do {
-        wstring name = data.cFileName;
-        if (name == L"." || name == L"..") continue;
-        wstring child = PathCombine(directory, name);
-        bool isDir = (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-        if (isDir) {
-            if (dirs) out.push_back(child);
-            if (recursive && !(data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) subdirectories.push_back(child);
-        } else if (files) {
-            out.push_back(child);
+    {
+        WIN32_FIND_DATAW data;
+        FindHandle find(FindFirstFileW((TrimEnd(NativePath(directory), L"\\") + L"\\*").c_str(), &data));
+        if (find.h == INVALID_HANDLE_VALUE) {
+            DWORD error = GetLastError();
+            if (error == ERROR_FILE_NOT_FOUND || error == ERROR_NO_MORE_FILES) return;
+            FailWin32(error, directory);
         }
-    } while (FindNextFileW(find, &data));
-    FindClose(find);
+        do {
+            wstring name = data.cFileName;
+            if (name == L"." || name == L"..") continue;
+            wstring child = PathCombine(directory, name);
+            bool isDir = (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+            if (isDir) {
+                if (dirs) out.push_back(child);
+                if (recursive && !(data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) subdirectories.push_back(child);
+            } else if (files) {
+                out.push_back(child);
+            }
+        } while (FindNextFileW(find.h, &data));
+    }
+    // Each folder's listing is closed before its subfolders are listed.
     for (const auto& sub : subdirectories) List(sub, files, dirs, true, out);
 }
 
@@ -562,14 +583,6 @@ bool IsDirectoryEmpty(const wstring& directory) { return ListEntries(directory).
 // ---- file contents -----------------------------------------------------------------------------------------------
 
 namespace {
-struct FileHandle {
-    HANDLE h = INVALID_HANDLE_VALUE;
-    explicit FileHandle(HANDLE handle) : h(handle) {}
-    ~FileHandle() { if (h != INVALID_HANDLE_VALUE) CloseHandle(h); }
-    FileHandle(const FileHandle&) = delete;
-    FileHandle& operator=(const FileHandle&) = delete;
-};
-
 [[noreturn]] void FailRead(DWORD error, const wstring& path) {
     if (BlockedByAntivirus(error))
         throw Error(ErrorKind::Io,
@@ -640,7 +653,7 @@ void WriteAllText(const wstring& path, const wstring& text) {
 
 void ReplaceFileWith(const wstring& temporary, const wstring& path) {
     if (FileExists(path)) {
-        if (!ReplaceFileW(path.c_str(), temporary.c_str(), nullptr, REPLACEFILE_IGNORE_MERGE_ERRORS, nullptr, nullptr)) {
+        if (!ReplaceFileW(NativePath(path).c_str(), NativePath(temporary).c_str(), nullptr, REPLACEFILE_IGNORE_MERGE_ERRORS, nullptr, nullptr)) {
             DWORD error = GetLastError();
             DeleteFileQuietly(temporary);
             FailWin32(error, L"Could not replace " + path);
@@ -739,7 +752,21 @@ Bytes ReadHandle(HANDLE handle, const wstring& what) {
 }
 }  // namespace
 
+bool VolumeHasNamedStreams(const wstring& path) {
+    wchar_t volume[MAX_PATH] = {};
+    DWORD flags = 0;
+    return GetVolumePathNameW(NativePath(path).c_str(), volume, MAX_PATH) &&
+           GetVolumeInformationW(volume, nullptr, 0, nullptr, nullptr, &flags, nullptr, 0) && (flags & FILE_NAMED_STREAMS) != 0;
+}
+
+bool FileSystemHoldsGame(const wstring& name) {
+    return !IEquals(name, L"FAT") && !IEquals(name, L"FAT12") && !IEquals(name, L"FAT16") && !IEquals(name, L"FAT32");
+}
+
 void CopyNamedStreams(const wstring& source, const wstring& target) {
+    // 1.0.2 kept saves in folder streams; the game reads none now (save_transfer.cpp), so a drive without streams loses
+    // nothing it needs.
+    if (!VolumeHasNamedStreams(source) || !VolumeHasNamedStreams(target)) return;
     StreamFind find(source);
     if (find.h == INVALID_HANDLE_VALUE) {
         if (find.error == ERROR_HANDLE_EOF) return;
@@ -776,64 +803,6 @@ void CopyTreeWithStreams(wstring source, const wstring& target, const std::funct
             FailWin32(GetLastError(), L"Copy failed: " + file);
         if (onFile) onFile(file);
     }
-}
-
-std::map<wstring, wstring> StreamDigests(const wstring& path) {
-    std::map<wstring, wstring> result;
-    StreamFind find(path);
-    if (find.h == INVALID_HANDLE_VALUE) {
-        if (find.error == ERROR_HANDLE_EOF) return result;
-        FailWin32(find.error, path);
-    }
-    do {
-        wstring name = find.data.cStreamName;
-        FileHandle handle(CreateFileW((name == L"::$DATA" ? NativePath(path) : NativePath(path) + name).c_str(), GENERIC_READ,
-                                      FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr));
-        if (handle.h == INVALID_HANDLE_VALUE) FailWin32(GetLastError(), path + name);
-        Bytes bytes = ReadHandle(handle.h, path + name);
-        result[name] = Sha256Bytes(bytes.data(), bytes.size());
-    } while (find.Next());
-    return result;
-}
-
-std::vector<std::pair<wstring, Bytes>> ReadNamedStreams(const wstring& path, long long maximumBytes) {
-    std::vector<std::pair<wstring, Bytes>> streams;
-    StreamFind find(path);
-    if (find.h == INVALID_HANDLE_VALUE) {
-        DWORD error = find.error;
-        if (error == ERROR_HANDLE_EOF || error == ERROR_INVALID_FUNCTION || error == ERROR_NOT_SUPPORTED ||
-            error == ERROR_INVALID_PARAMETER)
-            return streams;
-        FailWin32(error, path);
-    }
-    do {
-        wstring name = find.data.cStreamName;
-        if (name == L"::$DATA") continue;
-        if (!StartsWith(name, L":") || !EndsWith(name, L":$DATA"))
-            Fail(ErrorKind::Io, L"Unexpected stream " + name + L" on " + path + L".");
-        if (find.data.StreamSize.QuadPart > maximumBytes)
-            Fail(ErrorKind::Io, L"The stream " + name + L" of " + path + L" is too large.");
-        FileHandle handle(CreateFileW((NativePath(path) + name).c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
-                                      FILE_FLAG_BACKUP_SEMANTICS, nullptr));
-        if (handle.h == INVALID_HANDLE_VALUE) FailWin32(GetLastError(), path + name);
-        Bytes bytes = ReadHandle(handle.h, path + name);
-        if ((long long)bytes.size() != find.data.StreamSize.QuadPart)
-            Fail(ErrorKind::Io, L"The stream " + name + L" of " + path + L" changed while it was read.");
-        streams.emplace_back(name.substr(1, name.size() - 7), std::move(bytes));
-    } while (find.Next());
-    DWORD last = GetLastError();
-    if (last != ERROR_HANDLE_EOF) FailWin32(last, path);
-    return streams;
-}
-
-void WriteNamedStream(const wstring& path, const wstring& name, const Bytes& bytes) {
-    FileHandle handle(CreateFileW((NativePath(path) + L":" + name).c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
-                                  FILE_FLAG_BACKUP_SEMANTICS, nullptr));
-    if (handle.h == INVALID_HANDLE_VALUE) FailWin32(GetLastError(), path + L":" + name);
-    DWORD written = 0;
-    if (!bytes.empty() && !WriteFile(handle.h, bytes.data(), DWORD(bytes.size()), &written, nullptr))
-        FailWin32(GetLastError(), path + L":" + name);
-    FlushFileBuffers(handle.h);
 }
 
 // ---- hashes ------------------------------------------------------------------------------------------------------
@@ -874,7 +843,8 @@ wstring Sha256::FinishHex() {
     return HexLower(digest.data(), digest.size());
 }
 
-wstring Sha256File(const wstring& path) {
+// A file's SHA-256, read a megabyte at a time (a Setup carries every program: never whole in memory).
+static std::vector<uint8_t> Sha256FileDigest(const wstring& path) {
     FileHandle file(CreateFileW(NativePath(path).c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
                                 FILE_FLAG_SEQUENTIAL_SCAN, nullptr));
     if (file.h == INVALID_HANDLE_VALUE) FailRead(GetLastError(), path);
@@ -886,7 +856,12 @@ wstring Sha256File(const wstring& path) {
         if (read == 0) break;
         sha.Update(buffer.data(), read);
     }
-    return sha.FinishHex();
+    return sha.Finish();
+}
+
+wstring Sha256File(const wstring& path) {
+    const std::vector<uint8_t> digest = Sha256FileDigest(path);
+    return HexLower(digest.data(), digest.size());
 }
 
 wstring Sha256Bytes(const void* data, size_t size) {
@@ -966,13 +941,7 @@ bool VerifyRsaSha256File(const wstring& path, const Bytes& signature, const wstr
     std::copy(exponent.begin(), exponent.end(), blob.begin() + sizeof(BCRYPT_RSAKEY_BLOB));
     std::copy(modulus.begin(), modulus.end(), blob.begin() + sizeof(BCRYPT_RSAKEY_BLOB) + exponent.size());
 
-    std::vector<uint8_t> digest;
-    {
-        Bytes bytes = ReadAllBytes(path);
-        Sha256 sha;
-        sha.Update(bytes.data(), bytes.size());
-        digest = sha.Finish();
-    }
+    std::vector<uint8_t> digest = Sha256FileDigest(path);
     BCRYPT_ALG_HANDLE rsa = nullptr;
     BCRYPT_KEY_HANDLE key = nullptr;
     bool valid = false;

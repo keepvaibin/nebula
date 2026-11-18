@@ -1,6 +1,8 @@
 #include "Game/Sound/MeTrack.hpp"
 #include "Game/Sound/ChordInfo.hpp"
+#include "Game/Sound/NoteOctave.hpp"
 #include "Game/Sound/RhythmSystem.hpp"
+#include "Game/Sound/SeqRead.hpp"
 #include "Game/Sound/SoundEngine.hpp"
 #include <new>
 
@@ -589,25 +591,19 @@ void MeTrack::makeRandomSearchList(s32* pList, s32 numItems, bool ordered) {
     }
 }
 
+// By whole octaves, which end for every range (N-3027): the console's u8 loops wrapped and, for an upper end under 3
+// or a lower end over 252, never ended.
 void MeTrack::adjustInNoteRange(u8& rNote) const {
-    while (rNote > mTrackInfo.mNoteRangeUpper) {
-        rNote -= 12;
-    }
-    while (rNote < mTrackInfo.mNoteRangeLower) {
-        rNote += 12;
-    }
+    MR::octavesDownTo(rNote, mTrackInfo.mNoteRangeUpper);
+    MR::octavesUpTo(rNote, mTrackInfo.mNoteRangeLower);
 }
 
 void MeTrack::adjustInStartNoteRange(u8& rNote) const {
     if (!mIsInStart || mNoStartRange) {
         return;
     }
-    while (rNote > mTrackInfo.mNoteRangeStart + 12) {
-        rNote -= 12;
-    }
-    while (rNote < mTrackInfo.mNoteRangeStart) {
-        rNote += 12;
-    }
+    MR::octavesDownTo(rNote, mTrackInfo.mNoteRangeStart + 12);
+    MR::octavesUpTo(rNote, mTrackInfo.mNoteRangeStart);
 }
 
 MeTrack* MeTrack::brother(s32 index) const {
@@ -695,16 +691,19 @@ s32 MeTrack::seqProc(s32 type) {
     if (mWaitTime > 0) {
         return 0;
     }
-    while (mWaitTime == 0 && !mIsLocked) {
+    s32 stop = 0;
+    const s32 ran = MR::runSeqTick([&] { return stop == 0 && mWaitTime == 0 && !mIsLocked; }, [&] {
         const s32 opResult = parse();
-        if (opResult < 0) {
-            return -1;
-        }
         if (opResult == 1 && mCtrlStopAfterNote) {
-            return 1;
+            stop = 1;
         }
+        return opResult < 0 ? -1 : 0;
+    });
+    if (ran == -2) {
+        // A loop that never waits (N-3026): the console's sound thread ran it for ever.
+        NEBULA_PANIC("a Me program ran %u operations without waiting, at byte %u", MR::cSeqTickStepMost, mCursor);
     }
-    return 0;
+    return ran < 0 ? -1 : stop;
 }
 
 // One operation: <0 the program ends, 1 a note boundary. Bytes without an operation (the cook refuses any at or

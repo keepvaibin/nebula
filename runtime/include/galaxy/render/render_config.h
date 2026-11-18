@@ -51,9 +51,6 @@ struct RenderConfig {
     // present_frame_rate).
     float    max_fps             = static_cast<float>(kGameStepsPerSecond);
 
-    // Submits the game's records at their own 60 Hz cadence instead of one present per game frame.
-    bool     frame_rate_decouple = false;
-
     // Mip LOD bias in units of 0.5 LOD levels (0 full detail, 2 quarter), applied to every sampler.
     unsigned texture_lod_bias    = 0;
 
@@ -316,10 +313,6 @@ void set_present_waits_for_refresh(bool waits) noexcept;
 // added. A report older than 100 ms (loading, other scenes, a game that never reports) counts as no.
 void note_frame_generation_allowed(bool allowed) noexcept;
 [[nodiscard]] bool frame_generation_allowed() noexcept;
-// The game's report each frame (NEBULA_CONTEXT_CAMERA_WATER): the camera's depth under water in eye units, < 0 out of
-// water. A report older than 100 ms counts as out of water.
-void note_camera_water(float depth) noexcept;
-[[nodiscard]] float camera_water_depth() noexcept;
 // The rate the game presents at: max_fps, or 60 while frame generation runs.
 [[nodiscard]] inline float presented_max_fps(const RenderConfig& cfg) noexcept {
     return frame_generation_running() ? static_cast<float>(kGameStepsPerSecond) : cfg.max_fps;

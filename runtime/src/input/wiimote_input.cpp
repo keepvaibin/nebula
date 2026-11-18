@@ -2,9 +2,16 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 
 namespace galaxy::input::wiimote {
 namespace {
+
+// A Nunchuk stick's counts: the middle of its byte, the farthest a centre sits from it, and the least travel between
+// its limits that is a stick (real ones: about 0x80, within 0x20, 0xC0 from end to end).
+constexpr int kNominalStickCentre = 0x80;
+constexpr int kMostCentreOffset = 0x20;
+constexpr int kLeastStickRange = 0x60;
 
 // The camera picture in the pointer's units: x -1..1 across its 1024 columns, y up, the same scale.
 constexpr float kCameraScale = 2.0f / 1024.0f;
@@ -222,6 +229,7 @@ void Reader::connect(std::span<const std::uint8_t> eeprom, std::span<const std::
     nunchuk_stick_x_ = nunchuk_stick_y_ = 0.0f;
     nunchuk_gravity_ = {0.0f, 0.0f, 1.0f};
     stick_origin_set_ = false;
+    stick_origin_x_ = stick_origin_y_ = kNominalStickCentre;
     pointing_ = false;
     // The accelerometer's 0 g and 1 g, twice from 0x16 with a checksum each; the first good one.
     std::array<float, 3> zero{530.0f, 530.0f, 530.0f};
@@ -245,6 +253,18 @@ void Reader::connect(std::span<const std::uint8_t> eeprom, std::span<const std::
         if (static_cast<std::uint8_t>(sum + 0x55) != p[14] || static_cast<std::uint8_t>(sum + 0xAA) != p[15]) continue;
         nunchuk_zero = ten_bit(p, p[3]);
         nunchuk_one = ten_bit(p + 4, p[7]);
+        // The stick: X max, min and centre, then Y's (WiiBrew, Nunchuk calibration data, bytes 8-13). Some
+        // controllers fill these with nonsense under a good checksum; only a centre between its limits, near the
+        // middle, with room to move counts.
+        const auto centre = [](std::uint8_t most, std::uint8_t least, std::uint8_t mid) noexcept {
+            return least < mid && mid < most && most - least >= kLeastStickRange &&
+                   std::abs(mid - kNominalStickCentre) <= kMostCentreOffset;
+        };
+        if (centre(p[8], p[9], p[10]) && centre(p[11], p[12], p[13])) {
+            stick_origin_set_ = true;
+            stick_origin_x_ = p[10];
+            stick_origin_y_ = p[13];
+        }
     }
     nunchuk_zero_ = nunchuk_zero;
     set_scale(nunchuk_scale_, nunchuk_zero, nunchuk_one, 1.0f / 200.0f);
@@ -329,11 +349,15 @@ bool Reader::read(std::span<const std::uint8_t> report, PlayerInput& out, Motion
 void Reader::read_nunchuk(const std::uint8_t* e) {
     nunchuk_c_ = (e[5] & 0x02) == 0;
     nunchuk_z_ = (e[5] & 0x01) == 0;
-    // The stick from where it rested at the connection, in counts.
+    // Without a good calibration, the stick's first report is its centre when it is near the middle (at rest), else
+    // the middle: a stick held at the connection does not stay offset.
     if (!stick_origin_set_) {
         stick_origin_set_ = true;
-        stick_origin_x_ = e[0];
-        stick_origin_y_ = e[1];
+        const auto rest = [](std::uint8_t count) noexcept {
+            return std::abs(count - kNominalStickCentre) <= kMostCentreOffset ? static_cast<int>(count) : kNominalStickCentre;
+        };
+        stick_origin_x_ = rest(e[0]);
+        stick_origin_y_ = rest(e[1]);
     }
     const int sx = std::clamp(static_cast<int>(e[0]) - stick_origin_x_, -128, 127);
     const int sy = std::clamp(static_cast<int>(e[1]) - stick_origin_y_, -128, 127);

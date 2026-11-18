@@ -267,6 +267,9 @@ namespace {
         TextBox* mValueShadow;
         TextBox* mValue;
         TextBox* mLabel;
+        FitLine mValueShadowFit;  // NebulaUi's one rule for a line in its room
+        FitLine mValueFit;
+        FitLine mLabelFit;
     };
 
 
@@ -318,6 +321,7 @@ struct NebulaBoardParts {
     Window* mSummaryBar;
     TextBox* mPercent;
     Chip mTabs[TabNum];
+    FitLine mTabFits[TabNum];
     s32 mTabNum;  // the tabs shown: Mods only with mods' achievements
     Chip mFilters[FilterNum];
     TextBox* mTabCount;  // the tab's own count, right of the filters
@@ -554,13 +558,9 @@ namespace {
             const f32 room = p->mTileWidth - cCardPad * 2.0f - 48.0f;
             for (s32 i = 0; i < StatNum; i++) {
                 Tile& rTile = p->mTiles[i];
-                measure(rTile.mValue, 4000.0f, &width, &height);
-                measure(rTile.mValueShadow, 4000.0f, &width, &height);
-                const f32 valueScale = width > room && width > 0.0f ? room / width : 1.0f;
-                rTile.mValue->mScale = Vec2f(valueScale, 1.0f);
-                rTile.mValueShadow->mScale = Vec2f(valueScale, 1.0f);
-                measure(rTile.mLabel, 4000.0f, &width, &height);
-                rTile.mLabel->mScale = Vec2f(width > room && width > 0.0f ? room / width : 1.0f, 1.0f);
+                fitLine(rTile.mValueFit, rTile.mValue, room);
+                fitLine(rTile.mValueShadowFit, rTile.mValueShadow, room);
+                fitLine(rTile.mLabelFit, rTile.mLabel, room);
             }
         } else {
             const s32 rows = (p->mShownNum + p->mColumns - 1) / p->mColumns;
@@ -581,10 +581,7 @@ namespace {
         const f32 tabWidth = (right - left - cTabGap * (p->mTabNum - 1)) / p->mTabNum;
         for (s32 i = 0; i < p->mTabNum; i++) {
             Chip& rChip = p->mTabs[i];
-            rChip.mText->mScale = Vec2f(1.0f, 1.0f);
-            measure(rChip.mText, 4000.0f, &width, &height);
-            const f32 room = tabWidth - cTabPadding * 2.0f;
-            rChip.mText->mScale = Vec2f(width > room && width > 0.0f ? room / width : 1.0f, 1.0f);
+            fitLine(p->mTabFits[i], rChip.mText, tabWidth - cTabPadding * 2.0f);
             rChip.mWidth = tabWidth;
             rChip.mHeight = cTabHeight;
             rChip.mX = left + tabWidth * 0.5f + i * (tabWidth + cTabGap);
@@ -626,6 +623,8 @@ namespace {
             measure(p->mHintGlyphs[i], 4000.0f, &width, &height);
         }
         p->mArranged = true;
+        // The rule's floor over the board's texts, after each layout.
+        checkNarrowing(p->mBoard);
     }
 
     // Keeps the focused card's row in view.
@@ -1209,7 +1208,7 @@ void NebulaAchievementBoard::init(const TableIter& /*rIter*/) {
             return;
         }
         getText(text, cTabIds[i]);
-        setText(p->mTabs[i].mText, text.c_str());
+        setFitLine(p->mTabFits[i], p->mTabs[i].mText, text.c_str());
     }
     static const char* const cFilterIds[FilterNum] = {"FilterAll", "FilterUnlocked", "FilterLocked"};
     for (s32 i = 0; i < FilterNum; i++) {
@@ -1345,11 +1344,11 @@ void NebulaAchievementBoard::init(const TableIter& /*rIter*/) {
             return;
         }
         paint(rTile.mBody, cTileFill, cTileRing);
-        getText(text, cStatLabels[i]);
-        setText(rTile.mLabel, text.c_str());
         setTextStyle(rTile.mValueShadow, cValueSize, cTextShadow, cTextShadow, 0);
         setTextStyle(rTile.mValue, cValueSize, cWhite, cWhite, 0);
         setTextStyle(rTile.mLabel, cLabelSize, cSubText, cSubText, 0);
+        getText(text, cStatLabels[i]);
+        setFitLine(rTile.mLabelFit, rTile.mLabel, text.c_str());
     }
     p->mEmpty = makeText(p, pBoard, "NbEmpty", 128);
     p->mScrollTrack = makeWindow(p, pBoard, "NbScrTr");
@@ -1425,6 +1424,7 @@ void NebulaAchievementBoard::open() {
     }
     NebulaAchievements::flushStats();
     mIsOpen = true;
+    nebula_log("NebulaAchievementBoard: open\n");
     setSharp(SharpBoard, true);
     p->mTab = TabAll;
     p->mFilterMode = FilterAll;
@@ -1609,8 +1609,8 @@ void NebulaAchievementBoard::open() {
         } else {
             formatNumber(value, count);
         }
-        setText(rTile.mValue, value.c_str());
-        setText(rTile.mValueShadow, value.c_str());
+        setFitLine(rTile.mValueFit, rTile.mValue, value.c_str());
+        setFitLine(rTile.mValueShadowFit, rTile.mValueShadow, value.c_str());
         if (glyph == 0) {
             setIcon(p, rTile.mGlyph, rTile.mPicture, pPicture, 36.0f, cWhite);
         } else {

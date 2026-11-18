@@ -187,11 +187,19 @@ endif()
 # plain one when no enabled mod has code (runtime/src/game_module.cpp). Everything else about them is the same, in
 # smg_game_common. OFF: one module, as before (a build that needs only the rows one).
 option(NEBULA_LUMA_PLAIN_MODULE "Also build smg_game_plain, the game without rows, for a start with no mod code" ON)
+# Coverage builds (tests only, N-1042): the modules count every line and function they run (clang's source-based
+# coverage, written where LLVM_PROFILE_FILE says); tools/gate/coverage.py lists what no test ran.
+option(NEBULA_COVERAGE "Count the lines and functions the game modules run (a test build)" OFF)
+# A sanitizer's runtime and the profile counters' need the C runtime in the module (below).
+set(nebula_module_with_crt OFF)
+if(WIN32 AND (NEBULA_SANITIZE OR NEBULA_COVERAGE OR CMAKE_CXX_FLAGS MATCHES "fprofile-instr-generate"))
+    set(nebula_module_with_crt ON)
+endif()
 set(game_runtime_sources
     math/src/nebula_math.c
     math/src/nebula_libm.c
     math/src/nebula_libc.c
-    $<$<PLATFORM_ID:Windows>:math/src/nebula_runtime_win.c>)
+    $<$<AND:$<PLATFORM_ID:Windows>,$<NOT:$<BOOL:${nebula_module_with_crt}>>>:math/src/nebula_runtime_win.c>)
 add_library(smg_game_common INTERFACE)
 add_library(smg_game SHARED ${module_sources} ${game_runtime_sources})
 target_link_libraries(smg_game PRIVATE smg_game_common)
@@ -328,8 +336,12 @@ endif()
 set_source_files_properties(math/src/nebula_libm.c math/src/nebula_libc.c math/src/nebula_runtime_win.c PROPERTIES COMPILE_OPTIONS "-fno-builtin;-fno-lto")
 target_compile_definitions(smg_game_common INTERFACE _USE_STD_VECTOR_ALGORITHMS=0 _ACRTIMP=)
 # No system library: everything the module uses it defines or asks the host for. A sanitizer's runtime and the profile counters' need the C runtime.
-if(WIN32 AND NOT NEBULA_SANITIZE AND NOT CMAKE_CXX_FLAGS MATCHES "fprofile-instr-generate")
+if(WIN32 AND NOT nebula_module_with_crt)
     target_link_options(smg_game_common INTERFACE -nostdlib "LINKER:/NOENTRY" "LINKER:/NODEFAULTLIB")
+elseif(WIN32)
+    # With the C runtime its DLL entry runs the static constructors and it defines what nebula_runtime_win.c does: the
+    # module runs none itself (NebulaModule.c), or each would run twice (N-1062).
+    target_compile_definitions(smg_game_common INTERFACE NEBULA_MODULE_WITH_CRT=1)
 endif()
 
 if(WIN32)
@@ -433,6 +445,33 @@ if(NEBULA_SANITIZE)
                                     COMPILE_DEFINITIONS NEBULA_ASAN_HEAPS=1)
     endif()
 endif()
+if(NEBULA_COVERAGE)
+    if(NEBULA_PGO OR NEBULA_LTO)
+        message(FATAL_ERROR "NEBULA_COVERAGE counts the code as written: build it without NEBULA_PGO and NEBULA_LTO")
+    endif()
+    target_compile_options(smg_game_common INTERFACE -fprofile-instr-generate -fcoverage-mapping)
+    target_link_options(smg_game_common INTERFACE -fprofile-instr-generate)
+    get_target_property(game_exports_all smg_game WINDOWS_EXPORT_ALL_SYMBOLS)
+    if(WIN32 AND game_exports_all)
+        # The rows module keeps its exports (mods find the game's functions in this build too), less the counters,
+        # whose names CMake's own list cuts (../cmake/coverage_exports.py).
+        set(game_def "${CMAKE_CURRENT_BINARY_DIR}/smg_game_coverage.def")
+        file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/smg_game_objects.txt" CONTENT "$<JOIN:$<TARGET_OBJECTS:smg_game>,\n>\n")
+        set_target_properties(smg_game PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS OFF)
+        add_custom_command(TARGET smg_game PRE_LINK
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/coverage_exports.py" --cmake "${CMAKE_COMMAND}"
+                    --nm "${CMAKE_NM}" --objects "${CMAKE_CURRENT_BINARY_DIR}/smg_game_objects.txt" --out "${game_def}"
+            VERBATIM)
+        target_link_options(smg_game PRIVATE "LINKER:/DEF:${game_def}")
+    endif()
+endif()
+# A counting build (coverage, or the profile's training build: tools/gate/pgo.py make): the host asks for the counts
+# as it ends (nebula_game_write_counts), since it runs no library's exit.
+if(NEBULA_COVERAGE OR CMAKE_CXX_FLAGS MATCHES "fprofile-instr-generate")
+    foreach(module IN LISTS game_modules)
+        target_sources(${module} PRIVATE coverage_counts.c)
+    endforeach()
+endif()
 
 # The native game's host (host/host_main.cpp): loads the module and serves it. Built with the host's own C++ library.
 # The mods' virtual disc (galaxy::mods) serves this host's disc reads as the windowed host's.
@@ -440,7 +479,7 @@ add_executable(nebula_native_host host/host_main.cpp ../runtime/src/whole_lines.
     ../runtime/src/luma_input.cpp ../runtime/src/input/mod_actions.cpp ../runtime/src/input_bindings.cpp
     ../runtime/src/mod_log.cpp ../runtime/src/mod_check.cpp ../runtime/src/luma_game_store.cpp ../runtime/src/mod_screens.cpp ../runtime/src/mod_start_check.cpp ../runtime/src/mod_plugins.cpp ../runtime/src/game_module.cpp host/luma_guard.cpp host/crash_watch.cpp
     ../runtime/src/luma.cpp ../runtime/src/mods.cpp ../runtime/src/mod_consent.cpp ../runtime/src/texture_categories.cpp ../runtime/src/dolphin_pack.cpp ../runtime/src/mod_xml.cpp ../runtime/src/atomic_file.cpp ../runtime/src/save_files.cpp ../runtime/src/asset_store.cpp
-    ../runtime/src/crash_report.cpp ../runtime/src/discord_presence.cpp ../runtime/src/mii_import.cpp
+    ../runtime/src/crash_report.cpp ../runtime/src/host_text.cpp ../runtime/src/discord_presence.cpp ../runtime/src/mii_import.cpp
     ../runtime/src/mii_formats.cpp ../runtime/src/pointer_control.cpp
     # The start check asks whether the compiler of mods' programs is there (mod_start_check.cpp): the same answer as
     # the windowed host's on Windows (dxc beside the program) and Apple (none yet); elsewhere Vulkan's, whose HLSL
@@ -455,11 +494,18 @@ target_compile_features(nebula_native_host PRIVATE cxx_std_20)
 include("${CMAKE_CURRENT_LIST_DIR}/../third_party/boringssl.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/../third_party/zlib_inflate.cmake")
 target_link_libraries(nebula_native_host PRIVATE nebula_bssl_ssl nebula_zinflate)
+if(APPLE)
+    target_link_libraries(nebula_native_host PRIVATE "-framework CoreFoundation")  # host_text.cpp: the preferred language
+endif()
 target_compile_definitions(nebula_native_host PRIVATE _CRT_SECURE_NO_WARNINGS)
 add_dependencies(nebula_native_host ${game_modules})
 if(NEBULA_SANITIZE)
-    target_compile_options(nebula_native_host PRIVATE -fsanitize=${NEBULA_SANITIZE} -fno-sanitize-recover=all
-                           -fno-omit-frame-pointer)
+    # The host and the libraries it links are built alike: the C++ library's container annotations must agree between
+    # them (lld-link's /failifmismatch 'annotate_string'), and their code is checked too (N-1062).
+    foreach(target nebula_native_host nebula_bssl_crypto nebula_bssl_ssl nebula_zinflate)
+        target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:C,CXX>:-fsanitize=${NEBULA_SANITIZE}
+                               -fno-sanitize-recover=all -fno-omit-frame-pointer>)
+    endforeach()
     target_link_options(nebula_native_host PRIVATE -fsanitize=${NEBULA_SANITIZE})
 endif()
 

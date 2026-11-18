@@ -13,6 +13,7 @@
 #include <charconv>
 #include <chrono>
 #include <cstdint>
+#include <cstdio>
 #include <fstream>
 #include <iterator>
 #include <mutex>
@@ -252,12 +253,20 @@ bool keep_in_library(const std::filesystem::path& folder, const std::filesystem:
     return false;
 }
 
+// A count in its phrase. The phrases are whole literals so tools/nebula_text.py --check finds each one's row (the
+// menu translates "ADDED 3" by the id S.ADDED_#); one and many are two phrases, as the menu has no plural rule.
+std::string counted(const char* phrase, unsigned count) {
+    char text[96];
+    (void)std::snprintf(text, sizeof(text), phrase, count);
+    return text;
+}
+
 std::string result_text(const MiiMergeResult& r) {
-    std::string text = "ADDED " + std::to_string(r.added);
-    if (r.updated != 0u) text += ", UPDATED " + std::to_string(r.updated);
-    if (r.duplicates != 0u) text += ", " + std::to_string(r.duplicates) + " ALREADY HERE";
-    if (r.invalid != 0u) text += ", " + std::to_string(r.invalid) + " NOT VALID";
-    if (r.converted != 0u) text += ", " + std::to_string(r.converted) + " FROM NEWER CONSOLES";
+    std::string text = counted("ADDED %u", r.added);
+    if (r.updated != 0u) text += ", " + counted("UPDATED %u", r.updated);
+    if (r.duplicates != 0u) text += ", " + counted("%u ALREADY HERE", r.duplicates);
+    if (r.invalid != 0u) text += ", " + counted("%u NOT VALID", r.invalid);
+    if (r.converted != 0u) text += ", " + counted("%u FROM NEWER CONSOLES", r.converted);
     return text;
 }
 
@@ -483,8 +492,14 @@ MiiMergeResult import_mii_files(std::span<const std::filesystem::path> files, st
     }
     if (message != nullptr) {
         *message = result_text(total);
-        if (unreadable != 0u) *message += ", " + std::to_string(unreadable) + " FILE(S) NOT MII DATA";
-        if (unkept != 0u) *message += ", " + std::to_string(unkept) + " FILE(S) NOT COPIED TO THE MIIS FOLDER";
+        if (unreadable != 0u) {
+            *message += ", " + counted(unreadable == 1u ? "%u FILE IS NOT MII DATA" : "%u FILES ARE NOT MII DATA", unreadable);
+        }
+        if (unkept != 0u) {
+            *message += ", " + counted(unkept == 1u ? "%u FILE WAS NOT COPIED TO THE MIIS FOLDER"
+                                                    : "%u FILES WERE NOT COPIED TO THE MIIS FOLDER",
+                                       unkept);
+        }
     }
     return total;
 }

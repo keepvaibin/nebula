@@ -6,6 +6,7 @@
 #include "Game/Player/MarioState.hpp"
 #include "Game/Player/MarioSwim.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/FrameCount.hpp"
 
 bool Mario::doFlipWeak(const Vec3f& rVec) {
     if (mMovementStates.damaged) {
@@ -69,7 +70,7 @@ void MarioFaint::setVec(const Vec3f& rVec) {
 }
 
 bool MarioFaint::update() {
-    mTimer++;
+    MR::countUp(mTimer);
 
     switch (mStep) {
     case 0:

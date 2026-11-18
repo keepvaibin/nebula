@@ -198,12 +198,18 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
     float stick_x = logic.stick_x;
     float stick_y = logic.stick_y;
     if (script.has_stick) {
+        // An extension gives a Nunchuk's stick (nebula_host_extension.h): the Nunchuk's response.
         stick_x = script.stick_x;
         stick_y = script.stick_y;
+        const galaxy::input::StickValue nunchuk = galaxy::input::nunchuk_stick(stick_x, stick_y);
+        snapshot.stick_x = nunchuk.x;
+        snapshot.stick_y = nunchuk.y;
+    } else {
+        // Controllers, keys and the touch controls are past their own dead zones: one radial mapping.
+        const galaxy::input::StickVector stick = galaxy::input::game_stick(stick_x, stick_y);
+        snapshot.stick_x = stick.x;
+        snapshot.stick_y = stick.y;
     }
-    const galaxy::input::StickValue nunchuk_stick = galaxy::input::nunchuk_stick(stick_x, stick_y);
-    snapshot.stick_x = nunchuk_stick.x;
-    snapshot.stick_y = nunchuk_stick.y;
     snapshot.buttons.c = held(GameInput::C) || script.buttons.c;
     snapshot.buttons.z = held(GameInput::Z) || script.buttons.z;
 

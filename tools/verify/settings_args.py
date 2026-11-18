@@ -15,7 +15,7 @@ import sys
 RENDER = [
     ("GALAXY_VSYNC_INTERVAL", "vsync_interval"), ("GALAXY_MSAA_SAMPLES", "msaa_samples"),
     ("GALAXY_MAX_FPS", "max_fps"),
-    ("GALAXY_FRAME_RATE_DECOUPLE", "frame_rate_decouple"), ("GALAXY_TEXTURE_LOD_BIAS", "texture_lod_bias"),
+    ("GALAXY_TEXTURE_LOD_BIAS", "texture_lod_bias"),
     ("GALAXY_ANISOTROPIC_FILTERING", "anisotropic_filtering"),
     ("GALAXY_PER_PIXEL_LIGHTING", "per_pixel_lighting"), ("GALAXY_CURVED_SURFACES", "curved_surfaces"),
     ("GALAXY_DYNAMIC_RESOLUTION", "dynamic_resolution"),
@@ -38,7 +38,7 @@ RUNTIME = [
     ("GALAXY_AUDIO_SFX_GAIN", "audio_sfx_gain"), ("GALAXY_AUDIO_VOICE_GAIN", "audio_voice_gain"),
     ("GALAXY_AUDIO_AMBIENCE_GAIN", "audio_ambience_gain"), ("GALAXY_AUDIO_CUTSCENE_GAIN", "audio_cutscene_gain"),
     ("GALAXY_AUDIO_WIIMOTE_SPEAKER_GAIN", "audio_wiimote_speaker_gain"), ("GALAXY_TEXT_SPEED", "text_speed"),
-    ("GALAXY_LANGUAGE", "language"),
+    ("GALAXY_LANGUAGE", "language"), ("GALAXY_MENU_TEXT_SIZE", "menu_text_size"),
 ]
 FILES = {"config.ini": RENDER, "runtime_settings.ini": RUNTIME}
 SIDECAR = ".run_settings.json"

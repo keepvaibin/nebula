@@ -1,0 +1,90 @@
+{
+  "harness": 1,
+  "name": "menu-text-fit-ja",
+  "about": "Every settings page in Japanese in the smallest window at the largest menu text: each text is narrowed, then cut short, inside its room; none runs past it (P-162).",
+  "language": "JpJapanese",
+  "disc": "RMGJ01",
+  "window": [
+    320,
+    240
+  ],
+  "settings": [
+    "GALAXY_MENU_TEXT_SIZE=200"
+  ],
+  "limit_seconds": 180,
+  "steps": [
+    {
+      "at": 120,
+      "settings": "display"
+    },
+    {
+      "at": 160,
+      "picture": "display"
+    },
+    {
+      "at": 180,
+      "settings": "graphics"
+    },
+    {
+      "at": 220,
+      "picture": "graphics"
+    },
+    {
+      "at": 240,
+      "settings": "controls"
+    },
+    {
+      "at": 280,
+      "picture": "controls"
+    },
+    {
+      "at": 300,
+      "settings": "audio"
+    },
+    {
+      "at": 340,
+      "picture": "audio"
+    },
+    {
+      "at": 360,
+      "settings": "general"
+    },
+    {
+      "at": 400,
+      "picture": "general"
+    },
+    {
+      "at": 420,
+      "settings": "mods"
+    },
+    {
+      "at": 460,
+      "picture": "mods"
+    },
+    {
+      "at": 480,
+      "settings": "system"
+    },
+    {
+      "at": 520,
+      "picture": "system"
+    },
+    {
+      "at": 540,
+      "settings": "advanced"
+    },
+    {
+      "at": 580,
+      "picture": "advanced"
+    },
+    {
+      "at": 600,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "no_log": "runs past its room"
+    }
+  ]
+}

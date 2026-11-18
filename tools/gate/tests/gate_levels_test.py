@@ -6,7 +6,7 @@
    list fails; a check whose runs were not all reported cannot be known; a planned check that runs fails; an owed
    check does not fail the run; planned checks of the level are reported; history.tsv gets one line per run.
 3. The levels (a dry run of each): quick has no tablet, GitHub or soak; main has the tablet's short part and GitHub and
-   no soak; long has the soak, the sanitizer tour and every disc on every renderer, and no GitHub; final has both.
+   no soak; long has the soak, the sanitizer tour and mod tests, every disc on every renderer, and no GitHub; final has both.
    --only keeps a check and what it needs.
 4. The tablet's part is owed, not failed, when the tablet does not answer.
 5. GitHub (section 8, N-1047): every job of the candidate's run is required; a red, cancelled or skipped job ends the
@@ -51,8 +51,7 @@ def main():
         # 1. The lists.
         known, planned, problems = gate.read_lists()
         check(not problems, "the tree's lists read cleanly: %s" % problems)
-        check("030-FactoryGalaxy-4" in known.get("tour/d3d12", {}) and "pictures/tablet" in planned,
-              "the first content: P-122 on the tours, the tablet's pictures planned")
+        check("pictures/tablet" not in planned, "the tablet's pictures are a check, not planned (N-1040)")
         ledger = t / "ledger.tsv"
         ledger.write_text("id\tagent\tpackage\tstate\tproof\ttitle\tnote\nP-1\t1\tE0\topen\t\tx\t\nP-2\t1\tE0\tfixed\tc\tx\t\n",
                           encoding="utf-8")
@@ -146,14 +145,26 @@ def main():
             names[level] = set(dry.needs)
             if level == "main":
                 main_needs = dry.needs
+            if level == "long":
+                long_needs = dry.needs
         q, m, lg, f = names["quick"], names["main"], names["long"], names["final"]
+        check(tuple(main_needs.get("pictures/tablet", ())) == ("tour/tablet",),
+              "main: the tablet's pictures checked after its tour: %s" % (main_needs.get("pictures/tablet"),))
         check("tour/d3d12" in q and not any(n.startswith(("tablet/", "tour/tablet", "github", "soak")) for n in q),
               "quick: no tablet, GitHub or soak: %s" % sorted(q))
         check({"tour/vulkan", "tour/d3d11", "replays/tablet", "tour/tablet-pc", "github", "build/android",
                "tour-RMGP01/d3d12", "pictures/tablet"} <= m and "soak" not in m and "tour-RMGP01/vulkan" not in m,
               "main: %s" % sorted(m))
-        check({"soak", "tour-asan/d3d12", "tour-RMGJ01/vulkan", "tour-RMGP01/d3d11", "tour/tablet", "coverage"} <= lg
+        check({"soak", "tour-asan/d3d12", "mods-asan/d3d12", "tour-RMGJ01/vulkan", "tour-RMGP01/d3d11", "tour/tablet", "coverage", "measure/short"} <= lg
               and "github" not in lg and "unit/windows" not in lg and "pictures/tablet" not in lg, "long: %s" % sorted(lg))
+        # The sanitizer build runs the mod tests too (N-1041): a check of its own after that build, not a planned one.
+        check(tuple(long_needs.get("mods-asan/d3d12", ())) == ("build/windows-asan",),
+              "long: the mod tests on the sanitizer build: %s" % (long_needs.get("mods-asan/d3d12"),))
+        # The short measurement set runs at the long run's end (N-1043): a check of its own, not a planned one.
+        check(tuple(long_needs.get("coverage", ())) == ("build/windows-coverage",) and "build/windows-coverage" in lg,
+              "long: the coverage build's report runs: %s" % (long_needs.get("coverage"),))
+        check(tuple(long_needs.get("measure/short", ())) == ("build/windows",),
+              "long: the short measurement set runs: %s" % (long_needs.get("measure/short"),))
         check((m | lg) <= f | {"pictures/tablet"} and "measure/full" in f, "final has main's and long's: %s" % sorted((m | lg) - f))
         chosen = gate.select(main_needs, ["replays/vulkan"])
         check(chosen == {"replays/vulkan", "tour/vulkan", "tour/d3d12", "build/windows"}, "--only and its needs: %s" % sorted(chosen))
@@ -168,8 +179,10 @@ def main():
         g3 = gate.Gate(a)
         g3.android_built = True
         gate.tablet_part(g3, gate.QUICK_STOPS, device=Away())
-        check([r["state"] for r in g3.results] == ["owed"] * len(gate.TABLET_CHECKS)
-              and [r["check"] for r in g3.results] == list(gate.TABLET_CHECKS), "a tablet away owes its whole part")
+        # At the main level its part includes the pictures' check.
+        whole = list(gate.TABLET_CHECKS) + ["pictures/tablet"]
+        check([r["state"] for r in g3.results] == ["owed"] * len(whole)
+              and [r["check"] for r in g3.results] == whole, "a tablet away owes its whole part")
 
         # 5. GitHub: every job of the candidate's run (section 8).
         def job(name, state="completed", conclusion="success"):
@@ -206,6 +219,51 @@ def main():
         ok, detail = gate.github_wait("gate/x", "abc", state_of=lambda b, c: ("in_progress", green[:2]), sleep=tick,
                                       clock=lambda: now[0], log=t / "gh2.log")
         check(not ok and "120 minutes" in detail and now[0] >= 7200, "the wait has a limit: %s" % detail)
+        # N-1070: the CPU-only checks run in a lane beside the game lanes, their programs at below-normal priority;
+        # the unit tests and start checks stay before every lane.
+        import inspect
+        cpu_lane = getattr(gate, "cpu_lane", None)
+        check(cpu_lane is not None, "the CPU-only checks have a lane of their own")
+        if cpu_lane is not None:
+            source = inspect.getsource(gate.run_checks)
+            check(source.find("cpu_lane(") < source.find("g.lanes(lanes)") and "rust" not in inspect.getsource(gate.unit_part),
+                  "the lane is among the game lanes and the unit part runs no CPU-only check")
+            seen = []
+
+            class CpuArgs:
+                discs, build_root, jobs = str(t / "no-discs"), str(t), "1"
+
+            class CpuGate:
+                args = CpuArgs()
+
+                def check(self, name, fn, needs=()):
+                    seen.append((name, getattr(gate.LANE, "below_normal", False)))
+
+                def missing(self, name, why, needs=()):
+                    seen.append((name, getattr(gate.LANE, "below_normal", False)))
+
+            cpu_lane(CpuGate(), ("RMGE01",))()
+            check([n for n, _ in seen] == ["rust", "lumalink", "import/collision/RMGE01", "harness/self", "description/self"]
+                  and all(low for _, low in seen) and not getattr(gate.LANE, "below_normal", False),
+                  "the lane's checks run in order at below-normal priority, and the lane gives the flag back")
+            if os.name == "nt":
+                out = t / "priority.log"
+                gate.LANE.below_normal = True
+                try:
+                    gate.run([sys.executable, "-c", "import ctypes; k = ctypes.windll.kernel32; "
+                              "k.GetCurrentProcess.restype = ctypes.c_void_p; k.GetPriorityClass.argtypes = [ctypes.c_void_p]; "
+                              "print('class', k.GetPriorityClass(k.GetCurrentProcess()))"], str(out))
+                finally:
+                    gate.LANE.below_normal = False
+                check("class 16384" in out.read_text(encoding="utf-8", errors="replace"),
+                      "a program the lane starts runs at below-normal priority (16384)")
+
+        # --github-wait (Planner 11-18 03:49): 120 unless a candidate asks more, and the move's wait takes it.
+        args = gate.parser().parse_args(["--main", "--move"])
+        longer = gate.parser().parse_args(["--main", "--move", "--github-wait", "180"])             if "--github-wait" in gate.parser().format_help() else None
+        check(longer is not None and args.github_wait == 120 and longer.github_wait == 180
+              and "wait_minutes=args.github_wait" in __import__("inspect").getsource(gate.main),
+              "--github-wait sets the move's wait for GitHub, 120 minutes unless given")
         asked = [0]
 
         def flaky(branch, commit):

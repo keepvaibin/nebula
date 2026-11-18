@@ -2,6 +2,7 @@
 // anti-aliasing on the WARP software device (no GPU or window needed).
 #include "galaxy/render/post_process.h"
 #include "galaxy/render/renderer_d3d12.h"
+#include "render/core/utility_pipeline_d3d12.h"
 
 #include <dxgi1_4.h>
 
@@ -13,6 +14,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -603,15 +605,172 @@ void scene_aa_on_warp() {
     expect(device->GetDeviceRemovedReason() == S_OK, "device alive after the scene passes");
 }
 
+// DescriptorRing::write_view (P-026): a view is made once and copied after; another description or a null view is
+// another view; bytes a description's dimension does not read never make a new one; the cache keeps a reference to
+// what it views and lets it go once no frame has written the view in frames_in_flight + 1 frames.
+void view_cache_on_warp() {
+    using Microsoft::WRL::ComPtr;
+    ComPtr<IDXGIFactory4> factory;
+    ComPtr<IDXGIAdapter> adapter;
+    ComPtr<ID3D12Device> device;
+    if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))) ||
+        FAILED(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter))) ||
+        FAILED(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&device)))) {
+        std::cerr << "FAILED: WARP device\n";
+        ++failures;
+        return;
+    }
+    constexpr unsigned kFrames = 2u;
+    galaxy::render::DescriptorRing ring;
+    expect(ring.initialize(device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 16u, kFrames), "ring on WARP");
+    D3D12_HEAP_PROPERTIES heap{};
+    heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+    D3D12_RESOURCE_DESC rd{};
+    rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    rd.Width = 4u;
+    rd.Height = 4u;
+    rd.DepthOrArraySize = 1;
+    rd.MipLevels = 1;
+    rd.Format = DXGI_FORMAT_R8G8B8A8_TYPELESS;
+    rd.SampleDesc.Count = 1;
+    rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    ComPtr<ID3D12Resource> texture;
+    if (FAILED(device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_COMMON, nullptr,
+                                               IID_PPV_ARGS(&texture)))) {
+        std::cerr << "FAILED: WARP texture\n";
+        ++failures;
+        return;
+    }
+    const auto references = [&] {
+        texture->AddRef();
+        return texture->Release();
+    };
+    const ULONG alone = references();
+    const UINT step = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    const auto slot = [&](const galaxy::render::DescriptorRing::Table& t, unsigned i) {
+        D3D12_CPU_DESCRIPTOR_HANDLE h = t.cpu;
+        h.ptr += static_cast<SIZE_T>(i) * step;
+        return h;
+    };
+    D3D12_SHADER_RESOURCE_VIEW_DESC srv{};
+    srv.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srv.Texture2D.MipLevels = 1;
+    D3D12_UNORDERED_ACCESS_VIEW_DESC uav{};
+    uav.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+
+    ring.begin_frame(0u);
+    galaxy::render::DescriptorRing::Table t = ring.allocate(8u);
+    ring.write_view(slot(t, 0), texture.Get(), srv);
+    ring.write_view(slot(t, 1), texture.Get(), srv);
+    expect(ring.views_made() == 1u, "the same view twice is made once");
+    expect(references() == alone + 1u, "the cache holds a reference to what it views");
+    D3D12_SHADER_RESOURCE_VIEW_DESC srgb = srv;
+    srgb.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    ring.write_view(slot(t, 2), texture.Get(), srgb);
+    expect(ring.views_made() == 2u, "another format is another view");
+    ring.write_view(slot(t, 3), nullptr, srv);
+    ring.write_view(slot(t, 4), nullptr, srv);
+    expect(ring.views_made() == 3u, "a null view is made once");
+    ring.write_view(slot(t, 5), texture.Get(), uav);
+    expect(ring.views_made() == 4u, "a UAV of the same resource is its own view");
+    // Bytes of the union the dimension does not read: the same view.
+    D3D12_SHADER_RESOURCE_VIEW_DESC noisy;
+    std::memset(&noisy, 0xAB, sizeof(noisy));
+    noisy.Format = srv.Format;
+    noisy.ViewDimension = srv.ViewDimension;
+    noisy.Shader4ComponentMapping = srv.Shader4ComponentMapping;
+    noisy.Texture2D = srv.Texture2D;
+    ring.write_view(slot(t, 6), texture.Get(), noisy);
+    expect(ring.views_made() == 4u, "unread bytes of a description make no new view");
+    expect(ring.views_kept() == 4u, "four views kept");
+
+    // A frame that writes only the first view keeps the others for frames_in_flight + 1 frames, then drops them.
+    for (unsigned frame = 1u; frame <= kFrames + 2u; ++frame) {
+        ring.begin_frame(frame % kFrames);
+        t = ring.allocate(1u);
+        ring.write_view(slot(t, 0), texture.Get(), srv);
+    }
+    expect(ring.views_made() == 4u, "a view written every frame is not made again");
+    expect(ring.views_kept() == 1u, "views no frame wrote are dropped");
+    expect(references() == alone + 1u, "the kept view still holds its resource");
+    for (unsigned frame = 0u; frame <= kFrames + 1u; ++frame) {
+        ring.begin_frame(frame % kFrames);
+    }
+    expect(ring.views_kept() == 0u && references() == alone, "a dropped view lets its resource go");
+
+    // More views than the cache's first heap: it grows, and the views made before stay usable.
+    std::vector<ComPtr<ID3D12Resource>> many(80u);
+    ring.begin_frame(0u);
+    for (ComPtr<ID3D12Resource>& r : many) {
+        if (FAILED(device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_COMMON,
+                                                   nullptr, IID_PPV_ARGS(&r)))) {
+            expect(false, "WARP texture for the growth case");
+            return;
+        }
+        t = ring.allocate(1u);
+        ring.write_view(slot(t, 0), r.Get(), srv);
+    }
+    t = ring.allocate(1u);
+    ring.write_view(slot(t, 0), many[0].Get(), srv);
+    expect(ring.views_made() == 84u && ring.views_kept() == 80u, "the cache grows past its first heap");
+    expect(device->GetDeviceRemovedReason() == S_OK, "device alive after the view cache");
+}
+
+// P-052: the passes' pipelines go through the driver cache: a second post-processor loads every pipeline the first
+// made and makes none, and the loaded pipelines pass the self-test. (A second device on one adapter is the same device
+// in Direct3D 12, so the cache's guard against another device is not reached here.)
+void utility_pipelines_on_warp() {
+    using Microsoft::WRL::ComPtr;
+    const auto warp = [](ComPtr<ID3D12Device>& device, ComPtr<ID3D12CommandQueue>& queue) {
+        ComPtr<IDXGIFactory4> factory;
+        ComPtr<IDXGIAdapter> adapter;
+        D3D12_COMMAND_QUEUE_DESC qd{};
+        return SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))) &&
+               SUCCEEDED(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter))) &&
+               SUCCEEDED(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&device))) &&
+               SUCCEEDED(device->CreateCommandQueue(&qd, IID_PPV_ARGS(&queue)));
+    };
+    ComPtr<ID3D12Device> device;
+    ComPtr<ID3D12CommandQueue> queue;
+    if (!warp(device, queue)) {
+        std::cerr << "FAILED: WARP device\n";
+        ++failures;
+        return;
+    }
+    using galaxy::render::core::utility_pipeline_counts;
+    galaxy::render::PostProcessor first;
+    expect(first.initialize(device.Get(), queue.Get(), PostProcessSettings{}), "first post-processor on WARP");
+    const auto made = utility_pipeline_counts();
+    expect(made.made > 0u, "the first post-processor makes its pipelines");
+    galaxy::render::PostProcessor second;
+    expect(second.initialize(device.Get(), queue.Get(), PostProcessSettings{}), "second post-processor on WARP");
+    const auto loaded = utility_pipeline_counts();
+    expect(loaded.made == made.made, "the second makes none");
+    expect(loaded.loaded > made.loaded, "the second loads them from the cache");
+    expect(second.status().smaa_ok && second.status().fxaa_ok, "loaded pipelines pass the self-test");
+}
+
 }  // namespace
 
 int main() {
+    // The driver cache reads its file from the data folder: a folder of this run's own, never the user's.
+    const std::filesystem::path data = std::filesystem::temp_directory_path() / "nebula-post-process-tests";
+    std::error_code ignored;
+    std::filesystem::remove_all(data, ignored);
+    std::filesystem::create_directories(data, ignored);
+    SetEnvironmentVariableW(L"LOCALAPPDATA", data.c_str());
+    // First: the driver cache opens on the first device a pipeline is made on.
+    utility_pipelines_on_warp();
     hdr_output();
     plans();
     texts();
     fallbacks();
     self_test_on_warp();
     scene_aa_on_warp();
+    view_cache_on_warp();
     if (failures != 0) {
         std::cerr << failures << " post-process checks failed\n";
         return 1;

@@ -18,6 +18,7 @@
 #include "Game/Util/FurMulti.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Render/GameTexture.hpp"
+#include "Game/Util/FrameCount.hpp"
 #include <new>
 
 void MarioActor::initScreenBox() {
@@ -679,7 +680,7 @@ void MarioActor::updateDarkMask(u16 unused) {
     previous[index] = 0;
     previous[index + 1] = 255;
     RenderTexture::linear(image, NEBULA_TEXTURE_LINEAR_LA8, 8, 8, 1);
-    mDarkMaskTimer++;
+    MR::countUp(mDarkMaskTimer);
 }
 
 bool MarioActor::drawDarkMask() const {

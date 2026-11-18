@@ -3,6 +3,7 @@
 // program drawn full screen over the frame (RenderCore::walk_post), and a mod's native function given the device, the
 // open command list and the target at its draw point (RenderCore::walk_native).
 #include "galaxy/render/renderer_d3d12.h"
+#include "render/core/utility_pipeline_d3d12.h"
 
 #include "barriers_d3d12.h"
 #include "galaxy/render/mod_post.h"
@@ -18,22 +19,23 @@ using Microsoft::WRL::ComPtr;
 
 namespace {
 
-void null_view(ID3D12Device* device, DXGI_FORMAT format, D3D12_CPU_DESCRIPTOR_HANDLE slot) {
+void null_view(DescriptorRing& ring, DXGI_FORMAT format, D3D12_CPU_DESCRIPTOR_HANDLE slot) {
     D3D12_SHADER_RESOURCE_VIEW_DESC sd{};
     sd.Format = format;
     sd.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     sd.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     sd.Texture2D.MipLevels = 1;
-    device->CreateShaderResourceView(nullptr, &sd, slot);
+    ring.write_view(slot, nullptr, sd);
 }
 
-void texture_view(ID3D12Device* device, ID3D12Resource* texture, DXGI_FORMAT format, D3D12_CPU_DESCRIPTOR_HANDLE slot) {
+void texture_view(DescriptorRing& ring, ID3D12Resource* texture, DXGI_FORMAT format,
+                  D3D12_CPU_DESCRIPTOR_HANDLE slot) {
     D3D12_SHADER_RESOURCE_VIEW_DESC sd{};
     sd.Format = format;
     sd.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     sd.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     sd.Texture2D.MipLevels = 1;
-    device->CreateShaderResourceView(texture, &sd, slot);
+    ring.write_view(slot, texture, sd);
 }
 
 }  // namespace
@@ -120,7 +122,7 @@ ID3D12PipelineState* RendererD3D12::mod_post_pipeline(const ModPostProgram& prog
     pd.NumRenderTargets = 1;
     pd.RTVFormats[0] = format;
     pd.SampleDesc.Count = samples;
-    const HRESULT result = device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&made.pipeline));
+    const HRESULT result = core::utility_pipeline(device_.Get(), pd, &made.pipeline);
     if (FAILED(result)) {
         // Kept empty: the pass draws nothing for it from now on, and the log says why once.
         std::cerr << "[draw.post] program " << program.id << " pipeline failed " << std::hex << static_cast<unsigned long>(result)
@@ -211,18 +213,18 @@ void RendererD3D12::record_mod_post(const ModPostProgram& program, ModPostConsta
     const DescriptorRing::Table table = srv_ring_.allocate(3);
     const UINT step = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     D3D12_CPU_DESCRIPTOR_HANDLE slot = table.cpu;
-    texture_view(device_.Get(), picture.Get(), picture->GetDesc().Format, slot);
+    texture_view(srv_ring_, picture.Get(), picture->GetDesc().Format, slot);
     slot.ptr += step;
     if (depth != nullptr) {
-        texture_view(device_.Get(), depth, kSceneDepthSrvFormat, slot);
+        texture_view(srv_ring_, depth, kSceneDepthSrvFormat, slot);
     } else {
-        null_view(device_.Get(), DXGI_FORMAT_R32_FLOAT, slot);
+        null_view(srv_ring_, DXGI_FORMAT_R32_FLOAT, slot);
     }
     slot.ptr += step;
     if (motion != nullptr) {
-        texture_view(device_.Get(), motion, kMotionVectorFormat, slot);
+        texture_view(srv_ring_, motion, kMotionVectorFormat, slot);
     } else {
-        null_view(device_.Get(), DXGI_FORMAT_R16G16_FLOAT, slot);
+        null_view(srv_ring_, DXGI_FORMAT_R16G16_FLOAT, slot);
     }
 
     ID3D12GraphicsCommandList* const list = command_list_.Get();

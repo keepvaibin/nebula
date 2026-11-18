@@ -15,6 +15,7 @@
 // (set_upload_list), on a command buffer committed before the frame's draws.
 #pragma once
 
+#include "galaxy/platform_time.h"
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/mtl/mtl_context.h"
 #include "galaxy/render/texel_format.h"
@@ -175,7 +176,7 @@ private:
     std::uint64_t placed_ = 0u;
     mtl::Object upload_list_ = nullptr;
     bool uploaded_ = false;
-    std::uint32_t frames_since_trim_ = 0u;
+    ClockInterval trim_{10'000};  // empty heaps go back every 10 s, at any frame rate
 };
 
 }  // namespace galaxy::render

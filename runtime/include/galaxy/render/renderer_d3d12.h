@@ -21,6 +21,7 @@
 #include <d3d12sdklayers.h>
 #include <wrl/client.h>
 
+#include "galaxy/render/temporal_hold.h"
 #include "galaxy/render/fsr_frame_generation.h"
 #include "galaxy/render/utility_shaders.h"
 #include "galaxy/render/frame_pass.h"
@@ -28,6 +29,7 @@
 #include "galaxy/render/gpu_upload_ring.h"
 #include "galaxy/render/post_process.h"
 #include "galaxy/render/display_modes.h"
+#include "galaxy/render/dxgi_memory.h"
 #include "galaxy/render/os_hdr.h"
 #include "galaxy/render/ambient_occlusion.h"
 #include "galaxy/render/scene_camera.h"
@@ -61,6 +63,7 @@
 #include <atomic>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace galaxy::render {
@@ -163,8 +166,20 @@ public:
         D3D12_CPU_DESCRIPTOR_HANDLE cpu{};
         D3D12_GPU_DESCRIPTOR_HANDLE gpu{};
     };
-    // Reserves `count` consecutive slots; the caller writes views at `cpu`.
+    // Reserves `count` consecutive slots; the caller writes views at `cpu` (write_view).
     Table allocate(unsigned count);
+    // Writes a view of `resource` (nullptr: a null view) at `at`, a slot of a table of this ring (allocate). A view is
+    // made once, into a CPU-only cache, and copied from there after: the same resource and description again cost a
+    // descriptor copy, not a view creation. The cache holds a reference to each resource it has a view of, so no new
+    // resource takes that address while the view is kept; begin_frame drops the views no frame wrote in the last
+    // frames_in_flight + 1 frames. A UAV has no counter resource.
+    void write_view(D3D12_CPU_DESCRIPTOR_HANDLE at, ID3D12Resource* resource,
+                    const D3D12_SHADER_RESOURCE_VIEW_DESC& desc);
+    void write_view(D3D12_CPU_DESCRIPTOR_HANDLE at, ID3D12Resource* resource,
+                    const D3D12_UNORDERED_ACCESS_VIEW_DESC& desc);
+    // Views made since initialize (the cache's misses) and views kept now: tests and diagnostics.
+    [[nodiscard]] std::uint64_t views_made() const noexcept { return views_made_; }
+    [[nodiscard]] std::size_t views_kept() const noexcept { return views_.size(); }
     // Copies this frame's tables from the shadow heap into the heap (before the frame's command list is submitted).
     void flush();
 
@@ -188,7 +203,7 @@ public:
         replaced_owner_ = owner;
     }
     // The heaps growth replaced, for the renderer to free once the GPU is past the commands that may read them.
-    [[nodiscard]] std::vector<Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>> take_replaced() noexcept { return std::move(replaced_); }
+    [[nodiscard]] std::vector<Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>> take_replaced() noexcept { return std::exchange(replaced_, {}); }
     // The most a frame's segment and the persistent region have held (diagnostics). A segment that a frame fills doubles, as the
     // persistent region does (grow_frames); its first size is kSrvPerFrame.
     [[nodiscard]] unsigned frame_high_water() const noexcept { return frame_high_water_; }
@@ -230,6 +245,34 @@ private:
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE heap_cpu_at(unsigned index) const noexcept;  // a ring index, past the textures
     void fill_null(unsigned index, unsigned count);
     void copy_in(unsigned index, unsigned count);  // shadow -> heap, both by ring index
+    // The view cache (write_view). A key is the resource, the kind of view and the description's fields that its dimension
+    // reads, each at a fixed place in bytes that are otherwise zero (a description's padding never reaches the key).
+    struct ViewKey {
+        ID3D12Resource* resource = nullptr;
+        std::uint32_t kind = 0u;  // 0 SRV, 1 UAV
+        std::array<unsigned char, 48> desc{};
+        bool operator==(const ViewKey& other) const noexcept {
+            return resource == other.resource && kind == other.kind && desc == other.desc;
+        }
+    };
+    struct ViewKeyHash {
+        std::size_t operator()(const ViewKey& key) const noexcept;
+    };
+    struct KeptView {
+        Microsoft::WRL::ComPtr<ID3D12Resource> resource;
+        unsigned slot = 0u;
+        std::uint64_t written_frame = 0u;
+    };
+    // The cache's slot for `key` (`made`: it was missing, and the caller makes the view there); a null handle when the
+    // cache cannot grow (the caller makes the view in place).
+    D3D12_CPU_DESCRIPTOR_HANDLE view_slot(const ViewKey& key, ID3D12Resource* resource, bool& made);
+    std::unordered_map<ViewKey, KeptView, ViewKeyHash> views_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> view_heap_;  // CPU only
+    std::vector<unsigned> free_view_slots_;
+    unsigned view_capacity_ = 0u;
+    unsigned view_next_ = 0u;
+    std::uint64_t view_frame_ = 0u;
+    std::uint64_t views_made_ = 0u;
     ID3D12Device* device_ = nullptr;
     D3D12_DESCRIPTOR_HEAP_TYPE type_{};
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> heap_;
@@ -568,8 +611,6 @@ public:
     // `compared` probes are answered with their depth too: the read breaks no render pass here.
     [[nodiscard]] bool record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes, bool compared);
     [[nodiscard]] const float* screen_probes_finished(std::size_t slot);  // throws when the device is gone
-    bool debug_copy_scene_to_readback();
-    void debug_log_readback();
     void debug_log_backbuffer_readback();
     bool debug_copy_selected_display_to_readback(const DisplayTexture& source);
     void debug_log_selected_display_readback();
@@ -577,9 +618,7 @@ public:
     // its optional readbacks. Paths are retained with the pending readback so
     // a later nonblocking completion cannot write to a subsequent frame's
     // diagnostic file.
-    void set_debug_capture_paths(
-        std::string scene_ppm_path,
-        std::string backbuffer_ppm_path);
+    void set_debug_capture_paths(std::string backbuffer_ppm_path);
 
     [[nodiscard]] ID3D12Device* device() const { return device_.Get(); }
     [[nodiscard]] const FrameMap& frame_map() const noexcept { return frame_; }
@@ -700,9 +739,6 @@ private:
     void sync_post_process_settings();
     // A scale refused for the memory budget is tried again at this tick.
     std::uint64_t window_size_refused_ms_ = 0;
-    // Match Output's GPU budget: the frame command lists' measured GPU time over 2 s windows. When it stays above
-    // kGpuBudgetBusy of the wall time for two windows, the internal resolution Match Output may pick is capped one step
-    // lower for the session, so a GPU too slow for the window's resolution keeps every frame.
     // (Re)creates the scene target color/depth conversion SRVs in their fixed slots.
     void refresh_scene_conversion_source_views();
     // The scene target's conversion views (colour and depth) into `table`.
@@ -759,16 +795,8 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Device> device_;
     // The device's enhanced-barrier interface when it has them (BarrierPath::device points at it).
     Microsoft::WRL::ComPtr<ID3D12Device10> barrier_device_;
-    // The selected adapter, for video-memory budget queries.
-    Microsoft::WRL::ComPtr<IDXGIAdapter3> adapter3_;
-    // The OS signals this event when it changes the process's video memory budget (RegisterVideoMemoryBudgetChangeNotificationEvent;
-    // auto-reset; null where not registered); video_memory then reads again at once, else at most every 100 ms.
-    HANDLE budget_event_ = nullptr;
-    DWORD budget_cookie_ = 0u;
-    mutable std::int64_t memory_read_ms_ = 0;
-    mutable std::uint64_t memory_usage_ = 0u;
-    mutable std::uint64_t memory_budget_ = 0u;
-    void release_budget_notification() noexcept;
+    // The selected adapter's video memory (dxgi_memory.h: at most every 100 ms, at once when the OS moved the budget).
+    mutable DxgiMemory memory_;
     std::atomic<bool> occluded_{false};
     // The swap chain's frame latency waitable object (create_swap_chain): a present waits on it, bounded, so a frame is queued
     // when the display can take it. Owned (closed with the chain); null where the chain has none.
@@ -810,15 +838,6 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Fence> fence_;
     std::array<std::uint64_t, kFramesInFlight> fence_values_{};
     HANDLE fence_event_ = nullptr;
-    // The display the window and swap chain were last brought to.
-    struct AppliedDisplay {
-        bool valid = false;
-        unsigned mode = 0;
-        std::array<char, 64> monitor{};
-        unsigned window_width = 0;
-        unsigned window_height = 0;
-    };
-    AppliedDisplay applied_display_{};
     Microsoft::WRL::ComPtr<ID3D12QueryHeap> timestamp_query_heap_;
     Microsoft::WRL::ComPtr<ID3D12Resource> timestamp_readback_;
     std::array<bool, kFramesInFlight> timestamp_pending_{};
@@ -1109,7 +1128,7 @@ private:
         friend bool operator==(const TemporalInterpKey&, const TemporalInterpKey&) = default;
     };
     [[nodiscard]] TemporalInterpKey temporal_interp_key() const;
-    bool temporal_interp_suspended_ = false;
+    TemporalInterpHold temporal_interp_hold_;
     TemporalInterpKey temporal_interp_key_{};
     double generated_gpu_ms_ = 0.0;
     std::uint64_t generated_gpu_samples_ = 0;
@@ -1207,13 +1226,6 @@ private:
     std::uint64_t next_fence_value_ = 0;
 
 
-    // Debug scene target readback (debug_copy_scene_to_readback / debug_log_readback).
-    Microsoft::WRL::ComPtr<ID3D12Resource> readback_buf_;
-    bool readback_pending_ = false;
-    bool readback_wide_ = false;  // the copy is of the wide (RGBA16F) scene target: 8 bytes a pixel
-    std::uint64_t readback_fence_value_ = 0;
-    std::string next_scene_capture_path_;
-    std::string readback_capture_path_;
     Microsoft::WRL::ComPtr<ID3D12Resource> backbuffer_readback_buf_;
     bool backbuffer_readback_pending_ = false;
     std::uint64_t backbuffer_readback_fence_value_ = 0;

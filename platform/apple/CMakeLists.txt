@@ -11,6 +11,11 @@
 # MoltenVK (the release's MoltenVK folder: MoltenVK/dylib, MoltenVK/static).
 cmake_minimum_required(VERSION 3.24)
 project(NebulaApple LANGUAGES C CXX OBJC OBJCXX)
+# What the host computes for the game (a stick's position above all) is the same bits on every CPU: no multiply and
+# add is fused into one rounding. Clang fuses them by default on CPUs with a fused multiply-add (arm64, and x86-64 at
+# AVX2): a tablet's stick then differed from a computer's by one ulp, and its replay from the computer's (N-1064). The
+# game module is built the same way (native/CMakeLists.txt). MSVC fuses none at /fp:precise without /fp:contract.
+add_compile_options($<$<COMPILE_LANGUAGE:C,CXX,OBJC,OBJCXX>:-ffp-contract=off>)
 
 get_filename_component(nebula_root "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
 set(NEBULA_DEPS "" CACHE PATH "Folder of the dependency checkouts")

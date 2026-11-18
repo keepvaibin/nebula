@@ -23,7 +23,7 @@ bool SettingsSaveModel::write() {
 
 bool SettingsSaveModel::queue() {
     if (!dirty.load(std::memory_order_acquire)) return true;
-    std::call_once(worker_started_, [this] { std::thread([this] { run(); }).detach(); });
+    start_worker();
     {
         const std::lock_guard<std::mutex> lock(mutex_);
         requested_ = true;
@@ -32,12 +32,47 @@ bool SettingsSaveModel::queue() {
     return true;
 }
 
+void SettingsSaveModel::start_worker() {
+    std::call_once(worker_started_, [this] { std::thread([this] { run(); }).detach(); });
+}
+
+void SettingsSaveModel::watch(Notify look, std::chrono::milliseconds period) {
+    {
+        const std::lock_guard<std::mutex> lock(mutex_);
+        if (look_ != nullptr || look == nullptr) return;
+        look_ = look;
+        look_every_ = period;
+    }
+    start_worker();
+    changed_.notify_all();
+}
+
 void SettingsSaveModel::run() {
     if (started_) started_();
+    auto next_look = std::chrono::steady_clock::now();
     for (;;) {
+        Notify look = nullptr;
         {
             std::unique_lock<std::mutex> lock(mutex_);
-            changed_.wait(lock, [this] { return requested_; });
+            if (look_ == nullptr) {
+                changed_.wait(lock, [this] { return requested_ || look_ != nullptr; });
+            } else {
+                changed_.wait_until(lock, next_look, [this] { return requested_; });
+            }
+            if (!requested_) {
+                if (look_ != nullptr && std::chrono::steady_clock::now() >= next_look) {
+                    look = look_;
+                    next_look = std::chrono::steady_clock::now() + look_every_;
+                }
+            }
+        }
+        if (look != nullptr) {
+            try { look(); } catch (...) {}
+            continue;
+        }
+        {
+            std::unique_lock<std::mutex> lock(mutex_);
+            if (!requested_) continue;
             requested_ = false;
             running_ = true;
         }

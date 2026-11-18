@@ -27,6 +27,12 @@ public:
 
         return false;
     }
+
+    // Every member before mDeadFrom was alive at the last search for a dead one, made when LiveActor::sDeathCount was
+    // mDeadCheck. Members only join at the end, and no actor dies but through makeActorDead, so while the count is the
+    // same they still are, and the next search starts there (P-137). The plain module's.
+    mutable s32 mDeadFrom;
+    mutable u64 mDeadCheck;
 };
 
 template < typename T >

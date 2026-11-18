@@ -61,7 +61,7 @@ struct TextureHandle {
     std::uint32_t width = 0;
     std::uint32_t height = 0;
     std::uint32_t mip_levels = 1;
-    // Levels below the first were made by the cook: only ray tracing's hits read them.
+    // Levels below the first were made by the cook, not the game's: a draw keeps to the first (draw_walker).
     bool generated_mips = false;
     // A replacement: width/height stay the game texture's, the resource is larger by 2^(lod_shift / 16) and
     // samplers shift their LOD range by that much.
@@ -75,16 +75,6 @@ class TextureStore {
 public:
     static constexpr std::uint32_t kTargetBit = 0x80000000u;
     [[nodiscard]] static constexpr bool is_target(std::uint32_t id) noexcept { return (id & kTargetBit) != 0u; }
-    // Whether anything can read the cook's generated levels with these settings: ray tracing's hits, which pick a level
-    // by their footprint. A draw's sampler always keeps to the first level (draw_walker); without ray tracing only that
-    // level is staged.
-    [[nodiscard]] static bool wants_generated_levels(const RenderConfig& render) noexcept;
-    // Whether every texture holds the levels wants_generated_levels(render) asks for: follow_settings has seen it and the
-    // remakes it asked for have landed (take_ops). The tracer starts only then (rt_follow_setting).
-    [[nodiscard]] bool generated_levels_landed(const RenderConfig& render) const noexcept;
-    // Render thread, each frame after begin_frame: on a change of wants_generated_levels, the textures with generated levels
-    // are made again with them or without them (the old texture draws until then).
-    void follow_settings(const RenderConfig& render);
 
     struct Ops;
 
@@ -193,7 +183,7 @@ private:
         PackName name;
         bool generated = false;
         bool authored = false;  // detail::authored_levels
-        // `trimmed`: a record's first level alone, its generated levels left out (nothing reads them: wants_generated_levels).
+        // `trimmed`: a record's first level alone, its generated levels left out (a draw reads the first level only).
         // `full_levels`: the levels the image has.
         bool trimmed = false;
         std::uint32_t full_levels = 1u;
@@ -257,8 +247,6 @@ private:
     void make_own(Entry& entry, const Op& op, bool once);
     void update_entry(Op& op);
     void resize_entry(Op& op);
-    // An entry whose generated levels are not as generated_levels_ says (staged while that changed): made again.
-    void follow_generated_levels(std::uint32_t id, Entry& entry);
     void free_entry(std::uint32_t id);
     void apply_built_in(Op& op);
     void dump_base_level(const Staged& staged, const PackName& name);
@@ -279,8 +267,6 @@ private:
     std::unordered_map<std::uint32_t, Source> sources_;
     std::unordered_map<std::uint32_t, const void*> built_ins_;
     std::vector<ResizeRequest> resize_requests_;  // the budget's: staged by the next take_ops
-    // wants_generated_levels as the render thread last saw it, for the calling threads' staging.
-    std::atomic<bool> generated_levels_wanted_{false};
     DeviceGate* gate_ = nullptr;
     ChunkRef arena_chunk_;
     std::uint64_t arena_used_ = 0u;
@@ -292,7 +278,6 @@ private:
     // Render thread. Ids are never used again, so a table naming a freed image reads nothing, not another image.
     std::vector<std::unique_ptr<Entry>> entries_;
     std::uint64_t revision_ = 1u;
-    bool generated_levels_ = false;  // wants_generated_levels, as generated_levels_wanted_ was last set
     // Budget: frames begun, bytes of replaced textures still held by frames in flight, the bytes a walk may still ask to have
     // back this frame, the frame the next batch of reductions may start, and the counts since the start. (Render thread.)
     std::uint64_t frame_ = 0u;

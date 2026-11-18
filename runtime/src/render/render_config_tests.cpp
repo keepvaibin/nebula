@@ -517,9 +517,6 @@ int main() {
             quality.anisotropic_filtering == 16,
             "anisotropic filtering is clamped to the supported range");
 
-        passed &= expect(
-            !load("frame_rate_decouple=1\n").frame_rate_decouple,
-            "frame-rate decoupling stays off");
         std::filesystem::remove_all(root);
     }
 

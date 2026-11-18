@@ -5,6 +5,7 @@
 #if defined(_WIN32)
 #include "galaxy/windows_api.h"
 #include <atomic>
+#include <thread>
 
 #include <cstddef>
 #include <cstdio>
@@ -46,6 +47,20 @@ inline void lower_current_thread_priority() noexcept {
     if (running_on_battery()) {
         set_current_thread_efficiency(true);
     }
+}
+
+// A lowered background thread another thread now waits for (a stop's join): the normal priority again and no efficiency
+// request, so the job it is in finishes at a frame thread's pace. Windows' priorities are strict: beside busy threads of
+// the normal priority, one at the lowest runs only when the scheduler lifts it against starvation, seconds apart, and a
+// device restore that joined such threads took 16 s on a loaded PC (N-1072).
+inline void raise_waited_thread(std::thread& thread) noexcept {
+    const HANDLE handle = static_cast<HANDLE>(thread.native_handle());
+    (void)SetThreadPriority(handle, THREAD_PRIORITY_NORMAL);
+    THREAD_POWER_THROTTLING_STATE state{};
+    state.Version = THREAD_POWER_THROTTLING_CURRENT_VERSION;
+    state.ControlMask = THREAD_POWER_THROTTLING_EXECUTION_SPEED;
+    state.StateMask = 0u;
+    (void)SetThreadInformation(handle, ThreadPowerThrottling, &state, sizeof(state));
 }
 
 // timeBeginPeriod(1) while held; repeated calls with the same value do nothing.
@@ -108,7 +123,10 @@ inline void keep_display_on(bool keep) noexcept {
 
 }  // namespace galaxy::host
 #else
+#include "galaxy/crash_stack.h"
+
 #include <pthread.h>
+#include <thread>
 #if defined(__APPLE__)
 #include <pthread/qos.h>
 #else
@@ -131,6 +149,8 @@ inline void name_current_thread(const wchar_t* name) noexcept {
 #else
     (void)pthread_setname_np(pthread_self(), narrow);
 #endif
+    // Its fatal signals are reported even when its own stack ran out (crash_stack.h).
+    crash_stack_for_this_thread();
 }
 // Background work (the pipeline workers): the frame's threads run first wherever a core is contended. Apple: the class for
 // long work nobody waits on (the frame's threads are user-interactive, perf_hint.cpp). Linux and Android: nice 10 (Android's
@@ -142,6 +162,9 @@ inline void lower_current_thread_priority() noexcept {
     (void)setpriority(PRIO_PROCESS, static_cast<id_t>(syscall(SYS_gettid)), 10);
 #endif
 }
+// A waited-for lowered thread keeps its class here: Linux's fair scheduler gives nice 10 its share of a contended core and
+// Apple's utility class is not starved, so a join is not held as on Windows (N-1072).
+inline void raise_waited_thread(std::thread&) noexcept {}
 inline void opt_out_of_power_throttling_process() noexcept {}
 }  // namespace galaxy::host
 #endif

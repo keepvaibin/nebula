@@ -6,6 +6,7 @@
 #include "Game/Map/SunshadeMapHolder.hpp"
 #include "Game/Player/Mario.hpp"
 #include "Game/Player/MarioActor.hpp"
+#include "Game/Player/MarioCeilProbe.hpp"
 #include "Game/Player/MarioConst.hpp"
 #include "Game/Player/MarioDamage.hpp"
 #include "Game/Player/MarioHang.hpp"
@@ -275,8 +276,7 @@ f32 Mario::calcDistToCeil(bool saveSensor) {
         if (!MR::isSensorPressObj(triangle.mSensor) && mFloorCodeReader->getCode(&triangle) != CollisionFloorCode_Press && !pressGround &&
             mFloorCode != CollisionFloorCode_Press) {
             if ((hitPos - mPosition).dot(*getGravityVec()) >= 0.0f) {
-                if (offset <= 1.0f) {
-                    offset = -10.0f;
+                if (MR::retryCeilProbeAbove(offset)) {
                     continue;
                 }
 

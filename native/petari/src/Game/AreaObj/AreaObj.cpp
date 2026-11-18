@@ -98,13 +98,26 @@ bool AreaObj::isValidSwitchB() const {
 
 void AreaObj::setFollowMtx(const Pos3f* pMtx) {
     mForm->mFollowMtx = const_cast< Pos3f* >(pMtx);
+#if defined(NEBULA_PLAIN_PATHS)
+    AreaObjMgr::sFollowChanges++;
+#endif
 }
 
 Pos3f* AreaObj::getFollowMtx() const {
     return mForm->mFollowMtx;
 }
 
-AreaObjMgr::AreaObjMgr(s32 firstCapacity, const char* pName) : NameObj(pName), mArray(), mFirstCapacity(firstCapacity) {
+#if defined(NEBULA_PLAIN_PATHS)
+u32 AreaObjMgr::sFollowChanges = 0;
+#endif
+
+AreaObjMgr::AreaObjMgr(s32 firstCapacity, const char* pName)
+    : NameObj(pName), mArray(), mFirstCapacity(firstCapacity)
+#if defined(NEBULA_PLAIN_PATHS)
+      ,
+      mBounds(), mBoundsMade(0), mBoundsFollow(0)
+#endif
+{
     lumacore::setClass(this, lumacore::kClassId< AreaObjMgr >);
 }
 
@@ -117,6 +130,42 @@ void AreaObjMgr::entry(AreaObj* pAreaObj) {
 }
 
 AreaObj* AreaObjMgr::find_in(const Vec3f& rVec) const {
+#if defined(NEBULA_PLAIN_PATHS)
+    const u32 count = static_cast< u32 >(mArray.size());
+    if (mBoundsFollow != sFollowChanges || mBoundsMade > count) {
+        mBoundsMade = 0;
+        mBoundsFollow = sFollowChanges;
+    }
+    mBounds.room(count);
+    for (; mBoundsMade < count; mBoundsMade++) {
+        makeBound(mBoundsMade);
+    }
+
+    // The last one added wins.
+    for (u32 i = count; i-- > 0;) {
+        AreaObj* const pArea = mArray[static_cast< s32 >(i)];
+        if (mBounds[i].mObj != pArea) {
+            makeBound(i);
+        }
+
+        // Written so a NaN anywhere keeps the area.
+        const Bound& rBound = mBounds[i];
+        if (rBound.mRadiusSquared >= 0.0f && (rVec - rBound.mCenter).squared() > rBound.mRadiusSquared) {
+#if defined(NEBULA_AREA_BOUND_VERIFY)
+            if (pArea->isInVolume(rVec)) {
+                NEBULA_PANIC("area bound left out %s at %f %f %f", pArea->mName, rVec.x, rVec.y, rVec.z);
+            }
+#endif
+            continue;
+        }
+
+        if (pArea->isInVolume(rVec)) {
+            return pArea;
+        }
+    }
+
+    return nullptr;
+#else
     // The last one added wins.
     for (AreaObj* const* p = mArray.end(); p != mArray.begin();) {
         p--;
@@ -126,4 +175,23 @@ AreaObj* AreaObjMgr::find_in(const Vec3f& rVec) const {
     }
 
     return nullptr;
+#endif
 }
+
+#if defined(NEBULA_PLAIN_PATHS)
+void AreaObjMgr::makeBound(u32 index) const {
+    const AreaObj* const pArea = mArray[static_cast< s32 >(index)];
+    Bound& rBound = mBounds[index];
+    rBound.mObj = pArea;
+    rBound.mRadiusSquared = -1.0f;
+
+    Vec3f center;
+    f32 radius;
+    if (pArea->mForm != nullptr && pArea->mForm->calcBound(&center, &radius) && radius >= 0.0f) {
+        // Room over the float rounding of the forms' own tests.
+        const f32 room = radius * 1.001f + 1.0f;
+        rBound.mCenter = center;
+        rBound.mRadiusSquared = room * room;
+    }
+}
+#endif

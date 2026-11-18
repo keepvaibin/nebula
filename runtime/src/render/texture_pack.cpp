@@ -192,6 +192,10 @@ void TexturePacks::stop_workers() noexcept {
         jobs_.clear();
     }
     wake_.notify_all();
+    // A worker in a job finishes it at the normal priority: the caller waits for it (N-1072).
+    for (std::thread& worker : workers_) {
+        if (worker.joinable()) galaxy::host::raise_waited_thread(worker);
+    }
     for (std::thread& worker : workers_) {
         if (worker.joinable()) worker.join();
     }

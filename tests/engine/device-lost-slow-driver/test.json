@@ -1,0 +1,36 @@
+{
+  "harness": 1,
+  "name": "device-lost-slow-driver",
+  "about": "The graphics device lost on the stage's second frame, and the new device takes 12 s more to make, as a driver on a loaded machine can (GALAXY_TEST_REBUILD_DELAY_MS): the game makes no frame meanwhile, and that is no stall, as the stall watchdog leaves a rebuild out for up to 60 s (N-1072). The game then goes on to its end.",
+  "save": {
+    "spin": true
+  },
+  "stage": {
+    "name": "BattleShipGalaxy",
+    "scenario": 1
+  },
+  "limit_seconds": 240,
+  "settings": [
+    "GALAXY_TEST_REBUILD_DELAY_MS=12000"
+  ],
+  "steps": [
+    {
+      "at": 2,
+      "lose_device": true
+    },
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "log": "the graphics card was reset",
+      "times": 1
+    },
+    {
+      "log": "a new device in [0-9]{5,} ms",
+      "times": 1
+    }
+  ]
+}

@@ -115,6 +115,7 @@ The run starts with no saves. The test creates file 1 through the game's own new
 | `grand_stars` | `0` | Grand stars, 0 to 7. |
 | `flags` | None | Game event flags to switch on, by the game's names, such as `"PowerStarGet"`. |
 | `values` | None | Game event values by name, such as `{ "LibraryOpenNewStarCount": 0 }`. |
+| `tico_seeds` | None | Star bits already given to each Hungry Luma, by its seed number (the luma's placement argument 7), such as `{ "4": 50 }`. A luma given its full count is fed when its stage loads. |
 
 ## Stage
 

@@ -286,3 +286,49 @@ void AreaFormCylinder::init(const TableIter& rIter) {
     mHeight = scale;
     mHeight *= 500.0f;
 }
+
+#if defined(NEBULA_PLAIN_PATHS)
+// The box about its middle (the base matrix only turns and moves it).
+bool AreaFormCube::calcBound(Vec3f* pCenter, f32* pRadius) const {
+    if (mFollowMtx != nullptr) {
+        return false;
+    }
+
+    const Vec3f middle((mBounding.i + mBounding.f) * 0.5f);
+    mBaseMtx.mult(middle, *pCenter);
+    *pRadius = 0.5f * (mBounding.f - mBounding.i).length();
+    return true;
+}
+
+bool AreaFormSphere::calcBound(Vec3f* pCenter, f32* pRadius) const {
+    if (mFollowMtx != nullptr) {
+        return false;
+    }
+
+    *pCenter = mTranslation;
+    *pRadius = MR::abs(mRadius);
+    return true;
+}
+
+bool AreaFormBowl::calcBound(Vec3f* pCenter, f32* pRadius) const {
+    if (mFollowMtx != nullptr) {
+        return false;
+    }
+
+    *pCenter = mTranslation;
+    *pRadius = MR::abs(mRadius);
+    return true;
+}
+
+// The cylinder about the middle of its axis (MR::isInRange takes the height either way round).
+bool AreaFormCylinder::calcBound(Vec3f* pCenter, f32* pRadius) const {
+    if (mFollowMtx != nullptr) {
+        return false;
+    }
+
+    const f32 halfHeight = 0.5f * MR::abs(mHeight);
+    *pCenter = mTranslation + mUp * (0.5f * mHeight);
+    *pRadius = MR::sqrt(mRadius * mRadius + halfHeight * halfHeight);
+    return true;
+}
+#endif

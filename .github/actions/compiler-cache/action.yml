@@ -1,8 +1,10 @@
 name: Compiler cache
 description: >-
   sccache in front of every compiler CMake drives (CMAKE_C_COMPILER_LAUNCHER and CMAKE_CXX_COMPILER_LAUNCHER, which
-  CMake takes from the environment) and of rustc, its cache restored from this job's newest run on this branch or on
-  main. The job saves it again with actions/cache/save at its end (key: this step's output `key`).
+  CMake takes from the environment) and of rustc, and the cache of the hook module's copies (NEBULA_LUMA_CACHE,
+  tools/lumacore/instrument.py), one folder ($RUNNER_TEMP/compiler-cache) restored from this job's newest run on this
+  branch or on main. The job saves it again with actions/cache/save at its end (path: $RUNNER_TEMP/compiler-cache,
+  key: this step's output `key`); main saves, and a start by hand (workflow_dispatch) saves for its own branch.
 inputs:
   name:
     description: The cache's name, one per job (and matrix leg).
@@ -22,16 +24,23 @@ runs:
         name="$(printf '%s' '${{ inputs.name }}' | tr ',' '-')"
         echo "prefix=sccache-$name-${{ runner.os }}-" >> "$GITHUB_OUTPUT"
         echo "key=sccache-$name-${{ runner.os }}-${{ github.sha }}" >> "$GITHUB_OUTPUT"
-        dir="$(cd "$RUNNER_TEMP" && pwd -W 2>/dev/null || pwd)/sccache"
+        base="$(cd "$RUNNER_TEMP" && pwd -W 2>/dev/null || pwd)"
         {
-          echo "SCCACHE_DIR=$dir"
+          echo "SCCACHE_DIR=$base/compiler-cache/sccache"
           echo "SCCACHE_CACHE_SIZE=6G"
+          echo "NEBULA_LUMA_CACHE=$base/compiler-cache/luma"
+          echo "NEBULA_LUMA_CACHE_LOG=$base/luma-cache.log"
           echo "CMAKE_C_COMPILER_LAUNCHER=sccache"
           echo "CMAKE_CXX_COMPILER_LAUNCHER=sccache"
           echo "RUSTC_WRAPPER=sccache"
         } >> "$GITHUB_ENV"
     - uses: actions/cache/restore@v6
       with:
-        path: ${{ runner.temp }}/sccache
+        path: ${{ runner.temp }}/compiler-cache
         key: ${{ steps.key.outputs.key }}
         restore-keys: ${{ steps.key.outputs.prefix }}
+    # The copies no run used in 14 days go, so the saved folder holds what the branch builds now.
+    - shell: bash
+      run: |
+        if [ "$RUNNER_OS" = Windows ]; then py=python; else py=python3; fi
+        "$py" tools/lumacore/instrument.py --prune-cache "$NEBULA_LUMA_CACHE" 14

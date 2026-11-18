@@ -116,6 +116,9 @@ struct LaunchArgs {
     // --start-check N: the program's start without the game's files (host_main.cpp run_start_check): the window and the
     // renderer, which may take a software adapter when no graphics card runs it, then N frames drawn and shown.
     unsigned start_check = 0u;
+    // --pick-check 1, with --start-check: after the frames, one file pick (a mod's files), its answer printed (the Linux
+    // job's check that a system with no picker says so, P-036).
+    bool pick_check = false;
     unsigned gpu_start_retry = 0u;      // --gpu-start-retry: starts so far that found no graphics memory free
     unsigned started_again = 0u;        // --started-again: starts this run made again before this one
     // --start-again-of <id>-<time> (Windows): the process this start takes over from, by its id and creation time.

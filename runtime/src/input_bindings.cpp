@@ -1032,8 +1032,10 @@ LogicalInput merge_logical_input(const LogicalInput& a, const LogicalInput& b) n
     const auto larger = [](float x, float y) { return std::fabs(y) > std::fabs(x) ? y : x; };
     LogicalInput out{};
     out.pressed = a.pressed | b.pressed;
-    out.stick_x = larger(a.stick_x, b.stick_x);
-    out.stick_y = larger(a.stick_y, b.stick_y);
+    // The stick whole, the longer of the two: one source's x with the other's y points where neither does.
+    const bool b_longer = b.stick_x * b.stick_x + b.stick_y * b.stick_y > a.stick_x * a.stick_x + a.stick_y * a.stick_y;
+    out.stick_x = b_longer ? b.stick_x : a.stick_x;
+    out.stick_y = b_longer ? b.stick_y : a.stick_y;
     out.pointer_x = larger(a.pointer_x, b.pointer_x);
     out.pointer_y = larger(a.pointer_y, b.pointer_y);
     return out;

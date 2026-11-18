@@ -15,17 +15,14 @@
 #include <nebula_frame_list.h>
 
 // The draw.light service (docs/modding/reference/services/draw.md). Game thread throughout: the calls, the provider, and the
-// frame (GameLightSignal::frame at GameScene::draw3D's begin).
+// frame (GameScene::draw3D's begin).
 //
-// A light is a slot of one table across mods. Each frame drawn in a scene, each live light is
-//  - a lamp of the scene: a world light of kind REQUEST (the kind every actor's lamp is), `reach` its half distance;
-//  - a request for the game's one point light (LightPointCtrl::requestPointLightBy, keyed by its slot): lit when it is
-//    the nearest asking to the player, blended to over the game's half second, as an actor's lamp.
-// Intensity: the game's lamp falloff halves its light at h = 15 sqrt(b / (1 - b)) (reference distance 15); the traced
-// emitter takes candela = 37.5 (h / 100)^2 (rt_walk.cpp, a surface at h well lit). So h = 100 sqrt(candela / 37.5) and
-// b = h^2 / (h^2 + 225), which LightPointCtrl clamps to 0.95..0.999999 as it does the game's own (h 65 to 15000).
-// The RT branch's point lights (NebulaFramePointLight: candela, radius) take the light's candela, radius and casts
-// when that list is on this tree; until then the world light carries its place, colour and reach.
+// A light is a slot of one table across mods. Each frame drawn in a scene, each live light asks for the game's one point
+// light (LightPointCtrl::requestPointLightBy, keyed by its slot): lit when it is the nearest asking to the player, blended
+// to over the game's half second, as an actor's lamp.
+// Intensity: the game's lamp falloff halves its light at h = 15 sqrt(b / (1 - b)) (reference distance 15); a light of
+// candela c halves at h = 100 sqrt(c / 37.5) (a surface at h well lit), so b = h^2 / (h^2 + 225), which LightPointCtrl
+// clamps to 0.95..0.999999 as it does the game's own (h 65 to 15000).
 //
 // No cost with no mod: frame() is one load while no light lives.
 
@@ -351,15 +348,6 @@ namespace luma {
                         continue;
                     }
                     const f32 half = halfOf(rLight);
-                    NebulaFrameWorldLight world = {};
-                    world.id = NebulaHost::objectId(&rLight);
-                    world.kind = NEBULA_WORLD_LIGHT_REQUEST;
-                    for (u32 c = 0; c < 3; c++) {
-                        world.color[c] = rLight.colour[c];
-                        world.position[c] = rLight.position[c];
-                    }
-                    world.reach = half;
-                    Frame::worldLight(world);
                     if (pPoint != nullptr) {
                         const Vec3f at(rLight.position[0], rLight.position[1], rLight.position[2]);
                         const f32 distance = player ? MR::calcDistanceToPlayer(at) : cFar;
@@ -370,7 +358,7 @@ namespace luma {
                         pPoint->requestPointLightBy(&rLight, distance, at, colour, h2 / (h2 + cReference * cReference), -1);
                     }
                     if (facts && rLight.facts < 120u) {
-                        // Whether the game's point light is this one now (not traced: lit by it).
+                        // Whether the game's point light is this one now (what it lights).
                         const bool chosen = pPoint != nullptr && pPoint->mCurrentActor == &rLight;
                         lightFact("", rLight, chosen ? ",\"chosen\":true" : ",\"chosen\":false");
                         rLight.facts++;

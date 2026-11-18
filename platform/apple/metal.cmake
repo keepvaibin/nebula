@@ -58,6 +58,11 @@ target_include_directories(galaxy_render_mtl PUBLIC "${nebula_root}/runtime/src"
 target_include_directories(galaxy_render_mtl PRIVATE "${nebula_root}/third_party/smaa" "${nebula_root}/native/include"
     "${nebula_apple_utility_msl_dir}")
 target_link_libraries(galaxy_render_mtl PRIVATE nebula_msl)
+# AV1 movies (a mod's movie, NMOV codec 1) as every other renderer decodes them (P-116): platform/sdl's dav1d.
+if(TARGET nebula_dav1d)
+    target_link_libraries(galaxy_render_mtl PRIVATE nebula_dav1d)
+    target_compile_definitions(galaxy_render_mtl PRIVATE NEBULA_AV1=1)
+endif()
 # As platform/sdl gives galaxy_render_vk: TLS and gzip for the net services (luma_net.cpp), the save import's AES,
 # hashes and inflate (save_transfer.cpp), and the game's GameData.bin check (a source property is its folder's, so
 # platform/sdl's does not reach this folder's target).
@@ -71,6 +76,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 endif()
 target_link_libraries(galaxy_render_mtl PUBLIC "-framework Metal" "-framework QuartzCore" "-framework Foundation"
     "-framework CoreGraphics" "-framework IOSurface")
+# A replacement movie through AVFoundation (runtime/src/render/movie_source_apple.mm, from the Vulkan library's list),
+# built with ARC as platform/sdl builds it.
+set_source_files_properties("${nebula_root}/runtime/src/render/movie_source_apple.mm" PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+target_link_libraries(galaxy_render_mtl PRIVATE "-framework AVFoundation" "-framework CoreMedia" "-framework CoreVideo")
 # MetalFX is asked for at run time (macOS 13, iOS 16): the program starts without it.
 target_link_libraries(galaxy_render_mtl PUBLIC "-weak_framework MetalFX")
 set_source_files_properties(${nebula_apple_mtl_backend} "${nebula_apple_capture}" PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
@@ -99,6 +108,8 @@ add_executable(nebula_native
     "${nebula_root}/native/host/host_main.cpp"
     "${nebula_root}/runtime/src/whole_lines.cpp"
     "${nebula_root}/platform/sdl/native_game_host_sdl.cpp"
+    "${nebula_root}/platform/sdl/crash_log.cpp"
+    "${nebula_root}/platform/sdl/output_log.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/host_window_apple.mm"
     "${CMAKE_CURRENT_SOURCE_DIR}/luma_system_apple.mm"
     "${CMAKE_CURRENT_SOURCE_DIR}/audio_device_apple.mm"

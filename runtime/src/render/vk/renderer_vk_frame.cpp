@@ -2042,7 +2042,7 @@ void RendererVk::record_wide_end() {
     // The drawn part of the wide set: what the camera meters and writes. After a load or a long pause the eye starts open.
     const VkExtent2D part = scene_part();
     scene_camera_.meter(commands_, *wide, *scene_.depth, kDepthSampleLayout, part.width, part.height,
-                        seconds > 1.0f ? -1.0f : seconds, 0u, allocate);
+                        seconds > 1.0f ? -1.0f : seconds, allocate);
     image_barrier(commands_, scene_.depth->image, aspects, kDepthSampleLayout, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
                   VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
                   VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
@@ -2068,7 +2068,7 @@ void RendererVk::record_wide_end() {
     begin_scene_pass_with(0u, nullptr, true);
     scene_camera_.draw(commands_, draw_layout_.pass_for(scene_variant(), false), scene_samples_log2(),
                        resolve_output || per_sample ? *wide_ms : *wide, part.width, part.height, per_sample, allocate,
-                       resolve_output, 0u);
+                       resolve_output);
     reset_draw_bindings();
 }
 
@@ -2679,11 +2679,12 @@ gpu::Table RendererVk::sampler_table_for(const SamplerKey* keys, unsigned count)
 void RendererVk::reset_sampler_frame() {
     const RenderConfig cfg = get_render_config();
     const std::uint32_t config = sampler_config_key(cfg);
-    // Samplers are made per key the game uses (its LOD bias holds the output height's mip lines, so each window height
-    // adds a set) and per settings configuration, against the device's maxSamplerAllocationCount (4000 on the Android
-    // baselines and on some desktop drivers). After a settings change, or with half of that limit made, once the GPU is
-    // past every frame that read them: the old configuration's samplers (all of them when crowded) are destroyed, and the
-    // tables and slots are written again as the walker asks for them (sampler_generation). The same samplers come back.
+    // Samplers are made per key the game uses (the texture's own state: the frame's part of the bias is the programs',
+    // SamplerFrameBias) and per settings configuration, against the device's maxSamplerAllocationCount (4000 on the
+    // Android baselines and on some desktop drivers). After a settings change, or with half of that limit made, once
+    // the GPU is past every frame that read them: the old configuration's samplers (all of them when crowded) are
+    // destroyed, and the tables and slots are written again as the walker asks for them (sampler_generation). The same
+    // samplers come back.
     const bool crowded = samplers_.size() >= vk::Context::get().properties().limits.maxSamplerAllocationCount / 2u;
     const auto drop_other_configs = [this, config, crowded] {
         const VkDevice device = vk::Context::get().device();
@@ -2699,6 +2700,10 @@ void RendererVk::reset_sampler_frame() {
         const bool full = sampler_slots_.used() + vk_detail::kSamplerFrameRoom > kSamplerHeapSlots;
         if (sampler_slots_ready_ && config == sampler_config_ && !full && !crowded) {
             return;
+        }
+        if (sampler_slots_ready_ && (full || crowded)) {
+            std::fprintf(stderr, "[samplers] %u of %u slots, %zu samplers made: the array starts again once the GPU is "
+                                 "past them\n", sampler_slots_.used(), kSamplerHeapSlots, samplers_.size());
         }
         if (sampler_slots_ready_ && last_submitted_ != 0u) {
             wait_for_fence_value(last_submitted_);
@@ -2939,10 +2944,11 @@ void RendererVk::begin_scene_rectangle() {
                                                       resolution_budget_ms(rate, display_refresh_hz_));
         if (::galaxy::diagnosing(::galaxy::kDiagnoseResolutionSteps | ::galaxy::kDiagnosePresentStats) &&
             dynamic_resolution_.sixteenths() != before) {
-            std::fprintf(stderr, "[dynres] frame %llu: %u/16, %ux%u of %ux%u (floor %u/16)\n",
+            // With the samplers made so far, so what a step adds shows.
+            std::fprintf(stderr, "[dynres] frame %llu: %u/16, %ux%u of %ux%u (floor %u/16), samplers %zu\n",
                          static_cast<unsigned long long>(frame_index_), dynamic_resolution_.sixteenths(),
                          scene_rectangle_.width, scene_rectangle_.height, scene_extent_.width, scene_extent_.height,
-                         dynamic_resolution_.lowest_sixteenths());
+                         dynamic_resolution_.lowest_sixteenths(), samplers_.size());
         }
     }
     if (!(scene_rectangle_.width <= frame_extent_.width && scene_rectangle_.height <= frame_extent_.height) ||
@@ -3524,82 +3530,12 @@ const float* RendererVk::screen_probes_finished(std::size_t slot) {
 
 void RendererVk::finish_pictures() {
     wait_for_gpu_idle();
-    debug_log_readback();
     debug_log_backbuffer_readback();
     wait_picture_files();
 }
 
-void RendererVk::set_debug_capture_paths(std::string scene_ppm_path, std::string backbuffer_ppm_path) {
-    scene_capture_path_ = std::move(scene_ppm_path);
+void RendererVk::set_debug_capture_paths(std::string backbuffer_ppm_path) {
     backbuffer_capture_path_ = std::move(backbuffer_ppm_path);
-}
-
-bool RendererVk::debug_copy_scene_to_readback() {
-    debug_log_readback();
-    if (scene_capture_path_.empty() || !scene_capture_pending_path_.empty()) {
-        return false;
-    }
-    vk::Context& context = vk::Context::get();
-    const unsigned w = scene_map_.width;
-    const unsigned h = scene_map_.height;
-    // The 10-bit scene target, or the wide one (RGBA16F, a traced scene's): 8 bytes a pixel, its halves
-    // read as the 10-bit target's words (debug_log_readback). Any other format is not read.
-    const bool wide = scene_.color->format == VK_FORMAT_R16G16B16A16_SFLOAT;
-    if (!wide && scene_.color->format != vk::kSceneColorFormat) {
-        return false;
-    }
-    const std::uint64_t bytes = static_cast<std::uint64_t>(w) * h * (wide ? 8u : 4u);
-    if (!scene_capture_.buffer || scene_capture_.buffer->size < bytes) {
-        scene_capture_.buffer = context.create_readback_buffer(bytes, "scene target capture");
-        if (!scene_capture_.buffer) {
-            return false;
-        }
-    }
-    end_scene_pass();
-    const VkCommandBuffer commands = commands_;
-    image_barrier(commands, scene_.color->image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ColorWrite, gpu::Use::CopySource);
-    VkBufferImageCopy region{};
-    region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-    region.imageExtent = {w, h, 1};
-    vkCmdCopyImageToBuffer(commands, scene_.color->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                           scene_capture_.buffer->buffer, 1, &region);
-    image_barrier(commands, scene_.color->image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::CopySource, gpu::Use::ColorWrite);
-    scene_capture_.fence = 0u;
-    scene_capture_pending_path_ = scene_capture_path_;
-    scene_capture_width_ = w;
-    scene_capture_height_ = h;
-    scene_capture_wide_ = wide;
-    reset_draw_bindings();
-    bind_scene();
-    return true;
-}
-
-void RendererVk::debug_log_readback() {
-    if (scene_capture_pending_path_.empty() || scene_capture_.fence == 0u ||
-        completed_fence_value() < scene_capture_.fence) {
-        return;
-    }
-    vk::Context::get().invalidate(*scene_capture_.buffer);
-    std::vector<std::uint8_t> rgba(static_cast<std::size_t>(scene_capture_width_) * scene_capture_height_ * 4u);
-    const auto* copied = reinterpret_cast<const std::uint8_t*>(scene_capture_.buffer->mapped);
-    std::vector<std::uint8_t> words;
-    if (scene_capture_wide_) {
-        words.resize(rgba.size());
-        half4_to_ten_bit(copied, words.data(), scene_capture_width_, scene_capture_height_, scene_capture_width_ * 8u,
-                         scene_capture_width_ * 4u);
-        copied = words.data();
-    }
-    ten_bit_to_rgba8(copied, rgba.data(), scene_capture_width_, scene_capture_height_, scene_capture_width_ * 4u,
-                     scene_capture_width_ * 4u);
-    std::vector<std::uint8_t> rgb(static_cast<std::size_t>(scene_capture_width_) * scene_capture_height_ * 3u);
-    for (std::size_t i = 0, n = rgb.size() / 3u; i < n; ++i) {
-        rgb[i * 3u] = rgba[i * 4u];
-        rgb[i * 3u + 1u] = rgba[i * 4u + 1u];
-        rgb[i * 3u + 2u] = rgba[i * 4u + 2u];
-    }
-    write_ppm_async(std::move(scene_capture_pending_path_), std::move(rgb), scene_capture_width_, scene_capture_height_);
-    scene_capture_pending_path_.clear();
-    scene_capture_.fence = 0u;
 }
 
 bool RendererVk::debug_copy_selected_display_to_readback(const DisplayTexture& source) {
@@ -3698,20 +3634,20 @@ void RendererVk::debug_log_backbuffer_readback() {
 bool RendererVk::interpolation_mode() const {
     const RenderConfig cfg = get_render_config();
     const double rate = present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, display_refresh_hz_);
-    if (temporal_mode() && temporal_interp_suspended_) {
+    if (temporal_mode() && temporal_interp_hold_.held()) {
         return false;
     }
     return interpolated_frames_per_game_frame(rate) != 0u;
 }
 
 void RendererVk::suspend_temporal_interpolation(double ms_per_frame) {
-    if (temporal_interp_suspended_) {
+    if (temporal_interp_hold_.held()) {
         return;
     }
-    temporal_interp_suspended_ = true;
+    temporal_interp_hold_.hold(galaxy::qpc_to_ns(galaxy::qpc_now()));
     temporal_interp_key_ = temporal_interp_key();
     std::cerr << "[interp] temporal upscaling of generated frames off: " << ms_per_frame
-              << " ms GPU per presented frame\n";
+              << " ms GPU per presented frame; tried again in " << temporal_interp_hold_.wait_ns() / 1000000000 << " s\n";
 }
 
 RendererVk::TemporalInterpKey RendererVk::temporal_interp_key() const {

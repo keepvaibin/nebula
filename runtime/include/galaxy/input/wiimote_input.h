@@ -73,6 +73,7 @@ private:
     std::array<float, 3> nunchuk_zero_{512.0f, 512.0f, 512.0f};
     std::array<float, 3> nunchuk_scale_{1.0f / 204.0f, 1.0f / 204.0f, 1.0f / 204.0f};
     bool nunchuk_ = false;
+    // The stick's centre in counts: the Nunchuk's calibration when it is good, else the first report (P-074).
     bool stick_origin_set_ = false;
     int stick_origin_x_ = 0;
     int stick_origin_y_ = 0;

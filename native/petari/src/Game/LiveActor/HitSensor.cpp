@@ -2,6 +2,7 @@
 #include "Game/System/NebulaMods.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/SensorHitChecker.hpp"
+#include "Game/Util/Array.hpp"
 
 HitSensor::HitSensor(u32 type, u32 groupSize, f32 radius, LiveActor* pHost)
     : mType(type), mPosition(0.0f, 0.0f, 0.0f), mRadius(radius), mSensorCount(0), mGroupSize(groupSize), mSensors(nullptr), mSensorGroup(nullptr),
@@ -84,9 +85,16 @@ void HitSensor::invalidateBySystem() {
     }
 }
 
+// Every sensor it touches this step, in the order the pairs are checked. The list grows past the group size it was
+// made with (P-148): the console dropped any more without a word, so in a crowd an actor missed a hit.
 void HitSensor::addHitSensor(HitSensor* pSensor) {
-    if (mSensorCount < mGroupSize) {
-        mSensors[mSensorCount] = pSensor;
-        mSensorCount++;
+    if (mGroupSize == 0) {
+        return;  // in no group: no pair is ever checked for it
     }
+    if (mSensorCount >= mGroupSize) {
+        mSensors = MR::growArray(mSensors, static_cast< s32 >(mGroupSize));
+        mGroupSize *= 2;
+    }
+    mSensors[mSensorCount] = pSensor;
+    mSensorCount++;
 }

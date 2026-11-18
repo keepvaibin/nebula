@@ -25,6 +25,16 @@ int main() {
     input.header.dwSize = sizeof(input); input.header.dwType = RIM_TYPEKEYBOARD; check(!decode_native_raw_mouse(packet()));
     input.header.dwType = RIM_TYPEMOUSE; input.header.wParam = RIM_INPUTSINK; check(!decode_native_raw_mouse(packet()));
     input.header.wParam = RIM_INPUT; input.data.mouse.usFlags = MOUSE_MOVE_ABSOLUTE | MOUSE_VIRTUAL_DESKTOP;
-    sample = decode_native_raw_mouse(packet()); check(sample && !sample->moved && sample->x == 0 && sample->y == 0);
-    std::cout << "Native relative packet exact; unaligned/truncated/type/size/background guarded; absolute channel preserved\n";
+    // P-076: a position, not a motion; the tracker makes motion of successive positions, in pixels.
+    sample = decode_native_raw_mouse(packet());
+    check(sample && sample->absolute && !sample->moved && sample->x == -123456 && sample->y == 789012);
+    galaxy::input::AbsoluteMouseTracker tracker;
+    check(!tracker.step(32768, 32768, 1920, 1080).moved);
+    auto step = tracker.step(32768 + 3414, 32768 - 600, 1920, 1080);
+    check(step.moved && step.x == 100 && step.y == -10);
+    tracker.reset();
+    check(!tracker.step(0, 0, 1920, 1080).moved);
+    step = tracker.step(70000, 65535, 1920, 1080);
+    check(step.moved && step.x == 1919 && step.y == 1079);
+    std::cout << "Native relative packet exact; unaligned/truncated/type/size/background guarded; absolute positions move\n";
 }

@@ -15,6 +15,7 @@
 #include "galaxy/input/raw_mouse_win32.h"
 
 #include "galaxy/render/display_modes.h"
+#include "galaxy/render/display_reconcile.h"
 #include "galaxy/render/galaxy_select.h"
 #include "galaxy/render/post_process_settings.h"
 #include "galaxy/render/render_config.h"
@@ -29,6 +30,7 @@
 #include "galaxy/mods.h"
 #include "galaxy/luma_system_platform.h"
 #include "galaxy/game_paths.h"
+#include "galaxy/host_text.h"
 #include "galaxy/native_settings_pad.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/runtime_settings.h"
@@ -209,6 +211,8 @@ using host_window::WindowPlacement;
 
 namespace {
 
+// The window's thread is placing the window for the display setting (kPlaceWindowMessage).
+bool s_placing_window = false;
 std::atomic<bool> s_pointer_focused{false};
 galaxy::host::HostPointerSnapshotCache s_pointer_snapshot;
 std::atomic<int> s_pointer_last_cursor_poll_x{std::numeric_limits<int>::min()};
@@ -483,6 +487,95 @@ RECT windowed_rect_on_monitor(const MonitorInfo& monitor, unsigned width,
     return RECT{left, top, left + outer_w, top + outer_h};
 }
 
+namespace {
+
+// What was last applied to the window (display_reconcile.h), under s_display_mutex together with the setting's display
+// fields whenever either changes: the render thread never sees one without the other.
+std::mutex s_display_mutex;
+AppliedDisplay s_applied_display;
+
+DisplayState display_state_of(const RenderConfig& cfg) {
+    DisplayState state;
+    state.mode = std::min(cfg.display_mode, kDisplayBorderless);
+    state.monitor = cfg.monitor;
+    state.window_width = cfg.window_width;
+    state.window_height = cfg.window_height;
+    return state;
+}
+
+// The player placed the window by hand (an edge dragged, the window moved to another monitor or given another scale,
+// an extension's resize_window_client): its client size and monitor become the setting and what is applied, together.
+void keep_player_placement(HWND hwnd) {
+    if (hidden_window_mode_enabled() || borderless_active.load(std::memory_order_acquire) || IsIconic(hwnd)) {
+        return;
+    }
+    RECT client{};
+    if (!GetClientRect(hwnd, &client) || client.right <= 0 || client.bottom <= 0) {
+        return;
+    }
+    MONITORINFOEXW info{};
+    info.cbSize = sizeof(info);
+    std::string monitor;
+    if (GetMonitorInfoW(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST), &info)) {
+        monitor = narrow_utf8(info.szDevice);
+    }
+    const unsigned width = static_cast<unsigned>(client.right);
+    const unsigned height = static_cast<unsigned>(client.bottom);
+    const std::lock_guard<std::mutex> lock(s_display_mutex);
+    const DisplayState now = placed_by_player(display_state_of(get_render_config()), width, height, monitor);
+    native_settings_window_placed(width, height, now.monitor.data());
+    s_applied_display = {true, now};
+}
+
+}  // namespace
+
+bool reconcile_display(HWND window) {
+    if (window == nullptr || hidden_window_mode_enabled()) {
+        return false;
+    }
+    const bool monitors_changed = display_changed.exchange(false, std::memory_order_acq_rel);
+    std::unique_lock<std::mutex> lock(s_display_mutex, std::try_to_lock);
+    if (!lock.owns_lock()) {
+        // The window's thread is writing a placement of the player's: the next frame looks again.
+        if (monitors_changed) display_changed.store(true, std::memory_order_release);
+        return false;
+    }
+    const RenderConfig cfg = get_render_config();
+    const DisplayState wanted = display_state_of(cfg);
+    if (!display_needs_placing(s_applied_display, wanted, monitors_changed, wanted.mode == kDisplayWindowed,
+                               move_size_active.load(std::memory_order_acquire))) {
+        return false;
+    }
+    const std::vector<MonitorInfo> monitors = enumerate_monitors();
+    const MonitorInfo* monitor = find_monitor(monitors, widen_utf8(cfg.monitor.data()));
+    if (monitor == nullptr) {
+        return false;
+    }
+    WindowPlacement placement{};
+    if (wanted.mode == kDisplayWindowed) {
+        placement.style = kWindowStyle;
+        placement.rect = windowed_rect_on_monitor(*monitor, cfg.window_width, cfg.window_height);
+        placement.borderless = false;
+    } else {
+        placement.style = WS_POPUP;
+        placement.rect = monitor->bounds;
+        placement.borderless = true;
+    }
+    // The window's thread places it (and may take this lock for the player's own placement meanwhile).
+    lock.unlock();
+    DWORD_PTR result = 0u;
+    if (SendMessageTimeoutW(window, kPlaceWindowMessage, 0u, reinterpret_cast<LPARAM>(&placement), SMTO_NORMAL, 2000u,
+                            &result) == 0) {
+        std::cerr << "[Renderer] display change: the window did not respond\n";
+        return false;
+    }
+    lock.lock();
+    s_applied_display = {true, wanted};
+    std::cout << "[Renderer] display " << (wanted.mode == kDisplayWindowed ? "windowed" : "borderless") << ' '
+              << narrow_utf8(monitor->device) << '\n';
+    return true;
+}
+
 OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_height) {
     OpenedWindow opened;
     quit_request.store(false, std::memory_order_release);
@@ -610,6 +703,11 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
         opened.shown = false;  // drawn from its first picture (show_window)
     }
     return opened;
+}
+
+void finish_output() noexcept {
+    std::fflush(stdout);
+    std::fflush(stderr);
 }
 
 void close_game_window(WindowOwner& owner) noexcept {
@@ -744,10 +842,11 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
     if (msg == kResizeClientMessage) {
         RECT rect{0, 0, static_cast<LONG>(wp), static_cast<LONG>(lp)};
-        (void)AdjustWindowRectEx(&rect, static_cast<DWORD>(GetWindowLongPtrW(hwnd, GWL_STYLE)), FALSE,
-                                 static_cast<DWORD>(GetWindowLongPtrW(hwnd, GWL_EXSTYLE)));
+        (void)AdjustWindowRectExForDpi(&rect, static_cast<DWORD>(GetWindowLongPtrW(hwnd, GWL_STYLE)), FALSE,
+                                       static_cast<DWORD>(GetWindowLongPtrW(hwnd, GWL_EXSTYLE)), GetDpiForWindow(hwnd));
         (void)SetWindowPos(hwnd, nullptr, 0, 0, rect.right - rect.left, rect.bottom - rect.top,
                            SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+        host_window::keep_player_placement(hwnd);
         return 0;
     }
     if (msg == kPlaceWindowMessage) {
@@ -757,6 +856,8 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             const LONG_PTR visible = GetWindowLongPtrW(hwnd, GWL_STYLE) & WS_VISIBLE;
             (void)SetWindowLongPtrW(
                 hwnd, GWL_STYLE, static_cast<LONG_PTR>(placement->style) | visible);
+            // The rect is made for the target monitor's scale already: a scale change on the way is not the player's.
+            s_placing_window = true;
             (void)SetWindowPos(
                 hwnd, placement->borderless ? HWND_TOP : nullptr,
                 placement->rect.left, placement->rect.top,
@@ -764,6 +865,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 placement->rect.bottom - placement->rect.top,
                 SWP_FRAMECHANGED | SWP_NOACTIVATE |
                     (placement->borderless ? 0u : SWP_NOZORDER));
+            s_placing_window = false;
             host_window::borderless_active.store(placement->borderless, std::memory_order_release);
         }
         return 0;
@@ -787,13 +889,9 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         invalidate_pointer_focus_once();
         clear_pointer_buttons();
     }
-    if (msg == WM_EXITSIZEMOVE &&
-        !host_window::borderless_active.load(std::memory_order_acquire)) {
-        // A size the player drags the window to becomes the windowed size.
-        RECT client{};
-        if (GetClientRect(hwnd, &client) && client.right > 0 && client.bottom > 0) {
-            native_settings_window_resized(static_cast<unsigned>(client.right), static_cast<unsigned>(client.bottom));
-        }
+    if (msg == WM_EXITSIZEMOVE) {
+        // Where the player dragged the window to, and its size, become the setting.
+        host_window::keep_player_placement(hwnd);
     }
     if (msg == WM_EXITMENULOOP || msg == WM_EXITSIZEMOVE) {
         (msg == WM_EXITMENULOOP ? s_system_menu_active : host_window::move_size_active)
@@ -1024,10 +1122,15 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_DPICHANGED) {
         // Borderless fills its monitor: only a window takes the rectangle suggested for the new scale.
         const auto* suggested=reinterpret_cast<const RECT*>(lp);
-        if (suggested && !borderless_active.load(std::memory_order_relaxed)) {
+        if (suggested && !borderless_active.load(std::memory_order_relaxed) && !s_placing_window) {
             SetWindowPos(hwnd,nullptr,suggested->left,suggested->top,
                 suggested->right-suggested->left,suggested->bottom-suggested->top,
                 SWP_NOZORDER|SWP_NOACTIVATE);
+            // A new scale with no drag (the system's scale setting): the size it gives is kept. A drag across
+            // monitors is kept as it ends (WM_EXITSIZEMOVE).
+            if (!host_window::move_size_active.load(std::memory_order_acquire)) {
+                host_window::keep_player_placement(hwnd);
+            }
         }
         return 0;
     }
@@ -1510,49 +1613,58 @@ void resize_window_client(unsigned width, unsigned height) noexcept {
 }
 
 // The file picker on its own thread, a COM apartment of its own.
-void pick_files(FilePick kind, std::function<void(std::vector<std::filesystem::path>)> done) {
+void pick_files(FilePick kind, PickDone done) {
     const HWND owner = reinterpret_cast<HWND>(settings_window.load(std::memory_order_acquire));
     std::thread([owner, kind, done = std::move(done)] {
         const HRESULT com = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
         std::vector<std::filesystem::path> files;
         IFileOpenDialog* dialog = nullptr;
-        if (SUCCEEDED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog)))) {
+        // No dialog, or one that would not show (anything but the player's cancel).
+        HRESULT shown = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog));
+        if (SUCCEEDED(shown)) {
+            // The dialog's own words in the host's language (host_text, P-106); the system draws its buttons.
+            const char* const language = galaxy::host_text::language();
+            const auto say = [language](const char* english) {
+                return widen_utf8(galaxy::host_text::translated(english, language));
+            };
+            const std::wstring all = say(galaxy::host_text::kAllFiles);
             DWORD options = 0u;
             dialog->GetOptions(&options);
             options |= FOS_ALLOWMULTISELECT | FOS_FORCEFILESYSTEM;
             if (kind == FilePick::Miis) {
                 // Every kind of Mii file (galaxy::host::read_mii_file); the Mii Studio code as text.
+                const std::wstring name = say(galaxy::host_text::kMiiFiles);
                 const COMDLG_FILTERSPEC filters[] = {
-                    {L"Mii files (Wii, DS, 3DS, Wii U, Switch, Mii Studio, Mii Creator)",
+                    {name.c_str(),
                      L"*.mii;*.rcd;*.rsd;*.mae;*.miigx;*.ncd;*.nsd;*.cfcd;*.cfsd;*.ffcd;*.ffsd;*.charinfo;*.nfsd;*.nfcd;"
                      L"*.mnms;*.emnms;*.miic;*.dat;*.bin;*.txt"},
-                    {L"All files", L"*.*"}};
+                    {all.c_str(), L"*.*"}};
                 dialog->SetFileTypes(2u, filters);
-                dialog->SetTitle(L"Import Miis");
+                dialog->SetTitle(say(galaxy::host_text::kImportMiis).c_str());
                 options |= FOS_FILEMUSTEXIST;
             } else if (kind == FilePick::ModFolders) {
                 options |= FOS_PICKFOLDERS | FOS_PATHMUSTEXIST;
-                dialog->SetTitle(L"Import mod folders");
+                dialog->SetTitle(say(galaxy::host_text::kImportModFolders).c_str());
             } else if (kind == FilePick::Saves) {
-                const COMDLG_FILTERSPEC filters[] = {
-                    {L"Saves (zip, Nebula.sav, GameData.bin, Wii SD data.bin)", L"*.zip;*.sav;*.bin"},
-                    {L"All files", L"*.*"}};
+                const std::wstring name = say(galaxy::host_text::kSaveFiles);
+                const COMDLG_FILTERSPEC filters[] = {{name.c_str(), L"*.zip;*.sav;*.bin"}, {all.c_str(), L"*.*"}};
                 dialog->SetFileTypes(2u, filters);
-                dialog->SetTitle(L"Import saves");
+                dialog->SetTitle(say(galaxy::host_text::kImportSaves).c_str());
                 options &= ~static_cast<DWORD>(FOS_ALLOWMULTISELECT);
                 options |= FOS_FILEMUSTEXIST | FOS_PATHMUSTEXIST;
             } else {
+                const std::wstring name = say(galaxy::host_text::kModFiles);
                 const COMDLG_FILTERSPEC filters[] = {
-                    {L"Mods and texture packs (luma, zip, 7z, rar, tar)",
-                     L"*.luma;*.zip;*.7z;*.rar;*.tar;*.tgz;*.gz;*.txz;*.xz;*.tbz2;*.bz2;*.tzst;*.zst"},
-                    {L"All files", L"*.*"}};
+                    {name.c_str(), L"*.luma;*.zip;*.7z;*.rar;*.tar;*.tgz;*.gz;*.txz;*.xz;*.tbz2;*.bz2;*.tzst;*.zst"},
+                    {all.c_str(), L"*.*"}};
                 dialog->SetFileTypes(2u, filters);
-                dialog->SetTitle(L"Import mods");
+                dialog->SetTitle(say(galaxy::host_text::kImportMods).c_str());
                 options |= FOS_FILEMUSTEXIST | FOS_PATHMUSTEXIST;
             }
             dialog->SetOptions(options);
             IShellItemArray* items = nullptr;
-            if (SUCCEEDED(dialog->Show(owner)) && SUCCEEDED(dialog->GetResults(&items))) {
+            shown = dialog->Show(owner);
+            if (SUCCEEDED(shown) && SUCCEEDED(dialog->GetResults(&items))) {
                 DWORD count = 0u;
                 items->GetCount(&count);
                 for (DWORD i = 0; i < count; ++i) {
@@ -1573,7 +1685,12 @@ void pick_files(FilePick kind, std::function<void(std::vector<std::filesystem::p
         if (SUCCEEDED(com)) {
             CoUninitialize();
         }
-        done(std::move(files));
+        const bool failed = FAILED(shown) && shown != HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        if (failed) {
+            std::cerr << "[window] the file picker did not open: 0x" << std::hex << static_cast<unsigned long>(shown)
+                      << std::dec << '\n';
+        }
+        done(std::move(files), failed);
     }).detach();
 }
 
@@ -1585,11 +1702,13 @@ void save_copy(const std::filesystem::path& file, std::function<void(SaveCopy)> 
         SaveCopy result = SaveCopy::Failed;
         IFileSaveDialog* dialog = nullptr;
         if (SUCCEEDED(CoCreateInstance(CLSID_FileSaveDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog)))) {
-            const COMDLG_FILTERSPEC filters[] = {{L"Zip archive", L"*.zip"}};
+            const char* const language = galaxy::host_text::language();
+            const std::wstring zip = widen_utf8(galaxy::host_text::translated(galaxy::host_text::kZipArchive, language));
+            const COMDLG_FILTERSPEC filters[] = {{zip.c_str(), L"*.zip"}};
             dialog->SetFileTypes(1u, filters);
             dialog->SetDefaultExtension(L"zip");
             dialog->SetFileName(file.filename().c_str());
-            dialog->SetTitle(L"Export saves");
+            dialog->SetTitle(widen_utf8(galaxy::host_text::translated(galaxy::host_text::kExportSaves, language)).c_str());
             DWORD options = 0u;
             dialog->GetOptions(&options);
             dialog->SetOptions(options | FOS_FORCEFILESYSTEM | FOS_OVERWRITEPROMPT | FOS_PATHMUSTEXIST);

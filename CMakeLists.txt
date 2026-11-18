@@ -1,5 +1,16 @@
 cmake_minimum_required(VERSION 3.24)
 project(Nebula VERSION 2.0.0 LANGUAGES C CXX)
+# What the host computes for the game (a stick's position above all) is the same bits on every CPU: no multiply and
+# add is fused into one rounding. Clang fuses them by default on CPUs with a fused multiply-add (arm64, and x86-64 at
+# AVX2): a tablet's stick then differed from a computer's by one ulp, and its replay from the computer's (N-1064). The
+# game module is built the same way (native/CMakeLists.txt). MSVC fuses none at /fp:precise without /fp:contract.
+if(MSVC)
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/clang:-ffp-contract=off>)
+    endif()
+else()
+    add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:-ffp-contract=off>)
+endif()
 
 # The programs' debug information (crash dumps, the profiler): one PDB per program (/Zi), or inside each object (/Z7)
 # when a compiler cache sits in front of the compiler (the push workflow's sccache), which cannot cache a shared PDB.
@@ -10,6 +21,29 @@ else()
     set(NEBULA_MSVC_DEBUG_INFO /Zi)
 endif()
 add_compile_definitions(NEBULA_VERSION="${PROJECT_VERSION}")
+
+# Coverage builds (the gate's long run, tools/gate/coverage.py, N-1042): every program, library and test counts the lines
+# and functions it runs (clang's source-based coverage), each process writing them where LLVM_PROFILE_FILE says when it
+# ends (the host writes its counts itself: native/host/host_main.cpp). Clang-cl only; no optimizing across source files,
+# and warnings stay warnings (clang names some that Microsoft's compiler does not; the gate's MSVC build keeps /WX).
+option(NEBULA_COVERAGE "Count the lines and functions every program runs (clang-cl)" OFF)
+if(NEBULA_COVERAGE)
+    if(NOT (MSVC AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
+        message(FATAL_ERROR "NEBULA_COVERAGE needs clang-cl")
+    endif()
+    add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:-fprofile-instr-generate> $<$<COMPILE_LANGUAGE:C,CXX>:-fcoverage-mapping>)
+    add_compile_definitions(NEBULA_COVERAGE=1)
+    # The profile runtime from the compiler's own resource folder.
+    execute_process(COMMAND "${CMAKE_CXX_COMPILER}" /clang:-print-resource-dir OUTPUT_VARIABLE nebula_clang_resources
+                    OUTPUT_STRIP_TRAILING_WHITESPACE RESULT_VARIABLE nebula_clang_resources_result)
+    set(nebula_profile_runtime "${nebula_clang_resources}/lib/windows/clang_rt.profile-x86_64.lib")
+    if(NOT nebula_clang_resources_result EQUAL 0 OR NOT EXISTS "${nebula_profile_runtime}")
+        message(FATAL_ERROR "NEBULA_COVERAGE: no ${nebula_profile_runtime}")
+    endif()
+    link_libraries("${nebula_profile_runtime}")
+endif()
+# /WX beside /W4 in the targets below, except in a coverage build.
+set(NEBULA_WARNINGS_AS_ERRORS $<$<NOT:$<BOOL:${NEBULA_COVERAGE}>>:/WX>)
 
 # One build: a release and a test run use the same binaries (tools/release_check.ps1 checks the sources and the release).
 # The standard library's bounds checks (array, vector, span, string_view subscripts and the like) in every host build: an
@@ -91,7 +125,7 @@ endif()
 # The host libraries' Release code: no buffer security checks, no RTTI.
 function(galaxy_host_options target)
     if(MSVC)
-        target_compile_options(${target} PRIVATE /GS- /GR- /Oi /favor:INTEL64)
+        target_compile_options(${target} PRIVATE /GS- /GR- /Oi $<$<CXX_COMPILER_ID:MSVC>:/favor:INTEL64>)
     endif()
 endfunction()
 
@@ -194,6 +228,7 @@ add_library(galaxy_native_host STATIC
     runtime/src/strict_json.cpp
     runtime/src/diag_seal.cpp
     runtime/src/crash_report.cpp
+    runtime/src/host_text.cpp
     runtime/src/discord_presence.cpp
     runtime/src/controller_hid.cpp
     runtime/src/switch2_ble_win.cpp
@@ -422,6 +457,7 @@ runtime/src/render/host_window_win32.cpp
     runtime/src/render/texture_pack.cpp
     runtime/src/render/texture_pack_codecs.cpp
     runtime/src/render/movie_playback.cpp
+    runtime/src/render/movie_source_win.cpp
     runtime/src/movie_video.cpp
     runtime/src/render/gpu_texture_backend_d3d12.cpp
     runtime/src/render/gpu_placed_textures.cpp
@@ -459,6 +495,7 @@ runtime/src/render/host_window_win32.cpp
     runtime/src/render/core/pipelines_d3d12.cpp
     runtime/src/frame_telemetry.cpp
     runtime/src/perf_hint.cpp
+    runtime/src/thermal_state.cpp
     runtime/src/pacing.cpp
     runtime/src/pacing_recorder.cpp
 )
@@ -481,7 +518,7 @@ if(GALAXY_STREAMLINE_SDK)
     target_include_directories(galaxy_render SYSTEM PRIVATE "${GALAXY_STREAMLINE_SDK}/include")
     target_compile_definitions(galaxy_render PRIVATE GALAXY_WITH_STREAMLINE=1)
 endif()
-# HD movie replacements decode through Media Foundation (movie_playback.cpp).
+# HD movie replacements decode through Media Foundation (movie_source_win.cpp).
 target_link_libraries(galaxy_render PRIVATE mfplat mfreadwrite mfuuid d3d11)
 # The game window's cloak until its first picture (window_owner.cpp).
 target_link_libraries(galaxy_render PRIVATE dwmapi)
@@ -507,7 +544,7 @@ target_include_directories(galaxy_render
         "${CMAKE_CURRENT_SOURCE_DIR}/native/include"
 )
 if(MSVC)
-    target_compile_options(galaxy_render PRIVATE /GS- /GR- /Oi /favor:INTEL64)
+    target_compile_options(galaxy_render PRIVATE /GS- /GR- /Oi $<$<CXX_COMPILER_ID:MSVC>:/favor:INTEL64>)
 endif()
 
 # The native game's windowed host (native/host): runs the game module that native/CMakeLists.txt builds with clang
@@ -525,7 +562,8 @@ target_compile_features(Nebula PRIVATE cxx_std_20)
 target_link_libraries(Nebula PRIVATE galaxy_render galaxy_save_files galaxy_asset_store dwmapi)
 nebula_agility_runtime(Nebula)
 if(MSVC)
-    # Paths past MAX_PATH (CMake merges a .manifest source into the program's manifest).
+    # The program's identity and the Windows versions it supports, merged into the linker's manifest (which names the
+    # execution level, asInvoker); the DPI and path settings are nebula_game.manifest's.
     target_sources(Nebula PRIVATE native/host/nebula_host.manifest)
     # Symbols for crash dumps and the thread profiler; code generation is unchanged.
     target_compile_options(Nebula PRIVATE ${NEBULA_MSVC_DEBUG_INFO})
@@ -541,7 +579,7 @@ if(NEBULA_TEST_TOOLS)
     add_compile_definitions(NEBULA_TEST_TOOLS=1)
 endif()
 set(nebula_host_ipo_effective OFF)
-if(NEBULA_HOST_IPO)
+if(NEBULA_HOST_IPO AND NOT NEBULA_COVERAGE)
     include(CheckIPOSupported)
     check_ipo_supported(RESULT nebula_host_ipo_supported OUTPUT nebula_host_ipo_error LANGUAGES CXX)
     if(nebula_host_ipo_supported)
@@ -568,10 +606,14 @@ galaxy_test(galaxy_update_tests SOURCES ${rt}/update/update.cpp ${rt}/update/upd
 galaxy_test(galaxy_live_controls_engine_tests SOURCES ${rt}/input/live_controls_engine_tests.cpp LIBS galaxy_native_host)
 galaxy_test(galaxy_input_hotplug_tests SOURCES ${rt}/input/input_hotplug_tests.cpp LIBS galaxy_native_host)
 galaxy_test(galaxy_raw_mouse_win32_tests SOURCES ${rt}/input/raw_mouse_win32_tests.cpp LIBS galaxy_native_host)
+# The HID worker with a pipe standing in for a pad that takes no writes (P-077, P-083).
+galaxy_test(galaxy_controller_hid_tests SOURCES ${rt}/controller_hid_tests.cpp LIBS galaxy_native_host)
 galaxy_test(galaxy_key_positions_win32_tests SOURCES ${rt}/input/key_positions_win32_tests.cpp
     ${rt}/input/key_positions_win32.cpp LIBS user32)
 galaxy_test(galaxy_windows_power_tests SOURCES ${rt}/windows_power_tests.cpp)
 galaxy_test(galaxy_windows_child_tests SOURCES ${rt}/windows_child_tests.cpp)
+# The settings menu's view per page: the same rows on every ask, and an ask's time (P-088).
+galaxy_test(galaxy_native_settings_view_tests SOURCES ${rt}/ui/native_settings_view_tests.cpp LIBS galaxy_render)
 galaxy_test(galaxy_settings_graphics_page_tests SOURCES ${rt}/ui/settings_graphics_page_tests.cpp
     ${rt}/ui/settings_graphics_page.cpp ${rt}/ui/settings_model.cpp LIBS galaxy_render)
 # The HDR calibration's steps, with the renderer library's levels and patterns.
@@ -588,6 +630,12 @@ galaxy_test(galaxy_core_pairing_tests SOURCES ${render_src}/core/pairing_tests.c
     ${render_src}/frame_interpolation.cpp ${render_src}/affine.cpp)
 target_include_directories(galaxy_core_pairing_tests PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src" "${CMAKE_CURRENT_SOURCE_DIR}/native/include")
+# Setup's own code (installer/native): its file helpers and its windows at a changed DPI.
+include(installer/tests/setup_tests.cmake)
+# A frame list let go of with release and taken back with acquire (nebula_frame_list.h, P-005): two threads, so the
+# Linux thread sanitizer job sees the hand-off.
+galaxy_test(galaxy_frame_list_release_tests SOURCES ${render_src}/core/frame_list_release_tests.cpp)
+target_include_directories(galaxy_frame_list_release_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/native/include")
 
 # Additions a build asks for at configure, as a list of CMake files (-DNEBULA_EXTRA_CMAKE=<file>;...), each included
 # here after the product's targets and galaxy_test. A build that passes none builds the product and its unit tests only.
@@ -604,13 +652,16 @@ endforeach()
 # The pictures the mod check reads with the same answers (crates/nebula-import cook/pack_texture.rs).
 target_compile_definitions(galaxy_texture_pack_tests PRIVATE
     NEBULA_PACK_PICTURES="${CMAKE_CURRENT_SOURCE_DIR}/crates/nebula-import/data/pack-pictures")
+# The replacement movie the playback test plays (tests/data/movie, as galaxy_movie_source_tests reads it).
+target_compile_definitions(galaxy_movie_playback_tests PRIVATE
+    NEBULA_MOVIE_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/tests/data/movie/h264_64x64.mp4")
 # The tests compile their own small shaders; the program itself never compiles any.
 target_link_libraries(galaxy_frame_pass_tests PRIVATE d3dcompiler)
 
 if(MSVC)
     foreach(target galaxy_render galaxy_runtime_settings galaxy_atomic_file
             galaxy_host_pointer_events galaxy_native_input galaxy_native_host galaxy_audio_mixer)
-        target_compile_options(${target} PRIVATE /W4 /WX /permissive- /EHsc)
+        target_compile_options(${target} PRIVATE /W4 ${NEBULA_WARNINGS_AS_ERRORS} /permissive- /EHsc)
     endforeach()
 endif()
 
@@ -669,6 +720,7 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/texture_pack.cpp
         runtime/src/render/texture_pack_codecs.cpp
         runtime/src/render/movie_playback.cpp
+        runtime/src/render/movie_source_win.cpp
         runtime/src/movie_video.cpp
         runtime/src/render/frame_pass.cpp
         runtime/src/render/post_process_settings.cpp
@@ -694,6 +746,7 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/streamline_bridge.cpp
         runtime/src/frame_telemetry.cpp
         runtime/src/perf_hint.cpp
+        runtime/src/thermal_state.cpp
         runtime/src/pacing.cpp
         runtime/src/pacing_recorder.cpp
         runtime/src/render/vk/vk_context.cpp
@@ -747,7 +800,7 @@ runtime/src/render/host_window_win32.cpp
             galaxy_runtime_settings
             galaxy_host_pointer_events)
     if(MSVC)
-        target_compile_options(galaxy_render_vk PRIVATE /GS- /GR- /Oi /favor:INTEL64)
+        target_compile_options(galaxy_render_vk PRIVATE /GS- /GR- /Oi $<$<CXX_COMPILER_ID:MSVC>:/favor:INTEL64>)
     endif()
     if(WIN32)
         target_link_libraries(galaxy_render_vk PRIVATE mfplat mfreadwrite mfuuid d3d11 dwmapi)
@@ -812,6 +865,7 @@ if(NEBULA_D3D11)
         runtime/src/render/texture_pack.cpp
         runtime/src/render/texture_pack_codecs.cpp
         runtime/src/render/movie_playback.cpp
+        runtime/src/render/movie_source_win.cpp
         runtime/src/movie_video.cpp
         runtime/src/render/frame_pass.cpp
         runtime/src/render/post_process_settings.cpp
@@ -837,6 +891,7 @@ if(NEBULA_D3D11)
         runtime/src/render/xess_library.cpp
         runtime/src/frame_telemetry.cpp
         runtime/src/perf_hint.cpp
+        runtime/src/thermal_state.cpp
         runtime/src/pacing.cpp
         runtime/src/pacing_recorder.cpp
         runtime/src/render/mod_shaders.cpp
@@ -869,7 +924,8 @@ if(NEBULA_D3D11)
         PRIVATE
             mfplat mfreadwrite mfuuid dwmapi)
     if(MSVC)
-        target_compile_options(galaxy_render_d3d11 PRIVATE /GS- /GR- /Oi /favor:INTEL64 /W4 /WX /permissive- /EHsc)
+        target_compile_options(galaxy_render_d3d11 PRIVATE /GS- /GR- /Oi $<$<CXX_COMPILER_ID:MSVC>:/favor:INTEL64> /W4 ${NEBULA_WARNINGS_AS_ERRORS}
+                               /permissive- /EHsc)
     endif()
 
     add_executable(NebulaD11 native/host/host_main.cpp runtime/src/frame_phase.cpp)

@@ -118,4 +118,14 @@ public:
     Table* mapInfo;
     f32 mMaxVertexDistance;
     KCLFile mModel;  // the view of a cooked file
+#if defined(NEBULA_PLAIN_PATHS)
+    // For a cooked file, made once its prisms are final (calcFarthestVertexDistance): a stamp a prism, so a query
+    // visits a prism once however many blocks list it (P-133). Queries are made on the game thread only.
+    // Corners 1 and 2 are made at each use from the prism's normals (P-134): a cross product and a divide on data the
+    // caller mostly has in cache, cheaper than a read of a table of corners (measured on the benchmark's eight stops:
+    // Triangle::fillData with its getPos calls 6.3 us a step with the arithmetic, 11.0 with a table).
+    u32* mStamps;
+    u32 mStamp;
+    bool beginVisits();
+#endif
 };

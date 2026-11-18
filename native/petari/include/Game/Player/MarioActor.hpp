@@ -205,7 +205,7 @@ public:
     void initBoneMario();
     void swapTextureInit();
     void initBlur();
-    void changeDisplayMode(u8);
+    void changeDisplayMode(u32);
     void initModPowerUpModels();
     void showJointByPlugin(const char* pName, bool show);
     bool isAllHidden() const;
@@ -778,8 +778,9 @@ public:
     ModelHolder* mBoneModel;  // the bone form's model
     u8 mShadowMode;  // the shadow and reflection mode (decideShadowMode)
     u8 mReflectAlpha;  // the reflection's alpha step
-    u8 mCurrModel;
-    u8 mDisplayModel;  // the model shown (changeDisplayMode)
+    // mModels' index: the game's six, then 6 + each mod power-up's slot, as many as the mods register (N-3020).
+    u32 mCurrModel;
+    u32 mDisplayModel;  // the model shown (changeDisplayMode)
     u8 mWallShadeOn;  // the wall shade draws
     ModelHolder* mSimpleModelHolder;  // the shadow model's holder
     PlayerModel* mSimpleModel;  // the shadow model (getSimpleModel)

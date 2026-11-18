@@ -30,6 +30,7 @@
 #include "galaxy/render/present_clock.h"
 #include "galaxy/portable.h"
 #include "galaxy/render/render_core.h"
+#include "galaxy/render/render_queue.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/render/host_window.h"
 #include "galaxy/render/resolution_fit.h"
@@ -72,18 +73,25 @@
 
 namespace galaxy::render {
 
+SamplerFrameBias sampler_frame_bias(const TextureSampler& mode, bool arbitrary, bool authored) noexcept {
+    // Levels drawn by hand show the level the game showed: the frame's lines over the authored lines undo the finer
+    // levels a taller frame picks, and the scene's bias (an upscaler's) is for detail these levels do not hold.
+    if ((min_filter_code(mode) & 3u) == 0u) {
+        return SamplerFrameBias::none;
+    }
+    return arbitrary || authored ? SamplerFrameBias::lines : SamplerFrameBias::scene;
+}
+
 SamplerKey make_sampler_key(const TextureSampler& mode, std::uint32_t mip_levels, float lod_shift, bool arbitrary,
-                            float mip_lines_log2, float scene_bias, bool authored) noexcept {
+                            bool authored) noexcept {
     std::uint32_t min_filter = min_filter_code(mode);
     float min_lod = mode.min_lod, max_lod = mode.max_lod;
     const bool source_mips = (min_filter & 3u) != 0u;
-    // Levels drawn by hand show the level the game showed: the frame's lines over the authored lines undo the finer
-    // levels a taller frame picks, and the scene's bias (an upscaler's) is for detail these levels do not hold.
-    const bool by_hand = source_mips && (arbitrary || authored);
-    float bias = mode.lod_bias + (source_mips && !by_hand ? scene_bias : 0.0f);
+    const bool by_hand = sampler_frame_bias(mode, arbitrary, authored) == SamplerFrameBias::lines;
+    float bias = mode.lod_bias;
     std::uint32_t authored_bit = 0u;
     if (by_hand) {
-        bias += mip_lines_log2 - lod_shift;
+        bias -= lod_shift;
         authored_bit = kSamplerAuthoredLevels;
         if (arbitrary) {
             // A replacement's levels go on past the game's range, filtered between levels.
@@ -113,6 +121,8 @@ std::atomic<unsigned> s_layer_2d_lines{0u};
 
 // lose_gpu_device's request, taken at the renderer's next frame.
 std::atomic<bool> g_lose_device{false};
+// RenderCore::restart_device runs: a new graphics device is being made (device_rebuilding).
+std::atomic<bool> g_device_rebuilding{false};
 
 // Render thread: the game frame of the newest list drawn (NebulaFrameList.game_frame).
 std::uint32_t g_drawn_game_frame = 0u;
@@ -163,6 +173,10 @@ void lose_gpu_device() noexcept {
     g_lose_device.store(true, std::memory_order_release);
 }
 
+bool device_rebuilding() noexcept {
+    return g_device_rebuilding.load(std::memory_order_acquire);
+}
+
 void RenderCore::reset_session_state() {
     // While no producer or render thread runs.
     frame_index_ = 0u;
@@ -179,8 +193,6 @@ bool RenderCore::initialize(int w, int h) {
     }
 
     reset_session_state();
-
-    const RenderConfig cfg = get_render_config();
 
     boot_step("begins");
     // The scene at the window's picture: its exact size, square pixels.
@@ -608,22 +620,18 @@ void RenderCore::render_frame(bool present_swap_chain, bool black) {
             if (stop_render_thread_ || render_thread_error_ != nullptr) {
                 break;
             }
-            const std::size_t queued = queued_render_chunks();
-            if (queued < queue_depth_limit) {
+            const std::uint64_t now = steady_now_ns();
+            const QueuePlace place = queue_place(queued_render_chunks(), queue_depth_limit, stalled_depth_limit,
+                                                 render_work_started_ns_.load(std::memory_order_acquire), now,
+                                                 kRenderStallNs);
+            if (place.take) {
                 break;
             }
-            if (queued >= stalled_depth_limit || render_chunk_started_ns_ == 0u) {
+            if (place.until_ns == 0u) {
                 queue_space_cv_.wait(lock);
-                continue;
+            } else {
+                queue_space_cv_.wait_for(lock, std::chrono::nanoseconds(place.until_ns - now));
             }
-            const std::uint64_t now = static_cast<std::uint64_t>(
-                std::chrono::duration_cast<std::chrono::nanoseconds>(
-                    std::chrono::steady_clock::now().time_since_epoch()).count());
-            const std::uint64_t stalled_at = render_chunk_started_ns_ + kRenderStallNs;
-            if (now >= stalled_at) {
-                break;
-            }
-            queue_space_cv_.wait_for(lock, std::chrono::nanoseconds(stalled_at - now));
         }
         if (render_thread_error_ != nullptr) {
             // Rethrow the render thread's failure here rather than leave a frozen display.
@@ -638,6 +646,16 @@ void RenderCore::render_frame(bool present_swap_chain, bool black) {
     }
     queue_cv_.notify_one();
     galaxy::timeline::record(galaxy::timeline::Event::SubmitEnd, 0u, 0u);
+}
+
+void RenderCore::render_work_begins() noexcept {
+    render_work_started_ns_.store(steady_now_ns(), std::memory_order_release);
+    galaxy::host::perf_hint_busy(true);
+}
+
+void RenderCore::render_work_ends() noexcept {
+    render_work_started_ns_.store(0u, std::memory_order_release);
+    galaxy::host::perf_hint_busy(false);
 }
 
 void RenderCore::finish_pictures_here() {
@@ -1265,7 +1283,6 @@ void RenderCore::advance_interp_sequence(bool flush) {
                 ++interp_failed_;
             }
             ++sequence.next;
-            // Rates that are not multiples of 60 rarely present real frames.
             report_interp_stats();
             return;
         }
@@ -1594,7 +1611,7 @@ void RenderCore::drop_device_state() {
             }
         }
         frame_queue_.clear();
-        render_chunk_started_ns_ = 0u;
+        render_work_started_ns_.store(0u, std::memory_order_release);
         queue_space_cv_.notify_all();
     }
     if (in_hand_list_ != nullptr) {
@@ -1670,15 +1687,35 @@ bool RenderCore::restart_renderer(const FrameMap& frame, bool same_card) {
 bool RenderCore::restart_device() {
     device_lost_ = false;
     const std::int64_t started = galaxy::qpc_now();
+    g_device_rebuilding.store(true, std::memory_order_release);
+    struct Steps {
+        std::int64_t waited = 0, pipelines = 0, textures = 0, rest = 0, device = 0, starts = 0;
+    } steps;
+    struct RebuildMark {
+        ~RebuildMark() { g_device_rebuilding.store(false, std::memory_order_release); }
+    } rebuild_mark;
     try {
         std::unique_lock<std::shared_mutex> rebuilding = device_gate_.begin_rebuild();
+        if (const std::uint32_t delay = galaxy::extensions::device_rebuild_delay_ms(); delay != 0u) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(delay));  // a test's slow driver
+        }
         const FrameMap frame = renderer_.frame_map();
+        std::int64_t mark = started;
+        const auto lap = [&](std::int64_t& ms) {
+            const std::int64_t now = galaxy::qpc_now();
+            ms = (now - mark) * 1000 / galaxy::qpc_frequency();
+            mark = now;
+        };
+        lap(steps.waited);
         pipelines_.shutdown();
+        lap(steps.pipelines);
         movie_playback_.shutdown();
         texture_store_.shutdown();
+        lap(steps.textures);
         registries_.lose_device();
         display_pictures_.shutdown();
         drop_device_state();
+        lap(steps.rest);
 
         // The driver takes a moment to come back.
         constexpr unsigned kTries = 5u;
@@ -1689,6 +1726,7 @@ bool RenderCore::restart_device() {
             }
             back = restart_renderer(frame, attempt + 1u != kTries);
         }
+        lap(steps.device);
         if (!back || !display_pictures_.initialize(renderer_.device(), frame)) {
             throw std::runtime_error("[render] no device came back: DEVICE_LOST");
         }
@@ -1697,6 +1735,7 @@ bool RenderCore::restart_device() {
         registries_.restart(renderer_.device());
         pipelines_.initialize(renderer_.device(), renderer_.pipeline_root(), renderer_.pipeline_backend());
         cap_texture_packs();
+        lap(steps.starts);
         device_gate_.end_rebuild(rebuilding);
     } catch (...) {
         device_gate_.give_up();
@@ -1706,7 +1745,11 @@ bool RenderCore::restart_device() {
         queue_space_cv_.notify_all();
         return false;
     }
-    std::cerr << "[render] a new device in " << (galaxy::qpc_now() - started) * 1000 / galaxy::qpc_frequency() << " ms\n";
+    // Each step's time, so a slow restore names the step that took it (N-1072).
+    std::cerr << "[render] a new device in " << (galaxy::qpc_now() - started) * 1000 / galaxy::qpc_frequency()
+              << " ms (the gate " << steps.waited << ", pipeline workers stopped " << steps.pipelines << ", movies and textures "
+              << steps.textures << ", the rest " << steps.rest << ", the device " << steps.device << ", started again "
+              << steps.starts << ")\n";
     if (asked_loss_frame_ != 0u) {
         std::cerr << "[gpu] recovered from the device loss asked at frame " << asked_loss_frame_ << " (rendering goes on)\n";
         asked_loss_frame_ = 0u;
@@ -1715,7 +1758,7 @@ bool RenderCore::restart_device() {
 }
 
 void RenderCore::render_loop() {
-    // Called with queue_mutex_ held.
+    // A failure ends the queued utilities' waits; the caller holds queue_mutex_.
     const auto fail_queued_utilities = [&](std::exception_ptr error) {
         if (bear_device_loss(error)) {
             device_lost_ = true;
@@ -1766,13 +1809,9 @@ void RenderCore::render_loop() {
         }
         FrameChunk chunk;
         bool have_chunk = false;
-        bool idle_present = false;
         bool overlay_idle = false;
         {
             std::unique_lock<std::mutex> lock(queue_mutex_);
-            const RenderConfig cfg = get_render_config();
-            idle_present = !hidden && !background && cfg.frame_rate_decouple &&
-                (cfg.vsync_interval != 0u || presented_max_fps(cfg) > 0.0f);
             const bool poll_probes = !probe_flights_.empty();
             // Draining for a stop, out of sight or behind another window: queued frames present without generated frames.
             interp_stopping_ = stop_render_thread_ || hidden || background;
@@ -1813,7 +1852,7 @@ void RenderCore::render_loop() {
                     interp_wait_until(due);
                     lock.lock();
                 }
-            } else if (idle_present || poll_probes) {
+            } else if (poll_probes) {
                 // Fences are polled at the top of the loop, outside queue_mutex_:
                 // park for at most 1 ms, woken early by new work or a stop.
                 queue_cv_.wait_for(lock, std::chrono::milliseconds(1), [this] {
@@ -1842,14 +1881,19 @@ void RenderCore::render_loop() {
             };
             if (interp_sequence_.active && !stop_render_thread_ &&
                 (frame_queue_.empty() || due_slot_first())) {
+                // An interpolation step walks a list too (its draw.native calls among it): work the producer may
+                // run ahead of when it holds the thread.
+                render_work_begins();
                 lock.unlock();
                 try {
                     advance_interp_sequence(false);
                 } catch (...) {
+                    render_work_ends();
                     std::lock_guard<std::mutex> relock(queue_mutex_);
                     fail_queued_utilities(std::current_exception());
                     break;
                 }
+                render_work_ends();
                 continue;
             }
             if (frame_queue_.empty()) {
@@ -1877,19 +1921,21 @@ void RenderCore::render_loop() {
                     chunk.present_asked_qpc = present.present_asked_qpc;
                     chunk.step_moment_qpc = present.step_moment_qpc;
                 }
+                render_work_begins();
                 if (chunk.present_only) {
                     ++present_chunks_in_flight_;
                 } else {
                     galaxy::timeline::record(galaxy::timeline::Event::RenderBegin, 0u, 0u);
-                    render_chunk_started_ns_ = static_cast<std::uint64_t>(
-                        std::chrono::duration_cast<std::chrono::nanoseconds>(
-                            std::chrono::steady_clock::now().time_since_epoch()).count());
                     ++render_chunks_in_flight_;
                 }
                 have_chunk = true;
             }
         }
 
+        // A present of the latest picture again is work too (a chunk's began as it was taken).
+        if (!have_chunk && overlay_idle) {
+            render_work_begins();
+        }
         try {
             if (have_chunk) {
                 queue_space_cv_.notify_all();
@@ -1898,7 +1944,7 @@ void RenderCore::render_loop() {
                     if (chunk.black) {
                         supersede_interp_sequence();
                         interp_list_waiting_ = false;
-                        present_cached_display_on_thread(true, false);
+                        present_cached_display_on_thread(true);
                     } else if (interp_list_waiting_) {
                         supersede_interp_sequence();
                         interp_list_waiting_ = false;
@@ -1909,7 +1955,7 @@ void RenderCore::render_loop() {
                     } else if (!interp_sequence_.active) {
                         cached_present_asked_qpc_ = chunk.present_asked_qpc;
                         cached_present_step_qpc_ = chunk.step_moment_qpc;
-                        present_cached_display_on_thread(false, false);
+                        present_cached_display_on_thread(false);
                     } else {
                         ++interp_present_skipped_;
                     }
@@ -1920,20 +1966,18 @@ void RenderCore::render_loop() {
                     render_frame_on_thread(chunk);
                     run_pending_interp_start();
                 }
-            } else if (idle_present) {
-                present_latest_frame_on_thread();
             } else if (overlay_idle) {
                 // A due slot presents again the picture last presented (never a newer one between the game's own
                 // presents) unless a present of the game's own landed in it.
                 const std::int64_t now = galaxy::qpc_now();
                 if (interp_slot_unbounded_) {
                     // No slot clock (an unlimited rate): again as soon as the last present is done.
-                    present_cached_display_on_thread(false, false, false,
+                    present_cached_display_on_thread(false, false,
                                                      last_presented_slot_.load(std::memory_order_relaxed));
                     overlay_idle_due_qpc_ = now;
                 } else if (now >= overlay_idle_due_qpc_) {
                     if (renderer_.last_present_qpc() < overlay_idle_due_qpc_ - interp_slot_period_qpc_) {
-                        present_cached_display_on_thread(false, false, false,
+                        present_cached_display_on_thread(false, false,
                                                      last_presented_slot_.load(std::memory_order_relaxed));
                     }
                     overlay_idle_due_qpc_ += interp_slot_period_qpc_;
@@ -1958,6 +2002,7 @@ void RenderCore::render_loop() {
             break;
         }
 
+        render_work_ends();
         if (have_chunk && chunk.present_only) {
             std::lock_guard<std::mutex> lock(queue_mutex_);
             if (present_chunks_in_flight_ != 0u) {
@@ -1966,7 +2011,6 @@ void RenderCore::render_loop() {
             queue_space_cv_.notify_all();
         } else if (have_chunk) {
             std::lock_guard<std::mutex> lock(queue_mutex_);
-            render_chunk_started_ns_ = 0u;
             if (render_chunks_in_flight_ != 0u) {
                 --render_chunks_in_flight_;
             }
@@ -1988,12 +2032,26 @@ void RenderCore::render_loop() {
 std::uint32_t RenderCore::screen_probe_results(std::uint32_t channel, ScreenProbe* probes, std::uint32_t capacity,
                                                std::uint32_t game_frame) {
     std::unique_lock lock(probe_answers_lock_);
-    if (!probe_book_.ready(game_frame) &&
-        !probe_answers_cv_.wait_for(lock, std::chrono::seconds(2), [&] { return probe_book_.ready(game_frame); }) &&
-        probe_waits_logged_ < 4u) {
-        ++probe_waits_logged_;
-        std::fprintf(stderr, "[render] frame %u: the probes of frame %u were not back within 2 s; the answers before them are used\n",
-                     game_frame, probe_book_.oldest_pending());
+    const std::uint64_t deadline = steady_now_ns() + kProbeWaitNs;
+    while (!probe_book_.ready(game_frame)) {
+        const std::uint64_t now = steady_now_ns();
+        const ProbeWait wait = probe_wait(now, deadline, native_call_started_ns_.load(std::memory_order_acquire), kRenderStallNs);
+        if (wait == ProbeWait::Wait) {
+            // Woken by answers; looked at again a stall time on, when a draw.native call may have held the thread that long.
+            probe_answers_cv_.wait_for(lock, std::chrono::nanoseconds(std::min(deadline - now, kRenderStallNs)));
+            continue;
+        }
+        if (probe_waits_logged_ < 4u) {
+            ++probe_waits_logged_;
+            if (wait == ProbeWait::Held) {
+                std::fprintf(stderr, "[render] frame %u: a draw.native function holds the render thread; the answers before frame %u's probes are used\n",
+                             game_frame, probe_book_.oldest_pending());
+            } else {
+                std::fprintf(stderr, "[render] frame %u: the probes of frame %u were not back within 2 s; the answers before them are used\n",
+                             game_frame, probe_book_.oldest_pending());
+            }
+        }
+        break;
     }
     return probe_book_.answers(channel, game_frame, probes, capacity);
 }
@@ -2061,14 +2119,14 @@ void RenderCore::present_black_picture(bool in_frame) {
     }
     const std::string snapshot_path = present_snapshot_path(NEBULA_EXT_PICTURE_GAME);
     if (!snapshot_path.empty()) {
-        renderer_.set_debug_capture_paths({}, snapshot_path);
+        renderer_.set_debug_capture_paths(snapshot_path);
     }
     if (!in_frame) {
         renderer_.begin_frame();
     }
     renderer_.present(layout, !snapshot_path.empty(), true);
     if (!snapshot_path.empty()) {
-        renderer_.set_debug_capture_paths({}, {});
+        renderer_.set_debug_capture_paths({});
     }
     if (!in_frame) {
         renderer_.end_frame();
@@ -2078,13 +2136,8 @@ void RenderCore::present_black_picture(bool in_frame) {
     last_presented_picture_.store(~std::uint64_t{0}, std::memory_order_relaxed);
 }
 
-void RenderCore::present_latest_frame_on_thread() {
-    present_cached_display_on_thread(false, true, false);
-}
-
 void RenderCore::present_cached_display_on_thread(
     bool black,
-    bool sleep_if_missing,
     bool count_game_display_present,
     std::optional<std::uint32_t> slot) {
     const std::int64_t asked = std::exchange(cached_present_asked_qpc_, 0);
@@ -2098,9 +2151,6 @@ void RenderCore::present_cached_display_on_thread(
     black_shown_ = false;
     const DisplayTexture* selected = slot ? display_pictures_.picture(*slot) : display_pictures_.latest();
     if (selected == nullptr) {
-        if (sleep_if_missing) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        }
         return;
     }
     const bool duplicate_stamp =
@@ -2119,7 +2169,7 @@ void RenderCore::present_cached_display_on_thread(
     }
     const std::string snapshot_path = !count_game_display_present ? std::string{} : present_snapshot_path(duplicate_stamp ? NEBULA_EXT_PICTURE_REPEAT : NEBULA_EXT_PICTURE_GAME);
     if (!snapshot_path.empty()) {
-        renderer_.set_debug_capture_paths({}, snapshot_path);
+        renderer_.set_debug_capture_paths(snapshot_path);
     }
     const bool game_frame_only =
         interp_on_ && count_game_display_present && !interp_presenting_real_ && !duplicate_stamp;
@@ -2136,7 +2186,7 @@ void RenderCore::present_cached_display_on_thread(
     // render frames only; otherwise render-then-present would age pictures twice per frame.
     (void)renderer_.present(selected, !snapshot_path.empty());
     if (!snapshot_path.empty()) {
-        renderer_.set_debug_capture_paths({}, {});
+        renderer_.set_debug_capture_paths({});
     }
     renderer_.end_frame();
     galaxy::pacing::drop_description();
@@ -2325,7 +2375,6 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
     }
     display_pictures_.begin_frame(renderer_.frame_slot(), kFramesInFlight);
     texture_store_.begin_frame(renderer_.frame_slot(), kFramesInFlight);
-    texture_store_.follow_settings(render);
     enforce_video_memory();
     // New textures upload through this frame's command list.
     renderer_.attach_texture_uploads(texture_store_);
@@ -2551,11 +2600,11 @@ void RenderCore::walk_frame(ListEntry& entry, const core::WalkTime& time, bool p
     const std::string snapshot_path = selected != nullptr ? present_snapshot_path(real ? NEBULA_EXT_PICTURE_GAME : NEBULA_EXT_PICTURE_GENERATED) : std::string{};
     if (selected != nullptr) {
         if (!snapshot_path.empty()) {
-            renderer_.set_debug_capture_paths({}, snapshot_path);
+            renderer_.set_debug_capture_paths(snapshot_path);
         }
         renderer_.present(selected, !snapshot_path.empty());
         if (!snapshot_path.empty()) {
-            renderer_.set_debug_capture_paths({}, {});
+            renderer_.set_debug_capture_paths({});
         }
     }
     (void)renderer_.end_frame(
@@ -2608,6 +2657,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         const double rate = present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, renderer_.display_refresh_hz());
         interp_on_ = renderer_.interpolation_mode();
         const unsigned frames = interp_on_ ? interpolated_frames_per_game_frame(rate) : 0u;
+        g_in_between_on.store(frames != 0u, std::memory_order_relaxed);
         if (frames != interp_frames_) {
             interp_frames_ = frames;
             restart_interp_governors();
@@ -2688,7 +2738,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     if (present_swap_chain) {
         const std::string snapshot_path = present_snapshot_path(duplicate_display_present ? NEBULA_EXT_PICTURE_REPEAT : NEBULA_EXT_PICTURE_GAME);
         if (!snapshot_path.empty()) {
-            renderer_.set_debug_capture_paths({}, snapshot_path);
+            renderer_.set_debug_capture_paths(snapshot_path);
         }
         {
             const std::int64_t asked = chunk.present_asked_qpc != 0 ? chunk.present_asked_qpc : galaxy::qpc_now();
@@ -2697,7 +2747,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         }
         renderer_.present(selected_display, !snapshot_path.empty());
         if (!snapshot_path.empty()) {
-            renderer_.set_debug_capture_paths({}, {});
+            renderer_.set_debug_capture_paths({});
         }
     } else if (present_black) {
         present_black_picture(true);

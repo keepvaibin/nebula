@@ -34,3 +34,16 @@ void PointGravity::updateMtx(const Pos3f& rMtx) {
     // World position of the zone-local point.
     rMtx.mult(mOrigPosition, mTranslation);
 }
+
+#if defined(NEBULA_PLAIN_PATHS)
+bool PointGravity::calcBound(Vec3f* pCenter, f32* pRadius) const {
+    f32 room;
+    if (!rangeRoom(&room)) {
+        return false;
+    }
+
+    *pCenter = mTranslation;
+    *pRadius = room;
+    return true;
+}
+#endif

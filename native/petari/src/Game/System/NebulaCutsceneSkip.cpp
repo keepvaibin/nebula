@@ -1,5 +1,6 @@
 #include "Game/System/NebulaCutsceneSkip.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
+#include "Game/System/NebulaCutsceneSkipBound.hpp"
 #include "Game/System/Arenas.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include <nebula_module.h>
@@ -45,7 +46,6 @@ namespace {
     const u32 cStepBudgetMicros = 9000;   // the extra steps' share of a frame, in microseconds of wall time (not of play)
     const s32 cStepsPerFrameMax = 40;
     const s32 cStallSteps = NebulaFrameClock::stepsOfSeconds(10);          // a demo's clock held this long waits on the player: the skip ends there
-    const u32 cSkipMaxMicros = 15000000;  // a skip that has not ended by then shows the game as it is
 
     // The demos + skips, by their time sheets; EscapeDriverApr only in the launch star lessons.
     const char* const cSkippableSheets[] = {
@@ -84,11 +84,10 @@ namespace {
     bool sMovieSkip = false;
     bool sEndRequested = false;
     s32 sQuietFrames = 0;
-    s32 sSteps = 0;
+    NebulaCutsceneSkipBound sBound;  // a skip that has not ended by then shows the game as it is
     s32 sFadeFrames = 0;
     s32 sFrameSteps = 0;
     s64 sFrameStart = 0;  // NebulaClock
-    s64 sSkipStart = 0;
 
     bool isGameSceneRunning() {
         GameSystem* pSystem = SingletonHolder< GameSystem >::get();
@@ -240,7 +239,7 @@ namespace {
         MR::openSystemWipeFade();
         mute(false);
         silenceSe(false);
-        nebula_log("cutscene skip: done after %d steps (%s)\n", sSteps, pWhy);
+        nebula_log("cutscene skip: done after %d steps, %.1f s (%s)\n", sBound.steps(), (double)sBound.wallSeconds(), pWhy);
     }
 };  // namespace
 
@@ -327,7 +326,6 @@ namespace NebulaCutsceneSkip {
                 break;
             }
             sState = State_Skipping;
-            sSteps = 0;
             sQuietFrames = 0;
             sFrameSteps = 0;
             sEndRequested = false;
@@ -335,12 +333,11 @@ namespace NebulaCutsceneSkip {
             sStallSteps = 0;
             sMovieSkip = MR::isActiveMoviePlayer();
             sSkipDemo = !sMovieSkip;
-            sSkipStart = NebulaClock::nowNs();
+            sBound.begin(NebulaClock::nowNs());
             silenceSe(true);
             report("skipping");
             break;
         case State_Skipping: {
-            sSteps++;
             const char* pEnd = nullptr;
             if (sEndRequested) {
                 pEnd = "a question";
@@ -348,10 +345,15 @@ namespace NebulaCutsceneSkip {
                 pEnd = "the scene ended";
             } else if (GameSequenceFunction::isActiveSaveDataHandleSequence()) {
                 pEnd = "a save";
-            } else if ((NebulaClock::nowNs() - sSkipStart) / 1000 >= cSkipMaxMicros) {
-                pEnd = "time";
-            } else if (sSkipDemo && isStalled()) {
-                pEnd = "waits on the player";
+            } else {
+                // The stall check first: it also says whether the scene's time sheet moved in this step.
+                const bool stalled = sSkipDemo && isStalled();
+                const bool sheetMoved = sSkipDemo && sStallExecutor != nullptr && sStallSteps == 0;
+                if (sBound.step(NebulaClock::nowNs(), sheetMoved)) {
+                    pEnd = "three minutes of play with no time sheet moving";
+                } else if (stalled) {
+                    pEnd = "waits on the player";
+                }
             }
             if (pEnd != nullptr) {
                 report("ends");

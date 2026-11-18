@@ -91,8 +91,12 @@ namespace integration {
 // Shortcuts and registry entries for `version` (a portable copy: none). Shortcuts that could not be written are
 // returned, not thrown: Nebula runs without them.
 std::vector<wstring> Register(const InstallLayout& layout, const wstring& version, bool desktop);
-// Switches back to the kept previous version, with the game files it reads; returns it. A refusal changes nothing.
-wstring Rollback(const InstallLayout& layout);
+// Switches back to the kept previous version, with the game files it reads. A refusal changes nothing.
+struct Restored {
+    wstring version;
+    std::vector<wstring> shortcutFailures;  // as Register returns them: the version is restored all the same
+};
+Restored Rollback(const InstallLayout& layout);
 // Removes the program; saves, settings and caches stay unless asked.
 void Uninstall(const InstallLayout& layout, bool removeUserData);
 // The temporary copy's part of an uninstall: once Setup (process `setupProcess`) has ended, its copy in the install

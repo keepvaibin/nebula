@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The compiled programs' file, linked into the program. Written by tools/dev/compile_programs.py:
-//   "NBPROG03", vertex rows u32, pixel rows u32, the interface (40 hexadecimal digits), padding to 64 bytes;
+//   "NBPROG04", vertex rows u32, pixel rows u32, the interface (40 hexadecimal digits), padding to 64 bytes;
 //   rows sorted by id within each stage: id u64, flags u32, coords u32 (a written vertex program's texture coordinate
-//   inputs, 0 for others), then per stored variant (kProgramStored: the variants, a pixel program's bound-table
-//   forms, then its ray tracing forms) offset u32 and size u32.
+//   inputs, 0 for others), then per stored variant (kProgramStored: the variants, then a pixel program's bound-table
+//   forms) offset u32 and size u32.
 #include "galaxy/render/program_table.h"
 
 #include "galaxy/launch_args.h"
@@ -34,7 +34,6 @@ namespace {
 
 constexpr std::uint32_t kReadsWorld = 1u;
 constexpr std::uint32_t kLit = 2u;
-constexpr std::uint32_t kSumsKey = 4u;
 
 struct Row {
     std::uint64_t id;
@@ -62,7 +61,7 @@ Blob open_blob() noexcept {
     Blob blob;
     try {
         if (dev_shader_file("programs.bin", g_dev_programs)) {
-            if (g_dev_programs.size() >= 64u && std::memcmp(g_dev_programs.data(), "NBPROG03", 8u) == 0) {
+            if (g_dev_programs.size() >= 64u && std::memcmp(g_dev_programs.data(), "NBPROG04", 8u) == 0) {
                 blob.bytes = g_dev_programs.data();
                 std::fprintf(stderr, "[dev-shaders] programs from dev/programs.bin (%zu bytes, interface %.40s)\n",
                              g_dev_programs.size(), reinterpret_cast<const char*>(g_dev_programs.data() + 16u));
@@ -85,7 +84,7 @@ Blob open_blob() noexcept {
     blob.bytes = nebula_programs_begin;
 #endif
     }
-    if (blob.bytes == nullptr || std::memcmp(blob.bytes, "NBPROG03", 8u) != 0) {
+    if (blob.bytes == nullptr || std::memcmp(blob.bytes, "NBPROG04", 8u) != 0) {
         blob.bytes = nullptr;
         return blob;
     }

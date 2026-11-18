@@ -46,13 +46,9 @@ DXBC_TABLE = ["NEBULA_BOUND_TABLES", "NEBULA_TABLE_SLOTS=16"]
 # A Vulkan device without descriptor indexing reads each pixel program's bound-table form (program.hlsli
 # NEBULA_BOUND_TABLES): stored at the variant + BOUND_OFFSET, STORED variants to a row (core/program_table.h).
 BOUND_OFFSET = 5
-STORED = 16
+STORED = 10
 READS_WORLD = 1
 LIT = 2
-SUMS_KEY = 4  # a pixel program that sums its light set's first light: light_term or enh_add_light of light 0
-# A written material that sums the game's lights (native_material.hlsli NATIVE_LIT): its pixel program sums its key
-# (SUMS_KEY).
-WRITTEN_LIT = re.compile(r"^\s*#\s*define\s+NATIVE_LIT\s+1", re.M)
 
 
 def native_coords(path):
@@ -235,9 +231,7 @@ def main():
             if (name == "sample" and "discard" not in text) or not kept(name):
                 continue
             add(stage, row, source, text, entry, defines, index)
-        flags[(stage, row)] = (LIT if "program_lit.hlsli" in text else 0) | (
-            SUMS_KEY if (re.search(r"(light_term|enh_add_light|pbr_add_light)\(i\.lit_light, 0u", text) and "TRACED_UNKEYED;" not in text)
-            or WRITTEN_LIT.search(text) else 0)
+        flags[(stage, row)] = LIT if "program_lit.hlsli" in text else 0
 
     for number, name in enumerate(WRITTEN, 1):
         source = os.path.join(MATERIALS, name + ".hlsl")
@@ -377,7 +371,7 @@ def main():
     identity = hashlib.sha256(b"".join(packed) + b"".join(digests)).digest()[:8]
     if identity == b"\0" * 8:
         identity = b"\0" * 7 + b"\1"
-    head = b"NBPROG03" + struct.pack("<II", len(vertex), len(pixel)) + interface.encode() + identity
+    head = b"NBPROG04" + struct.pack("<II", len(vertex), len(pixel)) + interface.encode() + identity
     blob = head + b"".join(packed) + b"".join(chunks)
     temp = out + ".tmp"
     with open(temp, "wb") as f:

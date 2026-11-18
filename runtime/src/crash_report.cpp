@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/crash_report.h"
 
+#include "galaxy/host_text.h"
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -159,8 +161,8 @@ Report classify(const Facts& facts) noexcept {
     }
     if (running && gpu_lost(text)) {
         set(r, "NEB-G01", "The graphics card stopped responding",
-            "Update the graphics driver. If it happens again, turn off ray tracing and frame generation or lower the "
-            "internal resolution.");
+            "Update the graphics driver. If it happens again, turn off frame generation or lower the internal "
+            "resolution.");
         put(r.detail, sizeof(r.detail), "The graphics driver reset the graphics card while the game was running.");
         return r;
     }
@@ -263,22 +265,6 @@ Report classify(const Facts& facts) noexcept {
     return r;
 }
 
-namespace {
-#include "crash_text_table.inc"
-}  // namespace
-
-std::string_view translated(std::string_view english, std::string_view language) noexcept {
-    std::size_t column = std::size(kLanguages);
-    for (std::size_t i = 0; i < std::size(kLanguages); ++i) {
-        if (language == kLanguages[i]) column = i;
-    }
-    if (column == std::size(kLanguages)) return english;
-    for (const auto& row : kRows) {
-        if (english == row[0]) return row[column][0] != '\0' ? std::string_view(row[column]) : english;
-    }
-    return english;
-}
-
 std::string translated_report(std::string_view report, std::string_view language) {
     std::string out;
     while (!report.empty()) {
@@ -290,7 +276,7 @@ std::string translated_report(std::string_view report, std::string_view language
             out += line.substr(0, code + 2u);
             line.remove_prefix(code + 2u);
         }
-        out += translated(line, language);
+        out += galaxy::host_text::translated(line, language);
         if (end < std::string_view::npos && !report.empty()) out += '\n';
     }
     return out;

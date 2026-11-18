@@ -33,8 +33,8 @@ public:
     u32 mType;
     Vec3f mPosition;
     f32 mRadius;
-    u32 mSensorCount;
-    u32 mGroupSize;
+    u32 mSensorCount;  // the sensors it touches this step, in mSensors
+    u32 mGroupSize;    // the room of mSensors (grows, P-148); 0: the sensor is in no group
     HitSensor** mSensors;
     SensorGroup* mSensorGroup;
     bool mValidBySystem;

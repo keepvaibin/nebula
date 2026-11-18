@@ -131,7 +131,6 @@ void plan_early_probes(const NebulaFrameList& list, const Lookup& lookup, std::v
     const auto keeps_depth = [&](const NebulaFramePass& pass) {
         switch (pass.kind) {
         case NEBULA_PASS_PROBE:
-        case NEBULA_PASS_TRACED_DRAW:  // draws nothing
             return true;
         case NEBULA_PASS_CLEAR:
             return pass.layer == NEBULA_LAYER_TARGET || (pass.clear_channels & 4u) == 0u;
@@ -213,7 +212,7 @@ void plan_late_depth_clears(const NebulaFrameList& list, const Lookup& lookup, s
                 break;  // the whole depth again
             } else if (pass.kind == NEBULA_PASS_DRAW) {
                 late = leaves_depth(pass);
-            } else if (pass.kind != NEBULA_PASS_CLEAR && pass.kind != NEBULA_PASS_SHOW && pass.kind != NEBULA_PASS_TRACED_DRAW) {
+            } else if (pass.kind != NEBULA_PASS_CLEAR && pass.kind != NEBULA_PASS_SHOW) {
                 late = false;
             }
         }

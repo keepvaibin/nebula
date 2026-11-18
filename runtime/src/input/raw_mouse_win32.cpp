@@ -9,6 +9,9 @@ namespace galaxy::host {
 namespace {
 std::atomic<HWND> registered_window{nullptr};
 galaxy::input::RawMouseAccumulator motion;
+// Only the window thread publishes; clear() comes from it too.
+galaxy::input::AbsoluteMouseTracker absolute;
+bool virtual_desktop = false;
 bool own_window(HWND window) noexcept {
     DWORD process = 0;
     const DWORD thread = GetWindowThreadProcessId(window, &process);
@@ -23,9 +26,11 @@ std::optional<galaxy::input::RawMouseMotion> decode_native_raw_mouse(std::span<c
     std::memcpy(&input, packet.data(), required);
     if (input.header.dwType != RIM_TYPEMOUSE || input.header.dwSize < required ||
         input.header.dwSize > packet.size() || input.header.wParam != RIM_INPUT) return std::nullopt;
-    // Absolute tablets/remote desktops already use the exact client-coordinate channel.
-    if ((input.data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE) != 0) return galaxy::input::RawMouseMotion{};
     const auto& mouse = input.data.mouse;
+    // Remote Desktop, virtual machines and pen tablets report positions; publish turns them into motion.
+    if ((mouse.usFlags & MOUSE_MOVE_ABSOLUTE) != 0) {
+        return galaxy::input::RawMouseMotion{mouse.lLastX, mouse.lLastY, false, true};
+    }
     return galaxy::input::RawMouseMotion{mouse.lLastX, mouse.lLastY, mouse.lLastX != 0 || mouse.lLastY != 0};
 }
 
@@ -38,6 +43,7 @@ bool install_native_raw_mouse(std::uintptr_t window) noexcept {
     const RAWINPUTDEVICE device{0x01, 0x02, 0, hwnd};
     if (!RegisterRawInputDevices(&device, 1, sizeof(device))) return false;
     motion.clear();
+    absolute.reset();
     registered_window.store(hwnd, std::memory_order_release);
     return true;
 }
@@ -53,16 +59,31 @@ void remove_native_raw_mouse(std::uintptr_t window) noexcept {
 void publish_native_raw_mouse(std::uintptr_t window, std::uintptr_t input_handle) noexcept {
     const auto hwnd = reinterpret_cast<HWND>(window);
     if (registered_window.load(std::memory_order_acquire) != hwnd || !own_window(hwnd) ||
-        GetForegroundWindow() != hwnd) return;
+        GetForegroundWindow() != hwnd) {
+        absolute.reset();  // positions seen again later do not count the way the pointer went meanwhile
+        return;
+    }
     RAWINPUT input{};
     UINT size = sizeof(input);
     const UINT copied = GetRawInputData(reinterpret_cast<HRAWINPUT>(input_handle), RID_INPUT,
                                         &input, &size, sizeof(RAWINPUTHEADER));
     if (copied == UINT(-1) || copied > sizeof(input)) return;
     const auto decoded = decode_native_raw_mouse({reinterpret_cast<const std::byte*>(&input), copied});
+    if (decoded && decoded->absolute) {
+        const bool desktop = (input.data.mouse.usFlags & MOUSE_VIRTUAL_DESKTOP) != 0;
+        if (desktop != virtual_desktop) absolute.reset();
+        virtual_desktop = desktop;
+        const auto step = absolute.step(decoded->x, decoded->y, GetSystemMetrics(desktop ? SM_CXVIRTUALSCREEN : SM_CXSCREEN),
+                                        GetSystemMetrics(desktop ? SM_CYVIRTUALSCREEN : SM_CYSCREEN));
+        if (step.moved) motion.relative(static_cast<std::int32_t>(step.x), static_cast<std::int32_t>(step.y));
+        return;
+    }
     if (decoded && decoded->moved)
         motion.relative(static_cast<std::int32_t>(decoded->x), static_cast<std::int32_t>(decoded->y));
 }
-void clear_native_raw_mouse() noexcept { motion.clear(); }
+void clear_native_raw_mouse() noexcept {
+    motion.clear();
+    absolute.reset();
+}
 galaxy::input::RawMouseMotion sample_native_raw_mouse() noexcept { return motion.sample(); }
 }  // namespace galaxy::host

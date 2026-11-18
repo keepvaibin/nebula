@@ -66,15 +66,23 @@ namespace {
         return aLength == bLength && memcmp(pA, pB, aLength) == 0;
     }
 
-    // Whether the terminated text pA is the `bLength` bytes of pB (a terminated text of that length). Stops at the first
-    // difference: most of the table's ids differ in their first characters, and find asks for every row.
-    bool sameTerminated(const char* pA, const char* pB, s32 bLength) {
-        for (s32 i = 0; i < bLength; i++) {
-            if (pA[i] != pB[i]) {
-                return false;
+    // The table's row for `pId`, or null. tools/nebula_text.py writes the rows in byte order of their ids.
+    const NebulaTextRow* findRow(const char* pId) {
+        u32 low = 0;
+        u32 high = sizeof(cNebulaTextRows) / sizeof(cNebulaTextRows[0]);
+        while (low < high) {
+            const u32 middle = low + (high - low) / 2;
+            const s32 order = std::strcmp(cNebulaTextRows[middle].mId, pId);
+            if (order == 0) {
+                return &cNebulaTextRows[middle];
+            }
+            if (order < 0) {
+                low = middle + 1;
+            } else {
+                high = middle;
             }
         }
-        return pA[bLength] == 0;
+        return nullptr;
     }
 
     s32 findColumn(const char* pLanguage, s32 length) {
@@ -259,21 +267,18 @@ namespace {
                 return &sText[sOverrides[i].mText];
             }
         }
-        for (u32 i = 0; i < sizeof(cNebulaTextRows) / sizeof(cNebulaTextRows[0]); i++) {
-            const NebulaTextRow& rRow = cNebulaTextRows[i];
-            if (!sameTerminated(rRow.mId, pId, idLength)) {
-                continue;
-            }
-            if (rRow.mText[sColumn] != nullptr) {
-                return rRow.mText[sColumn];
-            }
-            const s32 sister = getSister(sColumn);
-            if (sister >= 0 && rRow.mText[sister] != nullptr) {
-                return rRow.mText[sister];
-            }
-            return rRow.mText[0];
+        const NebulaTextRow* pRow = findRow(pId);
+        if (pRow == nullptr) {
+            return nullptr;
         }
-        return nullptr;
+        if (pRow->mText[sColumn] != nullptr) {
+            return pRow->mText[sColumn];
+        }
+        const s32 sister = getSister(sColumn);
+        if (sister >= 0 && pRow->mText[sister] != nullptr) {
+            return pRow->mText[sister];
+        }
+        return pRow->mText[0];
     }
 
     // wcsncmp would read 32-bit units on Linux and Android (the game's char16_t is 16-bit, -fshort-wchar).
@@ -287,17 +292,21 @@ namespace {
     }
 
     // Where a text is expanded to: the first `mCapacity` units of mDst, the last kept for the terminator; with no mDst
-    // only counted.
+    // only counted; with mGrow, that buffer, grown as the text comes (every unit fits).
     struct Sink {
         char16_t* mDst;
         s32 mCapacity;
         s32 mLength;
+        MR::GrowBuffer< char16_t >* mGrow;
 
         bool fits(s32 units) const {
-            return mDst == nullptr || mLength + units < mCapacity;
+            return mDst == nullptr || mGrow != nullptr || mLength + units < mCapacity;
         }
 
         void put(char16_t unit) {
+            if (mGrow != nullptr) {
+                mDst = mGrow->room(static_cast< u32 >(mLength) + 2u);  // the unit and the terminator
+            }
             if (mDst != nullptr) {
                 mDst[mLength] = unit;
             }
@@ -392,7 +401,7 @@ namespace {
 
     // The units get gives for `pId` with room for all of them.
     s32 measure(const char* pId) {
-        Sink sink = {nullptr, 0, 0};
+        Sink sink = {nullptr, 0, 0, nullptr};
         expand(&sink, pId);
         return sink.mLength;
     }
@@ -408,7 +417,7 @@ namespace NebulaText {
         if (capacity <= 0) {
             return 0;
         }
-        Sink sink = {pDst, capacity, 0};
+        Sink sink = {pDst, capacity, 0, nullptr};
         expand(&sink, pId);
         pDst[sink.mLength] = 0;
         return sink.mLength;
@@ -419,18 +428,15 @@ namespace NebulaText {
     }
 
     const char16_t* english(const char* pId) {
-        const s32 idLength = lengthOf(pId);
-        for (u32 i = 0; i < sizeof(cNebulaTextRows) / sizeof(cNebulaTextRows[0]); i++) {
-            if (sameTerminated(cNebulaTextRows[i].mId, pId, idLength)) {
-                return cNebulaTextRows[i].mText[0];
-            }
-        }
-        return nullptr;
+        const NebulaTextRow* pRow = findRow(pId);
+        return pRow != nullptr ? pRow->mText[0] : nullptr;
     }
 
     const char16_t* get(MR::GrowBuffer< char16_t >* pText, const char* pId) {
-        const s32 units = measure(pId) + 1;
-        get(pText->room(units), units, pId);
+        // One pass: the buffer grows as the text is written.
+        Sink sink = {nullptr, 0, 0, pText};
+        expand(&sink, pId);
+        pText->room(static_cast< u32 >(sink.mLength) + 1u)[sink.mLength] = 0;
         return pText->mItems;
     }
 

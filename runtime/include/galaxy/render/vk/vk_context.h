@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <volk.h>
 
+#include "galaxy/render/video_memory_reading.h"
 #include "galaxy/render/vk/device_quirks_vk.h"
 #include "galaxy/render/vk/shader_compile_vk.h"
 
@@ -334,10 +335,8 @@ private:
     bool bc_textures_ = false;
     bool astc_textures_ = false;
     bool memory_budget_ = false;
-    // device_memory_budget's last read of the driver's figures (VK_EXT_memory_budget): at most every 100 ms; render thread.
-    mutable std::int64_t memory_read_ms_ = 0;
-    mutable std::uint64_t memory_usage_ = 0u;
-    mutable std::uint64_t memory_budget_bytes_ = 0u;
+    // device_memory_budget's read of the driver's figures (VK_EXT_memory_budget; video_memory_reading.h); render thread.
+    mutable galaxy::render::VideoMemoryReading memory_reading_;
     bool display_timing_ = false;  // VK_GOOGLE_display_timing
     bool present_wait_ = false;             // VK_KHR_present_wait and present_id, enabled
     bool present_timing_ = false;           // VK_EXT_present_timing, present_id2 and present_wait2, enabled

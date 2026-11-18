@@ -580,6 +580,10 @@ final class TouchControlsView extends View {
             arrangeEvent(event);
             return true;
         }
+        // A mouse is the game's: SDL's surface under this view makes its buttons and motion the game's (P-102).
+        if (ControlsRules.mouseEvent(event.getToolType(0), event.getSource())) {
+            return false;
+        }
         final int action = event.getActionMasked();
         switch (action) {
         case MotionEvent.ACTION_DOWN:

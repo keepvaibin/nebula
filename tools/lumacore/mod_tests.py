@@ -593,6 +593,75 @@ def built_in(program):
     return None
 
 
+# The tree's paths the pinned LumaLink builds from (its nebula/): Nebula's workspace files, the two crates, the text
+# table luma-validate's build script reads, and what nebula-import compiles in (include_bytes and include_str: the
+# placeholder, the shader headers and program table, the store version). A build that reads any other tree path
+# fails (check_nebula_inputs; a file missing from the copy fails the compile, which names it).
+NEBULA_INPUTS = ("Cargo.toml", "Cargo.lock", "crates/nebula-import", "crates/luma-validate", "localization/NebulaText.tsv",
+                 "data/placeholder", "runtime/include/galaxy/store_version.inc", "runtime/src/render/materials",
+                 "runtime/src/render/programs/table.tsv")
+
+
+def sync_by_content(tree, folder, paths=NEBULA_INPUTS):
+    """Makes `folder` hold `paths` of `tree` (files or folders, recursively), writing a file only when its bytes differ
+    and removing what the tree no longer has, so a file's time changes only with its content (cargo's freshness).
+    Returns the number of files written or removed."""
+    import shutil
+    changed = 0
+    wanted = set()
+    for rel in paths:
+        source = tree / rel
+        items = [source] if source.is_file() else sorted(f for f in source.rglob("*") if f.is_file()) if source.is_dir() else []
+        for f in items:
+            if "target" in f.relative_to(tree).parts:
+                continue
+            r = f.relative_to(tree)
+            wanted.add(r)
+            dest = folder / r
+            data = f.read_bytes()
+            if dest.is_file() and dest.read_bytes() == data:
+                continue
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(data)
+            changed += 1
+    if folder.is_dir():
+        for f in sorted(folder.rglob("*")):
+            r = f.relative_to(folder)
+            if f.is_file() and r not in wanted and "target" not in r.parts:
+                f.unlink()
+                changed += 1
+    for d in sorted((d for d in folder.rglob("*") if d.is_dir()), reverse=True) if folder.is_dir() else []:
+        if "target" not in d.relative_to(folder).parts and not any(d.iterdir()):
+            shutil.rmtree(d, ignore_errors=True)
+    return changed
+
+
+def check_nebula_inputs(cache, paths=NEBULA_INPUTS):
+    """The tree paths the last build read (dep-info and build scripts' rerun-if-changed), each inside `paths`: None, or
+    the first one outside them (the copy would then go stale where the tree changes)."""
+    import os.path
+    import re
+    target = cache / "target" / "release"
+    nebula = os.path.normcase(os.path.abspath(cache / "nebula"))
+    read = set()
+    for f in list(target.glob("deps/*.d")) + list(target.glob("build/*/output")):
+        text = f.read_text(encoding="utf-8", errors="replace")
+        if f.suffix == ".d":
+            for line in text.splitlines():
+                head, _, rest = line.partition(": ")
+                read.update(re.split(r"(?<!\\) ", rest.strip()) if rest else [])
+        else:
+            read.update(l.split("=", 1)[1] for l in text.splitlines() if l.startswith("cargo:rerun-if-changed="))
+    allowed = [os.path.normcase(os.path.abspath(cache / "nebula" / r)) for r in paths]
+    for r in sorted(read):
+        if not r:
+            continue
+        a = os.path.normcase(os.path.abspath(r if os.path.isabs(r) else cache / r))
+        if a.startswith(nebula + os.sep) and not any(a == x or a.startswith(x + os.sep) for x in allowed):
+            return a
+    return None
+
+
 def pinned_lumalink(cache):
     """The lumalink program built from the pinned LumaLink commit in `cache` (fetched there when it is not), and the
     checkout: (program, checkout). The checkout is reset to the pin each time; its target/ stays for the next build."""
@@ -614,28 +683,35 @@ def pinned_lumalink(cache):
     if git("cat-file", "-e", pin + "^{commit}", check=False).returncode != 0:
         print("mod_tests: fetching LumaLink %s from %s" % (pin[:9], repo), flush=True)
         git("fetch", "-q", "--depth", "1", "origin", pin)
-    # nebula/: LumaLink builds Nebula's validator and cooker from it (its README, "Building"); here it is a link to
-    # this tree, so the pinned LumaLink checks mods as the tree under test does. The link goes before the clean, so
-    # the clean never walks into this tree, and comes back after it.
+    # nebula/: LumaLink builds Nebula's validator and cooker from it (its README, "Building"); here it holds this
+    # tree's copy of the paths it builds from (NEBULA_INPUTS), written only where the bytes differ, so the pinned
+    # LumaLink checks mods as the tree under test does and cargo, which goes by file times, rebuilds only when they
+    # change (a link to the tree rebuilt all five crates at each gate: git rewrites the text table's time; N-1070).
+    # The clean keeps nebula/ and target/.
     link = cache / "nebula"
     if link.is_symlink() or (hasattr(link, "is_junction") and link.is_junction()):
         os.rmdir(link) if os.name == "nt" else link.unlink()
-    elif link.exists():
-        raise SystemExit("%s is a folder, not a link to a Nebula tree: move it away" % link)
     git("checkout", "-q", "--force", "--detach", pin)
-    git("clean", "-q", "-d", "-f", "-x", "-e", "target/")
-    if os.name == "nt":
-        r = subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(TREE)], capture_output=True, text=True)
-        if r.returncode != 0:
-            raise SystemExit("linking %s to %s failed: %s" % (link, TREE, (r.stderr or r.stdout).strip()))
-    else:
-        link.symlink_to(TREE, target_is_directory=True)
+    git("clean", "-q", "-d", "-f", "-x", "-e", "target/", "-e", "nebula/")
+    written = sync_by_content(TREE, link)
+    print("mod_tests: nebula/ of the pinned LumaLink: %d files written or removed" % written, flush=True)
     exe = cache / "target" / "release" / ("lumalink.exe" if os.name == "nt" else "lumalink")
-    print("mod_tests: building LumaLink %s (cargo build --release -p lumalink)" % pin[:9], flush=True)
-    r = subprocess.run(["cargo", "build", "--release", "--locked", "-p", "lumalink"], cwd=str(cache),
+    # The whole workspace with its tests, as the gate's lumalink check (cargo test --workspace) builds it: one feature
+    # set, so neither build undoes the other's (-p lumalink alone resolved other features, and each of the two
+    # rebuilt nebula-import, lumalink-core and lumalink at every gate; N-1070).
+    print("mod_tests: building LumaLink %s (cargo build --release --workspace --all-targets)" % pin[:9], flush=True)
+    r = subprocess.run(["cargo", "build", "--release", "--locked", "--workspace", "--all-targets"], cwd=str(cache),
                        capture_output=True, text=True)
     if r.returncode != 0 or not exe.is_file():
-        raise SystemExit("building the pinned LumaLink failed: %s" % (r.stderr or r.stdout).strip()[-800:])
+        text = (r.stderr or r.stdout).strip()
+        missing = "couldn't read `nebula" in text
+        raise SystemExit("building the pinned LumaLink failed%s: %s" % (
+            " (it reads a tree path its nebula/ copy does not hold: add it to mod_tests.NEBULA_INPUTS)" if missing else "",
+            text[-800:]))
+    outside = check_nebula_inputs(cache)
+    if outside is not None:
+        raise SystemExit("the pinned LumaLink's build read %s, a tree path its nebula/ copy does not hold: add it to "
+                         "mod_tests.NEBULA_INPUTS" % outside)
     return exe, cache
 
 

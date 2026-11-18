@@ -16,6 +16,7 @@
 #include "Game/Player/MarioConst.hpp"
 #include "Game/Player/MarioEffect.hpp"
 #include "Game/Player/MarioHolder.hpp"
+#include "Game/Player/MarioLife.hpp"
 #include "Game/Player/MarioMessenger.hpp"
 #include "Game/Player/MarioNullBck.hpp"
 #include "Game/Player/MarioParts.hpp"
@@ -51,6 +52,7 @@
 #include "Game/System/GameRules.hpp"
 #include "Game/System/LumaCore.hpp"
 #include "Game/System/LumaDrawView.hpp"
+#include "Game/Util/FrameCount.hpp"
 
 namespace {
     // The air the player has under water (8).
@@ -962,7 +964,7 @@ void MarioActor::controlMain() {
     updateControllerSwingLeft();
     update2D();
     if (mPreWipeOn) {
-        mPreWipeTimer++;
+        MR::countUp(mPreWipeTimer);
     }
 
     if (!isEnableMoveMario()) {
@@ -1222,9 +1224,9 @@ void MarioActor::updateSwingAction() {
 
         if (!isPunching()) {
             if (mSpinTicoTimer) {
-                mSpinTicoTimer += 0x96;
+                MR::countUp(mSpinTicoTimer, 0x96);
             } else {
-                mSpinTicoTimer += 0x12c;
+                MR::countUp(mSpinTicoTimer, 0x12c);
             }
         }
 
@@ -1533,15 +1535,7 @@ void MarioActor::incLife(u32 amt) {
 
 void MarioActor::changeMaxLife(s32 max) {
     mMaxHealth = max;
-    while (mHealth != max) {
-        if (mHealth > max) {
-            decLife(0);
-        } else if (mHealth < max) {
-            incLife(1);
-        } else {
-            break;
-        }
-    }
+    MR::stepHealthTo(*this, static_cast< u32 >(max));
 }
 
 bool MarioActor::doPressing() {
@@ -2716,9 +2710,7 @@ void MarioActor::setPress(u8 kind, s32 frames) {
         mPressTimer = 1000;
     }
 
-    for (u32 idx = 0; idx < 6; idx++) {
-        decLife(0);
-    }
+    MR::loseHealthToPress(*this);
 
     if (!mExtra) {
         MR::startStarPointerModeDemoMarioDeath(this);

@@ -360,3 +360,28 @@ void CubeGravity::updateMtx(const Pos3f& rMtx) {
     mPosition.getZDir(dir);
     lenZ = dir.length();
 }
+
+#if defined(NEBULA_PLAIN_PATHS)
+// A face, edge or corner of the box (half sides lenX, lenY, lenZ along the matrix's directions) and the range past it.
+// Only for a box with square corners, as the regions are found along each direction alone.
+bool CubeGravity::calcBound(Vec3f* pCenter, f32* pRadius) const {
+    f32 room;
+    if (!rangeRoom(&room)) {
+        return false;
+    }
+
+    Vec3f dirX, dirY, dirZ;
+    mPosition.getXDir(dirX);
+    mPosition.getYDir(dirY);
+    mPosition.getZDir(dirZ);
+    const f32 square = 1.0e-4f;
+    if (!(MR::abs(dirX.dot(dirY)) <= square * lenX * lenY) || !(MR::abs(dirY.dot(dirZ)) <= square * lenY * lenZ) ||
+        !(MR::abs(dirZ.dot(dirX)) <= square * lenZ * lenX)) {
+        return false;
+    }
+
+    mPosition.getTrans(*pCenter);
+    *pRadius = MR::sqrt(lenX * lenX + lenY * lenY + lenZ * lenZ) + room;
+    return true;
+}
+#endif

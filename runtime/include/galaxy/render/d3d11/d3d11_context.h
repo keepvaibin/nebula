@@ -124,11 +124,18 @@ struct RenderLayout {
     unsigned max_samples = 1u;
 };
 
+// Whether an adapter with `dedicated_bytes` of video memory of its own (DXGI_ADAPTER_DESC1::DedicatedVideoMemory) shares
+// the system's memory: an integrated GPU reserves at most a few hundred megabytes, WARP none.
+[[nodiscard]] constexpr bool unified_memory(std::uint64_t dedicated_bytes) noexcept {
+    return dedicated_bytes < (std::uint64_t{512} << 20u);
+}
+
 struct DeviceCaps {
     D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_11_0;
     bool tearing = false;               // DXGI_FEATURE_PRESENT_ALLOW_TEARING
     bool flip_model = false;            // DXGI 1.4+: FLIP_DISCARD swap chains
     bool unified_memory = false;        // the adapter has no video memory of its own (DXGI: DedicatedVideoMemory small)
+    bool no_overwrite_constants = false;  // a dynamic constant buffer can be mapped NO_OVERWRITE (D3D11.1 options)
     unsigned max_samples = 1u;          // the most samples a pixel the scene's formats take (MSAA)
     std::uint64_t dedicated_bytes = 0u;
     std::uint32_t vendor = 0u;
@@ -215,6 +222,7 @@ private:
     std::string failure_;
     std::mutex buffers_mutex_;
     std::vector<Buffer*> upload_buffers_;  // every buffer with a system-memory copy
+    std::vector<void*> written_pages_;     // upload_written's page list, made once (P-064)
     std::array<std::atomic<AddressPage*>, kAddressIds / kAddressPageSize> address_pages_{};
     std::mutex address_mutex_;
     std::vector<std::uint32_t> free_address_ids_;

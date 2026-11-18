@@ -389,7 +389,7 @@ private:
         info.layout = layout;
         info.renderPass = pass;
         VkPipeline pipeline = VK_NULL_HANDLE;
-        if (vkCreateGraphicsPipelines(device_, VK_NULL_HANDLE, 1u, &info, nullptr, &pipeline) != VK_SUCCESS) {
+        if (vkCreateGraphicsPipelines(device_, shared_pipeline_cache(), 1u, &info, nullptr, &pipeline) != VK_SUCCESS) {
             std::cerr << "[sgsr2] " << entry << " pipeline failed\n";
             return VK_NULL_HANDLE;
         }

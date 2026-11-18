@@ -62,6 +62,10 @@ class LauncherActivity : ComponentActivity() {
     /** "Open with Nebula" and Share to Nebula (the manifest's filters): the files go where a drop would. A nebula://
      *  link (6.1's import by link) only brings Nebula to the front until net.internet ships. */
     private fun opened(intent: Intent?) {
+        if (intent?.action == ACTION_RESTART) {
+            model.restartGame(this, IntentCompat.getParcelableExtra(intent, EXTRA_GAME_EXTRAS, Bundle::class.java))
+            return
+        }
         val uris: List<Uri> = when (intent?.action) {
             Intent.ACTION_VIEW -> listOfNotNull(intent.data).filter { it.scheme != "nebula" }
             Intent.ACTION_SEND -> listOfNotNull(IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java))
@@ -91,5 +95,12 @@ class LauncherActivity : ComponentActivity() {
             .putExtra(Intent.EXTRA_SUBJECT, getString(R.string.LogSubject))
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         startActivity(Intent.createChooser(send, getString(R.string.ShareGameLog)))
+    }
+
+    companion object {
+        /** The game's Restart (GameActivity.restartGame): start it again from here (LauncherModel.restartGame). */
+        const val ACTION_RESTART = "dev.nebula.galaxy.RESTART"
+        /** The restarted run's extras: the ended run's. */
+        const val EXTRA_GAME_EXTRAS = "nebula.gameExtras"
     }
 }

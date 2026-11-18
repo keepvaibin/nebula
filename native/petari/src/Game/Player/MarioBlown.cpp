@@ -5,6 +5,7 @@
 #include "Game/Player/MarioConst.hpp"
 #include "Game/Player/MarioState.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/FrameCount.hpp"
 
 bool Mario::blown(const Vec3f& rVec) {
     if (getCurrentStatus() == MarioStatus_Blown) {
@@ -60,7 +61,7 @@ bool MarioBlown::start() {
 }
 
 bool MarioBlown::update() {
-    mTimer++;
+    MR::countUp(mTimer);
 
     if (getPlayerMode() == PlayerMode_Teresa) {
         return false;

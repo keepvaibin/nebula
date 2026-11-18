@@ -75,5 +75,9 @@ struct DeviceQuirks {
 [[nodiscard]] std::string describe(const DeviceQuirks& quirks);
 // What a pipeline-cache file is valid for: the device, its driver build and the driver's cache UUID.
 [[nodiscard]] std::string driver_key(const DeviceIdentity& identity);
+// The Vulkan version the memory allocator (VMA) is told: the lower of the instance's and the device's, major and minor
+// only, from 1.0 to 1.3 (the newest Nebula asks an instance for). VMA takes newer core paths by it (1.3's
+// vkGetDeviceBufferMemoryRequirements, 1.2's core buffer addresses), so it is never higher than both have.
+[[nodiscard]] std::uint32_t allocator_api_version(std::uint32_t instance_version, std::uint32_t device_version) noexcept;
 
 }  // namespace galaxy::render::vk

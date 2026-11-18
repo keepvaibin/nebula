@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package dev.nebula.galaxy
 
-import android.app.ActivityManager
 import android.content.Context
 import android.net.Uri
 import android.os.Build
@@ -153,13 +152,9 @@ object GpuDrivers {
     fun failedStart(context: Context): String? {
         val driver = selected(context) ?: return null
         val starting = File(driver.folder, STARTING)
-        if (!starting.isFile || gameRunning(context)) return null
+        if (!starting.isFile || SaveTransfer.gameRunning(context)) return null
         starting.delete()
         select(context, null)
         return driver.name
     }
-
-    private fun gameRunning(context: Context): Boolean =
-        context.getSystemService(ActivityManager::class.java).runningAppProcesses
-            ?.any { it.processName == context.packageName + ":game" } == true
 }

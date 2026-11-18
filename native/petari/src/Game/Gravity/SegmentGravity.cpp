@@ -69,6 +69,22 @@ void SegmentGravity::updateMtx(const Pos3f& rMtx) {
     MR::separateScalarAndDirection(&mAxisLength, &mAxis, mAxis);
 }
 
+#if defined(NEBULA_PLAIN_PATHS)
+// The point of attraction is on the axis from the first point, between the hemisphere extensions' ends and the points.
+bool SegmentGravity::calcBound(Vec3f* pCenter, f32* pRadius) const {
+    f32 room;
+    if (!rangeRoom(&room)) {
+        return false;
+    }
+
+    const f32 low = mHemisphereExtension[0] < 0.0f ? mHemisphereExtension[0] : 0.0f;
+    const f32 high = mHemisphereExtension[1] < 0.0f ? mAxisLength - mHemisphereExtension[1] : mAxisLength;
+    *pCenter = mWorldGravityPoints[0] + mAxis * (0.5f * (low + high));
+    *pRadius = 0.5f * MR::abs(high - low) + room;
+    return true;
+}
+#endif
+
 void SegmentGravity::setGravityPoint(u32 index, const Vec3f& rGravityPoint) {
     mGravityPoints[index != 0] = rGravityPoint;
     updateLocalParam();
@@ -87,6 +103,9 @@ void SegmentGravity::setValidSideDegree(f32 validSideDegree) {
 
 void SegmentGravity::setEdgeValid(u32 index, bool isValid) {
     mEdges[index != 0] = isValid;
+#if defined(NEBULA_PLAIN_PATHS)
+    refreshBound();
+#endif
 }
 
 void SegmentGravity::updateLocalParam() {

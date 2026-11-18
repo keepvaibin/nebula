@@ -8,6 +8,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <span>
@@ -52,8 +53,9 @@ class Link {
 public:
     virtual ~Link() = default;
     [[nodiscard]] virtual const Calibration& calibration() const noexcept = 0;
-    // `event`, a Windows event, is set when a report arrives or the link is lost.
-    virtual void set_event(void* event) noexcept = 0;
+    // `signal` is called (on the link's thread) when a report arrives or the link is lost, and at once if one waits;
+    // an empty one stops the calls. It returns once a call running now has ended.
+    virtual void set_signal(std::function<void()> signal) noexcept = 0;
     [[nodiscard]] virtual bool next_report(std::array<std::uint8_t, 64>& report) noexcept = 0;
     [[nodiscard]] virtual bool lost() const noexcept = 0;
     virtual void send_motor(std::span<const std::uint8_t, kMotorBytes> value) noexcept = 0;

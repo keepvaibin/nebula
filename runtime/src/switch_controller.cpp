@@ -30,12 +30,6 @@ void fill_invalid(StickAxisCal& axis) noexcept {
 // Physical reach is below the calibrated extent; full output arrives at 75%.
 constexpr float kSwitchStickReach = 0.75f;
 
-float apply_deadzone(float value, float deadzone) noexcept {
-    const float magnitude = std::fabs(value);
-    if (magnitude <= deadzone) return 0.0f;
-    const float scaled = std::min((magnitude - deadzone) / std::max(1.0f - deadzone, 1e-3f), 1.0f);
-    return value < 0.0f ? -scaled : scaled;
-}
 
 constexpr std::array<std::uint8_t, 8> kNeutralRumble{0x00, 0x01, 0x40, 0x40, 0x00, 0x01, 0x40, 0x40};
 
@@ -210,7 +204,7 @@ bool decode_pro_report(std::span<const std::uint8_t> r, const ImuCal& cal, Decod
 }
 
 PadSample pad_sample_from(const DecodedState& state, ControlScheme scheme, const StickCal& left,
-                          const StickCal& right, float stick_deadzone, float pointer_deadzone) noexcept {
+                          const StickCal& right) noexcept {
     PadSample sample{};
     sample.connected = true;
     sample.scheme = scheme;
@@ -231,10 +225,7 @@ PadSample pad_sample_from(const DecodedState& state, ControlScheme scheme, const
         sticks[2] = normalize_stick(state.stick_raw[2], right.x);
         sticks[3] = normalize_stick(state.stick_raw[3], right.y);
     }
-    sample.axes[0] = apply_deadzone(sticks[0], stick_deadzone);
-    sample.axes[1] = apply_deadzone(sticks[1], stick_deadzone);
-    sample.axes[2] = apply_deadzone(sticks[2], pointer_deadzone);
-    sample.axes[3] = apply_deadzone(sticks[3], pointer_deadzone);
+    std::copy_n(sticks.begin(), 4, sample.axes.begin());
     if (!state.normalized) {
         sample.axes[4] = state.left_trigger ? 1.0f : 0.0f;
         sample.axes[5] = state.right_trigger ? 1.0f : 0.0f;

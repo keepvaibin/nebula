@@ -6,6 +6,7 @@
 #include "galaxy/controller_roster.h"
 #include "galaxy/generic_hid.h"
 #include "galaxy/input_bindings.h"
+#include "galaxy/pointer_control.h"
 #include "galaxy/playstation_controller.h"
 #include "galaxy/rumble.h"
 #include "galaxy/simple_pads.h"
@@ -783,14 +784,20 @@ void test_pad_sample() {
     r[2] = 128;
     r[8] = 64;
     const Decoded decoded = decode(ps::Model::DualShock4, ps::Transport::Usb, r);
-    const PadSample sample = switch_hid::pad_sample_from(decoded.state, ControlScheme::PlayStation, {}, {}, 0.1f, 0.2f);
+    SchemeTuning tuning{};
+    tuning.stick_deadzone = 0.1f;
+    tuning.pointer_deadzone = 0.2f;
+    PadSample sample = switch_hid::pad_sample_from(decoded.state, ControlScheme::PlayStation, {}, {});
+    shape_pad_sticks(sample, tuning);
     expect(sample.connected && sample.scheme == ControlScheme::PlayStation, "pad sample scheme");
     expect(close_to(sample.axes[0], 1.0f) && sample.axes[1] == 0.0f, "dead zone applies to the normalised sticks");
     expect(close_to(sample.axes[4], 64.0f / 255.0f) && sample.axes[5] == 0.0f, "triggers pass through");
     r[3] = 128 + 15;  // 11.8 percent: inside the 0.2 pointer dead zone
     const Decoded small = decode(ps::Model::DualShock4, ps::Transport::Usb, r);
-    expect(switch_hid::pad_sample_from(small.state, ControlScheme::PlayStation, {}, {}, 0.1f, 0.2f).axes[2] == 0.0f,
-           "the pointer stick has its own dead zone");
+    PadSample small_sample = switch_hid::pad_sample_from(small.state, ControlScheme::PlayStation, {}, {});
+    expect(small_sample.axes[2] != 0.0f, "the sample carries the stick with no dead zone");
+    shape_pad_sticks(small_sample, tuning);
+    expect(small_sample.axes[2] == 0.0f && small_sample.axes[3] == 0.0f, "the pointer stick has its own dead zone");
 }
 
 ControllerInfo controller(ControlScheme scheme, std::uint32_t slot, ControllerLink link, const char* model) {
@@ -961,7 +968,7 @@ void test_generic() {
     gh::map_report(four_way, hat_raw, state);
     expect(state.buttons == 0u, "a hat value below its range is centred");
 
-    const PadSample sample = switch_hid::pad_sample_from(state, ControlScheme::Generic, {}, {}, 0.15f, 0.15f);
+    const PadSample sample = switch_hid::pad_sample_from(state, ControlScheme::Generic, {}, {});
     expect(sample.scheme == ControlScheme::Generic && sample.connected, "generic pads become pad samples");
 
     // Bindings: the scheme, its names and defaults.

@@ -16,4 +16,9 @@ namespace MR {
     // pDst may also be an argument at the same position (the game appends to a text that way).
     int formatText(char16_t* pDst, size_t length, const char16_t* pFormat, ...);
     int formatTextV(char16_t* pDst, size_t length, const char16_t* pFormat, va_list args);
+
+    // UTF-8 (a host's text) as the game's UTF-16 text, at pDst, which has room for one unit per byte of pSrc and the
+    // terminator; the units without it. A character past U+FFFF is a surrogate pair; each broken sequence is one
+    // U+FFFD, as the Encoding Standard decodes. A null pDst only counts.
+    size_t utf8ToText(char16_t* pDst, const char* pSrc);
 }  // namespace MR

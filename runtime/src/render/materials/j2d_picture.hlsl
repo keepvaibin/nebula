@@ -27,7 +27,7 @@ float4 material_color(NativeVaryings i) {
     float4 c = float4(t0.rgb, (alphas & 1u) != 0u ? t0.a : 1.0);
     [unroll] for (uint s = 1u; s < 4u; ++s) {
         if (s < count) {
-            const float4 ts = TEX(s).Sample(SAMP(s), uv);
+            const float4 ts = SAMPLE_MAP(s, uv);
             const float ta = ((alphas >> s) & 1u) != 0u ? ts.a : 1.0;
             const float kc = s == 1u ? material.konst_color.a : s == 2u ? material.konst_color.b : material.konst_color.g;
             const float ka = s == 1u ? material.konst_alpha.a : s == 2u ? material.konst_alpha.b : material.konst_alpha.g;

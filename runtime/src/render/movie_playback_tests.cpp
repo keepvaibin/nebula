@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// HD movie replacements: the planes' layout, the JPEG YCbCr of known colours and the file lookup.
+// HD movie replacements: the planes' layout, the JPEG YCbCr of known colours, the file lookup, and a replacement
+// played through the system's decoder and the decoder thread (NEBULA_MOVIE_FIXTURE, tests/data/movie/h264_64x64.mp4).
 
 #include "galaxy/render/movie_playback.h"
 #include "galaxy/test_temp.h"
 
+#include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -11,6 +13,7 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #if defined(_WIN32)
@@ -144,6 +147,71 @@ void test_find() {
     std::filesystem::remove_all(root);
 }
 
+// The fixture (64x64, 30 frames at 30 fps, 0-14 red, 15-29 blue) as PrologueA's replacement: the frames the game
+// names, decoded ahead on the decoder thread, in JPEG's YCbCr of red (Y 76 Cb 85 Cr 255) and blue (Y 29 Cb 255 Cr 107),
+// then a jump back to the start (a restart) seeks there.
+void test_replacement() {
+    const std::filesystem::path root = galaxy::test_temp_path("nebula-movie-replacement");
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root);
+    std::filesystem::copy_file(NEBULA_MOVIE_FIXTURE, root / "PrologueA.mp4");
+    std::vector<std::unique_ptr<std::vector<std::uint8_t>>> buffers;
+    std::mutex buffers_mutex;
+    {
+        MoviePlayback playback;
+        playback.configure({root}, [&](std::uint64_t size) {
+            std::lock_guard<std::mutex> lock(buffers_mutex);
+            buffers.push_back(std::make_unique<std::vector<std::uint8_t>>(size));
+            TextureBackend::UploadChunk chunk{};
+            chunk.cpu_base = buffers.back()->data();
+            chunk.size = size;
+            return chunk;
+        });
+        MovieFrameMark mark{};
+        const char name[] = "/MovieData/PrologueA.thp";
+        std::memcpy(mark.name.data(), name, sizeof(name));
+        mark.frame_rate = 30.0f;
+        // The frame the game names once the decoder has it (it decodes ahead; five seconds at most).
+        const auto shown_at = [&](std::int32_t frame) -> const MovieFrame* {
+            mark.frame = frame;
+            for (int tries = 0; tries < 500; ++tries) {
+                const MovieFrame* shown = playback.frame(mark);
+                if (shown != nullptr && shown->frame == frame) return shown;
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+            return nullptr;
+        };
+        const auto close_to = [](int value, int wanted) { return std::abs(value - wanted) <= 16; };
+        bool right = true;
+        for (const std::int32_t frame : {0, 5, 14, 15, 20, 29, 2}) {
+            const MovieFrame* shown = shown_at(frame);
+            if (shown == nullptr || shown->width != 64u || shown->height != 64u || !shown->staging) {
+                std::cerr << "FAILED: replacement frame " << frame << " did not come\n";
+                right = false;
+                continue;
+            }
+            const std::uint8_t* planes = shown->staging->cpu_base;
+            const int y = planes[shown->offsets[0] + 32u * shown->pitches[0] + 32u];
+            const int cb = planes[shown->offsets[1] + 16u * shown->pitches[1] + 16u];
+            const int cr = planes[shown->offsets[2] + 16u * shown->pitches[2] + 16u];
+            const bool red = close_to(y, 76) && close_to(cb, 85) && close_to(cr, 255);
+            const bool blue = close_to(y, 29) && close_to(cb, 255) && close_to(cr, 107);
+            if (frame >= 15 ? !blue : !red) {
+                std::cerr << "FAILED: replacement frame " << frame << " is Y " << y << " Cb " << cb << " Cr " << cr << "\n";
+                right = false;
+            }
+        }
+        expect(right, "the replacement's frames as the game names them, in their colours");
+        const MoviePlayback::Stats stats = playback.stats();
+        expect(stats.opened == 1u && stats.decoded >= 7u, "one replacement opened, its frames decoded");
+        expect(stats.seeks >= 1u, "the jump back to the start seeks");
+        mark.frame = MovieFrameMark::kNone;
+        expect(playback.frame(mark) == nullptr, "closed: no frame");
+        playback.shutdown();
+    }
+    std::filesystem::remove_all(root);
+}
+
 // A cooked movie of `frames` 16x16 frames, each one baseline JPEG of a constant picture (six blocks with zero DC and
 // end of block: every texel 128), as the importer lays them out.
 std::vector<std::uint8_t> cooked_movie(std::uint32_t frames) {
@@ -273,9 +341,8 @@ void test_index() {
 int main() {
     test_colours();
     test_nv12();
-#if defined(_WIN32)
     test_find();
-#endif
+    test_replacement();
     test_index();
     if (failures == 0) std::cout << "movie playback tests passed\n";
     return failures == 0 ? 0 : 1;

@@ -37,7 +37,8 @@ namespace {
     }
 
     bool getFirstPolyOnLineCategory(Vec3f* pPos, Triangle* pTriangle, const Vec3f& rStart, const Vec3f& rDirection,
-                                    const TriangleFilterBase* pTriangleFilter, const CollisionPartsFilterBase* pPartsFilter, s32 category) {
+                                    const TriangleFilterBase* pTriangleFilter, const CollisionPartsFilterBase* pPartsFilter, s32 category,
+                                    bool* pOrderFree = nullptr) {
         u32 count = MR::getCollisionDirector()->getCategoryKeeper(category)->checkStrikeLine(rStart, rDirection, 0, pPartsFilter, nullptr);
         const HitInfo* pHit;
         if (count == 0) {
@@ -60,6 +61,18 @@ namespace {
 
         if (nearest == -1) {
             return false;
+        }
+
+        // The keeper's list holds every hit, so only a hit as near as the one taken, from another part or the same,
+        // could be taken instead were the parts walked in another order.
+        if (pOrderFree != nullptr) {
+            *pOrderFree = true;
+            for (u32 i = 0; i < count; i++) {
+                if (static_cast< s32 >(i) != nearest && getStrikeInfoCategory(category, i)->mDepth == minDistance &&
+                    !(pTriangleFilter && pTriangleFilter->isInvalidTriangle(&getStrikeInfoCategory(category, i)->mParentTriangle))) {
+                    *pOrderFree = false;
+                }
+            }
         }
 
         pHit = getStrikeInfoCategory(category, nearest);
@@ -219,6 +232,14 @@ namespace MR {
                                           const CollisionPartsFilterBase* pPartsFilter, const TriangleFilterBase* pTriangleFilter) {
         return ::getFirstPolyOnLineCategory(pPos, pTriangle, rStart, rDirection, pTriangleFilter, pPartsFilter, 2);
     }
+
+#if defined(NEBULA_PLAIN_PATHS)
+    bool getFirstPolyOnLineOrderFree(Vec3f* pPos, Triangle* pTriangle, const Vec3f& rStart, const Vec3f& rDirection,
+                                     const CollisionPartsFilterBase* pPartsFilter, s32 category, bool* pOrderFree) {
+        *pOrderFree = true;
+        return ::getFirstPolyOnLineCategory(pPos, pTriangle, rStart, rDirection, nullptr, pPartsFilter, category, pOrderFree);
+    }
+#endif
 
     bool getFirstPolyNormalOnLineToMap(Vec3f* pNormal, const Vec3f& rStart, const Vec3f& rDirection, Vec3f* pPos, const HitSensor* pSensor) {
         Triangle triangle;

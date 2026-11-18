@@ -10,6 +10,7 @@
 
 #include <array>
 #include <cstdint>
+#include <filesystem>
 
 namespace galaxy::sdl {
 
@@ -31,7 +32,10 @@ void pump_events(int timeout_ms) noexcept;
 // vsync times predict, so every frame stays on screen for the same number of vsyncs. False, at once, when there are
 // no recent vsyncs (out of sight, not yet shown), the display's rate does not divide the period, or the platform has
 // no display clock: the host's own clock times the frame then.
-bool wait_display_frame(std::int64_t period_ns, std::int64_t& last_ns) noexcept;
+bool wait_display_frame(std::int64_t period_ns, std::int64_t& last_ns, bool in_between) noexcept;
+// The app out of sight: the display clock asks for no vsyncs (Android's Choreographer callbacks, Apple's display link)
+// until it is let go, so no thread wakes at the display's rate for a game that waits. Any thread.
+void set_display_clock_held(bool held) noexcept;
 // The frame grid (CLOCK_MONOTONIC nanoseconds): the latest frame slot, the frame period, the display's vsync
 // interval and now; false while frames follow the host's clock.
 [[nodiscard]] bool display_grid(std::int64_t& slot_ns, std::int64_t& period_ns, std::int64_t& vsync_ns,
@@ -44,9 +48,13 @@ bool wait_display_frame(std::int64_t period_ns, std::int64_t& last_ns) noexcept;
 // Android, when `adb shell setprop debug.nebula.profile <seconds>` asks: that many seconds on, the render, host-main and
 // game threads' instruction pointers are sampled for 2 s each and the busiest places logged (thread_sampler.cpp).
 void start_thread_sampler() noexcept;
-// Linux and Android: a fatal signal (a bad access, an abort) is reported in the log before the system's own handler runs
-// (crash_log.cpp): the signal, the thread and the stack as library + offset. `fd` is the log file (-1: stderr).
+// Linux, Android and Apple's systems: a fatal signal (a bad access, an abort, a stack run out) is reported in the log
+// before the system's own handler runs (crash_log.cpp): the signal, the thread and the stack as library + offset. `fd`
+// is the log file (-1: stderr).
 void install_crash_log(int fd) noexcept;
+// Linux and Apple's systems: stdout and stderr to <data>/logs/game.log (the run before: game.previous.log) when no
+// terminal, pipe or file takes them, as when the program starts from an app menu, the Finder or the home screen.
+void keep_output_in_log(const std::filesystem::path& data) noexcept;
 
 // The on-screen controls (Android: the activity's overlay, through JNI).
 enum TouchButton : std::uint32_t {
@@ -137,6 +145,8 @@ struct InputState {
     std::array<std::uint32_t, kMaxPads> pad_ids{};
     // Each pad's button icon model: the DualShock 3's and the GameCube pad's own buttons, else the family's.
     std::array<galaxy::input::ButtonIconModel, kMaxPads> pad_icons{};
+    // Each pad's own name as the system gives it (input::kept_model_name; nullptr: none given), for the CONTROLS page.
+    std::array<const char*, kMaxPads> pad_names{};
     // Each pad's motion and touch surface since the game last took them (take_pad_motion).
     std::array<PadMotion, kMaxPads> motion{};
     // The device's own sensors (a phone), when it has them.

@@ -1,18 +1,12 @@
 #include "galaxy/frame_phase.h"
 
+#include "galaxy/step_lock.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
 
 namespace galaxy::host {
-
-std::int64_t refreshes_per_frame(std::int64_t period_ns, std::int64_t refresh_period_ns) noexcept {
-    if (period_ns <= 0 || refresh_period_ns <= 0) return 0;
-    const std::int64_t count = (period_ns + refresh_period_ns / 2) / refresh_period_ns;
-    if (count < 1) return 0;
-    const std::int64_t off = std::llabs(count * refresh_period_ns - period_ns);
-    return off * 100 <= period_ns ? count : 0;
-}
 
 bool refreshes_in_step(std::int64_t earlier_vblank_ns, const DisplayRefresh& now) noexcept {
     if (now.period_ns <= 0) return false;
@@ -22,7 +16,7 @@ bool refreshes_in_step(std::int64_t earlier_vblank_ns, const DisplayRefresh& now
 }
 
 std::int64_t FramePhase::next_start(std::int64_t last_start_ns, std::int64_t work_ns, std::int64_t period_ns,
-                                    const std::optional<DisplayRefresh>& refresh) noexcept {
+                                    const std::optional<DisplayRefresh>& refresh, bool in_between) noexcept {
     if (work_ns > budget_ns_) {
         plain_frames_ = kPlainFrames;
     } else if (plain_frames_ != 0) {
@@ -34,7 +28,7 @@ std::int64_t FramePhase::next_start(std::int64_t last_start_ns, std::int64_t wor
     }
     budget_ns_ = std::min(budget_ns_, period_ns - kMarginNs);
     if (!refresh || plain_frames_ != 0 || budget_ns_ > period_ns - period_ns / 4) return last_start_ns + period_ns;
-    const std::int64_t count = refreshes_per_frame(period_ns, refresh->period_ns);
+    const std::int64_t count = step_lock_refreshes(period_ns, refresh->period_ns, in_between);
     if (count == 0) return last_start_ns + period_ns;
     const std::int64_t step = count * refresh->period_ns;
     const std::int64_t cadence = last_start_ns + step;

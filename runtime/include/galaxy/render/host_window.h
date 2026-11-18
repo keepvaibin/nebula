@@ -58,8 +58,9 @@ extern std::timed_mutex surface_use;
 
 // Saves changed settings; false (kept dirty for a retry) when a file could not be written.
 bool flush_native_settings_if_dirty();
-// Takes a config.ini that Nebula Settings changed while the game runs.
-void poll_render_config_file();
+// Starts the watch for a config.ini that Nebula Settings changes while the game runs (on the settings' own thread;
+// the caller only starts it, once).
+void watch_render_config_file();
 // A hidden start (launch_args.h started_hidden): the window is never shown.
 [[nodiscard]] bool hidden_window_mode_enabled();
 
@@ -73,6 +74,9 @@ struct OpenedWindow {
 [[nodiscard]] OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_height);
 // Ends the window (the renderer's shutdown).
 void close_game_window(WindowOwner& owner) noexcept;
+// Before the process ends at once (std::_Exit): what the host wrote is out. Android's stdout and stderr reach logcat and
+// game.log through a pipe that a thread reads; its last lines are written first (at most a second is waited).
+void finish_output() noexcept;
 // The window's first picture is presented: the player sees the window from now (open_game_window). Any thread.
 void show_window(NativeWindow window) noexcept;
 // A shown window the player cannot see now: hidden, minimised or cloaked (Windows), hidden or minimised (SDL), not
@@ -119,9 +123,12 @@ struct SettingsMonitor {
 // The window's inside to that size in pixels, from any thread (an extension's resize_window).
 void resize_window_client(unsigned width, unsigned height) noexcept;
 enum class FilePick { Miis, ModArchives, ModFolders, Saves };
-// The platform's file picker; `done` runs off the window's thread with what was chosen. Android picks documents
-// (no folders: ModFolders is not offered there) and hands over copies the game can read by path. Saves picks one file.
-void pick_files(FilePick kind, std::function<void(std::vector<std::filesystem::path>)> done);
+// The platform's file picker; `done` runs off the window's thread with what was chosen (nothing: cancelled). Android
+// picks documents (no folders: ModFolders is not offered there) and hands over copies the game can read by path. Saves
+// picks one file. `failed`: there was no picker to show (Linux with no desktop portal and no Zenity); the game tells the
+// player to drop the files on the window, which every desktop host takes.
+using PickDone = std::function<void(std::vector<std::filesystem::path> files, bool failed)>;
+void pick_files(FilePick kind, PickDone done);
 // The platform's save dialog for a file the game made (an export): the player chooses where it goes, under `file`'s
 // name, and it is copied there. `done` runs off the window's thread.
 enum class SaveCopy { Saved, Cancelled, Failed };

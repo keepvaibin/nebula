@@ -1,18 +1,23 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// Frame pipeline timeline, recorded with --diagnostics timeline. Any thread appends a 32-byte
-// record with one relaxed atomic increment and one QueryPerformanceCounter read. Nothing is
-// formatted during the run. At exit the records go to --timeline's file (default the diagnostics
-// folder's timeline-<pid>.bin), analysed offline by tools/perf/timeline_digest.py.
-// All timestamps are QPC ticks, including GPU timestamps (via GetClockCalibration) and vblank
-// times (DXGI frame statistics, DWM timing).
+// Frame pipeline timeline, recorded with --diagnostics timeline, on every platform. Any thread appends a 32-byte
+// record with one relaxed atomic increment and one clock read. Nothing is formatted during the run. At exit the
+// records go to --timeline's file (default the diagnostics folder's timeline-<pid>.bin), analysed offline by
+// tools/perf/timeline_digest.py. Timestamps are ticks of galaxy::qpc_now() (platform_time.h; the header gives the
+// ticks a second): QueryPerformanceCounter on Windows, CLOCK_MONOTONIC nanoseconds on Linux and Android,
+// CLOCK_UPTIME_RAW nanoseconds on Apple's systems. GPU timestamps and vblank times are in the same ticks.
+
+#include "galaxy/platform_paths.h"
+#include "galaxy/platform_time.h"
 
 #if defined(_WIN32)
 #include "galaxy/windows_api.h"
-#include "galaxy/platform_paths.h"
-#include <cwchar>
-#include <string>
+#elif defined(__APPLE__)
+#include <pthread.h>
+#else
+#include <sys/syscall.h>
+#include <unistd.h>
 #endif
 
 #include <atomic>
@@ -20,6 +25,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 
 namespace galaxy::timeline {
 
@@ -47,6 +53,11 @@ enum class Event : std::uint16_t {
     StepWaitEnd = 32,      // game: the wait returned
     ContentTime = 33,      // render: a picture of an interpolation sequence. qpc=the moment it shows, a=its list's game
                            // frame, b=t (0 the frame before, 1 this one) in millionths
+    AcquireBegin = 34,     // render: waiting for a swap image (vkAcquireNextImageKHR, Metal's nextDrawable)
+    AcquireEnd = 35,       // render: the wait returned. a=the image's index (Metal: 0), b=1 when it gave none
+    GateWaitBegin = 36,    // render, Direct3D 12: a Present waits for pipeline creations in flight (core/present_gate.h).
+                           // a=creations in flight
+    GateWaitEnd = 37,
 };
 
 struct Record {
@@ -70,13 +81,25 @@ inline State g_state;
 
 [[nodiscard]] inline bool enabled() noexcept { return g_state.enabled; }
 
-[[nodiscard]] inline std::uint64_t now() noexcept {
+[[nodiscard]] inline std::uint64_t now() noexcept { return static_cast<std::uint64_t>(::galaxy::qpc_now()); }
+
+// The calling thread's id as the system's tools show it (32 bits; a record's thread).
+[[nodiscard]] inline std::uint32_t thread_id() noexcept {
 #if defined(_WIN32)
-    LARGE_INTEGER t;
-    QueryPerformanceCounter(&t);
-    return static_cast<std::uint64_t>(t.QuadPart);
+    return static_cast<std::uint32_t>(GetCurrentThreadId());
 #else
-    return 0u;
+    // One system call a thread, then a thread-local read (constant initialised: no guard, nothing run at load).
+    thread_local std::uint32_t id = 0u;
+    if (id == 0u) {
+#if defined(__APPLE__)
+        std::uint64_t tid = 0u;
+        (void)pthread_threadid_np(nullptr, &tid);
+        id = static_cast<std::uint32_t>(tid);
+#else
+        id = static_cast<std::uint32_t>(syscall(SYS_gettid));
+#endif
+    }
+    return id;
 #endif
 }
 
@@ -89,11 +112,7 @@ inline void record_at(Event event, std::uint64_t qpc, std::uint64_t a = 0u,
     r.qpc = qpc;
     r.a = a;
     r.b = b;
-#if defined(_WIN32)
-    r.thread = GetCurrentThreadId();
-#else
-    r.thread = 0u;
-#endif
+    r.thread = thread_id();
     r.event = static_cast<std::uint16_t>(event);
     r.valid = 1u;
 }
@@ -103,16 +122,15 @@ inline void record(Event event, std::uint64_t a = 0u, std::uint64_t b = 0u) noex
     record_at(event, now(), a, b);
 }
 
-#if defined(_WIN32)
 // Called once on the main thread before any worker thread starts.
 inline void initialize() noexcept {
     if (!::galaxy::diagnosing(::galaxy::kDiagnoseTimeline)) {
         return;
     }
-    // Events: 128 MB, about four minutes of an uncapped run at 2000 pictures a second (seven events a picture).
+    // Events: 128 MB of address space, its pages taken as records fill them; about four minutes of an uncapped run
+    // at 2000 pictures a second (seven events a picture).
     constexpr std::uint64_t capacity = 4'000'000u;
-    void* memory = VirtualAlloc(nullptr, static_cast<SIZE_T>(capacity * sizeof(Record)),
-                                MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    void* memory = std::malloc(static_cast<std::size_t>(capacity * sizeof(Record)));
     if (memory == nullptr) return;
     g_state.records = static_cast<Record*>(memory);
     g_state.capacity = capacity;
@@ -125,53 +143,43 @@ inline void initialize() noexcept {
 inline void dump() noexcept {
     if (!g_state.enabled) return;
     g_state.enabled = false;
-    std::wstring path;
+    std::filesystem::path path;
     try {
         if (!::galaxy::launch_args().timeline.empty()) {
-            path = ::galaxy::launch_args().timeline.wstring();
+            path = ::galaxy::launch_args().timeline;
         } else {
             const std::filesystem::path folder = ::galaxy::nebula_diagnostics_directory();
             if (folder.empty()) return;
-            path = (folder / (L"timeline-" + std::to_wstring(GetCurrentProcessId()) + L".bin")).wstring();
+            path = folder / ("timeline-" + std::to_string(::galaxy::current_process_id()) + ".bin");
         }
     } catch (...) {
         return;
     }
-    const HANDLE file = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
-                                    FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (file == INVALID_HANDLE_VALUE) {
-        std::fprintf(stderr, "[frame-timeline] cannot create %ls error=%lu\n", path.c_str(), GetLastError());
+    // The path as UTF-8 for the log line (C++20's u8string is char8_t text).
+    const std::u8string shown = path.generic_u8string();
+    const char* const shown_text = reinterpret_cast<const char*>(shown.c_str());
+    std::FILE* const file = ::galaxy::open_path(path, "wb");
+    if (file == nullptr) {
+        std::fprintf(stderr, "[frame-timeline] cannot create %s\n", shown_text);
         return;
     }
-    LARGE_INTEGER frequency{};
-    QueryPerformanceFrequency(&frequency);
     const std::uint64_t written_count = g_state.next.load(std::memory_order_acquire);
     const std::uint64_t count = written_count < g_state.capacity ? written_count : g_state.capacity;
     std::uint64_t header[8]{};
     std::memcpy(&header[0], "NBTL0001", 8);
     header[1] = 1u;  // format version
-    header[2] = static_cast<std::uint64_t>(frequency.QuadPart);
+    header[2] = static_cast<std::uint64_t>(::galaxy::qpc_frequency());
     header[3] = count;
     header[4] = written_count;
-    header[5] = GetCurrentProcessId();
-    DWORD bytes = 0;
-    BOOL ok = WriteFile(file, header, sizeof(header), &bytes, nullptr);
-    const auto* data = reinterpret_cast<const unsigned char*>(g_state.records);
-    std::uint64_t remaining = count * sizeof(Record);
-    while (ok && remaining != 0u) {
-        const DWORD chunk = remaining > (1u << 26) ? (1u << 26) : static_cast<DWORD>(remaining);
-        ok = WriteFile(file, data, chunk, &bytes, nullptr);
-        data += chunk;
-        remaining -= chunk;
+    header[5] = ::galaxy::current_process_id();
+    bool ok = std::fwrite(header, sizeof(header), 1u, file) == 1u;
+    if (ok && count != 0u) {
+        ok = std::fwrite(g_state.records, sizeof(Record), static_cast<std::size_t>(count), file) == count;
     }
-    CloseHandle(file);
-    std::fprintf(stderr, "[frame-timeline] wrote %llu of %llu events to %ls ok=%d\n",
-                 static_cast<unsigned long long>(count),
-                 static_cast<unsigned long long>(written_count), path.c_str(), ok ? 1 : 0);
+    ok = std::fclose(file) == 0 && ok;
+    std::fprintf(stderr, "[frame-timeline] wrote %llu of %llu events to %s ok=%d\n",
+                 static_cast<unsigned long long>(count), static_cast<unsigned long long>(written_count),
+                 shown_text, ok ? 1 : 0);
 }
-#else
-inline void initialize() noexcept {}
-inline void dump() noexcept {}
-#endif
 
 }  // namespace galaxy::timeline

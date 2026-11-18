@@ -40,7 +40,6 @@ float4 material_color(NativeVaryings i) {
         screen += move;
     }
     const float3 behind = TEX(1).Sample(SAMP(1), screen).rgb;  // the scene behind, moved; its tint apart
-    // Under the traced light the wobble moves what the tracer shows (program.hlsli traced_sea).
-    return traced_sea(pattern8 / 255.0, c8 / 255.0 - pattern8 / 255.0, behind, material.tint.rgb, float3(0.0, 0.0, 0.0),
-                      i.color.a, move * line_point_raster.xy, i.pos);
+    return sea_colour(pattern8 / 255.0, c8 / 255.0 - pattern8 / 255.0, behind, material.tint.rgb, float3(0.0, 0.0, 0.0),
+                      i.color.a);
 }

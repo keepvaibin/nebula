@@ -3,6 +3,7 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Map/CollisionCategorizedKeeper.hpp"
+#include "Game/Map/CollisionChanges.hpp"
 #include "Game/Map/CollisionDirector.hpp"
 #include "Game/Map/HitInfo.hpp"
 #include "Game/Map/KCollision.hpp"
@@ -14,15 +15,53 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/TriangleFilter.hpp"
 
+#if defined(NEBULA_PLAIN_PATHS)
+namespace {
+    // Where a part's triangles can be: noted before and after a change to a valid part (P-140). An invalid part is left
+    // out of every query; it is noted when a zone takes it again.
+    void noteParts(CollisionParts* pParts) {
+        if (pParts->mIsValid) {
+            CollisionChanges::note(pParts->getTrans(), pParts->mBoundingRadius);
+        }
+    }
+
+    // The zone that lists a part makes its index again at its next query (P-129), valid or not: a part that
+    // moved while left out is taken again where it is.
+    void noteMoved(CollisionParts* pParts) {
+        if (pParts->mListZone != nullptr) {
+            pParts->mListZone->mChanges++;
+        }
+    }
+}  // namespace
+#endif
+
 CollisionParts::CollisionParts()
     : mFollowMtx(), mHitSensor(), mIsValid(), mIsUpdate(true), mIsUpdateOnce(), mUseEqualScale(), mIsNotUsingScale(), mStillCount(), mBoundingRadius(-1.0f), mScale(1.0f), mKeeperIndex(-1), mZone() {
     mServer = new KCollisionServer();
+#if defined(NEBULA_PLAIN_PATHS)
+    mListZone = nullptr;
+#endif
 
     mPrevBaseMatrix.identity();
     mBaseMatrix.identity();
     mMatrix.identity();
     NebulaMtxInverse(mBaseMatrix.toMtxPtr(), mInvBaseMatrix.toMtxPtr());
+#if defined(NEBULA_PLAIN_PATHS)
+    mInvPrevBaseMatrix.identity();
+    keepInverses();
+#endif
 }
+
+#if defined(NEBULA_PLAIN_PATHS)
+// What the queries made from the matrices at each call (P-132), made when they change: the same operations on the
+// same values. A singular previous matrix leaves the last inverse, as NebulaMtxInverse leaves its output.
+void CollisionParts::keepInverses() {
+    NebulaMtxInverse(mPrevBaseMatrix.toMtxPtr(), mInvPrevBaseMatrix.toMtxPtr());
+    Vec3f scale;
+    mInvBaseMatrix.getScale(scale);
+    mInvAverageScale = (scale.x + scale.y + scale.z) / 3.0f;
+}
+#endif
 
 void CollisionParts::init(const Pos3f& rMatrix, HitSensor* pHitSensor, const void* pKclData, const void* pMapInfo, s32 keeperIndex,
                           bool /*useAutoScale*/) {
@@ -130,10 +169,18 @@ void CollisionParts::forceResetAllMtxAndSetUpdateMtxOneTime() {
 }
 
 void CollisionParts::resetAllMtxPrivate(const Pos3f& rMatrix) {
+#if defined(NEBULA_PLAIN_PATHS)
+    noteParts(this);
+#endif
     mPrevBaseMatrix.setInline(rMatrix);
     mBaseMatrix.setInline(rMatrix);
     mMatrix.setInline(rMatrix);
     NebulaMtxInverse(mBaseMatrix.toMtxPtr(), mInvBaseMatrix.toMtxPtr());
+#if defined(NEBULA_PLAIN_PATHS)
+    keepInverses();
+    noteParts(this);
+    noteMoved(this);
+#endif
 }
 
 void CollisionParts::setMtx(const Pos3f& rMatrix) {
@@ -176,9 +223,23 @@ void CollisionParts::updateMtx() {
         mIsUpdateOnce = false;
 
         if (mStillCount < 2) {
+#if defined(NEBULA_PLAIN_PATHS)
+            // A part that keeps its place is not noted: its matrix is written again as it was.
+            const bool moved = !MR::isSameMtx(mMatrix.toMtxPtr(), mBaseMatrix.toMtxPtr());
+            if (moved) {
+                noteParts(this);
+            }
+#endif
             mPrevBaseMatrix.setInline(mBaseMatrix);
             mBaseMatrix.setInline(mMatrix);
             NebulaMtxInverse(mBaseMatrix.toMtxPtr(), mInvBaseMatrix.toMtxPtr());
+#if defined(NEBULA_PLAIN_PATHS)
+            keepInverses();
+            if (moved) {
+                noteParts(this);
+                noteMoved(this);
+            }
+#endif
         }
     }
 }
@@ -231,8 +292,15 @@ void CollisionParts::updateBoundingSphereRange(Vec3f scale) {
 }
 
 void CollisionParts::updateBoundingSphereRangePrivate(f32 scale) {
+#if defined(NEBULA_PLAIN_PATHS)
+    noteParts(this);
+#endif
     mScale = scale;
     mBoundingRadius = scale * mServer->mMaxVertexDistance;
+#if defined(NEBULA_PLAIN_PATHS)
+    noteParts(this);
+    noteMoved(this);
+#endif
 }
 
 const char* CollisionParts::getHostName() const {
@@ -256,9 +324,13 @@ s32 CollisionParts::getPlacementZoneID() const {
 bool CollisionParts::checkStrikePoint(HitInfo* pHitInfo, const Vec3f& rPos) {
     Vec3f localPos;
     mInvBaseMatrix.mult(rPos, localPos);
+#if defined(NEBULA_PLAIN_PATHS)
+    const f32 averageScale = mInvAverageScale;
+#else
     Vec3f scale;
     mInvBaseMatrix.getScale(scale);
     f32 averageScale = (scale.x + scale.y + scale.z) / 3.0f;
+#endif
     f32 distance;
     KC_PrismData* prism = nullptr;
     u8 classification;
@@ -292,23 +364,65 @@ bool CollisionParts::checkStrikePoint(HitInfo* pHitInfo, const Vec3f& rPos) {
 }
 
 namespace {
-    // A query's working lists: room for the common case on the stack, more when more hits were asked for.
+    // Lists for queries that ask for more hits than the stack holds, kept from one query to the next (P-131): one set per
+    // depth of queries in progress (a triangle filter may make a query while its caller's lists are in use), each grown
+    // to the most asked for, in the permanent arena. Queries are made on the game thread only.
+    constexpr u32 cKeptDepths = 8;
+
+    struct KeptStrikeLists {
+        KC_PrismData** mPrisms;
+        f32* mDistances;
+        u8* mClassifications;
+        u32 mRoom;
+    };
+
+    KeptStrikeLists sKeptStrikeLists[cKeptDepths];
+    u32 sStrikeDepth = 0;
+
+    // A query's working lists: room for the common case on the stack, the kept lists of its depth when more hits were
+    // asked for (lists of its own past cKeptDepths).
     struct StrikeLists {
-        explicit StrikeLists(u32 maxHits) {
-            const bool fits = maxHits <= ARRAY_SIZEU(mPrismRoom);
-            mPrisms = fits ? mPrismRoom : new KC_PrismData*[maxHits];
-            mDistances = fits ? mDistanceRoom : new f32[maxHits];
-            mClassifications = fits ? mClassificationRoom : new u8[maxHits];
+        explicit StrikeLists(u32 maxHits) : mDepth(sStrikeDepth++), mOwned(false) {
+            if (maxHits <= ARRAY_SIZEU(mPrismRoom)) {
+                mPrisms = mPrismRoom;
+                mDistances = mDistanceRoom;
+                mClassifications = mClassificationRoom;
+            } else if (mDepth < cKeptDepths) {
+                KeptStrikeLists& rKept = sKeptStrikeLists[mDepth];
+                if (rKept.mRoom < maxHits) {
+                    delete[] rKept.mPrisms;
+                    delete[] rKept.mDistances;
+                    delete[] rKept.mClassifications;
+                    rKept.mPrisms = new (Arenas::permanent(), 0) KC_PrismData*[maxHits];
+                    rKept.mDistances = new (Arenas::permanent(), 0) f32[maxHits];
+                    rKept.mClassifications = new (Arenas::permanent(), 0) u8[maxHits];
+                    rKept.mRoom = maxHits;
+                }
+                mPrisms = rKept.mPrisms;
+                mDistances = rKept.mDistances;
+                mClassifications = rKept.mClassifications;
+            } else {
+                mOwned = true;
+                mPrisms = new KC_PrismData*[maxHits];
+                mDistances = new f32[maxHits];
+                mClassifications = new u8[maxHits];
+            }
         }
 
         ~StrikeLists() {
-            if (mPrisms != mPrismRoom) {
+            if (mOwned) {
                 delete[] mPrisms;
                 delete[] mDistances;
                 delete[] mClassifications;
             }
+            sStrikeDepth--;
         }
 
+        StrikeLists(const StrikeLists&) = delete;
+        StrikeLists& operator=(const StrikeLists&) = delete;
+
+        u32 mDepth;
+        bool mOwned;
         KC_PrismData* mPrismRoom[64];
         f32 mDistanceRoom[64];
         u8 mClassificationRoom[64];
@@ -327,15 +441,23 @@ u32 CollisionParts::checkStrikeBall(HitInfo* pHitInfo, u32 maxHits, const Vec3f&
     Pos3f inversePrev;
     Vec3f localPos;
     mInvBaseMatrix.mult(rPos, localPos);
+#if defined(NEBULA_PLAIN_PATHS)
+    const f32 averageScale = mInvAverageScale;
+#else
     Vec3f scale;
     mInvBaseMatrix.getScale(scale);
     f32 averageScale = (scale.x + scale.y + scale.z) / 3.0f;
+#endif
     f32 inverseScale = 1.0f / averageScale;
     radius *= averageScale;
     Vec3f movement(0, 0, 0);
 
     if (checkMovement && mStillCount == 0) {
+#if defined(NEBULA_PLAIN_PATHS)
+        inversePrev = mInvPrevBaseMatrix;
+#else
         NebulaMtxInverse(mPrevBaseMatrix.toMtxPtr(), inversePrev.toMtxPtr());
+#endif
         Vec3f prevPos;
         inversePrev.mult(rPos, prevPos);
         Vec3f localMovement(localPos - prevPos);
@@ -416,9 +538,13 @@ u32 CollisionParts::checkStrikeBallWithThickness(HitInfo* pHitInfo, u32 maxHits,
     u8* const classifications = lists.mClassifications;
     Vec3f localPos;
     mInvBaseMatrix.mult(rPos, localPos);
+#if defined(NEBULA_PLAIN_PATHS)
+    const f32 averageScale = mInvAverageScale;
+#else
     Vec3f scale;
     mInvBaseMatrix.getScale(scale);
     f32 averageScale = (scale.x + scale.y + scale.z) / 3.0f;
+#endif
     f32 scaledRadius = radius * averageScale;
     u32 count = mServer->checkSphereWithThickness(&localPos,scaledRadius, averageScale, maxHits, prisms, distances, classifications, thickness);
     f32 inverseScale = 1.0f / averageScale;

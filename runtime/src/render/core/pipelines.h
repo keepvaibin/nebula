@@ -132,11 +132,14 @@ private:
     gpu::Pipeline* create_now(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux);
     std::atomic<gpu::Pipeline*>* cell(std::uint64_t id, unsigned variant, unsigned aux);
     void refuse(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux);
-    // A build that returned null: refused, or for lack of memory (pipeline_workers.h) the workers' wait and, below
-    // kPipelineMemoryTries, a later try (`job`: a worker's, queued again behind the others).
-    void failed(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux, bool memory, const Job* job);
-    // build(), and whether it failed for lack of memory (note_pipeline_out_of_memory on this thread).
-    gpu::Pipeline* build_noting(const PipelineEntry& entry, unsigned variant, unsigned aux, bool& memory);
+    // Why a build returned null: the driver refused the pipeline, the device ran out of memory, or the device was lost.
+    enum class Failure : unsigned char { refused, memory, device_lost };
+    // A build that returned null: refused; for lack of memory (pipeline_workers.h) the workers' wait and, below
+    // kPipelineMemoryTries, a later try (`job`: a worker's, queued again behind the others); with the device lost,
+    // nothing: the pipeline is not at fault, and the device made after the loss is asked for it (N-4024).
+    void failed(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux, Failure why, const Job* job);
+    // build(), and why it failed (note_pipeline_out_of_memory, note_pipeline_device_lost on this thread).
+    gpu::Pipeline* build_noting(const PipelineEntry& entry, unsigned variant, unsigned aux, Failure& why);
     // Whether the form failed for memory and the wait after it is not over: its draw is left out until then.
     [[nodiscard]] bool waiting_for_memory(std::uint64_t key);
     // Whether the driver has refused this entry's program pair often enough that no state of it is asked for again.
@@ -231,6 +234,8 @@ private:
 
 // For a back end's build: the driver refused a pipeline for lack of memory (pipeline_workers.h), on this thread.
 void note_pipeline_out_of_memory() noexcept;
+// For a back end's build: the device was lost (removed, reset, hung) while it built, on this thread: no refusal.
+void note_pipeline_device_lost() noexcept;
 
 // Writes `bytes` beside `file` and renames it over, so a crash mid-write leaves the old cache whole.
 bool replace_file(const std::filesystem::path& file, const char* bytes, std::size_t size) noexcept;

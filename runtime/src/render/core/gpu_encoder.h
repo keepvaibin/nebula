@@ -34,10 +34,16 @@ struct DrawRoot {
     float half_line = 0.0f;
     float half_point = 0.0f;
     std::uint32_t table = 0u;  // the draw's first entry in the frame's texture lists (draw_tables)
+    // A bound table's maps' SamplerFrameBias, two bits a map from map 0 (program.hlsli NEBULA_BOUND_TABLES); with the
+    // arrays, each list entry's sampler slot holds its own at kTableBiasShift.
+    std::uint32_t map_bias = 0u;
+    [[nodiscard]] bool operator==(const DrawRoot&) const noexcept = default;
 };
 
 inline constexpr unsigned kDrawRootWords = sizeof(DrawRoot) / 4u;
-static_assert(sizeof(DrawRoot) == 20u);
+static_assert(sizeof(DrawRoot) == 24u);
+// A texture list entry's sampler slot (draw_tables .y): the slot below this bit, the map's SamplerFrameBias from it.
+inline constexpr unsigned kTableBiasShift = 30u;
 
 struct ViewportRect {
     float x = 0.0f, y = 0.0f, width = 0.0f, height = 0.0f, min_depth = 0.0f, max_depth = 1.0f;
@@ -103,8 +109,7 @@ public:
         want(kSlotPixelRows, pixel_rows);
     }
     void set_root(const DrawRoot& root) noexcept {
-        if (!root_valid_ || root.first_instance != root_.first_instance || root.flags != root_.flags ||
-            root.half_line != root_.half_line || root.half_point != root_.half_point || root.table != root_.table) {
+        if (!root_valid_ || root != root_) {
             root_ = root;
             root_valid_ = true;
             push_root();
@@ -250,8 +255,7 @@ public:
         }
     }
     void set_root(const DrawRoot& root) noexcept {
-        if (!root_valid_ || root.first_instance != root_.first_instance || root.flags != root_.flags ||
-            root.half_line != root_.half_line || root.half_point != root_.half_point || root.table != root_.table) {
+        if (!root_valid_ || root != root_) {
             root_ = root;
             root_valid_ = true;
             emit_root(root);
@@ -376,8 +380,7 @@ public:
         }
     }
     void set_root(const DrawRoot& root) noexcept {
-        if (!root_valid_ || root.first_instance != root_.first_instance || root.flags != root_.flags ||
-            root.half_line != root_.half_line || root.half_point != root_.half_point || root.table != root_.table) {
+        if (!root_valid_ || root != root_) {
             list_->SetGraphicsRoot32BitConstants(3u, kDrawRootWords, &root, 0u);
             root_ = root;
             root_valid_ = true;
@@ -530,8 +533,7 @@ public:
                          (pixel_rows == bound_pixel_rows_ || pixel_rows == 0u);
     }
     void set_root(const DrawRoot& root) noexcept {
-        if (!root_valid_ || root.first_instance != root_.first_instance || root.flags != root_.flags ||
-            root.half_line != root_.half_line || root.half_point != root_.half_point || root.table != root_.table) {
+        if (!root_valid_ || root != root_) {
             vkCmdPushConstants(commands_, layout_.layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0u,
                                sizeof(DrawRoot), &root);
             root_ = root;

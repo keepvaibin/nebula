@@ -118,6 +118,9 @@ wstring DirName(const wstring& path);
 wstring FileName(const wstring& path);
 wstring FullPath(const wstring& path);
 wstring Slashes(wstring path);               // '/' to '\'
+// The \\?\ form (\\?\UNC\ for a share) of the full path, for every Win32 file call: a path may pass MAX_PATH (an
+// install folder deep in a tree; named streams lengthen save paths).
+wstring NativePath(const wstring& path);
 bool IsRooted(const wstring& path);
 bool FileExists(const wstring& path);
 bool DirExists(const wstring& path);
@@ -156,10 +159,13 @@ void MoveDirectoryInPlace(const wstring& source, const wstring& destination);
 void CopyTree(const wstring& source, const wstring& destination);
 // CopyFileW for every file (it carries their streams) plus the streams of every folder; links refused.
 void CopyTreeWithStreams(wstring source, const wstring& target, const std::function<void(const wstring&)>& onFile);
+// Copies a file's or folder's named streams; nothing where either drive has none (exFAT, FAT): the game keeps none.
 void CopyNamedStreams(const wstring& source, const wstring& target);
-std::map<wstring, wstring> StreamDigests(const wstring& path);
-std::vector<std::pair<wstring, Bytes>> ReadNamedStreams(const wstring& path, long long maximumBytes);
-void WriteNamedStream(const wstring& path, const wstring& name, const Bytes& bytes);
+// The drive of `path` has named streams (NTFS, ReFS).
+bool VolumeHasNamedStreams(const wstring& path);
+// The file systems Nebula installs on (P-120): any whose files can pass 4 GB. FAT12, FAT16 and FAT32 stop just under it,
+// and the game's file (content/game.pak, about 4.05 GB) nearly reaches it; NTFS, ReFS and exFAT hold it.
+bool FileSystemHoldsGame(const wstring& name);
 
 // ---- hashes ------------------------------------------------------------------------------------------------------
 

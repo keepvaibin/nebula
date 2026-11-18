@@ -106,25 +106,47 @@ namespace {
     }
 #endif
 
-    // Every arena, for findFromRoot: a flat list by address is all it takes, as none lies in another.
+    // Every arena, for findFromRoot, sorted by where its span starts: none lies in another, so the one that can hold an
+    // address is the last that starts at or before it, found by halving (P-013: every construction and delete asks).
     NebulaArena** sArenas;
     s32 sArenaCount;
     s32 sArenaMax;
 
+    // The number of arenas that start at or before the address.
+    s32 countStartingBy(const void* pData) {
+        s32 low = 0;
+        s32 high = sArenaCount;
+        while (low < high) {
+            const s32 middle = low + (high - low) / 2;
+            if (static_cast< const void* >(sArenas[middle]->getStartAddr()) <= pData) {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+        return low;
+    }
+
     void addToList(NebulaArena* pArena) {
         if (sArenaCount == sArenaMax) {
             sArenaMax = sArenaMax != 0 ? sArenaMax * 2 : 64;
-            sArenas = static_cast< NebulaArena** >(realloc(sArenas, sizeof(NebulaArena*) * sArenaMax));
+            NebulaArena** const pGrown = static_cast< NebulaArena** >(realloc(sArenas, sizeof(NebulaArena*) * sArenaMax));
+            if (pGrown == nullptr) {
+                ARENA_PANIC("out of memory for the list of arenas");
+            }
+            sArenas = pGrown;
         }
-        sArenas[sArenaCount++] = pArena;
+        const s32 place = countStartingBy(pArena->getStartAddr());
+        memmove(&sArenas[place + 1], &sArenas[place], sizeof(NebulaArena*) * (sArenaCount - place));
+        sArenas[place] = pArena;
+        sArenaCount++;
     }
 
     void removeFromList(NebulaArena* pArena) {
-        for (s32 i = 0; i < sArenaCount; i++) {
-            if (sArenas[i] == pArena) {
-                sArenas[i] = sArenas[--sArenaCount];
-                break;
-            }
+        const s32 place = countStartingBy(pArena->getStartAddr()) - 1;
+        if (place >= 0 && sArenas[place] == pArena) {
+            sArenaCount--;
+            memmove(&sArenas[place], &sArenas[place + 1], sizeof(NebulaArena*) * (sArenaCount - place));
         }
     }
 }  // namespace
@@ -350,13 +372,12 @@ void NebulaArena::free(void* pData, NebulaArena* pArena) {
 }
 
 NebulaArena* NebulaArena::findFromRoot(void* pData) {
-    for (s32 i = 0; i < sArenaCount; i++) {
-        NebulaArena* const pArena = sArenas[i];
-        if (pData >= static_cast< void* >(pArena->mStart) && pData < static_cast< void* >(pArena->mEnd)) {
-            return pArena;
-        }
+    const s32 place = countStartingBy(pData) - 1;
+    if (place < 0) {
+        return nullptr;
     }
-    return nullptr;
+    NebulaArena* const pArena = sArenas[place];
+    return pData < static_cast< void* >(pArena->mEnd) ? pArena : nullptr;
 }
 
 void* operator new(size_t size) {

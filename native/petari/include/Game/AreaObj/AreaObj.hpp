@@ -86,4 +86,24 @@ public:
 
     MR::Vector< MR::AssignableArray< AreaObj* > > mArray;
     s32 mFirstCapacity;  // entry grows past it
+
+#if defined(NEBULA_PLAIN_PATHS)
+    // Each area's form bound beside mArray, so find_in passes the far areas without reading them (P-152). Every override
+    // of isInVolume is true only where AreaObj::isInVolume is, and that only inside the form.
+    struct Bound {
+        const AreaObj* mObj;   // the area the entry was made for: a list sorted since makes it again
+        Vec3f mCenter;
+        f32 mRadiusSquared;  // below 0: no bound
+    };
+
+    // setFollowMtx calls since the start: a form that follows a matrix has no bound, so every entry is made again.
+    static u32 sFollowChanges;
+
+private:
+    void makeBound(u32 index) const;
+
+    mutable MR::GrowBuffer< Bound > mBounds;
+    mutable u32 mBoundsMade;    // the entries made, from the first
+    mutable u32 mBoundsFollow;  // sFollowChanges when they were
+#endif
 };

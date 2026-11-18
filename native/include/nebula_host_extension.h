@@ -131,6 +131,10 @@ typedef struct NebulaHostForExtension {
        does): taken out with the mods that use it, loaded again, then they are; the harness fact reload.<id> once it
        ends. Null in a host without mods. */
     void (*reload_mod)(void* host, const char* mod_id);
+    /* The game ends as Nebula Settings' Restart ends it and starts again with this start's arguments, its
+       started_again one more (NebulaHostExtension.ending's `again` nonzero). 0: this host cannot start the game again
+       (an iOS app), and nothing happens. Null in a host without it. */
+    uint32_t (*restart)(void* host);
     /* sizeof(NebulaExtensionControls) as the host has it: the bytes `controls` may write (0: the struct up to
        pointer_y). */
     uint32_t controls_size;
@@ -184,6 +188,9 @@ typedef struct NebulaHostExtension {
     uint32_t (*holds_menus)(void* user);
     /* Nonzero: each write of a save file waits this long first, slow storage (the longest of the extensions'). */
     uint32_t save_write_delay_us;
+    /* Nonzero: each new graphics device after a loss takes this much longer to make, in milliseconds, a slow driver
+       (the longest of the extensions'). */
+    uint32_t device_rebuild_delay_ms;
 } NebulaHostExtension;
 
 typedef const NebulaHostExtension* (*NebulaExtensionAttach)(const NebulaHostForExtension* host);

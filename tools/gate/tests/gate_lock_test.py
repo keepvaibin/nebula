@@ -55,6 +55,79 @@ def main():
         check(gate.take_gate_lock(lock, me, 0, str(board), "Agent 1") is not None, "a lock taken by hand (no process) holds")
         check(gate.process_alive(os.getpid()) and not gate.process_alive(999999), "a process is alive, a made-up one is not")
 
+        gate.free_gate_lock(lock, "gate by hand", str(board), "Agent 2", "x")
+        import shutil
+        shutil.rmtree(lock, ignore_errors=True)
+
+        # Every level takes the gate lock (Planner 11-18 03:44): a quick gate never runs beside a held one.
+        locks_for = getattr(gate, "locks_for", None)
+        check(locks_for is not None and locks_for("quick", [], "g", "l") == ["g"] and locks_for("main", ["x"], "g", "l") == ["g"]
+              and locks_for("final", [], "g", "l") == ["g", "l"] and locks_for("long", [], "g", "l") == ["l"],
+              "the quick, main and final levels take the gate lock, --only runs too; the long run its own")
+
+        # The queue: when a held lock frees, a waiting gate of Agent 3 or 4 goes first, and a waiter whose process ended
+        # loses its place. Agent 1 waits on a hand lock while Agent 3's gate (process 4242) waits before it.
+        queue = pathlib.Path(str(lock) + ".queue")
+        lock.mkdir()
+        (lock / "holder.txt").write_text("rows tour by hand (Agent 3) 2026-11-18 03:49:44\n", encoding="utf-8")
+        queue.mkdir(exist_ok=True)
+        agent3 = queue / "0-1-4242.txt"
+        agent3.write_text("quick gate of A3@abc pid 4242\n", encoding="utf-8")
+        alive = {4242: True, os.getpid(): True}
+
+        def free_hand_lock(_):
+            shutil.rmtree(lock, ignore_errors=True)
+
+        held = gate.take_gate_lock(lock, me, 0.002, str(board), "Agent 1", alive=lambda pid: alive.get(pid, False),
+                                   sleep=free_hand_lock, poll=0.01)
+        check(held is not None and not lock.exists(), "Agent 1 does not take the freed lock while Agent 3's gate waits before it")
+        check(agent3.exists() and [f.name for f in queue.glob("*.txt")] == ["0-1-4242.txt"],
+              "a waiter that gives up leaves the queue; the others stay")
+        alive[4242] = False
+        check(gate.take_gate_lock(lock, me, 0.002, str(board), "Agent 1", alive=lambda pid: alive.get(pid, False),
+                                  sleep=lambda _: None, poll=0.01) is None, "a waiter whose process ended loses its place")
+        check(not agent3.exists() and not list(queue.glob("*.txt")), "the queue is empty once the lock is taken")
+        gate.free_gate_lock(lock, me, str(board), "Agent 1", "x")
+        check(getattr(gate, "queue_rank", lambda who: None)("Agent 4") == 0 and gate.queue_rank("Agent 2") == 1,
+              "Agents 3 and 4 rank before Agents 1 and 2")
+
+        # The pre-push checks (census, ratchet: a work tree and an inventory) are machine work: they run once the lock
+        # is held, never before it (11-18: they ran beside a measurement while the gate waited).
+        import inspect
+        source = inspect.getsource(gate.main)
+        check(0 < source.find("take_gate_lock(lock, holder") < source.find("push_checks(commit)"),
+              "the pre-push checks run after the gate lock is taken")
+
+        # The long run takes the lock part by part (Planner 11-18 03:44, condition 4): held during a part, free between
+        # two, and a part that cannot have it within --wait is a failed check that says why.
+        locked_part = getattr(gate, "locked_part", None)
+        check(locked_part is not None, "the long run has parts under the lock")
+        if locked_part is not None:
+            lock_path, board_path = str(lock), str(board)
+
+            class Args:
+                mode, gate_lock, wait, board, who = "long", lock_path, 0, board_path, "Agent 1"
+
+            class FakeGate:
+                dry, args, rows = False, Args(), []
+
+                def record(self, name, state, seconds, detail, log=None):
+                    self.rows.append((name, state, detail))
+
+            g = FakeGate()
+            seen = []
+            check(locked_part(g, "tours", lambda: seen.append(lock.exists()) or "ran") == "ran" and seen == [True],
+                  "a part runs holding the gate lock")
+            check(not lock.exists(), "the lock is free between two parts")
+            lock.mkdir()
+            (lock / "holder.txt").write_text("quick gate by hand (Agent 3) 2026-11-18 04:00:00\n", encoding="utf-8")
+            check(locked_part(g, "tablet", lambda: seen.append("ran")) is None and seen == [True]
+                  and g.rows and g.rows[-1][0] == "part/tablet" and g.rows[-1][1] == "fail",
+                  "a part that cannot have the lock does not run and fails as part/<name>")
+            shutil.rmtree(lock, ignore_errors=True)
+            Args.mode = "main"
+            check(locked_part(g, "x", lambda: lock.exists()) is False, "at the other levels a part takes no lock of its own")
+
         work = t / "runs"
         def quick(name, passed):
             f = work / name

@@ -2,6 +2,8 @@
 #include "galaxy/render/temporal_upscaler.h"
 
 #include <array>
+// FidelityFX's ffx_util.h calls std::popcount under C++20 without including <bit> (clang-cl defines __cplusplus).
+#include <bit>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>

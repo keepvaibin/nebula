@@ -1,5 +1,6 @@
 """instrument.py SOURCE OUTPUT --commands compile_commands.json [--entry FILE] [--root DIR] [--depfile FILE] [--libclang PATH]
 instrument.py --check-libclang --compiler COMPILER [--libclang PATH]
+instrument.py --prune-cache FOLDER DAYS
 
 Writes OUTPUT: SOURCE with one LUMA_HOOK (or LUMA_TELL, for a constructor or destructor) at the start of every
 function it defines. That line is the function's row in LumaCore's name table and the test that sends a hooked call
@@ -31,15 +32,21 @@ The arguments of SOURCE's own compile command are read from --commands, where th
 --check-libclang: loads the libclang the row generator would use with COMPILER (beside it, or --libclang) and checks
 it has every call the generator makes; prints its path and version, or exits 1 with what was found and what is
 needed. The game module's configure runs it once, before any file.
+
+NEBULA_LUMA_CACHE (a folder, in the environment): a unit's outputs are kept there and taken back when nothing they were
+made from changed (see CACHE_FORMAT). --prune-cache removes what no run used in DAYS days.
 """
 import bisect
 import ctypes
+import hashlib
 import json
 import os
 import pathlib
 import re
 import shlex
+import shutil
 import sys
+import time
 from ctypes import POINTER, Structure, byref, c_char_p, c_int, c_uint, c_void_p
 
 
@@ -2086,7 +2093,12 @@ def quote(text):
     return '"' + text.replace('\\', '\\\\').replace('"', '\\"') + '"'
 
 
+# Every file this run wrote, as it was named (the cache keeps them all).
+WRITTEN = []
+
+
 def write_if_changed(path, data):
+    WRITTEN.append(str(path))
     path = pathlib.Path(path)
     if path.exists() and path.read_bytes() == data:
         return
@@ -2102,6 +2114,140 @@ def write_depfile(path, output, included):
 
     names = sorted({escape(name) for name in included if name})
     write_if_changed(path, (escape(output) + ': ' + ' \\\n  '.join(names) + '\n').encode())
+
+
+# The cache of the copies (NEBULA_LUMA_CACHE). A build folder made anew, as each CI job's is, parses every unit again:
+# 16 minutes of a cold build on an Intel Mac runner. Like a compiler cache's direct mode, a unit's outputs are kept by
+# what made them and taken back when none of it changed:
+#   m/<key>.json  key: a hash of the generator (this file and gen_types.py), the Python, the libclang (its file, size
+#                 and version), the parse's arguments and folder, the source's path and bytes, OUTPUT and the root. It
+#                 lists every file the parse read with the hash of its bytes, and names the outputs' folder and parts.
+#   r/<hash>/     OUTPUT and the parts written beside it (OUTPUT.types and the like), named copy<suffix>, by the hash of
+#                 their bytes.
+# An entry is taken only when every file it lists has its hash still; the depfile is written again from the list. A use
+# marks the entry and its folder with the time; --prune-cache removes what no use marked in DAYS days. With
+# NEBULA_LUMA_CACHE_LOG naming a file, each unit adds a line to it: hit or miss, and OUTPUT.
+# What it cannot see, as any direct mode cannot: a header added where an include would now find it before the file the
+# list names. The copy's compile reads the real headers, so such a change can leave only this unit's rows behind.
+CACHE_FORMAT = b'instrument.py copies 1'
+
+
+def file_hash(path):
+    return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
+
+
+def cache_key(libclang, args, directory, source, output, root):
+    key = hashlib.sha256(CACHE_FORMAT + b'\0')
+    here = pathlib.Path(__file__).resolve().parent
+    for tool in ('instrument.py', 'gen_types.py'):
+        key.update((here / tool).read_bytes())
+    lib = pathlib.Path(libclang).resolve()
+    facts = [sys.version, str(lib), lib.stat().st_size, libclang_version(ctypes.CDLL(str(lib))), args, directory, source,
+             output, root]
+    key.update(json.dumps(facts).encode('utf-8'))
+    key.update(pathlib.Path(source).read_bytes())
+    return key.hexdigest()
+
+
+def cache_log(said, output):
+    log = os.environ.get('NEBULA_LUMA_CACHE_LOG')
+    if log:
+        with open(log, 'a', encoding='utf-8') as file:
+            file.write(f'{said} {output}\n')
+
+
+def cache_take(cache, key, output, depfile):
+    """Writes the unit's outputs (and its depfile) from the cache. False when the cache has none made from the files
+    as they are now."""
+    entry = pathlib.Path(cache) / 'm' / key[:2] / (key + '.json')
+    try:
+        kept = json.loads(entry.read_text(encoding='utf-8'))
+        read = [(name, digest) for name, digest in kept['read']]
+        if any(file_hash(name) != digest for name, digest in read):
+            return False
+        folder = pathlib.Path(cache) / 'r' / kept['outputs']
+        parts = [(suffix, (folder / ('copy' + suffix)).read_bytes()) for suffix in kept['parts']]
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+    for suffix, data in parts:
+        write_if_changed(output + suffix, data)
+    if depfile:
+        write_depfile(depfile, output, [name for name, _ in read])
+    for used in (entry, folder):
+        try:
+            os.utime(used)
+        except OSError:
+            pass
+    return True
+
+
+def cache_put(cache, key, output, depfile, included):
+    """Keeps what this run wrote beside OUTPUT for the next run made from the same files. A run that wrote anywhere
+    else is not kept; a cache that cannot take it (a full disk) leaves the next run to parse again."""
+    suffixes = []
+    for path in dict.fromkeys(WRITTEN):
+        if path == depfile:
+            continue
+        if not path.startswith(output):
+            return
+        suffixes.append(path[len(output):])
+    base = pathlib.Path(cache)
+    try:
+        parts = [(suffix, pathlib.Path(output + suffix).read_bytes()) for suffix in suffixes]
+        read = [[name, file_hash(name)] for name in sorted({name for name in included if name})]
+        made = hashlib.sha256()
+        for suffix, data in parts:
+            made.update(suffix.encode('utf-8') + b'\0' + len(data).to_bytes(8, 'little'))
+            made.update(data)
+        name = made.hexdigest()
+        folder = base / 'r' / name[:2] / name
+        if folder.is_dir():
+            os.utime(folder)
+        else:
+            temp = base / 'tmp' / f'{name}.{os.getpid()}'
+            shutil.rmtree(temp, ignore_errors=True)
+            temp.mkdir(parents=True)
+            for suffix, data in parts:
+                (temp / ('copy' + suffix)).write_bytes(data)
+            folder.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                os.replace(temp, folder)
+            except OSError:  # another run kept the same outputs first
+                shutil.rmtree(temp, ignore_errors=True)
+        entry = base / 'm' / key[:2] / (key + '.json')
+        entry.parent.mkdir(parents=True, exist_ok=True)
+        temp_entry = entry.with_name(f'{entry.name}.{os.getpid()}')
+        temp_entry.write_text(json.dumps({'read': read, 'outputs': f'{name[:2]}/{name}', 'parts': suffixes}),
+                              encoding='utf-8')
+        os.replace(temp_entry, entry)
+    except OSError:
+        pass
+
+
+def prune_cache(folder, days):
+    """Removes the entries and outputs no use marked in DAYS days, and what a stopped run left half written."""
+    base = pathlib.Path(folder)
+    old = time.time() - days * 86400
+    left = time.time() - 86400
+
+    def mtime(path):
+        try:
+            return path.stat().st_mtime
+        except OSError:
+            return None
+
+    for entry in base.glob('m/*/*'):
+        when = mtime(entry)
+        if when is not None and (when < old or not entry.name.endswith('.json') and when < left):
+            entry.unlink(missing_ok=True)
+    for outputs in base.glob('r/*/*'):
+        when = mtime(outputs)
+        if when is not None and when < old:
+            shutil.rmtree(outputs, ignore_errors=True)
+    for temp in base.glob('tmp/*'):
+        when = mtime(temp)
+        if when is not None and when < left:
+            shutil.rmtree(temp, ignore_errors=True)
 
 
 def command_for(commands, output):
@@ -2164,6 +2310,10 @@ def main():
     argv = sys.argv[1:]
     if '--check-libclang' in argv:
         return check_libclang(argv)
+    if argv[:1] == ['--prune-cache']:
+        if len(argv) != 3:
+            sys.exit(__doc__)
+        return prune_cache(argv[1], float(argv[2]))
     options = {}
     for flag in ('--commands', '--root', '--libclang', '--entry', '--depfile'):
         if flag in argv:
@@ -2183,7 +2333,12 @@ def main():
     import gen_types  # the type rows' reader; it imports this module (see the end of this file)
     gen_types.set_target(args)
     api = gen_types.Api(libclang)
+    cache = os.environ.get('NEBULA_LUMA_CACHE')
+    key = cache_key(libclang, args, directory, source, output, root) if cache else None
     os.chdir(directory)
+    if key and cache_take(cache, key, output, options.get('--depfile')):
+        cache_log('hit', output)
+        return
     index = api.createIndex(0, 0)
     tu = c_void_p()
     encoded = (c_char_p * len(args))(*[a.encode() for a in args])
@@ -2208,14 +2363,18 @@ def main():
     unit.places(types)
     unit.needs_facts()
     unit.write(output)
-    if '--depfile' in options:
+    if '--depfile' in options or key:
         included = []
 
         def note(file, _stack, _depth, _data):
             included.append(unit.string(api.fileName(file)))
 
         api.inclusions(tu, INCLUSION(note), None)
-        write_depfile(options['--depfile'], output, included)
+        if '--depfile' in options:
+            write_depfile(options['--depfile'], output, included)
+        if key:
+            cache_put(cache, key, output, options.get('--depfile'), included)
+            cache_log('miss', output)
 
 
 if __name__ == '__main__':

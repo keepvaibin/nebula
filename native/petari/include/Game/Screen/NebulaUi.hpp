@@ -94,10 +94,38 @@ namespace NebulaUi {
     f32 glyphCentre(f32 y, f32 size);
     // The lines a measured box holds at `size`.
     s32 countLines(f32 height, f32 size);
-    // A unit of text: one character, or a whole tag (its parameters may be zero).
+    // A unit of text: one character (a surrogate pair is one), or a whole tag (its parameters may be zero).
     s32 unitLength(const char16_t* p);
     // `pSource` set broken into lines at its spaces so that none runs wider than `limit`.
     void wrapWords(TextBox* pText, const char16_t* pSource, f32 limit, f32* pWidth, f32* pHeight);
+
+    // The one rule for a line of text in its room (P-162): narrowed to fit down to cMinSqueeze of its width; past that,
+    // its longest start (whole characters and tags, no space at its end) and an ellipsis.
+    const f32 cMinSqueeze = 0.6f;
+    // One line's whole text and how it was last fitted. Zeroed is empty, so it lives in zeroed structs.
+    struct FitLine {
+        MR::GrowBuffer< char16_t > mWhole;
+        MR::GrowBuffer< char16_t > mShown;  // the cut text while mCut
+        f32 mWholeWidth;  // at the box's size, unnarrowed
+        f32 mWidth;       // of the text shown, unnarrowed
+        f32 mRoom;        // the room of the last fit; mFitted false: none since the text was set
+        bool mFitted;
+        bool mCut;
+        bool mTold;  // the log has it past its room
+    };
+    // `pString` as the line's whole text in `pBox`, set and measured at the box's style (set the style first); its
+    // width. A line fitted before is fitted again at its room until the next fitLine.
+    f32 setFitLine(FitLine& rLine, TextBox* pBox, const char16_t* pString);
+    // The line in `pBox` within `room` wide: the whole text or its cut start, and the narrowing as the box's x scale,
+    // which it returns. Measures only when the room changed since the last fit.
+    f32 fitLine(FitLine& rLine, TextBox* pBox, f32 room);
+    // The narrowing that brings a line `width` wide into `room`, cMinSqueeze at least (1 when it fits).
+    f32 squeezeTo(f32 width, f32 room);
+    // Moves whenever fitLine fits a line again: a screen checks its texts (checkNarrowing) only when it moved.
+    u32 fitGeneration();
+    // The rule's floor over every shown text under `pRoot`, whoever narrowed it: one narrowed further than cMinSqueeze
+    // is logged, once per text box (the menu and board tests look for this).
+    void checkNarrowing(Pane* pRoot);
     // A box's font size for picture-font glyphs `size` high.
     Ui::Size glyphFontSize(const TextBox* pText, f32 size);
     // The game's picture font: a glyph sized like text, centred on its place.

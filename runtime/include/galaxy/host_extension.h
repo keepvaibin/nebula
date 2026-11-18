@@ -48,6 +48,8 @@ void ending(bool again) noexcept;
 [[nodiscard]] std::uint64_t vram_budget_bytes() noexcept;
 [[nodiscard]] std::uint32_t disc_read_delay_us() noexcept;
 [[nodiscard]] std::uint32_t save_write_delay_us() noexcept;
+// The extensions' added time to make a new graphics device after a loss, in milliseconds.
+[[nodiscard]] std::uint32_t device_rebuild_delay_ms() noexcept;
 // Each line the host logs, to every extension that listens ("<tag> <text>").
 void log_line(const char* tag, const char* text) noexcept;
 // A service an extension offers to mods by name, or null.

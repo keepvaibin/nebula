@@ -4,6 +4,12 @@
 
 #include <string>
 
+#if defined(__OBJC__)
+#import <Foundation/Foundation.h>
+
+#include "galaxy/host_text.h"
+#endif
+
 namespace galaxy::apple {
 
 // An app opened from the Finder or the home screen has no command line. Fills in what it leaves out from the app's own
@@ -26,5 +32,14 @@ void start_app() noexcept;
 // A Mac's first start (setup_apple.mm): with no game.pak at --pak, asks the player for their disc image and builds it.
 // False: the player left without setting up, and the app ends. After launch_arguments, on the main thread.
 [[nodiscard]] bool ensure_game_data(int argc, char** argv);
+
+#if defined(__OBJC__)
+// The app's own words in the host's language (galaxy/host_text.h: the LANGUAGE setting, else the Mac's preferred
+// language), as AppKit takes them. `english`: a "C." or "H." row's English (tools/nebula_text.py --check holds each
+// call to one). A row's text and a literal both end in a zero, so the view's data is a C string.
+[[nodiscard]] inline NSString* host_ns_text(const char* english) {
+    return [NSString stringWithUTF8String:galaxy::host_text::translated(english, galaxy::host_text::language()).data()];
+}
+#endif
 
 }  // namespace galaxy::apple

@@ -10,6 +10,9 @@ import subprocess
 import sys
 
 REVIEWED = {
+    "native/petari/include/Game/Camera/CameraAnim.hpp":
+        "cutCount reads the NCAM clip's own count: the importer cooks it (cook/camera.rs) as a little-endian u32 at a "
+        "4-byte boundary right after the f32 values, so the cast reads the value the cook wrote",
 }
 CAST = re.compile(
     r"\*\s*(?:reinterpret_cast<\s*(?:const\s+)?(?:u8|s8|u16|s16|u32|s32|u64|s64|f32|f64|char16_t|wchar)\s*\*\s*>\s*\(|"

@@ -246,8 +246,6 @@ private:
     bool prepared_ = false;
     bool reported_ = false;
     std::uint64_t frame_id_ = 0u;
-    std::uint64_t generated_ = 0u;
-    std::uint64_t generate_failures_ = 0u;
     unsigned render_width_ = 0u;
     unsigned render_height_ = 0u;
     unsigned display_width_ = 0u;

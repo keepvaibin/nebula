@@ -49,11 +49,19 @@
 
 namespace galaxy::render {
 
-// Replacement and scene LOD adjustments are floating-point mip levels. `arbitrary`: a replacement whose levels pair with
-// the game's by index; `authored`: the game's own levels drawn by hand (TextureHandle::authored_levels). Both choose the
-// level the game showed at its authored lines (mip_lines_log2) without the scene's bias (kSamplerAuthoredLevels).
+// Replacement LOD adjustments are floating-point mip levels. `arbitrary`: a replacement whose levels pair with the game's
+// by index; `authored`: the game's own levels drawn by hand (TextureHandle::authored_levels). Both choose the level the
+// game showed at its authored lines (sampler_frame_bias) without the settings' bias (kSamplerAuthoredLevels).
+// The key holds the texture's own state only: what follows the frame is the programs' (sampler_frame_bias).
 [[nodiscard]] SamplerKey make_sampler_key(const TextureSampler& mode, std::uint32_t mip_levels, float lod_shift = 0.0f,
-    bool arbitrary = false, float mip_lines_log2 = 0.0f, float scene_bias = 0.0f, bool authored = false) noexcept;
+    bool arbitrary = false, bool authored = false) noexcept;
+
+// The part of a sampler's level bias that follows the frame, which the programs add to the sampler's own
+// (program.hlsli BIAS, from core::ViewRows::map_bias): none (no levels); the scene's, an upscaler's, for the game's
+// levels; or, for levels drawn by hand, the frame's lines over the authored lines, so they show the level the game
+// showed. Out of the key, dynamic resolution's steps, the window's height and the upscaler make no new samplers.
+enum class SamplerFrameBias : std::uint32_t { none = 0u, scene = 1u, lines = 2u };
+[[nodiscard]] SamplerFrameBias sampler_frame_bias(const TextureSampler& mode, bool arbitrary, bool authored) noexcept;
 
 void note_layer_2d_lines(unsigned lines) noexcept;
 
@@ -178,10 +186,8 @@ private:
     // Presents black, a named picture (`slot`) or the newest.
     void present_cached_display_on_thread(
         bool black,
-        bool sleep_if_missing,
         bool count_game_display_present = true,
         std::optional<std::uint32_t> slot = std::nullopt);
-    void present_latest_frame_on_thread();
     // The output shows black (FrameChunk::black): one black present per black
     // run, repeated while the settings overlay is open. `in_frame`: inside a render chunk's
     // begin_frame/end_frame.
@@ -257,8 +263,10 @@ private:
     std::unique_ptr<core::RecordPool> record_pool_;
     const WalkView& walk_view(std::uint32_t index, const NebulaFramePass& pass);
     const core::StaticSlot& walk_material(std::uint32_t index);
-    // A frame constants entry's rows as this walk uploads them: the list's own, or at t.
-    [[nodiscard]] const float* walk_material_rows(std::uint32_t index);
+    // Makes a frame constants entry's rows as this walk uploads them: the list's own, or at t (kept in walk_lerped_).
+    void walk_material_settle(std::uint32_t index);
+    // A settled entry's rows. Reads only: a pointer from it stays valid until the next walk_material_settle.
+    [[nodiscard]] const float* walk_material_rows(std::uint32_t index) const;
     // One material at this walk's t: one entry, one registered slot, or rows the same to the byte.
     [[nodiscard]] bool walk_same_material(std::uint32_t a, std::uint32_t b);
     // The ring draws from `first` that are one draw with it; their indices in `index_count`.
@@ -271,7 +279,7 @@ private:
     std::vector<std::uint32_t> walk_pairs_;
 #if defined(NEBULA_GPU_VULKAN) || defined(NEBULA_GPU_METAL) || defined(NEBULA_GPU_D3D11)
     // Vulkan without descriptor indexing: the table's descriptor sets, as many maps as a bound table holds.
-    void walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::Table& samplers);
+    void walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::Table& samplers, std::uint32_t& map_bias);
     std::vector<SamplerKey> walk_keys_;
 #endif
     [[nodiscard]] bool item_culled(const NebulaFrameItem& item, const NebulaFramePass& pass, std::uint32_t state,
@@ -603,11 +611,13 @@ private:
     std::condition_variable queue_cv_;        // consumer: work or stop
     std::condition_variable queue_space_cv_;  // producer: slot free
     std::deque<FrameChunk> frame_queue_;
-    // Steady-clock time the render thread has spent on its current chunk (0 between chunks), written
-    // under queue_mutex_. While one chunk has run for kRenderStallNs (a burst of first-use textures or
-    // pipelines), the producer may queue up to kStalledRenderQueueDepth chunks. The game then reaches
-    // its own GPU wait, where its audio thread keeps running, instead of blocking here.
-    std::uint64_t render_chunk_started_ns_ = 0;
+    // When the render thread's current piece of work began (steady clock; 0 between pieces): a frame's list, an
+    // interpolation step, a present. While one has run for kRenderStallNs (a burst of first-use textures or pipelines,
+    // a mod's draw.native function holding the thread), the producer may queue up to kStalledRenderQueueDepth chunks
+    // (render_queue.h queue_place). The game then reaches its own GPU wait, where its audio thread keeps running.
+    std::atomic<std::uint64_t> render_work_started_ns_{0};
+    void render_work_begins() noexcept;
+    void render_work_ends() noexcept;
     static constexpr std::uint64_t kRenderStallNs = 20'000'000u;
     static constexpr std::size_t kStalledRenderQueueDepth = 8u;
     // Probes in flight, oldest first, each with the game frame whose list asked it; their answers go to probe_book_, the
@@ -627,6 +637,10 @@ private:
     std::condition_variable probe_answers_cv_;
     core::ProbeBook probe_book_;
     unsigned probe_waits_logged_ = 0u;
+    static constexpr std::uint64_t kProbeWaitNs = 2'000'000'000u;
+    // When the draw.native function the render thread runs began (steady clock; 0: none runs): the game's probe read
+    // waits on none that has run kRenderStallNs (render_queue.h probe_wait).
+    std::atomic<std::uint64_t> native_call_started_ns_{0};
     // Render thread: the list's real walk is over (it asks no more probes), or it leaves unwalked.
     void probes_walked(std::uint32_t game_frame);
     void probes_released(std::uint32_t game_frame);

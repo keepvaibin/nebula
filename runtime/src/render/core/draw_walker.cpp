@@ -2,6 +2,7 @@
 // The one path every presented frame takes through a frame list: a real frame at t = 1, a generated one at its t.
 #include "galaxy/render/program_table.h"
 #include "galaxy/render/render_core.h"
+#include "galaxy/render/render_queue.h"
 
 #include "galaxy/cpu_count.h"
 #include "galaxy/frame_timeline.h"
@@ -13,6 +14,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <cassert>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -572,6 +574,10 @@ const RenderCore::WalkView& RenderCore::walk_view(std::uint32_t index, const Neb
     rows.view_flags = view_flags_;
     rows.scale[1] = walk_.time.t;
     rows.scale[2] = walk_.time.t_prev;
+    // The frame's part of the maps' level bias (SamplerFrameBias): the views are written again where the scene begins
+    // and ends, so the scene's holds only inside it.
+    rows.map_bias[0] = scene_mip_bias_;
+    rows.map_bias[1] = walk_.mip_lines;
     std::memcpy(out.cpu, &rows, sizeof(rows));
     entry.address = out.gpu;
     // Half a line's and a point's width in this target's pixels (the item's are lines of the frame).
@@ -598,15 +604,21 @@ const core::StaticSlot& RenderCore::walk_material(std::uint32_t index) {
     slot.vertex_rows = vertex.gpu;
     slot.pixel_rows = pixel.gpu;
 
+    walk_material_settle(index);
     const float* rows = walk_material_rows(index);
     std::memcpy(vertex.cpu, rows, vertex_bytes);
     std::memcpy(pixel.cpu, rows + std::size_t{constants.vertex_rows} * 4u, pixel_bytes);
     return slot;
 }
 
-// The list's own rows, or at t: once a walk, kept in walk_lerped_ for walk_same_material.
-const float* RenderCore::walk_material_rows(std::uint32_t index) {
-    constexpr std::uint32_t kAsListed = NEBULA_NONE32 - 1u;
+namespace {
+constexpr std::uint32_t kWalkRowsAsListed = NEBULA_NONE32 - 1u;
+}
+
+// The list's own rows, or at t: once a walk, kept in walk_lerped_ for walk_same_material. The only place walk_lerped_
+// grows, so no pointer from walk_material_rows is held across it.
+void RenderCore::walk_material_settle(std::uint32_t index) {
+    constexpr std::uint32_t kAsListed = kWalkRowsAsListed;
     const NebulaFrameConstants& constants = walk_.now->list->constants[index];
     std::uint32_t& at = walk_material_at_[index];
     if (at == NEBULA_NONE32) {
@@ -649,7 +661,12 @@ const float* RenderCore::walk_material_rows(std::uint32_t index) {
             at = static_cast<std::uint32_t>(first);
         }
     }
-    return at == kAsListed ? reinterpret_cast<const float*>(constants.rows) : walk_lerped_.data() + at;
+}
+
+const float* RenderCore::walk_material_rows(std::uint32_t index) const {
+    const std::uint32_t at = walk_material_at_[index];
+    assert(at != NEBULA_NONE32);
+    return at == kWalkRowsAsListed ? reinterpret_cast<const float*>(walk_.now->list->constants[index].rows) : walk_lerped_.data() + at;
 }
 
 bool RenderCore::walk_same_material(std::uint32_t a, std::uint32_t b) {
@@ -666,9 +683,9 @@ bool RenderCore::walk_same_material(std::uint32_t a, std::uint32_t b) {
     if (bytes == 0u) {
         return true;
     }
-    (void)walk_material_rows(a);
-    const float* rb = walk_material_rows(b);
-    return std::memcmp(walk_material_rows(a), rb, bytes) == 0;  // a's again: b's may have grown walk_lerped_
+    walk_material_settle(a);
+    walk_material_settle(b);
+    return std::memcmp(walk_material_rows(a), walk_material_rows(b), bytes) == 0;
 }
 
 // Ring draws after `first` join its draw while they differ from it only in their rows, vertices and indices. Each
@@ -745,7 +762,6 @@ void RenderCore::walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_
         first = table.list_first;
         return;
     }
-    const float mip_lines = walk_.mip_lines;  // taken once in prepare_walk
     // The run is as long as the list: no count caps it.
     const std::uint32_t count = table.count;
     const NebulaFrameTexture none{};
@@ -767,11 +783,10 @@ void RenderCore::walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_
             walk_handles_[i] = texture_store_.handle(texture);
         }
     }
-    // A sampler depends on its texture (levels, generated levels, a replacement's shift): made again when the textures,
-    // the heap, the frame's height or the scene's bias changed, and each walk for a table holding a target.
+    // A sampler depends on its texture (levels, generated levels, a replacement's shift): made again when the textures
+    // or the heap changed, and each walk for a table holding a target. The frame's part of its bias is the programs'.
     if (has_target || table.sampler_slots.size() != count || table.textures_revision != texture_store_.revision() ||
-        table.samplers_generation != generation || table.samplers_mip_lines != mip_lines ||
-        table.samplers_scene_bias != scene_mip_bias_) {
+        table.samplers_generation != generation) {
         table.sampler_slots.resize(count);
         for (std::uint32_t i = 0; i < count; ++i) {
             const NebulaFrameTexture& t = entry_of(i);
@@ -786,19 +801,18 @@ void RenderCore::walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_
             mode.min_lod = t.min_lod;
             mode.max_lod = t.max_lod;
             const TextureHandle& handle = walk_handles_[i];
-            // The cook's generated levels are ray tracing's alone: a draw keeps to the game's first level.
+            // A draw keeps to the game's first level: the cook's generated levels are not the game's.
             if (handle.generated_mips) {
                 mode.min_lod = 0.0f;
                 mode.max_lod = 0.0f;
             }
-            table.sampler_slots[i] = renderer_.sampler_slot(make_sampler_key(mode, handle.mip_levels, handle.lod_shift,
-                                                                             handle.lod_arbitrary, mip_lines, scene_mip_bias_,
-                                                                             handle.authored_levels));
+            const std::uint32_t slot = renderer_.sampler_slot(make_sampler_key(mode, handle.mip_levels, handle.lod_shift,
+                                                                               handle.lod_arbitrary, handle.authored_levels));
+            const auto bias = sampler_frame_bias(mode, handle.lod_arbitrary, handle.authored_levels);
+            table.sampler_slots[i] = slot | static_cast<std::uint32_t>(bias) << gpu::kTableBiasShift;
         }
         table.textures_revision = texture_store_.revision();
         table.samplers_generation = generation;
-        table.samplers_mip_lines = mip_lines;
-        table.samplers_scene_bias = scene_mip_bias_;
     }
     walk_pairs_.resize(std::size_t{count} * 2u);
     for (std::uint32_t i = 0; i < count; ++i) {
@@ -821,7 +835,7 @@ void RenderCore::walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_
 #if defined(NEBULA_GPU_VULKAN) || defined(NEBULA_GPU_METAL) || defined(NEBULA_GPU_D3D11)
 // A device without descriptor indexing: each draw binds its table, as many maps as a bound table holds on this device
 // (renderer_.table_slots(); program.hlsli NEBULA_BOUND_TABLES). A longer list draws with its first maps.
-void RenderCore::walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::Table& samplers) {
+void RenderCore::walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::Table& samplers, std::uint32_t& map_bias) {
     core::TextureTable& table = registries_.table(id);
     table.last_frame = walk_.now->serial;
     table.retired = false;
@@ -839,10 +853,8 @@ void RenderCore::walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::
     };
     const bool stale = table.textures.ptr == 0u || table.textures_revision != texture_store_.revision();
     const bool per_walk = table.has_target && (table.walk_stamp != walk_.serial || table.pictures_moved != pictures_moved_);
-    const float mip_lines = walk_.mip_lines;  // taken once in prepare_walk
     const auto generation = renderer_.sampler_generation();
-    const bool samplers_stale = table.samplers.ptr == 0u || table.samplers_generation != generation ||
-        table.samplers_mip_lines != mip_lines || table.samplers_scene_bias != scene_mip_bias_;
+    const bool samplers_stale = table.samplers.ptr == 0u || table.samplers_generation != generation;
     if (stale || per_walk || samplers_stale) {
         walk_handles_.assign(count, TextureHandle{});
         std::vector<TextureHandle>& handles = walk_handles_;
@@ -877,6 +889,7 @@ void RenderCore::walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::
         if (stale || samplers_stale || has_target) {
             std::vector<SamplerKey>& keys = walk_keys_;
             keys.assign(count, SamplerKey{});
+            table.map_bias = 0u;
             for (std::uint32_t i = 0; i < count; ++i) {
                 const NebulaFrameTexture& t = entry_of(i);
                 TextureSampler mode;
@@ -890,18 +903,18 @@ void RenderCore::walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::
                 mode.min_lod = t.min_lod;
                 mode.max_lod = t.max_lod;
                 const TextureHandle& handle = handles[i];
-                // The cook's generated levels are ray tracing's alone: a draw keeps to the game's first level.
+                // A draw keeps to the game's first level: the cook's generated levels are not the game's.
                 if (handle.generated_mips) {
                     mode.min_lod = 0.0f;
                     mode.max_lod = 0.0f;
                 }
-                keys[i] = make_sampler_key(mode, handle.mip_levels, handle.lod_shift, handle.lod_arbitrary, mip_lines,
-                                           scene_mip_bias_, handle.authored_levels);
+                keys[i] = make_sampler_key(mode, handle.mip_levels, handle.lod_shift, handle.lod_arbitrary,
+                                           handle.authored_levels);
+                table.map_bias |= static_cast<std::uint32_t>(
+                    sampler_frame_bias(mode, handle.lod_arbitrary, handle.authored_levels)) << (2u * i);
             }
             table.samplers = renderer_.sampler_table_for(keys.data(), count);
             table.samplers_generation = generation;
-            table.samplers_mip_lines = mip_lines;
-            table.samplers_scene_bias = scene_mip_bias_;
         }
     } else if (table.touched_walk != walk_.serial) {
         // The table stands as it was built: its textures are named again all the same (the budget evicts the unnamed ones). Once
@@ -913,6 +926,7 @@ void RenderCore::walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::
     }
     textures = table.textures;
     samplers = table.samplers;
+    map_bias = table.map_bias;
 }
 #endif
 
@@ -1166,7 +1180,7 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
 #if defined(NEBULA_GPU_VULKAN) || defined(NEBULA_GPU_METAL) || defined(NEBULA_GPU_D3D11)
         if (!renderer_.bindless()) {
             gpu::Table textures{}, samplers{};
-            walk_bound_tables(item.textures, textures, samplers);
+            walk_bound_tables(item.textures, textures, samplers, root.map_bias);
             encoder.set_tables(textures, samplers);
         } else
 #endif
@@ -1759,7 +1773,15 @@ void RenderCore::walk_native(const NebulaFrameList& list, const NebulaFramePass&
             frame.projection[3u * 4u + c] = rows[3][c];
         }
     }
-    renderer_.record_native_call(call, frame, scene_point);
+    // The function's time is the mod's: the game's probe read does not wait on it once it holds the thread.
+    native_call_started_ns_.store(steady_now_ns(), std::memory_order_release);
+    try {
+        renderer_.record_native_call(call, frame, scene_point);
+    } catch (...) {
+        native_call_started_ns_.store(0u, std::memory_order_release);
+        throw;
+    }
+    native_call_started_ns_.store(0u, std::memory_order_release);
 }
 
 void RenderCore::walk_show() {

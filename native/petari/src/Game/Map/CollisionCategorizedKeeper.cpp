@@ -1,5 +1,6 @@
 #include "Game/Map/CollisionCategorizedKeeper.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
+#include "Game/Map/CollisionChanges.hpp"
 #include "Game/Map/CollisionParts.hpp"
 #include "Game/Util/CollisionPartsFilter.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -19,7 +20,7 @@ void CollisionCategorizedKeeper::movement() {
 
     for (CollisionZone** pZone = mZones.begin(); pZone != mZones.end(); pZone++) {
         s32 count = (*pZone)->mParts.size();
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
         // The global zone (the first) has no bounds: every query takes its parts without a zone test, and addParts
         // never makes them. The others' first bounds are made once, from every part's new matrix (as the last of a
         // remake per valid part left them). A module with hook points makes the game's calls.
@@ -38,10 +39,11 @@ void CollisionCategorizedKeeper::movement() {
                     continue;
                 }
 
-                if (mUpdateZoneBounds) {
+                // A moved part past the zone's box (shrunk by its radius) has the zone's bounds made again once,
+                // after every part moved, not once for each such part (P-130): the bounds only decide which
+                // zones a query looks in, and they hold every part either way.
+                if (mUpdateZoneBounds || (pParts->mStillCount == 0 && (*pZone)->isMoveOuter(pParts))) {
                     remake = true;
-                } else if (pParts->mStillCount == 0) {
-                    (*pZone)->calcMinMaxAndRadiusIfMoveOuter(pParts);
                 }
             }
         }
@@ -109,10 +111,16 @@ s32 CollisionCategorizedKeeper::checkStrikePoint(const Vec3f& rPosition, HitInfo
             }
         }
 
-        int count = (*pZone)->mParts.size();
         CollisionParts* pParts;
 
+#if defined(NEBULA_PLAIN_PATHS)
+        CollisionPartWalk walk(*pZone, rPosition, rPosition);
+        for (int i; (i = walk.next()) >= 0;) {
+#else
+        int count = (*pZone)->mParts.size();
+
         for (int i = 0; i < count; i++) {
+#endif
             pParts = (*pZone)->mParts[i];
 
             if (!pParts->mIsValid) {
@@ -157,6 +165,11 @@ s32 CollisionCategorizedKeeper::collectStrikeBall(const Vec3f& rPosition, f32 ba
                                                 const TriangleFilterBase* pTriangleFilter) {
     mNumHits = 0;
     s32 hitCount = 0;
+#if defined(NEBULA_PLAIN_PATHS)
+    // The box a part must meet to be tested: the ball's (P-129).
+    const Vec3f queryMin(rPosition.x - ballRadius, rPosition.y - ballRadius, rPosition.z - ballRadius);
+    const Vec3f queryMax(rPosition.x + ballRadius, rPosition.y + ballRadius, rPosition.z + ballRadius);
+#endif
 
     for (CollisionZone** pZone = mZones.begin(); pZone != mZones.end(); pZone++) {
         if (pZone != mZones.begin()) {
@@ -173,10 +186,16 @@ s32 CollisionCategorizedKeeper::collectStrikeBall(const Vec3f& rPosition, f32 ba
             }
         }
 
-        s32 count = (*pZone)->mParts.size();
         CollisionParts* pParts;
 
+#if defined(NEBULA_PLAIN_PATHS)
+        CollisionPartWalk walk(*pZone, queryMin, queryMax);
+        for (int i; (i = walk.next()) >= 0;) {
+#else
+        s32 count = (*pZone)->mParts.size();
+
         for (int i = 0; i < count; i++) {
+#endif
             pParts = (*pZone)->mParts[i];
 
             if (!pParts->mIsValid) {
@@ -229,6 +248,11 @@ s32 CollisionCategorizedKeeper::collectStrikeBallWithThickness(const Vec3f& rPos
                                                              const TriangleFilterBase* pTriangleFilter) {
     mNumHits = 0;
     s32 hitCount = 0;
+#if defined(NEBULA_PLAIN_PATHS)
+    // The box a part must meet to be tested: the ball's (P-129).
+    const Vec3f queryMin(rPosition.x - ballRadius, rPosition.y - ballRadius, rPosition.z - ballRadius);
+    const Vec3f queryMax(rPosition.x + ballRadius, rPosition.y + ballRadius, rPosition.z + ballRadius);
+#endif
 
     for (CollisionZone** pZone = mZones.begin(); pZone != mZones.end(); pZone++) {
         if (pZone != mZones.begin()) {
@@ -245,10 +269,16 @@ s32 CollisionCategorizedKeeper::collectStrikeBallWithThickness(const Vec3f& rPos
             }
         }
 
-        s32 count = (*pZone)->mParts.size();
         CollisionParts* pParts;
 
+#if defined(NEBULA_PLAIN_PATHS)
+        CollisionPartWalk walk(*pZone, queryMin, queryMax);
+        for (int i; (i = walk.next()) >= 0;) {
+#else
+        s32 count = (*pZone)->mParts.size();
+
         for (int i = 0; i < count; i++) {
+#endif
             pParts = (*pZone)->mParts[i];
 
             if (!pParts->mIsValid) {
@@ -340,10 +370,16 @@ s32 CollisionCategorizedKeeper::collectStrikeLine(const Vec3f& rStart, const Vec
             }
         }
 
-        s32 count = (*pZone)->mParts.size();
         CollisionParts* pParts;
 
+#if defined(NEBULA_PLAIN_PATHS)
+        CollisionPartWalk walk(*pZone, min, max);
+        for (int i; (i = walk.next()) >= 0;) {
+#else
+        s32 count = (*pZone)->mParts.size();
+
         for (int i = 0; i < count; i++) {
+#endif
             pParts = (*pZone)->mParts[i];
 
             if (!pParts->mIsValid) {
@@ -412,10 +448,16 @@ u32 CollisionCategorizedKeeper::createAreaPolygonList(Triangle* pTriangles, u32 
             continue;
         }
 
-        s32 count = (*pZone)->mParts.size();
         CollisionParts* pParts;
 
+#if defined(NEBULA_PLAIN_PATHS)
+        CollisionPartWalk walk(*pZone, min, max);
+        for (int i; (i = walk.next()) >= 0;) {
+#else
+        s32 count = (*pZone)->mParts.size();
+
         for (int i = 0; i < count; i++) {
+#endif
             pParts = (*pZone)->mParts[i];
 
             if (!pParts->mIsValid) {
@@ -451,10 +493,16 @@ u32 CollisionCategorizedKeeper::createAreaPolygonListArray(Triangle* pTriangles,
             continue;
         }
 
-        s32 count = (*pZone)->mParts.size();
         CollisionParts* pParts;
 
+#if defined(NEBULA_PLAIN_PATHS)
+        CollisionPartWalk walk(*pZone, min, max);
+        for (int i; (i = walk.next()) >= 0;) {
+#else
+        s32 count = (*pZone)->mParts.size();
+
         for (int i = 0; i < count; i++) {
+#endif
             pParts = (*pZone)->mParts[i];
 
             if (!pParts->mIsValid) {
@@ -574,9 +622,17 @@ CollisionZone* CollisionCategorizedKeeper::getZone(int zone) {
 }
 
 CollisionZone::CollisionZone(s32 zoneID) : mZoneID(zoneID), mCenter(0, 0, 0), mRadius(), mMin(0, 0, 0), mMax(0, 0, 0) {
+#if defined(NEBULA_PLAIN_PATHS)
+    mChanges = 0;
+#endif
 }
 
 void CollisionZone::addParts(CollisionParts* pParts) {
+#if defined(NEBULA_PLAIN_PATHS)
+    CollisionChanges::note(pParts->getTrans(), pParts->mBoundingRadius);
+    pParts->mListZone = this;
+    mChanges++;
+#endif
     mParts.push_back(pParts);
 
     if (mZoneID != 0) {
@@ -585,6 +641,11 @@ void CollisionZone::addParts(CollisionParts* pParts) {
 }
 
 void CollisionZone::calcMinMaxAndRadius() {
+#if defined(NEBULA_PLAIN_PATHS)
+    // The global zone's bounds are never tested; another zone's sphere decides which of its parts a line query takes.
+    const Vec3f lastCenter(mCenter);
+    const f32 lastRadius = mRadius;
+#endif
     CollisionParts** pCurrent;
     mMin.zero();
     mMax.zero();
@@ -614,7 +675,30 @@ void CollisionZone::calcMinMaxAndRadius() {
     }
 
     mRadius = radius;
+#if defined(NEBULA_PLAIN_PATHS)
+    if (mZoneID != 0 && (lastCenter.x != mCenter.x || lastCenter.y != mCenter.y || lastCenter.z != mCenter.z || lastRadius != mRadius)) {
+        CollisionChanges::note(lastCenter, lastRadius);
+        CollisionChanges::note(mCenter, mRadius);
+    }
+#endif
 }
+
+#if defined(NEBULA_PLAIN_PATHS)
+bool CollisionZone::isMoveOuter(CollisionParts* pParts) const {
+    f32 radius = pParts->mBoundingRadius;
+    Vec3f position(pParts->getTrans());
+    Vec3f min(mMin);
+    Vec3f max(mMax);
+    min.x += radius;
+    min.y += radius;
+    min.z += radius;
+    max.x -= radius;
+    max.y -= radius;
+    max.z -= radius;
+
+    return !MR::isInRange(position.x, min.x, max.x) || !MR::isInRange(position.y, min.y, max.y) || !MR::isInRange(position.z, min.z, max.z);
+}
+#endif
 
 void CollisionZone::calcMinMaxAndRadiusIfMoveOuter(CollisionParts* pParts) {
     f32 radius = pParts->mBoundingRadius;
@@ -674,6 +758,13 @@ void CollisionZone::eraseParts(CollisionParts* pParts) {
     }
 
     if (pFound != pEnd) {
+#if defined(NEBULA_PLAIN_PATHS)
+        CollisionChanges::note(pParts->getTrans(), pParts->mBoundingRadius);
+        if (pParts->mListZone == this) {
+            pParts->mListZone = nullptr;
+        }
+        mChanges++;
+#endif
         mParts[pFound - mParts.begin()] = mParts[count - 1];
         mParts.pop_back();
     }

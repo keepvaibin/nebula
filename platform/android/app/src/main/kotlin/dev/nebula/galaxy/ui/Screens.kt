@@ -169,7 +169,7 @@ fun NebulaApp(model: LauncherModel, onShareLog: () -> Unit) {
         }
     }
     Box(Modifier.fillMaxSize().dragAndDropTarget(shouldStartDragAndDrop = { model.screen != Screen.Import }, target = dropTarget)) {
-        Starfield()
+        Starfield(moving = model.screen != Screen.Import)
         AnimatedContent(
             targetState = model.screen,
             transitionSpec = { (fadeIn(tween(260)) + scaleIn(tween(260), initialScale = 0.98f)) togetherWith fadeOut(tween(160)) },

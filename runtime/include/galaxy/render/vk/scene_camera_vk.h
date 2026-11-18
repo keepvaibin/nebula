@@ -29,13 +29,12 @@ public:
     // `picture` is the scene target's colour, sampled; every sample of the wide target takes it.
     void widen(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2, const Texture& picture, unsigned width,
                unsigned height, const SetAllocator& allocate);
-    // `wide` is the resolved wide colour, sampled. Below zero `seconds` starts the eye open. `finish`: the traced
-    // relight's (scene_camera.hlsl g_finish), in the meter and the camera alike.
+    // `wide` is the resolved wide colour, sampled. Below zero `seconds` starts the eye open.
     void meter(VkCommandBuffer commands, const Texture& wide, const Texture& depth, VkImageLayout depth_layout,
-               unsigned width, unsigned height, float seconds, unsigned finish, const SetAllocator& allocate);
+               unsigned width, unsigned height, float seconds, const SetAllocator& allocate);
     // `wide` is the wide colour, sampled: the multisampled target when `per_sample`, else the resolved one.
     void draw(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2, const Texture& wide, unsigned width,
-              unsigned height, bool per_sample, const SetAllocator& allocate, bool resolve = false, unsigned finish = 0u);
+              unsigned height, bool per_sample, const SetAllocator& allocate, bool resolve = false);
 
 private:
     enum Kind : unsigned { kWiden, kCamera, kCameraSamples, kCameraResolve, kKinds };
@@ -43,7 +42,7 @@ private:
     [[nodiscard]] VkDescriptorSet set_of(const SetAllocator& allocate, const Texture& sampled, const Texture* depth = nullptr,
                                          VkImageLayout depth_layout = VK_IMAGE_LAYOUT_GENERAL) const;
     void full_screen(VkCommandBuffer commands, VkPipeline pipeline, VkDescriptorSet set, unsigned width,
-                     unsigned height, unsigned finish = 0u) const;
+                     unsigned height) const;
 
     std::shared_ptr<Texture> exposure_;
     VkDescriptorSetLayout set_layout_ = VK_NULL_HANDLE;

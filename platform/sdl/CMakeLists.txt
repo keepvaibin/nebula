@@ -3,6 +3,11 @@
 # the cache paths below; the game module is native/CMakeLists.txt.
 cmake_minimum_required(VERSION 3.22)
 project(NebulaSDL LANGUAGES C CXX)
+# What the host computes for the game (a stick's position above all) is the same bits on every CPU: no multiply and
+# add is fused into one rounding. Clang fuses them by default on CPUs with a fused multiply-add (arm64, and x86-64 at
+# AVX2): a tablet's stick then differed from a computer's by one ulp, and its replay from the computer's (N-1064). The
+# game module is built the same way (native/CMakeLists.txt). MSVC fuses none at /fp:precise without /fp:contract.
+add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:-ffp-contract=off>)
 # The game's version, from the main project's file.
 file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/../../CMakeLists.txt" nebula_project_line REGEX "^project\\(Nebula VERSION ")
 string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" nebula_version "${nebula_project_line}")
@@ -149,6 +154,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/frame_interpolation.cpp
     ${rt}/frame_telemetry.cpp
     ${rt}/perf_hint.cpp
+    ${rt}/thermal_state.cpp
     ${rt}/pacing.cpp
     ${rt}/pacing_recorder.cpp
     ${rt}/render/vk/vk_context.cpp
@@ -227,9 +233,24 @@ add_library(galaxy_render_vk STATIC
     ${rt}/texture_categories.cpp
     ${rt}/dolphin_pack.cpp
     ${rt}/crash_report.cpp
+    ${rt}/host_text.cpp
     ${rt}/discord_presence.cpp
     ${rt}/controller_roster.cpp
     ${rt}/wiimote_speaker.cpp)
+# A replacement movie through the system's decoder (runtime/src/render/movie_source.h): MediaCodec on Android,
+# AVFoundation on Apple's systems, GStreamer (opened at run time) elsewhere.
+if(ANDROID)
+    target_sources(galaxy_render_vk PRIVATE ${rt}/render/movie_source_android.cpp)
+    target_link_libraries(galaxy_render_vk PRIVATE mediandk)
+elseif(APPLE)
+    target_sources(galaxy_render_vk PRIVATE ${rt}/render/movie_source_apple.mm)
+    set_source_files_properties(${rt}/render/movie_source_apple.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+    target_link_libraries(galaxy_render_vk PRIVATE "-framework AVFoundation" "-framework CoreMedia"
+        "-framework CoreVideo" "-framework Foundation")
+else()
+    target_sources(galaxy_render_vk PRIVATE ${rt}/render/movie_source_gstreamer.cpp)
+    target_link_libraries(galaxy_render_vk PRIVATE ${CMAKE_DL_LIBS})
+endif()
 # Mod import (folders and archives).
 if(NOT IOS)
     set(NEBULA_ARCHIVE_SOURCES "${nebula_root}/third_party/archive" CACHE PATH "zlib, xz and libarchive sources")
@@ -296,6 +317,7 @@ set(host_sources
     "${CMAKE_CURRENT_SOURCE_DIR}/display_clock.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/thread_sampler.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/crash_log.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/output_log.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/native_game_host_sdl.cpp")
 if(ANDROID)
     # A real Wii Remote on a DolphinBar (wiimote_hid.h over wiimote_link_android.cpp).

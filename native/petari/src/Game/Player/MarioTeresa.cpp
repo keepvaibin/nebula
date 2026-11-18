@@ -16,6 +16,7 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/FrameCount.hpp"
 
 void Mario::startTeresaMode() {
     mTeresaWallThroughTimer = 0;
@@ -450,7 +451,7 @@ void MarioTeresa::checkWallCeilReflect() {
             player->mTeresaWallThroughTimer = 0;
         }
 
-        mReflectTimer++;
+        MR::countUp(mReflectTimer);
         return;
     }
 
@@ -688,7 +689,7 @@ void MarioTeresa::doTeresaReflection(const Vec3f& rNormal, bool effect) {
     Mario* player = getPlayer();
     player->mTeresaWallThroughTimer = 0;
     mActor->mSpinIntervalTimer = 5;
-    mReflectTimer++;
+    MR::countUp(mReflectTimer);
 }
 
 XanimeGroupInfo teresaAnimeTable[] = {

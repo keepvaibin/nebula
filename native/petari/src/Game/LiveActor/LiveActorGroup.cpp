@@ -3,7 +3,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/System/LumaCore.hpp"
 
-LiveActorGroup::LiveActorGroup(const char* pName, int numMax) : NameObjGroup(pName, numMax) {
+LiveActorGroup::LiveActorGroup(const char* pName, int numMax) : NameObjGroup(pName, numMax), mDeadFrom(0), mDeadCheck(0) {
     lumacore::setClass(this, lumacore::kClassId< LiveActorGroup >);
 }
 
@@ -16,6 +16,19 @@ LiveActor* LiveActorGroup::getActor(int index) const {
 }
 
 LiveActor* LiveActorGroup::getDeadActor() const {
+#if defined(NEBULA_PLAIN_PATHS)
+    s32 i = mDeadCheck == LiveActor::sDeathCount ? mDeadFrom : 0;
+    mDeadCheck = LiveActor::sDeathCount;
+    for (; i < getObjNum(); i++) {
+        if (MR::isDead(getActor(i))) {
+            mDeadFrom = i;
+            return getActor(i);
+        }
+    }
+
+    mDeadFrom = getObjNum();
+    return nullptr;
+#else
     for (s32 i = 0; i < getObjNum(); i++) {
         if (MR::isDead(getActor(i))) {
             return getActor(i);
@@ -23,6 +36,7 @@ LiveActor* LiveActorGroup::getDeadActor() const {
     }
 
     return nullptr;
+#endif
 }
 
 s32 LiveActorGroup::getLivingActorNum() const {

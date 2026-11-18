@@ -187,6 +187,10 @@ bool nunchuk_stick_response() {
     ok &= expect(nunchuk_stick_counts(15.0f, -15.0f).x == 0.0f && nunchuk_stick_counts(71.0f, 0.0f).x == 1.0f &&
                      nunchuk_stick_counts(-43.0f, 0.0f).x == -0.5f,
                  "a Nunchuk's own counts: 15 nothing, 43 half, 71 full");
+    // The same bits on every CPU (N-1064): the length's two squares are rounded apart, never fused into one rounding,
+    // which gives 0x1.53a09cp-1 and -0x1.7f242cp-1 here.
+    const StickValue held = nunchuk_stick(0.64f, -0.75f);
+    ok &= expect(held.x == 0x1.53a09ap-1f && held.y == -0x1.7f242ap-1f, "a stick past the circle: the same bits everywhere");
     return ok;
 }
 
@@ -308,6 +312,28 @@ bool real_remote_reports() {
     ok &= expect(reader.read(n, in) && in.buttons.c && !in.buttons.z, "C pressed");
     ok &= expect(in.stick_y < 0.0f && in.stick_x > 0.0f, "the stick right and down from where it rested");
     ok &= expect_close(in.stick_x * in.stick_x + in.stick_y * in.stick_y, 1.0f, 1e-5f, "a full push reaches the circle");
+
+    // P-074: a stick held at the connection. Its centre is the calibration's, not where the first report found it.
+    reader.connect(eeprom, calibration, true);
+    n[16] = 0x7b + 101;
+    n[17] = 0x81;
+    ok &= expect(reader.read(n, in) && in.stick_x == 1.0f && in.stick_y == 0.0f, "held right at the connection: right");
+    n[16] = 0x7b;
+    ok &= expect(reader.read(n, in) && in.stick_x == 0.0f, "let go: at rest");
+    // No good calibration: a held first report is not taken for the centre; one near the middle is.
+    auto broken = calibration;
+    broken[14] ^= 0xffu;
+    broken[30] ^= 0xffu;
+    reader.connect(eeprom, broken, true);
+    n[16] = 0x80 + 101;
+    n[17] = 0x80;
+    ok &= expect(reader.read(n, in) && in.stick_x == 1.0f, "no calibration, held right at the connection: right");
+    reader.connect(eeprom, broken, true);
+    n[16] = 0x86;
+    n[17] = 0x7c;
+    ok &= expect(reader.read(n, in) && in.stick_x == 0.0f && in.stick_y == 0.0f, "no calibration, at rest: centred");
+    n[16] = 0x86 + 71;
+    ok &= expect(reader.read(n, in) && in.stick_x == 1.0f, "no calibration: the first rest is the centre");
     return ok;
 }
 

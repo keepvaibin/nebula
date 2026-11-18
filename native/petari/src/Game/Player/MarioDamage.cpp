@@ -22,6 +22,7 @@
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SequenceUtil.hpp"
+#include "Game/Util/FrameCount.hpp"
 
 namespace {
     const char sDamageAirAnimation[] = "中ダメージ空中";
@@ -518,7 +519,7 @@ void MarioDamage::stopHead(const Vec3f& rNormal) {
 }
 
 bool MarioDamage::update() {
-    mTimer++;
+    MR::countUp(mTimer);
     if (mActor->mInDemo) {
         return true;
     }

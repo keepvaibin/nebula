@@ -1,4 +1,5 @@
 #include "galaxy/discord_presence.h"
+#include "galaxy/crash_stack.h"
 
 #include <atomic>
 #include <chrono>
@@ -410,6 +411,7 @@ void start(std::string client_id) {
 #elif NEBULA_DISCORD_SOCKET
     if (s_client_id.empty()) return;
     std::thread([] {
+        galaxy::host::crash_stack_for_this_thread();
 #if defined(__APPLE__)
         (void)pthread_setname_np("Nebula Discord");
         (void)pthread_set_qos_class_self_np(QOS_CLASS_UTILITY, 0);  // below the game's threads

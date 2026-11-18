@@ -6,7 +6,8 @@
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Particle/EmitterCore.hpp"
 
-ParticleEmitterHolder::ParticleEmitterHolder(const EffectSystem* pEffectSystem, int numEmitters) : mEffectSystem(pEffectSystem), mFreeFrom(0) {
+ParticleEmitterHolder::ParticleEmitterHolder(const EffectSystem* pEffectSystem, int numEmitters)
+    : mEffectSystem(pEffectSystem), mFreeFrom(0), mLive(), mLiveWords(0) {
     mFirst.mEmitters.init(numEmitters);
     mFirst.mNext = nullptr;
     claim(&mFirst, 0);
@@ -21,16 +22,15 @@ void ParticleEmitterHolder::claim(Chunk* pChunk, u32 base) {
 }
 
 void ParticleEmitterHolder::update(bool ignorePause) {
-    for (Chunk* pChunk = &mFirst; pChunk != nullptr; pChunk = pChunk->mNext)
-    for (ParticleEmitter* pEmitter = pChunk->mEmitters.begin(); pEmitter != pChunk->mEmitters.end(); pEmitter++) {
+    auto visit = [this, ignorePause](ParticleEmitter* pEmitter) {
         EmitterCore* pBaseEmitter = pEmitter->mEmitter;
         if (pBaseEmitter == nullptr) {
-            continue;
+            return;
         }
 
         // Group 1 is the 3D pause-ignoring group.
         if (ignorePause != (pBaseEmitter->getGroupID() == 1)) {
-            continue;
+            return;
         }
 
         if (pBaseEmitter->isEnableDeleteEmitter()) {
@@ -42,7 +42,54 @@ void ParticleEmitterHolder::update(bool ignorePause) {
 
             pEmitter->mUpdated = true;
         }
+    };
+
+#if defined(NEBULA_PLAIN_PATHS)
+    // The records in use, in place order as the walk of every record meets them (P-141). A word is read again after each
+    // visit, and the count of words and chunks at each step, as a visit may fill or free records further on (a callback
+    // may make an emitter).
+    const u32 size = static_cast< u32 >(mFirst.mEmitters.size());
+    Chunk* pChunk = &mFirst;
+    u32 base = 0;
+    for (u32 word = 0; word < mLiveWords; word++) {
+        u32 next = 0;
+        while (next < 64u) {
+            const u64 bits = mLive[word] >> next;
+            if (bits == 0) {
+                break;
+            }
+
+            const u32 place = word * 64u + next + static_cast< u32 >(__builtin_ctzll(bits));
+            while (place >= base + size) {
+                pChunk = pChunk->mNext;
+                base += size;
+            }
+            visit(&pChunk->mEmitters[static_cast< int >(place - base)]);
+            next = place - word * 64u + 1u;
+        }
     }
+#else
+    for (Chunk* pChunk = &mFirst; pChunk != nullptr; pChunk = pChunk->mNext)
+    for (ParticleEmitter* pEmitter = pChunk->mEmitters.begin(); pEmitter != pChunk->mEmitters.end(); pEmitter++) {
+        visit(pEmitter);
+    }
+#endif
+}
+
+void ParticleEmitterHolder::taken(const ParticleEmitter* pEmitter) {
+#if defined(NEBULA_PLAIN_PATHS)
+    const u32 word = pEmitter->mPlace / 64u;
+    if (word >= mLiveWords) {
+        u64* const pWords = mLive.room(word + 1u);
+        for (u32 i = mLiveWords; i <= word; i++) {
+            pWords[i] = 0;
+        }
+        mLiveWords = word + 1u;
+    }
+    mLive[word] |= 1ull << (pEmitter->mPlace % 64u);
+#else
+    (void)pEmitter;
+#endif
 }
 
 void ParticleEmitterHolder::forceDeleteAllOneTimeEmitters() {

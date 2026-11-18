@@ -198,7 +198,7 @@ VkPipeline RendererVk::mod_post_pipeline(const ModPostProgram& program, VkFormat
         info.pDynamicState = &dynamic;
         info.layout = mod_post_layout_;
         info.renderPass = pass;
-        ok = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1u, &info, nullptr, &made.pipeline) == VK_SUCCESS;
+        ok = vkCreateGraphicsPipelines(device, vk::shared_pipeline_cache(), 1u, &info, nullptr, &made.pipeline) == VK_SUCCESS;
     }
     for (VkShaderModule module : modules) {
         if (module != VK_NULL_HANDLE) {
