@@ -376,7 +376,7 @@ void MarioActor::initModPowerUpModels() {
     }
 }
 
-void MarioActor::changeDisplayMode(u8 mode) {
+void MarioActor::changeDisplayMode(u32 mode) {
     mCurrModel = mode;
     mMarioAnim->mXanimePlayer->setModel(mModels[mCurrModel]);
     mMarioAnim->mXanimePlayerUpper->setModel(mModels[mCurrModel]);

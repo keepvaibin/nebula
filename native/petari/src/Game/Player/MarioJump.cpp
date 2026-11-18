@@ -2636,8 +2636,7 @@ void Mario::startSlidingTask(u32 taskFlags, f32 speed, u16 frames) {
 
 bool Mario::taskOnSlide(u32) {
     addVelocity(mSlideVec);
-    mSlideTimer--;
-    return mSlideTimer != 0;
+    return MR::countDownLeft(mSlideTimer);
 }
 
 void Mario::incAirWalkTimer() {
