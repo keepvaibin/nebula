@@ -5,6 +5,18 @@
 machine	d3d11	NVIDIA GeForce RTX 5090	32.0.16.1088
 machine	d3d12	NVIDIA GeForce RTX 5090	32.0.16.1088
 machine	vulkan	NVIDIA GeForce RTX 5090	610.88.0
+picture	engine	board-text-fit-de	d3d12	board	320	240	723e5af417fca26327141e316f3085261aa153d7a919261dbae9b0d59d8535a0
+picture	engine	board-text-fit-de	d3d12	stats	320	240	fdeefa41499b7ccfde0a323ba57130b86170fd6f94c60e5ad92e1abc79999320
+picture	engine	board-text-fit-de	d3d12	tab-2	320	240	e3d1ca232160113cb8af81a091e94d24e9c26452ee2377fe737bd5a027ec1451
+picture	engine	board-text-fit-de	d3d12	tab-3	320	240	f87716f338e9d060f2d59c3bac2a40ce7a7df3d373b053e379b61dd22a865e9e
+picture	engine	board-text-fit-fr	d3d12	board	320	240	90caf69436a6a5b23b71b5bba2324ba9c38725576ff8a77acdb845ba6ecf12cf
+picture	engine	board-text-fit-fr	d3d12	stats	320	240	a70240606355ef663042aa9612f3f153d3d04804f2075364be3a47cc8ecf03bb
+picture	engine	board-text-fit-fr	d3d12	tab-2	320	240	a205ad6cc1e0eb9026d573f730533ff2fa1c89a5de1868f30d46d299fa46de6d
+picture	engine	board-text-fit-fr	d3d12	tab-3	320	240	a0abd70a78ad279d160d743d08b641fcdebe090184317b5f0c1c5b0aac954898
+picture	engine	board-text-fit-ja	d3d12	board	320	240	e98c8913d49af0871ae96fa4b0c3897bc3d68f78652141b55940e2144bc321d9
+picture	engine	board-text-fit-ja	d3d12	stats	320	240	88778544c7ce46a5056f3c130e33b9ea06449759aeb8b1d17eb36b7dfb8c721b
+picture	engine	board-text-fit-ja	d3d12	tab-2	320	240	9a907a29753a945da3990df2e00d052ae472bea0fd2d8ae28996937d9fbbaf7b
+picture	engine	board-text-fit-ja	d3d12	tab-3	320	240	b34e466d41ddf5109b4a7401f39cb434d5fa10dfdd817102699a7204fef909d9
 picture	engine	boot	d3d11	title	1280	720	63248a71fd2ce78bcef48e57c2a46be2cd2ac2c1877a44818f86f712a994973c
 picture	engine	boot	d3d12	title	1280	720	2f29dadefb081d48091e93f683edb97e150f7f4c37151ac2b5f035a05a782f05
 picture	engine	boot	vulkan	title	1280	720	a00fef7ba838997f4d754094dde9ae36846b9fcd57901888aa779873b2b95321
@@ -38,6 +50,31 @@ picture	engine	luigi-stages	vulkan	third	1280	720	246f2556bf0a4d3b56714ab93b42e5
 picture	engine	menu-key-icons	d3d11	menu	1280	720	c5fa2327f60ee346329cc42f147dfa09d73dc10fe729fa2b0ecbb18947f1a2eb
 picture	engine	menu-key-icons	d3d12	menu	1280	720	1452c2ec359b5e3d7be0f81bb340d1e953e98dc408f0a08d8c53b37897a567d5
 picture	engine	menu-key-icons	vulkan	menu	1280	720	ec1afd6f3cc75bfbda4ed59f0e37c889a5bfd04a9a310243e76b33c8f5843326
+picture	engine	menu-text-fit-de	d3d12	advanced	320	240	d8d9a95848be9246b2c62a65963249eb90f67d8520dfad114e0f6ba19fceb8e6
+picture	engine	menu-text-fit-de	d3d12	audio	320	240	d598e236ef98d476ed18771af4bfdcb0ce7511d4c0dbe2a306f1f2082d11a80b
+picture	engine	menu-text-fit-de	d3d12	controls	320	240	05dc5bb379df6a0b29ae8c7a333ce56b6650166b9bbd4356a79dbe66a07372fd
+picture	engine	menu-text-fit-de	d3d12	display	320	240	61e8eec523501c2548a1fbac8c5eb9ce42b1b0a81c549b57870b6a8bec716e1c
+picture	engine	menu-text-fit-de	d3d12	general	320	240	bd794f9957a4f5d2760a4bbb17d1f786cf9eeb1e51a27197428aad5b78f56beb
+picture	engine	menu-text-fit-de	d3d12	graphics	320	240	39842d5a01a5eb6b22b1f10de97b95361928f20ec46b8490d6a132fe06c3125f
+picture	engine	menu-text-fit-de	d3d12	mods	320	240	9e1bdb0451e3a32fa5fe509d54546311f7120bd6359bb83ecab97db3faf47174
+picture	engine	menu-text-fit-de	d3d12	system	320	240	8be8a6d1f09343293d0e1c18f4d89b04d5733f6cbadf924da9224e102c7cd394
+picture	engine	menu-text-fit-fr	d3d12	advanced	320	240	ee1efb28ca6b10347bac71252ed85413dd442aa867210a917514c2eb91143466
+picture	engine	menu-text-fit-fr	d3d12	audio	320	240	e1d7147ec58b644e0916e3fa3ec503136fef9831a06ce94e0565d09504b3a5da
+picture	engine	menu-text-fit-fr	d3d12	controls	320	240	119b7cfa7e957280b358457c4eb4d29833447182ac2bf6c212733d620638be4e
+picture	engine	menu-text-fit-fr	d3d12	display	320	240	3c84258a92168f520487696dcbb4634312d0b8685c474c44ecb0382548ccfdae
+picture	engine	menu-text-fit-fr	d3d12	general	320	240	9f91bbf37d342a3ab725bd4c8999b12df41786a56bb318ee6f37ddadf53b6343
+picture	engine	menu-text-fit-fr	d3d12	graphics	320	240	9d039625a91763d5819ee772dd3a176527ee2d2b5468a6dec217ec21ad1d2433
+picture	engine	menu-text-fit-fr	d3d12	mods	320	240	48ce13ddb07709f9953d14099e3953aa17da74fdfc3cf85c7653c01b11f379af
+picture	engine	menu-text-fit-fr	d3d12	system	320	240	b84dcface4aa12c3f341b0179a4ea5a1a0abcfc8a1d68570ec7394508323512b
+picture	engine	menu-text-fit-ja	d3d12	advanced	320	240	e4e176045f674c846a43193ca998983e24736f38a5da6c5e086f3df44682ff29
+picture	engine	menu-text-fit-ja	d3d12	audio	320	240	2c28ae8b939d366ed80a2ec8b8af84fc8b27dfb9458e380d69383aec28832a1e
+picture	engine	menu-text-fit-ja	d3d12	controls	320	240	5e0bb7bf8996629261f17d3f4b2f2d6e246c05cc6caf628ce0271a1bf5d29a3f
+picture	engine	menu-text-fit-ja	d3d12	display	320	240	4e38a27d1ebdefeaebc10f730aa3794a2efb9e3d0228bd81dc56830eb44bee4c
+picture	engine	menu-text-fit-ja	d3d12	general	320	240	6b8b08424b909e128bb9620dbfb11e66ece9e2d5bdbe02740830edb1e233b2bd
+picture	engine	menu-text-fit-ja	d3d12	graphics	320	240	02a903e9c38adef1807c5c1636f6314cc534e26abcc05dbecfdf016a69df413e
+picture	engine	menu-text-fit-ja	d3d12	mods	320	240	953530952c0696bd4c2fa66e38b70bc33dbc1d76fd990374167c08b863241442
+picture	engine	menu-text-fit-ja	d3d12	system	320	240	fa22a33699e062ac336c8feae35ddace92bb35db330da7bc2cb6b26718bb5908
+picture	engine	restarts	d3d12	title	1280	720	2f29dadefb081d48091e93f683edb97e150f7f4c37151ac2b5f035a05a782f05
 picture	engine	talk-balloon-edge	d3d11	arrive	1280	720	8e979441b92196feacc4c8f504e755adb23d5f6b9c4c865ee6419707058b0673
 picture	engine	talk-balloon-edge	d3d12	arrive	1280	720	c02beed569f34db65f5e0e87eea5b8507f8dcfe5acb8240af0a80c3a275cf2c0
 picture	engine	talk-balloon-edge	vulkan	arrive	1280	720	f6bf7c021d231fd4605d3af41b600fb54dcf0ce75eae95c2238e7ca9c10dbd79
