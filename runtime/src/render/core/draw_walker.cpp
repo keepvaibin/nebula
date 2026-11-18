@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <cassert>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -599,15 +600,21 @@ const core::StaticSlot& RenderCore::walk_material(std::uint32_t index) {
     slot.vertex_rows = vertex.gpu;
     slot.pixel_rows = pixel.gpu;
 
+    walk_material_settle(index);
     const float* rows = walk_material_rows(index);
     std::memcpy(vertex.cpu, rows, vertex_bytes);
     std::memcpy(pixel.cpu, rows + std::size_t{constants.vertex_rows} * 4u, pixel_bytes);
     return slot;
 }
 
-// The list's own rows, or at t: once a walk, kept in walk_lerped_ for walk_same_material.
-const float* RenderCore::walk_material_rows(std::uint32_t index) {
-    constexpr std::uint32_t kAsListed = NEBULA_NONE32 - 1u;
+namespace {
+constexpr std::uint32_t kWalkRowsAsListed = NEBULA_NONE32 - 1u;
+}
+
+// The list's own rows, or at t: once a walk, kept in walk_lerped_ for walk_same_material. The only place walk_lerped_
+// grows, so no pointer from walk_material_rows is held across it.
+void RenderCore::walk_material_settle(std::uint32_t index) {
+    constexpr std::uint32_t kAsListed = kWalkRowsAsListed;
     const NebulaFrameConstants& constants = walk_.now->list->constants[index];
     std::uint32_t& at = walk_material_at_[index];
     if (at == NEBULA_NONE32) {
@@ -650,7 +657,12 @@ const float* RenderCore::walk_material_rows(std::uint32_t index) {
             at = static_cast<std::uint32_t>(first);
         }
     }
-    return at == kAsListed ? reinterpret_cast<const float*>(constants.rows) : walk_lerped_.data() + at;
+}
+
+const float* RenderCore::walk_material_rows(std::uint32_t index) const {
+    const std::uint32_t at = walk_material_at_[index];
+    assert(at != NEBULA_NONE32);
+    return at == kWalkRowsAsListed ? reinterpret_cast<const float*>(walk_.now->list->constants[index].rows) : walk_lerped_.data() + at;
 }
 
 bool RenderCore::walk_same_material(std::uint32_t a, std::uint32_t b) {
@@ -667,9 +679,9 @@ bool RenderCore::walk_same_material(std::uint32_t a, std::uint32_t b) {
     if (bytes == 0u) {
         return true;
     }
-    (void)walk_material_rows(a);
-    const float* rb = walk_material_rows(b);
-    return std::memcmp(walk_material_rows(a), rb, bytes) == 0;  // a's again: b's may have grown walk_lerped_
+    walk_material_settle(a);
+    walk_material_settle(b);
+    return std::memcmp(walk_material_rows(a), walk_material_rows(b), bytes) == 0;
 }
 
 // Ring draws after `first` join its draw while they differ from it only in their rows, vertices and indices. Each

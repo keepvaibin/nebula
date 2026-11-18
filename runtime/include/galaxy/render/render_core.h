@@ -257,8 +257,10 @@ private:
     std::unique_ptr<core::RecordPool> record_pool_;
     const WalkView& walk_view(std::uint32_t index, const NebulaFramePass& pass);
     const core::StaticSlot& walk_material(std::uint32_t index);
-    // A frame constants entry's rows as this walk uploads them: the list's own, or at t.
-    [[nodiscard]] const float* walk_material_rows(std::uint32_t index);
+    // Makes a frame constants entry's rows as this walk uploads them: the list's own, or at t (kept in walk_lerped_).
+    void walk_material_settle(std::uint32_t index);
+    // A settled entry's rows. Reads only: a pointer from it stays valid until the next walk_material_settle.
+    [[nodiscard]] const float* walk_material_rows(std::uint32_t index) const;
     // One material at this walk's t: one entry, one registered slot, or rows the same to the byte.
     [[nodiscard]] bool walk_same_material(std::uint32_t a, std::uint32_t b);
     // The ring draws from `first` that are one draw with it; their indices in `index_count`.
