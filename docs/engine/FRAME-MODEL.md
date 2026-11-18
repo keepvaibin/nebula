@@ -194,9 +194,9 @@ with no row has a new one.
 | The sampler heap, full, drains the whole GPU | `renderer_d3d12.cpp:1410` (`reset_sampler_frame`) | P-048, E3 step 2 |
 | Size changes drain the whole GPU inside a frame | `renderer_d3d12.cpp:5034`, :5067, :5229 (the temporal upscaler), :1955; Vulkan's at size changes inside a frame (1.4) | P-028 (written for Direct3D 12 on engine/b; Vulkan's side open) |
 | The game thread waits for frame F - 2's probe answers | `render_core.cpp:2032` | N-1068, E4 |
-| The game thread waits for the whole render queue at an aspect change | `host_main.cpp:3236` | to be given |
-| A capture's readback waits for the GPU inside a frame | `renderer_d3d12.cpp:6904`, :6907 | to be given |
-| The game thread copies loads from the mapped store: a page not in memory is a drive read inside a step | `host_main.cpp:3152` (`svc_asset_read`) | to be given |
+| The game thread waits for the whole render queue at an aspect change | `host_main.cpp:3236` | N-1081 |
+| A capture's readback waits for the GPU inside a frame | `renderer_d3d12.cpp:6904`, :6907 | N-1082 |
+| The game thread copies loads from the mapped store: a page not in memory is a drive read inside a step | `host_main.cpp:3152` (`svc_asset_read`) | N-1083 |
 | Matrix rows made in eye space for one camera on the CPU, each walk and again for each in-between picture; skin envelopes on the CPU | `draw_walker.cpp:225-316` | E3 step 5 |
 | A block in calc mode 1 comes with the view inside its joints (the console's billboards and camera-bound models) | `draw_walker.cpp:309-313` | E3 step 5 (resolved per view on the GPU) |
 | Vertices the game builds on the CPU each step, copied each walk and moved at t on the CPU | `draw_walker.cpp:399` on | E3 step 4 |
@@ -208,8 +208,7 @@ with no row has a new one.
 | Vulkan's bloom and post-process pipelines built on the render thread in the first frame that needs them | `vk/renderer_vk.cpp:1998`, :2871 | P-052 (its Vulkan half: open) |
 | Metal's own programs (post-process, bloom, ambient occlusion, MetalFX depth copy) compiled from source at first use | `mtl/*_mtl.mm` (1.9) | P-065 |
 
-Every file stage 2 item 1 names has been read for this list. The parts marked "to be given" get new rows in the
-ledger with the model's landing.
+Every file stage 2 item 1 names has been read for this list. The three parts that had no row are N-1081 to N-1083.
 
 ## Part 2. The target
 
@@ -397,9 +396,9 @@ it. Pile A: the foundation does not touch its code; it comes after. Where this d
 | P-058 | A | after the foundation | VMA is told Vulkan 1.1 even when the device and instance are 1.2 or 1. |  |
 | P-117 | A | after the foundation | AV1 movie decode is plain C and can stall the render thread. |  |
 | P-042 | A | after the foundation | The default frame-rate setting is 60, the game step, on every platform |  |
-| new: the aspect latch's whole-queue wait (`host_main.cpp:3236`) | B | F5, E4 | the game holds for the render queue | rule 2 |
-| new: a capture's readback inside a frame (`renderer_d3d12.cpp:6904`) | B | F5, E4 | a capture answered by its frame later | rule 1 |
-| new: loads read from the mapped store on the game thread (`host_main.cpp:3152`) | B | F7 | read ahead by the loader | rule 3 |
+| N-1081: the aspect latch's whole-queue wait (`host_main.cpp:3236`) | B | F5, E4 | the game holds for the render queue | rule 2 |
+| N-1082: a capture's readback inside a frame (`renderer_d3d12.cpp:6904`) | B | F5, E4 | a capture answered by its frame later | rule 1 |
+| N-1083: loads read from the mapped store on the game thread (`host_main.cpp:3152`) | B | F7 | read ahead by the loader | rule 3 |
 
 The list of 1.9 holds nothing that P-022, E3, E4, E6b and the step's threading do not cover: the three new rows
 fall in E4 and F7. So these are the last rewrites the frame's rules ask for.
