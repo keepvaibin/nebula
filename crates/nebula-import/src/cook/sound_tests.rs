@@ -201,6 +201,12 @@ fn the_disc_cooks() {
         envelope = envelope.max(word(&file, 9));
     }
     println!("sequences {count}: {ops} ops, tracks at most {tracks}, slots at most {slots}, stack at most {stack}, envelope at most {envelope}");
+    for member in archive::members(&read(&format!("{files}/AudioRes/Info/JaiChord.arc"))).unwrap() {
+        if member.path.to_ascii_lowercase().ends_with(".cit") {
+            let file = super::super::native_data::cit(&member.bytes).unwrap_or_else(|e| panic!("{}: {e:#}", member.path));
+            println!("{}: {} bytes, chords {} scales {}", member.path, file.len(), u16::from_le_bytes([file[12], file[13]]), u16::from_le_bytes([file[14], file[15]]));
+        }
+    }
     for member in archive::members(&read(&format!("{files}/AudioRes/Info/JaiMe.arc"))).unwrap() {
         if !member.path.to_ascii_lowercase().ends_with(".bme") {
             continue;
@@ -263,6 +269,49 @@ fn a_me_stack_bound_counts_calls_loops_and_children() {
     // A call to itself nests without end.
     let bytes = [0, 0, 0, 1, 0, 0, 0, 8, 0x31, 0x00, 0x00, 0x08, 0x24];
     assert!(me_program(&bytes).is_err());
+}
+
+#[test]
+fn an_envelope_ends_and_names_curves_it_has() {
+    // Points as (mode, time, value).
+    let walk = |points: &[(i16, i16, i16)]| envelope_walk(|i| points.get(i).copied().context("past the points"));
+    assert_eq!(walk(&[(0, 10, 100), (1, 5, 0), (0xF, 0, 0)]).unwrap(), 3);
+    assert_eq!(walk(&[(0, 10, 100), (0xE, 0, 0)]).unwrap(), 2);
+    // A go back over points that take time ends; a negative time among them counts against the rest.
+    assert_eq!(walk(&[(0, 0, 100), (2, 4, 0), (0xD, 0, 0)]).unwrap(), 3);
+    assert!(walk(&[(0, 5, 100), (2, -5, 0), (0xD, 0, 0)]).is_err());
+    // N-3030: a go back over points of no time, to itself or past the points, never ended; a mode past the curves read
+    // past cCurves, and so did a first point that is an end.
+    assert!(walk(&[(0, 10, 100), (1, 0, 0), (0xD, 0, 1)]).is_err());
+    assert!(walk(&[(0, 10, 100), (0xD, 0, 1)]).is_err());
+    assert!(walk(&[(0, 10, 100), (0xD, 0, -1)]).is_err());
+    assert!(walk(&[(0, 10, 100), (4, 10, 0), (0xF, 0, 0)]).is_err());
+    assert!(walk(&[(0xF, 10, 0)]).is_err());
+    assert!(walk(&[(0, 10, 100), (1, 5, 0)]).is_err());
+}
+
+#[test]
+fn a_me_chromatic_list_of_no_notes_still_holds_one() {
+    // Entry (8): the chromatic pick from the list at 0x0D, end. The list: 0 notes, in order, then its first note.
+    let program = |list: &[u8]| {
+        let mut bytes = vec![0, 0, 0, 1, 0, 0, 0, 8, 0x83, 0x00, 0x00, 0x0D, 0x24];
+        bytes.extend_from_slice(list);
+        bytes
+    };
+    assert!(me_program(&program(&[0, 0, 60])).is_ok());
+    // MeTrack reads the first note of a list of none: at the program's end it was past it.
+    assert!(me_program(&program(&[0, 0])).is_err());
+    // A chord or scale pick of none reads no note.
+    let mut chord = program(&[0, 0]);
+    chord[8] = 0x81;
+    assert!(me_program(&chord).is_ok());
+    // A scale pick reads note (entry & 0x7F) of 12, up (0x80 set) or down.
+    let mut scale = program(&[2, 0, 0x8B, 11]);
+    scale[8] = 0x82;
+    assert!(me_program(&scale).is_ok());
+    let mut past = program(&[2, 0, 0x8C, 11]);
+    past[8] = 0x82;
+    assert!(me_program(&past).is_err());
 }
 
 /// The names of a cooked archive: items with a name, in order, each once; an item only in the table has none.

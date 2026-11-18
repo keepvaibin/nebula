@@ -1,4 +1,5 @@
 #include "Game/Sound/SeqTrack.hpp"
+#include "Game/Sound/SeqRead.hpp"
 #include "Game/Sound/SoundBank.hpp"
 #include "Game/Sound/SoundEngine.hpp"
 #include <new>
@@ -29,11 +30,15 @@ namespace {
     u32 be16(const u8* p) {
         return static_cast< u16 >((p[0] << 8) | p[1]);
     }
-    u32 be24(const u8* p) {
-        return (p[0] << 16) | (p[1] << 8) | p[2];
-    }
-    u32 be32(const u8* p) {
-        return (static_cast< u32 >(p[0]) << 24) | (p[1] << 16) | (p[2] << 8) | p[3];
+    // `Width` bytes at `offset` of a program's data, which the program names in registers (N-3025): one past its end
+    // stops the game, as a branch to no operation does (SoundEngine::reportBadTarget).
+    template < u32 Width >
+    u32 seqRead(const u8* pData, u32 bytes, u64 offset) {
+        u32 value = 0;
+        if (!MR::readSeqData< Width >(pData, bytes, offset, value)) {
+            NEBULA_PANIC("a sequence read %u bytes at byte %llu, past its %u", Width, static_cast< unsigned long long >(offset), bytes);
+        }
+        return value;
     }
 }  // namespace
 
@@ -825,7 +830,7 @@ s32 SeqTrack::findInterrupt() {
 void SeqTrack::checkInterrupt() {
     s32 intr;
     if (mSwap < 0 && (intr = findInterrupt()) >= 0) {
-        const u32 offset = be24(mData + mIntrTable + intr * 3);
+        const u32 offset = seqRead< 3 >(mData, seqBytes(), static_cast< u64 >(mIntrTable) + static_cast< u64 >(intr) * 3);
         mSwap = mPc;
         mPc = opAt(offset);
     }
@@ -862,12 +867,12 @@ s32 SeqTrack::seqTick() {
         mTimer--;
     }
     checkInterrupt();
-    while ((mTimer == 0 || mSwap >= 0) && !mWaitNote) {
-        if (step() < 0) {
-            return -1;
-        }
+    const s32 ran = MR::runSeqTick([this] { return (mTimer == 0 || mSwap >= 0) && !mWaitNote; }, [this] { return step(); });
+    if (ran == -2) {
+        // A loop that never waits (N-3026): the console's sound thread ran it for ever.
+        NEBULA_PANIC("a sequence ran %u operations in one tick without waiting, at byte %u", MR::cSeqTickStepMost, nextOffset());
     }
-    return 0;
+    return ran < 0 ? -1 : 0;
 }
 
 s32 SeqTrack::tickProc() {
@@ -905,7 +910,7 @@ s32 SeqTrack::seqMain() {
     }
     const f32 step = 1.0f;
     const f64 clockSeconds = mSecondsClock != nullptr ? mSecondsClock(mSecondsClockData) : -1.0;
-    if (clockSeconds >= 0.0) {
+    if (MR::isSeqClockTime(clockSeconds)) {
         // Its place is the clock's: as many ticks as have come due.
         const f64 due = clockSeconds * mTimebase * mTempo / 60.0;
         // Paused, no tick comes due: it takes up what the clock moved when it plays again.
@@ -1398,10 +1403,10 @@ s32 SeqTrack::step() {
         }
         break;
     case SEQ_JUMP_TABLE:
-        mPc = opAt(be24(mData + a[1] + a[0] * 3));
+        mPc = opAt(seqRead< 3 >(mData, seqBytes(), static_cast< u64 >(a[1]) + static_cast< u64 >(a[0]) * 3));
         break;
     case SEQ_CALL_TABLE:
-        call(static_cast< u32 >(opAt(be24(mData + a[1] + a[0] * 3))));
+        call(static_cast< u32 >(opAt(seqRead< 3 >(mData, seqBytes(), static_cast< u64 >(a[1]) + static_cast< u64 >(a[0]) * 3))));
         break;
     case SEQ_LOOP_START:
         loopStart(a[0]);
@@ -1503,24 +1508,25 @@ s32 SeqTrack::step() {
         }
         break;
     case SEQ_REG_TABLE: {
-        u32 value = a[2];
-        u32 index = a[3];
+        // The table's address and the index, either of them from a register (N-3025).
+        const u64 table = a[2];
+        const u64 index = a[3];
+        u32 value = 0;
         switch (a[0]) {
         case 0xc:
-            value = mData[value + index];
+            value = seqRead< 1 >(mData, seqBytes(), table + index);
             break;
         case 0xd:
-            value = be16(mData + value + index * 2);
+            value = seqRead< 2 >(mData, seqBytes(), table + index * 2);
             break;
         case 0xe:
-            index += index * 2;
-            value = be24(mData + value + index);
+            value = seqRead< 3 >(mData, seqBytes(), table + index * 3);
             break;
         case 0xf:
-            value = be32(mData + value + index * 4);
+            value = seqRead< 4 >(mData, seqBytes(), table + index * 4);
             break;
         case 0x10:
-            value = be32(mData + value + index);
+            value = seqRead< 4 >(mData, seqBytes(), table + index);
             break;
         default:
             return 0;
@@ -1571,6 +1577,10 @@ s32 SeqTrack::step() {
         break;
     }
     case SEQ_FIR_SET:
+        // Its 8 coefficients at an address that can be a register's (N-3025).
+        if (!MR::holdsSeqData< 16 >(seqBytes(), a[0])) {
+            NEBULA_PANIC("a sequence's filter at byte %u, past its %u", a[0], seqBytes());
+        }
         setFIR(mData + a[0]);
         break;
     case SEQ_WAIT:
