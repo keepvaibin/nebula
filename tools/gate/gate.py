@@ -457,6 +457,38 @@ def rust_tests(g):
     return fn
 
 
+PLATFORM_CHECK = TREE / "tools" / "lumacore" / "check_luma_platforms.py"
+
+
+def lumalink_tests(g):
+    """LumaLink's own tests at the commit tools/lumacore/lumalink.commit pins, in the checkout the mod tests build it in
+    (mod_tests.pinned_lumalink: <build root>/lumalink-pin, its nebula/ a link to this tree): every crate's tests, and
+    those that need clang, this tree's SDK and this build (the generated C compiled for every platform, one mod built
+    for all nine and each library read as its loader will, the same floating point on every platform, the programs
+    checked and emitted against this build's names); the VS Code one needs VS Code. When --lumalink names no program,
+    the mod tests then use the one built there."""
+    def fn(log):
+        sys.path.insert(0, str(TREE / "tools" / "lumacore"))
+        import mod_tests  # noqa: E402 - tools/lumacore, beside the mod tests it serves
+        try:
+            program, checkout = mod_tests.pinned_lumalink(pathlib.Path(g.args.build_root) / "lumalink-pin")
+        except SystemExit as stop:
+            pathlib.Path(log).write_text("%s\n" % stop, encoding="utf-8")
+            return False, str(stop)
+        env = {"LUMA_SDK": str(TREE / "native" / "include"), "LUMA_PLATFORM_CHECK": str(PLATFORM_CHECK),
+               "LUMA_ROWS": str(pathlib.Path(g.bin) / "luma"), "LUMA_TYPES": str(pathlib.Path(g.bin) / "luma_types.json")}
+        code = run(["cargo", "test", "--release", "--locked", "--no-fail-fast", "-j", g.args.jobs, "--workspace", "--",
+                    "--include-ignored", "--skip", "vscode"], log, env=env, cwd=checkout)
+        text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")
+        passed = sum(int(l.split()[3]) for l in text.splitlines() if l.startswith("test result:"))
+        failed = sum(int(l.split()[5]) for l in text.splitlines() if l.startswith("test result:"))
+        if not g.args.lumalink:
+            g.args.lumalink = str(program)
+        pin = (TREE / "tools" / "lumacore" / "lumalink.commit").read_text(encoding="utf-8").strip()
+        return code == 0 and failed == 0, "%d passed, %d failed (LumaLink %s)" % (passed, failed, pin[:9])
+    return fn
+
+
 def disc_images(folder):
     """{disc id: image} of a folder holding the discs as RMGE01.wbfs, RMGP01.rvz and so on."""
     out = {}
@@ -1036,6 +1068,7 @@ def unit_part(g, discs_proved):
     for r in RENDERERS:
         g.check("start/%s" % r, start_check(g, r), ("build/windows",))
     g.check("rust", rust_tests(g))
+    g.check("lumalink", lumalink_tests(g), ("build/windows",))
     # The cooked collision against each disc's (P-169).
     discs = disc_images(g.args.discs)
     for disc in discs_proved:
