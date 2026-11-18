@@ -12,7 +12,10 @@
 The table: UTF-8, tab-separated, one row per string id, one column per language folder (the header names them). An
 empty cell uses the language's fallback (NebulaText.cpp). In a cell, \\n is a line break and \\\\ a backslash. "L." rows
 are Setup's (installer/native/text.cpp, which finds any row by its English cell): the game's
-table leaves them out. "C." rows are the crash dialog's, written to runtime/src/crash_text_table.inc for the host.
+table leaves them out. "C." rows (the crash dialog's) and "H." rows (the host's own windows: menus, file dialogs, the
+Mac's setup window), with the rows HOST_ROWS names, are written to runtime/src/host_text_table.inc for the host
+(galaxy/host_text.h, which finds a row by its English cell); each English text the hosts pass to host_text must have
+one of them.
 "Validator." rows are the mod validator's (crates/luma-validate, which reads this file at build and checks their named
 places): the game's table leaves them out too, so a game with no mod carries none of them. The font check keeps them,
 since the Mods screen draws them.
@@ -26,7 +29,14 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TABLE = os.path.join(ROOT, 'localization', 'NebulaText.tsv')
 OUTPUT = os.path.join(ROOT, 'native', 'petari', 'src', 'Game', 'System', 'NebulaTextTable.inc')
-CRASH_OUTPUT = os.path.join(ROOT, 'runtime', 'src', 'crash_text_table.inc')
+HOST_OUTPUT = os.path.join(ROOT, 'runtime', 'src', 'host_text_table.inc')
+# Rows of Setup the host's windows say too (their id; the host table has every "C." and "H." row besides).
+HOST_ROWS = ('Quit', 'L.CANCEL_0246', 'L.CHOOSE_YOUR_SUPER_MARIO_GALAXY_DISC_IMAGE_0F03', 'L.Android.AboutNebula')
+# Where the hosts call host_text with an English literal (host_text::text, host_text::translated, the Mac's
+# host_ns_text), and host_text.h's named texts.
+HOST_TEXT_CALLS = ['runtime/include/galaxy/host_text.h', 'native/host/host_main.cpp',
+                   'runtime/src/render/host_window_win32.cpp',
+                   'platform/sdl/host_window_sdl.cpp', 'platform/apple/*.mm']
 # Every source whose capitals reach the settings menu (P-086, P-160): a new one goes here, or its texts go unchecked.
 HOST_TEXT = ['runtime/src/ui/*.cpp', 'runtime/src/render/host_window_win32.cpp', 'runtime/src/mod_import.cpp',
              'runtime/src/mods.cpp', 'runtime/src/luma.cpp', 'runtime/src/mod_plugins.cpp', 'runtime/src/mii_import.cpp',
@@ -145,7 +155,11 @@ def c_narrow(text):
     return '"' + ''.join(out) + '"'
 
 
-def generate_crash():
+def host_row(row):
+    return row[0].startswith(('C.', 'H.')) or row[0] in HOST_ROWS
+
+
+def generate_host():
     with open(TABLE, encoding='utf-8') as f:
         lines = [line.rstrip('\r\n').split('\t') for line in f if line.strip()]
     languages = lines[0][1:]
@@ -154,7 +168,7 @@ def generate_crash():
            'constexpr const char* kLanguages[] = {' + ', '.join('"%s"' % name for name in languages) + '};',
            'constexpr const char* kRows[][%d] = {' % len(languages)]
     for row in lines[1:]:
-        if row[0].startswith('C.'):
+        if host_row(row):
             cells = [unescape(c) for c in row[1:]] + [''] * (len(languages) - len(row) + 1)
             out.append('    {' + ', '.join(c_narrow(c) for c in cells) + '},')
     out.append('};')
@@ -217,8 +231,20 @@ def host_literals():
                 yield re.sub('%%', '%', re.sub('%[.0-9]*[a-z]+', '0', text))
 
 
-# Rows the game's own table leaves out: the launcher's and Setup's, the crash dialog's, the mod validator's.
-NOT_THE_GAMES = ('L.', 'C.', 'Validator.')
+# Rows the game's own table leaves out: the launcher's and Setup's, the crash dialog's, the host windows', the mod
+# validator's.
+NOT_THE_GAMES = ('L.', 'C.', 'H.', 'Validator.')
+
+
+def host_text_calls():
+    """The English literals the hosts pass to host_text: (file, text)."""
+    for pattern in HOST_TEXT_CALLS:
+        for path in glob.glob(os.path.join(ROOT, pattern)):
+            with open(path, encoding='utf-8') as f:
+                source = re.sub(r'"\s*\n\s*"', '', f.read())  # adjacent literals are one text
+            # A call with a literal, or one of host_text.h's named texts (inline constexpr char kName[] = "...").
+            for match in re.finditer(r'(?:\b(?:host_text::text|host_text::translated|host_ns_text)\(\s*|\bconstexpr char k\w+\[\] = )"((?:[^"\\\n]|\\.)*)"', source):
+                yield os.path.relpath(path, ROOT).replace(os.sep, '/'), match.group(1)
 
 
 def coverage():
@@ -229,6 +255,10 @@ def coverage():
     missing = set()
     for text in host_literals():
         missing.update('host: ' + piece for piece in host_missing(text, ids))
+    host_english = {unescape(cells[1]) for cells in rows if len(cells) > 1 and host_row(cells)}
+    for path, text in host_text_calls():
+        if text not in host_english:
+            missing.add('host window: %s: no "C." or "H." row (or HOST_ROWS) for %r' % (path, text))
     for path in glob.glob(os.path.join(ROOT, INSTALLER_TEXT), recursive=True):
         with open(path, encoding='utf-8-sig') as f:
             for match in re.finditer(r'\bOf\(L"((?:[^"\\]|\\.)*)"', f.read()):
@@ -340,7 +370,7 @@ def font_gaps(font_arc, columns=None):
         header = f.readline().rstrip('\r\n').split('\t')
     gaps = []
     for cells in table_rows():
-        if cells[0].startswith(('L.', 'C.')):
+        if cells[0].startswith(('L.', 'C.', 'H.')):
             continue
         for name, cell in zip(header[1:], cells[1:]):
             if name not in (columns or DISC_COLUMNS):
@@ -379,18 +409,18 @@ def main():
         with open(OUTPUT, encoding='utf-8') as f:
             current = f.read().replace('\r\n', '\n')
         failed = current != text
-        with open(CRASH_OUTPUT, encoding='utf-8') as f:
-            failed = f.read().replace('\r\n', '\n') != generate_crash() or failed
+        with open(HOST_OUTPUT, encoding='utf-8') as f:
+            failed = f.read().replace('\r\n', '\n') != generate_host() or failed
         if failed:
-            print('NebulaTextTable.inc or crash_text_table.inc is out of date: run python tools/nebula_text.py')
+            print('NebulaTextTable.inc or host_text_table.inc is out of date: run python tools/nebula_text.py')
         for line in coverage():
             print(line.encode('ascii', 'backslashreplace').decode())
             failed = True
         return 1 if failed else 0
     with open(OUTPUT, 'w', encoding='utf-8', newline='\n') as f:
         f.write(text)
-    with open(CRASH_OUTPUT, 'w', encoding='utf-8', newline='\n') as f:
-        f.write(generate_crash())
+    with open(HOST_OUTPUT, 'w', encoding='utf-8', newline='\n') as f:
+        f.write(generate_host())
     return 0
 
 

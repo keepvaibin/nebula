@@ -232,6 +232,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/texture_categories.cpp
     ${rt}/dolphin_pack.cpp
     ${rt}/crash_report.cpp
+    ${rt}/host_text.cpp
     ${rt}/discord_presence.cpp
     ${rt}/controller_roster.cpp
     ${rt}/wiimote_speaker.cpp)

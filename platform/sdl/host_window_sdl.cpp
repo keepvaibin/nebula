@@ -40,6 +40,7 @@ namespace galaxy::render::vk {
 #include "galaxy/render_api.h"
 #include "galaxy/input_bindings.h"
 #include "galaxy/game_paths.h"
+#include "galaxy/host_text.h"
 #include "galaxy/runtime_settings.h"
 #include "galaxy/path_text.h"
 #include "galaxy/platform_paths.h"
@@ -989,6 +990,7 @@ void open_gamepad(SDL_JoystickID id) {
                 g_accel_valid[index] = false;
                 g_touch_down[index] = false;
                 g_input.motion[index] = {};
+                g_input.pad_names[index] = galaxy::input::kept_model_name(SDL_GetGamepadName(slot) != nullptr ? SDL_GetGamepadName(slot) : "");
                 PadMotionSource& source = g_motion_source[index];
                 source = {};
 #if defined(__ANDROID__)
@@ -2257,7 +2259,25 @@ bool folders_open() noexcept {
 namespace {
 struct PickRequest {
     PickDone done;
+    // The filters SDL reads until it answers; their names are the host's words (host_text), static storage.
+    std::array<SDL_DialogFileFilter, 2> filters{};
 };
+
+// One of SDL's dialogs titled in the host's language (host_text, P-106).
+void show_dialog(SDL_FileDialogType type, SDL_DialogFileCallback callback, void* request, const char* title,
+                 const SDL_DialogFileFilter* filters, int count, const char* location, bool many) {
+    const SDL_PropertiesID props = SDL_CreateProperties();
+    SDL_SetPointerProperty(props, SDL_PROP_FILE_DIALOG_WINDOW_POINTER, galaxy::sdl::g_window);
+    SDL_SetStringProperty(props, SDL_PROP_FILE_DIALOG_TITLE_STRING, title);
+    if (count > 0) {
+        SDL_SetPointerProperty(props, SDL_PROP_FILE_DIALOG_FILTERS_POINTER, const_cast<SDL_DialogFileFilter*>(filters));
+        SDL_SetNumberProperty(props, SDL_PROP_FILE_DIALOG_NFILTERS_NUMBER, count);
+    }
+    if (location != nullptr) SDL_SetStringProperty(props, SDL_PROP_FILE_DIALOG_LOCATION_STRING, location);
+    SDL_SetBooleanProperty(props, SDL_PROP_FILE_DIALOG_MANY_BOOLEAN, many);
+    SDL_ShowFileDialogWithProperties(type, callback, request, props);
+    SDL_DestroyProperties(props);  // what the dialog keeps of them it has copied, as SDL_ShowOpenFileDialog does
+}
 
 void SDLCALL picked(void* userdata, const char* const* files, int) {
     std::unique_ptr<PickRequest> request(static_cast<PickRequest*>(userdata));
@@ -2276,24 +2296,28 @@ void SDLCALL picked(void* userdata, const char* const* files, int) {
 }  // namespace
 
 void pick_files(FilePick kind, PickDone done) {
+    namespace text = galaxy::host_text;
     auto* request = new PickRequest{std::move(done)};
+    const char* const language = text::language();
+    const auto say = [language](const char* english) { return text::translated(english, language).data(); };
     if (kind == FilePick::ModFolders) {
-        SDL_ShowOpenFolderDialog(picked, request, galaxy::sdl::g_window, nullptr, true);
+        show_dialog(SDL_FILEDIALOG_OPENFOLDER, picked, request, say(text::kImportModFolders), nullptr, 0, nullptr, true);
         return;
     }
     // As Windows' picker lists them (host_window_win32.cpp).
-    static constexpr SDL_DialogFileFilter kMiis[] = {
-        {"Mii files (Wii, DS, 3DS, Wii U, Switch, Mii Studio, Mii Creator)",
-         "mii;rcd;rsd;mae;miigx;ncd;nsd;cfcd;cfsd;ffcd;ffsd;charinfo;nfsd;nfcd;mnms;emnms;miic;dat;bin;txt"},
-        {"All files", "*"}};
-    static constexpr SDL_DialogFileFilter kMods[] = {
-        {"Mods and texture packs (luma, zip, 7z, rar, tar)", "luma;zip;7z;rar;tar;tgz;gz;txz;xz;tbz2;bz2;tzst;zst"},
-        {"All files", "*"}};
-    static constexpr SDL_DialogFileFilter kSaves[] = {
-        {"Saves (zip, Nebula.sav, GameData.bin, Wii SD data.bin)", "zip;sav;bin"},
-        {"All files", "*"}};
-    const SDL_DialogFileFilter* filters = kind == FilePick::Miis ? kMiis : kind == FilePick::Saves ? kSaves : kMods;
-    SDL_ShowOpenFileDialog(picked, request, galaxy::sdl::g_window, filters, 2, nullptr, kind != FilePick::Saves);
+    const char* const patterns = kind == FilePick::Miis ? "mii;rcd;rsd;mae;miigx;ncd;nsd;cfcd;cfsd;ffcd;ffsd;charinfo;nfsd;"
+                                                          "nfcd;mnms;emnms;miic;dat;bin;txt"
+                                 : kind == FilePick::Saves ? "zip;sav;bin"
+                                                           : "luma;zip;7z;rar;tar;tgz;gz;txz;xz;tbz2;bz2;tzst;zst";
+    const char* const name = say(kind == FilePick::Miis    ? text::kMiiFiles
+                                 : kind == FilePick::Saves ? text::kSaveFiles
+                                                           : text::kModFiles);
+    request->filters = {{{name, patterns}, {say(text::kAllFiles), "*"}}};
+    const char* const title = say(kind == FilePick::Miis    ? text::kImportMiis
+                                  : kind == FilePick::Saves ? text::kImportSaves
+                                                            : text::kImportMods);
+    show_dialog(SDL_FILEDIALOG_OPENFILE, picked, request, title, request->filters.data(), 2, nullptr,
+                kind != FilePick::Saves);
 }
 
 // SDL's save dialog; the file is copied where the player chose (a ".zip" added when the name has no extension).
@@ -2301,6 +2325,7 @@ namespace {
 struct SaveRequest {
     std::filesystem::path file;
     std::function<void(SaveCopy)> done;
+    SDL_DialogFileFilter zip{};  // read by SDL until it answers
 };
 
 void SDLCALL save_chosen(void* userdata, const char* const* files, int) {
@@ -2322,10 +2347,13 @@ void SDLCALL save_chosen(void* userdata, const char* const* files, int) {
 }  // namespace
 
 void save_copy(const std::filesystem::path& file, std::function<void(SaveCopy)> done) {
-    static constexpr SDL_DialogFileFilter kZip[] = {{"Zip archive", "zip"}};
+    namespace text = galaxy::host_text;
+    const char* const language = text::language();
     auto* request = new SaveRequest{file, std::move(done)};
+    request->zip = {text::translated(text::kZipArchive, language).data(), "zip"};
     const std::string name = galaxy::path_text(file.filename());
-    SDL_ShowSaveFileDialog(save_chosen, request, galaxy::sdl::g_window, kZip, 1, name.c_str());
+    show_dialog(SDL_FILEDIALOG_SAVEFILE, save_chosen, request, text::translated(text::kExportSaves, language).data(),
+                &request->zip, 1, name.c_str(), false);
 }
 
 // The file manager at the folder (made first, as on Windows).
@@ -2554,9 +2582,10 @@ std::size_t connected_controllers(std::span<input::ControllerInfo> out) noexcept
             info.scheme = state.pads[i].scheme;
             info.slot = static_cast<std::uint8_t>(i);
             info.icons = state.pad_icons[i];
-            info.model = state.pads[i].scheme == input::ControlScheme::PlayStation ? "PlayStation controller"
-                         : state.pads[i].scheme == input::ControlScheme::SwitchPro  ? "Switch controller"
-                                                                                    : "Controller";
+            // The system's own name for it, as Windows shows the device's (P-106); a translated word without one.
+            info.model = state.pad_names[i] != nullptr
+                             ? state.pad_names[i]
+                             : galaxy::host_text::translated("Controller", galaxy::host_text::language()).data();
             info.gyro = state.motion[i].has_gyro;
             info.sensors = state.motion[i].has_gyro || state.motion[i].has_accel;
             info.touch = state.motion[i].has_touch;

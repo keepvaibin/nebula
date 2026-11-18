@@ -89,7 +89,14 @@ target_include_directories(galaxy_native_calendar_tests PRIVATE "${galaxy_root}/
     "${galaxy_root}/native/petari/include")
 galaxy_test(galaxy_mii_import_tests SOURCES ${rt}/mii_import_tests.cpp ${rt}/mii_import.cpp
     LIBS galaxy_atomic_file galaxy_mii_formats)
-galaxy_test(galaxy_crash_report_tests SOURCES ${rt}/crash_report_tests.cpp ${rt}/crash_report.cpp)
+# The host's own texts: one table and one language rule for the crash dialog and every host's windows (P-106).
+set(galaxy_host_text_libs "")
+if(APPLE)
+    set(galaxy_host_text_libs "-framework CoreFoundation")
+endif()
+galaxy_test(galaxy_crash_report_tests SOURCES ${rt}/crash_report_tests.cpp ${rt}/crash_report.cpp ${rt}/host_text.cpp
+    LIBS ${galaxy_host_text_libs})
+galaxy_test(galaxy_host_text_tests SOURCES ${rt}/host_text_tests.cpp ${rt}/host_text.cpp LIBS ${galaxy_host_text_libs})
 
 # Settings, achievements, statistics and input.
 galaxy_test(galaxy_runtime_settings_tests SOURCES ${rt}/runtime_settings_tests.cpp LIBS galaxy_runtime_settings)

@@ -18,6 +18,7 @@
 #include "galaxy/controller_hid.h"
 #include "galaxy/input/press_latch.h"
 #include "galaxy/game_paths.h"
+#include "galaxy/host_text.h"
 #include "galaxy/input/host_input.h"
 #include "galaxy/input_bindings.h"
 #include "galaxy/luma_system_platform.h"
@@ -578,6 +579,7 @@ void open_gamepad(GCController* controller) {
         // A new controller's motion starts from rest, never from the last one in this slot.
         g_motion[index] = {};
         g_input.motion[index] = {};
+        g_input.pad_names[index] = galaxy::input::kept_model_name((controller.vendorName ?: @"").UTF8String);
         if (@available(macOS 11.0, *)) {
             GCMotion* const sensors = controller.motion;
             if (sensors != nil) {
@@ -1109,20 +1111,25 @@ void make_menus() {
     NSMenu* const bar = [NSMenu new];
     NSMenuItem* const app_item = [bar addItemWithTitle:@"" action:nil keyEquivalent:@""];
     NSMenu* const app_menu = [NSMenu new];
-    [app_menu addItemWithTitle:@"About Nebula" action:@selector(orderFrontStandardAboutPanel:) keyEquivalent:@""];
+    // In the host's language (P-106); AppKit renames the full-screen item itself while the window is full screen.
+    using galaxy::apple::host_ns_text;
+    [app_menu addItemWithTitle:host_ns_text("About Nebula") action:@selector(orderFrontStandardAboutPanel:) keyEquivalent:@""];
     [app_menu addItem:[NSMenuItem separatorItem]];
-    [app_menu addItemWithTitle:@"Hide Nebula" action:@selector(hide:) keyEquivalent:@"h"];
-    NSMenuItem* const others = [app_menu addItemWithTitle:@"Hide Others" action:@selector(hideOtherApplications:) keyEquivalent:@"h"];
+    [app_menu addItemWithTitle:host_ns_text("Hide Nebula") action:@selector(hide:) keyEquivalent:@"h"];
+    NSMenuItem* const others = [app_menu addItemWithTitle:host_ns_text("Hide Others") action:@selector(hideOtherApplications:)
+                                            keyEquivalent:@"h"];
     others.keyEquivalentModifierMask = NSEventModifierFlagCommand | NSEventModifierFlagOption;
-    [app_menu addItemWithTitle:@"Show All" action:@selector(unhideAllApplications:) keyEquivalent:@""];
+    [app_menu addItemWithTitle:host_ns_text("Show All") action:@selector(unhideAllApplications:) keyEquivalent:@""];
     [app_menu addItem:[NSMenuItem separatorItem]];
-    [app_menu addItemWithTitle:@"Quit Nebula" action:@selector(terminate:) keyEquivalent:@"q"];
+    [app_menu addItemWithTitle:host_ns_text("Quit Nebula") action:@selector(terminate:) keyEquivalent:@"q"];
     app_item.submenu = app_menu;
-    NSMenuItem* const window_item = [bar addItemWithTitle:@"Window" action:nil keyEquivalent:@""];
-    NSMenu* const window_menu = [[NSMenu alloc] initWithTitle:@"Window"];
-    [window_menu addItemWithTitle:@"Minimize" action:@selector(performMiniaturize:) keyEquivalent:@"m"];
-    [window_menu addItemWithTitle:@"Zoom" action:@selector(performZoom:) keyEquivalent:@""];
-    NSMenuItem* const full = [window_menu addItemWithTitle:@"Enter Full Screen" action:@selector(toggleFullScreen:) keyEquivalent:@"f"];
+    NSString* const window_title = host_ns_text("Window");
+    NSMenuItem* const window_item = [bar addItemWithTitle:window_title action:nil keyEquivalent:@""];
+    NSMenu* const window_menu = [[NSMenu alloc] initWithTitle:window_title];
+    [window_menu addItemWithTitle:host_ns_text("Minimize") action:@selector(performMiniaturize:) keyEquivalent:@"m"];
+    [window_menu addItemWithTitle:host_ns_text("Zoom") action:@selector(performZoom:) keyEquivalent:@""];
+    NSMenuItem* const full = [window_menu addItemWithTitle:host_ns_text("Enter Full Screen") action:@selector(toggleFullScreen:)
+                                             keyEquivalent:@"f"];
     full.keyEquivalentModifierMask = NSEventModifierFlagCommand | NSEventModifierFlagControl;
     window_item.submenu = window_menu;
     NSApp.mainMenu = bar;
@@ -1672,10 +1679,11 @@ void pick_files(FilePick kind, PickDone done) {
             panel.canChooseDirectories = kind == FilePick::ModFolders;
             panel.canChooseFiles = kind != FilePick::ModFolders;
             panel.allowsMultipleSelection = kind != FilePick::Saves;
-            panel.message = kind == FilePick::Miis         ? @"Choose Mii files"
-                            : kind == FilePick::ModFolders ? @"Choose mod folders"
-                            : kind == FilePick::Saves      ? @"Choose a save to import"
-                                                           : @"Choose mods or texture packs";
+            // The words every host's dialog says (host_text, P-106).
+            panel.message = galaxy::apple::host_ns_text(kind == FilePick::Miis         ? galaxy::host_text::kImportMiis
+                                                        : kind == FilePick::ModFolders ? galaxy::host_text::kImportModFolders
+                                                        : kind == FilePick::Saves      ? galaxy::host_text::kImportSaves
+                                                                                       : galaxy::host_text::kImportMods);
             g_panels.fetch_add(1, std::memory_order_relaxed);
             update_cursor();
             const auto finished = ^(NSModalResponse result) {
@@ -1709,7 +1717,7 @@ void save_copy(const std::filesystem::path& file, std::function<void(SaveCopy)> 
         @autoreleasepool {
             NSSavePanel* const panel = [NSSavePanel savePanel];
             panel.nameFieldStringValue = @(name.c_str());
-            panel.message = @"Export saves";
+            panel.message = galaxy::apple::host_ns_text(galaxy::host_text::kExportSaves);
             g_panels.fetch_add(1, std::memory_order_relaxed);
             update_cursor();
             const auto finished = ^(NSModalResponse result) {
@@ -1872,9 +1880,11 @@ std::size_t connected_controllers(std::span<input::ControllerInfo> out) noexcept
             info.scheme = state.pads[i].scheme;
             info.slot = static_cast<std::uint8_t>(i);
             info.icons = state.pad_icons[i];
-            info.model = state.pads[i].scheme == input::ControlScheme::PlayStation ? "PlayStation controller"
-                         : state.pads[i].scheme == input::ControlScheme::SwitchPro  ? "Switch controller"
-                                                                                    : "Controller";
+            // The system's own name for it (GCController.vendorName), as Windows shows the device's (P-106); a
+            // translated word without one.
+            info.model = state.pad_names[i] != nullptr
+                             ? state.pad_names[i]
+                             : galaxy::host_text::translated("Controller", galaxy::host_text::language()).data();
             info.gyro = state.motion[i].has_gyro;
             info.sensors = state.motion[i].has_gyro || state.motion[i].has_accel;
             info.touch = state.motion[i].has_touch;
