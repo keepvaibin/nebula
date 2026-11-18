@@ -466,6 +466,36 @@ def repo_audit(g):
     return fn
 
 
+# The code checks (P-043): each needs only the tree and Python, and GitHub's Linux unit job runs the same three.
+CODE_CHECKS = ("console_census.py", "cast_check.py", "byte_order_check.py")
+
+
+def code_checks(tree=TREE, scripts=CODE_CHECKS, log=None):
+    """The tree's code checks (tools/verify): the console census (closed groups read zero), cast_check (no number read
+    by casting a pointer in the game) and byte_order_check (no meaning that depends on the byte order). (passed, what
+    each said), each script's output in `log`."""
+    said, ok = [], True
+    for name in scripts:
+        script = pathlib.Path(TREE) / "tools" / "verify" / name
+        if log is not None:
+            code = run([sys.executable, "-X", "utf8", "-I", script, tree], log, cwd=str(tree))
+            text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace").split("$ ")[-1]
+        else:
+            r = subprocess.run([sys.executable, "-X", "utf8", "-I", str(script), str(tree)], capture_output=True,
+                               text=True, cwd=str(tree))
+            code, text = r.returncode, r.stdout + r.stderr
+        lines = [l.strip() for l in text.splitlines()[1 if log is not None else 0:] if l.strip()]
+        ok = ok and code == 0
+        said.append("%s %s" % (name[:-3], "pass" if code == 0 else "FAILED: " + (lines[0] if lines else "(no output)")[:120]))
+    return ok, "; ".join(said)
+
+
+def repo_code(g):
+    def fn(log):
+        return code_checks(TREE, log=log)
+    return fn
+
+
 def parse_scripts(g):
     """Every tracked PowerShell and Python script parses (tools/gate/parse_scripts.py): a script that does not fails
     only when someone runs it."""
@@ -1453,6 +1483,7 @@ def build_part(g):
     g.check("repo/settings", settings_table(g))
     g.check("repo/audit", repo_audit(g))
     g.check("repo/scripts", parse_scripts(g))
+    g.check("repo/code", repo_code(g))
     if g.args.no_build:
         return True
     return g.check("build/windows", build_windows(g)) is not False

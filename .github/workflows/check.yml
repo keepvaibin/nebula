@@ -187,6 +187,12 @@ jobs:
         uses: ./.github/actions/compiler-cache
         with:
           name: linux-unit
+      # The code checks gate.py runs as repo/code (P-043): the console census, cast_check and byte_order_check.
+      - name: Code checks
+        run: |
+          for check in console_census cast_check byte_order_check; do
+            python3 -X utf8 -I "tools/verify/$check.py" . || exit 1
+          done
       - name: LLVM
         run: |
           sudo apt-get update
