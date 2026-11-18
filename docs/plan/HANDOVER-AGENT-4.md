@@ -19,9 +19,9 @@ LumaLink workspace at 7524fa3: `cargo test --workspace` 498 passed, 0 failed (in
 ## Landing (as the Planner set it, 06:49)
 
 1. app/work reaches main first (Agent 3's rows P-076, P-102 are in it).
-2. link/m10 then lands on main through its own gate: `python tools/gate.py` on a tree at link/m10 rebased on main.
+2. link/m10 then lands on main through its own gate: `python tools/gate/gate.py` on a tree at link/m10 rebased on main.
 3. link/work lands after: its last full quick gate (2c4051083) passed 23 of 24; the one failure was riivolution's
-   timing test, fixed in 7524fa3. The quick gate of eb5f08d5a was stopped: run `python tools/gate.py --quick` again.
+   timing test, fixed in 7524fa3. The quick gate of eb5f08d5a was stopped: run `python tools/gate/gate.py --quick` again.
 4. LumaLink link/work goes to LumaLink main at the same time as the nebula commit that pins it.
 
 ## Open rows
@@ -59,7 +59,7 @@ l10n/bundle.l10n.*.json and messages.js; extension.js uses `vscode.l10n.t(M.X, .
 
 concepts/lumascript.md (temporaries are given back once used, not every frame), the-game-description.md and
 glossary.md (the description is the `luma` folder), mod-files-and-layers.md (`merge/` in the layer listing, a section
-on adding to a file many mods add to). Not run through docs_check: run `python tools/docs_check.py` before landing.
+on adding to a file many mods add to). Not run through docs_check: run `python tools/modding/docs_check.py` before landing.
 
 ## How far the M13 reading went
 
