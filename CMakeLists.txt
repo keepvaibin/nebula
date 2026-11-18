@@ -599,6 +599,10 @@ galaxy_test(galaxy_core_pairing_tests SOURCES ${render_src}/core/pairing_tests.c
     ${render_src}/frame_interpolation.cpp ${render_src}/affine.cpp)
 target_include_directories(galaxy_core_pairing_tests PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src" "${CMAKE_CURRENT_SOURCE_DIR}/native/include")
+# A frame list let go of with release and taken back with acquire (nebula_frame_list.h, P-005): two threads, so the
+# Linux thread sanitizer job sees the hand-off.
+galaxy_test(galaxy_frame_list_release_tests SOURCES ${render_src}/core/frame_list_release_tests.cpp)
+target_include_directories(galaxy_frame_list_release_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/native/include")
 
 # Additions a build asks for at configure, as a list of CMake files (-DNEBULA_EXTRA_CMAKE=<file>;...), each included
 # here after the product's targets and galaxy_test. A build that passes none builds the product and its unit tests only.
