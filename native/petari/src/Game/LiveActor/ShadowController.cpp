@@ -1,6 +1,7 @@
 #include "Game/LiveActor/ShadowController.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/ShadowDrawer.hpp"
+#include "Game/Map/CollisionChanges.hpp"
 #include "Game/Map/HitInfo.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/GravityUtil.hpp"
@@ -10,6 +11,15 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/LumaCore.hpp"
+
+#if defined(NEBULA_PLAIN_MODULE)
+namespace {
+    // Equal to the bit: a NaN equals a NaN of the same bits, 0 and -0 differ (a query with either may answer differently).
+    bool isSameBits(const Vec3f& rA, const Vec3f& rB) {
+        return __builtin_memcmp(&rA, &rB, sizeof(Vec3f)) == 0;
+    }
+}  // namespace
+#endif
 
 ShadowControllerHolder::ShadowControllerHolder() : NameObj("影管理"), mControllers(), mRequested() {
     lumacore::setClass(this, lumacore::kClassId< ShadowControllerHolder >);
@@ -23,7 +33,8 @@ ShadowController::ShadowController(LiveActor* pActor, const char* pName)
       mDropOffset(0.0f, 0.0f, 0.0f), mDropDir(), mDropDirection(0.0f, -1.0f, 0.0f), mProjPos(), mProjNorm(), mProjectionPos(0.0f, 0.0f, 0.0f),
       mProjectionNormal(0.0f, 1.0f, 0.0f), mStartOffset(50.0f), mDropLength(), mCollisionCalc(CollisionCalc::On), mCollisionCount(),
       mDropGravity(DropGravity::None), mDropType(DropType::Map), mVisibility(Visibility::SyncHost), mIsProjected(), mIsRequested(),
-      mIsFollowHostScale(), mIsValid(true) {
+      mIsFollowHostScale(), mIsValid(true), mLineKept(false), mLineHit(false), mLineType(DropType::Map), mLineFilter(), mLineChanges(),
+      mLineStart(0.0f, 0.0f, 0.0f), mLine(0.0f, 0.0f, 0.0f), mLinePos(0.0f, 0.0f, 0.0f), mLineNormal(0.0f, 1.0f, 0.0f), mLineSensor() {
     MR::createSceneObj(SceneObj_ShadowControllerHolder);
     MR::addShadowController(this);
 }
@@ -135,6 +146,54 @@ void ShadowController::updateProjection() {
     position -= direction * mStartOffset;
 
     const Vec3f line = direction * (mDropLength + mStartOffset);
+#if defined(NEBULA_PLAIN_MODULE)
+    // The same line as last time, nothing changed near it since: the same answer, without the query (P-140). A miss
+    // leaves the projection's place and normal as they were, as the query does.
+    if (mLineKept && mLineType == mDropType && mLineFilter == mCollisionPartsFilter && isSameBits(mLineStart, position) &&
+        isSameBits(mLine, line) && CollisionChanges::isLineUnchanged(mLineChanges, position, line)) {
+        mIsProjected = mLineHit;
+        if (mLineHit) {
+            mProjectionPos = mLinePos;
+            mProjectedSensor = mLineSensor;
+            mProjectionNormal = mLineNormal;
+        } else {
+            mProjectedSensor = nullptr;
+        }
+#if defined(NEBULA_SHADOW_LINE_VERIFY)
+        // A build that checks the reuse: the query made anyway, its answer the kept one to the bit.
+        Vec3f checkPos(mProjectionPos);
+        bool orderFree = false;
+        const bool checkHit = MR::getFirstPolyOnLineOrderFree(&checkPos, &triangle, position, line, mCollisionPartsFilter,
+                                                              mDropType == DropType::Map ? 0 : 2, &orderFree);
+        if (checkHit != mLineHit ||
+            (checkHit && (!isSameBits(checkPos, mLinePos) || triangle.getSensor() != mLineSensor ||
+                          !isSameBits(*triangle.getNormal(0), mLineNormal)))) {
+            NEBULA_PANIC("shadow line reuse differs from the query: %s, hit %d kept %d", mName, checkHit, mLineHit);
+        }
+#endif
+    } else {
+        bool orderFree = false;
+        mIsProjected = MR::getFirstPolyOnLineOrderFree(&mProjectionPos, &triangle, position, line, mCollisionPartsFilter,
+                                                       mDropType == DropType::Map ? 0 : 2, &orderFree);
+        if (mIsProjected) {
+            mProjectedSensor = triangle.getSensor();
+            mProjectionNormal.set(*triangle.getNormal(0));
+        } else {
+            mProjectedSensor = nullptr;
+        }
+
+        mLineKept = orderFree;
+        mLineHit = mIsProjected;
+        mLineType = mDropType;
+        mLineFilter = mCollisionPartsFilter;
+        mLineChanges = CollisionChanges::count();
+        mLineStart = position;
+        mLine = line;
+        mLinePos = mProjectionPos;
+        mLineNormal = mProjectionNormal;
+        mLineSensor = mProjectedSensor;
+    }
+#else
     if (mDropType == DropType::Map) {
         mIsProjected = MR::getFirstPolyOnLineToMap(&mProjectionPos, &triangle, position, line, mCollisionPartsFilter, nullptr);
     } else {
@@ -147,6 +206,7 @@ void ShadowController::updateProjection() {
     } else {
         mProjectedSensor = nullptr;
     }
+#endif
 
     if (mCollisionCalc == CollisionCalc::Once) {
         mCollisionCount++;
@@ -366,6 +426,8 @@ void ShadowController::offCalcDropPrivateGravity() {
 
 void ShadowController::setCollisionPartsFilter(CollisionPartsFilterBase* pBase) {
     mCollisionPartsFilter = pBase;
+    // A new filter may be made where an old one was: the last line query's answer is not kept (P-140).
+    mLineKept = false;
 }
 
 void ShadowController::onFollowHostScale() {

@@ -1,5 +1,6 @@
 #include "Game/Map/CollisionCategorizedKeeper.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
+#include "Game/Map/CollisionChanges.hpp"
 #include "Game/Map/CollisionParts.hpp"
 #include "Game/Util/CollisionPartsFilter.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -577,6 +578,9 @@ CollisionZone::CollisionZone(s32 zoneID) : mZoneID(zoneID), mCenter(0, 0, 0), mR
 }
 
 void CollisionZone::addParts(CollisionParts* pParts) {
+#if defined(NEBULA_PLAIN_MODULE)
+    CollisionChanges::note(pParts->getTrans(), pParts->mBoundingRadius);
+#endif
     mParts.push_back(pParts);
 
     if (mZoneID != 0) {
@@ -585,6 +589,11 @@ void CollisionZone::addParts(CollisionParts* pParts) {
 }
 
 void CollisionZone::calcMinMaxAndRadius() {
+#if defined(NEBULA_PLAIN_MODULE)
+    // The global zone's bounds are never tested; another zone's sphere decides which of its parts a line query takes.
+    const Vec3f lastCenter(mCenter);
+    const f32 lastRadius = mRadius;
+#endif
     CollisionParts** pCurrent;
     mMin.zero();
     mMax.zero();
@@ -614,6 +623,12 @@ void CollisionZone::calcMinMaxAndRadius() {
     }
 
     mRadius = radius;
+#if defined(NEBULA_PLAIN_MODULE)
+    if (mZoneID != 0 && (lastCenter.x != mCenter.x || lastCenter.y != mCenter.y || lastCenter.z != mCenter.z || lastRadius != mRadius)) {
+        CollisionChanges::note(lastCenter, lastRadius);
+        CollisionChanges::note(mCenter, mRadius);
+    }
+#endif
 }
 
 void CollisionZone::calcMinMaxAndRadiusIfMoveOuter(CollisionParts* pParts) {
@@ -674,6 +689,9 @@ void CollisionZone::eraseParts(CollisionParts* pParts) {
     }
 
     if (pFound != pEnd) {
+#if defined(NEBULA_PLAIN_MODULE)
+        CollisionChanges::note(pParts->getTrans(), pParts->mBoundingRadius);
+#endif
         mParts[pFound - mParts.begin()] = mParts[count - 1];
         mParts.pop_back();
     }

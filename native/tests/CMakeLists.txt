@@ -49,6 +49,10 @@ native_test(native_binder_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/binder_tests.
 native_test(native_binder_plain_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/binder_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/arena_test_host.c"
     "${CMAKE_CURRENT_LIST_DIR}/arena_test_tables.cpp" "${game_src}/LiveActor/Binder.cpp" "${game_src}/System/NebulaArena.cpp")
 target_compile_definitions(native_binder_plain_tests PRIVATE NEBULA_PLAIN_MODULE=1)
+# The plain module's collision change log: a change the game's line test could find touching a line reaches it (P-140).
+native_test(native_collision_changes_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/collision_changes_tests.cpp"
+    "${game_src}/Map/CollisionChanges.cpp")
+target_compile_definitions(native_collision_changes_tests PRIVATE NEBULA_PLAIN_MODULE=1)
 # A sensor keeps every sensor it touches (P-148), on the game's arenas.
 native_test(native_hit_sensor_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/hit_sensor_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/arena_test_host.c" "${CMAKE_CURRENT_LIST_DIR}/arena_test_tables.cpp"

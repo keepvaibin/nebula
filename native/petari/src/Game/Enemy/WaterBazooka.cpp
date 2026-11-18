@@ -8,6 +8,7 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/LiveActor/Nerve.hpp"
+#include "Game/Map/CollisionChanges.hpp"
 #include "Game/Map/CollisionParts.hpp"
 #include "Game/MapObj/WaterPressureBullet.hpp"
 #include "Game/MapObj/WaterPressureBulletHolder.hpp"
@@ -630,6 +631,12 @@ void WaterBazooka::makeActorDead() {
     mCapsule->makeActorDead();
     mBreakModel->makeActorDead();
     mDemoActor->makeActorDead();
+#if defined(NEBULA_PLAIN_MODULE)
+    // The cannon's collision leaves every query without leaving its zone (P-140).
+    if (mCannonCollisionParts->mIsValid) {
+        CollisionChanges::note(mCannonCollisionParts->getTrans(), mCannonCollisionParts->mBoundingRadius);
+    }
+#endif
     mCannonCollisionParts->mIsValid = false;
     LiveActor::makeActorDead();
 }

@@ -135,6 +135,19 @@ public:
     bool mIsRequested;
     bool mIsFollowHostScale;
     bool mIsValid;
+    // The plain module's last line query (P-140): its start, line, parts filter and drop type, the collision change
+    // count after it, and its answer. Its answer stands while all of these hold and no collision change since reaches the
+    // line; kept only when the parts in any order give it.
+    bool mLineKept;
+    bool mLineHit;
+    DropType mLineType;
+    const CollisionPartsFilterBase* mLineFilter;
+    u64 mLineChanges;
+    Vec3f mLineStart;
+    Vec3f mLine;
+    Vec3f mLinePos;
+    Vec3f mLineNormal;
+    HitSensor* mLineSensor;
 };
 
 namespace MR {

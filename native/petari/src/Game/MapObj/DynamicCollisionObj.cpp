@@ -1,5 +1,6 @@
 #include "Game/MapObj/DynamicCollisionObj.hpp"
 #include "Game/LiveActor/Nerve.hpp"
+#include "Game/Map/CollisionChanges.hpp"
 #include "Game/Map/CollisionDirector.hpp"
 #include "Game/Map/CollisionParts.hpp"
 #include "Game/Map/KCollision.hpp"
@@ -19,6 +20,12 @@ void DynamicCollisionObj::init(const TableIter& rIter) {
 }
 
 void DynamicCollisionObj::syncCollision() {
+#if defined(NEBULA_PLAIN_MODULE)
+    // The triangles are made again in place: a change where the part was (P-140). The new bounds note where it is.
+    if (mParts->mIsValid) {
+        CollisionChanges::note(mParts->getTrans(), mParts->mBoundingRadius);
+    }
+#endif
     updateCollisionHeader();
     updateTriangle();
     mParts->mServer->calcFarthestVertexDistance();

@@ -3,6 +3,7 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Map/CollisionCategorizedKeeper.hpp"
+#include "Game/Map/CollisionChanges.hpp"
 #include "Game/Map/CollisionDirector.hpp"
 #include "Game/Map/HitInfo.hpp"
 #include "Game/Map/KCollision.hpp"
@@ -13,6 +14,18 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/TriangleFilter.hpp"
+
+#if defined(NEBULA_PLAIN_MODULE)
+namespace {
+    // Where a part's triangles can be: noted before and after a change to a valid part (P-140). An invalid part is left
+    // out of every query; it is noted when a zone takes it again.
+    void noteParts(CollisionParts* pParts) {
+        if (pParts->mIsValid) {
+            CollisionChanges::note(pParts->getTrans(), pParts->mBoundingRadius);
+        }
+    }
+}  // namespace
+#endif
 
 CollisionParts::CollisionParts()
     : mFollowMtx(), mHitSensor(), mIsValid(), mIsUpdate(true), mIsUpdateOnce(), mUseEqualScale(), mIsNotUsingScale(), mStillCount(), mBoundingRadius(-1.0f), mScale(1.0f), mKeeperIndex(-1), mZone() {
@@ -130,10 +143,16 @@ void CollisionParts::forceResetAllMtxAndSetUpdateMtxOneTime() {
 }
 
 void CollisionParts::resetAllMtxPrivate(const Pos3f& rMatrix) {
+#if defined(NEBULA_PLAIN_MODULE)
+    noteParts(this);
+#endif
     mPrevBaseMatrix.setInline(rMatrix);
     mBaseMatrix.setInline(rMatrix);
     mMatrix.setInline(rMatrix);
     NebulaMtxInverse(mBaseMatrix.toMtxPtr(), mInvBaseMatrix.toMtxPtr());
+#if defined(NEBULA_PLAIN_MODULE)
+    noteParts(this);
+#endif
 }
 
 void CollisionParts::setMtx(const Pos3f& rMatrix) {
@@ -176,9 +195,21 @@ void CollisionParts::updateMtx() {
         mIsUpdateOnce = false;
 
         if (mStillCount < 2) {
+#if defined(NEBULA_PLAIN_MODULE)
+            // A part that keeps its place is not noted: its matrix is written again as it was.
+            const bool moved = !MR::isSameMtx(mMatrix.toMtxPtr(), mBaseMatrix.toMtxPtr());
+            if (moved) {
+                noteParts(this);
+            }
+#endif
             mPrevBaseMatrix.setInline(mBaseMatrix);
             mBaseMatrix.setInline(mMatrix);
             NebulaMtxInverse(mBaseMatrix.toMtxPtr(), mInvBaseMatrix.toMtxPtr());
+#if defined(NEBULA_PLAIN_MODULE)
+            if (moved) {
+                noteParts(this);
+            }
+#endif
         }
     }
 }
@@ -231,8 +262,14 @@ void CollisionParts::updateBoundingSphereRange(Vec3f scale) {
 }
 
 void CollisionParts::updateBoundingSphereRangePrivate(f32 scale) {
+#if defined(NEBULA_PLAIN_MODULE)
+    noteParts(this);
+#endif
     mScale = scale;
     mBoundingRadius = scale * mServer->mMaxVertexDistance;
+#if defined(NEBULA_PLAIN_MODULE)
+    noteParts(this);
+#endif
 }
 
 const char* CollisionParts::getHostName() const {
