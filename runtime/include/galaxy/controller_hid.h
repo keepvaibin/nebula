@@ -2,11 +2,12 @@
 
 // Switch Pro Controller, Switch 2 Pro Controller, PlayStation (DualShock 4,
 // DualSense, DualSense Edge), Steam Controller and generic game controller
-// (generic_hid.h) input over Windows HID. One worker thread blocks on an
-// overlapped ReadFile per device plus a device-change event
-// (CM_Register_Notification on the HID interface class), so it costs nothing
-// while idle and wakes at the controller's report rate. The input consumer
-// only copies the latest decoded state.
+// (generic_hid.h) input over Windows HID. One worker thread waits on one I/O
+// completion port for every device's reads and writes, so it costs nothing
+// while idle and wakes at the controllers' report rates; a setup thread lists
+// and opens devices at each device change (CM_Register_Notification on the
+// HID interface class). The input consumer only copies the latest decoded
+// state.
 
 #include "galaxy/controller_roster.h"
 #include "galaxy/input_bindings.h"
@@ -21,8 +22,8 @@
 
 namespace galaxy::host {
 
-// The HID worker's pads. The worker waits on four handles whatever the number of pads: each pad's read and write completions
-// reach it through the thread pool (controller_hid.cpp IoWait), so the Windows wait limit of 64 handles does not set the count.
+// The HID worker's pads. The worker waits on its completion port whatever the number of pads, so the Windows wait limit of
+// 64 handles does not set the count.
 // A pad's slot is the u32 of input::DeviceKey and ControllerInfo (the top two values are the phone's screen and the keyboard);
 // kMaxHidPads is the size of this worker's tables (published pads, rumble handles), not a limit of the key.
 inline constexpr std::size_t kMaxHidPads = 256;
@@ -94,6 +95,17 @@ void stop_all_rumble() noexcept;
 
 // Starts the worker on first use; later calls are free.
 void ensure_controller_hid_started() noexcept;
+// Tests only: the controllers the worker opens in place of the system's, each a path CreateFileW opens (a pipe's) with
+// the ids and report lengths a device's HID description would give. Before the worker starts; it then starts no
+// Bluetooth LE scan.
+struct HidStandIn {
+    std::wstring path;
+    std::uint16_t vendor = 0;
+    std::uint16_t product = 0;
+    std::uint16_t input_length = 0;
+    std::uint16_t output_length = 0;
+};
+void use_hid_stand_ins(std::vector<HidStandIn> pads);
 // Replaces `out` with every connected pad; `consume_gyro` clears the gyro and
 // touch accumulators. Returns the number written. Never blocks on device I/O.
 std::size_t read_hid_pads(std::vector<HidPadState>& out, bool consume_gyro) noexcept;

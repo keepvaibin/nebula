@@ -344,6 +344,9 @@ struct Hub {
     // Joy-Con halves and pairs (under `lock`) and the Pair Joy-Con screen.
     JoyConStatus joycon{};
     std::atomic<bool> joycon_pairing{false};
+    // A test's controllers in place of the system's (use_hid_stand_ins), set before the worker starts.
+    std::vector<HidStandIn> stand_ins;
+    bool use_stand_ins = false;
 };
 
 // Never destroyed: the worker may still be blocked when the process exits.
@@ -579,6 +582,9 @@ struct HidCandidate {
     USHORT vendor = 0;
     USHORT product = 0;
     ProductInfo info{};
+    // A stand-in's report lengths (use_hid_stand_ins); 0: the device's HID description.
+    USHORT input_length = 0;
+    USHORT output_length = 0;
 };
 
 // The icons a pad has of its own: the Sixaxis's, the GameCube pad's, every Steam controller's and the DualSense Edge's.
@@ -695,6 +701,17 @@ bool is_wii_u_pro(HANDLE handle) noexcept {
     std::array<wchar_t, 64> name{};
     return HidD_GetProductString(handle, name.data(), static_cast<ULONG>((name.size() - 1u) * sizeof(wchar_t))) &&
            wm::is_wii_u_pro_name(name.data());
+}
+
+// A test's stand-ins as the setup thread's list (the products it names that this file reads).
+std::vector<HidCandidate> stand_in_candidates() {
+    std::vector<HidCandidate> found;
+    for (const HidStandIn& pad : hub().stand_ins) {
+        if (const auto product = find_product(pad.vendor, pad.product)) {
+            found.push_back({pad.path, pad.vendor, pad.product, *product, pad.input_length, pad.output_length});
+        }
+    }
+    return found;
 }
 
 std::vector<HidCandidate> enumerate_hid_pads() {
@@ -1430,8 +1447,8 @@ public:
             SetThreadDescription(GetCurrentThread(), L"nebula-controller-setup");
             setup_main(stop, rescan);
         });
-        // A test session (a hidden window) never takes the player's controllers over Bluetooth LE.
-        const bool ble_wanted = !hidden_test_session();
+        // A test session (a hidden window) or a test's stand-ins never take the player's controllers over Bluetooth LE.
+        const bool ble_wanted = !hidden_test_session() && !hub().use_stand_ins;
         if (ble_wanted) ble::start(rescan);
         service_device_timers();
         std::array<OVERLAPPED_ENTRY, 64> entries{};
@@ -1492,8 +1509,8 @@ private:
                 if (result != WAIT_OBJECT_0 + 1 && result != WAIT_TIMEOUT) return;
             }
             const std::uint64_t scan_start = steady_us();
-            auto candidates = enumerate_hid_pads();
-            for (const ble::Found& pad : ble::found()) {
+            auto candidates = hub().use_stand_ins ? stand_in_candidates() : enumerate_hid_pads();
+            for (const ble::Found& pad : hub().use_stand_ins ? std::vector<ble::Found>{} : ble::found()) {
                 if (const auto product = find_product(sw::kNintendoVendorId, pad.product)) {
                     candidates.push_back({pad.path, sw::kNintendoVendorId, pad.product, *product});
                 }
@@ -1707,6 +1724,8 @@ private:
                 HidD_FreePreparsedData(preparsed);
             }
         }
+        if (candidate.input_length != 0u) caps.InputReportByteLength = candidate.input_length;
+        if (candidate.output_length != 0u) caps.OutputReportByteLength = candidate.output_length;
         device->buffer.resize(std::max<USHORT>(caps.InputReportByteLength, 64));
         device->output_length = std::max<USHORT>(caps.OutputReportByteLength, 2);
         device->bluetooth = device->link == ControllerLink::Bluetooth;
@@ -2653,6 +2672,14 @@ void ensure_controller_hid_started() noexcept {
         h.started.store(true, std::memory_order_release);
     } catch (...) {
     }
+}
+
+void use_hid_stand_ins(std::vector<HidStandIn> pads) {
+    Hub& h = hub();
+    const std::lock_guard<std::mutex> lock(h.lifecycle);
+    if (h.started.load(std::memory_order_relaxed)) return;
+    h.stand_ins = std::move(pads);
+    h.use_stand_ins = true;
 }
 
 std::size_t read_hid_pads(std::vector<HidPadState>& out, bool consume_gyro) noexcept {

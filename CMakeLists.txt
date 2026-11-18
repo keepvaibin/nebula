@@ -570,6 +570,8 @@ galaxy_test(galaxy_update_tests SOURCES ${rt}/update/update.cpp ${rt}/update/upd
 galaxy_test(galaxy_live_controls_engine_tests SOURCES ${rt}/input/live_controls_engine_tests.cpp LIBS galaxy_native_host)
 galaxy_test(galaxy_input_hotplug_tests SOURCES ${rt}/input/input_hotplug_tests.cpp LIBS galaxy_native_host)
 galaxy_test(galaxy_raw_mouse_win32_tests SOURCES ${rt}/input/raw_mouse_win32_tests.cpp LIBS galaxy_native_host)
+# The HID worker with a pipe standing in for a pad that takes no writes (P-077, P-083).
+galaxy_test(galaxy_controller_hid_tests SOURCES ${rt}/controller_hid_tests.cpp LIBS galaxy_native_host)
 galaxy_test(galaxy_key_positions_win32_tests SOURCES ${rt}/input/key_positions_win32_tests.cpp
     ${rt}/input/key_positions_win32.cpp LIBS user32)
 galaxy_test(galaxy_windows_power_tests SOURCES ${rt}/windows_power_tests.cpp)
