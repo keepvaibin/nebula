@@ -28,9 +28,8 @@ param(
     # Sanitizers for the game modules (clang -fsanitize=...), e.g. address,undefined; empty for none.
     [string]$Sanitize = "",
     [switch]$Coverage,
-    # The compiler cache in front of clang and cl (N-1049): one cache for every tree and build folder beside these,
-    # their paths taken out of what it hashes (SCCACHE_BASEDIRS), so a file another tree compiled the same way is not
-    # compiled again. Empty, or no such program: none.
+    # The compiler cache in front of clang and cl (N-1049): one cache for every tree and build folder, keyed by the
+    # paths as they are. Empty, or no such program: none.
     [string]$Sccache = "D:/NebulaWork/tools/sccache/sccache.exe",
     [string]$SccacheDir = "D:/NebulaWork/sccache"
 )
@@ -52,11 +51,12 @@ if ($Sccache -and (Test-Path $Sccache)) {
     $Sccache = (Resolve-Path $Sccache).Path.Replace("\", "/")
     $env:SCCACHE_DIR = $SccacheDir
     $env:SCCACHE_CACHE_SIZE = "60G"
-    # Every tree beside this one and every build folder beside this one's: the longest that starts a path is taken out.
-    $bases = @($Tree, $Root) + @(Get-ChildItem (Split-Path $Tree) -Directory | ForEach-Object { $_.FullName.Replace("\", "/") }) +
-        @(Get-ChildItem (Split-Path $Root) -Directory | Where-Object { (Test-Path "$($_.FullName)/msvc") -or (Test-Path "$($_.FullName)/game") } |
-          ForEach-Object { $_.FullName.Replace("\", "/") })
-    $env:SCCACHE_BASEDIRS = ($bases | Select-Object -Unique) -join ";"
+    # No path is taken out of what it hashes (SCCACHE_BASEDIRS): an object holds the paths it was compiled with (a
+    # test's work folder and extension, __FILE__, the debug information's sources), so another tree's object is never
+    # this tree's (N-1049: the unit tests of one tree ran another's test extension). A server of its own port, as one
+    # started with base folders keeps them until it stops.
+    Remove-Item Env:SCCACHE_BASEDIRS -ErrorAction SilentlyContinue
+    $env:SCCACHE_SERVER_PORT = "4227"
     $launch = "-DCMAKE_C_COMPILER_LAUNCHER=`"$Sccache`" -DCMAKE_CXX_COMPILER_LAUNCHER=`"$Sccache`" "
     $cacheBefore = (& $Sccache --show-stats --stats-format json 2>$null | ConvertFrom-Json)
 }
@@ -67,6 +67,16 @@ function Launcher-Differs([string]$Folder) {
     $have = if ($line) { $line.Matches[0].Groups[1].Value } else { "" }
     $want = if ($launch) { $Sccache } else { "" }
     return $have -ne $want
+}
+# A folder built through the cache while it took the trees' paths out may hold objects another tree compiled: they go,
+# once, and the build makes them again (sccache-own-paths says it is done; a new folder is so from the start).
+function Drop-Shared-Objects([string]$Folder) {
+    if (-not $launch -or (Test-Path "$Folder/sccache-own-paths")) { return }
+    if (Test-Path "$Folder/CMakeCache.txt") {
+        Get-ChildItem -Path $Folder -Recurse -File -Include *.obj, *.o -ErrorAction SilentlyContinue | Remove-Item -Force
+    }
+    New-Item -ItemType Directory -Force $Folder | Out-Null
+    Set-Content -Path "$Folder/sccache-own-paths" -Value "objects compiled with this folder's own paths (N-1049)" -Encoding ascii
 }
 
 # A step: its command in the build environment, its output in its log. Start returns the running process; Finish
@@ -95,6 +105,7 @@ function Step([string]$Name, [string]$Command, [string]$Log) {
 
 # The game modules (both), the headless host, the self-description and the services list.
 $game = "$Root/game"
+Drop-Shared-Objects $game
 if (-not (Test-Path "$game/build.ninja") -or (Launcher-Differs $game)) {
     Step "game configure" ("`"$cmake`" -S `"$Tree/native`" -B `"$game`" -G Ninja -DCMAKE_MAKE_PROGRAM=`"$ninja`" $launch" +
         "-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=`"$Llvm/clang.exe`" -DCMAKE_CXX_COMPILER=`"$Llvm/clang++.exe`" " +
@@ -115,6 +126,7 @@ $gameRun = Start-Step "`"$cmake`" --build `"$game`" --target all -j $half -- -k 
 # Every Windows program, the unit tests and the test extension, in one MSVC build.
 $msvc = "$Root/msvc"
 New-Item -ItemType Directory -Force $msvc | Out-Null
+Drop-Shared-Objects $msvc
 # The SDK's libraries are built already; building them again would rewrite the folder other trees link from.
 foreach ($stamp in "fidelityfx-fg.built", "fidelityfx-fg-vk.built") {
     if (-not (Test-Path "$msvc/$stamp")) { Set-Content -Path "$msvc/$stamp" -Value "$Ffx/sdk" -Encoding ascii }
