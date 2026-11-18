@@ -57,7 +57,7 @@ typedef struct LumaUiService {
        game's) opened on `layer`, shown. LUMA_OK and *out. A layout in no store: LUMA_E_NOT_FOUND, Ui.MissingLayout
        in the mod log. No scene running (the game is loading one, or at boot its fonts): LUMA_E_BUSY, reported
        (Ui.NoScene). An empty or null name, a layer outside the enum, a null out: LUMA_E_ARGUMENT, reported;
-       LUMA_UI_MOST_SCREENS open (or 128 made in one scene): LUMA_E_LIMIT, reported. Off the game thread:
+       LUMA_UI_MOST_SCREENS open: LUMA_E_LIMIT, reported; the scene's memory full: LUMA_E_MEMORY. Off the game thread:
        LUMA_E_THREAD, reported; while the game takes the mod out: LUMA_E_CANCELLED. A layout opened again on the
        layer after this mod closed it may be that screen again: its panes' visibility is the layout's again, their
        text as the mod left it. */
