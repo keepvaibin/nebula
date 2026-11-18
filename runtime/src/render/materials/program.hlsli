@@ -27,6 +27,7 @@ cbuffer View : register(b0) {
     float3 view_sky_up;        // the player's up in eye space, unit length
     uint view_flags;           // bit 0 view_sky_up known, bit 1 enhanced, bit 2 wide target
     float4 view_scale;         // x: the frame scale; y: particles' time in this frame; z: their time in the frame before
+    float4 view_map_bias;      // the level bias a map's frame bias kind adds (BIAS): x the scene's, y the lines'
 };
 
 cbuffer Draw : register(b3) {
@@ -35,12 +36,15 @@ cbuffer Draw : register(b3) {
     float draw_half_line;   // a widened line's half width in pixels
     float draw_half_point;  // a widened point's half size in pixels
     uint draw_table;        // the draw's first entry in draw_tables
+    uint draw_map_bias;     // NEBULA_BOUND_TABLES: each map's frame bias kind, two bits a map from map 0
 };
 
 StructuredBuffer<float4> rows : register(t16);
 StructuredBuffer<uint4> instances : register(t17);  // row base, last frame's row base, light base, world row base
 
-// The draw's textures: TEX(n) and SAMP(n) are its n-th map and that map's sampler.
+// The draw's textures: TEX(n) and SAMP(n) are its n-th map and that map's sampler, n a number from 0 to 15. TEX(n).Sample
+// adds the frame's part of the map's level bias (BIAS(n): the renderer's SamplerFrameBias, kept out of the sampler so
+// dynamic resolution and the upscaler make no new samplers); SAMPLE_MAP(n, uv) is the same for an n that is not a number.
 #if NEBULA_BOUND_TABLES
 // Devices without descriptor indexing (Vulkan only): the draw's own table of NEBULA_TABLE_SLOTS maps, bound per draw.
 #ifndef NEBULA_TABLE_SLOTS
@@ -48,8 +52,9 @@ StructuredBuffer<uint4> instances : register(t17);  // row base, last frame's ro
 #endif
 Texture2D tex[NEBULA_TABLE_SLOTS] : register(t0);
 SamplerState samp[NEBULA_TABLE_SLOTS] : register(s0);
-#define TEX(n) tex[n]
+#define MAP_AT(n) tex[n]
 #define SAMP(n) samp[n]
+#define BIAS_KIND(n) ((draw_map_bias >> (2u * (n))) & 3u)
 #else
 // Every texture and sampler in one array each, bound once; the draw's list holds each map's places in them (x the
 // texture, y the sampler), the same for every pixel of the draw.
@@ -57,10 +62,42 @@ SamplerState samp[NEBULA_TABLE_SLOTS] : register(s0);
 // (capability RuntimeDescriptorArray) over the image and sampler sets, whose lengths the renderer chooses.
 Texture2D gTextures[] : register(t0, space1);
 SamplerState gSamplers[] : register(s0, space1);
+// The sampler's place is y's low 30 bits, the map's frame bias kind its top two (gpu::kTableBiasShift).
 StructuredBuffer<uint2> draw_tables : register(t18);
-#define TEX(n) gTextures[draw_tables[draw_table + (n)].x]
-#define SAMP(n) gSamplers[draw_tables[draw_table + (n)].y]
+#define MAP_AT(n) gTextures[draw_tables[draw_table + (n)].x]
+#define SAMP(n) gSamplers[draw_tables[draw_table + (n)].y & 0x3FFFFFFFu]
+#define BIAS_KIND(n) (draw_tables[draw_table + (n)].y >> 30u)
 #endif
+#define BIAS(n) (BIAS_KIND(n) == 1u ? view_map_bias.x : BIAS_KIND(n) == 2u ? view_map_bias.y : 0.0)
+#define SAMPLE_MAP(n, uv) MAP_AT(n).SampleBias(SAMP(n), uv, BIAS(n))
+
+// TEX(n): a named map per number, whose methods are Texture2D's (a struct holding the number, not the texture: glslang
+// and shader model 5.0 take no texture in a struct, and glslang no method of a temporary).
+struct NebulaMap {
+    uint n;
+    float4 Sample(SamplerState s, float2 uv) { return MAP_AT(n).SampleBias(s, uv, BIAS(n)); }
+    float4 SampleLevel(SamplerState s, float2 uv, float level) { return MAP_AT(n).SampleLevel(s, uv, level); }
+    float4 Load(int3 texel) { return MAP_AT(n).Load(texel); }
+    void GetDimensions(out uint width, out uint height) { MAP_AT(n).GetDimensions(width, height); }
+    void GetDimensions(out float width, out float height) { MAP_AT(n).GetDimensions(width, height); }
+};
+static NebulaMap nebula_map0 = {0u};
+static NebulaMap nebula_map1 = {1u};
+static NebulaMap nebula_map2 = {2u};
+static NebulaMap nebula_map3 = {3u};
+static NebulaMap nebula_map4 = {4u};
+static NebulaMap nebula_map5 = {5u};
+static NebulaMap nebula_map6 = {6u};
+static NebulaMap nebula_map7 = {7u};
+static NebulaMap nebula_map8 = {8u};
+static NebulaMap nebula_map9 = {9u};
+static NebulaMap nebula_map10 = {10u};
+static NebulaMap nebula_map11 = {11u};
+static NebulaMap nebula_map12 = {12u};
+static NebulaMap nebula_map13 = {13u};
+static NebulaMap nebula_map14 = {14u};
+static NebulaMap nebula_map15 = {15u};
+#define TEX(n) nebula_map##n
 
 // A draw matrix is six rows: three of its place, three of its normal.
 struct Place {

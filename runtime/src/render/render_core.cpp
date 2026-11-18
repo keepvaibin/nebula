@@ -73,18 +73,25 @@
 
 namespace galaxy::render {
 
+SamplerFrameBias sampler_frame_bias(const TextureSampler& mode, bool arbitrary, bool authored) noexcept {
+    // Levels drawn by hand show the level the game showed: the frame's lines over the authored lines undo the finer
+    // levels a taller frame picks, and the scene's bias (an upscaler's) is for detail these levels do not hold.
+    if ((min_filter_code(mode) & 3u) == 0u) {
+        return SamplerFrameBias::none;
+    }
+    return arbitrary || authored ? SamplerFrameBias::lines : SamplerFrameBias::scene;
+}
+
 SamplerKey make_sampler_key(const TextureSampler& mode, std::uint32_t mip_levels, float lod_shift, bool arbitrary,
-                            float mip_lines_log2, float scene_bias, bool authored) noexcept {
+                            bool authored) noexcept {
     std::uint32_t min_filter = min_filter_code(mode);
     float min_lod = mode.min_lod, max_lod = mode.max_lod;
     const bool source_mips = (min_filter & 3u) != 0u;
-    // Levels drawn by hand show the level the game showed: the frame's lines over the authored lines undo the finer
-    // levels a taller frame picks, and the scene's bias (an upscaler's) is for detail these levels do not hold.
-    const bool by_hand = source_mips && (arbitrary || authored);
-    float bias = mode.lod_bias + (source_mips && !by_hand ? scene_bias : 0.0f);
+    const bool by_hand = sampler_frame_bias(mode, arbitrary, authored) == SamplerFrameBias::lines;
+    float bias = mode.lod_bias;
     std::uint32_t authored_bit = 0u;
     if (by_hand) {
-        bias += mip_lines_log2 - lod_shift;
+        bias -= lod_shift;
         authored_bit = kSamplerAuthoredLevels;
         if (arbitrary) {
             // A replacement's levels go on past the game's range, filtered between levels.

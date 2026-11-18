@@ -49,11 +49,19 @@
 
 namespace galaxy::render {
 
-// Replacement and scene LOD adjustments are floating-point mip levels. `arbitrary`: a replacement whose levels pair with
-// the game's by index; `authored`: the game's own levels drawn by hand (TextureHandle::authored_levels). Both choose the
-// level the game showed at its authored lines (mip_lines_log2) without the scene's bias (kSamplerAuthoredLevels).
+// Replacement LOD adjustments are floating-point mip levels. `arbitrary`: a replacement whose levels pair with the game's
+// by index; `authored`: the game's own levels drawn by hand (TextureHandle::authored_levels). Both choose the level the
+// game showed at its authored lines (sampler_frame_bias) without the settings' bias (kSamplerAuthoredLevels).
+// The key holds the texture's own state only: what follows the frame is the programs' (sampler_frame_bias).
 [[nodiscard]] SamplerKey make_sampler_key(const TextureSampler& mode, std::uint32_t mip_levels, float lod_shift = 0.0f,
-    bool arbitrary = false, float mip_lines_log2 = 0.0f, float scene_bias = 0.0f, bool authored = false) noexcept;
+    bool arbitrary = false, bool authored = false) noexcept;
+
+// The part of a sampler's level bias that follows the frame, which the programs add to the sampler's own
+// (program.hlsli BIAS, from core::ViewRows::map_bias): none (no levels); the scene's, an upscaler's, for the game's
+// levels; or, for levels drawn by hand, the frame's lines over the authored lines, so they show the level the game
+// showed. Out of the key, dynamic resolution's steps, the window's height and the upscaler make no new samplers.
+enum class SamplerFrameBias : std::uint32_t { none = 0u, scene = 1u, lines = 2u };
+[[nodiscard]] SamplerFrameBias sampler_frame_bias(const TextureSampler& mode, bool arbitrary, bool authored) noexcept;
 
 void note_layer_2d_lines(unsigned lines) noexcept;
 
@@ -271,7 +279,7 @@ private:
     std::vector<std::uint32_t> walk_pairs_;
 #if defined(NEBULA_GPU_VULKAN) || defined(NEBULA_GPU_METAL) || defined(NEBULA_GPU_D3D11)
     // Vulkan without descriptor indexing: the table's descriptor sets, as many maps as a bound table holds.
-    void walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::Table& samplers);
+    void walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::Table& samplers, std::uint32_t& map_bias);
     std::vector<SamplerKey> walk_keys_;
 #endif
     [[nodiscard]] bool item_culled(const NebulaFrameItem& item, const NebulaFramePass& pass, std::uint32_t state,

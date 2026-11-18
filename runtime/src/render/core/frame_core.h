@@ -114,7 +114,7 @@ struct TextureTable {
     gpu::Table samplers{};
     std::uint64_t textures_revision = ~0ull;
     std::uint32_t samplers_generation = 0u;
-    float samplers_mip_lines = 0.0f, samplers_scene_bias = 0.0f;
+    std::uint32_t map_bias = 0u;  // a bound table's maps' SamplerFrameBias (gpu::DrawRoot::map_bias)
     bool has_target = false;
     std::uint64_t walk_stamp = 0u;
     std::uint64_t pictures_moved = 0u;  // RenderCore::pictures_moved_ when its target's pictures were named
@@ -151,10 +151,12 @@ struct ViewRows {
     float sky_up[3];          // the player's up in eye space (unit), else the view's up
     std::uint32_t view_flags; // bit 0 sky up known, bit 1 enhanced, bit 2 wide target
     float scale[4];
+    // The level biases the programs add for a map's SamplerFrameBias: x the scene's, y the lines'; z, w unused.
+    float map_bias[4];
 };
 // The cbuffer's packing: view_sky_up and view_flags share one 16-byte row.
 static_assert(offsetof(ViewRows, sky_up) == 128 && offsetof(ViewRows, view_flags) == 140 &&
-              offsetof(ViewRows, scale) == 144 && sizeof(ViewRows) == 160);
+              offsetof(ViewRows, scale) == 144 && offsetof(ViewRows, map_bias) == 160 && sizeof(ViewRows) == 176);
 
 // Everything one list needs that lasts as long as the list.
 struct ListData {

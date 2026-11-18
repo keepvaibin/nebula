@@ -2679,11 +2679,12 @@ gpu::Table RendererVk::sampler_table_for(const SamplerKey* keys, unsigned count)
 void RendererVk::reset_sampler_frame() {
     const RenderConfig cfg = get_render_config();
     const std::uint32_t config = sampler_config_key(cfg);
-    // Samplers are made per key the game uses (its LOD bias holds the output height's mip lines, so each window height
-    // adds a set) and per settings configuration, against the device's maxSamplerAllocationCount (4000 on the Android
-    // baselines and on some desktop drivers). After a settings change, or with half of that limit made, once the GPU is
-    // past every frame that read them: the old configuration's samplers (all of them when crowded) are destroyed, and the
-    // tables and slots are written again as the walker asks for them (sampler_generation). The same samplers come back.
+    // Samplers are made per key the game uses (the texture's own state: the frame's part of the bias is the programs',
+    // SamplerFrameBias) and per settings configuration, against the device's maxSamplerAllocationCount (4000 on the
+    // Android baselines and on some desktop drivers). After a settings change, or with half of that limit made, once
+    // the GPU is past every frame that read them: the old configuration's samplers (all of them when crowded) are
+    // destroyed, and the tables and slots are written again as the walker asks for them (sampler_generation). The same
+    // samplers come back.
     const bool crowded = samplers_.size() >= vk::Context::get().properties().limits.maxSamplerAllocationCount / 2u;
     const auto drop_other_configs = [this, config, crowded] {
         const VkDevice device = vk::Context::get().device();
