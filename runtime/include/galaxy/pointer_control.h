@@ -42,6 +42,14 @@ struct StickVector {
     float y = 0.0f;
 };
 [[nodiscard]] StickVector apply_radial_deadzone(float x, float y, float deadzone) noexcept;
+// A stick from controllers, keys or the touch controls, each already past its own dead zone, in the game's range:
+// the direction kept, the length at most 1. A Nunchuk's counts take nunchuk_stick_counts instead (native_input.h).
+[[nodiscard]] StickVector game_stick(float x, float y) noexcept;
+// The scheme's dead zones on a controller's sticks, once, on every platform: radial on each stick (a small diagonal
+// push keeps its direction), the rest of the travel rescaled to 0..1. The hosts hand over sticks with no dead zone.
+struct PadSample;
+struct SchemeTuning;
+void shape_pad_sticks(PadSample& sample, const SchemeTuning& tuning) noexcept;
 
 // Pointer velocity (pointer units per second, 2 units = picture width; y up
 // positive) for a dead-zoned stick vector: response 0.3 s + 0.7 s^3 of the

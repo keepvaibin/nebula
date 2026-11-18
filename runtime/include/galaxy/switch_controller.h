@@ -120,11 +120,10 @@ struct DecodedState {
 [[nodiscard]] bool decode_pro_report(std::span<const std::uint8_t> report, const ImuCal& imu_cal,
                                      DecodedState& out) noexcept;
 
-// Converts decoded raw sticks into a PadSample with calibration and the
-// scheme deadzones (per axis, like XInput).
+// Converts decoded raw sticks into a PadSample with calibration and no dead zone (shape_pad_sticks applies the
+// scheme's).
 [[nodiscard]] PadSample pad_sample_from(const DecodedState& state, ControlScheme scheme,
-                                        const StickCal& left, const StickCal& right,
-                                        float stick_deadzone, float pointer_deadzone) noexcept;
+                                        const StickCal& left, const StickCal& right) noexcept;
 
 // Subcommand output report (0x01): packet number, neutral rumble, subcommand
 // id and data. Returns the number of meaningful bytes (pad to the device's

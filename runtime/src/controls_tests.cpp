@@ -5,6 +5,7 @@
 
 #include "galaxy/input_bindings.h"
 #include "galaxy/input/key_positions.h"
+#include "galaxy/input/press_latch.h"
 #include "galaxy/native_input.h"
 #include "galaxy/native_settings_pad.h"
 #include "galaxy/pointer_control.h"
@@ -357,7 +358,10 @@ void test_switch_pro_decoding() {
            "flat controller reads +1 g up");
     expect(approx(decoded.imu[0].gyro[1], 143.0f / 14.2842f * 3.14159265f / 180.0f, 1e-3f),
            "gyro z becomes yaw");
-    const PadSample sample = pad_sample_from(decoded, ControlScheme::SwitchPro, left, right, 0.12f, 0.12f);
+    PadSample sample = pad_sample_from(decoded, ControlScheme::SwitchPro, left, right);
+    SchemeTuning switch_tuning{};
+    switch_tuning.stick_deadzone = switch_tuning.pointer_deadzone = 0.12f;
+    shape_pad_sticks(sample, switch_tuning);
     expect(approx(sample.axes[0], 1.0f) && approx(sample.axes[1], 0.0f), "left stick full right");
     expect(sample.axes[3] > 0.5f && approx(sample.axes[5], 1.0f), "right stick up, ZR full");
     const LogicalInput logic = evaluate_pad_bindings(
@@ -506,7 +510,7 @@ void test_joycons() {
            "each stick from its half");
     expect(pair.imu_count == right.imu_count && pair.imu[0].gyro[0] == right.imu[0].gyro[0],
            "the pair's motion is the right half's");
-    const PadSample sample = pad_sample_from(pair, ControlScheme::SwitchPro, StickCal{}, StickCal{}, 0.12f, 0.12f);
+    const PadSample sample = pad_sample_from(pair, ControlScheme::SwitchPro, StickCal{}, StickCal{});
     const LogicalInput logic = evaluate_pad_bindings(default_binding_table(ControlScheme::SwitchPro), sample,
                                                      96.0f / 255.0f);
     expect(logic.held(GameInput::Plus) && logic.held(GameInput::Home) && logic.held(GameInput::DpadUp),
@@ -828,6 +832,34 @@ void test_stick_pointer() {
     expect(approx(full.x, 1.0f) && full.y == 0.0f, "full deflection stays full");
     const StickVector edge = apply_radial_deadzone(dz + 0.001f, 0.0f, dz);
     expect(edge.x > 0.0f && edge.x < 0.01f, "output starts at zero past the dead zone");
+
+    // One dead zone per stick, radial, on every platform (P-073): a small diagonal push keeps its direction.
+    SchemeTuning tuning{};
+    tuning.stick_deadzone = 7849.0f / 32767.0f;
+    tuning.pointer_deadzone = 0.12f;
+    PadSample pad{};
+    pad.connected = true;
+    const float angle = 20.0f * 3.14159265f / 180.0f;
+    pad.axes = {0.4f * std::cos(angle), 0.4f * std::sin(angle), 0.0f, 0.1f, 0.0f, 0.0f};
+    shape_pad_sticks(pad, tuning);
+    expect(approx(std::atan2(pad.axes[1], pad.axes[0]), angle) && pad.axes[1] > 0.05f,
+           "a small diagonal push keeps its direction");
+    expect(approx(std::hypot(pad.axes[0], pad.axes[1]),
+                  (0.4f - tuning.stick_deadzone) / (1.0f - tuning.stick_deadzone)),
+           "the travel past the dead zone is rescaled to 0..1");
+    expect(pad.axes[2] == 0.0f && pad.axes[3] == 0.0f, "the right stick has its own dead zone");
+    // The game's stick (P-084): the direction kept, no second dead zone, at most 1 long.
+    const StickVector corner = game_stick(1.0f, 1.0f);
+    expect(approx(std::hypot(corner.x, corner.y), 1.0f) && approx(corner.x, corner.y), "at most 1 long");
+    expect(game_stick(0.3f, 0.2f).x == 0.3f && game_stick(0.3f, 0.2f).y == 0.2f, "shorter sticks pass as they are");
+    // Two sources' sticks: the longer one whole, never one axis from each.
+    LogicalInput first{};
+    LogicalInput second{};
+    first.stick_x = 0.9f;
+    second.stick_x = 0.1f;
+    second.stick_y = -0.5f;
+    const LogicalInput merged = merge_logical_input(first, second);
+    expect(merged.stick_x == 0.9f && merged.stick_y == 0.0f, "the longer stick whole");
 
     // Response: slow near the centre, the configured speed at full deflection.
     const StickVector v_full = stick_pointer_velocity({1.0f, 0.0f}, 2.4f);
@@ -1883,6 +1915,18 @@ void test_touch_tuning() {
     expect(std::string(pointer_source_name(PointerSource::Touch)) == "touch", "the touch source's name");
 }
 
+// P-075: a press that comes and goes between two reads of the game reaches the game once, and only once.
+void test_press_latch() {
+    galaxy::input::PressLatch latch;
+    expect(latch.take(0x4u) == 0x4u, "levels pass through an empty latch");
+    latch.press(0x1u);
+    latch.press(0x2u);
+    expect(latch.take(0u) == 0x3u, "presses released before the read reach it");
+    expect(latch.take(0u) == 0u, "a read takes the presses: the next read sees only the levels");
+    latch.press(0x8u);
+    expect(latch.take(0x8u) == 0x8u, "a press still held reads as one button");
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -1919,6 +1963,7 @@ int main(int argc, char** argv) {
     test_keyboard_icons();
     test_shared_bindings();
     test_touch_tuning();
+    test_press_latch();
     if (g_failures != 0) {
         std::cerr << g_failures << " controls test(s) failed\n";
         return 1;

@@ -10,6 +10,7 @@
 #include "galaxy/steam_controller.h"
 #include "galaxy/controller_hid.h"
 #include "galaxy/input/host_input.h"
+#include "galaxy/input/press_latch.h"
 #include "galaxy/mod_import.h"
 #include "galaxy/native_settings_pad.h"
 #include "galaxy/render_api.h"
@@ -867,8 +868,52 @@ void sample_pad_motion(std::size_t index, SDL_Gamepad* gamepad) {
     }
 }
 
-void sample_gamepads() {
+// Each pad's presses since the game last took the input (P-075): from every sample and every button event. Guarded by
+// g_input_mutex.
+std::array<galaxy::input::PressLatch, kMaxPads> g_pad_presses;
+
+// The unified layout's bit for one of SDL's buttons on a controller of `scheme` (0: not used). Back buttons: SDL's upper
+// pair is the Edge's paddles (the Steam controllers' L4 R4), its lower pair the Edge's Fn buttons (L5 R5).
+std::uint32_t pad_bit(galaxy::input::ControlScheme scheme, SDL_GamepadButton button) {
     namespace pad = galaxy::input::pad;
+    const bool steam = scheme == galaxy::input::ControlScheme::Steam;
+    const bool back = steam || scheme == galaxy::input::ControlScheme::PlayStation;
+    switch (button) {
+    case SDL_GAMEPAD_BUTTON_DPAD_UP: return pad::bit(pad::kDpadUpBit);
+    case SDL_GAMEPAD_BUTTON_DPAD_DOWN: return pad::bit(pad::kDpadDownBit);
+    case SDL_GAMEPAD_BUTTON_DPAD_LEFT: return pad::bit(pad::kDpadLeftBit);
+    case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: return pad::bit(pad::kDpadRightBit);
+    case SDL_GAMEPAD_BUTTON_START: return pad::bit(pad::kStartBit);
+    case SDL_GAMEPAD_BUTTON_BACK: return pad::bit(pad::kBackBit);
+    case SDL_GAMEPAD_BUTTON_LEFT_STICK: return pad::bit(pad::kLeftStickBit);
+    case SDL_GAMEPAD_BUTTON_RIGHT_STICK: return pad::bit(pad::kRightStickBit);
+    case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER: return pad::bit(pad::kLeftShoulderBit);
+    case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: return pad::bit(pad::kRightShoulderBit);
+    case SDL_GAMEPAD_BUTTON_GUIDE: return pad::bit(pad::kHomeBit);
+    case SDL_GAMEPAD_BUTTON_MISC1: return pad::bit(pad::kCaptureBit);
+    case SDL_GAMEPAD_BUTTON_LEFT_PADDLE1: return back ? pad::bit(pad::kGripLeftBit) : 0u;
+    case SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1: return back ? pad::bit(pad::kGripRightBit) : 0u;
+    case SDL_GAMEPAD_BUTTON_LEFT_PADDLE2: return back ? pad::bit(steam ? pad::kGripLeft2Bit : pad::kFnLeftBit) : 0u;
+    case SDL_GAMEPAD_BUTTON_RIGHT_PADDLE2: return back ? pad::bit(steam ? pad::kGripRight2Bit : pad::kFnRightBit) : 0u;
+    case SDL_GAMEPAD_BUTTON_SOUTH: return pad::bit(pad::kSouthBit);
+    case SDL_GAMEPAD_BUTTON_EAST: return pad::bit(pad::kEastBit);
+    case SDL_GAMEPAD_BUTTON_WEST: return pad::bit(pad::kWestBit);
+    case SDL_GAMEPAD_BUTTON_NORTH: return pad::bit(pad::kNorthBit);
+    default: return 0u;
+    }
+}
+
+// A button's press event, between two samples. Called with g_input_mutex held.
+void pad_button_event(const SDL_GamepadButtonEvent& event) {
+    for (std::size_t i = 0; i < kMaxPads; ++i) {
+        if (g_gamepads[i] != nullptr && SDL_GetGamepadID(g_gamepads[i]) == event.which) {
+            g_pad_presses[i].press(pad_bit(scheme_of(g_gamepads[i]), static_cast<SDL_GamepadButton>(event.button)));
+            return;
+        }
+    }
+}
+
+void sample_gamepads() {
     for (std::size_t i = 0; i < kMaxPads; ++i) {
         SDL_Gamepad* gamepad = g_gamepads[i];
         galaxy::input::PadSample& sample = g_input.pads[i];
@@ -882,34 +927,14 @@ void sample_gamepads() {
         sample.connected = true;
         sample.scheme = scheme_of(gamepad);
         g_input.pad_icons[i] = icon_model_of(gamepad);
-        const auto button = [gamepad](SDL_GamepadButton b) { return SDL_GetGamepadButton(gamepad, b); };
         std::uint32_t bits = 0;
-        if (button(SDL_GAMEPAD_BUTTON_DPAD_UP)) bits |= pad::bit(pad::kDpadUpBit);
-        if (button(SDL_GAMEPAD_BUTTON_DPAD_DOWN)) bits |= pad::bit(pad::kDpadDownBit);
-        if (button(SDL_GAMEPAD_BUTTON_DPAD_LEFT)) bits |= pad::bit(pad::kDpadLeftBit);
-        if (button(SDL_GAMEPAD_BUTTON_DPAD_RIGHT)) bits |= pad::bit(pad::kDpadRightBit);
-        if (button(SDL_GAMEPAD_BUTTON_START)) bits |= pad::bit(pad::kStartBit);
-        if (button(SDL_GAMEPAD_BUTTON_BACK)) bits |= pad::bit(pad::kBackBit);
-        if (button(SDL_GAMEPAD_BUTTON_LEFT_STICK)) bits |= pad::bit(pad::kLeftStickBit);
-        if (button(SDL_GAMEPAD_BUTTON_RIGHT_STICK)) bits |= pad::bit(pad::kRightStickBit);
-        if (button(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER)) bits |= pad::bit(pad::kLeftShoulderBit);
-        if (button(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)) bits |= pad::bit(pad::kRightShoulderBit);
-        if (button(SDL_GAMEPAD_BUTTON_GUIDE)) bits |= pad::bit(pad::kHomeBit);
-        if (button(SDL_GAMEPAD_BUTTON_MISC1)) bits |= pad::bit(pad::kCaptureBit);
-        // Back buttons: SDL's upper pair is the Edge's paddles (the Steam controllers' L4 R4), its lower pair the Edge's
-        // Fn buttons (L5 R5).
-        if (sample.scheme == galaxy::input::ControlScheme::PlayStation || sample.scheme == galaxy::input::ControlScheme::Steam) {
-            const bool steam = sample.scheme == galaxy::input::ControlScheme::Steam;
-            if (button(SDL_GAMEPAD_BUTTON_LEFT_PADDLE1)) bits |= pad::bit(pad::kGripLeftBit);
-            if (button(SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1)) bits |= pad::bit(pad::kGripRightBit);
-            if (button(SDL_GAMEPAD_BUTTON_LEFT_PADDLE2)) bits |= pad::bit(steam ? pad::kGripLeft2Bit : pad::kFnLeftBit);
-            if (button(SDL_GAMEPAD_BUTTON_RIGHT_PADDLE2)) bits |= pad::bit(steam ? pad::kGripRight2Bit : pad::kFnRightBit);
+        for (int b = 0; b < SDL_GAMEPAD_BUTTON_COUNT; ++b) {
+            if (SDL_GetGamepadButton(gamepad, static_cast<SDL_GamepadButton>(b))) {
+                bits |= pad_bit(sample.scheme, static_cast<SDL_GamepadButton>(b));
+            }
         }
-        if (button(SDL_GAMEPAD_BUTTON_SOUTH)) bits |= pad::bit(pad::kSouthBit);
-        if (button(SDL_GAMEPAD_BUTTON_EAST)) bits |= pad::bit(pad::kEastBit);
-        if (button(SDL_GAMEPAD_BUTTON_WEST)) bits |= pad::bit(pad::kWestBit);
-        if (button(SDL_GAMEPAD_BUTTON_NORTH)) bits |= pad::bit(pad::kNorthBit);
         sample.buttons = bits;
+        g_pad_presses[i].press(bits);
         // SDL's Y axes grow downward; the unified layout's grow upward.
         sample.axes[0] = axis(gamepad, SDL_GAMEPAD_AXIS_LEFTX);
         sample.axes[1] = -axis(gamepad, SDL_GAMEPAD_AXIS_LEFTY);
@@ -1392,6 +1417,9 @@ void pump_events(int timeout_ms) noexcept {
         case SDL_EVENT_GAMEPAD_SENSOR_UPDATE:
             pad_sensor_event(event.gsensor);
             break;
+        case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+            pad_button_event(event.gbutton);
+            break;
         case SDL_EVENT_GAMEPAD_REMOVED:
             close_gamepad(event.gdevice.which);
             break;
@@ -1506,6 +1534,10 @@ InputState input_state() noexcept {
 InputState take_input_state() noexcept {
     std::lock_guard<std::mutex> lock(g_input_mutex);
     InputState state = g_input;
+    for (std::size_t i = 0; i < kMaxPads; ++i) {
+        const std::uint32_t buttons = g_pad_presses[i].take(state.pads[i].buttons);
+        if (state.pads[i].connected) state.pads[i].buttons = buttons;
+    }
     state.touch_buttons |= g_touch_pressed | (g_back_held ? kTouchHome : 0u);
     g_touch_pressed = 0u;
     for (PadMotion& motion : g_input.motion) {

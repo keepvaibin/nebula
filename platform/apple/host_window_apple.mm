@@ -16,6 +16,7 @@
 #include "galaxy/benchmark.h"
 #include "galaxy/content_viewport.h"
 #include "galaxy/controller_hid.h"
+#include "galaxy/input/press_latch.h"
 #include "galaxy/game_paths.h"
 #include "galaxy/input/host_input.h"
 #include "galaxy/input_bindings.h"
@@ -101,6 +102,10 @@ bool g_cursor_hidden = false;
 // the cursor hidden and kept still, its moves the look's.
 std::atomic<bool> g_mouse_look_wanted{false};
 bool g_mouse_look_held = false;
+// The look's motion this hold comes from GCMouse (P-076): the device's own counts, unaccelerated, as Windows' raw input.
+// NSEvent's deltas follow the pointer's acceleration and serve only until a GCMouse moves (a trackpad that is no
+// GCMouse). Under g_input_mutex.
+bool g_raw_look = false;
 // The display mode the window was last put in (RenderConfig::display_mode; ~0: none yet).
 unsigned g_applied_mode = ~0u;
 // The system refused the last change to full screen (the main thread's).
@@ -214,6 +219,26 @@ void update_window_size() {
     galaxy::render::host_window::backbuffer_height = static_cast<unsigned>(height);
 }
 
+// A mouse's unaccelerated motion for the look (P-076). Its handler runs on the main queue, as the events do.
+void open_mouse(GCMouse* mouse) {
+    GCMouseInput* const input = mouse.mouseInput;
+    if (input == nil) {
+        return;
+    }
+    input.mouseMovedHandler = ^(GCMouseInput*, float dx, float dy) {
+        if (!g_mouse_look_held) {
+            return;
+        }
+        const std::lock_guard<std::mutex> lock(g_input_mutex);
+        if (!g_raw_look) {
+            g_raw_look = true;
+            g_input.mouse_dx = g_input.mouse_dy = 0.0f;
+        }
+        g_input.mouse_dx += dx;
+        g_input.mouse_dy -= dy;  // GameController's y is up
+    };
+}
+
 // The pointer's place from an event: the view's pixels, the origin at its top left.
 void mouse_at(NSEvent* event) {
     if (g_view == nil || event.window != g_window) {
@@ -225,9 +250,12 @@ void mouse_at(NSEvent* event) {
     const bool inside = NSPointInRect([view convertPoint:event.locationInWindow fromView:nil], view.bounds);
     const std::lock_guard<std::mutex> lock(g_input_mutex);
     if (g_mouse_look_held) {
-        // Held for a first-person look: the cursor stays where it is; its motion is the look's (points, y down).
-        g_input.mouse_dx += static_cast<float>(event.deltaX);
-        g_input.mouse_dy += static_cast<float>(event.deltaY);
+        // Held for a first-person look: the cursor stays where it is; its motion is the look's (y down). GCMouse's
+        // counts once a GCMouse moved this hold (open_mouse), else the event's.
+        if (!g_raw_look) {
+            g_input.mouse_dx += static_cast<float>(event.deltaX);
+            g_input.mouse_dy += static_cast<float>(event.deltaY);
+        }
         g_input.mouse_pointer = true;
         g_input.mouse_inside = true;
         return;
@@ -258,6 +286,7 @@ void update_cursor() {
         (void)CGAssociateMouseAndMouseCursorPosition(hold ? false : true);
         const std::lock_guard<std::mutex> lock(g_input_mutex);
         g_input.mouse_dx = g_input.mouse_dy = 0.0f;
+        g_raw_look = false;
     }
     const bool hide = ((inside && front) || hold);
     if (hide != g_cursor_hidden) {
@@ -387,9 +416,46 @@ void sample_pad_motion(std::size_t index) {
     }
 }
 
+// Each pad's presses since the game last took the input (P-075): from every sample and every change the system reports
+// (the pads' valueChangedHandler). Guarded by g_input_mutex.
+std::array<galaxy::input::PressLatch, kMaxPads> g_pad_presses;
+
+// A pad's buttons held now, in the unified layout.
+std::uint32_t pad_buttons(const Pad& pad, GCExtendedGamepad* gamepad) {
+    namespace pad_bits = galaxy::input::pad;
+    std::uint32_t bits = 0;
+    const auto set = [&bits](GCControllerButtonInput* button, unsigned bit) {
+        if (button != nil && button.pressed) bits |= pad_bits::bit(bit);
+    };
+    set(gamepad.dpad.up, pad_bits::kDpadUpBit);
+    set(gamepad.dpad.down, pad_bits::kDpadDownBit);
+    set(gamepad.dpad.left, pad_bits::kDpadLeftBit);
+    set(gamepad.dpad.right, pad_bits::kDpadRightBit);
+    set(gamepad.buttonMenu, pad_bits::kStartBit);
+    set(gamepad.buttonOptions, pad_bits::kBackBit);
+    set(gamepad.leftThumbstickButton, pad_bits::kLeftStickBit);
+    set(gamepad.rightThumbstickButton, pad_bits::kRightStickBit);
+    set(gamepad.leftShoulder, pad_bits::kLeftShoulderBit);
+    set(gamepad.rightShoulder, pad_bits::kRightShoulderBit);
+    if (@available(macOS 11.0, *)) {
+        set(gamepad.buttonHome, pad_bits::kHomeBit);
+    }
+    if (@available(macOS 12.0, *)) {
+        if ([gamepad isKindOfClass:GCXboxGamepad.class]) {
+            set(((GCXboxGamepad*)gamepad).buttonShare, pad_bits::kCaptureBit);
+        }
+    }
+    // The unified layout names the face buttons by their places. The system names a Nintendo controller's by
+    // their labels (its A is the right one), every other's by their places (A is the lower one).
+    set(pad.nintendo ? gamepad.buttonB : gamepad.buttonA, pad_bits::kSouthBit);
+    set(pad.nintendo ? gamepad.buttonA : gamepad.buttonB, pad_bits::kEastBit);
+    set(pad.nintendo ? gamepad.buttonY : gamepad.buttonX, pad_bits::kWestBit);
+    set(pad.nintendo ? gamepad.buttonX : gamepad.buttonY, pad_bits::kNorthBit);
+    return bits;
+}
+
 // Called with g_input_mutex held.
 void sample_gamepads() {
-    namespace pad_bits = galaxy::input::pad;
     for (std::size_t i = 0; i < kMaxPads; ++i) {
         Pad& pad = g_pads[i];
         galaxy::input::PadSample& sample = g_input.pads[i];
@@ -404,35 +470,9 @@ void sample_gamepads() {
         sample.connected = true;
         sample.scheme = pad.scheme;
         g_input.pad_icons[i] = pad.icons;
-        std::uint32_t bits = 0;
-        const auto set = [&bits](GCControllerButtonInput* button, unsigned bit) {
-            if (button != nil && button.pressed) bits |= pad_bits::bit(bit);
-        };
-        set(gamepad.dpad.up, pad_bits::kDpadUpBit);
-        set(gamepad.dpad.down, pad_bits::kDpadDownBit);
-        set(gamepad.dpad.left, pad_bits::kDpadLeftBit);
-        set(gamepad.dpad.right, pad_bits::kDpadRightBit);
-        set(gamepad.buttonMenu, pad_bits::kStartBit);
-        set(gamepad.buttonOptions, pad_bits::kBackBit);
-        set(gamepad.leftThumbstickButton, pad_bits::kLeftStickBit);
-        set(gamepad.rightThumbstickButton, pad_bits::kRightStickBit);
-        set(gamepad.leftShoulder, pad_bits::kLeftShoulderBit);
-        set(gamepad.rightShoulder, pad_bits::kRightShoulderBit);
-        if (@available(macOS 11.0, *)) {
-            set(gamepad.buttonHome, pad_bits::kHomeBit);
-        }
-        if (@available(macOS 12.0, *)) {
-            if ([gamepad isKindOfClass:GCXboxGamepad.class]) {
-                set(((GCXboxGamepad*)gamepad).buttonShare, pad_bits::kCaptureBit);
-            }
-        }
-        // The unified layout names the face buttons by their places. The system names a Nintendo controller's by
-        // their labels (its A is the right one), every other's by their places (A is the lower one).
-        set(pad.nintendo ? gamepad.buttonB : gamepad.buttonA, pad_bits::kSouthBit);
-        set(pad.nintendo ? gamepad.buttonA : gamepad.buttonB, pad_bits::kEastBit);
-        set(pad.nintendo ? gamepad.buttonY : gamepad.buttonX, pad_bits::kWestBit);
-        set(pad.nintendo ? gamepad.buttonX : gamepad.buttonY, pad_bits::kNorthBit);
+        const std::uint32_t bits = pad_buttons(pad, gamepad);
         sample.buttons = bits;
+        g_pad_presses[i].press(bits);
         // The system's sticks grow upward, as the unified layout's.
         sample.axes[0] = std::clamp(gamepad.leftThumbstick.xAxis.value, -1.0f, 1.0f);
         sample.axes[1] = std::clamp(gamepad.leftThumbstick.yAxis.value, -1.0f, 1.0f);
@@ -493,6 +533,18 @@ void open_gamepad(GCController* controller) {
         }
         pad = Pad{};
         pad.controller = controller;
+        // Every change the system reports, between two samples (P-075). The handler runs on the main queue.
+        if (GCExtendedGamepad* const gamepad = controller.extendedGamepad; gamepad != nil) {
+            gamepad.valueChangedHandler = ^(GCExtendedGamepad* changed, GCControllerElement*) {
+                const std::lock_guard<std::mutex> lock(g_input_mutex);
+                for (std::size_t i = 0; i < kMaxPads; ++i) {
+                    if (g_pads[i].controller != nil && g_pads[i].controller.extendedGamepad == changed) {
+                        g_pad_presses[i].press(pad_buttons(g_pads[i], changed));
+                        return;
+                    }
+                }
+            };
+        }
         pad.number = g_next_pad_id++;
         pad.scheme = scheme_of(controller, pad.nintendo);
         NSString* const category = controller.productCategory ?: @"";
@@ -963,6 +1015,17 @@ bool start() noexcept {
         for (GCController* controller in GCController.controllers) {
             open_gamepad(controller);
         }
+        [center addObserverForName:GCMouseDidConnectNotification
+                            object:nil
+                             queue:NSOperationQueue.mainQueue
+                        usingBlock:^(NSNotification* note) {
+                            if ([note.object isKindOfClass:GCMouse.class]) {
+                                open_mouse((GCMouse*)note.object);
+                            }
+                        }];
+        for (GCMouse* mouse in GCMouse.mice) {
+            open_mouse(mouse);
+        }
     }
     // The system's memory pressure, as Android's onTrimMemory: the host lets go of what comes back by itself
     // (take_low_memory). The source's handler runs on a global queue and only sets the flag.
@@ -1188,7 +1251,11 @@ InputState input_state() noexcept {
 
 InputState take_input_state() noexcept {
     const std::lock_guard<std::mutex> lock(g_input_mutex);
-    const InputState state = g_input;
+    InputState state = g_input;
+    for (std::size_t i = 0; i < kMaxPads; ++i) {
+        const std::uint32_t buttons = g_pad_presses[i].take(state.pads[i].buttons);
+        if (state.pads[i].connected) state.pads[i].buttons = buttons;
+    }
     for (PadMotion& motion : g_input.motion) {
         motion.gyro_x = motion.gyro_y = 0.0f;
         motion.touch_dx = motion.touch_dy = 0.0f;

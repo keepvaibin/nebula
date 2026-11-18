@@ -596,11 +596,9 @@ bool route_native_settings_pad(std::uint16_t& buttons, float stick_x, float stic
 }
 
 // Every connected XInput pad: the slots the presence thread found (xinput_present_mask), so no empty slot is asked
-// here; a slot that stops answering is handed back to it. Sticks are normalised with `left_deadzone` on the left stick
-// and none on the right; the pointer applies a radial dead zone.
-std::size_t poll_native_xinput_pads(
-    std::int16_t left_deadzone,
-    std::array<NativeHidControllerState, XUSER_MAX_COUNT>& out) {
+// here; a slot that stops answering is handed back to it. Sticks are normalised with no dead zone
+// (shape_pad_sticks applies the scheme's).
+std::size_t poll_native_xinput_pads(std::array<NativeHidControllerState, XUSER_MAX_COUNT>& out) {
     const std::uint32_t present = xinput_present_mask();
     std::size_t count = 0;
     for (DWORD slot = 0; slot < XUSER_MAX_COUNT; ++slot) {
@@ -616,11 +614,11 @@ std::size_t poll_native_xinput_pads(
         controller = {};
         controller.connected = true;
         controller.slot = slot;
-        controller.buttons = state.Gamepad.wButtons;
+        controller.buttons = static_cast<WORD>(state.Gamepad.wButtons | take_xinput_presses(slot));
         controller.left_trigger = state.Gamepad.bLeftTrigger;
         controller.right_trigger = state.Gamepad.bRightTrigger;
-        controller.left_x = galaxy::input::normalize_xinput_axis(state.Gamepad.sThumbLX, left_deadzone);
-        controller.left_y = galaxy::input::normalize_xinput_axis(state.Gamepad.sThumbLY, left_deadzone);
+        controller.left_x = galaxy::input::normalize_xinput_axis(state.Gamepad.sThumbLX, 0);
+        controller.left_y = galaxy::input::normalize_xinput_axis(state.Gamepad.sThumbLY, 0);
         controller.right_x = galaxy::input::normalize_xinput_axis(state.Gamepad.sThumbRX, 0);
         controller.right_y = galaxy::input::normalize_xinput_axis(state.Gamepad.sThumbRY, 0);
     }
@@ -645,10 +643,6 @@ const LiveControls& live_controls() {
     return s_live;
 }
 
-std::int16_t deadzone_counts(float fraction) {
-    return static_cast<std::int16_t>(std::clamp(
-        std::lround(static_cast<double>(fraction) * 32767.0), 0l, 32767l));
-}
 
 // Vibration (controller_hid.h): the controller in use, its strength setting and the window focus. The live input
 // path sets these each sample and the game's motor state reads them when it is published. Game thread only; the
@@ -661,20 +655,17 @@ struct RumbleHost {
 RumbleHost g_rumble_host{};
 void publish_rumble_for_mode(std::uint8_t strength, std::optional<std::uint32_t> star_pointer_mode) noexcept;
 
-// `right_deadzone` is radial (pointer_control.h); the right stick must arrive
-// without a per-axis dead zone.
 galaxy::input::PadSample pad_sample_from_xinput(const NativeHidControllerState& controller,
-                                                float right_deadzone) {
+                                                const galaxy::input::SchemeTuning& tuning) {
     galaxy::input::PadSample sample{};
     sample.connected = controller.connected;
     sample.scheme = galaxy::input::ControlScheme::Xbox;
     sample.buttons = controller.buttons;
     sample.axes[0] = controller.left_x;
     sample.axes[1] = controller.left_y;
-    const galaxy::input::StickVector right =
-        galaxy::input::apply_radial_deadzone(controller.right_x, controller.right_y, right_deadzone);
-    sample.axes[2] = right.x;
-    sample.axes[3] = right.y;
+    sample.axes[2] = controller.right_x;
+    sample.axes[3] = controller.right_y;
+    galaxy::input::shape_pad_sticks(sample, tuning);
     sample.axes[4] = static_cast<float>(controller.left_trigger) / 255.0f;
     sample.axes[5] = static_cast<float>(controller.right_trigger) / 255.0f;
     return sample;
@@ -690,12 +681,8 @@ std::size_t collect_hid_pads(const galaxy::input::ControlsConfig& config, std::v
         LivePad& live = out[i];
         live = {};
         live.sample = galaxy::input::switch_hid::pad_sample_from(
-            pads[i].decoded, pads[i].scheme, pads[i].left, pads[i].right,
-            tuning.stick_deadzone, 0.0f);
-        const galaxy::input::StickVector right = galaxy::input::apply_radial_deadzone(
-            live.sample.axes[2], live.sample.axes[3], tuning.pointer_deadzone);
-        live.sample.axes[2] = right.x;
-        live.sample.axes[3] = right.y;
+            pads[i].decoded, pads[i].scheme, pads[i].left, pads[i].right);
+        galaxy::input::shape_pad_sticks(live.sample, tuning);
         live.imu_live = pads[i].imu_live;
         live.gyro_missing = pads[i].gyro_missing;
         const bool shaking = pads[i].shake_until_us != 0u && now_us < pads[i].shake_until_us;
@@ -1098,22 +1085,16 @@ galaxy::input::PlayerInput build_live_input(
         controller_mode_polls || (capturing && capture_scheme == galaxy::input::ControlScheme::Xbox);
     const galaxy::input::SchemeTuning& xbox_tuning =
         controls.config.tune(galaxy::input::ControlScheme::Xbox);
-    // Every XInput pad is read; the right stick arrives raw and the pointer
-    // takes a radial dead zone.
+    // Every XInput pad is read; its sticks arrive raw and take the scheme's radial dead zones.
     std::array<NativeHidControllerState, XUSER_MAX_COUNT> xinput_pads{};
-    const std::size_t xinput_count = poll_controller
-        ? poll_native_xinput_pads(deadzone_counts(xbox_tuning.stick_deadzone), xinput_pads)
-        : 0u;
-    const float xinput_pointer_deadzone_fraction =
-        static_cast<float>(deadzone_counts(xbox_tuning.pointer_deadzone)) / 32767.0f;
+    const std::size_t xinput_count = poll_controller ? poll_native_xinput_pads(xinput_pads) : 0u;
     static std::vector<LivePad> pads;  // the game thread's, reused each frame
     pads.clear();
     for (std::size_t i = 0; i < std::max<std::size_t>(xinput_count, 1u); ++i) {
         LivePad& pad = pads.emplace_back();
         pad.device_slot = i < xinput_count ? static_cast<std::uint32_t>(xinput_pads[i].slot) : galaxy::input::kKeyboardSlot;
         pad.sample = pad_sample_from_xinput(
-            i < xinput_count ? xinput_pads[i] : NativeHidControllerState{},
-            xinput_pointer_deadzone_fraction);
+            i < xinput_count ? xinput_pads[i] : NativeHidControllerState{}, xbox_tuning);
     }
     if (controller_mode_polls || (capturing && galaxy::input::scheme_uses_hid(capture_scheme))) {
         ensure_controller_hid_started();

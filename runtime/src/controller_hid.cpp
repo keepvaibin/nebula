@@ -84,15 +84,21 @@ bool contains_ci(const std::wstring& text, const wchar_t* needle) {
     return a.find(b) != std::wstring::npos;
 }
 
+// An OVERLAPPED's event whose completion must not reach the worker's completion port: with the low bit set the system
+// signals the event and queues no packet (GetQueuedCompletionStatus). For the waits below, on handles the port may have.
+HANDLE no_port(HANDLE event) noexcept {
+    return reinterpret_cast<HANDLE>(reinterpret_cast<ULONG_PTR>(event) | 1u);
+}
+
 // Synchronous helpers over an overlapped handle, used only while a device
-// is being initialised (on the worker thread, before its read loop starts).
+// is being initialised (on the setup thread, before the worker takes it).
 class OverlappedIo {
 public:
     explicit OverlappedIo(HANDLE handle) : handle_(handle), event_(CreateEventW(nullptr, TRUE, FALSE, nullptr)) {}
     bool write(const std::uint8_t* data, DWORD size, DWORD timeout_ms) {
         OVERLAPPED ov{};
-        ov.hEvent = event_.get();
-        ResetEvent(ov.hEvent);
+        ov.hEvent = no_port(event_.get());
+        ResetEvent(event_.get());
         DWORD done = 0;
         if (!WriteFile(handle_, data, size, nullptr, &ov) && GetLastError() != ERROR_IO_PENDING) {
             return false;
@@ -102,8 +108,8 @@ public:
     // Reads one report; false on timeout or error.
     bool read(std::uint8_t* data, DWORD size, DWORD timeout_ms, DWORD& got) {
         OVERLAPPED ov{};
-        ov.hEvent = event_.get();
-        ResetEvent(ov.hEvent);
+        ov.hEvent = no_port(event_.get());
+        ResetEvent(event_.get());
         got = 0;
         if (!ReadFile(handle_, data, size, nullptr, &ov) && GetLastError() != ERROR_IO_PENDING) {
             return false;
@@ -113,7 +119,7 @@ public:
 
 private:
     bool finish(OVERLAPPED& ov, DWORD timeout_ms, DWORD& done) {
-        if (WaitForSingleObject(ov.hEvent, timeout_ms) != WAIT_OBJECT_0) {
+        if (WaitForSingleObject(event_.get(), timeout_ms) != WAIT_OBJECT_0) {
             CancelIoEx(handle_, &ov);
             GetOverlappedResult(handle_, &ov, &done, TRUE);
             return false;
@@ -151,38 +157,18 @@ struct WinUsbPipes {
     }
 };
 
-// A wait for one overlapped read or write: the thread pool waits on the event (once, WT_EXECUTEONLYONCE) and, when it is signalled,
-// sets `ready` and the worker's `wake` event. The worker so waits on a handful of handles whatever the number of pads (one
-// WaitForMultipleObjects takes 64); each pad arms its own wait when it has a read or a write in flight. `ready` may be stale (a
-// wake from an earlier arming): the worker checks the overlapped result itself.
-struct IoWait {
-    HANDLE wait = nullptr;
-    HANDLE wake = nullptr;  // the worker's event; set when the worker owns the device
-    std::atomic<bool> ready{false};
+// The worker's completion port (P-077). Every pad's handle is tied to it, so one wait takes every pad's finished reads
+// and writes, a batch at a time, with nothing to arm per report. A packet's key says what it is. A pad's packets carry
+// its read's or its queue's OVERLAPPED, by which the worker finds the pad; a packet for a pad already gone finds none,
+// and one for an I/O already handled finds it still pending (the worker checks the I/O itself).
+enum CompletionKey : ULONG_PTR {
+    kKeyDevice = 1,  // a pad's read or queued write finished (the system's packet)
+    kKeyBle,         // a Bluetooth LE pad has reports (its link's packet)
+    kKeyResume,      // a pad's read burst continues after the others (the worker's own)
+    kKeySetup,       // the setup thread has devices or a scan for the worker
+    kKeyRumble,      // the game's vibration changed
+    kKeyStop,        // the worker ends (with the stop event set, for the setup thread)
 };
-
-VOID CALLBACK on_io_signalled(PVOID context, BOOLEAN) {
-    auto* io = static_cast<IoWait*>(context);
-    io->ready.store(true, std::memory_order_release);
-    SetEvent(io->wake);
-}
-
-// `blocking`: returns once a callback running now has finished (before the event or the IoWait goes away).
-void disarm_io(IoWait& io, bool blocking) noexcept {
-    if (io.wait == nullptr) return;
-    if (blocking) UnregisterWaitEx(io.wait, INVALID_HANDLE_VALUE); else UnregisterWait(io.wait);
-    io.wait = nullptr;
-}
-
-void arm_io(IoWait& io, HANDLE event) noexcept {
-    disarm_io(io, false);
-    io.ready.store(false, std::memory_order_release);
-    if (io.wake == nullptr || event == nullptr) return;
-    if (!RegisterWaitForSingleObject(&io.wait, event, on_io_signalled, &io, INFINITE,
-                                     WT_EXECUTEONLYONCE | WT_EXECUTEINWAITTHREAD)) {
-        io.wait = nullptr;
-    }
-}
 
 struct Device {
     std::wstring path;
@@ -208,10 +194,9 @@ struct Device {
     bool needs_driver = false;
     UniqueHandle handle;
     UniqueHandle read_event;
-    IoWait read_io;
     OVERLAPPED read_ov{};
     bool read_pending = false;
-    bool resume = false;   // read_event set by hand to continue a burst
+    bool resume = false;   // a kKeyResume packet posted to continue a burst
     bool failed = false;   // read error (or `gone`): the worker drops it; the setup thread opens it again
     bool gone = false;     // no longer listed
     std::vector<std::uint8_t> buffer;
@@ -236,6 +221,7 @@ struct Device {
     std::uint32_t motion_shakes_logged = 0;
     std::unique_ptr<WinUsbPipes> winusb;
     std::size_t slot = kMaxHidPads;  // given when the worker takes it in
+    bool slot_released = false;      // closing: the slot is another's now (Worker::release_slot)
     // Output packet number after initialisation (0x10 rumble reports).
     std::uint8_t packet = 0;
     // PlayStation.
@@ -293,13 +279,14 @@ struct Device {
         std::vector<std::uint8_t> bytes;
         bool feature = false;  // a feature report, else an output report
         bool motor = false;    // a motor's: a newer one replaces it while it waits
+        bool get = false;      // a feature report asked for (bytes[0] its id); the answer goes to take_feature_reply
     };
     std::deque<Queued> outputs;
     std::vector<std::uint8_t> post_buffer;
     OVERLAPPED post_ov{};
     UniqueHandle post_event;
-    IoWait post_io;
     bool post_pending = false;
+    bool post_get = false;
     std::uint64_t post_started_us = 0;
 };
 
@@ -342,7 +329,9 @@ struct Hub {
     SRWLOCK rumble_lock = SRWLOCK_INIT;
     RumbleRequest rumble_request{};
     std::uint64_t rumble_published_us = 0;
-    UniqueHandle rumble_event;
+    // The worker's completion port (CompletionKey), made once and never replaced: publish_rumble_request posts to it
+    // from the game thread.
+    UniqueHandle port;
     // Set by stop_all_rumble (exit, crash): no motor starts again.
     std::atomic<bool> rumble_shutdown{false};
     std::atomic<std::uint8_t> xinput_rumbling{0};  // bit per XInput user index
@@ -1008,7 +997,7 @@ void init_switch_pro(Device& device) {
 bool write_report(HANDLE handle, HANDLE event, const std::uint8_t* data, DWORD size, DWORD timeout_ms) noexcept {
     if (handle == nullptr || handle == INVALID_HANDLE_VALUE || event == nullptr) return false;
     OVERLAPPED ov{};
-    ov.hEvent = event;
+    ov.hEvent = no_port(event);
     ResetEvent(event);
     DWORD done = 0;
     if (!WriteFile(handle, data, size, nullptr, &ov)) {
@@ -1022,14 +1011,15 @@ bool write_report(HANDLE handle, HANDLE event, const std::uint8_t* data, DWORD s
     return GetOverlappedResult(handle, &ov, &done, FALSE) != FALSE;
 }
 
+constexpr DWORD kIoctlHidGetFeature = 0x000b0192;  // IOCTL_HID_GET_FEATURE
+
 // A feature report read on an overlapped handle (IOCTL_HID_GET_FEATURE, as
 // HidD_GetFeature cannot wait on one): buffer[0] is the report id. Returns the
 // bytes received including the id, 0 on failure or timeout.
 DWORD get_feature_report(HANDLE handle, HANDLE event, std::uint8_t* buffer, DWORD size, DWORD timeout_ms) noexcept {
-    constexpr DWORD kIoctlHidGetFeature = 0x000b0192;
     if (handle == nullptr || handle == INVALID_HANDLE_VALUE || event == nullptr) return 0;
     OVERLAPPED ov{};
-    ov.hEvent = event;
+    ov.hEvent = no_port(event);
     ResetEvent(event);
     DWORD done = 0;
     if (!DeviceIoControl(handle, kIoctlHidGetFeature, buffer, size, buffer, size, nullptr, &ov)) {
@@ -1080,9 +1070,11 @@ void init_wii_u_pro(Device& device) {
     send(wm::build_report_mode(simple::kWiiUProReport, true, false, out));
 }
 
-// The motor-off report for a HID controller.
-bool write_rumble_off(HANDLE handle, HANDLE event, std::uint16_t output_length, OffKind kind) noexcept {
-    std::array<std::uint8_t, kLargestOutputReport> report{};
+// The motor-off report for a HID controller in `report`: the bytes to send (an output report at the handle's full
+// length), 0 for none; `feature` for a feature report (the Deck's).
+std::size_t build_rumble_off(std::uint16_t output_length, OffKind kind, std::array<std::uint8_t, kLargestOutputReport>& report,
+                             bool& feature) noexcept {
+    feature = false;
     const std::size_t length = std::min<std::size_t>(output_length, report.size());
     const std::span<std::uint8_t> out(report.data(), length);
     std::size_t built = 0;
@@ -1131,14 +1123,27 @@ bool write_rumble_off(HANDLE handle, HANDLE event, std::uint16_t output_length, 
         built = sv::build_rumble_report(0, 0, out);
         break;
     case OffKind::SteamDeck: {
-        std::array<std::uint8_t, sv::kValveFeatureBytes> feature{};
-        return sv::build_deck_rumble_report(0, 0, feature) != 0 &&
-               HidD_SetFeature(handle, feature.data(), static_cast<ULONG>(feature.size()));
+        std::array<std::uint8_t, sv::kValveFeatureBytes> deck{};
+        static_assert(sv::kValveFeatureBytes <= kLargestOutputReport);
+        if (sv::build_deck_rumble_report(0, 0, deck) == 0) return 0;
+        std::copy(deck.begin(), deck.end(), report.begin());
+        feature = true;
+        return deck.size();
     }
     case OffKind::None:
         break;
     }
-    return built != 0 && write_report(handle, event, report.data(), static_cast<DWORD>(length), 30);
+    return built != 0 ? length : 0;
+}
+
+// The same, written at once (a crashing or exiting process: stop_all_rumble).
+bool write_rumble_off(HANDLE handle, HANDLE event, std::uint16_t output_length, OffKind kind) noexcept {
+    std::array<std::uint8_t, kLargestOutputReport> report{};
+    bool feature = false;
+    const std::size_t size = build_rumble_off(output_length, kind, report, feature);
+    if (size == 0u) return false;
+    if (feature) return HidD_SetFeature(handle, report.data(), static_cast<ULONG>(size)) != FALSE;
+    return write_report(handle, event, report.data(), static_cast<DWORD>(size), 30);
 }
 
 OffKind off_kind_of(const Device& device) noexcept {
@@ -1182,36 +1187,32 @@ constexpr std::array<std::uint8_t, 3> kLightBarColor{0x20, 0x20, 0x20};
 // A DualSense ignores its light bar until the pairing animation is over.
 constexpr std::uint64_t kDualSenseBluetoothLightDelayUs = 4'000'000;
 
-// An output report goes out at the handle's full report length; `report` is
-// zero-filled past the `built` meaningful bytes.
-bool write_output(Device& device, const std::uint8_t* report, std::size_t built) {
-    const std::size_t length = device.output_length;
-    if (built == 0 || built > length || length > kLargestOutputReport) return false;
-    return write_report(device.handle.get(), device.write_event.get(), report, static_cast<DWORD>(length), 30);
-}
+void take_feature_reply(Device& device, std::span<const std::uint8_t> reply);
 
-// Output sent without waiting for it (the motors, a Steam controller's settings): the worker never stalls on a busy
-// radio, so every controller's reports keep arriving as they come. A device's reports go out in order, one in flight
-// (the worker waits on its event and sends the next); a motor report replaces one still waiting; one stuck past
-// kPostStuckUs is cancelled.
+// What the worker sends or asks a device for goes without waiting for it (the motors, the light bar, a Steam
+// controller's settings, a feature report asked again): the worker never stalls on a busy radio, so every controller's
+// reports keep arriving as they come (P-083). A device's requests go out in order, one in flight (its completion
+// reaches the port and the worker sends the next); a motor report replaces one still waiting; one stuck past
+// kPostStuckUs is cancelled (service_device_timers).
 constexpr std::uint64_t kPostStuckUs = 100'000;
 constexpr DWORD kIoctlHidSetFeature = 0x000b0191;  // IOCTL_HID_SET_FEATURE
 constexpr std::size_t kMostQueued = 8;
 
-void finish_post(Device& device, bool wait) {
+// The request in flight, if it finished (or `cancel`, or it is stuck): done with, its answer taken.
+void finish_post(Device& device, bool cancel) {
     if (!device.post_pending) return;
     DWORD done = 0;
-    if (!wait && !GetOverlappedResult(device.handle.get(), &device.post_ov, &done, FALSE) &&
-        GetLastError() == ERROR_IO_INCOMPLETE) {
-        if (steady_us() - device.post_started_us < kPostStuckUs) return;
-        wait = true;
-    }
-    if (wait) {
+    BOOL ok = GetOverlappedResult(device.handle.get(), &device.post_ov, &done, FALSE);
+    if (!ok && GetLastError() == ERROR_IO_INCOMPLETE) {
+        if (!cancel && steady_us() - device.post_started_us < kPostStuckUs) return;
         CancelIoEx(device.handle.get(), &device.post_ov);
-        GetOverlappedResult(device.handle.get(), &device.post_ov, &done, TRUE);
+        ok = GetOverlappedResult(device.handle.get(), &device.post_ov, &done, TRUE);
     }
     device.post_pending = false;
-    disarm_io(device.post_io, false);
+    if (ok && device.post_get && done != 0u) {
+        take_feature_reply(device, std::span<const std::uint8_t>(device.post_buffer.data(),
+                                                                 std::min<std::size_t>(done, device.post_buffer.size())));
+    }
 }
 
 void pump_output(Device& device) {
@@ -1221,20 +1222,37 @@ void pump_output(Device& device) {
         Device::Queued next = std::move(device.outputs.front());
         device.outputs.pop_front();
         device.post_buffer = std::move(next.bytes);
+        device.post_get = next.get;
         device.post_ov = OVERLAPPED{};
         device.post_ov.hEvent = device.post_event.get();
         ResetEvent(device.post_event.get());
+        HANDLE const handle = device.handle.get();
+        std::uint8_t* const bytes = device.post_buffer.data();
         const DWORD size = static_cast<DWORD>(device.post_buffer.size());
-        const BOOL done = next.feature ? DeviceIoControl(device.handle.get(), kIoctlHidSetFeature, device.post_buffer.data(),
-                                                         size, nullptr, 0, nullptr, &device.post_ov)
-                                       : WriteFile(device.handle.get(), device.post_buffer.data(), size, nullptr,
-                                                   &device.post_ov);
-        if (!done && GetLastError() == ERROR_IO_PENDING) {
+        const BOOL done = next.get       ? DeviceIoControl(handle, kIoctlHidGetFeature, bytes, size, bytes, size, nullptr,
+                                                           &device.post_ov)
+                          : next.feature ? DeviceIoControl(handle, kIoctlHidSetFeature, bytes, size, nullptr, 0, nullptr,
+                                                           &device.post_ov)
+                                         : WriteFile(handle, bytes, size, nullptr, &device.post_ov);
+        if (done || GetLastError() == ERROR_IO_PENDING) {
             device.post_pending = true;
             device.post_started_us = steady_us();
-            arm_io(device.post_io, device.post_event.get());
+            if (done) finish_post(device, false);  // finished at once: no packet comes (FILE_SKIP_COMPLETION_PORT_ON_SUCCESS)
         }
     }
+}
+
+// A feature report asked for without waiting (queue_output's order): `size` bytes, the first its id.
+void queue_feature_read(Device& device, std::uint8_t id, std::size_t size) {
+    if (size == 0u || size > kLargestOutputReport) return;
+    Device::Queued queued;
+    queued.bytes.assign(size, 0u);
+    queued.bytes[0] = id;
+    queued.feature = true;
+    queued.get = true;
+    if (device.outputs.size() >= kMostQueued) device.outputs.pop_front();
+    device.outputs.push_back(std::move(queued));
+    pump_output(device);
 }
 
 // `report` (`built` bytes; an output report goes out at the handle's full length) after the device's others; a motor
@@ -1264,7 +1282,9 @@ bool send_playstation_effects(Device& device, ps::Effects effects) {
     effects.sequence = device.ps_sequence++;
     std::array<std::uint8_t, kLargestOutputReport> report{};
     const std::size_t built = ps::build_output_report(device.ps_model, device.ps_transport, effects, report);
-    return write_output(device, report.data(), built);
+    if (built == 0u || built > device.output_length) return false;
+    queue_output(device, report.data(), built, false, false);
+    return true;
 }
 
 // Reads the calibration (and a DualSense's firmware version); over Bluetooth
@@ -1302,6 +1322,34 @@ void read_playstation_features(Device& device) {
         const std::uint16_t version = firmware != 0 ? ps::dualsense_firmware(std::span<const std::uint8_t>(feature.data(), firmware)) : 0;
         device.ps_full_range_rumble = ps::dualsense_full_range_rumble(device.ps_model, version);
     }
+}
+
+// A feature report asked for through the queue: a PlayStation controller's calibration or capabilities, asked again
+// over Bluetooth while it still sends short reports (the asking switches it to full ones). Taken as the setup thread's
+// read takes it, if that read found none.
+void take_feature_reply(Device& device, std::span<const std::uint8_t> reply) {
+    if (device.scheme != ControlScheme::PlayStation || reply.empty() || device.ps_cal.hardware) return;
+    const std::uint8_t id = reply[0];
+    const bool bluetooth = device.ps_transport == ps::Transport::Bluetooth;
+    if (!device.ps_caps.official) {
+        if (id == ps::kFeatureCapabilities) {
+            ps::apply_capability_report(device.ps_model, device.vendor, device.product, reply, device.ps_caps, device.ps_cal);
+        }
+    } else if (device.ps_model == ps::Model::DualShock4) {
+        if (id == (bluetooth ? ps::kFeatureDualShock4CalibrationBluetooth : ps::kFeatureDualShock4CalibrationUsb)) {
+            device.ps_cal = ps::parse_calibration(reply, bluetooth || device.ps_caps.dongle);
+        }
+    } else if (id == ps::kFeatureDualSenseCalibration) {
+        device.ps_cal = ps::parse_calibration(reply, false);
+    }
+}
+
+// Over Bluetooth, the report that switches a PlayStation controller to full reports, asked again without waiting.
+void ask_playstation_full_reports(Device& device) {
+    const std::uint8_t id = !device.ps_caps.official                ? ps::kFeatureCapabilities
+                            : device.ps_model == ps::Model::DualShock4 ? ps::kFeatureDualShock4CalibrationBluetooth
+                                                                       : ps::kFeatureDualSenseCalibration;
+    queue_feature_read(device, id, 64u);
 }
 
 void init_playstation(Device& device) {
@@ -1375,10 +1423,9 @@ public:
     // The reports, the motors and the pairs, here; listing the controllers and setting up new ones (seconds on a slow
     // radio), on a setup thread of its own, so a controller connecting, a USB device plugged in or a busy radio never
     // holds back another controller's input.
-    void run(HANDLE stop, HANDLE rescan, HANDLE rumble) {
-        setup_done_.reset(CreateEventW(nullptr, FALSE, FALSE, nullptr));
-        wake_.reset(CreateEventW(nullptr, FALSE, FALSE, nullptr));
-        if (!setup_done_ || !wake_) return;
+    void run(HANDLE stop, HANDLE rescan, HANDLE port) {
+        port_ = port;
+        if (port_ == nullptr) return;
         setup_ = std::thread([this, stop, rescan] {
             SetThreadDescription(GetCurrentThread(), L"nebula-controller-setup");
             setup_main(stop, rescan);
@@ -1387,19 +1434,26 @@ public:
         const bool ble_wanted = !hidden_test_session();
         if (ble_wanted) ble::start(rescan);
         service_device_timers();
+        std::array<OVERLAPPED_ENTRY, 64> entries{};
         for (;;) {
-            // Four handles whatever the number of pads: a pad's read or write completing wakes `wake_` through the thread
-            // pool (arm_io), and service_io then finds the pads that are ready. A timer only while a motor runs or device
-            // work is due: it refreshes the motor, stops it when the game's state goes stale and sends deferred writes.
-            const HANDLE waits[4] = {stop, setup_done_.get(), rumble, wake_.get()};
-            const DWORD result = WaitForMultipleObjects(4, waits, FALSE, wait_timeout_ms());
-            if (result == WAIT_OBJECT_0) break;
-            if (result == WAIT_OBJECT_0 + 1) {
-                take_setup();
-            } else if (result != WAIT_OBJECT_0 + 2 && result != WAIT_OBJECT_0 + 3 && result != WAIT_TIMEOUT) {
-                break;  // WAIT_FAILED: leave rather than spin
+            // One wait whatever the number of pads: the port's packets, a batch at a time (CompletionKey). A timer only
+            // while a motor runs or device work is due: it refreshes the motor, stops it when the game's state goes
+            // stale, sends deferred writes and cancels stuck ones.
+            ULONG count = 0;
+            if (!GetQueuedCompletionStatusEx(port_, entries.data(), static_cast<ULONG>(entries.size()), &count,
+                                             wait_timeout_ms(), FALSE)) {
+                if (GetLastError() != WAIT_TIMEOUT) break;  // the port gone: leave rather than spin
+                count = 0;
             }
-            service_io();
+            const auto batch = std::span<const OVERLAPPED_ENTRY>(entries.data(), count);
+            const auto has = [batch](ULONG_PTR key) {
+                return std::any_of(batch.begin(), batch.end(), [key](const OVERLAPPED_ENTRY& e) { return e.lpCompletionKey == key; });
+            };
+            if (has(kKeyStop)) break;
+            if (has(kKeySetup)) {
+                take_setup();
+            }
+            for (const OVERLAPPED_ENTRY& entry : batch) completed(entry);
             drop_failed();
             service_rumble();
             service_device_timers();
@@ -1412,6 +1466,8 @@ public:
         devices_.clear();
         for (auto& device : setup_ready_) close_device(*device);
         setup_ready_.clear();
+        for (auto& device : closing_) close_device(*device);
+        closing_.clear();
     }
 
 private:
@@ -1487,7 +1543,7 @@ private:
             for (const HidCandidate& candidate : candidates) setup_seen_.push_back(candidate.path);
             setup_seen_fresh_ = true;
             ReleaseSRWLockExclusive(&setup_lock_);
-            SetEvent(setup_done_.get());
+            (void)PostQueuedCompletionStatus(port_, 0, kKeySetup, nullptr);
         }
     }
 
@@ -1522,8 +1578,11 @@ private:
                 continue;
             }
             Device& ref = *device;
-            ref.read_io.wake = wake_.get();
-            ref.post_io.wake = wake_.get();
+            if (!attach_to_port(ref)) {
+                forget_path(ref.path);
+                close_device(ref);
+                continue;
+            }
             devices_.push_back(std::move(device));
             if (ref.joycon == sw::JoyConSide::None && !ref.puck && !ref.grip) {
                 publish_device(ref);
@@ -1551,8 +1610,8 @@ private:
                 partner->partner = nullptr;
                 device.partner = nullptr;
             }
-            close_device(device);
             forget_path(device.path);
+            retire_device(std::move(*it));
             it = devices_.erase(it);
         }
         if (halves) update_joycon_pairs();
@@ -1563,6 +1622,25 @@ private:
         AcquireSRWLockExclusive(&setup_lock_);
         std::erase(open_paths_, path);
         ReleaseSRWLockExclusive(&setup_lock_);
+    }
+
+    // The device's completions to the port: its handle's, or its Bluetooth LE link's packets. A request that finishes
+    // at once sends none (the worker handles it there), and the handle's own event is not set.
+    bool attach_to_port(Device& device) {
+        if (device.ble) {
+            const HANDLE port = port_;
+            OVERLAPPED* const read = &device.read_ov;
+            device.ble->set_signal([port, read] { (void)PostQueuedCompletionStatus(port, 0, kKeyBle, read); });
+            return true;
+        }
+        if (CreateIoCompletionPort(device.handle.get(), port_, kKeyDevice, 0) == nullptr) {
+            std::cerr << "[controller] " << device.model_name << ": cannot wait on the device (error " << GetLastError()
+                      << ")\n";
+            return false;
+        }
+        (void)SetFileCompletionNotificationModes(device.handle.get(),
+                                                 FILE_SKIP_COMPLETION_PORT_ON_SUCCESS | FILE_SKIP_SET_EVENT_ON_HANDLE);
+        return true;
     }
 
     std::size_t free_slot() const {
@@ -1603,10 +1681,8 @@ private:
             device->buffer.resize(sw::kSwitch2ReportBytes);
             device->output_length = sw::kSwitch2ReportBytes;
             device->bluetooth = true;
-            device->read_event.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
             device->write_event.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
-            device->ble->set_event(device->read_event.get());
-            return device;
+            return device;  // its reports reach the worker's port once the worker takes it (attach_to_port)
         }
         device->handle.reset(CreateFileW(candidate.path.c_str(), GENERIC_READ | GENERIC_WRITE,
                                          FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
@@ -1786,34 +1862,87 @@ private:
 
     // Motor off on a device that goes away; its crash-stop entry retires first.
     void stop_device_rumble(Device& device) {
-        if (device.slot < kMaxHidPads) {
+        if (device.slot < kMaxHidPads && !device.slot_released) {
             AcquireSRWLockExclusive(&hub().rumble_device_lock);
             hub().hid_rumble_handles[device.slot].store(nullptr);
             ReleaseSRWLockExclusive(&hub().rumble_device_lock);
         }
         if (device.rumble_on) {
-            finish_post(device, true);  // the off report after the last one
-            device.outputs.clear();
-            if (!device.write_event) device.write_event.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
-            (void)write_rumble_off(device.handle.get(), device.write_event.get(), device.output_length,
-                                   off_kind_of(device));
             device.rumble_on = false;
+            if (device.ble) {
+                device.ble->send_motor(ble::motor_value(device.rumble_sequence++, 0, 0));
+                return;
+            }
+            // Queued after what the device has waiting, the motor reports replaced (P-083: no wait here).
+            std::array<std::uint8_t, kLargestOutputReport> report{};
+            bool feature = false;
+            const std::size_t size = build_rumble_off(device.output_length, off_kind_of(device), report, feature);
+            if (size != 0u) queue_output(device, report.data(), size, feature, true);
         }
     }
 
-    void close_device(Device& device) {
-        disarm_io(device.read_io, true);
-        disarm_io(device.post_io, true);
-        stop_device_rumble(device);
-        finish_post(device, true);
-        device.outputs.clear();
+    // A device that goes: its motor's off report and what it had waiting go out first, each for at most kPostStuckUs
+    // (closing_, service_device_timers), then it closes. Its slot is free at once.
+    void retire_device(std::unique_ptr<Device> device) {
+        stop_device_rumble(*device);
+        if (!device->post_pending) {
+            close_device(*device);
+            return;
+        }
+        if (device->ble) device->ble->set_signal({});
+        stop_reading(*device);
+        release_slot(*device);
+        closing_.push_back(std::move(device));
+    }
+
+    // The closing devices whose requests finished or got stuck: closed.
+    void service_closing() {
+        for (auto it = closing_.begin(); it != closing_.end();) {
+            Device& device = **it;
+            pump_output(device);
+            if (device.post_pending) {
+                ++it;
+                continue;
+            }
+            close_device(device);
+            it = closing_.erase(it);
+        }
+    }
+
+    // The device no longer the hub's: its slot empty for another, its crash-stop entry retired.
+    void release_slot(Device& device) {
+        if (device.slot >= kMaxHidPads || device.slot_released) return;
+        AcquireSRWLockExclusive(&hub().rumble_device_lock);
+        hub().hid_rumble_handles[device.slot].store(nullptr);
+        ReleaseSRWLockExclusive(&hub().rumble_device_lock);
+        AcquireSRWLockExclusive(&hub().lock);
+        hub().pads[device.slot] = {};
+        ReleaseSRWLockExclusive(&hub().lock);
+        if (device.published) {
+            std::cerr << "[controller] disconnected " << input::control_scheme_id(device.scheme) << ' '
+                      << device.model_name << '\n';
+            device.published = false;
+        }
+        device.slot_released = true;
+    }
+
+    void stop_reading(Device& device) {
         if (device.read_pending && !device.resume && !device.ble) {
             CancelIoEx(device.handle.get(), &device.read_ov);
             DWORD done = 0;
             GetOverlappedResult(device.handle.get(), &device.read_ov, &done, TRUE);
-            device.read_pending = false;
         }
-        if (device.slot < kMaxHidPads) {
+        device.read_pending = false;
+        device.resume = false;
+    }
+
+    void close_device(Device& device) {
+        if (device.ble) device.ble->set_signal({});
+        stop_device_rumble(device);
+        finish_post(device, true);
+        device.outputs.clear();
+        stop_reading(device);
+        if (device.slot < kMaxHidPads && !device.slot_released) {
             AcquireSRWLockExclusive(&hub().lock);
             hub().pads[device.slot] = {};
             ReleaseSRWLockExclusive(&hub().lock);
@@ -1826,7 +1955,7 @@ private:
 
     void issue_read(Device& device) {
         if (device.ble) {
-            ResetEvent(device.read_event.get());
+            // Its link posts kKeyBle with every report (attach_to_port); the reports waiting are taken here.
             device.read_pending = true;
             std::array<std::uint8_t, sw::kSwitch2ReportBytes> report{};
             while (device.ble->next_report(report)) {
@@ -1836,8 +1965,6 @@ private:
             if (device.ble->lost()) {
                 device.read_pending = false;
                 device.failed = true;
-            } else {
-                arm_io(device.read_io, device.read_event.get());
             }
             return;
         }
@@ -1855,7 +1982,6 @@ private:
             }
             if (GetLastError() == ERROR_IO_PENDING) {
                 device.read_pending = true;
-                arm_io(device.read_io, device.read_event.get());
                 return;
             }
             device.read_pending = false;
@@ -1864,26 +1990,34 @@ private:
         }
         device.resume = true;
         device.read_pending = true;
-        SetEvent(device.read_event.get());  // continue after the other waits
-        arm_io(device.read_io, device.read_event.get());
+        (void)PostQueuedCompletionStatus(port_, 0, kKeyResume, &device.read_ov);  // continue after the other packets
     }
 
-    // The pads whose reads or writes completed since the last look (IoWait::ready).
-    void service_io() {
-        for (auto& entry : devices_) {
-            Device& device = *entry;
+    // One packet of the port (CompletionKey).
+    void completed(const OVERLAPPED_ENTRY& entry) {
+        const ULONG_PTR key = entry.lpCompletionKey;
+        if (key != kKeyDevice && key != kKeyBle && key != kKeyResume) return;
+        const OVERLAPPED* const ov = entry.lpOverlapped;
+        for (auto& closing : closing_) {
+            if (ov == &closing->post_ov) {
+                service_closing();
+                return;
+            }
+        }
+        for (auto& owned : devices_) {
+            Device& device = *owned;
             if (device.failed) continue;
-            if (device.post_pending && device.post_io.ready.exchange(false, std::memory_order_acq_rel)) {
-                pump_output(device);
-                if (device.post_pending) arm_io(device.post_io, device.post_event.get());  // still in flight: wait again
+            if (ov == &device.post_ov && key == kKeyDevice) {
+                if (device.post_pending) pump_output(device);
+                return;
             }
-            if (device.read_pending && device.read_io.ready.exchange(false, std::memory_order_acq_rel)) {
-                if (device.ble || device.resume || HasOverlappedIoCompleted(&device.read_ov)) {
-                    complete_read(device);
-                } else {
-                    arm_io(device.read_io, device.read_event.get());  // a wake from an earlier arming: wait again
-                }
+            if (ov != &device.read_ov) continue;
+            // An I/O already handled (it finished at once, or its burst went on) finds the next one still pending.
+            if (device.read_pending && (key != kKeyDevice || HasOverlappedIoCompleted(&device.read_ov)) &&
+                (key == kKeyResume) == device.resume && (key == kKeyBle) == (device.ble != nullptr)) {
+                complete_read(device);
             }
+            return;
         }
     }
 
@@ -2063,7 +2197,7 @@ private:
             } else if (device.ps_mode_attempts < kPlayStationModeAttempts && now >= device.ps_mode_next_us) {
                 ++device.ps_mode_attempts;
                 device.ps_mode_next_us = now + 1'000'000;
-                read_playstation_features(device);
+                ask_playstation_full_reports(device);
             }
         }
         float gyro_x = 0.0f, gyro_y = 0.0f;
@@ -2114,6 +2248,7 @@ private:
         state.connected = true;
         state.scheme = target->scheme;
         state.decoded = decoded;
+        state.pressed |= decoded.buttons;
         state.left = target->partner != nullptr ? target->partner->left : target->left;
         state.right = target->right;
         if (shake_started) state.shake_until_us = now + sw::SwitchMotion::kShakeHoldUs;
@@ -2394,8 +2529,15 @@ private:
         const auto consider = [&soonest](std::uint64_t due) {
             if (soonest == 0u || due < soonest) soonest = due;
         };
+        service_closing();
+        for (auto& device : closing_) consider(device->post_started_us + kPostStuckUs);
         for (auto& device : devices_) {
             if (device->failed) continue;
+            if (device->post_pending) {
+                // A request stuck on a busy radio is cancelled and the next goes (finish_post).
+                if (now - device->post_started_us >= kPostStuckUs) pump_output(*device);
+                if (device->post_pending) consider(device->post_started_us + kPostStuckUs);
+            }
             if (device->ps_led_due_us != 0u) {
                 if (now >= device->ps_led_due_us) send_light_bar(*device);
                 else consider(device->ps_led_due_us);
@@ -2455,9 +2597,10 @@ private:
     std::vector<std::unique_ptr<Device>> devices_;
     // The setup thread and what it hands over (under setup_lock_): devices ready to read, the paths of the last scan,
     // and every path open here or handed over.
+    // Devices gone whose last requests (the motor's off report) are still going out.
+    std::vector<std::unique_ptr<Device>> closing_;
     std::thread setup_;
-    UniqueHandle setup_done_;
-    UniqueHandle wake_;  // set by a pad whose read or write completed (IoWait)
+    HANDLE port_ = nullptr;  // the hub's; the setup thread posts kKeySetup to it
     SRWLOCK setup_lock_ = SRWLOCK_INIT;
     std::vector<std::unique_ptr<Device>> setup_ready_;
     std::vector<std::wstring> setup_seen_;
@@ -2486,10 +2629,8 @@ void ensure_controller_hid_started() noexcept {
     try {
         h.stop_event.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
         h.rescan_event.reset(CreateEventW(nullptr, FALSE, FALSE, nullptr));
-        // Created once and never replaced: publish_rumble_request signals it
-        // from the game thread.
-        if (!h.rumble_event) h.rumble_event.reset(CreateEventW(nullptr, FALSE, FALSE, nullptr));
-        if (h.stop_event.get() == nullptr || h.rescan_event.get() == nullptr || h.rumble_event.get() == nullptr) {
+        if (!h.port) h.port.reset(CreateIoCompletionPort(INVALID_HANDLE_VALUE, nullptr, 0, 1));
+        if (h.stop_event.get() == nullptr || h.rescan_event.get() == nullptr || h.port.get() == nullptr) {
             return;
         }
         CM_NOTIFY_FILTER filter{};
@@ -2502,12 +2643,12 @@ void ensure_controller_hid_started() noexcept {
         }
         HANDLE stop = h.stop_event.get();
         HANDLE rescan = h.rescan_event.get();
-        HANDLE rumble = h.rumble_event.get();
-        h.worker = std::thread([stop, rescan, rumble] {
+        HANDLE port = h.port.get();
+        h.worker = std::thread([stop, rescan, port] {
             SetThreadDescription(GetCurrentThread(), L"nebula-controller-hid");
             Worker worker;
             worker.rescan_handle_ = rescan;
-            worker.run(stop, rescan, rumble);
+            worker.run(stop, rescan, port);
         });
         h.started.store(true, std::memory_order_release);
     } catch (...) {
@@ -2523,8 +2664,10 @@ std::size_t read_hid_pads(std::vector<HidPadState>& out, bool consume_gyro) noex
     for (Published& published : h.pads) {
         if (!published.connected) continue;
         out.push_back(published.state);
+        out.back().decoded.buttons |= published.state.pressed;
         ++count;
         if (consume_gyro) {
+            published.state.pressed = 0u;
             published.state.gyro_x = 0.0f;
             published.state.gyro_y = 0.0f;
             published.state.touch_dx = 0.0f;
@@ -2578,7 +2721,7 @@ void publish_rumble_request(const RumbleRequest& published) noexcept {
     const bool changed = previous.level != request.level || previous.strength != request.strength ||
                          !(previous.target == request.target) || previous.focused != request.focused ||
                          previous.paused != request.paused;
-    if (changed && h.started.load(std::memory_order_acquire) && h.rumble_event) SetEvent(h.rumble_event.get());
+    if (changed && h.started.load(std::memory_order_acquire)) (void)PostQueuedCompletionStatus(h.port.get(), 0, kKeyRumble, nullptr);
 }
 
 void stop_all_rumble() noexcept {
@@ -2691,7 +2834,74 @@ void ensure_presence_started() noexcept {
     });
 }
 
+// take_xinput_presses' sampler: started by the first take, asleep while no take came within the last second.
+struct XInputPresses {
+    std::once_flag start;
+    std::array<std::atomic<std::uint16_t>, XUSER_MAX_COUNT> pressed{};
+    std::atomic<std::uint64_t> last_take_us{0u};
+    std::atomic<bool> asleep{false};
+    UniqueHandle wake;  // auto-reset: a take after a quiet time
+};
+
+XInputPresses& xinput_presses() {
+    static XInputPresses* instance = new XInputPresses;
+    return *instance;
+}
+
+void ensure_xinput_presses_started() noexcept {
+    XInputPresses& x = xinput_presses();
+    std::call_once(x.start, [&x] {
+        try {
+            x.wake.reset(CreateEventW(nullptr, FALSE, FALSE, nullptr));
+            if (!x.wake) return;
+            std::thread([&x] {
+                SetThreadDescription(GetCurrentThread(), L"nebula-xinput-presses");
+                SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
+                // A high-resolution timer keeps the period at kXInputPressMs whatever the system's timer resolution.
+                UniqueHandle timer(CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
+                                                          TIMER_ALL_ACCESS));
+                for (;;) {
+                    if (steady_us() - x.last_take_us.load() > 1'000'000u) {
+                        // Asleep, unless a take came meanwhile: it either finds `asleep` and sets `wake`, or it
+                        // came before and the check after the store sees it.
+                        x.asleep.store(true);
+                        if (steady_us() - x.last_take_us.load() <= 1'000'000u && x.asleep.exchange(false)) continue;
+                        if (WaitForSingleObject(x.wake.get(), INFINITE) != WAIT_OBJECT_0) return;
+                        continue;
+                    }
+                    const std::uint32_t present = xinput_present_mask();
+                    for (DWORD slot = 0; slot < XUSER_MAX_COUNT; ++slot) {
+                        XINPUT_STATE state{};
+                        if ((present & (1u << slot)) != 0u && XInputGetState(slot, &state) == ERROR_SUCCESS) {
+                            x.pressed[slot].fetch_or(state.Gamepad.wButtons, std::memory_order_acq_rel);
+                        }
+                    }
+                    // No XInput pad: asked again at the presence thread's pace, not 250 times a second.
+                    const LONGLONG period_ms = present != 0u ? kXInputPressMs : 250;
+                    LARGE_INTEGER due{};
+                    due.QuadPart = -period_ms * 10'000;
+                    if (timer && SetWaitableTimer(timer.get(), &due, 0, nullptr, nullptr, FALSE)) {
+                        WaitForSingleObject(timer.get(), INFINITE);
+                    } else {
+                        Sleep(static_cast<DWORD>(period_ms));
+                    }
+                }
+            }).detach();
+        } catch (...) {
+        }
+    });
+}
+
 }  // namespace
+
+std::uint16_t take_xinput_presses(std::uint32_t slot) noexcept {
+    if (slot >= XUSER_MAX_COUNT) return 0u;
+    ensure_xinput_presses_started();
+    XInputPresses& x = xinput_presses();
+    x.last_take_us.store(steady_us());
+    if (x.asleep.exchange(false) && x.wake) SetEvent(x.wake.get());
+    return x.pressed[slot].exchange(0u, std::memory_order_acq_rel);
+}
 
 std::uint32_t xinput_present_mask() noexcept {
     ensure_presence_started();
