@@ -7,6 +7,16 @@
 #include "Game/Render/ModelData.hpp"
 #include "Game/System/LumaCore.hpp"
 
+namespace {
+    // The joint and every joint under it take the matrix.
+    void writeSubtree(f32 (*pJoints)[4], const Joint* pJoint, const Mtx mtx) {
+        memcpy(pJoints[pJoint->getJntNo() * 3], mtx, sizeof(Mtx));
+        for (const Joint* pChild = pJoint->getChild(); pChild != nullptr; pChild = pChild->getYounger()) {
+            writeSubtree(pJoints, pChild, mtx);
+        }
+    }
+}  // namespace
+
 ShadowVolumeFlatModel::ShadowVolumeFlatModel(const char* pModelName)
     : ShadowVolumeModel("板状シャドウボリューム描画"), mBaseMtx(), mRootJoint(-1), mDropJoint(-1) {
     lumacore::setClass(this, lumacore::kClassId< ShadowVolumeFlatModel >);
@@ -31,7 +41,9 @@ void ShadowVolumeFlatModel::initModel(const char* pModelName) {
 void ShadowVolumeFlatModel::initJointDrawMtxResister() {
     Joint* root = mModelData->getRootNode();
     mRootJoint = root->getJntNo();
-    mDropJoint = root->getChild()->getJntNo();
+    // Every shipped flat shadow has two joints, the root and the drop joint under it (P-178). A model with one is a
+    // shadow that does not stretch; one with more has its other joints follow the root or the drop joint.
+    mDropJoint = root->getChild() != nullptr ? root->getChild()->getJntNo() : mRootJoint;
 }
 
 void ShadowVolumeFlatModel::draw() const {
@@ -57,9 +69,15 @@ void ShadowVolumeFlatModel::loadModelDrawMtx(TypedDraw& rDraw) const {
         MR::preScaleMtx(dropMtx, controller->getHost()->mScale);
     }
 
-    f32 (*pJoints)[4] = static_cast< f32 (*)[4] >(Frame::arena(mModelData->getJointCount() * sizeof(Mtx), 16));
-    memcpy(pJoints[mRootJoint * 3], rootMtx.mMtx, sizeof(Mtx));
-    memcpy(pJoints[mDropJoint * 3], dropMtx.mMtx, sizeof(Mtx));
+    const s32 jointCount = mModelData->getJointCount();
+    f32 (*pJoints)[4] = static_cast< f32 (*)[4] >(Frame::arena(jointCount * sizeof(Mtx), 16));
+    // The frame arena is not cleared: a row left unwritten would draw from an old frame's bytes (P-178).
+    for (s32 i = 0; i < jointCount; i++) {
+        memcpy(pJoints[i * 3], rootMtx.mMtx, sizeof(Mtx));
+    }
+    if (mDropJoint != mRootJoint) {
+        ::writeSubtree(pJoints, mModelData->getRootNode()->getChild(), dropMtx.mMtx);
+    }
     rDraw.setModelJoints(mModelData, pJoints);
 }
 
