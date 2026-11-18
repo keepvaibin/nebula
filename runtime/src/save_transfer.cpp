@@ -54,6 +54,8 @@ constexpr std::string_view kFormatName = "nebula-saves";
 constexpr std::int64_t kFormatVersion = 1;
 // Nebula's own Mii file (mii_import.cpp): its name, and its first line's format name (kLibraryFormat, any version).
 constexpr std::string_view kMiisFilePath = "nebula-miis.txt";
+constexpr std::string_view kAchievementsPath = "nebula-achievements.ini";  // an archive's progress (Progress)
+constexpr std::string_view kStatsPath = "nebula-stats.ini";
 constexpr std::string_view kMiisFileFormat = "nebula-mii-library ";
 constexpr std::string_view kNativeSave = "Nebula.sav";
 constexpr std::string_view kGameData = "GameData.bin";
@@ -476,11 +478,18 @@ struct Canonical {
     std::string path;
     std::string code;        // the release a per-release file belongs to
     std::string_view copy;   // "" for the file itself
-    enum Role { kNone, kNative, kGameData, kBanner, kMod, kMiiDatabase, kMiisFile } role = kNone;
+    enum Role { kNone, kNative, kGameData, kBanner, kMod, kMiiDatabase, kMiisFile, kAchievements, kStats } role = kNone;
 };
 
 Canonical canonical(std::string_view path) {
     Canonical out;
+    for (const auto& [name, role] : {std::pair{kAchievementsPath, Canonical::kAchievements}, std::pair{kStatsPath, Canonical::kStats}}) {
+        if (same_text(path, name)) {
+            out.path = name;
+            out.role = role;
+            return out;
+        }
+    }
     if (same_text(path, kMiisFilePath)) {
         out.path = kMiisFilePath;
         out.role = Canonical::kMiisFile;
@@ -689,6 +698,10 @@ ImportPlan plan_tree(Tree tree, Kind kind, std::string_view target) {
             }
             plan.mii_library |= c.role == Canonical::kMiisFile;
             add(c.path, std::move(bytes));
+        } else if (c.role == Canonical::kAchievements || c.role == Canonical::kStats) {
+            total += bytes.size();
+            (c.role == Canonical::kAchievements ? plan.achievements : plan.stats)
+                .assign(reinterpret_cast<const char*>(bytes.data()), bytes.size());
         }
     }
     if (total > kMaxSourceBytes) {
@@ -1801,7 +1814,8 @@ std::string recover_import(const std::filesystem::path& save_root) noexcept {
     }
 }
 
-Error make_export(const std::filesystem::path& save_root, std::string_view nebula_version, std::vector<std::byte>* zip) noexcept {
+Error make_export(const std::filesystem::path& save_root, std::string_view nebula_version, std::vector<std::byte>* zip,
+                  const Progress& progress) noexcept {
     try {
         zip->clear();
         const fs::path root = clean_root(save_root);
@@ -1850,6 +1864,15 @@ Error make_export(const std::filesystem::path& save_root, std::string_view nebul
                 files.push_back({path, bytes});
             }
         }
+        for (const auto& [name, text] : {std::pair{kAchievementsPath, &progress.achievements}, std::pair{kStatsPath, &progress.stats}}) {
+            if (text->size() > kMaxFileBytes) {
+                return Error::kTooLarge;
+            }
+            if (!text->empty()) {
+                const auto* const data = reinterpret_cast<const std::byte*>(text->data());
+                files.push_back({std::string(name), Bytes(data, data + text->size())});
+            }
+        }
 
         std::string manifest = "{\"format\":";
         json_string(manifest, kFormatName);
@@ -1892,11 +1915,11 @@ Error make_export(const std::filesystem::path& save_root, std::string_view nebul
 }
 
 ExportResult export_saves(const std::filesystem::path& save_root, const std::filesystem::path& folder,
-                          std::string_view nebula_version) noexcept {
+                          std::string_view nebula_version, const Progress& progress) noexcept {
     ExportResult result;
     try {
         Bytes zip;
-        result.error = make_export(save_root, nebula_version, &zip);
+        result.error = make_export(save_root, nebula_version, &zip, progress);
         if (result.error != Error::kNone) {
             return result;
         }

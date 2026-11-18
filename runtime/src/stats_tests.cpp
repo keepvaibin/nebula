@@ -72,6 +72,21 @@ int main() {
     st::set_path_for_tests(path);
     expect(st::get("c70") == 1u && st::get("c79") == 1u && st::get("coins") == 12u, "every counter in the file is kept");
 
+    // Save export and import (P-119): each counter the larger of the two.
+    expect(st::merge("coins=40\ndeaths=1\nnew_one=7\r\nBAD=9\nspins=-3\nbig=99999999999999999999999\n") == 2u,
+           "two counters grow: a larger one and a new one");
+    expect(st::get("coins") == 40u && st::get("deaths") == 2u && st::get("new_one") == 7u && st::get("big") == 0u,
+           "the larger kept, a smaller one passed over, a bad line too");
+    expect(st::merge(st::text()) == 0u, "an install's own counts again change nothing");
+    st::flush();
+    {
+        std::ofstream out(path.parent_path() / std::string(st::kImportFileName), std::ios::trunc);
+        out << "coins=41\n";
+    }
+    st::set_path_for_tests(path);
+    expect(st::get("coins") == 41u && st::get("new_one") == 7u, "a handed-over import is merged at the first read");
+    expect(!std::filesystem::exists(path.parent_path() / std::string(st::kImportFileName)), "and its file removed");
+
     st::set_path_for_tests(path);
     std::filesystem::remove(path);
     if (s_failures == 0) std::printf("stats: all passed\n");

@@ -49,6 +49,8 @@
 #include "galaxy/ui/settings_display_page.h"
 #include "galaxy/ui/settings_advanced_page.h"
 #include "galaxy/ui/settings_system_page.h"
+#include "galaxy/achievements.h"
+#include "galaxy/stats.h"
 #include "galaxy/save_transfer.h"
 #if defined(NEBULA_UPDATE_CHECK)
 #include "galaxy/update.h"
@@ -2462,7 +2464,15 @@ void confirm_saves_import(bool whole) {
         return;
     }
     std::thread([plan] {
-        finish_saves_import(galaxy::save_transfer::commit_import(*plan, galaxy::save_transfer::game_save_root()));
+        const galaxy::save_transfer::ImportResult result =
+            galaxy::save_transfer::commit_import(*plan, galaxy::save_transfer::game_save_root());
+        if (result.error == galaxy::save_transfer::Error::kNone) {
+            // The archive's unlocks and counters (P-119), merged once its saves are in place.
+            const unsigned unlocks = galaxy::achievements::merge(plan->achievements);
+            const unsigned counters = galaxy::stats::merge(plan->stats);
+            std::cerr << "[settings] save import: " << unlocks << " achievements and " << counters << " stats merged\n";
+        }
+        finish_saves_import(result);
     }).detach();
 }
 
@@ -2474,8 +2484,9 @@ void start_saves_export() {
         const std::filesystem::path folder = galaxy::runtime_settings_folder() / ".export";
         std::error_code error;
         std::filesystem::remove_all(folder, error);
-        const galaxy::save_transfer::ExportResult made =
-            galaxy::save_transfer::export_saves(galaxy::save_transfer::game_save_root(), folder, NEBULA_VERSION);
+        const galaxy::save_transfer::ExportResult made = galaxy::save_transfer::export_saves(
+            galaxy::save_transfer::game_save_root(), folder, NEBULA_VERSION,
+            galaxy::save_transfer::Progress{galaxy::achievements::text(), galaxy::stats::text()});
         if (made.error != galaxy::save_transfer::Error::kNone) {
             {
                 const std::lock_guard<std::mutex> lock(s_saves_mutex);

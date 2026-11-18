@@ -6,6 +6,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <fstream>
+#include <iterator>
 #include <map>
 #include <mutex>
 #include <sstream>
@@ -42,10 +43,45 @@ std::filesystem::path file_path_locked(const State& s) {
     return folder.empty() ? folder : folder / "stats.ini";
 }
 
+// `text`'s counters into `s` (merge): each the larger; how many changed.
+unsigned merge_locked(State& s, std::string_view text) {
+    unsigned changed = 0u;
+    while (!text.empty()) {
+        const std::size_t end = text.find('\n');
+        std::string_view line = text.substr(0, end);
+        text = end == std::string_view::npos ? std::string_view() : text.substr(end + 1u);
+        if (!line.empty() && line.back() == '\r') line.remove_suffix(1u);
+        const std::size_t eq = line.find('=');
+        if (eq == std::string_view::npos || !valid_name(line.substr(0, eq))) continue;
+        const std::string_view digits = line.substr(eq + 1u);
+        if (digits.empty() || digits.size() > 20u || digits.find_first_not_of("0123456789") != std::string_view::npos) continue;
+        std::uint64_t value = 0u;
+        bool fits = true;
+        for (const char c : digits) {
+            const std::uint64_t digit = static_cast<std::uint64_t>(c - '0');
+            fits = fits && value <= (UINT64_MAX - digit) / 10u;
+            value = fits ? value * 10u + digit : UINT64_MAX;
+        }
+        std::uint64_t& count = s.counters[std::string(line.substr(0, eq))];
+        if (value > count) {
+            count = value;
+            ++changed;
+        }
+    }
+    return changed;
+}
+
+std::string text_locked(const State& s) {
+    std::ostringstream out;
+    for (const auto& [name, value] : s.counters) out << name << '=' << value << '\n';
+    return out.str();
+}
+
 void load_locked(State& s) {
     if (s.loaded) return;
     s.loaded = true;
-    std::ifstream in(file_path_locked(s));
+    const std::filesystem::path file = file_path_locked(s);
+    std::ifstream in(file);
     std::string line;
     while (std::getline(in, line)) {
         const std::size_t eq = line.find('=');
@@ -54,6 +90,18 @@ void load_locked(State& s) {
             s.counters[line.substr(0, eq)] = std::stoull(line.substr(eq + 1u));
         } catch (...) {
         }
+    }
+    in.close();
+    // An import handed over by another process: merged and written now, then its file goes.
+    if (file.empty()) return;
+    const std::filesystem::path import = file.parent_path() / std::string(kImportFileName);
+    std::error_code error;
+    if (!std::filesystem::is_regular_file(import, error)) return;
+    std::ifstream pending(import, std::ios::binary);
+    const std::string text((std::istreambuf_iterator<char>(pending)), std::istreambuf_iterator<char>());
+    pending.close();
+    if (merge_locked(s, text) == 0u || io::write_file_atomically(file, text_locked(s))) {
+        std::filesystem::remove(import, error);
     }
 }
 
@@ -67,9 +115,7 @@ bool write_waiting() {
         const std::lock_guard<std::mutex> lock(s.mutex);
         if (!s.dirty) return true;
         s.dirty = false;
-        std::ostringstream out;
-        for (const auto& [name, value] : s.counters) out << name << '=' << value << '\n';
-        contents = out.str();
+        contents = text_locked(s);
         path = file_path_locked(s);
     }
     if (path.empty() || io::write_file_atomically(path, contents)) return true;
@@ -123,6 +169,31 @@ std::uint64_t get(std::string_view name) {
     load_locked(s);
     const auto it = s.counters.find(std::string(name));
     return it == s.counters.end() ? 0u : it->second;
+}
+
+std::string text() {
+    State& s = state();
+    const std::lock_guard<std::mutex> lock(s.mutex);
+    load_locked(s);
+    return text_locked(s);
+}
+
+unsigned merge(std::string_view text) {
+    State& s = state();
+    unsigned changed = 0u;
+    {
+        const std::lock_guard<std::mutex> lock(s.mutex);
+        load_locked(s);
+        changed = merge_locked(s, text);
+        if (changed == 0u) return 0u;
+        s.dirty = true;
+        if (!s.writer) {
+            s.writer = true;
+            std::thread(writer_main).detach();
+        }
+    }
+    s.wake.notify_all();
+    return changed;
 }
 
 void flush() {

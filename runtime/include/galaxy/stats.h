@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <string>
 #include <string_view>
 
 // Nebula's all-time counters (jumps, spins, coins, lives lost, play time...): the game counts them and the achievement
@@ -15,6 +16,15 @@ void add(std::string_view name, std::uint64_t delta);
 [[nodiscard]] std::uint64_t get(std::string_view name);
 // Writes what is waiting now (the host's exit).
 void flush();
+
+// Save export and import (save_transfer): the counters as the file holds them ("<name>=<count>" lines), and another
+// install's merged in: each counter takes the larger of the two (an import of the same install's counts again adds
+// nothing). Returns how many counters changed.
+[[nodiscard]] std::string text();
+unsigned merge(std::string_view text);
+// An import's counts for a run that is not this one: this file beside stats.ini is merged when the counts are first
+// read, then removed.
+inline constexpr std::string_view kImportFileName = "stats.ini.import";
 
 // Tests: sets the file (empty: stats.ini in the settings folder), drops the cache and stops the writer.
 void set_path_for_tests(const std::filesystem::path& path);

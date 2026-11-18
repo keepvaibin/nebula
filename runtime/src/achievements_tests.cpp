@@ -98,6 +98,33 @@ int main() {
     expect(ach::unlocked("mod:example/first") && ach::unlocked("comets"), "both kept across sessions");
     expect(!ach::unlocked("mod:example/second"), "another of the mod's is still locked");
 
+    // Save export and import (P-119): another install's unlocks merged in, the earlier time kept.
+    {
+        std::ofstream out(path, std::ios::trunc);
+        out << "comets=2026-03-01T00:00:00Z\n";
+    }
+    ach::set_path_for_tests(path);
+    const unsigned merged = ach::merge("comets=2025-01-01T00:00:00Z\ncoins999=2026-05-05T00:00:00Z\r\n"
+                                       "not_an_id=2026-01-01T00:00:00Z\nmod:other/one=2026-02-02T00:00:00Z\nno equals\n");
+    expect(merged == 3u, "three unlocks taken: an earlier time, a new one, a mod's");
+    expect(ach::unlocked("coins999") && ach::unlocked("mod:other/one") && !ach::unlocked("not_an_id"), "the catalogue's and mods' only");
+    expect(ach::text().find("comets=2025-01-01T00:00:00Z\n") != std::string::npos, "the earlier time kept");
+    expect(ach::merge(ach::text()) == 0u, "an install's own unlocks again change nothing");
+    ach::flush();
+    ach::set_path_for_tests(path);
+    expect(ach::unlocked("coins999") && ach::unlocked_date("comets") != 0, "written to the file");
+
+    // Handed over by another process: merged at the first read, then its file removed.
+    {
+        std::ofstream out(path.parent_path() / std::string(ach::kImportFileName), std::ios::trunc);
+        out << "gateway=2026-06-06T00:00:00Z\n";
+    }
+    ach::set_path_for_tests(path);
+    expect(ach::unlocked("gateway"), "a handed-over import is merged");
+    expect(!std::filesystem::exists(path.parent_path() / std::string(ach::kImportFileName)), "and its file removed");
+    ach::set_path_for_tests(path);
+    expect(ach::unlocked("gateway"), "and kept in the file");
+
     std::filesystem::remove(path);
     if (s_failures == 0) std::printf("achievements: all passed\n");
     return s_failures == 0 ? 0 : 1;
