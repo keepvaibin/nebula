@@ -10,6 +10,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <mutex>
 #include <string>
@@ -33,10 +34,17 @@ struct Output {
     std::string text[2];
     int flushes = 0;
     std::atomic<int> writes_waiting{0};
+    std::thread::id writer;  // the thread of the first write
+    bool other_thread_wrote = false;
 
     static void write(void* user, unsigned output, const char* data, std::size_t size) {
         Output& o = *static_cast<Output*>(user);
         std::unique_lock<std::mutex> lock(o.mutex);
+        if (o.writer == std::thread::id()) {
+            o.writer = std::this_thread::get_id();
+        } else if (o.writer != std::this_thread::get_id()) {
+            o.other_thread_wrote = true;
+        }
         ++o.writes_waiting;
         o.released.wait(lock, [&] { return !o.held; });
         --o.writes_waiting;
@@ -65,8 +73,30 @@ int main(int argc, char** argv) {
     const bool without = argc > 1 && std::strcmp(argv[1], "--without") == 0;
     bool passed = true;
     Output output;
+    // A wait on a stuck output with no bound is the fault this tests for: a test that stops is a failed one.
+    std::thread([] {
+        std::this_thread::sleep_for(std::chrono::seconds(60));
+        std::printf("FAILED: still waiting after 60 s\n");
+        std::fflush(stdout);
+        std::_Exit(1);
+    }).detach();
     galaxy::LineWriter writer(&Output::write, &Output::flush_all, &output);
     writer.start();
+
+    // A flush right after a hand, the output stuck: it gives up at its bound. It never writes on its own thread
+    // (it would wait on the stuck output with no bound).
+    if (!without) {
+        output.hold(true);
+        writer.hand(1u, "s", 1u);
+        const auto asked = std::chrono::steady_clock::now();
+        passed &= expect(!writer.flush(std::chrono::milliseconds(50)), "flush returned done while the output was stuck");
+        passed &= expect(std::chrono::steady_clock::now() - asked < std::chrono::seconds(1), "flush waited past its bound");
+        output.hold(false);
+        passed &= expect(writer.flush(std::chrono::milliseconds(5000)), "flush did not finish once the output moved");
+        std::lock_guard<std::mutex> lock(output.mutex);
+        output.text[0].clear();
+        output.text[1].clear();
+    }
 
     // The output is stuck. A thread hands many lines: it must finish in far less than a stuck write would take.
     output.hold(true);
@@ -122,6 +152,7 @@ int main(int argc, char** argv) {
         // Output 1 sees the '|' of a, then b, then the '|' of c: a, b, c in that order.
         passed &= expect(output.text[0] == "a|c" && output.text[1] == "|b|", "two outputs' text out of order");
         passed &= expect(output.flushes > 0, "the outputs were never flushed");
+        passed &= expect(!output.other_thread_wrote, "a thread other than the writer wrote");
     }
 
     // After stop, hand refuses: the caller writes itself.

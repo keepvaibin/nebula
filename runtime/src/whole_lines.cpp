@@ -165,8 +165,11 @@ bool flush(unsigned bound_ms) noexcept {
             done = false;
         }
     }
-    std::fflush(stdout);
-    std::fflush(stderr);
+    // Not when the writer is stuck: its write holds the stream's lock, and fflush would wait on it with no bound.
+    if (done) {
+        std::fflush(stdout);
+        std::fflush(stderr);
+    }
     return done;
 }
 
