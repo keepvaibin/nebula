@@ -1,7 +1,7 @@
 {
   "harness": 1,
   "name": "3107-movie-loose",
-  "about": "N-2057: jv-loose brings layers/base/files/MovieData/PrologueA.ivf, 6 s of one colour in AV1 (IVF, which the system movie player never takes): the cook makes it the game's MovieData/PrologueA.thp, so MR::startMoviePlayer(\"/MovieData/PrologueA.thp\") plays it over the stage, full screen (pictures f150, f200: the colour; before the fix, the game's own prologue)",
+  "about": "N-2057: jv-loose brings layers/base/files/MovieData/PrologueA.ivf, 6 s of one colour in AV1 (IVF, which the system movie player never takes): the cook makes it the game's MovieData/PrologueA.thp, so MR::startMoviePlayer(\"/MovieData/PrologueA.thp\") plays it over the stage, full screen (pictures f150, f200: the colour, like their references; with a start check older than the fix, the game's own prologue, which differs)",
   "proves": [
     "movie.av1"
   ],
@@ -34,5 +34,20 @@
       "end": true
     }
   ],
-  "expect": []
+  "expect": [
+    {
+      "picture": "f150",
+      "like": "refs/{renderer}/f150.png",
+      "within": {
+        "rmse": 0.5
+      }
+    },
+    {
+      "picture": "f200",
+      "like": "refs/{renderer}/f200.png",
+      "within": {
+        "rmse": 0.5
+      }
+    }
+  ]
 }
