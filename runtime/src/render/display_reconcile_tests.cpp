@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The display rule (display_reconcile.h, P-110 and P-111): the window is placed when the setting differs from what was
-// applied, and a placement the player made by hand is kept.
+// applied, and a placement the player made by hand is kept; SDL's displays get keys that tell them apart (P-103).
 #include "galaxy/render/display_reconcile.h"
 
 #include <cstdio>
+#include <string>
+#include <vector>
 
 using namespace galaxy::render::host_window;
 
@@ -68,6 +70,21 @@ int main() {
     expect(!display_needs_placing(applied, now, false, true, false), "placed by hand: kept");
     expect(placed_by_player(setting_before, 800, 600, "").monitor == setting_before.monitor,
            "no monitor known: the setting's stays");
+
+    // SDL's displays (P-103): two screens of one name stay apart, and every key fits the setting.
+    const std::vector<std::string> keys = display_keys({"DELL U2720Q", "LG HDR 4K", "DELL U2720Q", "DELL U2720Q"});
+    expect(keys.size() == 4 && keys[0] == "DELL U2720Q" && keys[1] == "LG HDR 4K" && keys[2] == "DELL U2720Q (2)" &&
+               keys[3] == "DELL U2720Q (3)",
+           "one name twice: the second is told apart");
+    const std::string long_name = std::string(60, 'a') + "\xC3\xA9\xC3\xA9";  // two-byte characters at the cut
+    const std::vector<std::string> long_keys = display_keys({long_name, long_name});
+    expect(long_keys[0].size() <= 57 && long_keys[1].size() < DisplayState{}.monitor.size() &&
+               long_keys[1] == long_keys[0] + " (2)",
+           "a long name: cut to fit, still told apart");
+    const std::vector<std::string> split = display_keys({std::string(56, 'b') + "\xC3\xA9"});
+    expect(split[0] == std::string(56, 'b'), "a long name: cut at a whole character");
+    DisplayState from_key = state(kWindowed, keys[2].c_str(), 1280, 720);
+    expect(!same_monitor(from_key, state(kWindowed, keys[0].c_str(), 1280, 720)), "the two screens: two settings");
 
     std::printf("%s\n", g_ok ? "display reconcile: every case holds" : "display reconcile: FAILED");
     return g_ok ? 0 : 1;
