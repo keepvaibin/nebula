@@ -14,7 +14,11 @@ python -X utf8 -I tools/lumacore/tests/harness_android_test.py [--work <folder>]
 - the platform names follow the device's ABI;
 - the start check (the push workflow's, on an emulator) starts the test app with its own extras and no game data, and
   its verdict is the game process's exit record: 0 passes, a status or a crash is that code, a process that never
-  ends is stopped at the limit, one that never starts is reported.
+  ends is stopped at the limit, one that never starts is reported;
+- a device that leaves adb during a test is luma_test.DeviceLost (verdict `device-lost`, the suite's other tests not
+  run), not the test's own failure; a failure while the device still answers stays the test's; remove on a device
+  that does not answer fails instead of saying the test app is not installed (seen 11-17: the tablet left adb mid-tour,
+  the runner fell over and remove said "not installed").
 Exit 0 when every case holds.
 """
 import importlib.util
@@ -27,6 +31,8 @@ HERE = pathlib.Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location("luma_test_android", HERE.parent / "luma_test_android.py")
 android = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(android)
+sys.path.insert(0, str(HERE.parent))
+import luma_test  # noqa: E402
 
 RECORD = ("ApplicationExitInfo #0:\n"
           "  timestamp=2026-11-17 10:00:00.000 pid=4321 realUid=10345 packageUid=10345 definingUid=10345 user=0\n"
@@ -94,6 +100,20 @@ class StartDevice(android.Device):
 
     def sleep(self, seconds):
         self.now += seconds
+
+
+class GoneDevice(android.Device):
+    """A device that answers adb or not, as told."""
+
+    def __init__(self, there):
+        super().__init__("fake")
+        self.there = there
+
+    def answers(self):
+        return self.there
+
+    def installed(self):
+        return False
 
 
 def main():
@@ -164,6 +184,30 @@ def main():
     code, seen = android.start_check(StartDevice(alive=3, record="", installed=False), 300, 120,
                                      clock=lambda: 0.0, sleep=lambda s: None)
     check(code is None and "not installed" in seen, "no test app: no start: %s" % seen)
+
+    def failing(*a):
+        raise RuntimeError("run-as dev.nebula.galaxy.test gave no folder")
+    real = android.run_on_device
+    android.run_on_device = failing
+    try:
+        android.run_one(luma_test, GoneDevice(False), {}, None, work, None)
+        check(False, "a device gone mid-test raises DeviceLost")
+    except Exception as error:  # noqa: BLE001
+        check(type(error).__name__ == "DeviceLost" and isinstance(error, getattr(luma_test, "DeviceLost", ())),
+              "a device gone mid-test is DeviceLost: %r" % error)
+    try:
+        android.run_one(luma_test, GoneDevice(True), {}, None, work, None)
+        check(False, "a failure on a device still there is raised")
+    except Exception as error:  # noqa: BLE001
+        check(type(error) is RuntimeError, "a failure on a device still there stays the test's: %r" % error)
+    android.run_on_device = real
+    real_device = android.Device
+    android.Device = lambda serial: GoneDevice(False)
+
+    class Args:
+        device = "fake"
+    check(android.remove(Args()) == 1, "remove on a device that does not answer fails")
+    android.Device = real_device
 
     check(android.host_for("arm64-v8a")["code"] == "code/android-arm64/mod.so", "arm64 code path")
     check(android.host_for("x86_64")["platform"] == "android-x64", "x86_64 platform")

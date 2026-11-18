@@ -206,7 +206,17 @@ def host_for(abi):
 
 
 def run_one(lt, device, test, args, run_folder, previous):
-    """luma_test.run_one on an Android device: the same layout, the start over adb."""
+    """luma_test.run_one on an Android device: the same layout, the start over adb. A failure while the device no
+    longer answers adb (unplugged, asleep with USB off) is lt.DeviceLost: the device went, not the test."""
+    try:
+        return run_on_device(lt, device, test, args, run_folder, previous)
+    except (lt.SetupFailed, RuntimeError, OSError, subprocess.TimeoutExpired) as error:
+        if not device.answers():
+            raise lt.DeviceLost("%s left adb during the test (%s)" % (device.serial, str(error)[:160])) from error
+        raise
+
+
+def run_on_device(lt, device, test, args, run_folder, previous):
     for m in test["mods"]:
         if m["install"] == "import":
             raise lt.HarnessError("install import: the Android app imports with its own screen, not a start argument")
@@ -377,6 +387,10 @@ def prepare(args):
 
 def remove(args):
     device = Device(args.device)
+    if not device.answers():
+        # Not "not installed": nothing is known of a device that does not answer, and the app may still be on it.
+        print("%s does not answer adb: %s could not be removed" % (args.device, PACKAGE))
+        return 1
     if not device.installed():
         print("%s is not installed" % PACKAGE)
         return 0

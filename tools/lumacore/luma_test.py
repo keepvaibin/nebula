@@ -2390,6 +2390,7 @@ def run_tests(args):
     lock.write_text("%s %s luma-test %s\n" % (args.who, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), suite_name), encoding="utf-8")
     all_pass = True
     passed = {}
+    lost = None  # why the device went, once it has: the tests after it are not run
     try:
         for folder in folders:
             try:
@@ -2405,6 +2406,11 @@ def run_tests(args):
             for renderer in renderers:
                 run_folder = work / "runs" / suite_name / test["name"] / renderer
                 previous = None
+                if lost is not None:
+                    all_pass = False
+                    report(run_folder, test["name"], test["proves"], renderer, "device-lost",
+                           "not run: the device left before it (%s)" % lost, [], args, {})
+                    continue
                 try:
                     if test["continue_from"] is not None:
                         prev = passed.get((test["continue_from"], renderer))
@@ -2420,6 +2426,9 @@ def run_tests(args):
                     verdict, reason, checks, facts, pictures, ran = "setup-failed", str(error), [], [], [], {}
                 except NotRun as error:
                     verdict, reason, checks, facts, pictures, ran = "not-run", str(error), [], [], [], {}
+                except DeviceLost as error:
+                    verdict, reason, checks, facts, pictures, ran = "device-lost", str(error), [], [], [], {}
+                    lost = str(error)
                 if verdict == "pass":
                     passed[(test["name"], renderer)] = run_folder
                 else:
@@ -2447,6 +2456,11 @@ def run_tests(args):
 
 class SetupFailed(Exception):
     pass
+
+
+class DeviceLost(Exception):
+    """The device the run was on stopped answering (luma_test_android.py): verdict `device-lost` for the test, and the
+    suite's other tests are not run. Not a verdict on the game."""
 
 
 class NotRun(Exception):
