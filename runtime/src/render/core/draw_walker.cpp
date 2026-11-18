@@ -9,6 +9,7 @@
 #include "galaxy/loss_report.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/scene_camera_shape.h"
+#include "galaxy/worker_pool.h"
 #include "render/core/walk_plan.h"
 
 #include <algorithm>
@@ -1035,7 +1036,10 @@ unsigned RenderCore::recording_workers(const NebulaFramePass& pass) const {
     if (cores < kRecordMinCores || pass.item_count < kRecordThreshold) {
         return 0u;
     }
-    return std::clamp(cores / 2u, 2u, 8u);
+    // The threads that can take a chunk are the process pool's and this one (P-040): with fewer than two, a recording
+    // would replay its chunks one after another here, the parallel path's cost with none of its gain.
+    const unsigned workers = std::min(std::clamp(cores / 2u, 2u, 8u), galaxy::process_workers().threads() + 1u);
+    return workers < 2u ? 0u : workers;
 }
 
 // The recorded pass, replayed: in chunks on the pool's threads and the render thread, each into a command list or secondary
