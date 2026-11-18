@@ -59,8 +59,8 @@ void write_conversion_input(VkDescriptorSet set, VkImageView view) {
 
 }  // namespace
 
-// A scene target set at `scale`: targets in their attachment layouts, the framebuffer, and the conversion input (allocated
-// once per set; rewriting it needs a GPU that no longer reads the old views, which callers ensure).
+// A scene target set at `scale`: targets in their attachment layouts, the framebuffer, and the conversion inputs (new ones:
+// the set's old inputs are retired, as a frame in flight or the one recording may still read them).
 bool RendererVk::create_scene_set(SceneSet& set, const FrameMap& map, unsigned samples, unsigned set_width,
                                 unsigned set_height, bool target) {
     vk::Context& context = vk::Context::get();
@@ -124,8 +124,8 @@ bool RendererVk::create_scene_set(SceneSet& set, const FrameMap& map, unsigned s
                                               : draw_layout_.scene_pass,
                                        single);
     }
-    // The new targets enter their attachment layouts now, so every later submission finds them so.
-    run_one_time([&](VkCommandBuffer commands) {
+    // The new targets enter their attachment layouts before the frame's commands run, so every later submission finds them so.
+    record_first_use([&](VkCommandBuffer commands) {
         for (const vk::Texture* target : {color.get(), ms_color.get()}) {
             if (target == nullptr) continue;
             image_barrier(commands, target->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
@@ -152,13 +152,11 @@ bool RendererVk::create_scene_set(SceneSet& set, const FrameMap& map, unsigned s
     set.wide = wide;
     set.wide_read = false;
     set.depth_serial = ++scene_depth_serial_;
-    if (set.color_source == VK_NULL_HANDLE) {
-        set.color_source = allocate_persistent_set(utility_set_layout_);
-    }
+    retire_source(set.color_source);
+    set.color_source = fresh_source();
     if (samples > 1u) {
-        if (set.ms_depth_source == VK_NULL_HANDLE) {
-            set.ms_depth_source = allocate_persistent_set(utility_set_layout_);
-        }
+        retire_source(set.ms_depth_source);
+        set.ms_depth_source = fresh_source();
         const VkDescriptorImageInfo ms_info{VK_NULL_HANDLE, set.ms_depth->view, kDepthSampleLayout};
         VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
         write.dstSet = set.ms_depth_source;
@@ -270,6 +268,38 @@ void RendererVk::resolve_scene_depth(VkCommandBuffer commands) {
         set.depth_dirty = false;
         reset_draw_bindings();
     }
+}
+
+void RendererVk::record_first_use(const std::function<void(VkCommandBuffer)>& record) {
+    if (frame_recording_) {
+        record(frames_[frame_slot_].uploads);
+    } else {
+        run_one_time(record);
+    }
+}
+
+void RendererVk::retire_source(VkDescriptorSet& source) {
+    if (source != VK_NULL_HANDLE) {
+        retired_target_sources_.push_back({source, last_submitted_ + 1u});
+        source = VK_NULL_HANDLE;
+    }
+}
+
+VkDescriptorSet RendererVk::fresh_source() {
+    const std::uint64_t completed = completed_fence_value();
+    std::erase_if(retired_target_sources_, [&](const RetiredTable& retired) {
+        if (retired.fence > completed) {
+            return false;
+        }
+        target_free_sources_.push_back(retired.set);
+        return true;
+    });
+    if (target_free_sources_.empty()) {
+        return allocate_persistent_set(utility_set_layout_);
+    }
+    const VkDescriptorSet source = target_free_sources_.back();
+    target_free_sources_.pop_back();
+    return source;
 }
 
 void RendererVk::run_one_time(const std::function<void(VkCommandBuffer)>& record) {
@@ -743,21 +773,6 @@ bool RendererVk::begin_target_pass(std::uint64_t key, std::uint32_t width, std::
         return false;
     }
     TargetSlot& slot = target_slots_[key];
-    if (slot.set.color_source == VK_NULL_HANDLE) {
-        // Colour inputs of dropped slots come back once the GPU is past the commands that read them.
-        const std::uint64_t completed = completed_fence_value();
-        std::erase_if(retired_target_sources_, [&](const RetiredTable& retired) {
-            if (retired.fence > completed) {
-                return false;
-            }
-            target_free_sources_.push_back(retired.set);
-            return true;
-        });
-        if (!target_free_sources_.empty()) {
-            slot.set.color_source = target_free_sources_.back();
-            target_free_sources_.pop_back();
-        }
-    }
     const FrameMap map(width, height);
     // The test hook NEBULA_EXT_REMAKE_TARGETS makes it again at the same size, as a size change does (P-028, P-054).
     const bool kept = slot.set.color && slot.map == map && (galaxy::extensions::flags() & NEBULA_EXT_REMAKE_TARGETS) == 0u;
@@ -767,9 +782,7 @@ bool RendererVk::begin_target_pass(std::uint64_t key, std::uint32_t width, std::
         }
         // A new set enters its attachment layouts (create_scene_set); the pass's first clear (RenderCore) fills it.
         if (!create_scene_set(slot.set, map, 1u, kFrameUnits, kFrameUnits, true)) {
-            if (slot.set.color_source != VK_NULL_HANDLE) {
-                target_free_sources_.push_back(slot.set.color_source);
-            }
+            retire_source(slot.set.color_source);  // the old set's: frames may still read it
             target_slots_.erase(key);
             return false;
         }
@@ -822,12 +835,8 @@ void RendererVk::end_target_pass(std::uint8_t channels, TextureStore& textures) 
 
 // A slot's targets go to the open frame's retired list; its colour input is reused once the commands recorded so far have run.
 void RendererVk::retire_target_slot(TargetSlot& slot) {
-    const VkDescriptorSet source = slot.set.color_source;
     destroy_scene_set(slot.set);
-    if (source != VK_NULL_HANDLE) {
-        retired_target_sources_.push_back({source, last_submitted_ + 1u});
-    }
-    slot.set.color_source = VK_NULL_HANDLE;
+    retire_source(slot.set.color_source);
 }
 
 void RendererVk::sweep_target_slots() {
@@ -1113,7 +1122,7 @@ bool RendererVk::ensure_motion_targets() {
             layer_trans.reset();
         }
     }
-    run_one_time([&](VkCommandBuffer commands) {
+    record_first_use([&](VkCommandBuffer commands) {
         for (const vk::Texture* target : {motion.get(), reactive.get()}) {
             image_barrier(commands, target->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE,
@@ -1460,7 +1469,7 @@ void RendererVk::take_fg_hudless_scene() {
     vk::Context& context = vk::Context::get();
     const vk::Texture& color = *scene_.color;
     if (!fg_hudless_scene_color_ || fg_hudless_scene_color_->width != color.width || fg_hudless_scene_color_->height != color.height) {
-        vkDeviceWaitIdle(context.device());
+        retire(std::move(fg_hudless_scene_color_));  // no GPU wait (P-054)
         fg_hudless_scene_color_ = context.create_texture(color.width, color.height, 1u, color.format,
                                                          VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, true,
                                                          "frame generation scene");
@@ -1500,7 +1509,7 @@ void RendererVk::copy_fg_hudless_display(const DisplayTexture& dest) {
     }
     vk::Context& context = vk::Context::get();
     if (!fg_hudless_display_ || fg_hudless_display_->width != dest.width || fg_hudless_display_->height != dest.height) {
-        vkDeviceWaitIdle(context.device());
+        retire(std::move(fg_hudless_display_));  // no GPU wait (P-054)
         fg_hudless_display_ = context.create_texture(dest.width, dest.height, 1u, vk::kSceneColorFormat,
                                                      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, true,
                                                      "frame generation display picture");
@@ -1553,7 +1562,7 @@ void RendererVk::present_fg_hudless(const DisplayTexture& source, const galaxy::
     constexpr VkImageUsageFlags kUsage =
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     if (!fg_hudless_target_ || fg_hudless_target_->width != width || fg_hudless_target_->height != height) {
-        vkDeviceWaitIdle(context.device());
+        retire(std::move(fg_hudless_target_));  // no GPU wait (P-054)
         fg_hudless_target_ = context.create_texture(width, height, 1u, VK_FORMAT_R8G8B8A8_UNORM, kUsage, true, "frame generation HUD-less");
         if (!fg_hudless_target_) {
             vk::streamline_vk::tag_hudless(commands, nullptr);
@@ -1915,7 +1924,7 @@ bool RendererVk::ensure_wide_set(SceneSet& set, VkFormat format) {
     info.height = height;
     info.layers = 1;
     vk::check(vkCreateFramebuffer(device, &info, nullptr, &set.framebuffer), "wide scene framebuffer");
-    run_one_time([&](VkCommandBuffer commands) {
+    record_first_use([&](VkCommandBuffer commands) {
         for (const vk::Texture* target : {color.get(), ms_color.get()}) {
             if (target == nullptr) continue;
             image_barrier(commands, target->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
@@ -1934,9 +1943,8 @@ bool RendererVk::ensure_wide_set(SceneSet& set, VkFormat format) {
     set.wide = wide;
     set.wide_read = false;
     set.turned = false;
-    if (set.color_source == VK_NULL_HANDLE) {
-        set.color_source = allocate_persistent_set(utility_set_layout_);
-    }
+    retire_source(set.color_source);
+    set.color_source = fresh_source();
     write_conversion_input(set.color_source, set.color->view);
     return true;
 }

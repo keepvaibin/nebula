@@ -556,6 +556,10 @@ private:
     void apply_window_size();
     // Records `record` into a one-time command buffer, submits it and waits (start and resolution changes only).
     void run_one_time(const std::function<void(VkCommandBuffer)>& record);
+    // A new target's first layouts and contents (P-054): recorded into the open frame's upload list, which the queue runs
+    // before the frame's own commands, so no submission of its own and no wait for the GPU; with no frame open (start-up,
+    // a new device), run_one_time.
+    void record_first_use(const std::function<void(VkCommandBuffer)>& record);
     bool create_utility_pipelines();
     // A pipeline of the renderer's own passes: no vertex input, `strip` four-vertex quads or full-screen triangles,
     // blended over the target when `blend`, depth written (always passing) when `depth_write`.
@@ -825,7 +829,7 @@ private:
     std::unordered_map<std::uint64_t, TargetSlot> target_slots_;
     static constexpr std::uint64_t kTargetSweepSteps = 60u;  // begin_frame's sweep: once a second of the game
     std::uint64_t target_swept_step_ = 0u;                    // idle_clock() at the last sweep
-    std::vector<VkDescriptorSet> target_free_sources_;  // dropped slots' colour inputs, free to reuse
+    std::vector<VkDescriptorSet> target_free_sources_;  // scene sets' inputs no frame reads, free to reuse (fresh_source)
     // A slot's targets go to the open frame's retired list; its colour input waits for the fence (retired_target_sources_).
     void retire_target_slot(TargetSlot& slot);
     // Slots no pass has used for kIdleSteps game steps give their targets back; also from begin_frame, so that a scene without
@@ -1117,7 +1121,7 @@ private:
         std::uint64_t fence = 0;
     };
     std::vector<RetiredTable> retired_tables_;
-    std::vector<RetiredTable> retired_target_sources_;  // dropped slots' colour inputs until the GPU is past their last read
+    std::vector<RetiredTable> retired_target_sources_;  // scene sets' inputs until the GPU is past their last read
     std::vector<VkDescriptorSet> free_tables_;
     void write_table(VkDescriptorSet set, const TextureHandle* handles, unsigned count, const TextureStore& cache);
     bool ring_growth_failed_ = false;
@@ -1133,6 +1137,11 @@ private:
     bool create_scene_set(SceneSet& set, const FrameMap& map, unsigned samples = 1u, unsigned width = kFrameUnits,
                         unsigned height = kFrameUnits, bool target = false);
     void destroy_scene_set(SceneSet& set);
+    // A scene set's colour or multisampled depth input (utility_set_layout_). The frames recorded so far may read it, so it is
+    // reused only once the GPU is past them (retired_target_sources_), never written while one may (P-054).
+    void retire_source(VkDescriptorSet& source);
+    // An input no frame reads: a retired one the GPU is past, else a new one.
+    [[nodiscard]] VkDescriptorSet fresh_source();
     // The frame's GPU time (timestamps) of frames that presented a generated picture: the interpolation's GPU governor.
     std::array<bool, kFramesInFlight> frame_generated_{};
     double generated_gpu_ema_ms_ = 0.0;
@@ -1255,7 +1264,7 @@ private:
     std::array<unsigned, kFramesInFlight> pass_mark_count_{};
     GpuPass current_pass_ = GpuPass::Scene;
     bool pass_recording_ = false;  // between begin_frame and end_frame
-    bool frame_recording_ = false;  // begin_frame to end_frame: the frame's command buffers are open
+    bool frame_recording_ = false;  // begin_frame to end_frame: the frame's upload list is open (record_first_use)
     std::array<double, static_cast<std::size_t>(GpuPass::Count)> pass_ms_{};
     // The settings page's timing: asked for by gpu_timing_wanted_ (every frame is profiled while it is), and each pass's running
     // average for the page.
