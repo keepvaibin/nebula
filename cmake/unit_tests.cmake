@@ -148,6 +148,8 @@ galaxy_test(galaxy_frame_interpolation_tests SOURCES ${render_src}/frame_interpo
 galaxy_test(galaxy_present_slots_tests SOURCES ${render_src}/present_slots_tests.cpp ${render_src}/present_slots.cpp)
 # The temporal upscaler's hold on generated frames ends (header-only).
 galaxy_test(galaxy_temporal_hold_tests SOURCES ${render_src}/temporal_hold_tests.cpp)
+# The renderers' video memory read: at most every 100 ms, at once when the budget moved (P-011).
+galaxy_test(galaxy_video_memory_reading_tests SOURCES ${render_src}/video_memory_reading_tests.cpp)
 # The game thread's place in the render queue (header-only).
 galaxy_test(galaxy_render_queue_tests SOURCES ${render_src}/render_queue_tests.cpp)
 # The vsync grid the Android and Apple display clocks run the game's frames on (header-only).

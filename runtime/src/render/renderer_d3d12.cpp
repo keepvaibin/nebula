@@ -1833,20 +1833,16 @@ void RendererD3D12::apply_window_size() {
 }
 
 bool RendererD3D12::scene_fits_memory(const FrameMap& map) const {
-    if (!adapter3_) {
-        return true;
-    }
-    DXGI_QUERY_VIDEO_MEMORY_INFO info{};
-    if (FAILED(adapter3_->QueryVideoMemoryInfo(
-            0u, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &info)) || info.Budget == 0u) {
+    std::uint64_t usage = 0u;
+    std::uint64_t budget = 0u;
+    if (!memory_.read_now(usage, budget)) {
         return true;
     }
     // Size-dependent residency: scene colour (4 bytes per pixel) and depth (kSceneDepthBytes) and at most the display
     // picture pair plus one full-picture copy (12 bytes per pixel).
     const auto bytes = [](const FrameMap& m) { return (4.0 + kSceneDepthBytes + 12.0) * m.width * m.height; };
     const double needed = bytes(map) - bytes(scene_extent_);
-    return static_cast<double>(info.CurrentUsage) + needed <=
-           0.9 * static_cast<double>(info.Budget);
+    return static_cast<double>(usage) + needed <= 0.9 * static_cast<double>(budget);
 }
 
 void RendererD3D12::probe_occlusion() {
@@ -1861,42 +1857,7 @@ void RendererD3D12::probe_occlusion() {
 }
 
 bool RendererD3D12::video_memory(std::uint64_t& usage, std::uint64_t& budget) const noexcept {
-    usage = budget = 0u;
-    if (!adapter3_) {
-        return false;
-    }
-    // The use moves with every allocation and is read at most every 100 ms; the budget moves when the OS says (the event), and
-    // that is read at once.
-    const std::int64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                 std::chrono::steady_clock::now().time_since_epoch()).count();
-    const bool moved = budget_event_ != nullptr && WaitForSingleObject(budget_event_, 0u) == WAIT_OBJECT_0;
-    if (moved || memory_budget_ == 0u || now - memory_read_ms_ >= 100) {
-        DXGI_QUERY_VIDEO_MEMORY_INFO info{};
-        if (FAILED(adapter3_->QueryVideoMemoryInfo(0u, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &info)) || info.Budget == 0u) {
-            return false;
-        }
-        if (moved) {
-            std::cout << "[vram] the OS moved the budget from " << (memory_budget_ >> 20u) << " MB to " << (info.Budget >> 20u)
-                      << " MB\n";
-        }
-        memory_read_ms_ = now;
-        memory_usage_ = info.CurrentUsage;
-        memory_budget_ = info.Budget;
-    }
-    usage = memory_usage_;
-    budget = memory_budget_;
-    return true;
-}
-
-void RendererD3D12::release_budget_notification() noexcept {
-    if (adapter3_ && budget_cookie_ != 0u) {
-        adapter3_->UnregisterVideoMemoryBudgetChangeNotification(budget_cookie_);
-    }
-    budget_cookie_ = 0u;
-    if (budget_event_ != nullptr) {
-        CloseHandle(budget_event_);
-        budget_event_ = nullptr;
-    }
+    return memory_.read(usage, budget);
 }
 
 bool RendererD3D12::create_clear_pipeline() {
@@ -2187,16 +2148,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
         host_window::rtx_adapter.store(adapter_desc.VendorId == 0x10DEu &&
                                        std::wcsstr(adapter_desc.Description, L"RTX") != nullptr,
                                        std::memory_order_relaxed);
-        (void)adapter.As(&adapter3_);
-        release_budget_notification();
-        if (adapter3_) {
-            budget_event_ = CreateEventW(nullptr, FALSE, FALSE, nullptr);
-            if (budget_event_ != nullptr &&
-                FAILED(adapter3_->RegisterVideoMemoryBudgetChangeNotificationEvent(budget_event_, &budget_cookie_))) {
-                budget_cookie_ = 0u;
-                release_budget_notification();
-            }
-        }
+        memory_.attach(adapter.Get());
         {
             const std::string narrow = narrow_utf8(adapter_desc.Description);
             const bool is_software =
@@ -2950,7 +2902,7 @@ void RendererD3D12::shutdown() {
         streamline::shutdown();
     });
     if (fence_event_) { CloseHandle(fence_event_); fence_event_ = nullptr; }
-    release_budget_notification();
+    memory_.release();
     host_window::pending_resize_extent.store(0u, std::memory_order_relaxed);
     s_blit_root_sig.Reset();
     set_mod_post_compiler(nullptr, false);

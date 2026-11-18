@@ -86,6 +86,7 @@ bool RendererD3D11::initialize(int window_width, int window_height, const FrameM
             return false;
         }
         report_adapter();
+        memory_.attach(d3d11::Context::get().adapter());
         if (!create_scene_targets(scene_map_, wanted_msaa_samples())) {
             shutdown();
             return false;
@@ -367,6 +368,7 @@ RendererD3D11::Kept RendererD3D11::take_apart_lost_device() {
 }
 
 void RendererD3D11::shutdown() {
+    memory_.release();
     set_mod_post_compiler(nullptr, false);
     d3d11::Context& context = d3d11::Context::get();
     if (context.ready()) {
@@ -499,19 +501,7 @@ void RendererD3D11::wait_for_fence_value(std::uint64_t fence_value) {
 }
 
 bool RendererD3D11::video_memory(std::uint64_t& usage, std::uint64_t& budget) const noexcept {
-    usage = budget = 0u;
-    d3d11::ComPtr<IDXGIAdapter3> adapter;
-    IDXGIAdapter1* const base = d3d11::Context::get().adapter();
-    if (base == nullptr || FAILED(base->QueryInterface(IID_PPV_ARGS(&adapter)))) {
-        return false;
-    }
-    DXGI_QUERY_VIDEO_MEMORY_INFO info{};
-    if (FAILED(adapter->QueryVideoMemoryInfo(0u, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &info))) {
-        return false;
-    }
-    usage = info.CurrentUsage;
-    budget = info.Budget;
-    return true;
+    return memory_.read(usage, budget);
 }
 
 void RendererD3D11::probe_occlusion() noexcept {
