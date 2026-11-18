@@ -92,6 +92,10 @@ struct ImportPlan {
     bool banner_left_out = false;    // a banner.bin that failed its check
     bool miis_left_out = false;      // a Wii Mii database or nebula-miis.txt that failed its check
     bool mii_library = false;        // the import writes nebula-miis.txt (the Mii library is read again)
+    // A Nebula saves archive's unlocks and counters (nebula-achievements.ini, nebula-stats.ini): not written by
+    // commit_import; merged into this install's after it (achievements::merge, stats::merge). Empty when not held.
+    std::string achievements;
+    std::string stats;
 };
 
 // The releases' codes ("RMGE", "RMGP", "RMGJ", "RMGK") and their save folders.
@@ -130,11 +134,18 @@ struct ImportResult {
 // removed. Returns what it did, for the log; empty when there was no journal.
 [[nodiscard]] std::string recover_import(const std::filesystem::path& save_root) noexcept;
 
+// The install's achievements and stats as their files hold them (achievements::text, stats::text); an export carries
+// them as nebula-achievements.ini and nebula-stats.ini, an empty one left out.
+struct Progress {
+    std::string achievements;
+    std::string stats;
+};
+
 // The save root's saves as a Nebula saves archive: each release's save (the newest copy that passes the game's check,
-// as Nebula.sav or GameData.bin), its banner, its mods' files (<code>/luma), the Mii library and the Wii Mii database.
-// `nebula_version` goes in the manifest. kNoSaves when the root holds no save.
+// as Nebula.sav or GameData.bin), its banner, its mods' files (<code>/luma), the Mii library and the Wii Mii database,
+// and `progress`. `nebula_version` goes in the manifest. kNoSaves when the root holds no save.
 [[nodiscard]] Error make_export(const std::filesystem::path& save_root, std::string_view nebula_version,
-                                std::vector<std::byte>* zip) noexcept;
+                                std::vector<std::byte>* zip, const Progress& progress = {}) noexcept;
 
 struct ExportResult {
     Error error = Error::kNone;
@@ -144,7 +155,7 @@ struct ExportResult {
 // Writes Nebula-Saves-<yyyyMMdd-HHmmss>.zip (local time; -2, -3... when taken) into `folder`, read back before it is
 // named.
 [[nodiscard]] ExportResult export_saves(const std::filesystem::path& save_root, const std::filesystem::path& folder,
-                                        std::string_view nebula_version) noexcept;
+                                        std::string_view nebula_version, const Progress& progress = {}) noexcept;
 
 // The running game's save root and release ("RMGE"), for the settings' SAVES rows: the host sets them once the disc
 // is open. Empty before, and in a run without a save folder.

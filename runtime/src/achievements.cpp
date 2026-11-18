@@ -7,6 +7,7 @@
 #include <condition_variable>
 #include <ctime>
 #include <fstream>
+#include <iterator>
 #include <iomanip>
 #include <map>
 #include <mutex>
@@ -85,15 +86,64 @@ std::filesystem::path file_path_locked(const State& s) {
     return folder.empty() ? folder : folder / "achievements.ini";
 }
 
+// An imported unlock's id: one of the catalogue or a mod's key.
+bool importable(std::string_view id) {
+    return find(id) != nullptr || (id.starts_with("mod:") && id.size() > 4u && id.size() <= 200u);
+}
+
+// `text`'s unlocks into `s` (merge); how many were added or made earlier.
+unsigned merge_locked(State& s, std::string_view text) {
+    unsigned changed = 0u;
+    while (!text.empty()) {
+        const std::size_t end = text.find('\n');
+        std::string_view line = text.substr(0, end);
+        text = end == std::string_view::npos ? std::string_view() : text.substr(end + 1u);
+        if (!line.empty() && line.back() == '\r') line.remove_suffix(1u);
+        const std::size_t eq = line.find('=');
+        if (eq == std::string_view::npos || eq == 0u) continue;
+        const std::string_view id = line.substr(0, eq), when = line.substr(eq + 1u);
+        if (!importable(id) || when.empty() || when.size() > 32u) continue;
+        const auto it = s.unlocked.find(std::string(id));
+        if (it == s.unlocked.end()) {
+            s.unlocked.emplace(std::string(id), std::string(when));
+        } else if (std::string_view(it->second) > when) {  // ISO 8601: the earlier sorts first
+            it->second = std::string(when);
+        } else {
+            continue;
+        }
+        ++changed;
+    }
+    return changed;
+}
+
+std::string text_locked(const State& s) {
+    std::ostringstream out;
+    for (const auto& [key, value] : s.unlocked) out << key << '=' << value << '\n';
+    return out.str();
+}
+
 void load_locked(State& s) {
     if (s.loaded) return;
     s.loaded = true;
-    std::ifstream in(file_path_locked(s));
+    const std::filesystem::path file = file_path_locked(s);
+    std::ifstream in(file);
     std::string line;
     while (std::getline(in, line)) {
         const std::size_t eq = line.find('=');
         if (eq == std::string::npos || eq == 0u) continue;
         s.unlocked[line.substr(0, eq)] = line.substr(eq + 1u);
+    }
+    in.close();
+    // An import handed over by another process: merged and written now, then its file goes.
+    if (file.empty()) return;
+    const std::filesystem::path import = file.parent_path() / std::string(kImportFileName);
+    std::error_code error;
+    if (!std::filesystem::is_regular_file(import, error)) return;
+    std::ifstream pending(import, std::ios::binary);
+    const std::string text((std::istreambuf_iterator<char>(pending)), std::istreambuf_iterator<char>());
+    pending.close();
+    if (merge_locked(s, text) == 0u || io::write_file_atomically(file, text_locked(s))) {
+        std::filesystem::remove(import, error);
     }
 }
 
@@ -107,9 +157,7 @@ bool write_waiting() {
         const std::lock_guard<std::mutex> lock(s.mutex);
         if (!s.dirty) return true;
         s.dirty = false;
-        std::ostringstream out;
-        for (const auto& [key, value] : s.unlocked) out << key << '=' << value << '\n';
-        contents = out.str();
+        contents = text_locked(s);
         path = file_path_locked(s);
     }
     if (path.empty() || io::write_file_atomically(path, contents)) return true;
@@ -220,6 +268,31 @@ int unlocked_date(std::string_view id) {
 
 void flush() {
     (void)write_waiting();
+}
+
+std::string text() {
+    State& s = state();
+    const std::lock_guard<std::mutex> lock(s.mutex);
+    load_locked(s);
+    return text_locked(s);
+}
+
+unsigned merge(std::string_view text) {
+    State& s = state();
+    unsigned changed = 0u;
+    {
+        const std::lock_guard<std::mutex> lock(s.mutex);
+        load_locked(s);
+        changed = merge_locked(s, text);
+        if (changed == 0u) return 0u;
+        s.dirty = true;
+        if (!s.writer) {
+            s.writer = true;
+            std::thread(writer_main).detach();
+        }
+    }
+    s.wake.notify_all();
+    return changed;
 }
 
 void set_path_for_tests(const std::filesystem::path& path) {

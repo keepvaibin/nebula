@@ -673,6 +673,29 @@ void test_export(const fs::path& base) {
     });
     CHECK(listing(copy) == expected);
 
+    // The install's achievements and stats travel with the saves (P-119); not written into the save root.
+    {
+        std::vector<std::byte> with_progress;
+        CHECK(st::make_export(root, "2.0.0", &with_progress, st::Progress{"comets=2026-01-01T00:00:00Z\n", "coins=5\n"}) ==
+              Error::kNone);
+        std::vector<st::detail::ZipEntry> progress_entries;
+        CHECK(st::detail::read_zip(with_progress, &progress_entries) == Error::kNone && progress_entries.size() == 10);
+        const st::ImportPlan carried = st::plan_import(with_progress, "RMGE");
+        CHECK(carried.error == Error::kNone && carried.files.size() == 7);
+        CHECK(carried.achievements == "comets=2026-01-01T00:00:00Z\n" && carried.stats == "coins=5\n");
+        CHECK(plan.achievements.empty() && plan.stats.empty());
+        std::vector<std::byte> stats_only;
+        CHECK(st::make_export(root, "2.0.0", &stats_only, st::Progress{"", "coins=5\n"}) == Error::kNone);
+        CHECK(st::detail::read_zip(stats_only, &progress_entries) == Error::kNone && progress_entries.size() == 9);
+        // A changed progress file fails the archive's digest check, as a save would.
+        std::vector<st::detail::ZipEntry> tampered;
+        CHECK(st::detail::read_zip(with_progress, &tampered) == Error::kNone);
+        for (st::detail::ZipEntry& entry : tampered) {
+            if (entry.name == "saves/nebula-stats.ini") entry.bytes = bytes_of("coins=9\n");
+        }
+        CHECK(st::plan_import(make_zip(tampered), "RMGE").error == Error::kDamaged);
+    }
+
     // The archive's own checks.
     const auto with_manifest = [&entries](std::string manifest) {
         std::vector<st::detail::ZipEntry> changed = entries;
