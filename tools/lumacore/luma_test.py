@@ -140,11 +140,16 @@ def load_json(path):
 
 
 def place_saves(test, run_folder):
-    """The test's own start saves (its "saves" folder) into the run's save folder."""
+    """The test's own start saves (its "saves" folder) into the run's save folder, as laid out there: the host's save
+    root, whose game folder is the disc's four-letter code (RMGE/Nebula.sav; runtime/src/save_files.cpp)."""
     if test.get("saves"):
-        for f in sorted((test["folder"] / test["saves"]).iterdir()):
-            if f.is_file():
-                shutil.copyfile(f, run_folder / "saves" / f.name)
+        shutil.copytree(test["folder"] / test["saves"], run_folder / "saves", dirs_exist_ok=True)
+
+
+def save_name_ok(name):
+    """A save_file name: a path inside the save root, by forward slashes, with no empty, "." or ".." part."""
+    parts = name.split("/")
+    return "\\" not in name and all(p not in ("", ".", "..") and ":" not in p for p in parts)
 
 
 def keys_known(obj, path, known):
@@ -268,7 +273,7 @@ def read_test(folder, types=None):
     keys_known(t, "", {"harness", "name", "about", "proves", "mods", "code", "language", "seed", "continue_from",
                        "renderers", "limit_seconds", "bare", "save", "stage", "player", "steps", "expect",
                        "faults", "hide_game_files", "safe_start", "device", "ends", "starts", "fresh", "window",
-                       "time", "visible", "settings", "diagnostics", "disc", "memory", "saves"})
+                       "time", "visible", "settings", "diagnostics", "disc", "memory", "saves", "clock"})
     for key in ("harness", "name", "about", "steps", "expect"):
         if key not in t:
             raise HarnessError("the test has no %s" % key)
@@ -298,6 +303,13 @@ def read_test(folder, types=None):
     clock = text(t, "time", "") if "time" in t else "steps"
     if clock not in ("steps", "real"):
         raise HarnessError("time is steps or real")
+    # Where frame 0 is for a test with no stage: the title screen's first frame (the default), or the game's first frame
+    # ("start"), for what comes before the title (a window the start shows).
+    clock_from = text(t, "clock", "") if "clock" in t else "title"
+    if clock_from not in ("title", "start"):
+        raise HarnessError("clock is title or start")
+    if clock_from == "start" and "stage" in t:
+        raise HarnessError("clock start is for a test with no stage")
     # "memory": seconds (1 to 3600): the fact process.memory {"seconds", "bytes"} at frame 0 and each that many seconds
     # of wall time after it, the process's own memory (tools/test_driver/extension/process_memory.h); a soak run's.
     memory = whole(t, "memory", "", 1) if "memory" in t else None
@@ -474,7 +486,7 @@ def read_test(folder, types=None):
             "continue_from": continue_from, "saves": saves, "faults": faults, "setup": setup, "steps": steps,
             "expect": expect,
             "has_stage": "stage" in t, "hidden": hidden, "safe_start": safe_start, "device": device, "ends": ends,
-            "time": clock, "visible": visible, "settings": run_settings, "diagnostics": diagnostics,
+            "time": clock, "clock": clock_from, "visible": visible, "settings": run_settings, "diagnostics": diagnostics,
             "starts": starts, "fresh": fresh, "not_here": not_here, "disc": disc, "memory": memory}
 
 
@@ -961,8 +973,8 @@ def read_expect(t, bare, steps, folder):
             # A file of the run's save folder at the end: "same" as the test's own copy (saves), or "absent".
             keys_known(c, path, {"save_file", "is"})
             name = text(c, "save_file", path)
-            if "/" in name or "\\" in name or name in ("", ".", ".."):
-                raise HarnessError("%s.save_file is a plain file name" % path)
+            if not save_name_ok(name):
+                raise HarnessError("%s.save_file is a path in the save root, by forward slashes (RMGE/Nebula.sav)" % path)
             state = text(c, "is", path) if "is" in c else ""
             if state not in ("same", "absent"):
                 raise HarnessError("%s.is must be same or absent" % path)
@@ -1376,7 +1388,7 @@ def run_diagnostics(test, args):
 
 def plan_text(test, out):
     lines = ["harness 1", "out %s" % out, "bare %d" % (1 if test["bare"] else 0)]
-    if not test["has_stage"]:
+    if not test["has_stage"] and test.get("clock", "title") == "title":
         lines.append("clock title")
     if test.get("device", "keyboard") == "pad":
         lines.append("device pad")
