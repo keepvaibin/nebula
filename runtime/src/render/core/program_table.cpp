@@ -121,7 +121,6 @@ const Row* find(std::uint64_t id, bool pixel) noexcept {
 }
 
 std::atomic<bool> g_bound_tables{false};
-std::atomic<bool> g_triangle_ids{true};
 
 bool exists(std::uint64_t id, unsigned variant, bool pixel) noexcept {
     return program_bytes(id, variant, pixel).size != 0u;
@@ -137,51 +136,16 @@ bool program_bound_tables() noexcept {
     return g_bound_tables.load(std::memory_order_relaxed);
 }
 
-void program_use_triangle_ids(bool ids) noexcept {
-    g_triangle_ids.store(ids, std::memory_order_relaxed);
-}
-
 ProgramBytes program_bytes(std::uint64_t id, unsigned variant, bool pixel) noexcept {
-    const bool traced = variant >= kProgramPrepass && variant < kProgramStored;
-    if (variant >= kProgramVariants && !traced) {
+    if (variant >= kProgramVariants) {
         return {};
     }
-    // A traced form's vertex stage: its own where it has one (a written lit material's light varyings; a generated
-    // stage's de-lit colour, D2), a mod's too, for its prepass too: the prepass writes the depth the scene pass then
-    // tests, so both run one vertex stage.
-    bool own_form = false;
-    if (!pixel && traced) {
-        const unsigned own = variant == kProgramTracedMotion ? unsigned{kProgramTracedMotion} : unsigned{kProgramTraced};
-        const Row* const row = find(id, false);
-        if (row != nullptr ? row->variants[own].size != 0u : mod_program_bytes(id, own, false).size != 0u) {
-            variant = own;
-            own_form = true;
-        }
+    // A vertex stage of the pixel-only forms is the base form's.
+    if (!pixel && (variant == kProgramReactive || variant == kProgramLayer || variant == kProgramSample)) {
+        variant = kProgramBase;
     }
-    if (!pixel && !own_form) {
-        switch (variant) {
-        case kProgramReactive:
-        case kProgramLayer:
-        case kProgramSample:
-        case kProgramPrepass:
-        case kProgramPrepassItem:
-        case kProgramTraced:
-        case kProgramTracedReactive:
-        case kProgramTracedLayer:
-            variant = kProgramBase;
-            break;
-        case kProgramTracedMotion:
-            variant = kProgramMotion;
-            break;
-        default:
-            break;
-        }
-    }
-    // A vertex stage reads no texture: one form serves both. The tracer's forms are bindless only.
+    // A vertex stage reads no texture: one form serves both.
     if (pixel && g_bound_tables.load(std::memory_order_relaxed)) {
-        if (traced) {
-            return {};
-        }
         variant += kProgramBoundOffset;
     }
     const Row* row = find(id, pixel);
@@ -195,16 +159,6 @@ ProgramBytes program_bytes(std::uint64_t id, unsigned variant, bool pixel) noexc
 }
 
 unsigned program_variant(std::uint64_t pixel, unsigned aux, unsigned samples_log2) noexcept {
-    if (aux == kAuxPrepass || aux == kAuxPrepassMotion) {
-        return g_triangle_ids.load(std::memory_order_relaxed) ? kProgramPrepass : kProgramPrepassItem;
-    }
-    if (aux >= kAuxTraced) {
-        const unsigned targets = aux & 7u;
-        return targets == 1u   ? kProgramTracedMotion
-               : targets == 2u ? kProgramTracedReactive
-               : targets == 3u ? kProgramTracedLayer
-                               : kProgramTraced;
-    }
     if (aux != 0u && aux != 4u) {
         return aux == 1u ? kProgramMotion : aux == 2u ? kProgramReactive : kProgramLayer;
     }
@@ -239,14 +193,6 @@ bool program_lit(std::uint64_t pixel) noexcept {
     return (flags_of(pixel, true) & kLit) != 0u;
 }
 
-bool program_sums_key(std::uint64_t pixel) noexcept {
-    return (flags_of(pixel, true) & kSumsKey) != 0u;
-}
-
-bool program_traced(std::uint64_t pixel) noexcept {
-    return exists(pixel, kProgramTraced, true) &&
-           (g_triangle_ids.load(std::memory_order_relaxed) || exists(pixel, kProgramPrepassItem, true));
-}
 
 const char* program_file_name() noexcept {
 #if defined(NEBULA_GPU_VULKAN)

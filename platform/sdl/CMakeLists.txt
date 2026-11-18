@@ -91,8 +91,6 @@ else()
     add_executable(galaxy_utility_spirv IMPORTED)
     set_target_properties(galaxy_utility_spirv PROPERTIES IMPORTED_LOCATION "${NEBULA_HOST_TOOLS}/galaxy_utility_spirv${CMAKE_HOST_EXECUTABLE_SUFFIX}")
 endif()
-# NEBULA_RAY_TRACING (cmake/rt_shaders.cmake) decides the programs' traced forms too.
-include("${nebula_root}/cmake/rt_shaders.cmake")
 include("${nebula_root}/cmake/native_materials.cmake")
 galaxy_program_blob(galaxy_programs_spirv spirv)
 set(galaxy_utility_spirv_dir "${CMAKE_CURRENT_BINARY_DIR}/generated/utility_spirv")
@@ -108,6 +106,7 @@ set(rt "${nebula_root}/runtime/src")
 add_library(galaxy_render_vk STATIC
     ${rt}/render/render_api.cpp
     ${rt}/render/render_config.cpp
+    ${rt}/render/device_memory.cpp
     ${rt}/render/renderer_choice.cpp
     ${rt}/ui/native_settings.cpp
     ${rt}/ui/launcher.cpp
@@ -134,17 +133,10 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/affine.cpp
     ${rt}/render/core/compose.cpp
     ${rt}/render/core/draw_walker.cpp
-    ${rt}/render/core/rt_walk.cpp
-    ${rt}/render/core/rt_bounce.cpp
-    ${rt}/render/core/rt_pass_indirect.cpp
-    ${rt}/render/core/rt_pass_reflect.cpp
-    ${rt}/render/core/rt_pass_transmit.cpp
-    ${rt}/render/core/rt_pass_volume.cpp
     ${rt}/render/core/pairing.cpp
     ${rt}/render/core/pipelines.cpp
     ${rt}/render/core/program_table.cpp
     ${rt}/render/core/registries.cpp
-    ${rt}/render/core/world_lights.cpp
     ${rt}/render/core/pipelines_vk.cpp
     ${rt}/render/core/encoder_vk.cpp
     ${rt}/render/galaxy_select.cpp
@@ -155,12 +147,6 @@ add_library(galaxy_render_vk STATIC
     ${rt}/benchmark_results.cpp
     ${rt}/strict_json.cpp
     ${rt}/render/frame_interpolation.cpp
-    ${rt}/render/rt_materials.cpp
-    ${rt}/render/rt_caps.cpp
-    ${rt}/render/rt/rt_shaders.cpp
-    ${rt}/render/vk/rt_backend_vk.cpp
-    ${rt}/render/rt/rt_geometry.cpp
-    ${rt}/render/rt/rt_scene.cpp
     ${rt}/frame_telemetry.cpp
     ${rt}/perf_hint.cpp
     ${rt}/pacing.cpp
@@ -262,17 +248,6 @@ set_property(SOURCE ${rt}/save_transfer.cpp APPEND PROPERTY INCLUDE_DIRECTORIES 
 target_include_directories(galaxy_render_vk PUBLIC "${nebula_root}/runtime/src")
 target_include_directories(galaxy_render_vk PUBLIC "${nebula_root}/runtime/include")
 target_include_directories(galaxy_render_vk PRIVATE "${nebula_root}/third_party/smaa" "${nebula_root}/native/include" "${galaxy_utility_spirv_dir}")
-# The tracer's SPIR-V, with NEBULA_RAY_TRACING where a dxc that writes it is named (cmake/rt_shaders.cmake).
-set(galaxy_dxc_spirv "")
-if(NEBULA_RAY_TRACING)
-    galaxy_find_dxc_spirv(galaxy_dxc_spirv)
-endif()
-if(galaxy_dxc_spirv)
-    galaxy_rt_shaders(galaxy_rt_spirv spirv "${galaxy_dxc_spirv}")
-    target_sources(galaxy_render_vk PRIVATE "${galaxy_rt_spirv}")
-    target_include_directories(galaxy_render_vk PRIVATE "${galaxy_rt_shader_dir}")
-    target_compile_definitions(galaxy_render_vk PRIVATE GALAXY_RT_SPIRV=1)
-endif()
 # vk_mem_alloc.h leaves pointer nullability unannotated.
 target_compile_options(galaxy_render_vk PRIVATE -Wno-nullability-completeness)
 target_link_libraries(galaxy_render_vk PUBLIC nebula_vulkan_deps)

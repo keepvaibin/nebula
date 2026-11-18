@@ -19,8 +19,6 @@ STORE = os.path.join(ROOT, "runtime", "include", "galaxy")
 DXC = os.environ.get("GALAXY_DXC", "dxc")
 FXC = os.environ.get("GALAXY_FXC", "fxc")  # dxbc: Direct3D 11, shader model 5.0
 JOBS = int(os.environ.get("JOBS", "24"))
-# Ray tracing's forms (TRACED_VARIANTS): only in a build with ray tracing (cmake/rt_shaders.cmake NEBULA_RAY_TRACING).
-TRACED = os.environ.get("GALAXY_TRACED_FORMS", "1") != "0"
 SITE = 1 << 63
 
 WRITTEN = """whirlpool ocean_bowl screen_blur flat_color clip_fill big_bubble whirlpool_accelerator spin_driver_path spider_thread
@@ -39,20 +37,9 @@ VARIANTS = {
     "motion": (3, ["NATIVE_MOTION"]),
     "sample": (4, ["NATIVE_SAMPLE"]),
 }
-# Ray tracing's forms of a pixel program, stored after the bound-table forms and never in one (a device that traces
-# has descriptor indexing): every program's prepass and traced forms.
-TRACED_VARIANTS = {
-    "prepass": (10, ["NATIVE_PREPASS"]),
-    "traced": (11, ["NATIVE_TRACED"]),
-    "traced_motion": (12, ["NATIVE_TRACED", "NATIVE_MOTION"]),
-    "traced_reactive": (13, ["NATIVE_TRACED", "NATIVE_REACTIVE"]),
-    "traced_layer": (14, ["NATIVE_TRACED", "NATIVE_REACTIVE", "NATIVE_LAYER"]),
-    # Vulkan without geometry shaders: the prepass names the item only. SPIR-V only.
-    "prepass_item": (15, ["NATIVE_PREPASS", "NATIVE_PREPASS_ITEM"]),
-}
 VERTEX_FORMS = ("base", "motion")
-# Direct3D 11 (dxbc): no temporal upscaler, frame generation or tracer reads motion, the reactive mask, the layer or a
-# traced form, so only these are compiled; and its pixel programs are the bound-table form only (shader model 5.0 has no
+# Direct3D 11 (dxbc): no temporal upscaler or frame generation reads motion, the reactive mask or the layer, so only
+# these are compiled; and its pixel programs are the bound-table form only (shader model 5.0 has no
 # unbounded arrays), stored at the variant + BOUND_OFFSET with 16 maps to a table (d3d11::kBoundTableSlots).
 DXBC_FORMS = ("base", "sample")
 DXBC_TABLE = ["NEBULA_BOUND_TABLES", "NEBULA_TABLE_SLOTS=16"]
@@ -63,8 +50,8 @@ STORED = 16
 READS_WORLD = 1
 LIT = 2
 SUMS_KEY = 4  # a pixel program that sums its light set's first light: light_term or enh_add_light of light 0
-# A written material that sums the game's lights (native_material.hlsli NATIVE_LIT): its traced form has a vertex
-# form of its own (the light varyings), and its pixel program sums its key at the pixel there (SUMS_KEY).
+# A written material that sums the game's lights (native_material.hlsli NATIVE_LIT): its pixel program sums its key
+# (SUMS_KEY).
 WRITTEN_LIT = re.compile(r"^\s*#\s*define\s+NATIVE_LIT\s+1", re.M)
 
 
@@ -242,22 +229,12 @@ def main():
             for name in filter(kept, VERTEX_FORMS):
                 index, defines = VARIANTS[name]
                 add(stage, row, source, text, entry, defines, index)
-            # A vertex stage that de-lights its colour (programs.rs) does so in its traced forms alone; the tracer's
-            # draws and their prepass run those (program_table.cpp program_bytes). Direct3D 11 has no tracer: none there.
-            if TRACED and backend != "dxbc" and ("traced_vertex_gain(" in text or "traced_map_gain(" in text):  # a map's gain too
-                for name in ("traced", "traced_motion"):
-                    index, defines = TRACED_VARIANTS[name]
-                    add(stage, row, source, text, entry, defines, index, False)
             flags[(stage, row)] = READS_WORLD if "world_" in text else 0
             return
         for name, (index, defines) in VARIANTS.items():
             if (name == "sample" and "discard" not in text) or not kept(name):
                 continue
             add(stage, row, source, text, entry, defines, index)
-        for name, (index, defines) in TRACED_VARIANTS.items():
-            if not TRACED or (name == "prepass_item" and backend != "spirv") or backend == "dxbc":
-                continue
-            add(stage, row, source, text, entry, defines, index, False)
         flags[(stage, row)] = (LIT if "program_lit.hlsli" in text else 0) | (
             SUMS_KEY if (re.search(r"(light_term|enh_add_light|pbr_add_light)\(i\.lit_light, 0u", text) and "TRACED_UNKEYED;" not in text)
             or WRITTEN_LIT.search(text) else 0)
@@ -271,10 +248,6 @@ def main():
             return 1
         coords[("vs", row)] = coords[("vs", row | 1)] = count
         add_program("vs", row, source, "native_vs")
-        if TRACED and WRITTEN_LIT.search(read(source)) and backend != "dxbc":
-            for name in ("traced", "traced_motion"):
-                index, defines = TRACED_VARIANTS[name]
-                add("vs", row, source, read(source), "native_vs", defines, index)
         if name in VERTEX_ONLY:
             continue
         add_program("ps", row, source, "native_ps")
@@ -328,12 +301,12 @@ def main():
         print(len(failed), "of", len(jobs), "failed")
         return 1
 
-    # No form without ray tracing fetches what only a traced form reads: a SPIR-V vertex module's every input is
-    # read. DXIL keeps its signature as declared; its drivers fetch only what a shader reads.
+    # A SPIR-V vertex module reads its every input. DXIL keeps its signature as declared; its drivers fetch only what
+    # a shader reads.
     if backend == "spirv":
         unread = []
         for key, (source, stage, entry, defines) in sorted(jobs.items()):
-            if stage != "vs" or "NATIVE_TRACED" in defines:
+            if stage != "vs":
                 continue
             with open(os.path.join(cache, key), "rb") as f:
                 locations = vertex_unused_inputs(f.read())

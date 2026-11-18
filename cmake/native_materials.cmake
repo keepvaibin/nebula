@@ -15,32 +15,25 @@ function(galaxy_program_blob out_var backend)
         "${galaxy_programs_root}/runtime/src/render/materials/*.hlsli"
         "${galaxy_programs_root}/runtime/src/render/programs/*.hlsl")
     # The program set may change only with the store version (compile_programs.py check_store_programs).
-    # The traced forms only with NEBULA_RAY_TRACING (cmake/rt_shaders.cmake).
-    if(NEBULA_RAY_TRACING)
-        set(traced "GALAXY_TRACED_FORMS=1")
-    else()
-        set(traced "GALAXY_TRACED_FORMS=0")
-    endif()
     list(APPEND sources "${galaxy_programs_root}/runtime/src/render/programs/table.tsv"
         "${galaxy_programs_root}/runtime/include/galaxy/store_version.inc"
         "${galaxy_programs_root}/runtime/include/galaxy/store_programs.txt")
     if(backend STREQUAL "dxil")
         add_custom_command(OUTPUT "${blob}"
-            COMMAND ${CMAKE_COMMAND} -E env "GALAXY_DXC=${GALAXY_DXC}" "${traced}"
+            COMMAND ${CMAKE_COMMAND} -E env "GALAXY_DXC=${GALAXY_DXC}"
                 "${Python3_EXECUTABLE}" "${galaxy_programs_root}/tools/dev/compile_programs.py" dxil "${blob}"
             DEPENDS ${sources} "${galaxy_programs_root}/tools/dev/compile_programs.py"
             VERBATIM)
     elseif(backend STREQUAL "dxbc")
         # Direct3D 11: shader model 5.0 by fxc (the Windows SDK's, GALAXY_FXC).
         add_custom_command(OUTPUT "${blob}"
-            COMMAND ${CMAKE_COMMAND} -E env "GALAXY_FXC=${GALAXY_FXC}" "${traced}"
+            COMMAND ${CMAKE_COMMAND} -E env "GALAXY_FXC=${GALAXY_FXC}"
                 "${Python3_EXECUTABLE}" "${galaxy_programs_root}/tools/dev/compile_programs.py" dxbc "${blob}"
             DEPENDS ${sources} "${galaxy_programs_root}/tools/dev/compile_programs.py"
             VERBATIM)
     else()
         add_custom_command(OUTPUT "${blob}"
-            COMMAND ${CMAKE_COMMAND} -E env "${traced}"
-                "${Python3_EXECUTABLE}" "${galaxy_programs_root}/tools/dev/compile_programs.py" spirv "${blob}"
+            COMMAND "${Python3_EXECUTABLE}" "${galaxy_programs_root}/tools/dev/compile_programs.py" spirv "${blob}"
                 "$<TARGET_FILE:galaxy_native_spirv>"
             DEPENDS ${sources} "${galaxy_programs_root}/tools/dev/compile_programs.py" galaxy_native_spirv
             VERBATIM)

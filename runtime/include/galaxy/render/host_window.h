@@ -166,7 +166,6 @@ void start_again(Restart kind);
 // Ends the game as the window's close does (the settings' Update on Windows, once Nebula Setup has started).
 void quit_game() noexcept;
 
-extern std::atomic<bool> ray_tracing_offered;  // the RAY TRACING row is offered
 extern std::atomic<bool> rtx_adapter;          // the session's GPU is an NVIDIA RTX (DLSS)
 [[nodiscard]] float upscaler_render_fraction(const RenderConfig& render, unsigned output_width, unsigned output_height);
 void save_native_settings_now();

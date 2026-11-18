@@ -10,7 +10,7 @@ namespace galaxy::render {
 
 // The scene camera, for rays through scene target pixels and depth reconstruction: projection A-D,
 // the D3D projection's [2][2] and [2][3], the viewport in scene target pixels and its depth range.
-struct RtView {
+struct SceneView {
     std::array<float, 4> projection{};
     float z_scale = 0.0f;
     float z_offset = 0.0f;

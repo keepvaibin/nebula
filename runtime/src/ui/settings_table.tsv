@@ -54,19 +54,6 @@ texture_lod_bias	config	texture_lod_bias	int	0..8	0	-	-	-	-	read by the Metal re
 wide_scene	config	wide_scene	bool	0|1	1	-	-	-	-	-	-
 post_process	config	post_process	bool	0|1	1	-	-	s	-	-	-
 frame_rate_decouple	config	frame_rate_decouple	bool	0|1	0	-	-	-	-	read, always off	-
-ray_tracing_enabled	config	ray_tracing_enabled	bool	0|1	0	Graphics	-	y	-	the GPU traces (rt_caps.h kRayTracingRowOffered)	Ray tracing
-rt_quality	config	rt_quality	enum	medium|high|low|reference|custom	0	Graphics	-	y	-	ray tracing on	Ray tracing quality
-rt_sun	config	rt_parts	enum	off|low|medium|high	2	Graphics	-	y	-	ray tracing on	-
-rt_lights	config	rt_parts	enum	off|low|medium|high	2	Graphics	-	y	-	ray tracing on	-
-rt_indirect	config	rt_parts	enum	off|low|medium|high	2	Graphics	-	y	-	ray tracing on	-
-rt_reflect	config	rt_parts	enum	off|low|medium|high	2	Graphics	-	y	-	ray tracing on	-
-rt_transmit	config	rt_parts	enum	off|low|medium|high	2	Graphics	-	y	-	ray tracing on	-
-rt_volume	config	rt_parts	enum	off|low|medium|high	2	Graphics	-	y	-	ray tracing on	-
-rt_lens_bloom	config	rt_lens_bloom	bool	0|1	1	Graphics	-	y	-	ray tracing on	-
-rt_landing_shadow	config	rt_landing_shadow	bool	0|1	1	Graphics	-	y	-	ray tracing on	-
-rt_light_style	config	rt_style	enum	painted|physical	1	Graphics	-	y	-	ray tracing on	-
-rt_probe_ms	config	rt_probe_ms	state	0..1000	0	-	-	-	-	-	-
-rt_chosen	config	rt_chosen	state	0|1	0	-	-	-	-	-	-
 input_mode	runtime	input_mode	enum	auto|keyboard_mouse|controller|real_wiimote|phone|wiimote_motion	auto	Controls	-	y	y	real_wiimote, wiimote_motion where a Wii Remote can connect; phone on Android	Input
 co_star	runtime	co_star	bool	0|1	0	Controls	-	y	-	Windows' host (the others run no second player yet)	Co-Star
 audio_master_gain	runtime	master	float	0..2/0.05	1	Audio	-	y	y	the engine accepts up to 4 in a file	Master

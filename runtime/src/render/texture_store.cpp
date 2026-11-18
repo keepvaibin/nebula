@@ -274,8 +274,8 @@ struct TextureStore::Ops {
     std::uint64_t serial = 0u;  // the operations handed out up to and with these (queued_ops)
 };
 
-bool TextureStore::wants_generated_levels(const RenderConfig& render) noexcept {
-    return render.ray_tracing_enabled;
+bool TextureStore::wants_generated_levels(const RenderConfig&) noexcept {
+    return false;  // their only reader was the tracer (E13a stage 4 takes the levels out of the cook)
 }
 
 bool TextureStore::generated_levels_landed(const RenderConfig& render) const noexcept {

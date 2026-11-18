@@ -243,15 +243,12 @@ bool s_hdr_calibration_due = false;
 std::atomic<bool> s_settings_held{false};
 // Apply saved mod changes this session did not start with: the menu asks whether to restart now.
 std::atomic<bool> s_mods_restart_ask{false};
-// RAY TRACING turned on (applied) before its shaders are prepared: the menu asks to restart, which prepares them.
-std::atomic<bool> s_rt_restart_ask{false};
 // SYSTEM > DIAGNOSTICS > RECORD: the menu asks to restart into a recorded session (the launcher's recording).
 std::atomic<bool> s_diagnostics_ask{false};
 
-// A restart question is up (the mods', ray tracing's, the diagnostics run's).
+// A restart question is up (the mods', the diagnostics run's).
 bool restart_asking() {
-    return s_mods_restart_ask.load(std::memory_order_acquire) || s_rt_restart_ask.load(std::memory_order_acquire) ||
-           s_diagnostics_ask.load(std::memory_order_acquire);
+    return s_mods_restart_ask.load(std::memory_order_acquire) || s_diagnostics_ask.load(std::memory_order_acquire);
 }
 // The pages, in order.
 constexpr const char* kNativeSettingsTabNames[] = {"DISPLAY", "GRAPHICS", "CONTROLS", "AUDIO", "GENERAL", "MODS", "SYSTEM",
@@ -299,7 +296,7 @@ unsigned shown_position(unsigned tab) {
 // The GRAPHICS page's rows for what is not built natively yet. Each goes with its feature.
 bool graphics_row_hidden(const char* label) {
     static constexpr const char* kHidden[] = {
-        "RAY TRACING", "RAY TRACING QUALITY", "TEXTURE PACKS", "  REPLACEMENTS", "DUMP TEXTURES", "TEXTURE DUMPS FOLDER",
+        "TEXTURE PACKS", "  REPLACEMENTS", "DUMP TEXTURES", "TEXTURE DUMPS FOLDER",
     };
     for (const char* hidden : kHidden) {
         if (std::strcmp(label, hidden) == 0) return true;
@@ -310,7 +307,7 @@ bool graphics_row_hidden(const char* label) {
 // Rows of the shown pages for what is not there yet or not on this platform.
 bool row_hidden(const char* label) {
     static constexpr const char* kHidden[] = {
-        "POST-PROCESS", "RAY TRACING HARDWARE", "NVIDIA STREAMLINE", "NVIDIA REFLEX", "DLSS", "DLSS FRAME GENERATION",
+        "POST-PROCESS", "NVIDIA STREAMLINE", "NVIDIA REFLEX", "DLSS", "DLSS FRAME GENERATION",
 #if defined(__ANDROID__)
         // MONITOR, DISPLAY MODE and RESOLUTION: the display page has none on a phone (fullscreen_only). VSYNC stays: off,
         // the swap chain keeps only the newest picture (mailbox) and runs uncapped; on, it shows every picture.
@@ -694,11 +691,6 @@ unsigned pending_settings_changes() {
     changes += d.bloom != live.bloom;
     changes += d.hud_output_resolution != live.hud_output_resolution;
     changes += d.hud_internal_resolution != live.hud_internal_resolution;
-    changes += d.ray_tracing_enabled != live.ray_tracing_enabled;
-    changes += d.rt_quality != live.rt_quality;
-    changes += d.rt_parts != live.rt_parts;
-    changes += d.rt_lens_bloom != live.rt_lens_bloom;
-    changes += d.rt_landing_shadow != live.rt_landing_shadow;
     changes += d.texture_packs != live.texture_packs ||
         (d.texture_packs && d.texture_pack_preload != live.texture_pack_preload);
     changes += d.texture_dump != live.texture_dump;
@@ -1179,12 +1171,6 @@ void apply_native_settings_draft() {
     applied.bloom = next.bloom;
     applied.hud_output_resolution = next.hud_output_resolution;
     applied.hud_internal_resolution = next.hud_internal_resolution;
-    applied.ray_tracing_enabled = next.ray_tracing_enabled;
-    applied.rt_quality = next.rt_quality;
-    applied.rt_parts = next.rt_parts;
-    applied.rt_chosen = next.rt_chosen;
-    applied.rt_lens_bloom = next.rt_lens_bloom;
-    applied.rt_landing_shadow = next.rt_landing_shadow;
     applied.texture_packs = next.texture_packs;
     applied.texture_pack_preload = next.texture_pack_preload;
     applied.texture_dump = next.texture_dump;
@@ -2125,8 +2111,6 @@ public:
         state.dlss_installed = dlss_installed_now();
         state.xess_supported = host_window::upscaler_caps().xess;
         state.xess_installed = xess_installed_now();
-        state.ray_tracing_offered = host_window::ray_tracing_offered.load(std::memory_order_relaxed);
-        state.traced_temporal = fsr3_available();
         state.temporal_upscaling = temporal_upscaler(render) != 0u;
         state.spatial_upscaling = spatial_quality_mode(render);
         state.curved_surfaces_offered = curved_surfaces_offered();
@@ -5686,7 +5670,7 @@ bool dlss_prompt_key(std::uintptr_t key, bool was_down) {
     return true;
 }
 
-// After changes that take a restart were applied (mods; ray tracing turned on before its shaders are prepared): Enter,
+// After changes that take a restart were applied (mods): Enter,
 // Space or Y restarts the game now; Escape, Backspace or B keeps them for the next start. Every other key waits for
 // the answer.
 bool restart_ask_key(std::uintptr_t key, bool was_down) {
@@ -5694,7 +5678,6 @@ bool restart_ask_key(std::uintptr_t key, bool was_down) {
     if (was_down) return true;
     if (key == VK_RETURN || key == VK_SPACE) {
         s_mods_restart_ask.store(false, std::memory_order_release);
-        s_rt_restart_ask.store(false, std::memory_order_release);
         const bool record = s_diagnostics_ask.exchange(false, std::memory_order_acq_rel);
         if (host_window::restart_game(record ? host_window::Restart::Diagnostics : host_window::Restart::Start)) {
             std::cerr << (record ? "[settings] restarting into a diagnostics run\n" : "[settings] restarting\n");
@@ -5703,7 +5686,6 @@ bool restart_ask_key(std::uintptr_t key, bool was_down) {
         }
     } else if (key == VK_ESCAPE || key == VK_BACK || key == VK_F1) {
         s_mods_restart_ask.store(false, std::memory_order_release);
-        s_rt_restart_ask.store(false, std::memory_order_release);
         s_diagnostics_ask.store(false, std::memory_order_release);
     }
     return true;
@@ -6000,8 +5982,6 @@ bool native_settings_mods_changed() {
 
 namespace host_window {
 
-// DXR 1.1 with shader model 6.6 and resource binding tier 3 on an adapter with dedicated memory (the RAY TRACING row).
-std::atomic<bool> ray_tracing_offered{false};
 // Queues a save of the settings files when something changed; never waits on the disk.
 bool flush_native_settings_if_dirty() {
     return s_settings_save.queue();
@@ -6323,8 +6303,6 @@ NativeSettingsView build_native_settings_view() {
         view.status_number = static_cast<int>(pending_settings_changes());
     } else if (s_mods_restart_ask.load(std::memory_order_acquire)) {
         view.status = NativeSettingsStatus::ModsRestartAsk;
-    } else if (s_rt_restart_ask.load(std::memory_order_acquire)) {
-        view.status = NativeSettingsStatus::RtRestartAsk;
     } else if (s_diagnostics_ask.load(std::memory_order_acquire)) {
         view.status = NativeSettingsStatus::DiagnosticsAsk;
     } else if (controls_capturing()) {

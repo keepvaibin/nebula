@@ -1124,7 +1124,7 @@ bool RendererD3D11::begin_wide_scene(bool wanted, const SceneClearValues* initia
     return true;
 }
 
-void RendererD3D11::end_wide_scene(unsigned) {
+void RendererD3D11::end_wide_scene() {
     if (!scene_.wide) {
         return;
     }

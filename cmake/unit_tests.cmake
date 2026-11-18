@@ -144,8 +144,6 @@ galaxy_test(galaxy_discord_presence_tests SOURCES ${rt}/discord_presence_tests.c
 galaxy_test(galaxy_frame_interpolation_tests SOURCES ${render_src}/frame_interpolation_tests.cpp
     ${render_src}/frame_interpolation.cpp ${render_src}/affine.cpp)
 galaxy_test(galaxy_present_slots_tests SOURCES ${render_src}/present_slots_tests.cpp ${render_src}/present_slots.cpp)
-galaxy_test(galaxy_core_world_lights_tests SOURCES ${render_src}/core/world_lights_tests.cpp ${render_src}/core/world_lights.cpp)
-target_include_directories(galaxy_core_world_lights_tests PRIVATE "${galaxy_root}/runtime/src" "${galaxy_root}/native/include")
 # The vsync grid the Android and Apple display clocks run the game's frames on (header-only).
 galaxy_test(galaxy_vsync_grid_tests SOURCES ${rt}/vsync_grid_tests.cpp)
 # The draw walker's plans for a list (header-only).

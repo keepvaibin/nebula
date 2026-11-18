@@ -9,7 +9,7 @@
 
 #include "galaxy/render/ambient_occlusion_objects.h"
 #include "galaxy/render/gpu_upload_ring.h"
-#include "galaxy/render/rt_types.h"
+#include "galaxy/render/scene_view.h"
 
 #include <array>
 #include <cstdint>
@@ -49,7 +49,7 @@ public:
         bool ssao = false;                // SSAO instead of GTAO
         const std::vector<ao::ObjectOccluder>* objects = nullptr;  // the scene's models
         UploadRing* ring = nullptr;       // where their buffers go
-        RtView view{};                    // the scene's projection, depth range and viewport (scene target pixels)
+        SceneView view{};                    // the scene's projection, depth range and viewport (scene target pixels)
     };
     // Records the occlusion and multiplies it into `color_rtv`'s RGB. Leaves this pass's root signatures, pipeline
     // and render target bound. Returns false when nothing was recorded.
