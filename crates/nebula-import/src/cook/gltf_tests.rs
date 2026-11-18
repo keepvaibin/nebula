@@ -300,7 +300,7 @@ fn a_damaged_model_is_refused_by_name_never_a_panic() {
         ("vertex past", Box::new(|d| d["accessors"][0]["count"] = 2.into()), "Cook.Model.VertexPast"),
         ("accessor offset", Box::new(|d| d["accessors"][0]["byteOffset"] = max.clone()), "Cook.Model.AccessorPast"),
         ("view offset", Box::new(|d| d["bufferViews"][0]["byteOffset"] = max.clone()), "Cook.Model.ViewPast"),
-        ("stride", Box::new(|d| d["bufferViews"][0]["byteStride"] = max.clone()), "Cook.Model.AccessorPast"),
+        ("stride", Box::new(|d| d["bufferViews"][0]["byteStride"] = max.clone()), "Cook.Model.Invalid"),
         ("index offset", Box::new(|d| d["accessors"][1]["byteOffset"] = max.clone()), "Cook.Model.AccessorPast"),
         ("sparse count", Box::new(|d| d["accessors"][0]["sparse"] = serde_json::json!({ "count": u64::MAX, "indices": { "bufferView": 1, "componentType": 5123 }, "values": { "bufferView": 0 } })), "Cook.Model.AccessorPast"),
         ("node cycle", Box::new(|d| d["nodes"][0]["children"] = serde_json::json!([0])), "Cook.Model.Invalid"),
@@ -474,8 +474,8 @@ fn signed_and_sparse_numbers_read_as_gltf_says() {
                 "indices": { "bufferView": 1, "componentType": 5123 }, "values": { "bufferView": 2 } } },
         ] });
     let document = Document::parse(&serde_json::to_vec(&json).unwrap(), None).unwrap();
-    assert_eq!(document.floats(0, 1).unwrap(), [1.0, -1.0]);
-    assert_eq!(document.floats(1, 1).unwrap(), [0.0, 7.0, 0.0]);
+    assert_eq!(*document.floats(0, 1).unwrap(), [1.0, -1.0]);
+    assert_eq!(*document.floats(1, 1).unwrap(), [0.0, 7.0, 0.0]);
 }
 
 #[test]
@@ -1404,3 +1404,51 @@ fn a_mirroring_node_keeps_its_faces_and_normals_outward() {
     assert_eq!(square_to([0.0, 0.0, 1.0], [0.0, 0.0, 3.0]), [0.0, 1.0, 0.0]);
 }
 
+
+/// A file of `primitives` primitives that all name one POSITION accessor of `vertices` vertices with no buffer view
+/// (all zero, from nothing in the file): with `indexed`, each draws one triangle of it through a three-index accessor;
+/// without, each draws all of it.
+fn sharing(primitives: usize, vertices: u64, indexed: bool) -> Vec<u8> {
+    let mut data = Vec::new();
+    for v in [0u32, 1, 2] {
+        data.extend_from_slice(&v.to_le_bytes());
+    }
+    let one = if indexed { r#"{"attributes":{"POSITION":0},"indices":1,"material":0}"# } else { r#"{"attributes":{"POSITION":0},"material":0}"# };
+    let drawn = vec![one; primitives].join(",");
+    format!(
+        r#"{{"asset":{{"version":"2.0"}},"scene":0,"scenes":[{{"nodes":[0]}}],"nodes":[{{"mesh":0}}],
+            "materials":[{{"name":"material"}}],
+            "meshes":[{{"primitives":[{drawn}]}}],
+            "accessors":[{{"componentType":5126,"count":{vertices},"type":"VEC3"}},{{"bufferView":0,"componentType":5125,"count":3,"type":"SCALAR"}}],
+            "bufferViews":[{{"buffer":0,"byteLength":12}}],
+            "buffers":[{{"byteLength":12,"uri":"data:application/octet-stream;base64,{}"}}]}}"#,
+        encode(&data)
+    )
+    .into_bytes()
+}
+
+/// M-145: primitives that name one accessor share one read of it, what a model's meshes name is bounded for the whole
+/// model, and a buffer view's stride is one glTF allows. Before, each of two primitives drawing all of a
+/// 4,194,304-vertex accessor (from no bytes of the file) kept 4,194,304 corners, and a stride of 0 let a 12-byte view
+/// serve the whole accessor.
+#[test]
+fn a_model_is_bounded_as_a_whole() {
+    let started = std::time::Instant::now();
+    let _reading = crate::cook::refuse::reading();
+    let (ir, _) = to_ir(&sharing(2000, MAX_ELEMENTS, true), None).unwrap();
+    assert_eq!(ir.shapes.len(), 2000);
+    let Err(error) = to_ir(&sharing(2, MAX_ELEMENTS, false), None) else { panic!("two primitives of all 4,194,304 vertices cooked") };
+    let (why, args) = crate::cook::refuse::said(&error);
+    assert_eq!((why, args), ("Cook.Model.Indices", vec![("count", (2 * MAX_ELEMENTS).to_string()), ("max", MOST_INDICES.to_string())]));
+    for (stride, ok) in [(0, false), (8, false), (12, true), (14, false), (256, false)] {
+        let file = String::from_utf8(triangle(1)).unwrap().replacen(r#"{"buffer":0,"byteLength":36}"#, &format!(r#"{{"buffer":0,"byteLength":36,"byteStride":{stride}}}"#), 1);
+        match to_ir(file.as_bytes(), None) {
+            Ok(_) => assert!(ok, "stride {stride} cooked"),
+            Err(error) => {
+                assert!(!ok, "stride {stride}: {error:#}");
+                assert_eq!(crate::cook::refuse::said(&error), ("Cook.Model.Invalid", vec![("where", "/bufferViews/0/byteStride".to_string())]));
+            }
+        }
+    }
+    assert!(started.elapsed() < std::time::Duration::from_secs(60), "{:?}", started.elapsed());
+}

@@ -11,8 +11,10 @@ use super::model_ir::{PbrShading, SurfaceIr, PBR_METAL_ROUGH, PBR_OCCLUSION};
 use super::refuse::{invalid, note, refuse, OrInvalid};
 use anyhow::{bail, Context, Result};
 use serde_json::Value;
-use std::collections::{BTreeMap, BTreeSet};
+use std::cell::{Cell, RefCell};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
+use std::rc::Rc;
 
 const UNITS_PER_METRE: f32 = 100.0;
 
@@ -20,6 +22,13 @@ struct Document {
     root: Value,
     buffers: Vec<Vec<u8>>,
     folder: Option<std::path::PathBuf>,
+    /// Each accessor's numbers once read, by accessor and width: every primitive, skin and sampler that names it shares
+    /// them (M-145).
+    read: RefCell<HashMap<(usize, usize), Rc<Vec<f32>>>>,
+    /// The numbers taken from the accessors and made from them, and the indices the meshes name, so far: each bounded
+    /// for the model (MOST_NUMBERS, MOST_INDICES).
+    numbers: Cell<u64>,
+    indices: Cell<u64>,
 }
 
 /// `bytes` as base64 text (with `=` padding), for an inline `data:` URI.
@@ -124,7 +133,7 @@ impl Document {
                 None => return Err(invalid(pointer)),
             });
         }
-        Ok(Self { root, buffers, folder: folder.map(Path::to_path_buf) })
+        Ok(Self { root, buffers, folder: folder.map(Path::to_path_buf), read: RefCell::default(), numbers: Cell::new(0), indices: Cell::new(0) })
     }
 
     fn view(&self, index: usize) -> Result<&[u8]> {
@@ -139,22 +148,59 @@ impl Document {
             .ok_or_else(|| refuse("Cook.Model.ViewPast", &[("view", index.to_string())]))
     }
 
-    /// The `byteStride` of a buffer view, or `packed` (its elements side by side) when it has none.
-    fn stride(&self, view: u64, packed: usize) -> Option<usize> {
-        match &self.root["bufferViews"][place(view)?]["byteStride"] {
-            Value::Null => Some(packed),
-            s => place(s.as_u64()?),
+    /// The `byteStride` of a buffer view, or `packed` (its elements side by side) when it has none. One given is as
+    /// glTF 2.0 (3.6.2.4) allows it: 4 to 252, a multiple of 4, and no less than the element it steps over, so elements
+    /// never overlap (a stride of 0 let a 12-byte view serve any count of elements: M-145).
+    fn stride(&self, view: u64, packed: usize) -> Result<usize> {
+        let at = || invalid(format!("/bufferViews/{view}/byteStride"));
+        match &self.root["bufferViews"][place(view).ok_or_else(at)?]["byteStride"] {
+            Value::Null => Ok(packed),
+            s => s.as_u64().and_then(place).filter(|&n| (4..=252).contains(&n) && n % 4 == 0 && n >= packed).ok_or_else(at),
         }
     }
 
-    /// An accessor's numbers, each element as `width` floats.
-    fn floats(&self, index: usize, width: usize) -> Result<Vec<f32>> {
+    /// An accessor's numbers, each element as `width` floats: read once, then shared by every primitive, skin and
+    /// sampler that names it.
+    fn floats(&self, index: usize, width: usize) -> Result<Rc<Vec<f32>>> {
+        if let Some(found) = self.read.borrow().get(&(index, width)) {
+            return Ok(Rc::clone(found));
+        }
+        let read = Rc::new(self.read_floats(index, width)?);
+        self.read.borrow_mut().insert((index, width), Rc::clone(&read));
+        Ok(read)
+    }
+
+    /// Numbers the cook takes from the accessors or makes from them for one primitive, counted before they are made:
+    /// the model's sum is bounded, so a small file cannot ask for memory or time without end (M-145).
+    fn take_numbers(&self, count: u64) -> Result<()> {
+        let total = self.numbers.get().saturating_add(count);
+        self.numbers.set(total);
+        if total > MOST_NUMBERS {
+            return Err(refuse("Cook.Model.Numbers", &[("count", total.to_string()), ("max", MOST_NUMBERS.to_string())]));
+        }
+        Ok(())
+    }
+
+    /// Indices a primitive names (its vertices when it has no index accessor), counted before they are read: each
+    /// becomes a corner the model keeps, and the model's sum is bounded (M-145).
+    fn take_indices(&self, count: u64) -> Result<()> {
+        let total = self.indices.get().saturating_add(count);
+        self.indices.set(total);
+        if total > MOST_INDICES {
+            return Err(refuse("Cook.Model.Indices", &[("count", total.to_string()), ("max", MOST_INDICES.to_string())]));
+        }
+        Ok(())
+    }
+
+    /// An accessor's numbers read from its buffer.
+    fn read_floats(&self, index: usize, width: usize) -> Result<Vec<f32>> {
         let accessor = &self.root["accessors"][index];
         let count = accessor["count"].as_u64().or_invalid(|| format!("/accessors/{index}/count"))?;
         // Far past any model the game draws: a damaged count would ask for memory no device has.
         if count > MAX_ELEMENTS {
             return Err(refuse("Cook.Model.Accessor", &[("accessor", index.to_string()), ("count", count.to_string()), ("max", MAX_ELEMENTS.to_string())]));
         }
+        self.take_numbers(count * width as u64)?;
         let count = count as usize;
         let past = || refuse("Cook.Model.AccessorPast", &[("accessor", index.to_string())]);
         let kind = accessor["componentType"].as_u64().or_invalid(|| format!("/accessors/{index}/componentType"))?;
@@ -181,7 +227,7 @@ impl Document {
             Some(view_index) => {
                 let view = self.view(place(view_index).ok_or_else(past)?)?;
                 let start = place(accessor["byteOffset"].as_u64().unwrap_or(0)).ok_or_else(past)?;
-                let stride = self.stride(view_index, size * width).ok_or_else(past)?;
+                let stride = self.stride(view_index, size * width)?;
                 // The last number is in the view, before any memory is taken for them all.
                 if count > 0 {
                     element_at(view, start, count - 1, stride, (width - 1) * size, size).ok_or_else(past)?;
@@ -257,8 +303,9 @@ impl Document {
                 if count > MAX_ELEMENTS {
                     return Err(refuse("Cook.Model.Accessor", &[("accessor", index.to_string()), ("count", count.to_string()), ("max", MAX_ELEMENTS.to_string())]));
                 }
+                self.take_indices(count)?;
                 let count = count as usize;
-                let stride = self.stride(view_index, size).ok_or_else(past)?;
+                let stride = self.stride(view_index, size)?;
                 if count > 0 {
                     element_at(view, start, count - 1, stride, 0, size).ok_or_else(past)?;
                 }
@@ -267,7 +314,10 @@ impl Document {
                     Ok(match size { 1 => u32::from(b[0]), 2 => u32::from(u16::from_le_bytes(b.try_into().unwrap())), _ => u32::from_le_bytes(b.try_into().unwrap()) })
                 }).collect()
             },
-            None => Ok((0..vertices as u32).collect()),
+            None => {
+                self.take_indices(vertices as u64)?;
+                Ok((0..vertices as u32).collect())
+            }
         }
     }
 
@@ -373,6 +423,11 @@ pub fn to_collision(bytes: &[u8], folder: Option<&Path>) -> Result<(Vec<u8>, Vec
 
 /// The most elements one accessor of a model may have: a primitive's vertices, far past any the game draws.
 const MAX_ELEMENTS: u64 = 1 << 22;
+/// The most numbers a model's cook takes from its accessors (each accessor once) and makes from them for its primitives:
+/// sixteen for each of an accessor's most elements, 256 MiB of floats.
+const MOST_NUMBERS: u64 = MAX_ELEMENTS * 16;
+/// The most indices a model's meshes name in all: an accessor's most. Each is a corner the model keeps.
+const MOST_INDICES: u64 = MAX_ELEMENTS;
 
 /// The widest and tallest image a mod may bring: past any GPU's textures, and a damaged header can't ask for more
 /// memory than a gigabyte of pixels.
@@ -1207,11 +1262,21 @@ fn triangles_of(mode: u64, indices: &[u32], pointer: &str) -> Result<Vec<u32>> {
     Ok(out)
 }
 
-/// A colour accessor's numbers as RGBA (glTF allows VEC3 and VEC4).
-fn colour_values_of(document: &Document, index: usize) -> Result<Vec<f32>> {
+/// A colour accessor's numbers as RGBA (glTF allows VEC3 and VEC4; a VEC3's are made once, as an accessor's are read).
+fn colour_values_of(document: &Document, index: usize) -> Result<Rc<Vec<f32>>> {
     match document.root["accessors"][index]["type"].as_str() {
         Some("VEC4") => document.floats(index, 4),
-        Some("VEC3") => Ok(document.floats(index, 3)?.chunks_exact(3).flat_map(|c| [c[0], c[1], c[2], 1.0]).collect()),
+        Some("VEC3") => {
+            // Kept beside the accessor's own reads under a width no accessor is read with.
+            if let Some(found) = document.read.borrow().get(&(index, usize::MAX)) {
+                return Ok(Rc::clone(found));
+            }
+            let rgb = document.floats(index, 3)?;
+            document.take_numbers(rgb.len() as u64 / 3 * 4)?;
+            let rgba: Rc<Vec<f32>> = Rc::new(rgb.chunks_exact(3).flat_map(|c| [c[0], c[1], c[2], 1.0]).collect());
+            document.read.borrow_mut().insert((index, usize::MAX), Rc::clone(&rgba));
+            Ok(rgba)
+        }
         _ => Err(invalid(format!("/accessors/{index}/type"))),
     }
 }
@@ -1310,7 +1375,7 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
                 .collect::<Result<_>>()?;
             let inverses = match skin["inverseBindMatrices"].as_u64() {
                 Some(index) => document.floats(index as usize, 16)?,
-                None => IDENTITY.repeat(list.len()),
+                None => Rc::new(IDENTITY.repeat(list.len())),
             };
             for (place, node) in list.iter().enumerate() {
                 let inverse: Matrix = inverses.get(place * 16..place * 16 + 16).or_invalid(|| format!("/skins/{s}/inverseBindMatrices"))?.try_into()?;
@@ -1606,6 +1671,7 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
                     if flat_meshes.insert(mesh) {
                         note("Cook.Model.FlatNormals", &[("mesh", name.clone())]);
                     }
+                    document.take_numbers(source_indices.len() as u64)?;
                     let mut out = Vec::with_capacity(source_indices.len());
                     for t in source_indices.chunks_exact(3) {
                         let v = |k: usize| -> [f32; 3] {
@@ -1618,7 +1684,7 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
                         let length = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
                         out.extend_from_slice(&if length > 1e-12 { n.map(|x| x / length) } else { [0.0, 1.0, 0.0] });
                     }
-                    out
+                    Rc::new(out)
                 }
             };
             let weights = if skinned {
@@ -1631,7 +1697,9 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
             };
             // Four weights a vertex: a second set that weighs anything is refused, never dropped (models.md section 4).
             if let (true, Some(w)) = (skinned, attributes["WEIGHTS_1"].as_u64()) {
-                let heavy = document.floats(w as usize, 4)?.chunks_exact(4).filter(|v| v.iter().any(|x| *x > 0.001)).count();
+                let second = document.floats(w as usize, 4)?;
+                document.take_numbers(second.len() as u64)?;
+                let heavy = second.chunks_exact(4).filter(|v| v.iter().any(|x| *x > 0.001)).count();
                 if heavy > 0 {
                     return Err(refuse("Cook.Model.WeightsOver4", &[("mesh", name.clone()), ("vertices", heavy.to_string())]));
                 }
@@ -1641,7 +1709,7 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
             if sets > 2 {
                 return Err(refuse("Cook.Model.ColorSets", &[("mesh", name.clone()), ("count", sets.to_string()), ("max", "2".to_string())]));
             }
-            let mut colour_values: [Option<Vec<f32>>; 2] = [None, None];
+            let mut colour_values: [Option<Rc<Vec<f32>>>; 2] = [None, None];
             for (k, values) in colour_values.iter_mut().enumerate() {
                 if let Some(index) = attributes[format!("COLOR_{k}")].as_u64() {
                     *values = Some(colour_values_of(&document, index as usize)?);
@@ -1677,7 +1745,10 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
                         *present = true;
                         document.floats(index as usize, 2)?
                     }
-                    None => vec![0.0; count * 2],
+                    None => {
+                        document.take_numbers(count as u64 * 2)?;
+                        Rc::new(vec![0.0; count * 2])
+                    }
                 };
                 coordinate_values.push(values);
             }
@@ -1687,7 +1758,10 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
             // A map's own transform, baked into the set it alone reads.
             for m in source.pbr_maps.iter().flatten() {
                 if let Some(t) = &m.bake {
-                    for uv in coordinate_values[m.coord as usize].chunks_exact_mut(2) {
+                    // The set as this primitive bakes it: its own copy when another reads the accessor too.
+                    let set = &mut coordinate_values[m.coord as usize];
+                    document.take_numbers(set.len() as u64)?;
+                    for uv in Rc::make_mut(set).chunks_exact_mut(2) {
                         let [u, v] = transformed_coordinate(t, [uv[0], uv[1]]);
                         uv[0] = u;
                         uv[1] = v;
@@ -1697,7 +1771,7 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
             // A normal-mapped material's tangents (materials.md): the file's TANGENT by vertex, or MikkTSpace's by
             // corner over the normal map's (baked) coordinates when it has none or its normals are made flat (glTF 2.0
             // then ignores the file's).
-            let tangents: Option<(Vec<f32>, bool)> = match &source.pbr_maps[PBR_NORMAL] {
+            let tangents: Option<(Rc<Vec<f32>>, bool)> = match &source.pbr_maps[PBR_NORMAL] {
                 None => None,
                 Some(map) => match attributes["TANGENT"].as_u64() {
                     Some(index) if !flat => Some((document.floats(index as usize, 4)?, false)),
@@ -1710,8 +1784,9 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
                             coords: &coordinate_values[map.coord as usize],
                             out: vec![[1.0, 0.0, 0.0, 1.0]; source_indices.len()],
                         };
+                        document.take_numbers(source_indices.len() as u64 * 4)?;
                         mikktspace::generate_tangents(&mut input);
-                        Some((input.out.concat(), true))
+                        Some((Rc::new(input.out.concat()), true))
                     }
                 },
             };
@@ -2677,8 +2752,8 @@ const MAX_CLIP_FRAMES: usize = 65_535;
 
 /// A sampled curve of one joint's value.
 struct Curve {
-    times: Vec<f32>,
-    values: Vec<f32>,
+    times: Rc<Vec<f32>>,
+    values: Rc<Vec<f32>>,
     width: usize,
     step: bool,
     cubic: bool,

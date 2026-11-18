@@ -729,6 +729,8 @@ A finding's `{why}`, `{what}` or `{kind}` is one of these phrases, listed by its
 | `Cook.Merge.RemoveForm` | each item of "remove" must be a set of columns |
 | `Cook.Merge.RemoveNoRow` | "remove" {row} matched no row; the rest of the file was added |
 | `Cook.Model.Accessor` | accessor {accessor} has {count} elements; a model has up to {max} |
+| `Cook.Model.Numbers` | the model reads {count} numbers from its accessors; a model reads up to {max} |
+| `Cook.Model.Indices` | the model's meshes have {count} indices in all; a model has up to {max} |
 | `Cook.Model.AccessorPast` | accessor {accessor} reaches past its buffer view |
 | `Cook.Model.Billboard` | the node {node}'s billboard is {value}; it can be "y" or "xy" |
 | `Cook.Model.Blends` | the mesh {mesh} needs more blends of joints than a model has room for ({max}) |
