@@ -6,6 +6,7 @@
 #include "Game/Screen/NebulaPaneKit.hpp"
 #include "Game/Screen/NebulaUi.hpp"
 #include "Game/System/LumaModLog.hpp"
+#include "Game/System/NebulaClock.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaText.hpp"
 #include <Game/Ui/Layout.hpp>
@@ -35,12 +36,13 @@ namespace {
     const u32 cFill = rgba(20, 26, 44, 216);
     const u32 cRing = rgba(217, 83, 79, 255);
     const u32 cText = rgba(255, 255, 255, 255);
-    // Frames at 60 a second: in, held (6 s), out (0.3 s); and the share of the way a line moves to its
-    // place each frame when the lines below it go.
-    const s32 cInFrames = 8;
-    const s32 cHoldFrames = 360;
-    const s32 cOutFrames = 18;
+    // Milliseconds on screen (the host's clock, whatever the frames take): in, held, out; and the share of the way a
+    // line moves to its place in each 60th of a second when the lines below it go.
+    const f32 cInMs = 133.0f;
+    const f32 cHoldMs = 6000.0f;
+    const f32 cOutMs = 300.0f;
     const f32 cFollow = 0.25f;
+    const s64 cFollowTickNs = 16666667;
 
     const s32 cLines = 3;
     const char16_t cEllipsis = 0x2026;  // the line cut short
@@ -52,7 +54,8 @@ namespace {
         s32 kind;
         const luma::modlog::Entry* entry;  // KindEntry
         u32 count;                         // KindSummary, KindMore
-        s32 frame;                         // frames shown
+        s64 shownNs;                       // when it came on screen (NebulaClock; 0: not yet)
+        f32 ms;                            // milliseconds on screen, as of the last step
         f32 y;                             // its place now, from the bottom line's (0) up
         bool shown;                        // the text is in its pane
         bool told;                         // its modlog.notice fact is written (once, though it may move pane)
@@ -86,7 +89,8 @@ namespace {
         rSlot.kind = kind;
         rSlot.entry = pEntry;
         rSlot.count = count;
-        rSlot.frame = 0;
+        rSlot.shownNs = 0;
+        rSlot.ms = 0.0f;
         // A new line comes in at the bottom; the ones above it rise to make room (their own y follows).
         rSlot.y = 0.0f;
         rSlot.shown = false;
@@ -116,11 +120,20 @@ namespace {
         sBacklog = luma::modlog::noticesWaiting() != 0;
     }
 
-    // Each line one frame on; a line that has gone out leaves its place to the ones after it.
+    // Each line's time on screen, by the host's clock; a line that has gone out leaves its place to the ones after it.
     bool advance() {
         bool freed = false;
+        const s64 now = NebulaClock::nowNs();
         for (s32 i = 0; i < cLines; i++) {
-            if (sSlots[i].kind != KindNone && ++sSlots[i].frame >= cInFrames + cHoldFrames + cOutFrames) {
+            Slot& rSlot = sSlots[i];
+            if (rSlot.kind == KindNone) {
+                continue;
+            }
+            if (rSlot.shownNs == 0) {
+                rSlot.shownNs = now;
+            }
+            rSlot.ms = static_cast< f32 >(now - rSlot.shownNs) / 1000000.0f;
+            if (rSlot.ms >= cInMs + cHoldMs + cOutMs) {
                 sSlots[i].kind = KindNone;
                 freed = true;
             }
@@ -238,7 +251,7 @@ namespace {
 
 class NebulaModLogNoticeScreen : public LayoutActor {
 public:
-    NebulaModLogNoticeScreen() : LayoutActor("NebulaModLogNotice", true), mBuilt(false), mRoot(nullptr), mAny(false) {
+    NebulaModLogNoticeScreen() : LayoutActor("NebulaModLogNotice", true), mBuilt(false), mRoot(nullptr), mAny(false), mPlacedNs(0) {
         mKits.mText = &mTextKit;
         mKits.mWindow = &mWindowKit;
         mKits.mButton = nullptr;
@@ -402,6 +415,17 @@ private:
         const f32 limit = screenWidth * cMaxShare - cPadX * 2.0f;
         const f32 lineHeight = cSize * cCapHeight + cPadY * 2.0f + cSize * 0.4f;
         const f32 left = -screenWidth * 0.5f + cLeft;
+        // What is left of each line's way to its place after the time since the last place: (1 - cFollow) for each
+        // 60th of a second (a part of one, in part), four 60ths at most (after a long frame a line jumps no further).
+        const s64 now = NebulaClock::nowNs();
+        f32 ticks = mPlacedNs == 0 ? 1.0f : static_cast< f32 >(now - mPlacedNs) / static_cast< f32 >(cFollowTickNs);
+        mPlacedNs = now;
+        ticks = ticks < 0.0f ? 0.0f : (ticks > 4.0f ? 4.0f : ticks);
+        f32 keep = 1.0f;
+        for (; ticks >= 1.0f; ticks -= 1.0f) {
+            keep *= 1.0f - cFollow;
+        }
+        keep *= 1.0f - cFollow * ticks;
         const f32 bottom = -screenHeight * 0.5f + cBottom + lineHeight * 0.5f;
         const s32 count = activeCount();
         for (s32 i = 0; i < cLines; i++) {
@@ -416,7 +440,7 @@ private:
             }
             // The newest at the bottom: line i of `count` sits (count - 1 - i) lines up.
             const f32 target = static_cast< f32 >(count - 1 - i) * (lineHeight + cGap);
-            rSlot.y += (target - rSlot.y) * cFollow;
+            rSlot.y = target + (rSlot.y - target) * keep;
             if (rSlot.y > target - 0.25f && rSlot.y < target + 0.25f) {
                 rSlot.y = target;
             }
@@ -424,10 +448,10 @@ private:
             const f32 y = bottom + rSlot.y;
             shape(mWindow[i], left + boxWidth * 0.5f, y, boxWidth, lineHeight, lineHeight * 0.5f);
             mText[i]->mTranslate = Vec3f(left + cPadX, textCentre(y, cSize), 0.0f);
-            f32 alpha = clamp01(static_cast< f32 >(rSlot.frame) / cInFrames);
-            const s32 out = rSlot.frame - (cInFrames + cHoldFrames);
-            if (out > 0) {
-                alpha *= 1.0f - clamp01(static_cast< f32 >(out) / cOutFrames);
+            f32 alpha = clamp01(rSlot.ms / cInMs);
+            const f32 out = rSlot.ms - (cInMs + cHoldMs);
+            if (out > 0.0f) {
+                alpha *= 1.0f - clamp01(out / cOutMs);
             }
             mLine[i]->mAlpha = toAlpha(alpha);
             mLine[i]->SetVisible(true);
@@ -444,13 +468,14 @@ private:
     TextBox* mText[cLines];
     f32 mWidth[cLines];
     bool mAny;
+    s64 mPlacedNs;  // the last place (NebulaClock; 0: none yet)
 };
 
 namespace {
     // This scene's notice; null when the scene has none. Every game scene sets it (make), so it never names the last
     // scene's.
     NebulaModLogNoticeScreen* sScreen = nullptr;
-    // The frame the notice last stepped. Its lines count frames shown, not world steps (services/time.md 1, item 4:
+    // The frame the notice last stepped. Its lines count time on screen, not world steps (services/time.md 1, item 4:
     // Nebula's own screens are never moved by the world clock): a frame of several steps steps it once, a held world
     // (no scene update) steps it from the draw.
     u32 sSteppedFrame = 0;
