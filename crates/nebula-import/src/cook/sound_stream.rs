@@ -8,7 +8,7 @@
 
 use super::particle_json::{as_f32, as_int, at_key, missing, object, only, text};
 use super::refuse::refuse;
-use super::sound_effect::{decode, loudness, resample_to_rate, Around, Cooked, Made, Pcm, SoundFacts, HIGHEST_RATE, LOWEST_RATE, RATE};
+use super::sound_effect::{decode, loudness, resample_to_rate, Around, Bounds, Cooked, Made, Pcm, SoundFacts, HIGHEST_RATE, LOWEST_RATE, RATE};
 use anyhow::Result;
 use serde_json::Value;
 
@@ -16,6 +16,8 @@ use serde_json::Value;
 pub const MOST_CHANNELS: usize = 6;
 /// A stream's longest: 20 minutes.
 pub const MOST_SECONDS: f64 = 1200.0;
+/// A stream's bounds, checked from a file's headers before it is decoded.
+pub const BOUNDS: Bounds = Bounds { most_channels: MOST_CHANNELS, most_seconds: MOST_SECONDS, channels: "Cook.Sound.StreamChannels", too_long: "Cook.Sound.StreamTooLong" };
 /// The header's volume of 1 (StreamPlayer: volume / 127).
 const UNIT_VOLUME: f32 = 127.0;
 const HEADER: usize = 32;
@@ -89,7 +91,7 @@ pub fn cook(map: &serde_json::Map<String, Value>, around: &Around) -> Result<Coo
     if bytes.is_empty() {
         return Err(refuse("Cook.Sound.Empty", &[("uri", file.to_string())]));
     }
-    let pcm = if is_nintendo(&bytes) { nintendo(&bytes, file)? } else { decode(&bytes, file)? };
+    let pcm = if is_nintendo(&bytes) { nintendo(&bytes, file)? } else { decode(&bytes, file, &BOUNDS)? };
     if pcm.channels == 0 || pcm.channels > MOST_CHANNELS {
         return Err(refuse("Cook.Sound.StreamChannels", &[("uri", file.to_string()), ("count", pcm.channels.to_string()), ("max", MOST_CHANNELS.to_string())]));
     }

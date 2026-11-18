@@ -28,6 +28,9 @@ pub const MOST_PIXELS: u64 = 1920 * 1080;
 pub const MOST_RATE: f64 = 60.0;
 /// A movie's longest: an hour.
 pub const MOST_SECONDS: f64 = 3600.0;
+/// A movie's sound's bounds, checked from its file's headers before it is decoded.
+const SOUND_BOUNDS: super::sound_effect::Bounds =
+    super::sound_effect::Bounds { most_channels: 2, most_seconds: MOST_SECONDS, channels: "Cook.Sound.Channels", too_long: "Cook.Movie.TooLong" };
 const AUDIO_RATE: u32 = 32_000;
 const HEADER: usize = 0x40;
 const FRAME_HEADER: usize = 0x10;
@@ -497,7 +500,7 @@ fn check_video(v: &mut Video, file: &str) -> Result<(Sequence, u32)> {
 
 /// The sound as the game's movie records: stereo, 32 kHz, PCM16, interleaved.
 fn sound(bytes: &[u8], file: &str) -> Result<Vec<i16>> {
-    let pcm = super::sound_effect::decode(bytes, file)?;
+    let pcm = super::sound_effect::decode(bytes, file, &SOUND_BOUNDS)?;
     if pcm.channels == 0 || pcm.channels > 2 {
         return Err(refuse("Cook.Sound.Channels", &[("uri", file.to_string()), ("count", pcm.channels.to_string()), ("max", "2".into())]));
     }

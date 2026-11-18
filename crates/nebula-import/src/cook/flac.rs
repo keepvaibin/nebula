@@ -23,6 +23,8 @@ pub enum FlacError {
     Cut,
     /// Data that breaks the format, at a byte.
     Broken(usize),
+    /// More frames than the caller allows: as many as the header says, or as were decoded when the bound was passed.
+    TooLong(u64),
 }
 
 impl std::fmt::Display for FlacError {
@@ -31,6 +33,7 @@ impl std::fmt::Display for FlacError {
             FlacError::NotFlac => write!(f, "not a FLAC file"),
             FlacError::Cut => write!(f, "the FLAC file is cut off"),
             FlacError::Broken(at) => write!(f, "the FLAC file is damaged at byte {at}"),
+            FlacError::TooLong(frames) => write!(f, "the FLAC file holds {frames} frames, more than it may"),
         }
     }
 }
@@ -115,10 +118,23 @@ fn crc16(bytes: &[u8]) -> u16 {
     c
 }
 
-/// Most samples a file may hold (an effect is far shorter: this only keeps a lying header from asking for memory).
-const MOST_SAMPLES: u64 = 1 << 28;
+/// What a FLAC file's STREAMINFO says: its rate, channels, bits a sample and frames (0: not said).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct StreamInfo {
+    pub rate: u32,
+    pub channels: usize,
+    pub bits: u32,
+    pub total: u64,
+}
 
-pub fn decode(b: &[u8]) -> Result<Flac, FlacError> {
+/// A FLAC file's STREAMINFO, read before any frame: what a caller checks before a sample is decoded.
+pub fn stream_info(b: &[u8]) -> Result<StreamInfo, FlacError> {
+    metadata(b).map(|(info, _, _)| info)
+}
+
+/// The metadata blocks: STREAMINFO, the Vorbis comments, and the byte where the frames start.
+#[allow(clippy::type_complexity)]
+fn metadata(b: &[u8]) -> Result<(StreamInfo, Vec<(String, String)>, usize), FlacError> {
     if b.get(..4) != Some(b"fLaC") {
         return Err(FlacError::NotFlac);
     }
@@ -159,16 +175,25 @@ pub fn decode(b: &[u8]) -> Result<Flac, FlacError> {
         }
     }
     let (rate, channels, bits, total) = info.ok_or(FlacError::Broken(4))?;
-    if total > MOST_SAMPLES {
-        return Err(FlacError::Broken(4));
+    Ok((StreamInfo { rate, channels, bits, total }, comments, at))
+}
+
+/// Every frame decoded, at most `most_frames` of them (a caller's bound from the rate: M-151). A file whose STREAMINFO
+/// says more is refused before a frame is read; one that says less, or nothing, is stopped at the first frame past
+/// the bound, so memory never runs ahead of it by more than a frame.
+pub fn decode(b: &[u8], most_frames: u64) -> Result<Flac, FlacError> {
+    let (StreamInfo { rate, channels, bits, total }, comments, at) = metadata(b)?;
+    if total > most_frames {
+        return Err(FlacError::TooLong(total));
     }
     let mut samples: Vec<i32> = Vec::with_capacity((total as usize).saturating_mul(channels).min(1 << 24));
     let mut r = Bits { b, at: at * 8 };
     while r.byte() + 2 <= b.len() {
         let start = r.byte();
         frame(&mut r, b, start, channels, bits, &mut samples)?;
-        if samples.len() as u64 > MOST_SAMPLES * channels as u64 {
-            return Err(FlacError::Broken(start));
+        let frames = (samples.len() / channels) as u64;
+        if frames > most_frames {
+            return Err(FlacError::TooLong(frames));
         }
     }
     if total != 0 && (samples.len() / channels) as u64 != total {
@@ -535,7 +560,7 @@ mod tests {
         let left: Vec<i16> = (0..300).map(|i| ((i as f32 * 0.07).sin() * 12000.0) as i16).collect();
         let right: Vec<i16> = (0..300).map(|i| ((i as f32 * 0.11).cos() * -9000.0) as i16).collect();
         for side in [false, true] {
-            let got = decode(&file(&left, &right, side)).unwrap();
+            let got = decode(&file(&left, &right, side), u64::MAX).unwrap();
             assert_eq!((got.channels, got.rate, got.bits), (2, 44100, 16));
             let want: Vec<i32> = left.iter().zip(&right).flat_map(|(l, r)| [i32::from(*l), i32::from(*r)]).collect();
             assert_eq!(got.samples, want, "side {side}");
@@ -547,17 +572,92 @@ mod tests {
     fn a_damaged_or_cut_flac_says_so() {
         let left = [1i16, 2, 3, 4, 5, 6, 7, 8];
         let good = file(&left, &left, false);
-        assert_eq!(decode(b"RIFF....").err(), Some(FlacError::NotFlac));
-        assert_eq!(decode(&good[..good.len() - 3]).err(), Some(FlacError::Cut));
+        assert_eq!(decode(b"RIFF....", u64::MAX).err(), Some(FlacError::NotFlac));
+        assert_eq!(decode(&good[..good.len() - 3], u64::MAX).err(), Some(FlacError::Cut));
         let mut bad = good.clone();
         let n = bad.len();
         bad[n - 5] ^= 0x10;
-        assert!(matches!(decode(&bad).err(), Some(FlacError::Broken(_))));
-        // A header claiming 2^36-1 samples is refused before memory is asked for.
+        assert!(matches!(decode(&bad, u64::MAX).err(), Some(FlacError::Broken(_))));
+        // A header claiming about 2^36 samples is refused before memory is asked for.
         let mut liar = good.clone();
         for b in &mut liar[4 + 4 + 13..4 + 4 + 18] {
             *b |= 0x0F;
         }
-        assert!(decode(&liar).is_err());
+        let claimed = stream_info(&liar).unwrap().total;
+        assert!(claimed > 1 << 35);
+        assert_eq!(decode(&liar, 1 << 28).err(), Some(FlacError::TooLong(claimed)));
+        assert!(decode(&liar, u64::MAX).is_err());
     }
+
+    /// M-151: frames of a few bytes that each stand for 65,535 samples a channel. A bound the STREAMINFO passes is
+    /// refused before a frame; one it does not say is stopped at the first frame past it.
+    #[test]
+    fn decoding_stops_at_the_bound() {
+        let said = silent(8, 48000, 1 << 28, 3);
+        assert_eq!(stream_info(&said).unwrap(), StreamInfo { rate: 48000, channels: 8, bits: 16, total: 1 << 28 });
+        assert_eq!(decode(&said, 1 << 20).err(), Some(FlacError::TooLong(1 << 28)));
+        let unsaid = silent(8, 48000, 0, 40);
+        assert_eq!(decode(&unsaid, 1 << 20).err(), Some(FlacError::TooLong(17 * 65535)));
+        let whole = decode(&silent(2, 48000, 0, 4), 4 * 65535).unwrap();
+        assert_eq!(whole.samples.len(), 4 * 65535 * 2);
+        assert!(whole.samples.iter().all(|&v| v == -3));
+    }
+}
+
+/// A 16-bit file of `frames` frames of 65,535 samples on each of `channels` channels, each a constant -3: a few bytes
+/// a frame. STREAMINFO says `total` frames (0: not said).
+#[cfg(test)]
+pub(crate) fn silent(channels: u8, rate: u32, total: u64, frames: usize) -> Vec<u8> {
+    fn put(out: &mut Vec<u8>, bits: &mut usize, n: u32, v: u64) {
+        for i in (0..n).rev() {
+            if *bits % 8 == 0 {
+                out.push(0);
+            }
+            let last = out.len() - 1;
+            out[last] |= (((v >> i) & 1) as u8) << (7 - *bits % 8);
+            *bits += 1;
+        }
+    }
+    let mut f = b"fLaC".to_vec();
+    let (mut info, mut n) = (Vec::new(), 0);
+    for (width, v) in [(16, 65535), (16, 65535), (24, 0), (24, 0), (20, u64::from(rate)), (3, u64::from(channels) - 1), (5, 15), (36, total), (64, 0), (64, 0)] {
+        put(&mut info, &mut n, width, v);
+    }
+    f.extend_from_slice(&[0x80, 0, 0, 34]);
+    f.extend_from_slice(&info);
+    for number in 0..frames as u64 {
+        let (mut w, mut n) = (Vec::new(), 0);
+        put(&mut w, &mut n, 15, 0x7FFC);
+        put(&mut w, &mut n, 1, 0);
+        put(&mut w, &mut n, 4, 7);
+        put(&mut w, &mut n, 4, 0);
+        put(&mut w, &mut n, 4, u64::from(channels) - 1);
+        put(&mut w, &mut n, 3, 4);
+        put(&mut w, &mut n, 1, 0);
+        // The frame number, UTF-8 coded.
+        if number < 0x80 {
+            put(&mut w, &mut n, 8, number);
+        } else if number < 0x800 {
+            put(&mut w, &mut n, 8, 0xC0 | number >> 6);
+            put(&mut w, &mut n, 8, 0x80 | (number & 0x3F));
+        } else {
+            assert!(number < 0x10000);
+            put(&mut w, &mut n, 8, 0xE0 | number >> 12);
+            put(&mut w, &mut n, 8, 0x80 | (number >> 6 & 0x3F));
+            put(&mut w, &mut n, 8, 0x80 | (number & 0x3F));
+        }
+        put(&mut w, &mut n, 16, 65534);
+        let crc = u64::from(crc8(&w));
+        put(&mut w, &mut n, 8, crc);
+        for _ in 0..channels {
+            put(&mut w, &mut n, 1, 0);
+            put(&mut w, &mut n, 6, 0);
+            put(&mut w, &mut n, 1, 0);
+            put(&mut w, &mut n, 16, 0xFFFD);
+        }
+        let crc = u64::from(crc16(&w));
+        put(&mut w, &mut n, 16, crc);
+        f.extend_from_slice(&w);
+    }
+    f
 }

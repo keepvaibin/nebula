@@ -37,6 +37,43 @@ pub const RATE: u32 = 48_000;
 pub const MOST_SECONDS: f64 = 60.0;
 pub const LOWEST_RATE: u32 = 8_000;
 pub const HIGHEST_RATE: u32 = 384_000;
+
+/// What a sound file may hold as what it is cooked as (an effect, a stream, a movie's sound), checked from its headers
+/// before a sample is decoded (M-151, M-159): a file past them is refused with the words it would get after decoding,
+/// and one whose header says less than it holds is stopped where the bound is passed.
+pub struct Bounds {
+    pub most_channels: usize,
+    pub most_seconds: f64,
+    /// The phrase for too many channels ({uri}, {count}, {max}) and for too long ({seconds}, {max}).
+    pub channels: &'static str,
+    pub too_long: &'static str,
+}
+
+/// An effect's bounds: one or two channels, MOST_SECONDS.
+pub const EFFECT_BOUNDS: Bounds = Bounds { most_channels: 2, most_seconds: MOST_SECONDS, channels: "Cook.Sound.Channels", too_long: "Cook.Sound.TooLong" };
+
+/// Frames a decoder may make past a bound before it can stop: an Ogg Vorbis packet gives at most half of its largest
+/// block, 8,192.
+const PACKET_FRAMES: u64 = 8192;
+
+impl Bounds {
+    /// Channels and rate from a file's headers checked; the most frames it may hold.
+    pub fn frames(&self, file: &str, channels: usize, rate: u32) -> Result<u64> {
+        if channels == 0 || channels > self.most_channels {
+            return Err(refuse(self.channels, &[("uri", file.to_string()), ("count", channels.to_string()), ("max", self.most_channels.to_string())]));
+        }
+        if !(LOWEST_RATE..=HIGHEST_RATE).contains(&rate) {
+            return Err(refuse("Cook.Sound.Rate", &[("uri", file.to_string()), ("value", rate.to_string()), ("min", LOWEST_RATE.to_string()), ("max", HIGHEST_RATE.to_string())]));
+        }
+        Ok((self.most_seconds * f64::from(rate)) as u64)
+    }
+
+    /// The refusal of a sound of `frames` frames at `rate`.
+    pub fn too_long(&self, frames: u64, rate: u32) -> anyhow::Error {
+        let seconds = frames as f64 / f64::from(rate.max(1));
+        refuse(self.too_long, &[("seconds", format!("{seconds:.1}")), ("max", format!("{:.0}", self.most_seconds))])
+    }
+}
 pub const BUSES: [&str; 4] = ["effects", "ui", "voice", "music"];
 /// The kinds of `.sound.json`: an effect (layer 1, with `replace` layer 2), a stream (layer 3, sound_stream.rs), a voice
 /// line (layer 4: an effect on the voice bus standing in for a game voice line), a sequence (layer 5, sound_sequence.rs).
@@ -99,7 +136,7 @@ fn cut(file: &str) -> anyhow::Error {
 }
 
 /// A WAV: PCM 8 (unsigned), 16, 24 or 32 bits, or float 32 or 64, plain or extensible; its `smpl` loop.
-fn read_wav(b: &[u8], file: &str) -> Result<Pcm> {
+fn read_wav(b: &[u8], file: &str, bounds: &Bounds) -> Result<Pcm> {
     let mut at = 12;
     let mut format: Option<(u16, usize, u32, u16)> = None;
     let mut data: Option<&[u8]> = None;
@@ -133,6 +170,11 @@ fn read_wav(b: &[u8], file: &str) -> Result<Pcm> {
     }
     let (tag, channels, rate, bits) = format.ok_or_else(|| broken(file, 12))?;
     let data = data.ok_or_else(|| broken(file, 12))?;
+    // Its length from its data's size, before a sample is converted.
+    let frames = (data.len() / usize::from(bits / 8).max(1) / channels.max(1)) as u64;
+    if frames > bounds.frames(file, channels, rate)? {
+        return Err(bounds.too_long(frames, rate));
+    }
     let samples: Vec<f32> = match (tag, bits) {
         (1, 8) => data.iter().map(|&v| (f32::from(v) - 128.0) / 128.0).collect(),
         (1, 16) => data.chunks_exact(2).map(|s| f32::from(i16::from_le_bytes([s[0], s[1]])) / 32768.0).collect(),
@@ -145,7 +187,58 @@ fn read_wav(b: &[u8], file: &str) -> Result<Pcm> {
     Ok(Pcm { channels, rate, samples, loop_points })
 }
 
-fn read_ogg(b: &[u8], file: &str) -> Result<Pcm> {
+/// An Ogg file with its last page's granule position made `granule` (its CRC made again): a last page that says
+/// another length. The last page runs to the file's end.
+#[cfg(test)]
+pub(crate) fn ogg_with_last_granule(ogg: &[u8], granule: u64) -> Vec<u8> {
+    let mut b = ogg.to_vec();
+    let at = b.windows(4).rposition(|w| w == b"OggS").unwrap();
+    b[at + 6..at + 14].copy_from_slice(&granule.to_le_bytes());
+    b[at + 22..at + 26].fill(0);
+    let crc = ogg_crc(&b[at..]);
+    b[at + 22..at + 26].copy_from_slice(&crc.to_le_bytes());
+    b
+}
+
+/// The page CRC of Ogg (RFC 3533 6): polynomial 0x04C11DB7, not reflected, from 0.
+fn ogg_crc(bytes: &[u8]) -> u32 {
+    let mut c = 0u32;
+    for &b in bytes {
+        c ^= u32::from(b) << 24;
+        for _ in 0..8 {
+            c = if c & 0x8000_0000 != 0 { c << 1 ^ 0x04C1_1DB7 } else { c << 1 };
+        }
+    }
+    c
+}
+
+/// The frames an Ogg Vorbis stream says it holds: the granule position of its last whole page that ends a packet, of
+/// the stream its first page starts (RFC 3533 6; Vorbis I A.2: a page's granule is the frames decoded once its last
+/// packet is). None when no such page is found.
+fn ogg_frames(b: &[u8]) -> Option<u64> {
+    let serial = b.get(14..18)?;
+    let mut end = b.len();
+    while let Some(at) = b[..end].windows(4).rposition(|w| w == b"OggS") {
+        end = at + 3;
+        let page = &b[at..];
+        let Some(&segments) = page.get(26) else { continue };
+        let Some(table) = page.get(27..27 + usize::from(segments)) else { continue };
+        let size = 27 + usize::from(segments) + table.iter().map(|&s| usize::from(s)).sum::<usize>();
+        let Some(whole) = page.get(..size) else { continue };
+        let granule = u64::from_le_bytes(whole[6..14].try_into().unwrap());
+        if whole[4] != 0 || &whole[14..18] != serial || granule == u64::MAX {
+            continue;
+        }
+        let mut zeroed = whole.to_vec();
+        zeroed[22..26].fill(0);
+        if ogg_crc(&zeroed).to_le_bytes() == whole[22..26] {
+            return Some(granule);
+        }
+    }
+    None
+}
+
+fn read_ogg(b: &[u8], file: &str, bounds: &Bounds) -> Result<Pcm> {
     // An Ogg Opus stream starts with "OpusHead" in its first page.
     if b.windows(8).take(200).any(|w| w == b"OpusHead") {
         return Err(refuse("Cook.Sound.Opus", &[("uri", file.to_string())]));
@@ -159,7 +252,12 @@ fn read_ogg(b: &[u8], file: &str) -> Result<Pcm> {
         (Some(s), None, Some(n)) => Some((s, s.saturating_add(n))),
         _ => None,
     };
-    let most = (MOST_SECONDS * f64::from(HIGHEST_RATE)) as usize * 2;
+    // Its length from its last page, before a packet is decoded; a last page that says less is stopped a packet past
+    // the bound.
+    let most = bounds.frames(file, channels, rate)?;
+    if let Some(frames) = ogg_frames(b).filter(|&f| f > most) {
+        return Err(bounds.too_long(frames, rate));
+    }
     let mut samples = Vec::new();
     loop {
         match reader.read_dec_packet_itl() {
@@ -168,8 +266,9 @@ fn read_ogg(b: &[u8], file: &str) -> Result<Pcm> {
             // A stream that ends inside a page or packet: cut off.
             Err(_) => return Err(cut(file)),
         }
-        if samples.len() > most {
-            return Err(too_long(samples.len() as f64 / channels.max(1) as f64 / f64::from(rate.max(1))));
+        let frames = (samples.len() / channels) as u64;
+        if frames > most + PACKET_FRAMES {
+            return Err(bounds.too_long(frames, rate));
         }
     }
     Ok(Pcm { channels, rate, samples, loop_points })
@@ -179,27 +278,33 @@ fn too_long(seconds: f64) -> anyhow::Error {
     refuse("Cook.Sound.TooLong", &[("seconds", format!("{seconds:.1}")), ("max", format!("{MOST_SECONDS:.0}"))])
 }
 
-/// A sound file by its bytes (not its name): WAV, FLAC or Ogg Vorbis.
-pub fn decode(b: &[u8], file: &str) -> Result<Pcm> {
+/// A sound file by its bytes (not its name): WAV, FLAC or Ogg Vorbis, within `bounds`.
+pub fn decode(b: &[u8], file: &str, bounds: &Bounds) -> Result<Pcm> {
     if b.is_empty() {
         return Err(refuse("Cook.Sound.Empty", &[("uri", file.to_string())]));
     }
     if b.starts_with(b"RIFF") && b.get(8..12) == Some(b"WAVE") {
-        return read_wav(b, file);
+        return read_wav(b, file, bounds);
     }
     if b.starts_with(b"fLaC") {
-        return match flac::decode(b) {
+        let flac_error = |e: FlacError, rate: u32| match e {
+            FlacError::Cut => cut(file),
+            FlacError::Broken(at) => broken(file, at),
+            FlacError::NotFlac => unreadable(file),
+            FlacError::TooLong(frames) => bounds.too_long(frames, rate),
+        };
+        let info = flac::stream_info(b).map_err(|e| flac_error(e, 0))?;
+        let most = bounds.frames(file, info.channels, info.rate)?;
+        return match flac::decode(b, most) {
             Ok(f) => {
                 let scale = (1u64 << (f.bits - 1)) as f32;
                 Ok(Pcm { channels: f.channels, rate: f.rate, samples: f.samples.iter().map(|&v| v as f32 / scale).collect(), loop_points: f.loop_points })
             }
-            Err(FlacError::Cut) => Err(cut(file)),
-            Err(FlacError::Broken(at)) => Err(broken(file, at)),
-            Err(FlacError::NotFlac) => Err(unreadable(file)),
+            Err(e) => Err(flac_error(e, info.rate)),
         };
     }
     if b.starts_with(b"OggS") {
-        return read_ogg(b, file);
+        return read_ogg(b, file, bounds);
     }
     Err(unreadable(file))
 }
@@ -448,7 +553,7 @@ fn cook_effect(map: &serde_json::Map<String, Value>, around: &Around, voice: boo
         None => String::new(),
     };
     let bytes = (around.file)(file).ok_or_else(|| refuse("Cook.Effect.FileMissing", &[("where", "/file".into()), ("uri", file.to_string())]))?;
-    let pcm = decode(&bytes, file)?;
+    let pcm = decode(&bytes, file, &EFFECT_BOUNDS)?;
     if pcm.channels == 0 || pcm.channels > 2 {
         return Err(refuse("Cook.Sound.Channels", &[("uri", file.to_string()), ("count", pcm.channels.to_string()), ("max", "2".into())]));
     }

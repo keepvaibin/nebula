@@ -91,7 +91,7 @@ fn a_wav_stream_round_trips_with_its_loop() {
 #[test]
 fn an_ogg_stream_round_trips_its_loop_and_rate() {
     let bytes = include_bytes!("../../data/sound/s16.ogg").to_vec();
-    let pcm = decode(&bytes, "s.ogg").unwrap();
+    let pcm = decode(&bytes, "s.ogg", &BOUNDS).unwrap();
     let (made, facts) = cook_with(r#"{"kind":"stream","file":"s.ogg"}"#, &[("s.ogg", bytes)], &[]).unwrap();
     let (h, samples) = read_back(&made[0].1);
     assert_eq!((h[1], h[2], h[3], h[4], h[5], h[6], h[7]), (2, 44100, 8192, 1, 1000, 6000, 127));
@@ -162,4 +162,22 @@ fn hostile_stream_files_are_refused_by_name() {
     rstm[..4].copy_from_slice(b"RSTM");
     rstm[4..6].copy_from_slice(&[0xFE, 0xFF]);
     assert_eq!(refused("b.brstm", rstm), "Cook.Sound.StreamFile");
+}
+
+/// M-151: a FLAC stream whose STREAMINFO says 2^28 frames (93 minutes at 48 kHz) is refused from its header, before a
+/// frame is decoded; before, every frame was decoded, 2^28 samples a channel, and refused only then. A header that says
+/// nothing is stopped at the first frame past 20 minutes; an Ogg's last page is read as its length.
+#[test]
+fn a_long_stream_is_refused_from_its_header() {
+    let started = std::time::Instant::now();
+    let refused = |name: &str, bytes: Vec<u8>| said(&cook_with(&format!(r#"{{"kind":"stream","file":"{name}"}}"#), &[(name, bytes)], &[]).unwrap_err());
+    let long = crate::cook::flac::silent(2, 48000, 1 << 28, 4097);
+    assert_eq!(refused("long.flac", long), ("Cook.Sound.StreamTooLong", vec![("seconds", "5592.4".to_string()), ("max", "1200".to_string())]));
+    assert_eq!(refused("unsaid.flac", crate::cook::flac::silent(1, 8000, 0, 300)).0, "Cook.Sound.StreamTooLong");
+    let ogg = crate::cook::sound_effect::ogg_with_last_granule(include_bytes!("../../data/sound/s16.ogg"), 44100 * 2000);
+    assert_eq!(refused("long.ogg", ogg), ("Cook.Sound.StreamTooLong", vec![("seconds", "2000.0".to_string()), ("max", "1200".to_string())]));
+    // Seven channels and a rate of 1 Hz: refused from the header too.
+    assert_eq!(refused("wide.flac", crate::cook::flac::silent(7, 48000, 0, 1)).0, "Cook.Sound.StreamChannels");
+    assert_eq!(refused("slow.flac", crate::cook::flac::silent(1, 1, 0, 1)).0, "Cook.Sound.Rate");
+    assert!(started.elapsed() < std::time::Duration::from_secs(10), "{:?}", started.elapsed());
 }

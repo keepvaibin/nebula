@@ -233,11 +233,11 @@ fn flac_from_a_real_encoder_decodes_to_its_exact_samples() {
         ("s16.flac", &include_bytes!("../../data/sound/s16.flac")[..], Some((1000, 6000))),
         ("s16-fixed.flac", &include_bytes!("../../data/sound/s16-fixed.flac")[..], None),
     ] {
-        let f = crate::cook::flac::decode(bytes).unwrap();
+        let f = crate::cook::flac::decode(bytes, u64::MAX).unwrap();
         assert_eq!((f.channels, f.rate, f.bits, f.loop_points), (2, 44100, 16, looped), "{name}");
         assert!(f.samples == stereo, "{name}: first difference at {:?}", f.samples.iter().zip(&stereo).position(|(a, b)| a != b));
     }
-    let f = crate::cook::flac::decode(include_bytes!("../../data/sound/m24.flac")).unwrap();
+    let f = crate::cook::flac::decode(include_bytes!("../../data/sound/m24.flac"), u64::MAX).unwrap();
     assert_eq!((f.channels, f.rate, f.bits), (1, 48000, 24));
     let mono = fixture_source(1, true);
     assert!(f.samples == mono, "m24: first difference at {:?}", f.samples.iter().zip(&mono).position(|(a, b)| a != b));
@@ -251,7 +251,7 @@ fn flac_from_a_real_encoder_decodes_to_its_exact_samples() {
 
 #[test]
 fn ogg_vorbis_from_a_real_encoder_decodes_close_to_its_source() {
-    let pcm = decode(include_bytes!("../../data/sound/s16.ogg"), "s16.ogg").unwrap();
+    let pcm = decode(include_bytes!("../../data/sound/s16.ogg"), "s16.ogg", &EFFECT_BOUNDS).unwrap();
     let stereo = fixture_source(2, false);
     assert_eq!((pcm.channels, pcm.rate, pcm.loop_points), (2, 44100, Some((1000, 6000))));
     assert_eq!(pcm.samples.len(), stereo.len(), "every frame and no more");

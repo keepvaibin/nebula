@@ -84,21 +84,14 @@ fn read_wav(bytes: &[u8]) -> Result<Audio> {
     Ok(Audio { channels, rate, samples, loop_points })
 }
 
-fn read_ogg(bytes: &[u8]) -> Result<Audio> {
-    let mut reader = lewton::inside_ogg::OggStreamReader::new(std::io::Cursor::new(bytes)).context("the Ogg file can't be read")?;
-    let channels = usize::from(reader.ident_hdr.audio_channels);
-    let rate = reader.ident_hdr.audio_sample_rate;
-    let comment = |name: &str| reader.comment_hdr.comment_list.iter().find(|(k, _)| k.eq_ignore_ascii_case(name)).and_then(|(_, v)| v.trim().parse::<u32>().ok());
-    let loop_points = match (comment("LOOPSTART"), comment("LOOPEND"), comment("LOOPLENGTH")) {
-        (Some(start), Some(end), _) => Some((start, end)),
-        (Some(start), None, Some(length)) => Some((start, start.saturating_add(length))),
-        _ => None,
-    };
-    let mut samples = Vec::new();
-    while let Some(packet) = reader.read_dec_packet_itl().context("the Ogg file can't be read")? {
-        samples.extend_from_slice(&packet);
-    }
-    Ok(Audio { channels, rate, samples, loop_points })
+/// An Ogg Vorbis file read as a `.sound.json` stream's is (sound_effect::decode): its channels, rate and length checked
+/// against a stream's bounds from its headers before it is decoded (M-159), the samples back to the 16-bit values the
+/// decoder gave.
+fn read_ogg(name: &str, bytes: &[u8]) -> Result<Audio> {
+    let pcm = super::sound_effect::decode(bytes, name, &super::sound_stream::BOUNDS)?;
+    let samples = pcm.samples.iter().map(|&v| (v * 32768.0).round().clamp(-32768.0, 32767.0) as i16).collect();
+    let loop_points = pcm.loop_points.and_then(|(start, end)| Some((u32::try_from(start).ok()?, u32::try_from(end).ok()?)));
+    Ok(Audio { channels: pcm.channels, rate: pcm.rate, samples, loop_points })
 }
 
 
@@ -358,7 +351,7 @@ pub fn to_stream(name: &str, bytes: &[u8]) -> Result<Vec<u8>> {
     let audio = if lower.ends_with(".wav") {
         read_wav(bytes)?
     } else if lower.ends_with(".ogg") {
-        read_ogg(bytes)?
+        read_ogg(name, bytes)?
     } else if lower.ends_with(".brstm") || lower.ends_with(".bcstm") || lower.ends_with(".bfstm") {
         read_nintendo_stream(bytes)?
     } else {
@@ -572,5 +565,18 @@ mod tests {
         assert!(to_stream("a.wav", b"nope").is_err());
         assert!(to_stream("a.ogg", b"nope").is_err());
         assert!(to_stream("a.mp3", b"nope").is_err());
+    }
+
+    /// M-159: an Ogg in place of a game stream is read within a stream's bounds: the fixture keeps its rate, frames and
+    /// loop; a last page saying 2,000 seconds is refused before a packet is decoded (it was decoded to its end, with
+    /// no bound).
+    #[test]
+    fn an_ogg_is_read_within_a_streams_bounds() {
+        let ogg = include_bytes!("../../data/sound/s16.ogg");
+        let s = to_stream("a.ogg", ogg).unwrap();
+        assert_eq!([word(&s, 1), word(&s, 2), word(&s, 3), word(&s, 5), word(&s, 6)], [2, 44100, 8192, 1000, 6000]);
+        let long = crate::cook::sound_effect::ogg_with_last_granule(ogg, 44100 * 2000);
+        let (why, args) = crate::cook::refuse::said(&to_stream("a.ogg", &long).unwrap_err());
+        assert_eq!((why, args), ("Cook.Sound.StreamTooLong", vec![("seconds", "2000.0".to_string()), ("max", "1200".to_string())]));
     }
 }
