@@ -251,10 +251,17 @@ std::string utf8_of(const fs::path& path) {
     return std::string(reinterpret_cast<const char*>(text.data()), text.size());
 }
 
+// The line goes to the log by its writer's thread (galaxy/whole_lines.h): the game thread, a caller, never waits on
+// the log's disk. A process that ends other than by returning from main flushes it first (whole_lines::flush).
 void log_line(const char* tag, const char* text) {
     const double t = std::chrono::duration<double>(Clock::now() - kStart).count();
-    std::fprintf(stdout, "[%9.3f] %s %s\n", t, tag, text);
-    std::fflush(stdout);
+    char stamp[32];
+    const int stamped = std::snprintf(stamp, sizeof(stamp), "[%9.3f] ", t);
+    const std::size_t stamp_size = stamped > 0 ? static_cast<std::size_t>(stamped) : 0u;
+    std::string line;
+    line.reserve(stamp_size + std::strlen(tag) + std::strlen(text) + 2u);
+    line.append(stamp, stamp_size).append(tag).append(1, ' ').append(text).append(1, '\n');
+    galaxy::whole_lines::write(stdout, line.data(), line.size());
     galaxy::extensions::log_line(tag, text);
 }
 
@@ -437,13 +444,13 @@ void report_crash_facts(const fs::path& dump) {
     std::vsnprintf(text, sizeof(text), format, args);
     va_end(args);
     log_line("fatal:", text);
-    std::fflush(stdout);
+    galaxy::whole_lines::flush();
     gather_crash_facts(galaxy::crash::Facts::Kind::Startup, text);
     report_crash_facts({});
 #if defined(NEBULA_HOST_RENDERER)
     flush_progress_bounded(1500u);
 #endif
-    std::fflush(stdout);
+    galaxy::whole_lines::flush();
     std::_Exit(3);
 }
 
@@ -1395,6 +1402,7 @@ constexpr DWORD kHeapCorruption = 0xC0000374u;  // STATUS_HEAP_CORRUPTION (ntsta
     // The dump and report are written: whatever the crashed thread still does (a flush behind a lock another thread
     // held when it stopped) never keeps the process alive.
     Sleep(5000);
+    galaxy::whole_lines::flush(1000u);
     TerminateProcess(GetCurrentProcess(), 4);
     std::_Exit(4);
 }
@@ -1472,7 +1480,7 @@ void report_crash(EXCEPTION_POINTERS* info) {
     gCrashThread = GetCurrentThreadId();
     SetEvent(gCrashRequest);
     WaitForSingleObject(gCrashDone, 60000);
-    std::fflush(stdout);
+    galaxy::whole_lines::flush();
 }
 
 // The mod whose plugin's code was running at a fault: the fault's own place, else the nearest plugin frame the stack
@@ -1561,6 +1569,7 @@ void note_crash_plugin(const EXCEPTION_POINTERS* info) noexcept {
                        code == EXCEPTION_STACK_OVERFLOW);
     note_crash_plugin(info);
     report_crash(info);
+    galaxy::whole_lines::flush(1000u);
     TerminateProcess(GetCurrentProcess(), 4);
     std::_Exit(4);
 }
@@ -1705,6 +1714,7 @@ void abort_handler(int) {
         EXCEPTION_POINTERS pointers{&record, &context};
         report_crash(&pointers);
     }
+    galaxy::whole_lines::flush(1000u);
     TerminateProcess(GetCurrentProcess(), 3);
     std::_Exit(3);
 }
@@ -1765,6 +1775,7 @@ LONG WINAPI unhandled_filter(EXCEPTION_POINTERS* info) {
     }
     gCrashForeign = !cpp && owner != GetModuleHandleW(nullptr) && owner != static_cast<HMODULE>(gModule.module);
     report_crash(info);
+    galaxy::whole_lines::flush(1000u);
     TerminateProcess(GetCurrentProcess(), 4);
     std::_Exit(4);
 }
@@ -1900,7 +1911,7 @@ void svc_fatal(void*, const char* text) {
 #else
     report_crash_facts({});
 #endif
-    std::fflush(stdout);
+    galaxy::whole_lines::flush();
     std::_Exit(3);
 }
 
@@ -2059,7 +2070,7 @@ int run_start_check(unsigned frames) {
     galaxy::render::wait_for_render_idle();
     const galaxy::render::DisplayPresentStats shown = galaxy::render::display_present_stats();
     std::printf("start check: %u frames drawn, %llu pictures shown\n", frames, static_cast<unsigned long long>(shown.presented));
-    std::fflush(stdout);
+    galaxy::whole_lines::flush();
     return shown.presented != 0u ? 0 : 4;
 }
 
@@ -4444,8 +4455,7 @@ DWORD WINAPI hand_over_backstop(void* event) {
 
 void hand_over(HANDLE event, const std::wstring& cooked) {
     log_line("host:", "ending: the new process takes over");
-    std::fflush(stdout);
-    std::fflush(stderr);
+    galaxy::whole_lines::flush();
     // Before the stop: every mapped view's base, and those of files under .cooked, by the path the system names them
     // with (\Device\...\mods\.cooked\...): the folder's path past its drive is found in it, letters in any case.
     static const void* mapped[kHandOverViews];
@@ -4663,14 +4673,13 @@ void hand_off_to(galaxy::render::RendererKind kind, const char* why) {
         return;
     }
     log_line((std::string("host: ") + renderer_title(kind) + " takes the start:").c_str(), why);
-    std::fflush(stdout);
-    std::fflush(stderr);
+    galaxy::whole_lines::flush();
     unsigned long code = 1u;
     if (!nebula_run_sibling(path.c_str(), &code)) {
         log_line((std::string("host: the ") + renderer_title(kind) + " program did not start:").c_str(), why);
         return;
     }
-    std::fflush(stdout);
+    galaxy::whole_lines::flush();
     TerminateProcess(GetCurrentProcess(), static_cast<UINT>(code));
 }
 #endif
@@ -4732,7 +4741,7 @@ void hand_off_to(galaxy::render::RendererKind kind, const char* why) {
     // Windows HDR the game turned on goes off again; a restart hands it to the next process (render/os_hdr.h).
     galaxy::render::os_hdr::finish(restart);
 #endif
-    std::fflush(stdout);
+    galaxy::whole_lines::flush();
 #if defined(_WIN32)
     if (restart) {
 #if defined(NEBULA_HOST_RENDERER)
@@ -4870,7 +4879,7 @@ void hand_off_to(galaxy::render::RendererKind kind, const char* why) {
         }
         if (!exe.empty()) execv(exe.c_str(), arguments.data());
         log_line("host:", ("the game could not start again: " + std::string(std::strerror(errno))).c_str());
-        std::fflush(stdout);
+        galaxy::whole_lines::flush();
     }
 #else
     (void)restart;  // an iOS app cannot replace its own image: kHostStartsAgain is false there
@@ -6034,8 +6043,7 @@ int main(int argc, char** argv) {
     if (const unsigned frames = ::galaxy::launch_args().start_check; frames != 0u) {
         // The process ends here without the renderer's shutdown, as a game's end does (finish_and_exit).
         const int code = run_start_check(frames);
-        std::fflush(stdout);
-        std::fflush(stderr);
+        galaxy::whole_lines::flush();
         std::_Exit(code);
     }
     if (benchmark) {

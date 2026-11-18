@@ -85,7 +85,7 @@ int main(int argc, char** argv) {
         });
     }
     for (std::thread& thread : threads) thread.join();
-    std::fflush(stderr);
+    galaxy::whole_lines::flush();
     std::ifstream in(path, std::ios::binary);
     std::set<std::pair<int, int>> seen;
     int broken = 0;

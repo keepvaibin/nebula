@@ -29,6 +29,8 @@ set(render_src "${galaxy_rt}/render")
 
 # The process's output: every line whole, whichever threads write.
 galaxy_test(galaxy_whole_lines_tests SOURCES ${rt}/whole_lines_tests.cpp ${rt}/whole_lines.cpp)
+# Its writer's thread: no caller waits on a stuck output; order kept; flush bounded.
+galaxy_test(galaxy_line_writer_tests SOURCES ${rt}/line_writer_tests.cpp)
 # The pacing measures (file 00 4.3) on synthetic runs, and the recorder that feeds them.
 galaxy_test(galaxy_pacing_tests SOURCES ${rt}/pacing_tests.cpp ${rt}/pacing.cpp ${rt}/pacing_recorder.cpp)
 # The frame threads' CPU time by thread (the pacing line). Windows reads no thread's CPU time there (perf_hint.cpp's
