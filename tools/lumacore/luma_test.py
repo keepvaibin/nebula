@@ -1506,12 +1506,19 @@ def place_mods(test, settings, previous, frozen, ports=None):
 
 
 def write_run_settings(test, settings):
-    """The run's settings file: the window's size and the test's language (tools/verify/settings_args.py)."""
+    """The run's settings file: the window's size, the test's language, VSync off for a fixed-step run, and the test's own settings
+    (tools/verify/settings_args.py)."""
     assignments = ["GALAXY_WINDOW_WIDTH=%d" % test["window"][0], "GALAXY_WINDOW_HEIGHT=%d" % test["window"][1]]
     if test["language"] is not None:
         assignments.append("GALAXY_LANGUAGE=%s" % LANGUAGES[test["language"]])
     if GPU is not None:
         assignments.append("GALAXY_GPU=%s" % GPU)
+    named = {a.partition("=")[0] for a in test.get("settings", [])}
+    if test.get("time", "steps") == "steps" and "GALAXY_VSYNC_INTERVAL" not in named:
+        # A fixed-step run's frames do not follow the display, so its presents need not wait for the refresh (N-1052:
+        # Direct3D's VSync waits where Vulkan's MAILBOX does not, which made the Direct3D suites the gate's slowest).
+        # A test that names the setting (the pace suite's real-time runs) keeps its own.
+        assignments.append("GALAXY_VSYNC_INTERVAL=0")
     assignments += [a for a in test.get("settings", []) if a.partition("=")[0] not in TEST_HOOKS]
     subprocess.run([sys.executable, "-I", str(TREE / "tools" / "verify" / "settings_args.py"), str(settings)] + assignments,
                    check=True, capture_output=True)
