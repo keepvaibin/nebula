@@ -488,6 +488,8 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
     if (FAILED(hr)) {
         if (hr == E_OUTOFMEMORY) {
             note_pipeline_out_of_memory();
+        } else if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET || hr == DXGI_ERROR_DEVICE_HUNG) {
+            note_pipeline_device_lost();
         }
         std::fprintf(stderr, "[pipelines] create failed %08lx: %llx %llx state %08x variant %u aux %u\n", static_cast<unsigned long>(hr),
                      static_cast<unsigned long long>(desc.vertex), static_cast<unsigned long long>(desc.pixel), state, variant, aux);
