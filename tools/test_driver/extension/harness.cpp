@@ -418,10 +418,16 @@ struct Input {
 struct Picture {
     std::uint64_t game_frame;
     std::string name;
+    std::optional<std::chrono::steady_clock::time_point> held;  // first present it waited at for prepared graphics
 };
+
+// The frame lists the game may queue ahead of the one presented (at most 8, render_core), and more: a menu picture is
+// of a frame whose menu was drawn once no pipeline was left.
+constexpr std::uint32_t kPictureSettlePresents = 10u;
 
 struct State {
     const NebulaHostForExtension* host = nullptr;
+    std::uint32_t presents_clear = kPictureSettlePresents;  // presents since a menu showed pipelines left
     void (*log)(const std::string&) = nullptr;
     void (*quit)() = nullptr;
     bool on = false;
@@ -952,7 +958,7 @@ void run_step(Step& s, std::int64_t now) {
         }
         g.host->open_settings(g.host->host, s.key);
         break;
-    case Action::Picture: g.pictures.push_back({g.game_frame, s.text}); break;
+    case Action::Picture: g.pictures.push_back({g.game_frame, s.text, std::nullopt}); break;
     case Action::Wait: break;
     case Action::End:
         // A picture asked before the end and not yet taken (the render thread draws behind the game) is the run's
@@ -1367,14 +1373,40 @@ void controls(std::uint64_t game_frames, NebulaExtensionControls* out) {
 
 const char* picture_path(std::uint64_t game_frame, std::uint32_t kind) {
     std::lock_guard<std::recursive_mutex> hold(g_lock);
-    if (!g.on || g.pictures.empty() || kind == NEBULA_EXT_PICTURE_GENERATED || game_frame < g.pictures.front().game_frame) {
+    if (!g.on || kind == NEBULA_EXT_PICTURE_GENERATED) {
         return nullptr;
+    }
+    // Nebula's own menu shows how far the pipelines behind the game are ("Preparing graphics: 95 %"), which is this
+    // machine's speed, not the test's: a picture of it waits until they are made (the menu holds the game, so what it
+    // shows is the same) and the frames drawn before are presented. At most 120 s; then it is taken and its fact says
+    // how many were left.
+    std::uint32_t left = 0u;
+    const bool menu = g.host != nullptr && g.host->size >= offsetof(NebulaHostForExtension, pipelines_left) + sizeof(g.host->pipelines_left) &&
+                      g.host->pipelines_left != nullptr && g.host->menu_open != nullptr &&
+                      g.host->menu_open(g.host->host) != NEBULA_EXT_MENU_NONE;
+    if (menu) {
+        left = g.host->pipelines_left(g.host->host);
+        g.presents_clear = left != 0u ? 0u : std::min(g.presents_clear + 1u, kPictureSettlePresents);
+    }
+    if (g.pictures.empty() || game_frame < g.pictures.front().game_frame) {
+        return nullptr;
+    }
+    if (menu && (left != 0u || g.presents_clear < kPictureSettlePresents)) {
+        const auto now = std::chrono::steady_clock::now();
+        Picture& rWaiting = g.pictures.front();
+        if (!rWaiting.held) {
+            rWaiting.held = now;
+        }
+        if (now - *rWaiting.held < std::chrono::seconds(120)) {
+            return nullptr;
+        }
     }
     const Picture p = g.pictures.front();
     g.pictures.pop_front();
     g.picture_file = g.out + "/pictures/" + p.name + ".ppm";
     write_fact("picture." + p.name, "{\"game_frame\":" + std::to_string(game_frame) + ",\"asked_at\":" +
-                                        std::to_string(static_cast<long long>(p.game_frame) - static_cast<long long>(g.base.value_or(0u))) + "}");
+                                        std::to_string(static_cast<long long>(p.game_frame) - static_cast<long long>(g.base.value_or(0u))) +
+                                        ",\"pipelines_left\":" + std::to_string(left) + "}");
     if (g.end_at && g.pictures.empty()) {
         finish({}, {});
     }

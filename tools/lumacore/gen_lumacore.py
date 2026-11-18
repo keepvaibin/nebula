@@ -51,6 +51,9 @@ def main():
         print('LumaCore generated files current')
         return
     rows, dupes = gen_classes.classes(INC)
+    if dupes:
+        # The second header's class would get no row of its own: its objects would carry the first one's id.
+        raise SystemExit('LumaCore class rows: a class is named in two headers: ' + ', '.join(sorted(dupes)))
     OUT.mkdir(parents=True, exist_ok=True)
     IDS.mkdir(parents=True, exist_ok=True)
     write(IDS / 'lumacore_class_ids.hpp', gen_classes.emit_class_ids(rows))
@@ -58,10 +61,10 @@ def main():
     write(hash_file, digest + '\n')
     doc = [f'{len(rows)} classes derive from NameObj. A luma.json `object_classes` row\'s `like` names '
            'one of them; a mod\'s code reads the same rows through LumaCore (class count, row, is-a).', '',
-'', '## Classes', '', '| Class | Parent | Header |', '|---|---|---|']
+           '## Classes', '', '| Class | Parent | Header |', '|---|---|---|']
     doc += [f'| {q} | {p or ""} | {rel} |' for (q, p, rel, _) in rows]
     reference_pages.write_page('classes', '\n'.join(doc), DOCS)
-    print(f'classes {len(rows)} ({len(dupes)} names in two headers: {", ".join(dupes)})')
+    print(f'classes {len(rows)}')
 
 
 if __name__ == '__main__':

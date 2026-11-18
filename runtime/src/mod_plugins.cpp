@@ -51,6 +51,11 @@ void (*g_log)(const char*) = nullptr;
 std::vector<AchievementToAdd> g_achievements;
 // Each one known to be unlocked (now or in an earlier run): an event that matches it again costs nothing.
 std::unique_ptr<std::atomic<bool>[]> g_achievement_done;
+// Per event: the achievements whose "when" names it (their indexes), and how many of them are still locked. Its
+// callback goes once none is (M-112). Each achievement's event, or -1.
+std::vector<std::uint32_t> g_on_event[NEBULA_MOD_EVENT_COUNT];
+std::atomic<std::uint32_t> g_locked_on_event[NEBULA_MOD_EVENT_COUNT];
+std::vector<int> g_event_of;
 bool (*g_achievement_store)(std::string_view key) = nullptr;
 std::mutex g_unlocked_mutex;
 std::vector<std::int32_t> g_unlocked;
@@ -86,21 +91,30 @@ static_assert(sizeof(kEventNames) / sizeof(kEventNames[0]) == NEBULA_MOD_EVENT_C
 
 bool unlock_achievement_at(std::size_t index) {
     if (index >= g_achievements.size() || g_achievement_done[index].exchange(true)) return false;
+    if (index < g_event_of.size() && g_event_of[index] >= 0) g_locked_on_event[g_event_of[index]].fetch_sub(1u);
     if (g_achievement_store != nullptr && !g_achievement_store(g_achievements[index].key)) return false;
     const std::lock_guard<std::mutex> lock(g_unlocked_mutex);
     g_unlocked.push_back(static_cast<std::int32_t>(index));
     return true;
 }
 
-// An event some achievement's "when" names: each one it matches is unlocked. What the event carries is not changed.
+void say(const std::string& text);
+
+// An event some achievement's "when" names: each locked one on it that it matches is unlocked. What the event carries
+// is not changed. Once every achievement on it is unlocked, the callback goes, and the game raises the event for them
+// no more.
 void achievement_event(const NebulaModEventData* data, void* user) {
     const int event = static_cast<int>(reinterpret_cast<std::intptr_t>(user));
-    for (std::size_t i = 0; i < g_achievements.size(); ++i) {
+    for (const std::uint32_t i : g_on_event[event]) {
+        if (g_achievement_done[i].load(std::memory_order_acquire)) continue;
         const AchievementToAdd& achievement = g_achievements[i];
-        if (mod_event_by_name(achievement.event) != event) continue;
         if (!achievement.event_name.empty() && (data->name == nullptr || achievement.event_name != data->name)) continue;
         if (achievement.has_value && achievement.event_value != data->value) continue;
         (void)unlock_achievement_at(i);
+    }
+    if (g_locked_on_event[event].load(std::memory_order_acquire) == 0u && g_api.unsubscribe != nullptr &&
+        g_api.unsubscribe(static_cast<NebulaModEvent>(event), achievement_event, user) == 0) {
+        say(std::string("achievements: none waits for ") + kEventNames[event] + " now");
     }
 }
 
@@ -382,18 +396,25 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
         g_achievements = rows.achievements;
         g_achievement_done = std::make_unique<std::atomic<bool>[]>(g_achievements.size());
         {
-            bool subscribed[NEBULA_MOD_EVENT_COUNT] = {};
-            for (const AchievementToAdd& achievement : g_achievements) {
+            g_event_of.assign(g_achievements.size(), -1);
+            for (std::vector<std::uint32_t>& on : g_on_event) on.clear();
+            for (std::size_t i = 0; i < g_achievements.size(); ++i) {
+                const AchievementToAdd& achievement = g_achievements[i];
                 if (achievement.event.empty()) continue;
                 const int event = mod_event_by_name(achievement.event);
                 if (event < 0) {
                     say(achievement.mod_id + ": the achievement " + achievement.key + " waits for an event the game has not: " + achievement.event);
                     continue;
                 }
-                if (subscribed[event]) continue;
-                subscribed[event] = true;
+                g_event_of[i] = event;
+                g_on_event[event].push_back(static_cast<std::uint32_t>(i));
+            }
+            for (int event = 0; event < NEBULA_MOD_EVENT_COUNT; ++event) {
+                g_locked_on_event[event].store(static_cast<std::uint32_t>(g_on_event[event].size()), std::memory_order_release);
+                if (g_on_event[event].empty()) continue;
                 if (g_api.subscribe(static_cast<NebulaModEvent>(event), achievement_event, reinterpret_cast<void*>(static_cast<std::intptr_t>(event))) != 0) {
-                    say(achievement.mod_id + ": the achievement " + achievement.key + " cannot wait for " + achievement.event);
+                    const AchievementToAdd& first = g_achievements[g_on_event[event].front()];
+                    say(first.mod_id + ": the achievement " + first.key + " cannot wait for " + first.event);
                 }
             }
         }

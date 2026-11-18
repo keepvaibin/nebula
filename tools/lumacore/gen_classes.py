@@ -193,8 +193,15 @@ def emit_class_ids(rows):
     """lumacore_class_ids.hpp: kClassId<T> for every row (the factory's createNameObj<T> reads it)."""
     lines = [HEADER, '#pragma once', '', '#include <nebula_types.h>', '']
     lines += [forward(q, kind) for (q, _, _, kind) in rows]
-    lines += ['', 'namespace lumacore {', "    // A class's id: its row in kClassRows. 0 (NameObj) for a type with no row.",
-              '    template < typename T >', '    inline constexpr u16 kClassId = 0;']
+    lines += ['', 'namespace lumacore {',
+              "    // A class's id: its row in kClassRows. A type with no row stops the build: the header scan",
+              '    // (tools/lumacore/gen_classes.py) did not find its class, so its objects would be named NameObj.',
+              '    template < typename T >', '    inline constexpr bool kNoRow = false;',
+              '    template < typename T >', '    struct NoRow {',
+              '        static_assert(kNoRow< T >, "this class has no row in the LumaCore class rows: run tools/lumacore/gen_lumacore.py, "',
+              '                                   "or write its head as the scan reads it (gen_classes.py)");',
+              '        static constexpr u16 kId = 0;', '    };',
+              '    template < typename T >', '    inline constexpr u16 kClassId = NoRow< T >::kId;']
     for i, (q, _, _, _) in enumerate(rows):
         lines.append(f'    template <> inline constexpr u16 kClassId< ::{q} > = {i};')
     lines += ['}  // namespace lumacore', '']

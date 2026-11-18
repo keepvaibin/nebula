@@ -1063,9 +1063,18 @@ class YellowChipGroup;
 class YesNoLayout;
 
 namespace lumacore {
-    // A class's id: its row in kClassRows. 0 (NameObj) for a type with no row.
+    // A class's id: its row in kClassRows. A type with no row stops the build: the header scan
+    // (tools/lumacore/gen_classes.py) did not find its class, so its objects would be named NameObj.
     template < typename T >
-    inline constexpr u16 kClassId = 0;
+    inline constexpr bool kNoRow = false;
+    template < typename T >
+    struct NoRow {
+        static_assert(kNoRow< T >, "this class has no row in the LumaCore class rows: run tools/lumacore/gen_lumacore.py, "
+                                   "or write its head as the scan reads it (gen_classes.py)");
+        static constexpr u16 kId = 0;
+    };
+    template < typename T >
+    inline constexpr u16 kClassId = NoRow< T >::kId;
     template <> inline constexpr u16 kClassId< ::NameObj > = 0;
     template <> inline constexpr u16 kClassId< ::LiveActor > = 1;
     template <> inline constexpr u16 kClassId< ::Air > = 2;

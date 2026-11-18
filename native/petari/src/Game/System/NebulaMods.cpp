@@ -112,6 +112,23 @@ namespace {
     List< Subscriber > sSubscribers[NEBULA_MOD_EVENT_COUNT];
     // The events service's (setWatched): some mod watches the event.
     bool sWatched[NEBULA_MOD_EVENT_COUNT];
+    // The runs of each event in progress, and whether a callback was ended during one: its row is emptied then, and the
+    // list closed up when the outermost run ends (the run walks the list by index).
+    u32 sRunning[NEBULA_MOD_EVENT_COUNT];
+    bool sEnded[NEBULA_MOD_EVENT_COUNT];
+
+    void closeUp(u32 event) {
+        List< Subscriber >& rList = sSubscribers[event];
+        int kept = 0;
+        for (int i = 0; i < rList.mCount; i++) {
+            if (rList.mItems[i].mCallback != nullptr) {
+                rList.mItems[kept++] = rList.mItems[i];
+            }
+        }
+        rList.mCount = kept;
+        sEnded[event] = false;
+        NebulaMods::sWanted[event] = sWatched[event] || kept != 0;
+    }
     struct HungryLuma {
         s32 mSlot;
         s32 mPrice;
@@ -164,6 +181,24 @@ namespace {
         sSubscribers[event].add(subscriber);
         NebulaMods::sWanted[event] = true;
         return 0;
+    }
+
+    int32_t apiUnsubscribe(NebulaModEvent event, NebulaModCallback callback, void* user) {
+        if (static_cast< u32 >(event) >= NEBULA_MOD_EVENT_COUNT || callback == nullptr) {
+            return -1;
+        }
+        List< Subscriber >& rList = sSubscribers[event];
+        for (int i = 0; i < rList.mCount; i++) {
+            if (rList.mItems[i].mCallback == callback && rList.mItems[i].mUser == user) {
+                rList.mItems[i].mCallback = nullptr;
+                sEnded[event] = true;
+                if (sRunning[event] == 0) {
+                    closeUp(event);
+                }
+                return 0;
+            }
+        }
+        return -1;
     }
 
     int32_t apiAddGalaxy(const NebulaGalaxy* pGalaxy) {
@@ -543,6 +578,7 @@ namespace {
         apiAddSoundEffect,
         apiAddPlayerAnimation,
         apiSetStory,
+        apiUnsubscribe,
     };
 }  // namespace
 
@@ -566,8 +602,15 @@ namespace NebulaMods {
     void dispatch(NebulaModEvent event, s32 value, void* pActor, const char* pName) {
         const List< Subscriber >& rSubscribers = sSubscribers[event];
         const NebulaModEventData data = {value, static_cast< NebulaActor* >(pActor), pName};
+        sRunning[event]++;
         for (int i = 0; i < rSubscribers.mCount; i++) {
-            rSubscribers.mItems[i].mCallback(&data, rSubscribers.mItems[i].mUser);
+            const NebulaModCallback callback = rSubscribers.mItems[i].mCallback;
+            if (callback != nullptr) {
+                callback(&data, rSubscribers.mItems[i].mUser);
+            }
+        }
+        if (--sRunning[event] == 0 && sEnded[event]) {
+            closeUp(event);
         }
         if (sWatched[event]) {
             luma::events::raise(static_cast< u32 >(event), value, pActor, pName);

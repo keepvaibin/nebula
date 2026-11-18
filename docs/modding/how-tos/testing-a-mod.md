@@ -108,7 +108,8 @@ A `call` step calls a game function by name and records its result. A `read` ste
 
 ### Pictures
 
-A `picture` step saves the frame. Compare it with a reference picture, or check the color of part of it:
+A `picture` step saves the frame. A picture of Nebula's own menu waits until the game's graphics are prepared, so the
+menu's status line is the same on any computer. Compare it with a reference picture, or check the color of part of it:
 
 ```json
 { "picture": "after", "like": "refs/after.png", "within": { "rmse": 6.0 } },

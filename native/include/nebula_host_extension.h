@@ -126,6 +126,9 @@ typedef struct NebulaHostForExtension {
        does): taken out with the mods that use it, loaded again, then they are; the harness fact reload.<id> once it
        ends. Null in a host without mods. */
     void (*reload_mod)(void* host, const char* mod_id);
+    /* The pipelines still being prepared behind the game (the Settings status line's "Preparing graphics"); 0 when none
+       is. Null in a host without a renderer. */
+    uint32_t (*pipelines_left)(void* host);
 } NebulaHostForExtension;
 
 /* What the extension offers. Each function may be null. */

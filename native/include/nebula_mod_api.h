@@ -233,6 +233,10 @@ typedef struct NebulaModApi {
        instead of the prologue; "hub" is where the player returns after a galaxy instead of the Comet Observatory;
        "story_scenes" "off" skips the game's story scenes. */
     int32_t (*set_story)(const char* key, const char* value);
+    /* Ends the subscription of `callback` with `user` to `event` (the first, if made twice); -1: there is none. A
+       callback may end its own while the event runs: the callbacks after it in that run still run. An event no
+       callback and no mod watches is not raised. */
+    int32_t (*unsubscribe)(NebulaModEvent event, NebulaModCallback callback, void* user);
 } NebulaModApi;
 
 #ifdef __cplusplus

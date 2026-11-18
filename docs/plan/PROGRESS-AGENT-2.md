@@ -260,3 +260,16 @@ One dated entry per package step. Newest last. Ledger rows are in ledger.tsv (ag
   On the kernel before, the take-out waited for the call, which waited for the stop (stopped_seen 0), and 1410 made
   a Kuribo off the game thread (off_made_null 0).
 - Ledger: M-013, M-009 fixed; N-2052 opened (renderer feature list, found by Agent 1).
+
+## 2026-11-17 M-110, M-112, N-2053: no silent class id, achievements stop costing, menu pictures are the machine's no more
+
+- M-110: kClassId of a type with no class row stops the build (a static_assert in the primary template) instead of
+  naming its objects NameObj. gen_lumacore.py refuses a class in two headers. class_rows_fixture_test.py (in the gate)
+  compares the committed rows with what the generator makes now, and compiles a probe each way.
+- M-112: achievements are matched by event number, read once; each event's callback walks only its own achievements
+  and ends its subscription once all are unlocked (NebulaModApi.unsubscribe; a callback may end its own while the
+  event runs). Test events 6902: "none waits for stage_start now", and coin's stays for coin-nine.
+- N-2053: a picture of the host's menu waits until the pipelines are made (pipelines_left) and ten frames drawn since
+  are presented, so its status line no longer reads "Preparing graphics" on a loaded machine. Found as safestart
+  6605's failure in the regression.
+- The types fixture's driver gives guard::probe (0e028f210): the M-007 commit had broken its link in the gate.

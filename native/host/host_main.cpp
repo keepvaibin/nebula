@@ -4286,6 +4286,7 @@ void extension_menu_key(void*, uint32_t key) {
         galaxy::render::native_settings_post_keyboard_key(static_cast<std::uintptr_t>(kKeys[key]));
     }
 }
+uint32_t extension_pipelines_left(void*) { return galaxy::render::pipeline_progress().left; }
 uint32_t extension_menu_open(void*) {
     if (galaxy::render::home_menu_visible()) {
         return NEBULA_EXT_MENU_HOME;
@@ -4372,6 +4373,7 @@ void attach_extensions() {
 #if defined(NEBULA_HOST_RENDERER)
     host.menu_key = extension_menu_key;
     host.menu_open = extension_menu_open;
+    host.pipelines_left = extension_pipelines_left;
     host.open_settings = extension_open_settings;
     host.resize_window = extension_resize_window;
     host.lose_gpu_device = extension_lose_gpu_device;
