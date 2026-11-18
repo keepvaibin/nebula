@@ -1,0 +1,22 @@
+{
+  "patch": 1,
+  "key": [
+    "l_id"
+  ],
+  "add": [
+    {
+      "name": "PowerStar",
+      "l_id": 9301,
+      "pos_x": -2864.6,
+      "pos_y": -12981.3,
+      "pos_z": -15332.0,
+      "dir_x": 0.0,
+      "dir_y": 0.0,
+      "dir_z": 0.0,
+      "scale_x": 1.0,
+      "scale_y": 1.0,
+      "scale_z": 1.0,
+      "Obj_arg0": 4
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 {
   "harness": 1,
   "name": "2493-native-late-take-out",
-  "about": "fn-late taken out while its draw.native function's first call holds the render thread (entered) and then waits there for the game thread to move on (fn-late-clock's count of LiveActor::calcAnim calls): the take-out does not wait for that call, the game goes on, the function sees the count move and returns, and fn-late's library goes after it (M-013). D3D12 only: on vulkan and d3d11 the game thread does not move while a PRESENT call holds the render thread (11-17: ticks_while_held 0 over 1.7 s), so no take-out can come during one there",
+  "about": "fn-late taken out while its draw.native function's first call holds the render thread (entered) and then waits there for the game thread to move on (fn-late-clock's count of LiveActor::calcAnim calls): the take-out does not wait for that call, the game goes on, the function sees the count move and returns, and fn-late's library goes after it (M-013)",
   "proves": [
     "draw.native.take_out"
   ],

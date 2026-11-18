@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "cm-star",
+  "version": "1.0.0",
+  "name": "cm-star",
+  "summary": "cm-star (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

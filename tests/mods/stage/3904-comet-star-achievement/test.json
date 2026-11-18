@@ -1,0 +1,65 @@
+{
+  "harness": 1,
+  "name": "3904-comet-star-achievement",
+  "about": "P-164: on a new file in EggStarGalaxy (scenario 1), cm-star places a PowerStar for the galaxy's comet star (Obj_arg0 4, its speedy comet; cm-probe reads both) where the player is put: the player takes it at once, and while its get sequence plays both First Star and First Comet unlock, before any next scene starts. A placed star does not appear in the comet scenarios themselves, so the test takes the comet's star in scenario 1; the achievement reads only which of the galaxy's stars is owned.",
+  "proves": [
+    "stage.place"
+  ],
+  "mods": [
+    {
+      "path": "../mods/cm-star",
+      "loads": false
+    },
+    "../mods/cm-probe"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3904
+      ]
+    },
+    {
+      "at": 120,
+      "picture": "f120"
+    },
+    {
+      "at": 240,
+      "picture": "f240"
+    },
+    {
+      "at": 250,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.cm-probe.comet_no",
+      "is": 4
+    },
+    {
+      "fact": "mod.cm-probe.comet_red",
+      "is": 1
+    },
+    {
+      "log": "achievement: first_star"
+    },
+    {
+      "log": "achievement: first_comet"
+    }
+  ],
+  "player": {
+    "position": [
+      -2864.6,
+      -12981.3,
+      -15332.0
+    ]
+  }
+}
