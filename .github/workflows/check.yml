@@ -464,9 +464,6 @@ jobs:
     timeout-minutes: 60
     env:
       SYSTEM_IMAGE: system-images;android-34;google_apis;x86_64
-      # Where avdmanager writes the device and the emulator reads it: without it they did not agree ("Unknown AVD
-      # name"). An absolute folder, made before avdmanager runs: a relative one that did not exist yet was not used.
-      ANDROID_AVD_HOME: ${{ runner.temp }}/avd
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
@@ -480,6 +477,11 @@ jobs:
           sudo udevadm trigger --name-match=kvm
       - name: The emulator and its system image
         run: |
+          # Where avdmanager writes the device and the emulator reads it, for this step and the later ones: without it
+          # they did not agree ("Unknown AVD name"). An absolute folder, made before avdmanager runs (the runner context
+          # cannot be read in a job's env).
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/avd"
+          echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
           mkdir -p "$ANDROID_AVD_HOME"
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install emulator platform-tools "$SYSTEM_IMAGE" > /dev/null
           echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force -n start -k "$SYSTEM_IMAGE"
