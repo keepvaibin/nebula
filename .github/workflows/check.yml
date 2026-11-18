@@ -465,8 +465,8 @@ jobs:
     env:
       SYSTEM_IMAGE: system-images;android-34;google_apis;x86_64
       # Where avdmanager writes the device and the emulator reads it: without it they did not agree ("Unknown AVD
-      # name").
-      ANDROID_AVD_HOME: ${{ github.workspace }}/../avd
+      # name"). An absolute folder, made before avdmanager runs: a relative one that did not exist yet was not used.
+      ANDROID_AVD_HOME: ${{ runner.temp }}/avd
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
@@ -480,16 +480,29 @@ jobs:
           sudo udevadm trigger --name-match=kvm
       - name: The emulator and its system image
         run: |
+          mkdir -p "$ANDROID_AVD_HOME"
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install emulator platform-tools "$SYSTEM_IMAGE" > /dev/null
           echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force -n start -k "$SYSTEM_IMAGE"
+          if ! "$ANDROID_HOME/emulator/emulator" -list-avds | grep -qx start; then
+            echo "the device was not made where the emulator reads it"
+            ls -la "$ANDROID_AVD_HOME" "$HOME/.android/avd" 2>&1
+            exit 1
+          fi
       - name: Start the emulator
         run: |
           nohup "$ANDROID_HOME/emulator/emulator" -avd start -no-window -no-audio -no-boot-anim -no-snapshot \
             -gpu swiftshader_indirect -camera-back none -camera-front none > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          emulator=$!
           adb="$ANDROID_HOME/platform-tools/adb"
-          timeout 600 "$adb" -s emulator-5554 wait-for-device
+          "$adb" start-server
+          # Started when the system says so; stopped at once when the emulator itself ends.
           for i in $(seq 1 120); do
-            [ "$("$adb" -s emulator-5554 shell getprop sys.boot_completed | tr -d '\r')" = "1" ] && exit 0
+            if ! kill -0 "$emulator" 2>/dev/null; then
+              echo "the emulator ended before the system started"
+              tail -50 "$RUNNER_TEMP/emulator.log"
+              exit 1
+            fi
+            [ "$("$adb" -s emulator-5554 shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ] && exit 0
             sleep 5
           done
           echo "the emulator did not finish starting in 10 minutes"
