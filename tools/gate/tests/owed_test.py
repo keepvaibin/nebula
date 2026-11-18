@@ -47,6 +47,13 @@ check(not done, "a job not owed and not ended: not done: %s" % detail)
 done, green, detail = gate.judge_run("completed", fast, owed_jobs=gate.OWED_JOBS)
 check(done and green and gate.owed_of(detail) == [], "nothing owed when all ended: %s" % detail)
 
+done, green, detail = gate.judge_run("in_progress", fast[:1] + [job("Mac", "in_progress")], owed_jobs=gate.EVERY_JOB)
+check(done and green and gate.owed_of(detail) == ["Mac"], "every job owed: a job not ended is owed: %s" % detail)
+done, green, detail = gate.judge_run("in_progress", [job("Mac", "completed", "failure"), job("Linux", "in_progress")],
+                                     owed_jobs=gate.EVERY_JOB)
+check(done and not green, "every job owed: one already red still stops the move: %s" % detail)
+check("owed=EVERY_JOB" in (gate.HERE / "gate.py").read_text(encoding="utf-8"), "the move owes every job not ended")
+
 asked = []
 green, detail = gate.github_wait("gate/x", "abc", owed=gate.OWED_JOBS, sleep=lambda s: None,
                                  state_of=lambda b, c: asked.append(b) or ("in_progress", fast + slow))

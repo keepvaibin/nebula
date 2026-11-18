@@ -93,6 +93,17 @@ GITHUB_WAIT_MINUTES = 120
 # or the landing is taken back. One already red before the move stops it as any red job does.
 OWED_JOBS = ("Android (arm64-v8a)", "Android (x86_64)", "Android start check (x86_64 emulator)")
 OWED_HOURS = 2.0
+
+
+class EveryJob:
+    """Every job's name (07, How the work flows 3, 11-18 15:20): the cloud never holds a move; a job not ended when the
+    local main gate passes is owed and read after the move."""
+
+    def __contains__(self, name):
+        return True
+
+
+EVERY_JOB = EveryJob()
 GITHUB_CHECK_MINUTES = 15
 CANDIDATE_PREFIX = "gate/"
 # The two lists (section 4) and the ledger their lines name.
@@ -2032,7 +2043,7 @@ def main(argv=None):
             add_waiting(args.work, commit, candidate, os.getpid())
             try:
                 green, detail = github_wait(candidate, commit, planned_jobs(planned), wait_minutes=args.github_wait,
-                                            log=str(g.work / "github.log"), owed=OWED_JOBS)
+                                            log=str(g.work / "github.log"), owed=EVERY_JOB)
                 why = None if green else "GitHub's jobs on %s: %s" % (candidate, detail)
                 if why is None:
                     move_lock = str(pathlib.Path(args.gate_lock).with_name("move.lock"))
