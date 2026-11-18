@@ -125,7 +125,9 @@
             </intent-filter>
         </activity>
 
-        <!-- The game, in its own process: one run per process (the native game starts once). -->
+        <!-- The game, in its own process: one run per process (the native game starts once). Every configuration
+             change is its own: a recreated activity would be a second start, which SDL answers by ending the
+             process (P-098; ManifestTest). -->
         <activity
             android:name=".GameActivity"
             android:exported="${gameExported}"
@@ -134,7 +136,7 @@
             android:screenOrientation="fullUser"
             android:resizeableActivity="true"
             android:preferMinimalPostProcessing="true"
-            android:configChanges="layoutDirection|locale|grammaticalGender|fontScale|fontWeightAdjustment|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation|density" />
+            android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|screenLayout|fontScale|uiMode|orientation|screenSize|smallestScreenSize|layoutDirection|colorMode|density|fontWeightAdjustment|grammaticalGender" />
 
         <!-- Android's installer's answer to an update (Updates.install): its confirmation screen. -->
         <receiver
