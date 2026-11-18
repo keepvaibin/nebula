@@ -3504,6 +3504,15 @@ std::vector<std::pair<std::string, std::string>> gCookOwners;
 // The exit waits here for the saves still on the worker.
 std::mutex gSavesMutex;
 std::condition_variable gSavesDone;
+// The requests' status words: the worker stores each, the game's save_wait sleeps on its own.
+galaxy::saves::StatusBoard gSaveStatus;
+
+// The game's wait for its last request (SaveDataHandler::waitRequest), asleep until the worker ends it.
+void svc_save_wait(void*, const int32_t* status) {
+    if (gSaveStatus.wait(status, NEBULA_SAVE_PENDING)) {
+        log_line("saves:", "the game waited for its last save request to end");
+    }
+}
 
 // gFs stays one worker taking its queue in order (FIFO): the game's save, save.global's luma/<id>.bin writes and a
 // broken file's luma/<id>.bin.broken copy rely on a later request never passing an earlier one.
@@ -3567,11 +3576,7 @@ void svc_save_request(void*, const NebulaSaveRequest* request) {
                 }
             }
         }
-#if defined(__cpp_lib_atomic_ref)
-        std::atomic_ref<int32_t>(*r.status).store(result, std::memory_order_release);
-#else  // libc++ without atomic_ref (Android NDK r28): the compiler's builtin, the same release store.
-        __atomic_store_n(r.status, result, __ATOMIC_RELEASE);
-#endif
+        gSaveStatus.store(r.status, result);
         if (gSavesPending.fetch_sub(1, std::memory_order_acq_rel) == 1) {
             { const std::lock_guard<std::mutex> lock(gSavesMutex); }
             gSavesDone.notify_all();
@@ -6388,6 +6393,7 @@ int main(int argc, char** argv) {
     services.frame_wait = svc_frame_wait;
     services.frame_begun = svc_frame_begun;
     services.save_request = svc_save_request;
+    services.save_wait = svc_save_wait;
     services.system_setting = svc_system_setting;
     services.input_read = svc_input_read;
     services.input_control = svc_input_control;

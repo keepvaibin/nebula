@@ -2,8 +2,10 @@
 // writes and deletes. The results are the native game's save request results (NEBULA_SAVE_*).
 #pragma once
 
+#include <condition_variable>
 #include <cstdint>
 #include <filesystem>
+#include <mutex>
 #include <string>
 #include <string_view>
 
@@ -49,5 +51,19 @@ struct SaveFolders {
 [[nodiscard]] Result write(const std::filesystem::path& folder, std::string_view name, const void* data,
                            std::uint32_t size, Backups backups = Backups::kKeep) noexcept;
 [[nodiscard]] Result remove(const std::filesystem::path& folder, std::string_view name) noexcept;
+
+// The status words of the game's save requests: the save worker stores each result, the game's thread sleeps until
+// its request's word leaves `pending` (the host's save_wait), never spinning.
+class StatusBoard {
+public:
+    // A release store, then every waiter woken.
+    void store(std::int32_t* status, std::int32_t value) noexcept;
+    // Returns once *status is not `pending` (an acquire load), asleep meanwhile; true when it had to sleep.
+    bool wait(const std::int32_t* status, std::int32_t pending) noexcept;
+
+private:
+    std::mutex mutex_;
+    std::condition_variable stored_;
+};
 
 }  // namespace galaxy::saves

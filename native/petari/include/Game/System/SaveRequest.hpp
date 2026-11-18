@@ -20,6 +20,8 @@ public:
 
     void init();
     bool isDone() const;
+    // Returns once the request is done, the thread asleep meanwhile (the host's save_wait).
+    void wait() const;
     // The result, once done.
     Result getResult() const;
     void start();

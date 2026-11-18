@@ -2,6 +2,7 @@
 
 #include "galaxy/atomic_file.h"
 
+#include <atomic>
 #include <cstring>
 #include <fstream>
 #include <string>
@@ -149,6 +150,38 @@ Result remove(const std::filesystem::path& folder, std::string_view name) noexce
     } catch (...) {
         return kFailed;
     }
+}
+
+namespace {
+
+std::int32_t load_status(const std::int32_t* status) noexcept {
+#if defined(__cpp_lib_atomic_ref)
+    return std::atomic_ref<const std::int32_t>(*status).load(std::memory_order_acquire);
+#else  // libc++ without atomic_ref (Android NDK r28): the compiler's builtin, the same acquire load.
+    return __atomic_load_n(status, __ATOMIC_ACQUIRE);
+#endif
+}
+
+}  // namespace
+
+void StatusBoard::store(std::int32_t* status, std::int32_t value) noexcept {
+#if defined(__cpp_lib_atomic_ref)
+    std::atomic_ref<std::int32_t>(*status).store(value, std::memory_order_release);
+#else
+    __atomic_store_n(status, value, __ATOMIC_RELEASE);
+#endif
+    // Taken after the store: a waiter that saw the old value under the mutex is asleep before this notify.
+    { const std::lock_guard<std::mutex> lock(mutex_); }
+    stored_.notify_all();
+}
+
+bool StatusBoard::wait(const std::int32_t* status, std::int32_t pending) noexcept {
+    if (load_status(status) != pending) {
+        return false;
+    }
+    std::unique_lock<std::mutex> lock(mutex_);
+    stored_.wait(lock, [status, pending] { return load_status(status) != pending; });
+    return true;
 }
 
 }  // namespace galaxy::saves
