@@ -1,4 +1,5 @@
 #include "Game/NPC/DemoRabbit.hpp"
+#include "Game/NPC/RabbitRunTurn.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
@@ -159,11 +160,7 @@ void DemoRabbit::updateRun(const Vec3f& targetDir, bool /*unused*/) {
 
     f32 accel = MR::calcNerveValue(this, ::sRunawayDeccelTime, ::sRunawayAccel, ::sRunawayEndAccel);
 
-    while (MR::isExistMapCollision(mPosition, mFrontVec * 200.0f)) {
-        f32 oldLength = mFrontVec.length();
-        mFrontVec = (mFrontVec + -mGravity) / 2.0f;
-        mFrontVec.setLength(oldLength);
-    }
+    MR::turnUpWhileBlocked(mFrontVec, -mGravity, [this](const Vec3f& rFront) { return MR::isExistMapCollision(mPosition, rFront * 200.0f); });
 
     MR::addVelocityMoveToDirection(this, mFrontVec, mAirTimer < ::sIsAirTime ? accel : accel / 2.0f);
 }
