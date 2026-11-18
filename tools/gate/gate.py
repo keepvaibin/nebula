@@ -379,19 +379,61 @@ def git(*args):
     return r.stdout.strip()
 
 
+# A run's checks stop when GitHub has a red job of the commit (GithubWatch): every command running is ended with its
+# children, and one asked after is not started.
+STOPPED = threading.Event()
+STOPPED_WHY = [""]
+CHILDREN = set()
+CHILDREN_LOCK = threading.Lock()
+
+
+def end_tree(process):
+    """Ends a process and every process it started."""
+    if process.poll() is not None:
+        return
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(process.pid)], capture_output=True)
+    else:
+        process.kill()
+
+
+def stop_runs(why):
+    """Ends every command the checks run now and starts no other (the run then fails)."""
+    STOPPED_WHY[0] = why
+    STOPPED.set()
+    with CHILDREN_LOCK:
+        running = list(CHILDREN)
+    for process in running:
+        end_tree(process)
+
+
 def run(cmd, log, env=None, cwd=None, timeout=None):
-    """Runs cmd with its output in log; returns the exit code."""
+    """Runs cmd with its output in log; returns the exit code (124: timed out; 125: stopped, stop_runs)."""
     with open(log, "ab") as f:
         f.write(("$ %s\n" % " ".join(str(c) for c in cmd)).encode())
         f.flush()
+        if STOPPED.is_set():
+            f.write(("(not started: %s)\n" % STOPPED_WHY[0]).encode())
+            return 125
         e = dict(os.environ)
         e.update(env or {})
+        process = subprocess.Popen([str(c) for c in cmd], stdout=f, stderr=subprocess.STDOUT, env=e, cwd=cwd)
+        with CHILDREN_LOCK:
+            CHILDREN.add(process)
         try:
-            return subprocess.run([str(c) for c in cmd], stdout=f, stderr=subprocess.STDOUT, env=e, cwd=cwd,
-                                  timeout=timeout).returncode
+            code = process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
+            end_tree(process)
+            process.wait()
             f.write(b"\n(timed out)\n")
             return 124
+        finally:
+            with CHILDREN_LOCK:
+                CHILDREN.discard(process)
+        if STOPPED.is_set():
+            f.write(("\n(stopped: %s)\n" % STOPPED_WHY[0]).encode())
+            return 125
+        return code
 
 
 # Checks ---------------------------------------------------------------------------------------------------------
@@ -932,6 +974,18 @@ def planned_jobs(planned):
     return {name[len("github/"):] for name in planned if name.startswith("github/")}
 
 
+def red_minute(job):
+    """' at HH:MM' (this computer's time) of a job's end, from GitHub's completedAt; '' where it has none."""
+    when = job.get("completedAt") or ""
+    try:
+        moment = datetime.datetime.fromisoformat(when.replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    if moment.year < 2000:  # GitHub's zero time: not ended
+        return ""
+    return " at " + moment.astimezone().strftime("%H:%M")
+
+
 def judge_run(status, jobs, planned_jobs=()):
     """(done, green, detail) of a run (section 8): every job is required except the planned ones. A job that ended
     other than green (failure, cancelled, skipped) ends it at once; otherwise it is done when the run has ended."""
@@ -945,7 +999,7 @@ def judge_run(status, jobs, planned_jobs=()):
         elif j.get("conclusion") == "success":
             green += 1
         else:
-            red.append("%s %s" % (name, j.get("conclusion") or "?"))
+            red.append("%s %s%s" % (name, j.get("conclusion") or "?", red_minute(j)))
     if red:
         return True, False, "red: " + "; ".join(red)
     if status is None:
@@ -976,6 +1030,65 @@ def github_wait(branch, sha, planned=(), wait_minutes=GITHUB_WAIT_MINUTES, state
         if clock() >= deadline:
             return False, detail + " (no result after %g minutes)" % wait_minutes
         sleep(60.0)
+
+
+# The answers that count as red before a main gate starts (a cancelled run is another push's, not a fault).
+RED_CONCLUSIONS = ("failure", "timed_out", "startup_failure")
+
+
+def commit_runs(sha):
+    """[(branch, jobs)] of every push run of the commit on GitHub, under any branch name."""
+    runs = gh_json("run", "list", "--commit", sha, "--workflow", WORKFLOW, "--event", "push", "--json",
+                   "databaseId,headBranch", "--limit", "20") or []
+    return [(r.get("headBranch") or "?", gh_json("run", "view", str(r["databaseId"]), "--json", "jobs").get("jobs", []))
+            for r in runs]
+
+
+def red_on_github(sha, planned=(), runs_of=commit_runs):
+    """Why a main gate of `sha` would not move main, already known on GitHub (section 8: read before the checks
+    start): a job of any run of the commit that failed, with its branch and the minute it went red. None when none
+    did, or when GitHub does not answer (the run then starts, and its own wait reads GitHub again)."""
+    try:
+        runs = runs_of(sha)
+    except (RuntimeError, OSError, ValueError, subprocess.SubprocessError):
+        return None
+    red = ["%s %s on %s%s" % (j.get("name") or "?", j.get("conclusion"), branch, red_minute(j))
+           for branch, jobs in runs for j in jobs
+           if j.get("status") == "completed" and j.get("conclusion") in RED_CONCLUSIONS
+           and (j.get("name") or "?") not in planned]
+    return ("red on GitHub: " + "; ".join(red[:4]) + (" ..." if len(red) > 4 else "")) if red else None
+
+
+class GithubWatch:
+    """Reads the candidate's run once a minute while the gate's checks run (section 8); at its first red job calls
+    on_red with why (the job and the minute it went red) and stops reading."""
+
+    def __init__(self, branch, sha, planned=(), on_red=None, state_of=candidate_state, every=60.0):
+        self.branch, self.sha, self.planned = branch, sha, planned
+        self.on_red = on_red or stop_runs
+        self.state_of, self.every = state_of, every
+        self.red = None
+        self._end = threading.Event()
+        self._thread = threading.Thread(target=self._loop, name="github-watch", daemon=True)
+
+    def start(self):
+        self._thread.start()
+        return self
+
+    def stop(self):
+        self._end.set()
+        self._thread.join(timeout=10.0)
+
+    def _loop(self):
+        while not self._end.wait(self.every):
+            try:
+                done, green, detail = judge_run(*self.state_of(self.branch, self.sha), planned_jobs=self.planned)
+            except (RuntimeError, OSError, ValueError, subprocess.SubprocessError):
+                continue  # asked again the next minute
+            if done and not green:
+                self.red = "GitHub's jobs on %s: %s" % (self.branch, detail)
+                self.on_red(self.red)
+                return
 
 
 def github_check(g, wait_minutes=GITHUB_CHECK_MINUTES, state_of=commit_state, sleep=time.sleep, clock=time.time):
@@ -1448,6 +1561,10 @@ def main(argv=None):
             return refuse("main (%s) is not an ancestor of this commit: rebase on it first" % git("rev-parse", "--short", "origin/main"))
         if git("status", "--porcelain"):
             return refuse("the tree has uncommitted changes")
+        red = red_on_github(commit, planned_jobs(planned))
+        if red:
+            board_line(args.board, "%s NOTICE: no main gate of %s: %s." % (args.who, commit[:9], red))
+            return refuse("main could not move to %s: %s" % (commit[:9], red))
         unheld = unheld_candidates(args.work, commit)
         if unheld:
             return refuse("candidates still wait for GitHub that this commit does not hold (%s): rebase on the newest "
@@ -1483,16 +1600,25 @@ def main(argv=None):
             return refuse(held)
         taken.append(lock)
     code, summary = 2, "it ended before writing a result"
+    watch = GithubWatch(candidate, commit, planned_jobs(planned)).start() if args.move else None
     try:
-        g = run_checks(args, known, planned, selected)
+        try:
+            g = run_checks(args, known, planned, selected)
+        finally:
+            if watch is not None:
+                watch.stop()
         code = g.code
         summary = "all checks passed" if code == 0 else "checks failed (exit %d)" % code
+        if watch is not None and watch.red:
+            code, summary = 1, "stopped: " + watch.red
+            board_line(args.board, "%s NOTICE: main gate %s on %s stopped: %s." % (args.who, g.name, commit[:9],
+                                                                                    watch.red))
         owed = [r["check"] for r in g.results if r["state"] == "owed"]
         if owed and args.board:
             board_line(args.board, "%s OWED: the tablet's part of %s gate %s on %s: %s. It runs on main's newest "
                        "commit first when the tablet is back (gate.py --main --only \"%s\")." % (
                            args.who, args.mode, g.name, commit[:9], ", ".join(owed), ",".join(owed)))
-        if args.move and code == 0:
+        if args.move and code == 0 and not (watch is not None and watch.red):
             # The machine is free for the next gate from here (section 5.5); this process waits for GitHub alone.
             for lock in taken:
                 free_gate_lock(lock, holder, args.board, args.who, "its checks passed; it waits for GitHub's jobs on %s"
