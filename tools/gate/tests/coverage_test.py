@@ -8,7 +8,8 @@ game), run, and its counts merged:
   in coverage.tsv, and gives the share of lines run;
 - files outside --root are left out;
 - with a history, the first run sets the share; a build that adds code no run reaches lowers it and fails, naming
-  the share it fell from; the same share again passes.
+  the share it fell from; the same share again passes; a line of other binaries (another scope) is not compared;
+- paths under each of several build folders (--rebase) read as the tree's.
 Needs clang, llvm-profdata and llvm-cov (C:/Program Files/LLVM/bin, or NEBULA_LLVM_BIN).
 """
 import os
@@ -80,6 +81,12 @@ if coverage is not None:
         exe2, profile2 = build_and_run(t / "one", EXTRA)
         code, out = report(exe2, profile2, t / "out5", t, history)
         check(code == 1 and "it fell from" in out, "code no run reaches lowers the share and fails: %s" % out)
+        # A higher share under other binaries' names: not this scope's last line.
+        other = t / "other-history.tsv"
+        coverage.append_history(other, {"time": "x", "commit": "c", "lines_run": 1, "lines": 1, "share": "100.0000",
+                                        "functions_run": 1, "functions": 1, "scope": "nebula.exe,smg_game.dll"})
+        code, out = report(exe, profile, t / "out6", t, other)
+        check(code == 0 and len(coverage.read_history(other)) == 2, "another scope's line is not compared: %s" % out)
 
     # A cache's paths (the build folder joined with paths relative to the tree) read as the tree's; a file in two
     # modules adds up; a file's own function and a decorated name read as written.
@@ -94,6 +101,12 @@ if coverage is not None:
         files = coverage.parse_lcov(lcov, t / "tree", t / "build" / "game")
         check(list(files) == ["src/B.cpp"] and files["src/B.cpp"][:4] == [2, 6, 0, 2],
               "rebased, kept case, two modules add up: %s" % files)
+        # Two build folders, each rebased: the programs' and the game's.
+        two = (record % (t / "build" / "msvc" / "src" / "B.cpp", "f", "f")
+               + record % (t / "build" / "game" / "src" / "B.cpp", "g", "g"))
+        both = coverage.parse_lcov(two, t / "tree", [t / "build" / "game", t / "build" / "msvc"])
+        check(list(both) == ["src/B.cpp"] and both["src/B.cpp"][:4] == [2, 6, 0, 2],
+              "each build folder rebased: %s" % both)
         names = sorted(coverage.readable(n) for _, n in files["src/B.cpp"][4])
         check(names[1] == "local" and (os.name != "nt" or names[0].startswith("Actor::run")),
               "names read as written: %s" % names)

@@ -493,7 +493,15 @@ void* find_symbol(void* module, const char* name) {
 
 // A counting build's module (native/coverage_counts.c: coverage, or the profile's training) writes its counts here,
 // as the process ends without running the module's exit. No other build has the export.
+#if defined(NEBULA_COVERAGE)
+extern "C" int __llvm_profile_write_file(void);
+#endif
+
 void write_module_counts() {
+#if defined(NEBULA_COVERAGE)
+    // A coverage build of the host (CMakeLists.txt NEBULA_COVERAGE): its own counts, which its exit would never write.
+    __llvm_profile_write_file();
+#endif
     if (gModule.module == nullptr) {
         return;
     }

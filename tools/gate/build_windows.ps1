@@ -10,8 +10,9 @@
 # -Sanitize address,undefined: the game modules built with those sanitizers (native/CMakeLists.txt NEBULA_SANITIZE),
 # their runtime (LLVM's clang_rt.asan_dynamic) in the bin folder. The programs stay as they are: one AddressSanitizer
 # runtime serves a process, and Microsoft's compiler would bring its own. Use a ROOT of its own.
-# -Coverage: the game modules count the lines and functions they run (native/CMakeLists.txt NEBULA_COVERAGE), each
-# process writing them where LLVM_PROFILE_FILE says (tools/gate/coverage.py). Use a ROOT of its own.
+# -Coverage: the game modules and the programs count the lines and functions they run (native/CMakeLists.txt and
+# CMakeLists.txt NEBULA_COVERAGE; the programs then built by clang-cl), each process writing them where LLVM_PROFILE_FILE
+# says (tools/gate/coverage.py). Use a ROOT of its own.
 param(
     [Parameter(Mandatory = $true)][string]$Tree,
     [Parameter(Mandatory = $true)][string]$Root,
@@ -124,11 +125,25 @@ if ($SeedFrom -and (Test-Path "$SeedFrom/generated")) {
         if (-not (Test-Path "$msvc/generated/$($_.Name)")) { Copy-Item -Recurse $_.FullName "$msvc/generated/$($_.Name)" }
     }
 }
-if (-not (Test-Path "$msvc/build.ninja") -or (Launcher-Differs $msvc)) {
+# A coverage build's programs: clang-cl, its linker and resource compiler (CMakeLists.txt NEBULA_COVERAGE).
+$compilers = "-DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DNEBULA_COVERAGE=OFF "
+if ($Coverage) {
+    $compilers = "-DCMAKE_C_COMPILER=`"$Llvm/clang-cl.exe`" -DCMAKE_CXX_COMPILER=`"$Llvm/clang-cl.exe`" " +
+        "-DCMAKE_LINKER=`"$Llvm/lld-link.exe`" -DCMAKE_RC_COMPILER=`"$Llvm/llvm-rc.exe`" -DNEBULA_COVERAGE=ON "
+}
+# A folder configured the other way (another compiler) is configured again from nothing.
+$counting = { (Test-Path "$msvc/CMakeCache.txt") -and [bool](Select-String -Path "$msvc/CMakeCache.txt" -Pattern '^NEBULA_COVERAGE:BOOL=ON$' -Quiet) }
+if ((Test-Path "$msvc/CMakeCache.txt") -and ((& $counting) -ne [bool]$Coverage)) {
+    Remove-Item -Force "$msvc/CMakeCache.txt"
+    Remove-Item -Recurse -Force "$msvc/CMakeFiles" -ErrorAction SilentlyContinue
+    Remove-Item -Force "$msvc/build.ninja" -ErrorAction SilentlyContinue
+}
+if (-not (Test-Path "$msvc/build.ninja") -or -not (Test-Path "$msvc/CMakeCache.txt") -or (Launcher-Differs $msvc)) {
     Step "msvc configure" ("`"$cmake`" -G Ninja -S `"$Tree`" -B `"$msvc`" -DCMAKE_BUILD_TYPE=Release -DNEBULA_VULKAN=ON $launch" +
-        "-DNEBULA_D3D11=ON -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DFETCHCONTENT_SOURCE_DIR_FIDELITYFX_SDK=$Ffx " +
+        "-DNEBULA_D3D11=ON $compilers-DFETCHCONTENT_SOURCE_DIR_FIDELITYFX_SDK=$Ffx " +
         "`"-DNEBULA_EXTRA_CMAKE=$Tree/tools/test_driver/test_driver.cmake`"") "$Root/msvc.configure.log"
 }
+if ((& $counting) -ne [bool]$Coverage) { "msvc: $msvc is not configured with NEBULA_COVERAGE=$([bool]$Coverage)"; exit 1 }
 $msvcWatch = [Diagnostics.Stopwatch]::StartNew()
 $msvcRun = Start-Step "`"$cmake`" --build `"$msvc`" -j $half -- -k 0" "$Root/msvc.build.log"
 Finish-Step "game" $gameRun "$Root/game.build.log" $gameWatch

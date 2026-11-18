@@ -1627,10 +1627,11 @@ def coverage_lane(g):
 
 
 def coverage_part(g):
-    """Which game code no test runs (tools/gate/coverage.py, file 04 3.3, N-1042): the game modules built counting the
-    lines and functions they run (build_windows.ps1 -Coverage, a build root of its own) play the engine tests, the
-    tour and every mod test on Direct3D 12, each game writing its counts; then the list of what none of them ran and
-    the share of lines run, which may not fall below the last long run's (gate-runs/coverage-history.tsv)."""
+    """Which code no test runs (tools/gate/coverage.py, file 04 3.3, N-1042): the game modules and the programs built
+    counting the lines and functions they run (build_windows.ps1 -Coverage, a build root of its own) play the engine
+    tests, the tour and every mod test on Direct3D 12, each process writing its counts; then the list of what none of
+    them ran and the share of lines run, which may not fall below the last long run's (gate-runs/coverage-history.tsv,
+    per set of binaries)."""
     root = pathlib.Path(g.args.build_root) / "coverage"
     bin_dir = str(root / "bins")
     if g.check("build/windows-coverage", build_windows(g, root=root, bin_dir=bin_dir, coverage=True)) is False:
@@ -1649,8 +1650,8 @@ def coverage_check(g, bin_dir, tour):
         counts = out / "counts"
         shutil.rmtree(counts, ignore_errors=True)
         counts.mkdir(parents=True)
-        # %m: one file per module (smg_game, smg_game_plain), %p: per process.
-        env = {"LLVM_PROFILE_FILE": str(counts / "game-%m-%p.profraw")}
+        # %m: one file per module (Nebula.exe, smg_game, smg_game_plain), %p: per process.
+        env = {"LLVM_PROFILE_FILE": str(counts / "counts-%m-%p.profraw")}
         runs = [("engine", harness(g, TREE / "tests" / "engine" / "suite.json", "d3d12", "engine-coverage",
                                    bin_dir=bin_dir, env=env)),
                 ("tour", harness(g, tour, "d3d12", "tour-coverage", bin_dir=bin_dir, env=env))]
@@ -1663,19 +1664,21 @@ def coverage_check(g, bin_dir, tour):
             f.write("runs: %s\n" % "; ".join(said))
         raws = sorted(counts.glob("*.profraw"))
         if not raws:
-            return False, "no game wrote counts; runs: " + "; ".join(said)
+            return False, "no process wrote counts; runs: " + "; ".join(said)
         llvm = LLVM_BIN
-        merged = out / "game.profdata"
+        merged = out / "counts.profdata"
         # Hundreds of files: their names in a list, past the command line's length.
         listed = out / "counts.txt"
         listed.write_text("".join("%s\n" % r for r in raws), encoding="utf-8")
         if run([llvm / "llvm-profdata.exe", "merge", "-o", merged, "-f", listed], log) != 0:
             return False, "llvm-profdata merge failed"
-        modules = [pathlib.Path(bin_dir) / m for m in ("smg_game.dll", "smg_game_plain.dll")
+        # The program the runs on Direct3D 12 start, and the game modules it loads.
+        modules = [pathlib.Path(bin_dir) / m for m in ("Nebula.exe", "smg_game.dll", "smg_game_plain.dll")
                    if (pathlib.Path(bin_dir) / m).exists()]
         binaries = [a for m in modules for a in ("--binary", m)]
+        builds = pathlib.Path(bin_dir).parent
         code = run([sys.executable, "-X", "utf8", "-I", HERE / "coverage.py", "report", *binaries, "--profile", merged,
-                    "--work", out, "--root", TREE, "--rebase", pathlib.Path(bin_dir).parent / "game",
+                    "--work", out, "--root", TREE, "--rebase", builds / "game", "--rebase", builds / "msvc",
                     "--history", pathlib.Path(g.args.work) / "coverage-history.tsv",
                     "--commit", g.commit, "--llvm", llvm], log)
         text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")

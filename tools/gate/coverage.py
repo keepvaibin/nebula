@@ -1,18 +1,19 @@
-"""coverage.py: which game code no test runs, and the share run (docs/plan/04-GATE-AND-MAIN.md 3.3, N-1042).
+"""coverage.py: which code no test runs, and the share run (docs/plan/04-GATE-AND-MAIN.md 3.3, N-1042).
 
-    python -X utf8 -I tools/gate/coverage.py report --binary DLL [--binary DLL...] --profile PROFDATA --work OUT [--root TREE]
-                                               [--rebase BUILD] [--history FILE] [--commit SHA] [--llvm LLVM_BIN]
+    python -X utf8 -I tools/gate/coverage.py report --binary BIN [--binary BIN...] --profile PROFDATA --work OUT [--root TREE]
+                                               [--rebase BUILD...] [--history FILE] [--commit SHA] [--llvm LLVM_BIN]
 
 The binaries are built with -fprofile-instr-generate -fcoverage-mapping (native/CMakeLists.txt NEBULA_COVERAGE: both
-game modules, smg_game and smg_game_plain), the profile merged from the runs of the tests on them; a source file in
-both counts as run where either ran it. llvm-cov exports the counts per source line and function (lcov text), and
+game modules, smg_game and smg_game_plain; CMakeLists.txt NEBULA_COVERAGE: the programs), the profile merged from the
+runs of the tests on them; a source file in several counts as run where any ran it. llvm-cov exports the counts per source line and function (lcov text), and
 this writes, for the files under --root (the tree):
 - OUT/coverage.tsv: each file's lines and functions, run and in all, the files with the most lines never run first;
 - OUT/never-run.txt: every function no test ran, file:line and its name;
-and prints the share of lines run. --rebase names the build folder the sources' paths are recorded under when a
+and prints the share of lines run. --rebase names a build folder the sources' paths are recorded under when a
 compiler cache made them relative to the tree (build_windows.ps1's sccache with SCCACHE_BASEDIRS): those paths are read
-as the tree's. With --history the share joins that file (one line a run), and a share lower than
-the last line's fails: the share of code run by tests may not fall (a change that adds code no test runs lowers it).
+as the tree's (one --rebase a build folder). With --history the share joins that file (one line a run, its scope the
+binaries' names), and a share lower than the last line's of the same scope fails: the share of code run by tests may
+not fall (a change that adds code no test runs lowers it); another set of binaries starts its own line.
 Exit 0 when the export worked and the share held.
 """
 import argparse
@@ -39,22 +40,26 @@ def readable(name):
     return name
 
 
-HISTORY_COLUMNS = ("time", "commit", "lines_run", "lines", "share", "functions_run", "functions")
+HISTORY_COLUMNS = ("time", "commit", "lines_run", "lines", "share", "functions_run", "functions", "scope")
 
 
 def parse_lcov(text, root, rebase=None):
     """{file: [lines run, lines, functions run, functions, [(line, name) never run]]} for files under `root` (a path
-    under `rebase` read as the same path under `root`). A file in the text twice (two modules) adds up."""
+    under a `rebase` folder, one path or several, read as the same path under `root`). A file in the text twice (two
+    modules) adds up."""
     root = os.path.normcase(os.path.abspath(root)) + os.sep
-    rebase = os.path.normcase(os.path.abspath(rebase)) + os.sep if rebase else None
+    folders = [rebase] if isinstance(rebase, (str, os.PathLike)) else list(rebase or [])
+    # The longest first: a build folder inside another is its own.
+    rebases = sorted((os.path.normcase(os.path.abspath(f)) + os.sep for f in folders if f), key=len, reverse=True)
     files, current, names = {}, None, {}
     for line in text.splitlines():
         if line.startswith("SF:"):
             # Compared without case (Windows paths), kept as the export spells them.
             path = os.path.abspath(line[3:])
             # A rebased path names a tree file only when the tree has it (not a file the build made).
-            if rebase and os.path.normcase(path).startswith(rebase):
-                path = root + path[len(rebase):]
+            folder = next((f for f in rebases if os.path.normcase(path).startswith(f)), None)
+            if folder:
+                path = root + path[len(folder):]
                 if not os.path.exists(path):
                     path = ""
             current = None
@@ -124,6 +129,7 @@ def report(a, run=subprocess.run, now=None):
         print("coverage: llvm-cov export failed: %s" % (r.stderr or r.stdout).strip()[-400:])
         return 1
     files = parse_lcov(r.stdout, a.root, a.rebase)
+    scope = ",".join(sorted(pathlib.Path(b).name.lower() for b in a.binary))
     if not files:
         print("coverage: the export names no file under %s" % a.root)
         return 1
@@ -133,12 +139,13 @@ def report(a, run=subprocess.run, now=None):
     said = "%.2f %% of %d lines run, %d of %d functions, %d files" % (share, lines, functions_run, functions, len(files))
     fell = None
     if a.history:
-        earlier = read_history(a.history)
+        earlier = [row for row in read_history(a.history) if row.get("scope") == scope]
         if earlier and share < float(earlier[-1]["share"]) - 0.005:
             fell = "%.2f %% at %s" % (float(earlier[-1]["share"]), earlier[-1]["commit"])
         append_history(a.history, {"time": (now or datetime.datetime.now()).isoformat(timespec="seconds"),
                                    "commit": a.commit[:9], "lines_run": lines_run, "lines": lines,
-                                   "share": "%.4f" % share, "functions_run": functions_run, "functions": functions})
+                                   "share": "%.4f" % share, "functions_run": functions_run, "functions": functions,
+                                   "scope": scope})
     print("coverage: %s%s" % (said, ("; it fell from " + fell) if fell else ""))
     print("coverage lists: %s, %s" % (pathlib.Path(a.work) / "coverage.tsv", pathlib.Path(a.work) / "never-run.txt"))
     return 1 if fell else 0
@@ -152,7 +159,7 @@ def main(argv=None):
     r.add_argument("--profile", required=True)
     r.add_argument("--work", required=True)
     r.add_argument("--root", default=str(pathlib.Path(__file__).resolve().parents[2]))
-    r.add_argument("--rebase", default="")
+    r.add_argument("--rebase", action="append", default=[])
     r.add_argument("--history", default="")
     r.add_argument("--commit", default="")
     r.add_argument("--llvm", default=os.environ.get("NEBULA_LLVM_BIN", "C:/Program Files/LLVM/bin"))

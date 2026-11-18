@@ -14,7 +14,7 @@ else()
 endif()
 target_compile_features(nebula_test_extension PRIVATE cxx_std_20)
 if(MSVC)
-    target_compile_options(nebula_test_extension PRIVATE /W4 /WX /permissive- /EHsc)
+    target_compile_options(nebula_test_extension PRIVATE /W4 ${NEBULA_WARNINGS_AS_ERRORS} /permissive- /EHsc)
 endif()
 
 # The extension's data guard: a test run never touches a player's folders.

@@ -22,6 +22,29 @@ else()
 endif()
 add_compile_definitions(NEBULA_VERSION="${PROJECT_VERSION}")
 
+# Coverage builds (the gate's long run, tools/gate/coverage.py, N-1042): every program, library and test counts the lines
+# and functions it runs (clang's source-based coverage), each process writing them where LLVM_PROFILE_FILE says when it
+# ends (the host writes its counts itself: native/host/host_main.cpp). Clang-cl only; no optimizing across source files,
+# and warnings stay warnings (clang names some that Microsoft's compiler does not; the gate's MSVC build keeps /WX).
+option(NEBULA_COVERAGE "Count the lines and functions every program runs (clang-cl)" OFF)
+if(NEBULA_COVERAGE)
+    if(NOT (MSVC AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
+        message(FATAL_ERROR "NEBULA_COVERAGE needs clang-cl")
+    endif()
+    add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:-fprofile-instr-generate> $<$<COMPILE_LANGUAGE:C,CXX>:-fcoverage-mapping>)
+    add_compile_definitions(NEBULA_COVERAGE=1)
+    # The profile runtime from the compiler's own resource folder.
+    execute_process(COMMAND "${CMAKE_CXX_COMPILER}" /clang:-print-resource-dir OUTPUT_VARIABLE nebula_clang_resources
+                    OUTPUT_STRIP_TRAILING_WHITESPACE RESULT_VARIABLE nebula_clang_resources_result)
+    set(nebula_profile_runtime "${nebula_clang_resources}/lib/windows/clang_rt.profile-x86_64.lib")
+    if(NOT nebula_clang_resources_result EQUAL 0 OR NOT EXISTS "${nebula_profile_runtime}")
+        message(FATAL_ERROR "NEBULA_COVERAGE: no ${nebula_profile_runtime}")
+    endif()
+    link_libraries("${nebula_profile_runtime}")
+endif()
+# /WX beside /W4 in the targets below, except in a coverage build.
+set(NEBULA_WARNINGS_AS_ERRORS $<$<NOT:$<BOOL:${NEBULA_COVERAGE}>>:/WX>)
+
 # One build: a release and a test run use the same binaries (tools/release_check.ps1 checks the sources and the release).
 # The standard library's bounds checks (array, vector, span, string_view subscripts and the like) in every host build: an
 # index past the end stops the program at once, never reading or writing a neighbouring member.
@@ -102,7 +125,7 @@ endif()
 # The host libraries' Release code: no buffer security checks, no RTTI.
 function(galaxy_host_options target)
     if(MSVC)
-        target_compile_options(${target} PRIVATE /GS- /GR- /Oi /favor:INTEL64)
+        target_compile_options(${target} PRIVATE /GS- /GR- /Oi $<$<CXX_COMPILER_ID:MSVC>:/favor:INTEL64>)
     endif()
 endfunction()
 
@@ -518,7 +541,7 @@ target_include_directories(galaxy_render
         "${CMAKE_CURRENT_SOURCE_DIR}/native/include"
 )
 if(MSVC)
-    target_compile_options(galaxy_render PRIVATE /GS- /GR- /Oi /favor:INTEL64)
+    target_compile_options(galaxy_render PRIVATE /GS- /GR- /Oi $<$<CXX_COMPILER_ID:MSVC>:/favor:INTEL64>)
 endif()
 
 # The native game's windowed host (native/host): runs the game module that native/CMakeLists.txt builds with clang
@@ -536,7 +559,8 @@ target_compile_features(Nebula PRIVATE cxx_std_20)
 target_link_libraries(Nebula PRIVATE galaxy_render galaxy_save_files galaxy_asset_store dwmapi)
 nebula_agility_runtime(Nebula)
 if(MSVC)
-    # Paths past MAX_PATH (CMake merges a .manifest source into the program's manifest).
+    # The program's identity and the Windows versions it supports, merged into the linker's manifest (which names the
+    # execution level, asInvoker); the DPI and path settings are nebula_game.manifest's.
     target_sources(Nebula PRIVATE native/host/nebula_host.manifest)
     # Symbols for crash dumps and the thread profiler; code generation is unchanged.
     target_compile_options(Nebula PRIVATE ${NEBULA_MSVC_DEBUG_INFO})
@@ -552,7 +576,7 @@ if(NEBULA_TEST_TOOLS)
     add_compile_definitions(NEBULA_TEST_TOOLS=1)
 endif()
 set(nebula_host_ipo_effective OFF)
-if(NEBULA_HOST_IPO)
+if(NEBULA_HOST_IPO AND NOT NEBULA_COVERAGE)
     include(CheckIPOSupported)
     check_ipo_supported(RESULT nebula_host_ipo_supported OUTPUT nebula_host_ipo_error LANGUAGES CXX)
     if(nebula_host_ipo_supported)
@@ -625,7 +649,7 @@ target_link_libraries(galaxy_frame_pass_tests PRIVATE d3dcompiler)
 if(MSVC)
     foreach(target galaxy_render galaxy_runtime_settings galaxy_atomic_file
             galaxy_host_pointer_events galaxy_native_input galaxy_native_host galaxy_audio_mixer)
-        target_compile_options(${target} PRIVATE /W4 /WX /permissive- /EHsc)
+        target_compile_options(${target} PRIVATE /W4 ${NEBULA_WARNINGS_AS_ERRORS} /permissive- /EHsc)
     endforeach()
 endif()
 
@@ -762,7 +786,7 @@ runtime/src/render/host_window_win32.cpp
             galaxy_runtime_settings
             galaxy_host_pointer_events)
     if(MSVC)
-        target_compile_options(galaxy_render_vk PRIVATE /GS- /GR- /Oi /favor:INTEL64)
+        target_compile_options(galaxy_render_vk PRIVATE /GS- /GR- /Oi $<$<CXX_COMPILER_ID:MSVC>:/favor:INTEL64>)
     endif()
     if(WIN32)
         target_link_libraries(galaxy_render_vk PRIVATE mfplat mfreadwrite mfuuid d3d11 dwmapi)
@@ -884,7 +908,8 @@ if(NEBULA_D3D11)
         PRIVATE
             mfplat mfreadwrite mfuuid dwmapi)
     if(MSVC)
-        target_compile_options(galaxy_render_d3d11 PRIVATE /GS- /GR- /Oi /favor:INTEL64 /W4 /WX /permissive- /EHsc)
+        target_compile_options(galaxy_render_d3d11 PRIVATE /GS- /GR- /Oi $<$<CXX_COMPILER_ID:MSVC>:/favor:INTEL64> /W4 ${NEBULA_WARNINGS_AS_ERRORS}
+                               /permissive- /EHsc)
     endif()
 
     add_executable(NebulaD11 native/host/host_main.cpp runtime/src/frame_phase.cpp)
