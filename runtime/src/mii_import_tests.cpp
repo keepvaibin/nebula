@@ -319,7 +319,7 @@ bool library() {
     std::string message;
     const auto r = galaxy::host::import_mii_folder(&message);
     ok &= expect(r.added == 1u, "the folder's Mii added");
-    ok &= expect(message == "ADDED 1, 1 FILE(S) NOT MII DATA", "the message");
+    ok &= expect(message == "ADDED 1, 1 FILE IS NOT MII DATA", "the message");
     ok &= expect(galaxy::host::mii_library_count() == 2u, "the library holds it");
     const auto installs = galaxy::host::take_mii_installs();
     ok &= expect(installs.size() == 1u && installs[0].first == 1u, "queued for the running game");
@@ -355,7 +355,7 @@ bool library() {
     write_file(huge, mii(14u));
     std::filesystem::resize_file(huge, (std::uintmax_t{64} << 20u) + 1u, error);
     const auto from_huge = galaxy::host::import_mii_files(std::span<const std::filesystem::path>(&huge, 1u), &message);
-    ok &= expect(from_huge.added == 0u && message.find("1 FILE(S) NOT MII DATA") != std::string::npos &&
+    ok &= expect(from_huge.added == 0u && message.find("1 FILE IS NOT MII DATA") != std::string::npos &&
                      !std::filesystem::exists(root / "miis" / "huge.mii"),
                  "a huge file is not read");
 

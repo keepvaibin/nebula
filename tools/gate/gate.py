@@ -410,6 +410,16 @@ def parse_scripts(g):
     return fn
 
 
+def text_table(g):
+    """Every text the host hands the settings menu has its row in all languages, and the game's table is generated from
+    localization/NebulaText.tsv (tools/nebula_text.py --check; P-160): a host text without a row would show in English."""
+    def fn(log):
+        code = run([sys.executable, "-X", "utf8", "-I", TREE / "tools" / "nebula_text.py", "--check"], log)
+        text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")
+        return code == 0, last_line(text) if text.strip() else "every host text has its row"
+    return fn
+
+
 def build_windows(g, root=None, bin_dir=None, sanitize=""):
     """The game modules (clang) and every Windows program with the unit tests and the test extension (MSVC), into the
     build root; then the bin folder the harness runs. `sanitize`: the game modules with those sanitizers, in a build
@@ -1180,6 +1190,7 @@ def build_part(g):
     """The repository checks and the Windows build: False when the build failed (nothing after it can run)."""
     g.check("repo/audit", repo_audit(g))
     g.check("repo/scripts", parse_scripts(g))
+    g.check("repo/text", text_table(g))
     if g.args.no_build:
         return True
     return g.check("build/windows", build_windows(g)) is not False

@@ -61,6 +61,25 @@ int main() {
         sFailures++;
     }
 
+    // UTF-8 as the game's text (P-160): two- and three-byte characters, one U+FFFD for a four-byte one and for a broken
+    // sequence, never more units than bytes.
+    {
+        char16_t units[32];
+        const char* const pMixed = "A\xC3\xA9\xE3\x81\x82\xF0\x9F\x98\x80Z";  // A, e acute, hiragana a, an emoji, Z
+        const size_t count = MR::utf8ToText(units, pMixed);
+        const char16_t want[] = {u'A', 0xE9, 0x3042, 0xFFFD, u'Z', 0};
+        bool same = count == 5;
+        for (size_t i = 0; same && i < 6; i++) {
+            same = units[i] == want[i];
+        }
+        // A cut sequence (each of its bytes one mark), a letter, a stray continuation byte.
+        const size_t broken = MR::utf8ToText(units, "\xE3\x81Z\x80");
+        if (!same || broken != 4 || units[0] != 0xFFFD || units[1] != 0xFFFD || units[2] != u'Z' || units[3] != 0xFFFD) {
+            printf("FAIL utf8ToText\n");
+            sFailures++;
+        }
+    }
+
     if (sFailures == 0) {
         printf("Text string tests passed\n");
     }

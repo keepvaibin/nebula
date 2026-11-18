@@ -1,5 +1,31 @@
 #include "Game/Util/TextString.hpp"
 
+namespace MR {
+    size_t utf8ToText(char16_t* pDst, const char* pSrc) {
+        const unsigned char* p = reinterpret_cast< const unsigned char* >(pSrc);
+        const auto follows = [](unsigned char b) { return (b & 0xC0) == 0x80; };
+        size_t length = 0;
+        while (*p != 0) {
+            unsigned int c = *p++;
+            if (c >= 0xF0 && c <= 0xF4 && follows(p[0]) && follows(p[1]) && follows(p[2])) {
+                p += 3;
+                c = 0xFFFD;
+            } else if (c >= 0xE0 && c < 0xF0 && follows(p[0]) && follows(p[1])) {
+                c = ((c & 0x0F) << 12) | ((p[0] & 0x3F) << 6) | (p[1] & 0x3F);
+                p += 2;
+            } else if (c >= 0xC2 && c < 0xE0 && follows(p[0])) {
+                c = ((c & 0x1F) << 6) | (p[0] & 0x3F);
+                p += 1;
+            } else if (c >= 0x80) {
+                c = 0xFFFD;
+            }
+            pDst[length++] = static_cast< char16_t >(c);
+        }
+        pDst[length] = 0;
+        return length;
+    }
+}  // namespace MR
+
 namespace {
     struct Writer {
         char16_t* mDst;
