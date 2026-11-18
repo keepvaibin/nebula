@@ -119,7 +119,11 @@ args = argparse.Namespace(runs="d3d12,tablet", bin="B", android_bin="", device="
                           commit="0123456789ab", history=str(work / "runs-history.tsv"))
 
 
+commands = []
+
+
 def runner(command, env=None, check=False):
+    commands.append(command)
     folder = pathlib.Path(command[command.index("--work") + 1]) / "runs" / "measure-route" / "d3d12"
     folder.mkdir(parents=True)
     (folder / "run.log").write_text("harness: frame 0 is game frame 10\n" + pace % (0, 5000, 800) * 3, encoding="utf-8")
@@ -130,6 +134,8 @@ def runner(command, env=None, check=False):
 
 
 failed, said = m.measure_runs(args, work / "measure", runner)
+check(commands and all("--lock" in c for c in commands),
+      "the harness gets a run lock (luma_test.py run refuses a run without one): %s" % commands)
 lines = m.read_history(args.history)
 check(not failed and len(lines) == 1 and lines[0]["commit"] == "012345678" and lines[0]["device"] == "pc",
       "one line for the d3d12 run: %s %s" % (said, lines))

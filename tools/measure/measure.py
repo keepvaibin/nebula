@@ -314,7 +314,9 @@ def measure_runs(args, work, runner=subprocess.run):
             tablet = Tablet(luma_test_android.Device(args.device))
         command = [sys.executable, "-X", "utf8", "-I", str(TREE / "tools/lumacore/luma_test.py"), "run", str(ROUTE),
                    "--bin", args.android_bin if tablet else args.bin, "--work", str(folder), "--who", "measure",
-                   "--renderer", renderer, "--commit", args.commit]
+                   "--renderer", renderer, "--commit", args.commit,
+                   # The harness refuses a run without a run lock file; each run has its own beside its folder.
+                   "--lock", str(work / ("harness-%s.lock" % name))]
         if tablet:
             command += ["--device", args.device] + (["--device-lock", args.device_lock] if args.device_lock else [])
         env = dict(os.environ)
