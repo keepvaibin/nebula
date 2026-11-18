@@ -179,3 +179,21 @@ One dated entry per package step. Newest last.
   b4b11bbe1 tells E13a's one-time cost from a cache fault. P-044: the display clock half was done on 11-17.
 - Reviewed Agent 3's shared worker pool (P-040) render half: correct; asked that the chunk count follow the pool's
   threads, so its replays with 0 or 1 worker test the path players take.
+
+## 2026-11-18, 05:15 to 06:00 (Nebula-A1h, beside the main gate of b4b11bbe1)
+
+- The main gate of b4b11bbe1 does not move main: android/tablet's walk test failed on its own pattern, not on the
+  game. It asked for a pacing line of exactly 600 frames; since P-041 the line is a 10 s window (594 to 600 frames
+  at 60 Hz), so it passed only by chance (fc23ce733). N-1071 (dbc7ec863): any frame count; the new pattern matches
+  the failed run's log, the old one does not. Every tour, picture and replay of that gate passed.
+- N-1042 (10db9cfc6, ea927861f): coverage of the game modules in the long run. NEBULA_COVERAGE builds both modules
+  counting what they run; build_windows.ps1 -Coverage; gate.py's coverage part plays the engine tests, the tour and
+  every mod test on that build, writes coverage.tsv and never-run.txt with the results, and fails when the share of
+  lines run falls. coverage_test.py builds a real clang coverage program (fails before). The engine half (the MSVC
+  programs) is a clang-cl build, to be tried in a build root of its own.
+- P-114 closed: installer/tests/run-setup-uninstall-window.ps1 removes a portable copy of 40,000 files through
+  Setup's window and asks the window WM_NULL every 50 ms meanwhile: Setup from before 86f5b2316 missed 2 of 4
+  probes, the current one none of 57.
+- N-1040: pictures/tablet wired in gate.py (main level, after the tablet's tour, --place tablet), uncommitted until
+  the tablet's pictures are approved from two tours of one commit; the first tour (b4b11bbe1's main gate, 24
+  pictures, Adreno 740 driver 512.676.1) is kept in D:/NebulaWork/build/n1040.

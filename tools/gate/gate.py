@@ -1669,7 +1669,8 @@ def coverage_check(g, bin_dir, tour):
                    if (pathlib.Path(bin_dir) / m).exists()]
         binaries = [a for m in modules for a in ("--binary", m)]
         code = run([sys.executable, "-X", "utf8", "-I", HERE / "coverage.py", "report", *binaries, "--profile", merged,
-                    "--work", out, "--root", TREE, "--history", pathlib.Path(g.args.work) / "coverage-history.tsv",
+                    "--work", out, "--root", TREE, "--rebase", pathlib.Path(bin_dir).parent / "game",
+                    "--history", pathlib.Path(g.args.work) / "coverage-history.tsv",
                     "--commit", g.commit, "--llvm", llvm], log)
         text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")
         line = next((l for l in reversed(text.splitlines()) if l.startswith("coverage: ")), "coverage: no report")

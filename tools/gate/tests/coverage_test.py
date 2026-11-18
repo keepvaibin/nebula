@@ -81,6 +81,23 @@ if coverage is not None:
         code, out = report(exe2, profile2, t / "out5", t, history)
         check(code == 1 and "it fell from" in out, "code no run reaches lowers the share and fails: %s" % out)
 
+    # A cache's paths (the build folder joined with paths relative to the tree) read as the tree's; a file in two
+    # modules adds up; a file's own function and a decorated name read as written.
+    with tempfile.TemporaryDirectory() as tmp:
+        t = pathlib.Path(tmp)
+        record = "SF:%s\nFN:4,%s\nFNDA:0,%s\nLF:3\nLH:1\nend_of_record\n"
+        lcov = (record % (t / "build" / "game" / "src" / "B.cpp", "B.cpp:local", "B.cpp:local")
+                + record % (t / "build" / "game" / "src" / "B.cpp", "?run@Actor@@QEAAXXZ", "?run@Actor@@QEAAXXZ")
+                + record % (t / "build" / "game" / "gen" / "made.cpp", "made", "made"))
+        (t / "tree" / "src").mkdir(parents=True)
+        (t / "tree" / "src" / "B.cpp").write_text("", encoding="utf-8")
+        files = coverage.parse_lcov(lcov, t / "tree", t / "build" / "game")
+        check(list(files) == ["src/B.cpp"] and files["src/B.cpp"][:4] == [2, 6, 0, 2],
+              "rebased, kept case, two modules add up: %s" % files)
+        names = sorted(coverage.readable(n) for _, n in files["src/B.cpp"][4])
+        check(names[1] == "local" and (os.name != "nt" or names[0].startswith("Actor::run")),
+              "names read as written: %s" % names)
+
 if failures:
     print("coverage_test.py: FAILED:\n  " + "\n  ".join(failures))
     sys.exit(1)
