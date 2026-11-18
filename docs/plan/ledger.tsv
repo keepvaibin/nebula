@@ -187,7 +187,7 @@ P-008	1	E2 crashes and wrong behaviour	fixed	3e15861ca; crash_report_tests metal
 P-009	1	E9 upscalers, HDR and option parity	open		(platform gap) Feature parity: D3D11 and Metal lack several features the other two have; three of them silently.	Owner keeps Direct3D 11: bring it to parity or hide what it cannot do.
 P-010	1	E5 hitches and GPU waits	open		(performance) A draw whose pipeline is not made yet compiles it on the render thread; only Vulkan with graphics pipeline libraries gets a quick link.	
 P-011	1	E5 hitches and GPU waits	open		(performance, D3D11) D3D11's `video_memory` queries the adapter on every walk, generated pictures included; D3D12 and Vulkan cache it for 100 ms.	
-P-012	1	E2 crashes and wrong behaviour	open	code in 7543f48fc; proof: the thread sanitizer tour and the replay at the next main gate	(wrong behaviour, latent) The game's global `operator new`/`delete` are not thread-safe and nothing enforces the "game thread only" rule.	
+P-012	1	E2 crashes and wrong behaviour	open	code in 5d66a2740; a stop inside new or delete clears the flag (native_arena_tests failed: its trapped panic left the flag set, the next new said two threads); proof: the thread sanitizer tour and the replay at the next main gate	(wrong behaviour, latent) The game's global `operator new`/`delete` are not thread-safe and nothing enforces the "game thread only" rule.	
 P-013	1	E7 game step speed	open		(performance, scales with object count) Every object construction and every `delete` searches all arenas linearly.	
 P-014	1	E0 gate	open		(maintainability) The Windows release links a stored PGO profile whose staleness warnings are switched off.	
 P-015	1	E12 Windows, Linux, Mac	open		(platform gap) macOS and iOS write no crash report of Nebula's own.	

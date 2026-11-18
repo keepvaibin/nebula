@@ -52,6 +52,8 @@ namespace {
             sArenaBusy = false;
         }
     };
+    // A stop inside new or delete clears the flag first: a test that traps the stop jumps past ~ArenaUse.
+#define ARENA_PANIC(...) (sArenaBusy = false, NEBULA_PANIC(__VA_ARGS__))
 }  // namespace
 
 namespace {
@@ -64,7 +66,7 @@ namespace {
 
     u32 blockSize(u64 size) {
         if (size > cMaxBlock) {
-            NEBULA_PANIC("an allocation of %llu bytes", static_cast< unsigned long long >(size));
+            ARENA_PANIC("an allocation of %llu bytes", static_cast< unsigned long long >(size));
         }
         return static_cast< u32 >(size);
     }
@@ -143,7 +145,7 @@ NebulaArena::NebulaArena() {
     const NebulaHostServices* const host = nebula_host();
     mStart = static_cast< u8* >(host->memory_reserve(host->user, cSpan));
     if (mStart == nullptr) {
-        NEBULA_PANIC("no addresses left for an arena");
+        ARENA_PANIC("no addresses left for an arena");
     }
     mEnd = mStart + cSpan;
     mNext = mStart;
@@ -163,7 +165,7 @@ NebulaArena::~NebulaArena() {
 NebulaArena* NebulaArena::create(NebulaArena* pParent) {
     void* const pMemory = malloc(sizeof(NebulaArena));
     if (pMemory == nullptr) {
-        NEBULA_PANIC("out of memory for an arena");
+        ARENA_PANIC("out of memory for an arena");
     }
 
     NebulaArena* const pArena = new (pMemory) NebulaArena();
@@ -232,13 +234,13 @@ void NebulaArena::destroy(NebulaArena* pArena) {
 
 void NebulaArena::commitTo(u8* pEnd) {
     if (pEnd > mEnd) {
-        NEBULA_PANIC("an arena used all of its %llu bytes of addresses", static_cast< unsigned long long >(cSpan));
+        ARENA_PANIC("an arena used all of its %llu bytes of addresses", static_cast< unsigned long long >(cSpan));
     }
 
     const u64 bytes = (static_cast< u64 >(pEnd - mCommitted) + cCommitStep - 1) & ~(cCommitStep - 1);
     const NebulaHostServices* const host = nebula_host();
     if (!host->memory_commit(host->user, mCommitted, bytes)) {
-        NEBULA_PANIC("out of memory: %llu bytes more for an arena", static_cast< unsigned long long >(bytes));
+        ARENA_PANIC("out of memory: %llu bytes more for an arena", static_cast< unsigned long long >(bytes));
     }
     POISON_BLOCK(mCommitted, bytes);
     mCommitted += bytes;
@@ -270,7 +272,7 @@ void* NebulaArena::alloc(u32 size, int alignment) {
     // 0 (the game's "any": new (pArena, 0)) or a power of two, which the mask below needs; never negative (the console's
     // heaps took a negative one to mean "from the top").
     if (alignment < 0 || (alignment & (alignment - 1)) != 0) {
-        NEBULA_PANIC("an allocation aligned to %d bytes", alignment);
+        ARENA_PANIC("an allocation aligned to %d bytes", alignment);
     }
     // At least 16-byte aligned, as a native allocator's memory is.
     u32 align = static_cast< u32 >(alignment);
@@ -332,7 +334,7 @@ void* NebulaArena::alloc(u32 size, int alignment, NebulaArena* pArena) {
     // Before GameSystem makes the root there is nowhere to put a block (a static's constructor, say): a null from new
     // would be written through later, far from here.
     if (pArena == nullptr) {
-        NEBULA_PANIC("an allocation of %u bytes before the first arena", size);
+        ARENA_PANIC("an allocation of %u bytes before the first arena", size);
     }
     return pArena->alloc(size, alignment);
 }
