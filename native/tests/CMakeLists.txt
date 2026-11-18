@@ -51,6 +51,10 @@ native_test(native_mario_messenger_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/mari
     "${game_src}/Player/MarioMessenger.cpp" "${game_src}/System/NebulaArena.cpp")
 # Mario's state timers stop at their top instead of reading 0 after 65536 steps (N-3011).
 native_test(native_frame_count_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/frame_count_tests.cpp")
+# A Life Up's change of the most health ends when a step is refused (N-3015); the ceiling probe of a hanging Mario
+# probes from above once (N-3016).
+native_test(native_mario_life_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/mario_life_tests.cpp")
+native_test(native_mario_ceil_probe_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/mario_ceil_probe_tests.cpp")
 # The frame-list writer, against the list the renderer reads.
 native_test(native_frame_list_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/frame_list_tests.cpp" "${game_src}/Render/FrameList.cpp")
 # The cutscene skip's bound, in steps of play (header only).
