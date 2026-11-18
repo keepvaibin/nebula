@@ -918,14 +918,15 @@ def board_line(board, text):
             f.write("%s %s\n" % (datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), text))
 
 
-# Who goes first among waiting gates (Planner, 11-18 03:44): Agents 3 and 4 before Agents 1 and 2 (DECISION 01:15),
-# otherwise first come. gate.py keeps the order, not the agents.
-FIRST_IN_QUEUE = ("Agent 3", "Agent 4")
+# Who goes first among the lock's waiters (07-BASE-FIRST, How the work flows: the long run does not take the lock
+# while a landing waits): a landing's gate (quick or main) before the work that waits for no one (the long run's
+# parts, the measure, queued loops), otherwise first come. gate.py keeps the order, not the agents.
+LANDING_GATES = ("quick gate ", "main gate ")
 
 
-def queue_rank(who):
-    """0 for an agent whose waiting gate goes first, 1 for the rest."""
-    return 0 if any(who.startswith(name) for name in FIRST_IN_QUEUE) else 1
+def queue_rank(holder):
+    """0 for a landing's gate (its holder line), 1 for the rest."""
+    return 0 if holder.startswith(LANDING_GATES) else 1
 
 
 def queue_folder(lock):
@@ -997,7 +998,7 @@ def take_gate_lock(path, holder, wait_minutes, board, who, alive=process_alive, 
                 return "the gate lock %s is held: %s" % (lock, text)
             if mine is None:
                 queue_folder(lock).mkdir(exist_ok=True)
-                mine = queue_folder(lock) / ("%d-%d-%d.txt" % (queue_rank(who), int(clock() * 1000), pid))
+                mine = queue_folder(lock) / ("%d-%d-%d.txt" % (queue_rank(holder), int(clock() * 1000), pid))
                 mine.write_text(holder + "\n", encoding="utf-8")
                 continue
             if not said_waiting:

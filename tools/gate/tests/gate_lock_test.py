@@ -88,8 +88,11 @@ def main():
                                   sleep=lambda _: None, poll=0.01) is None, "a waiter whose process ended loses its place")
         check(not agent3.exists() and not list(queue.glob("*.txt")), "the queue is empty once the lock is taken")
         gate.free_gate_lock(lock, me, str(board), "Agent 1", "x")
-        check(getattr(gate, "queue_rank", lambda who: None)("Agent 4") == 0 and gate.queue_rank("Agent 2") == 1,
-              "Agents 3 and 4 rank before Agents 1 and 2")
+        check(gate.queue_rank("quick gate of Nebula-A1@abc pid 1") == 0 and gate.queue_rank("main gate of x pid 2") == 0
+              and gate.queue_rank("long run part tour of Nebula-long pid 3") == 1
+              and gate.queue_rank("measure.py: the play route measure of abc pid 4") == 1
+              and gate.queue_rank("full gate of x pid 5") == 1,
+              "a landing's gate ranks before the long run's parts, the measure and other work")
 
         # The pre-push checks (census, ratchet: a work tree and an inventory) are machine work: they run once the lock
         # is held, never before it (11-18: they ran beside a measurement while the gate waited).
