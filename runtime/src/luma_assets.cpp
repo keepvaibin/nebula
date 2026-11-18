@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <cstdint>
 #include <cstring>
@@ -821,6 +822,7 @@ struct CookJob {
 struct Cooks {
     std::mutex lock;
     std::condition_variable wake;
+    std::condition_variable settled;  // a cook posted or forgotten (frame_start waits on it)
     std::vector<std::unique_ptr<CookJob>> jobs;  // waiting, cooking, or posted and not yet delivered or dropped
     bool thread = false;
 };
@@ -893,14 +895,17 @@ void cook_loop() {
             job->items.clear();
         }
         job->source = {};
-        const std::lock_guard lock(c.lock);
-        const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
-        // Posting under the lock: mod_gone takes it too, so after it returns nothing posts for the mod.
-        if (job->cancelled || kernel == nullptr || kernel->post(&job->link.node) != LUMA_OK) {
-            forget_locked(c, job);
-            continue;
+        {
+            const std::lock_guard lock(c.lock);
+            const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
+            // Posting under the lock: mod_gone takes it too, so after it returns nothing posts for the mod.
+            if (job->cancelled || kernel == nullptr || kernel->post(&job->link.node) != LUMA_OK) {
+                forget_locked(c, job);
+            } else {
+                job->state = CookJob::State::Posted;
+            }
         }
-        job->state = CookJob::State::Posted;
+        c.settled.notify_all();
     }
 }
 
@@ -1117,6 +1122,31 @@ void registered(void*, const LumaServiceKernel* kernel) {
     g_kernel.store(kernel, std::memory_order_release);
 }
 
+void (*g_log)(const char*) = nullptr;  // set by providers() before the first mod
+
+// Deterministic mode (luma_service_provider.h frame_start), game thread, at each frame's start: every cook asked before
+// it is cooked and its event posted before the frame's events are taken, so a cook asked in one frame is answered at
+// the next frame's start every run, however long the cooking takes (the cooking thread runs in real time, the frames
+// as fast as the game makes them). Only the game thread asks, so no cook is added while this waits.
+constexpr auto kCookWaitMost = std::chrono::seconds(60);
+void frame_start(void*) {
+    Cooks& c = cooks();
+    std::unique_lock lock(c.lock);
+    const auto settled = [&c] {
+        return std::none_of(c.jobs.begin(), c.jobs.end(),
+                            [](const std::unique_ptr<CookJob>& job) { return job->state != CookJob::State::Posted; });
+    };
+    if (c.settled.wait_for(lock, kCookWaitMost, settled)) {
+        return;
+    }
+    lock.unlock();
+    static bool said = false;
+    if (!said && g_log != nullptr) {
+        said = true;
+        g_log("LumaCore assets: cooks asked before a frame were not done after 60 s; the frame went on");
+    }
+}
+
 const LumaAssetsService kAssets = {
     {sizeof(LumaAssetsService), LUMA_ASSETS_MAJOR, LUMA_ASSETS_MINOR},
     assets_find,
@@ -1131,7 +1161,7 @@ const LumaAssetsService kAssets = {
 // cooks; its end forgets its count.
 const LumaServiceProvider kAssetsProvider = {
     sizeof(LumaServiceProvider), LUMA_ASSETS_NAME, &kAssets.base, nullptr, nullptr, 0u, nullptr,
-    nullptr, assets_mod_gone, assets_mod_end, registered,
+    nullptr, assets_mod_gone, assets_mod_end, registered, frame_start,
 };
 const LumaServiceProvider* const kProviders[] = {&kAssetsProvider};
 
@@ -1141,7 +1171,8 @@ void set_store(const galaxy::assets::AssetStore* store) noexcept {
     g_store.store(store, std::memory_order_release);
 }
 
-std::span<const LumaServiceProvider* const> providers(void (*)(const char*)) noexcept {
+std::span<const LumaServiceProvider* const> providers(void (*log)(const char*)) noexcept {
+    g_log = log;
     return kProviders;
 }
 

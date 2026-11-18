@@ -27,7 +27,7 @@ They work with three folders:
 
 Nebula's data folder is the one given with `--data`, or the system's folder for application data. A test run has its own. On Android, the data folder is private to the app, so the player cannot open the Exchange folder and the **Mods** page has no **Exchange folder** button. There, the Exchange folder is shared between mods only. On other systems, the **Exchange folder** button on the **Mods** page opens it.
 
-Every call is a request. The service checks it on the game thread, does the work on one worker thread in the order the requests were made, and answers with one event at the start of a later frame. Every request is closed after its event. A write is copied before the call returns, so a write followed by a read in the same frame reads what was written. When the player quits, the game does every write, remove and move already asked before it closes, also one asked in the last frame. Their events do not come.
+Every call is a request. The service checks it on the game thread, does the work on one worker thread in the order the requests were made, and answers with one event at the start of a later frame. In a test run's deterministic mode, a request is answered at the start of the next frame, however fast the disk. Every request is closed after its event. A write is copied before the call returns, so a write followed by a read in the same frame reads what was written. When the player quits, the game does every write, remove and move already asked before it closes, also one asked in the last frame. Their events do not come.
 
 ## Paths
 

@@ -2218,6 +2218,8 @@ def evaluate(test, renderer, run_folder, ran):
         if c["kind"] == "fact":
             got = [f for f in by_key.get(c["key"], []) if c["frames"] is None or c["frames"][0] <= f["frame"] <= c["frames"][1]]
             name = "fact %s %s %s" % (c["key"], c["op"], json.dumps(c["value"]))
+            if c["frames"] is not None:
+                name += " in frames %d-%d" % tuple(c["frames"])
             if c["matching"] is not None:
                 got = [f for f in got if has_value(f["value"], c["matching"])]
                 name += " matching %s" % json.dumps(c["matching"], ensure_ascii=False)

@@ -1,7 +1,7 @@
 {
   "harness": 1,
   "name": "2301-write-read",
-  "about": "write twice in two letter cases: one file, 5 then 6 bytes; read through a third case: READ value 6, the length asked with a null buffer, the bytes, a second take LUMA_E_HANDLE",
+  "about": "write twice in two letter cases: one file, 5 then 6 bytes; read through a third case: READ value 6, the length asked with a null buffer, the bytes, a second take LUMA_E_HANDLE; the 16 requests of frame 10 are answered at frame 11, however fast the disk (fixed steps)",
   "proves": [
     "services.fs"
   ],
@@ -65,6 +65,22 @@
     {
       "fact": "mod.fs-data.r3",
       "is": 1
+    },
+    {
+      "fact": "mod.fs-data.e1_kind",
+      "frames": [
+        11,
+        11
+      ],
+      "is": 2
+    },
+    {
+      "fact": "mod.fs-data.e16_status",
+      "frames": [
+        11,
+        11
+      ],
+      "exists": true
     },
     {
       "fact": "mod.fs-data.e1_kind",

@@ -13,7 +13,8 @@
                         inside an archive, at a plain folder, under a file, an archive where a file is.
    assets-provide-mistakes (5) 2805: ARGUMENT for each wrong argument of provide, withdraw and cook; LIMIT.
    assets-first, assets-second (6, 7) 2806: one path, two mods: EXISTS, withdraw, then the second's.
-   assets-cook     (8) 2807: a text file cooked as it is and provided; a cut model refused with the cooker's words. */
+   assets-cook     (8) 2807: a text file cooked as it is and provided; a cut model refused with the cooker's words; a
+                        32 MiB text file, whose cooking takes longer than a frame. */
 #include "../loader/lt.h"
 #include <luma_assets.h>
 
@@ -323,7 +324,8 @@ static void two_case(int32_t k) {
 static const char text[] = "cooked as it is";
 /* A J3D2 bdl4 header claiming more than it holds. */
 static const unsigned char broken[32] = {'J', '3', 'D', '2', 'b', 'd', 'l', '4', 0, 0, 0x10, 0, 0, 0, 0, 8};
-static LumaHandle text_request, broken_request;
+static LumaHandle text_request, broken_request, big_request;
+#define BIG_BYTES (32ull << 20u)
 
 static void cooked(void* user, const LumaEvent* event) {
     (void)user;
@@ -341,6 +343,13 @@ static void cooked(void* user, const LumaEvent* event) {
         int32_t status = 0;
         info_of("ModData/Broken.bdl", 0, &status);
         lt_fact("broken_absent", status);
+    } else if (event->handle == big_request) {
+        lt_fact("big_cooked", event->status);
+        const void* data = 0;
+        uint64_t bytes = 0;
+        lt_fact("big_bytes", assets->bytes(lt_mod, "ModData/Big.txt", 0, &data, &bytes));
+        const unsigned char* p = (const unsigned char*)data;
+        lt_fact("big_same", bytes == BIG_BYTES && p != 0 && p[0] == 'b' && p[BIG_BYTES / 2u] == 'b' && p[BIG_BYTES - 1u] == 'b');
     }
 }
 
@@ -349,6 +358,13 @@ static void cook_case(void) {
     lt_fact("broken_cook",
             assets->cook(lt_mod, "ModData/Broken.bdl", broken, sizeof(broken), cooked, 0, &broken_request));
     lt_fact("requests_differ", text_request != 0 && broken_request != 0 && text_request != broken_request);
+    /* The cook copies what it is given before it returns: the buffer goes at once. */
+    unsigned char* big = (unsigned char*)lt_core->alloc(lt_mod, BIG_BYTES, 16);
+    lt_fact("big_alloc", big != 0);
+    if (big == 0) return;
+    for (uint64_t i = 0; i < BIG_BYTES; i++) big[i] = 'b';
+    lt_fact("big_cook", assets->cook(lt_mod, "ModData/Big.txt", big, BIG_BYTES, cooked, 0, &big_request));
+    lt_core->free(lt_mod, big);
 }
 #endif
 

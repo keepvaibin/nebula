@@ -488,7 +488,8 @@ struct Worker {
     std::condition_variable progress;  // a job done (finish waits on it)
     std::deque<Request*> jobs;
     bool busy = false;          // a job taken and not yet done
-    std::uint64_t done = 0;     // jobs done
+    std::uint64_t queued = 0;   // jobs queued
+    std::uint64_t done = 0;     // jobs done (in the order queued, each answered before it counts)
     bool started = false;
 };
 Worker* g_worker = nullptr;      // game thread makes it; its fields under its lock
@@ -545,6 +546,7 @@ void queue(Request* request) {
     try {
         const std::lock_guard<std::mutex> lock(w->lock);
         w->jobs.push_back(request);
+        w->queued++;
     } catch (...) {
         request->status = LUMA_E_MEMORY;  // linked and counted already: answered, so its event closes it
         answer(request);
@@ -1248,6 +1250,33 @@ void registered(void*, const LumaServiceKernel* kernel) {
     g_kernel.store(kernel, std::memory_order_release);
 }
 
+// Deterministic mode (luma_service_provider.h frame_start), game thread, at each frame's start: every request queued
+// before it is done and its event posted before the frame's events are taken, so a request made in one frame is
+// answered at the next frame's start every run, however fast the disk (the worker runs in real time, the frames as
+// fast as the game makes them). One worker serves fs and fs.exchange: fs's provider alone has this.
+constexpr auto kFrameWaitMost = std::chrono::seconds(10);
+void frame_start(void*) {
+    Worker* w = nullptr;
+    {
+        const std::lock_guard<std::mutex> lock(g_worker_make);
+        w = g_worker;
+    }
+    if (w == nullptr || !w->started) {
+        return;
+    }
+    std::unique_lock<std::mutex> lock(w->lock);
+    const std::uint64_t asked = w->queued;
+    if (w->progress.wait_for(lock, kFrameWaitMost, [w, asked] { return w->done >= asked; })) {
+        return;
+    }
+    lock.unlock();
+    static bool said = false;
+    if (!said && g_log != nullptr) {
+        said = true;
+        g_log("LumaCore fs: requests made before a frame were not done after 10 s; the frame went on");
+    }
+}
+
 const LumaFsService kFs = {
     {sizeof(LumaFsService), LUMA_FS_MAJOR, LUMA_FS_MINOR},
     fs_read,
@@ -1277,11 +1306,12 @@ const LumaFsExchangeService kExchange = {
 // fs reports only the registry's rows (100-104): no rows of its own.
 const LumaServiceProvider kFsProvider = {
     sizeof(LumaServiceProvider), LUMA_FS_NAME, &kFs.base, nullptr, nullptr, 0u, nullptr,
-    mod_begin, mod_gone, mod_end, registered,
+    mod_begin, mod_gone, mod_end, registered, frame_start,
 };
 const LumaServiceProvider kExchangeProvider = {
     sizeof(LumaServiceProvider), LUMA_FS_EXCHANGE_NAME, &kExchange.base, nullptr, nullptr, 0u, nullptr,
     mod_begin, mod_gone, mod_end, registered,
+    nullptr,  // fs's frame_start waits for the one worker of both
 };
 const LumaServiceProvider* const kProviders[] = {&kFsProvider, &kExchangeProvider};
 
@@ -1389,6 +1419,7 @@ void forget_data(std::string_view id) {
         {
             const std::lock_guard<std::mutex> lock(w->lock);
             w->jobs.push_back(request);
+            w->queued++;
         }
         w->ready.notify_one();
     } catch (...) {

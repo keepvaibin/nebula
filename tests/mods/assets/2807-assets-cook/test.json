@@ -1,7 +1,7 @@
 {
   "harness": 1,
   "name": "2807-assets-cook",
-  "about": "the game's cooker at run time (needs nebula_import's luma_cook_entry, contract 4): a text file cooked as it is and provided (its bytes the same), a cut model refused with the cooker's words and nothing provided; each answer by its request",
+  "about": "the game's cooker at run time (needs nebula_import's luma_cook_entry, contract 4): a text file cooked as it is and provided (its bytes the same), a cut model refused with the cooker's words and nothing provided; each answer by its request; a 32 MiB text file cooked; the three cooks asked at frame 10 are answered at frame 11, however long the cooking takes (fixed steps)",
   "proves": [
     "services.assets.cook"
   ],
@@ -28,7 +28,7 @@
     },
     {
       "after": {
-        "fact": "mod.assets-cook.broken_absent",
+        "fact": "mod.assets-cook.big_same",
         "exists": true
       },
       "timeout": 3600,
@@ -53,6 +53,22 @@
       "is": 0
     },
     {
+      "fact": "mod.assets-cook.text_cooked",
+      "frames": [
+        11,
+        11
+      ],
+      "is": 0
+    },
+    {
+      "fact": "mod.assets-cook.broken_cooked",
+      "frames": [
+        11,
+        11
+      ],
+      "is": -15
+    },
+    {
       "fact": "mod.assets-cook.text_held",
       "is": 1
     },
@@ -75,6 +91,30 @@
     {
       "fact": "mod.assets-cook.broken_absent",
       "is": -7
+    },
+    {
+      "fact": "mod.assets-cook.big_alloc",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-cook.big_cook",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-cook.big_cooked",
+      "frames": [
+        11,
+        11
+      ],
+      "is": 0
+    },
+    {
+      "fact": "mod.assets-cook.big_bytes",
+      "is": 0
+    },
+    {
+      "fact": "mod.assets-cook.big_same",
+      "is": 1
     }
   ]
 }
