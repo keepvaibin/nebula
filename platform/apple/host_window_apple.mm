@@ -159,6 +159,9 @@ struct Pad {
     CHHapticEngine* engine API_AVAILABLE(macos(11.0)) = nil;
     id<CHHapticPatternPlayer> player API_AVAILABLE(macos(11.0)) = nil;
     bool rumbling = false;
+    // Set by the engine's reset and stopped handlers, which run on a queue of Core Haptics' own: the main thread
+    // (run_requests) drops the engine and its player and sends the game's level again on a new one (P-109).
+    std::shared_ptr<std::atomic<bool>> haptics_lost;
 };
 std::array<Pad, kMaxPads> g_pads{};
 std::uint32_t g_next_pad_id = 1u;
@@ -639,11 +642,15 @@ void set_rumble(Pad& pad, std::uint32_t level) {
                 pad.engine = nil;
                 return;
             }
-            Pad* const stopped = &pad;
+            // The handlers only set the pad's flag: they run off the main thread, and the pad's slot may hold another
+            // controller by then (the flag is the engine's own, not the slot's).
+            pad.haptics_lost = std::make_shared<std::atomic<bool>>(false);
+            const std::shared_ptr<std::atomic<bool>> lost = pad.haptics_lost;
             pad.engine.resetHandler = ^{
-                [stopped->engine startAndReturnError:nil];
-                stopped->player = nil;
-                stopped->rumbling = false;
+                lost->store(true, std::memory_order_release);
+            };
+            pad.engine.stoppedHandler = ^(CHHapticEngineStoppedReason) {
+                lost->store(true, std::memory_order_release);
             };
         }
         if (pad.player == nil) {
@@ -842,7 +849,21 @@ void run_requests() {
     }
     const std::uint32_t pad_id = g_rumble_pad.load(std::memory_order_relaxed);
     const std::uint32_t level = g_rumble_level.load(std::memory_order_relaxed);
-    if (pad_id != g_rumble_sent_pad || level != g_rumble_sent_level) {
+    // An engine the system reset or stopped (the controller's audio route changed, the app was suspended, an error
+    // of the haptics server) plays nothing again: it is dropped, and the level the game holds is sent on a new one.
+    bool resend = false;
+    if (@available(macOS 11.0, *)) {
+        for (Pad& pad : g_pads) {
+            if (pad.haptics_lost != nullptr && pad.haptics_lost->load(std::memory_order_acquire)) {
+                pad.engine = nil;
+                pad.player = nil;
+                pad.rumbling = false;
+                pad.haptics_lost.reset();
+                resend = true;
+            }
+        }
+    }
+    if (resend || pad_id != g_rumble_sent_pad || level != g_rumble_sent_level) {
         for (Pad& pad : g_pads) {
             if (pad.controller != nil && (pad.number == pad_id || pad.number == g_rumble_sent_pad)) {
                 set_rumble(pad, pad.number == pad_id ? level : 0u);
