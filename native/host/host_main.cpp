@@ -1102,10 +1102,11 @@ void apply_power_wish(bool background, bool minimised) {
 }
 #endif
 
-// The display's frame at 60 Hz: 59.94 would repeat a frame every 17 s on a 60 Hz display. A late
-// wake-up skips the fields it missed, as a display does, rather than delivering them back to back. On Android the
-// frame follows the display's own vsync (every second one at 120 Hz), so frames never drift against it and each
-// stays on screen for the same time; the host's clock takes over where the display gives none.
+// The game's step: 60 a second (game_step.h), or, on a display within 0.2 % of a whole number of steps' refreshes
+// (galaxy/step_lock.h; exact with in-between pictures on), that many of the display's refreshes, so no picture repeats
+// against it. On Android and Apple the step waits for the display's own vsync by the same rule (every second one at
+// 120 Hz); the host's clock takes over where the display gives none. A late wake-up skips the steps it missed, as a
+// display does, rather than running them back to back.
 void svc_frame_wait(void*) {
 #if defined(NEBULA_HOST_RENDERER)
     galaxy::pacing::step_done();  // the game thread is back: the step's own work ends here

@@ -373,7 +373,7 @@ I-011	1	E6 pacing and in-between pictures	open		console-era remnant (T5). Counts
 I-012	1	E6 pacing and in-between pictures	open		design gap (T7). Only Android Vulkan presents at a requested time; only Windows has frame telemetry and the timeline.	
 I-013	1	E6 pacing and in-between pictures	open		wrong behaviour (minor), suspected. FramePhase measures the wrong work under interpolation.	
 I-014	1	E6 pacing and in-between pictures	open		wrong behaviour (T2), suspected. Game-declared camera cuts come from two places only.	
-I-015	1	E6 pacing and in-between pictures	open		maintainability. Stale or wrong comments and dead parts.	
+I-015	1	E6 pacing and in-between pictures	fixed	the five comments corrected (frame_interpolation.cpp 8x, render_core.cpp's queue lock and real-picture comments, host_main.cpp svc_frame_wait's step rule) and interp_types.h removed; frame_rate_decouple and idle_present went with P-001	maintainability. Stale or wrong comments and dead parts.	
 I-016	1	E6 pacing and in-between pictures	open		gap in tests. The scheduler is not under test (J.8): the arrival clock, `vblanks_per_slot`, both governors, supersede, `interp_walk_time`, the platfor	
 N-1001	1	E0 gate	fixed	6181b8a06; repo/audit (gate) and the Windows job's first step	(untested) tools/audit_repo.ps1 ran nowhere: no workflow or gate step called it, and it had failed since 11-14 (validator inputs, lumakit.luma's size).	
 N-1002	1	E0 gate	fixed	e7bcd827e; unit/game (gate), the Windows game and Linux jobs	(untested) native/tests had no build: its tests compiled in no target and ran nowhere.	
