@@ -1,0 +1,97 @@
+{
+  "harness": 1,
+  "name": "1123-passes-game-thread",
+  "about": "With a mod hooking a function inside each pass the plain module may run on worker threads (P-040: the frustum judge, the shadows' first part, actor animation), every call reaches the hook on the game thread",
+  "proves": [
+    "kernel.threads"
+  ],
+  "mods": [
+    "../mods/lt-passes"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 300,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4249
+      ],
+      "fact": "asked"
+    },
+    {
+      "at": 310,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-passes.judge_on",
+      "at_least": 1
+    },
+    {
+      "fact": "mod.lt-passes.judge_off",
+      "is": 0
+    },
+    {
+      "fact": "mod.lt-passes.judge_in_on",
+      "at_least": 1
+    },
+    {
+      "fact": "mod.lt-passes.judge_in_off",
+      "is": 0
+    },
+    {
+      "fact": "mod.lt-passes.clipped_on",
+      "at_least": 1
+    },
+    {
+      "fact": "mod.lt-passes.clipped_off",
+      "is": 0
+    },
+    {
+      "fact": "mod.lt-passes.shadow_on",
+      "at_least": 1
+    },
+    {
+      "fact": "mod.lt-passes.shadow_off",
+      "is": 0
+    },
+    {
+      "fact": "mod.lt-passes.gravity_on",
+      "at_least": 1
+    },
+    {
+      "fact": "mod.lt-passes.gravity_off",
+      "is": 0
+    },
+    {
+      "fact": "mod.lt-passes.calc_anim_on",
+      "at_least": 1
+    },
+    {
+      "fact": "mod.lt-passes.calc_anim_off",
+      "is": 0
+    },
+    {
+      "fact": "mod.lt-passes.model_anim_on",
+      "at_least": 1
+    },
+    {
+      "fact": "mod.lt-passes.model_anim_off",
+      "is": 0
+    },
+    {
+      "fact": "mod.lt-passes.xanime_on",
+      "at_least": 1
+    },
+    {
+      "fact": "mod.lt-passes.xanime_off",
+      "is": 0
+    }
+  ]
+}
