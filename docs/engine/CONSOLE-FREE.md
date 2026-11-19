@@ -76,11 +76,11 @@ What the hits are, by search (each line read at a1f423dd8):
 
 | Area | Files | Read |
 | --- | --- | --- |
-| The game's sound code (`Game/AudioLib`, `Game/GameAudio`, `Game/Sound`, `Game/Speaker`, `Game/RhythmLib`) | 170 | not read whole |
-| Archives and the game's file access (`Game/System` archive and resource holders, `Game/Util/FileUtil`, the store) | not counted | not read whole |
-| Text (`MessageHolder`, the `NMSG` reader, the host's `message_utf8`) | not counted | not read whole |
-| Layouts and fonts (`Game/Ui`, `Game/Screen`'s layout code, `Game/System` font holders) | `Game/Ui` 51, `Game/Screen` 289 | started: `Layout::Build`, `Material`'s record and draw (section 3) |
-| Input (the host's and the game's) | not counted | read for master report 6, not for this test |
+| The game's sound code (`Game/AudioLib`, `Game/GameAudio`, `Game/Sound`, `Game/Speaker`, `Game/RhythmLib`) | 170 | `Sound`'s engine and the host mixer read; all swept by pattern, every hit read; P-186 |
+| Archives and the game's file access (`Game/System` archive and resource holders, `Game/Util/FileUtil`, the store) | 11 | the load path read: modern |
+| Text (`MessageHolder`, the `NMSG` reader, the host's `message_utf8`) | not counted | the record and readers read; 16-bit codes open |
+| Layouts and fonts (`Game/Ui`, `Game/Screen`'s layout code, `Game/System` font holders) | `Game/Ui` 51, `Game/Screen` 289 | `Layout::Build`, `Material`, `ResFont` read; P-184 |
+| Input (the host's and the game's) | not counted | the game's record read: modern |
 | The game's own files E14 did not reach (Agent 3's hand-over, `docs/plan/HANDOVER-AGENT-3.md` on `app/work`: Player 99, Sound 76, Enemy 109, Boss 166, Ride 19, NPC 76, MapObj 314, LiveActor 62) | 921 | swept by pattern (below), every hit read; not read whole |
 
 What is read so far (at a1f423dd8):
@@ -90,7 +90,12 @@ What is read so far (at a1f423dd8):
   pattern recorded with the item): 15 sit in functions named like per-step code (`exe*`, `control`, `calc*`, `update*`,
   `draw*`); read one by one, 9 are `ValueControl::getValue` or a sound note's field (not a table) and 6 are
   `StageDataHolder::calcPlacementMtx` (`StageDataHolder.cpp:673-680`), which runs at placement. 99 lines are in free
-  functions (`MR::`) whose callers are not yet placed. So far no table read by name in a step; not closed.
+  functions (`MR::`) whose callers are not yet placed. A second pass names the enclosing function of every read by
+  a definition match (340 lines with `ValueControl` and the message helpers): `init*`, constructors of the demo
+  keepers, `load*`, `create*FromCSV`, placement getters, story-event and race-time lookups, the light tables
+  (`LightFunction.cpp:64-91`, read once for every light by `LightDataHolder.cpp:24` at load). No read by name was found in a step. The column search by
+  name (`Table.cpp:33-48`) is the game's own data access (its JMap design), paid at load: the game, not the console;
+  not an item.
 - Layouts. Cooked `NLYT` (section 1); the record's material: P-184.
 - Text. Cooked `NMSG` (`MessageHolder.hpp:8-32`): host-order counts and offsets, the text as `char16_t`, flow nodes
   and branches as records. Fonts: cooked `NFNT` (`native_data.rs:244-257`): host order, sheets as distance fields
@@ -106,9 +111,13 @@ What is read so far (at a1f423dd8):
   (`SoundEngine.cpp:148`, `cTicksPerSecond`; sequences by tempo and timebase, `SeqTrack.cpp:644-646`) is the game's
   sound step, as the 60 Hz step is its logic's: stays. The console's surround matrix (surround buses folded into left
   and right, the inverted right) is used only when the device has two channels: with surround asked and an
-  extensible format the buses go to speakers of their own (`audio_mixer.h:90-95`, `audio_device_wasapi.cpp:222`). Not
-  yet read: `AudioLib` (58 files), `GameAudio`, `RhythmLib`, `Speaker`, the volume ramp over the first 4/5 of a tick
-  (`audio_mixer.h`, `ramp_mix`).
+  extensible format the buses go to speakers of their own (`audio_mixer.h:90-95`, `audio_device_wasapi.cpp:222`).
+  `AudioLib`, `GameAudio`, `RhythmLib`, `Speaker` (48 sources, 6,369 lines) swept as the actor folders (below): no CPU
+  intrinsic, address, byte swap or pointer kept as an integer; 5 reads of cooked records by offset (name tables); 11
+  tables of a literal size (two music players, mute nibbles, four effect lines: the game's). The remote speaker's
+  sounds are mixed at 6 kHz (`SpeakerMixer.hpp:58-77`) because their waves are the disc's speaker waves
+  (`native_data.rs:542-545`, `CSW`); the host resamples player 1's into the output (`host_main.cpp:4016-4025`,
+  `wiimote_speaker.h`): the game's content. Not read: the volume ramp over the first 4/5 of a tick (`ramp_mix`).
 - Archives and file access. The game's archive names (`.arc`, `.szs` in 18 runtime, 6 game and 10 header lines) are
   names only: the store drops the ending (`asset_store.h:118-119`, `asset_store.cpp:33`). The game reads the store
   (`game.pak`, `cook/store.rs`) through `AssetFolder` and `GameAssets::load` (`FileUtil.cpp:88`); `ResourceHolder`
@@ -184,6 +193,5 @@ Each: where; what of it is the console's; the modern form; row; state; proof.
 | A layout material's blend kept in the console's codes and turned into the renderer's at every draw | `native/petari/include/Game/Ui/UiData.hpp:163-182` (`mBlend`: type, factors, op as the console wrote them; `mAlphaCompare`: two compares packed in a byte; `mGenerators`: texture coordinate generators as type, source, matrix); `native/petari/src/Game/Ui/Material.cpp:702-714` (each draw maps the blend type, and the source factor's two destination-colour codes, to `NEBULA_BLEND_*`, `NEBULA_FACTOR_*`) | the console's blend and compare encodings in the cooked record | the cook writes the material's pass state word (`PassState`) and the compare in the renderer's terms; the draw copies it | P-184 | open | not yet |
 | Blur radii stretched for one wide shape only | `BloomEffectSimple.cpp:28`, `ImageEffectLocalUtil.cpp:146` (`isScreen16Per9() ? 1.333f : 1.0f`) | the console's two screen shapes, 4:3 and 16:9 | the vertical factor from the frame's aspect over 4:3, so the blur keeps its shape on every screen | P-185 | open | not yet |
 | Sound sequences' data kept in the console's byte order | `native/petari/src/Game/Sound/SeqTrack.cpp:29-37`, `:706-745`, `:1505-1525` | the sequence file's data section as the console stored it (big-endian), swapped at every read on the sound thread | the cook, which already decodes the operations, writes each table they read in host order and typed (envelope points, filter weights, 8-, 16-, 24-, 32-bit tables); the run time reads records | P-186 | open | not yet |
-| Columns found by name at every read | `native/petari/src/Game/Util/Table.cpp:33-48` (`searchItemInfo`: the column's hash searched over the fields on each `getValue` by name) | the console's JMapInfo access, cheap only for its small tables | not decided: pass two reads how often the game reads by name in a step | none yet | to read | not yet |
 | The game's movies decoded with the SDK's THP codec while the game runs | `runtime/src/movie_video.cpp`, `MovieStream.cpp` | the console's video codec; its IDCT order is P-118 (owner: stays) | not decided: pass two weighs a cook to a current codec against the decoder's cost | none yet | to read | not yet |
 | Texture headers in the console's form | `ResTIMG`, 137 lines in 59 files | the J3D texture header and its filter codes | a host id and a sampler resolved at load (E3 step 2) | P-155 | open (F4) | not yet |
