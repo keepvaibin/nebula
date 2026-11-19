@@ -105,6 +105,33 @@ int main() {
             std::cerr << "present rate must follow the cap, the display rate and VSync\n";
             passed = false;
         }
+        {
+            // The DXGI sync interval (Direct3D 12 and 11 share it, P-022).
+            using galaxy::render::dxgi_sync_interval;
+            int asked = 0;
+            const auto on = [&asked] { ++asked; return true; };
+            const auto off = [&asked] { ++asked; return false; };
+            const bool sync_ok =
+                dxgi_sync_interval(0u, false, 120.0, 0.0f, true, on) == 0u &&   // VSync off stays off
+                dxgi_sync_interval(2u, false, 120.0, 0.0f, true, on) == 2u &&   // 2 asked stays 2
+                dxgi_sync_interval(1u, true, 120.0, 30.0f, true, on) == 1u &&   // a variable refresh: as asked
+                dxgi_sync_interval(1u, false, 0.0, 30.0f, true, on) == 1u &&    // an unknown display rate
+                asked == 0 &&                                                    // none of these asks
+                dxgi_sync_interval(1u, false, 120.0, 0.0f, true, on) == 1u &&   // a game frame at 60 goes out at once
+                dxgi_sync_interval(1u, false, 240.0, 0.0f, true, off) == 1u &&
+                asked == 0 &&                                                    // a game frame never asks
+                dxgi_sync_interval(1u, false, 120.0, 30.0f, true, on) == 4u &&  // 30 on 120: four refreshes each
+                dxgi_sync_interval(1u, false, 144.0, 30.0f, true, on) == 1u &&  // 30 on 144: no whole multiple
+                dxgi_sync_interval(1u, false, 60.0, 30.0f, true, on) == 2u &&   // 30 on 60: two
+                dxgi_sync_interval(1u, false, 240.0, 120.0f, false, on) == 2u && // in-between pictures at half the rate
+                dxgi_sync_interval(1u, false, 119.0, 59.94f, false, on) == 2u && // 119 for 119.88: within 1.5 %
+                dxgi_sync_interval(1u, false, 120.0, 0.0f, false, off) == 1u &&  // no in-between pictures, 120: at once
+                asked == 3;
+            if (!sync_ok) {
+                std::cerr << "the DXGI sync interval must keep whole refreshes only for a rate that is a part of the display's\n";
+                passed = false;
+            }
+        }
         using galaxy::render::interpolated_frames_per_game_frame;
         if (interpolated_frames_per_game_frame(30.0) != 0u ||
             interpolated_frames_per_game_frame(60.0) != 0u ||

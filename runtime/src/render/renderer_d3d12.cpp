@@ -4272,30 +4272,8 @@ ID3D12Resource* RendererD3D12::hdr_capture_picture(const DisplayTexture& source,
 
 UINT RendererD3D12::present_sync_interval(unsigned configured, float max_fps) {
     const bool game_frame = std::exchange(present_game_frame_, false);
-    if (configured != 1u || variable_refresh_) {
-        return configured;  // a variable refresh display shows a frame at once: whole refreshes mean nothing
-    }
-    const double hz = display_refresh_hz_;
-    if (hz <= 0.0) {
-        return 1u;
-    }
-    // EnumDisplaySettings reports whole hertz: 119 for 119.88, 239 for 239.76.
-    const double rate = game_frame ? std::min(kGameStepRate, present_frame_rate(max_fps, configured, hz))
-                                   : present_frame_rate(max_fps, configured, hz);
-    // A game frame at 60 (in-between pictures off, or a movie between them) goes out at once and the display repeats
-    // it until the next: the step clock keeps the frames on the display's grid where its rate is a multiple
-    // (galaxy/step_lock.h, frame_phase.h). A sync interval of a whole step held each frame back that long (file F, M1:
-    // at 240 Hz the present call was made 12.9 ms after its step and came back at 29.3 ms). A rate capped under 60
-    // (30), or of in-between pictures that is a part of the refresh, keeps whole refreshes per picture.
-    if ((game_frame || !interpolation_mode()) && rate >= kGameStepRate - 0.5) {
-        return 1u;
-    }
-    const double multiple = std::round(hz / rate);
-    if (multiple >= 2.0 && multiple <= 4.0 &&
-        std::abs(hz - rate * multiple) <= 0.015 * hz) {
-        return static_cast<UINT>(multiple);
-    }
-    return 1u;
+    return dxgi_sync_interval(configured, variable_refresh_, display_refresh_hz_, max_fps, game_frame,
+                              [this] { return interpolation_mode(); });
 }
 
 void RendererD3D12::present_to_swap_chain() {

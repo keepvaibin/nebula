@@ -615,25 +615,8 @@ void RendererD3D11::begin_frame() {
 
 unsigned RendererD3D11::present_sync_interval(unsigned configured, float max_fps) {
     const bool game_frame = std::exchange(present_game_frame_, false);
-    if (configured != 1u || variable_refresh_) {
-        return configured;  // a variable refresh display shows a frame at once: whole refreshes mean nothing
-    }
-    const double hz = display_refresh_hz_;
-    if (hz <= 0.0) {
-        return 1u;
-    }
-    // As renderer_d3d12.cpp present_sync_interval: a game frame at 60 goes out at once; a capped or in-between rate
-    // that is a part of the refresh keeps whole refreshes per picture.
-    const double rate = game_frame ? std::min(kGameStepRate, present_frame_rate(max_fps, configured, hz))
-                                   : present_frame_rate(max_fps, configured, hz);
-    if ((game_frame || !interpolation_mode()) && rate >= kGameStepRate - 0.5) {
-        return 1u;
-    }
-    const double multiple = std::round(hz / rate);
-    if (multiple >= 2.0 && multiple <= 4.0 && std::abs(hz - rate * multiple) <= 0.015 * hz) {
-        return static_cast<unsigned>(multiple);
-    }
-    return 1u;
+    return dxgi_sync_interval(configured, variable_refresh_, display_refresh_hz_, max_fps, game_frame,
+                              [this] { return interpolation_mode(); });
 }
 
 bool RendererD3D11::interpolation_mode() const {

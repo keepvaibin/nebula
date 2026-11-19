@@ -195,6 +195,36 @@ inline unsigned interpolated_frames_per_game_frame(double rate) {
     return std::max(1u, static_cast<unsigned>(frames));
 }
 
+// The sync interval of a DXGI present (Direct3D 12 and 11; P-022: one copy). `configured`: the settings' (0 off, 1, 2),
+// kept as it is but for 1 on a display of a fixed rate; `refresh_hz` the display's (whole hertz, as EnumDisplaySettings
+// reports 119 for 119.88; 0 unknown); `game_frame`: the picture is a game frame, not one between two; `interpolating()`:
+// pictures between game frames are on (asked only when it decides).
+// A game frame at 60 (in-between pictures off, or a movie between them) goes out at once and the display repeats it
+// until the next: the step clock keeps the frames on the display's grid where its rate is a multiple
+// (galaxy/step_lock.h, frame_phase.h). A sync interval of a whole step held each frame back that long (file F, M1: at
+// 240 Hz the present call was made 12.9 ms after its step and came back at 29.3 ms). A rate capped under 60 (30), or of
+// in-between pictures that is a part of the refresh, keeps whole refreshes per picture.
+template <class Interpolating>
+inline unsigned dxgi_sync_interval(unsigned configured, bool variable_refresh, double refresh_hz, float max_fps,
+                                   bool game_frame, Interpolating&& interpolating) {
+    if (configured != 1u || variable_refresh) {
+        return configured;  // a variable refresh display shows a frame at once: whole refreshes mean nothing
+    }
+    if (refresh_hz <= 0.0) {
+        return 1u;
+    }
+    const double asked = present_frame_rate(max_fps, configured, refresh_hz);
+    const double rate = game_frame ? std::min(kGameStepRate, asked) : asked;
+    if ((game_frame || !interpolating()) && rate >= kGameStepRate - 0.5) {
+        return 1u;
+    }
+    const double multiple = std::round(refresh_hz / rate);
+    if (multiple >= 2.0 && multiple <= 4.0 && std::abs(refresh_hz - rate * multiple) <= 0.015 * refresh_hz) {
+        return static_cast<unsigned>(multiple);
+    }
+    return 1u;
+}
+
 inline constexpr std::array<unsigned, 9> kInternalHeights{0, 144, 240, 360, 480, 720, 1080, 1440, 2160};
 inline unsigned normalized_internal_height(unsigned height) {
     return std::find(kInternalHeights.begin(), kInternalHeights.end(), height) != kInternalHeights.end() ? height : 0u;
