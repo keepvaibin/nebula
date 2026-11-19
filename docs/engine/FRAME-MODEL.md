@@ -770,3 +770,64 @@ tests read `SLOT` through `MATL`'s `first_slot`.
 - The gate's pictures on every stop and renderer are unchanged and the replay is identical; the store version goes up
   by one.
 - No switch: no path draws differently.
+
+### 2.10 Step 2: samplers decided at the cook, a texture list made once
+
+Read at c8222595e.
+
+**Today.**
+
+1. `TEXR` (`NebulaModelTexture`, `nebula_model.h:267-274`) keeps the console's sampler codes: wrap codes, the min and
+   mag filter codes (the console's min types 0 to 5), anisotropy, the lod range and bias. At load `ModelData.cpp:101-124`
+   copies each into a `ResTIMG` (`GameTexture.hpp:21-35`), the console's texture header.
+2. A form's list is made by `MaterialDraw::tableOf` (`Material.cpp:770-820`): for each map, the texture its slot shows,
+   its host id found from the image's address (`RenderTexture::idOf`, `RenderTexture.cpp:175` on), and its sampler
+   decoded from the console's codes (`:789-797`). The same decode is written a second time for the draw sites
+   (`SiteTextures::toFrame`, `TypedDraw.cpp:78-84`). The list is registered by its hash (`Registries::texture_table`,
+   `registries.cpp:682-726`: a per-thread memo of 64 lists of up to 8 textures, else a map under the lock). A form keeps
+   its table while the material's textures and the model's texture data stand (`Material.cpp:774-777`); a draw that
+   swaps an image builds and registers its list at every draw (`:814-818`); the one caller is the player's model
+   (`PlayerModel.cpp:136`).
+3. The render thread, for each table a draw names:
+   - with descriptor indexing (`RenderCore::walk_tables`, `draw_walker.cpp:752-833`): each walk looks up every
+     texture's handle and writes the table's pairs into that frame's list buffer again (`write_texture_list`; Direct3D
+     12 `renderer_d3d12.cpp:2934` on, an upload ring per frame slot); the sampler slots are made again when the
+     textures, the sampler heap or a target changed (`:787-816`);
+   - without it (`walk_bound_tables`, `:838-933`): rebuilt when stale, per walk for a table holding a target.
+4. A sampler's key holds the texture's levels, generated levels and a replacement's shift (`draw_walker.cpp:801-813`)
+   and the render settings (`make_sampler_slot_key(key, cfg)`, `renderer_d3d12.cpp:2918-2920`). P-048, P-056 and P-066
+   are the heaps' waits when they fill.
+
+**The file.**
+
+- `SAMP`: each distinct sampler of the model in the form the renderer takes, `NebulaFrameTexture`'s sampler fields
+  (`nebula_frame_list.h:106-113`): wrap s and t, min and mag linear, the mip mode, anisotropy, `min_lod`, `max_lod`,
+  `lod_bias`. The importer decodes the disc's codes once; the game copies.
+- `TEXR` loses the codes and gains `sampler`, its `SAMP` entry. The sampler is the texture's, not the form's: when the
+  texture animation puts another texture in a map (`BtpPlayer.cpp:17`), the map samples as that texture says
+  (`Material.cpp:785-797`). So 2.7.2's `TXLS` (a texture and a sampler per entry) is not made: a form's list is its map
+  numbers, 2.9's `FTEX`, kept. 2.7.2 and 2.9 are corrected by this.
+
+**The engine.**
+
+- `ModelData` registers each texture with the host at load and keeps, per texture, the host id, the size and the
+  sampler, in a record of its own in place of `ResTIMG` for a model's textures. `tableOf` takes ids and samplers from
+  it: no search by address and no decode at a draw.
+- The player's swapped images (`PlayerModel.cpp:136`): its list is registered once per distinct list and kept by the
+  model, not at every draw. How it is kept is decided when the caller is read whole, in the step's code.
+- The render thread writes a table's pairs once, into a table buffer that lives as long as the table, and again only
+  when one of its textures' slots or its samplers' slots changes (the texture store's revision, the heap's generation).
+  A target, whose picture changes every frame, is read by the program through the target's own slot, which the frame
+  sets once; a table holding a target is not written again each walk. Its samplers are made when it is registered.
+- The sites' decode (`TypedDraw.cpp:78-84`) and `ResTIMG` for disc pictures, particles and targets are step 4's
+  (P-155 with P-154): their files' samplers are decoded at their cook the same way.
+
+**Proof.**
+
+- A test in `crates/nebula-import`: for every texture of every model of the US disc, its `SAMP` entry equals the decode
+  of 12's codes by the rule of `Material.cpp:789-797`.
+- A test of the walk with a renderer that counts: the same list walked twice writes each table once; a table with a
+  target is not written again.
+- The gate's pictures on every stop and renderer unchanged, the replay identical.
+- `git grep -n "mMinType" native/petari/src/Game/Render/Material.cpp` and `RenderTexture::idOf` in the same file: 0.
+- The walk's time per frame on the play route on the PC and the tablet, before and after (file 08 7.4: never slower).
