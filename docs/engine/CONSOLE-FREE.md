@@ -48,7 +48,10 @@ Second way (7.3.6, the SDK searches came back almost empty): plain substrings, `
 areas at a1f423dd8: `JKR`, `WPAD`, `OSReport`, `VIWait`, `DVDRead`, `revolution`, `PSMTX`, `PSVEC`, `JMap`,
 `JMapInfo`, `GXColor` 0 lines; `J3D` 22 lines in 4 files, `nw4r` 1 and `JPA` 5 lines in 3 files, all in `crates` (the
 importer's names for what it reads); `GX` 10 lines in 9 files (runtime 6, native/include 1, crates 3), `JUT` 2 lines and
-`J2D` 4 lines (native/petari, native/include), not yet read. So the SDK's and the middleware's names are gone from the
+`J2D` 4 lines (native/petari, native/include), all read: `GX` is in comments (a material's colours as the data has them;
+the game's projection terms read into the host's reversed depth, `draw_walker.cpp:1680-1686`) and inside `GGX` and
+`NGX`; `JUT` is a sound's name (`SE_OJ_POLTA_G_ROCK_JUT`); `J2D` names the 2D picture's shader
+(`NEBULA_SHADER_J2D_PICTURE`): names, not the console's code. So the SDK's and the middleware's names are gone from the
 game and the host; the console's shapes are not found by names, and pass two reads for them. Names the game kept from
 the console that do hold its shapes: `ResTIMG` (the J3D texture header: 137 lines in 59 files of native/petari and
 native/include, and 16 lines in 5 importer files; P-155), `Mtx44` (67 lines in 25 files, not yet classed).
@@ -142,7 +145,14 @@ What is read so far (at a1f423dd8):
   holder is made (`init(n)`, `new XHolder(n)`, `new T[n]` with n of 10 or more: 37 lines in `native/petari/src`): the
   six read grow when full (`MR::Vector` and `AssignableArray::grow`, `Array.hpp:104-120`, `:291-312`;
   `SensorGroup::add`, `SensorHitChecker.cpp:65-72`; `NameObjHolder::add`, `NameObjHolder.cpp:22-30`;
-  `NameObjExecuteHolder::registerActor`, `NameObjExecuteHolder.cpp:200-204`); the others not yet read. Inline arrays of
+  `NameObjExecuteHolder::registerActor`, `NameObjExecuteHolder.cpp:200-204`). Read after: the members made with
+  `init(n)` are all `MR::Vector` (`DemoStartRequestHolder`, `StarPieceDirector`, `TalkDirector`,
+  `GameDataGalaxyStorage`, `SpinDriverPathStorage`, `ShadowController`, `DemoSimpleCastHolder`); groups grow
+  (`NameObjGroup::registerObj`, `NameObjGroup.cpp:15-23`, under `LiveActorGroup` and `MiiFacePartsHolder`), as do
+  `MiiFaceIconHolder::registerIcon` (`MiiFaceIconHolder.cpp:27-34`), the clipping groups (`ClippingGroupHolder.cpp:23-24`,
+  `room`) and the shadow's polygon lists (`MarioShadow.cpp:207`). Pools of actors made ahead (`DinoPackunVs2.cpp:34-35`:
+  64 and 16 fires) are how many fires the boss has: the game's. Not read: `EffectKeeper`'s extra emitters
+  (`MarioEffect.cpp:728`, `0xB8`). Inline arrays of
   16 or more outside the actor folders: the collision query's and the draw rows' are small-buffer rooms that move to the
   heap past their size (`CollisionParts.cpp:299-317`, `TypedDraw.hpp`), the rest are the game's tables and text
   buffers.
