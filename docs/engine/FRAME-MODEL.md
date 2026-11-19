@@ -1036,3 +1036,65 @@ its sites, by the table, to their kind.
   vertex and index rings per frame, arena bytes for site constants, `texture_table` calls; after the last landing
   `git grep -n "writeIndices\|SiteTextures::toFrame\|void TypedDraw::widen" native`: 0.
 - The game step's and the walk's time on the PC and the tablet, before and after (file 08 7.4: never slower).
+
+### 2.13 Step 5: both poses once a step, the matrices of each picture made on the GPU
+
+Read at cfc2e368e.
+
+**Today.**
+
+1. The game: `Model::viewCalc` copies the skeleton's matrices into the model's pose (`capturePose`,
+   `Model.cpp:532-535`), and `addPoseBlock` copies the pose into the frame's arena once a frame and pose stamp
+   (`:619-660`, the copy at `:624-631`): two copies a step of every animated model's joints (P-144). A block holds
+   joints in the world, or with the view inside them (calc mode 1: the console's billboards and camera-bound models), or
+   a camera's base (calc mode 2, `:646-654`).
+2. The render thread, at every walk, which is every picture (`RenderCore`'s walk, `draw_walker.cpp:195-316`): each
+   camera at t (`:219`); per block, its joints at t when it moved (`core::joints_at`, `:294`), then
+   `core::compose_rows` (`:298`; `compose.cpp:170-228`): per draw matrix the view times the joint, an envelope's
+   weighted sum of joints (`weighted_sum`, `:120-160`), the inverse transpose for a scaled one (`:43-67`), billboards
+   (`:78-116`), six rows each (`compose.h:13`), and the world rows again where a program reads them (`:313`). All of it
+   goes into the matrix ring each walk (`:252`) (P-156).
+3. Culling reads those rows: an item of one matrix is tested against the view's planes with its place from this
+   walk's rows (`item_culled`, `draw_walker.cpp:933` on).
+4. A run of ring draws is joined by rewriting each joining draw's matrix numbers and indices in the upload memory
+   (`merge_ring_run`, `:695` on) (P-046).
+5. I-003's design (ledger, E6b) records each draw pass once per list and replays it for an in-between picture with
+   only the rows changed. Its rows are still this walk's CPU rows.
+
+**The engine.**
+
+- The game writes a block's joints once a step, into the list, from the skeleton's evaluation (one copy, P-144); the
+  model's pose for game reads stays the game's.
+- The render thread uploads each list's joints, flags, envelopes' indices and weights (the model's, registered once)
+  and calc-mode bases once, when the list arrives: the list before is already on the GPU.
+- Per picture the CPU writes the cameras at t and t. One compute pass, the same on the four renderers, makes every
+  block's rows for that picture: the joints at t (each pair as `joints_at` mixes them today, the same rule), the
+  envelopes' sums, the view, the inverse transpose, the billboards, the world rows where wanted, into the rows buffer
+  the recorded passes read (I-003). Calc mode 1 is undone once: the game's joints carry the view of their step, so the
+  pass applies the view of the picture to `inverse(view of the step) x joint`, made once per list; calc mode 2's base is
+  mixed in the pass.
+- Culling without the rows: per list, once, each item of one matrix gets a bound covering the steps between: a sphere
+  around its joint's translations at both steps, reaching as far as the mesh's sphere does from the joint (its
+  centre's offset plus its radius, by the larger of the two steps' largest stretch). The mix moves the translation
+  on a line, turns on the sphere and mixes the stretch on a line (`affine_motion_at`, `affine.cpp:256-298`), so for
+  t from 0 to 1 the mesh stays inside. Per picture the CPU tests that bound against the picture's planes. On a
+  still object it is today's sphere; on a moving one it keeps more, never less.
+- Ring runs name each joining draw's first matrix through an instance row, not by rewriting vertices and indices
+  (P-046); the run's vertices are written once by their site (2.12).
+- The CPU compose (`compose.cpp`'s `compose_rows`, `compose_world_rows`, `joints_at`) stays as the old path of 2.7.4
+  until the step's last landing, which deletes it. The pass is the same program on every renderer, written once in the
+  shader source the renderers share.
+
+**Groups.** As 2.7.3: one joint; many rigid joints; weighted (skinned); billboard and calc mode 1; calc mode 2;
+eye-space blocks.
+
+**Proof.**
+
+- 2.7.4's step-5 compare: one list walked twice, by the CPU and by the pass, at a step and at a fixed t between two,
+  pictures equal within the tolerance Vulkan is held to against Direct3D 12, on every stop and renderer.
+- A test of the pass against `compose_rows` for every block kind of the tours' models (rows equal within the same
+  tolerance), and of the cull bound: no item culled by the new test that today's keeps, on the play route's lists.
+- The CPU's time per picture (from the walk's start to the end of its rows) and the GPU pass's time, before and after,
+  at an unlimited picture rate in HoneyBeeKingdom (P-156's scene) on the PC and the tablet; the game step's time
+  unchanged or lower (file 08 7.4).
+- After the last landing: `git grep -n "compose_rows\|joints_at" runtime`: 0, and the walk writes no matrix row.
