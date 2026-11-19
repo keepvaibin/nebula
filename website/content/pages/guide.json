@@ -48,16 +48,16 @@
       "row_2": "Processor",
       "cell_2": "x86-64 with SSE4.2, or ARM64. Processors with AVX2 use a faster build.",
       "row_3": "Graphics",
-      "cell_3": "Direct3D 12 or 11 on Windows, Vulkan on Linux, Metal on macOS, Vulkan 1.1 on Android. Ray tracing needs a GPU with hardware ray tracing.",
+      "cell_3": "Direct3D 12 or 11 on Windows, Vulkan on Linux, Metal on macOS, Vulkan 1.1 on Android.",
       "row_4": "Memory",
       "cell_4": "8 GB RAM (Windows, Linux, macOS)",
       "row_5": "Storage",
       "cell_5": "8 GB free for setup",
       "row_6": "Your game",
-      "cell_6": "Super Mario Galaxy for Wii, North America (RMGE01), revision 0. Super Mario Galaxy 2 is not supported.",
+      "cell_6": "Super Mario Galaxy for Wii, from a US, PAL or JP disc. Super Mario Galaxy 2 is not supported.",
       "row_7": "Accepted formats",
       "cell_7": "ISO, RVZ or an extracted game folder",
-      "paragraph_2": "The North American disc plays in English, French and Spanish. Support for PAL and JP will come in v2."
+      "paragraph_2": "Each disc plays in its own languages: the US disc in English, French and Spanish; the PAL disc in English, French, German, Italian, Spanish and Dutch; and the JP disc in Japanese."
     },
     "install": {
       "div_1": "INSTALL",
@@ -88,7 +88,7 @@
       "item_2": "On an older computer, start at a low internal resolution and raise it while the game stays smooth.",
       "item_3": "Set Aspect ratio to Auto, and HUD resolution to Display for sharp menus and text.",
       "item_4": "On a display faster than 60 Hz, turn on Interpolation and set the target frame rate.",
-      "item_5": "For ray tracing, start at Low or Medium. If the game slows down, lower the internal resolution or use an upscaler.",
+      "item_5": "If the game slows down, lower the internal resolution or use an upscaler.",
       "item_6": "Choose Apply to keep changes, or Undo to discard them. Display changes revert after a countdown unless you keep them.",
       "link_1": "Graphics and performance →"
     },

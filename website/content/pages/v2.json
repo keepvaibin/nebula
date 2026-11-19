@@ -2,7 +2,7 @@
   "page": "/v2/",
   "metadata": {
     "title": "Nebula v2",
-    "description": "Native code from the Petari decompilation, ray tracing, four platforms, more controllers, mods and 34 achievements."
+    "description": "Native code from the Petari decompilation, every language, four platforms, more controllers, mods and 34 achievements."
   },
   "text": {
     "general": {
@@ -25,7 +25,7 @@
     },
     "page": {
       "link_1": "Nebula /",
-      "paragraph_1": "CURRENT RELEASE",
+      "paragraph_1": "COMING SOON",
       "title_1": "Nebula v2",
       "paragraph_2": "What is new in Nebula v2."
     },
@@ -47,7 +47,7 @@
     },
     "showcase": {
       "div_1": "A CLOSER LOOK",
-      "heading_1": "Ray Tracing.",
+      "heading_1": "A closer look.",
       "label_1": "✦",
       "emphasis_1": "Comet Observatory",
       "label_2": "✦",
@@ -58,7 +58,7 @@
     "comforts": {
       "div_1": "WHAT’S NEW",
       "heading_1": "What’s new in v2",
-      "item_1": "Ray-traced lighting, shadows, reflections and water on GPUs with hardware ray tracing.",
+      "item_1": "All US, PAL and JP languages, each through its own language’s ISO.",
       "item_2": "Windows (Direct3D 12 and 11), Linux and Android (Vulkan), and macOS (Metal).",
       "item_3": "A home screen with Play, Settings, Benchmark and Quit, and in-app updates.",
       "item_4": "DLSS, FSR 1, FSR 3, XeSS, SGSR 2 and MetalFX upscaling.",
@@ -72,7 +72,8 @@
       "item_12": "Mii import for file icons.",
       "item_13": "Discord status with your current galaxy and mission.",
       "item_14": "Save import and export in the game, from a Wii, Dolphin or the Switch release.",
-      "item_15": "Menus in all 14 of the game’s languages, and error codes with a saved report."
+      "item_15": "Menus in all 14 of the game’s languages, and error codes with a saved report.",
+      "item_16": "Ray-traced lighting is being worked on and will come in a very soon release."
     },
     "achievements": {
       "div_1": "ACHIEVEMENTS",

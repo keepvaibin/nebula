@@ -2,7 +2,7 @@
   "page": "/",
   "metadata": {
     "title": "Nebula",
-    "description": "Super Mario Galaxy, running natively on Windows, Linux, macOS and Android, with ray tracing, high refresh rates, mods and achievements."
+    "description": "Super Mario Galaxy, running natively on Windows, Linux, macOS and Android, in every language, with high refresh rates, mods and achievements."
   },
   "text": {
     "general": {
@@ -50,10 +50,10 @@
       "div_1": "NEBULA V2",
       "heading_1": "What is Nebula?",
       "paragraph_1": "Nebula runs Super Mario Galaxy as native code, built from SMGCommunity’s Petari decompilation. You need your own copy of the game.",
-      "label_1": "Graphics",
-      "subheading_1": "Ray-traced lighting",
+      "label_1": "Languages",
+      "subheading_1": "Every language",
       "label_2": "→",
-      "paragraph_3": "Ray-traced sunlight, shadows, reflections and water, with light from lamps, fire and Lumas.",
+      "paragraph_3": "All US, PAL and JP languages are supported, each through its own language’s ISO.",
       "label_3": "Display",
       "subheading_2": "High refresh rates",
       "label_4": "→",
@@ -99,6 +99,13 @@
       "link_1": "Open the setup guide",
       "link_2": "Check downloads"
     },
+    "support": {
+      "div_1": "KO-FI",
+      "heading_1": "Support Nebula on Ko-fi",
+      "paragraph_1": "Donations go straight to keepvaibin through Ko-fi. Any amount is super welcome!",
+      "paragraph_2": "Donating is completely optional and does not unlock anything. But any donations help build the features that you request!",
+      "link_1": "Donate on Ko-fi ↗"
+    },
     "community": {
       "div_1": "COMMUNITY",
       "heading_1": "Discord and bug reports",
@@ -113,7 +120,7 @@
       "question_1": "Is Nebula free?",
       "paragraph_1": "Yes. Nebula is free software under the GNU GPL v3. You need your own copy of Super Mario Galaxy.",
       "question_2": "Is v2 available?",
-      "paragraph_2": "Yes. Download it from the Download page.",
+      "paragraph_2": "Not yet. Nebula v2 is coming soon. Nebula v1.0.2 is available now from the Download page.",
       "question_3": "Is this an emulator?",
       "paragraph_3": "No. Nebula v2 is native code built from SMGCommunity’s Petari decompilation. Nebula v1.0.2 translates the game’s PowerPC code to C++ during setup.",
       "question_4": "Which copy of the game do I need?",

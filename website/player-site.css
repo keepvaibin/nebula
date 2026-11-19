@@ -150,8 +150,9 @@ body > .site-footer {
 .glance-strip {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  max-width: 1050px;
-  width: 86%;
+  /* As wide as the cards below it. */
+  max-width: 1240px;
+  width: 88%;
   margin: 12px auto 55px;
   border-top: 1px solid #84c9ff55;
   border-bottom: 1px solid #84c9ff55;
@@ -616,6 +617,7 @@ kbd {
     grid-template-columns: repeat(2, 1fr);
   }
   .glance-strip {
+    width: 90%;
     gap: 25px;
     margin-top: 25px;
     padding: 25px 0;
