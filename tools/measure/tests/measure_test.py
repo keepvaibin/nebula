@@ -4,6 +4,7 @@ python -X utf8 -I tools/measure/tests/measure_test.py
 """
 import argparse
 import json
+import os
 import pathlib
 import struct
 import sys
@@ -115,8 +116,8 @@ check(all(c.split()[2] in ("global", "secure") and c.split()[3] in ("low_power",
           for c in device.commands), "no other setting is touched: %s" % device.commands)
 
 # The runs: a fake harness writes a run folder; the line lands in the history; a missing run fails.
-args = argparse.Namespace(runs="d3d12,tablet", bin="B", android_bin="", device="", device_lock="", paks="",
-                          commit="0123456789ab", history=str(work / "runs-history.tsv"))
+args = argparse.Namespace(runs="d3d12,tablet", bin="B", android_bin="", apk="", pak="", device="", device_lock="",
+                          paks="", commit="0123456789ab", history=str(work / "runs-history.tsv"))
 
 
 commands = []
@@ -144,6 +145,77 @@ args.runs = "vulkan"
 failed, said = m.measure_runs(args, work / "measure2", lambda *a, **k: type("D", (), {"returncode": 1})())
 check(failed and said == ["vulkan no run (harness exit 1)"], "a run with no folder fails: %s" % said)
 check(m.processor_mask(0) is None, "no cores asked: the mask is left alone")
+
+# The tablet's run stands alone (P-321): inside the device's lock, the test app prepared before the run and removed
+# after it, also when the run or the install fails; the steps take no lock of their own.
+class FakeTablet(FakeDevice):
+    def __init__(self, answers=True):
+        super().__init__()
+        self.answering = answers
+
+    def answers(self):
+        return self.answering
+
+
+class FakeGate:
+    def __init__(self, held=None):
+        self.held, self.taken = held, []
+
+    def take_device_lock_wait(self, path, who, wait_minutes):
+        self.taken.append((path, wait_minutes))
+        if self.held is None:
+            pathlib.Path(path).mkdir()
+        return self.held
+
+
+def tablet_runs(prepare_code=0, run_code=0, held=None, answers=True):
+    """measure_runs' tablet run with a fake adb, harness and lock: (failed, said, steps, gate, lock)."""
+    steps = []
+
+    def fake(command, env=None, check=False):
+        step = "prepare" if "prepare" in command else "remove" if "remove" in command else "run"
+        steps.append((step, "LUMA_TEST_DEVICE_LOCK" in (env or {}), command))
+        if step == "run":
+            folder = pathlib.Path(command[command.index("--work") + 1]) / "runs" / "measure-route" / "vulkan"
+            folder.mkdir(parents=True)
+            (folder / "run.log").write_text("harness: frame 0 is game frame 10\n" + pace % (0, 5000, 800) * 3,
+                                            encoding="utf-8")
+        return type("D", (), {"returncode": {"prepare": prepare_code, "run": run_code}.get(step, 0)})()
+
+    lock = pathlib.Path(tempfile.mkdtemp()) / "tablet.lock"
+    targs = argparse.Namespace(runs="tablet", bin="B", android_bin="AB", apk="T.apk", pak="G.pak", device="SERIAL",
+                               device_lock=str(lock), device_wait=5.0, paks="", commit="0123456789ab",
+                               history=str(pathlib.Path(tempfile.mkdtemp()) / "h.tsv"))
+    gate = FakeGate(held)
+    os.environ["LUMA_TEST_DEVICE_LOCK"] = "elsewhere.lock"
+    try:
+        failed, said = m.measure_runs(targs, pathlib.Path(tempfile.mkdtemp()), fake, FakeTablet(answers), gate)
+    finally:
+        del os.environ["LUMA_TEST_DEVICE_LOCK"]
+    return failed, said, steps, gate, lock
+
+
+failed, said, steps, gate, lock = tablet_runs()
+names = [s[0] for s in steps]
+check(names == ["prepare", "run", "remove"] and not failed, "prepare, the run, remove: %s %s" % (names, said))
+prepare = steps[0][2] if steps else []
+check("--apk" in prepare and prepare[prepare.index("--apk") + 1] == "T.apk" and prepare[prepare.index("--pak") + 1] ==
+      "G.pak", "the test app installed with the pak: %s" % prepare)
+check(gate.taken == [(str(lock), 5.0)] and not lock.exists(), "the device's lock taken, then freed: %s" % gate.taken)
+check(not any(s[1] for s in steps) and not any("--device-lock" in s[2] for s in steps),
+      "the steps take no lock of their own while the run holds it: %s" % steps)
+failed, said, steps, gate, lock = tablet_runs(run_code=1)
+check([s[0] for s in steps] == ["prepare", "run", "remove"], "a failed run still removes the test app: %s" % steps)
+failed, said, steps, gate, lock = tablet_runs(prepare_code=1)
+check([s[0] for s in steps] == ["prepare", "remove"] and failed and said == ["tablet no run (the test app was not "
+                                                                             "prepared (exit 1))"],
+      "a failed install: no run, the test app removed: %s %s" % ([s[0] for s in steps], said))
+failed, said, steps, gate, lock = tablet_runs(held="gate 20261119 tablet")
+check(steps == [] and failed and "lock stayed held 5 minutes: gate 20261119 tablet" in said[0],
+      "a held tablet: nothing runs, the holder said: %s" % said)
+failed, said, steps, gate, lock = tablet_runs(answers=False)
+check(steps == [] and gate.taken == [] and said == ["tablet no run (SERIAL does not answer adb)"],
+      "a tablet that does not answer: no lock, nothing runs: %s" % said)
 
 if failures:
     print("measure_test.py: FAILED:\n  " + "\n  ".join(failures))

@@ -113,27 +113,40 @@ with tempfile.TemporaryDirectory() as m:
     m = pathlib.Path(m)
     (m / "bins").mkdir()
     (m / "bins" / "Nebula.exe").write_text("x", encoding="utf-8")
-    (m / "android").mkdir()
-    (m / "android" / "app.apk").write_text("y", encoding="utf-8")
+    (m / "android" / "test-bin").mkdir(parents=True)
+    (m / "android" / "test-bin" / "libgame.so").write_text("y", encoding="utf-8")
+    (m / "android" / "Nebula.apk").write_text("z", encoding="utf-8")
     store = m / "measure-bins"
     for i, old in enumerate(("aaa", "bbb", "ccc")):
         (store / old).mkdir(parents=True)
         os.utime(store / old, (1000 + i, 1000 + i))
-    g = type("G", (), {"bin": str(m / "bins"), "android_bin": str(m / "android"), "name": "run-9"})()
+    g = type("G", (), {"bin": str(m / "bins"), "android_bin": str(m / "android" / "test-bin"), "name": "run-9"})()
     margs = type("A", (), {"work": str(m / "work"), "paks": "P", "who": "Agent 1", "tablet": "SERIAL",
-                           "tablet_lock": "T.lock", "gate_lock": "G.lock", "board": "B.md"})()
+                           "tablet_lock": "T.lock", "gate_lock": "G.lock", "board": "B.md", "build_root": str(m),
+                           "pak": "US.pak"})()
     (m / "work").mkdir()
     started = []
     what = gate.start_measure("0123456789abcdef", g, margs, popen=lambda cmd, **k: started.append(cmd), bins=store)
     copy = store / "012345678"
-    check(len(started) == 1 and (copy / "bin" / "Nebula.exe").is_file() and (copy / "android" / "app.apk").is_file(),
-          "the build and the Android build copied, one start: %s %s" % (what, started))
+    check(len(started) == 1 and (copy / "bin" / "Nebula.exe").is_file() and (copy / "android" / "libgame.so").is_file()
+          and (copy / "Nebula.apk").is_file(), "the build, the Android bins and the test app copied, one start: %s %s"
+          % (what, started))
     cmd = started[0] if started else []
     check(str(gate.MEASURE) in cmd and cmd[cmd.index("--bin") + 1] == str(copy / "bin")
           and cmd[cmd.index("--gate-lock") + 1] == "G.lock" and cmd[cmd.index("--board") + 1] == "B.md"
           and cmd[cmd.index("--runs") + 1].endswith(",tablet") and cmd[cmd.index("--device") + 1] == "SERIAL",
           "measure.py on the copy, with the gate lock, the board and the tablet: %s" % cmd)
-    check(sorted(p.name for p in store.iterdir()) == ["012345678", "bbb", "ccc"], "the two copies before it kept")
+    # P-321: the tablet's run installs the copied test app with the gate's pak, inside the tablet's lock.
+    check("--apk" in cmd and cmd[cmd.index("--apk") + 1] == str(copy / "Nebula.apk") and cmd[cmd.index("--pak") + 1]
+          == "US.pak" and cmd[cmd.index("--device-lock") + 1] == "T.lock",
+          "the test app and the pak handed to the tablet's run: %s" % cmd)
+    (m / "android" / "Nebula.apk").unlink()
+    started.clear()
+    gate.start_measure("fedcba9876543210", g, margs, popen=lambda cmd, **k: started.append(cmd), bins=store)
+    cmd = started[0] if started else []
+    check(cmd and not cmd[cmd.index("--runs") + 1].endswith(",tablet") and "--device" not in cmd,
+          "no test app built: the tablet is left out: %s" % cmd)
+    check(sorted(p.name for p in store.iterdir()) == ["012345678", "ccc", "fedcba987"], "the two copies before it kept")
 
 if failures:
     print("long_start_test.py: FAILED:\n  " + "\n  ".join(failures))

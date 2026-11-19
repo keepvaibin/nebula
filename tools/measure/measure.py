@@ -2,7 +2,8 @@
 three minutes from the stage's first frame, on each renderer, with one line per run in the measure history.
 
   measure.py run --bin BIN --work WORK --commit SHA [--runs d3d12,vulkan,d3d11,d3d12-4cores,tablet]
-                 [--device SERIAL --android-bin BIN [--device-lock PATH]] [--history FILE] [--paks ...]
+                 [--device SERIAL --android-bin BIN --apk APK --pak PAK [--device-lock PATH]] [--history FILE]
+                 [--paks ...]
                  [--gate-lock D:/NebulaWork/plan/gate.lock --board FILE --who NAME] [--lock measure.lock]
       Takes the gate lock (through its queue, so no gate, long run part or gate build runs beside it; none when the
       caller holds it) and the measurement lock, runs tests/measure/route through the harness (real time, a visible
@@ -13,8 +14,10 @@ three minutes from the stage's first frame, on each renderer, with one line per 
       One run's figures (and its history line when --history is given).
 
 A run named d3d12-4cores holds the game to four logical processors (the harness's processor mask, which the game
-inherits). The tablet's run sets what 120 Hz needs (power saving off, Motion smoothness adaptive) for the run and
-puts both back after it; no other setting of the tablet is touched.
+inherits). The tablet's run stands alone (P-321): inside the device's lock (waited for up to --device-wait minutes)
+the test app APK is installed with PAK (luma_test_android.py prepare), the route runs, and the test app is removed,
+also when the run fails; the player's game is never touched. It sets what 120 Hz needs (power saving off, Motion
+smoothness adaptive) for the run and puts both back after it; no other setting of the tablet is touched.
 
 The figures, from the stage's first frame (the harness's "frame 0") to the run's end:
   rate            the pictures a second asked for; refresh_hz the display's refresh as the renderer reported it
@@ -298,50 +301,81 @@ def gate_module():
     return gate
 
 
-def measure_runs(args, work, runner=subprocess.run):
+def on_tablet(args, command, env, runner=subprocess.run, device=None, gate=None):
+    """The tablet's run, standing alone (P-321): inside the device's lock, the test app installed with the pak
+    (luma_test_android.py prepare), the route run, then the test app removed, also when the run or the install fails.
+    (the harness's exit code, None), or (None, why it did not run)."""
+    if device is None:
+        sys.path.insert(0, str(TREE / "tools" / "lumacore"))
+        import luma_test_android
+        device = luma_test_android.Device(args.device)
+    if not device.answers():
+        return None, "%s does not answer adb" % args.device
+    if args.device_lock:
+        held = (gate or gate_module()).take_device_lock_wait(
+            args.device_lock, "measure.py %s pid %d" % (args.commit[:9], os.getpid()), args.device_wait)
+        if held is not None:
+            return None, "the tablet's lock stayed held %g minutes: %s" % (args.device_wait, held)
+    # This run holds the lock: the steps below take none of their own.
+    env = {k: v for k, v in env.items() if k != "LUMA_TEST_DEVICE_LOCK"}
+    android = [sys.executable, "-X", "utf8", "-I", str(TREE / "tools/lumacore/luma_test_android.py")]
+    try:
+        prepared = runner(android + ["prepare", "--device", args.device, "--apk", args.apk, "--pak", args.pak, "--who",
+                                     "measure"], env=env, check=False).returncode
+        if prepared != 0:
+            return None, "the test app was not prepared (exit %d)" % prepared
+        tablet = Tablet(device)
+        print("measure.py: the tablet for the run: %s" % tablet.set_for_run(), flush=True)
+        try:
+            return runner(command + ["--device", args.device], env=env, check=False).returncode, None
+        finally:
+            print("measure.py: the tablet put back: %s" % tablet.put_back(), flush=True)
+    finally:
+        removed = runner(android + ["remove", "--device", args.device], env=env, check=False).returncode
+        if removed != 0:
+            print("measure.py: the test app may still be on %s (remove exit %d)" % (args.device, removed), flush=True)
+        if args.device_lock:
+            shutil.rmtree(args.device_lock, ignore_errors=True)
+
+
+def measure_runs(args, work, runner=subprocess.run, device=None, gate=None):
     """Each run named, in turn: (failed, one text a run)."""
     failed, said = False, []
     for name in args.runs.split(","):
         renderer, cores = RUNS[name]
         folder = work / name
-        tablet = None
-        if name == "tablet":
-            if not args.device or not args.android_bin:
-                said.append("tablet left out (no --device and --android-bin)")
-                continue
-            sys.path.insert(0, str(TREE / "tools" / "lumacore"))
-            import luma_test_android
-            tablet = Tablet(luma_test_android.Device(args.device))
+        tablet = name == "tablet"
+        if tablet and not (args.device and args.android_bin and args.apk and args.pak):
+            said.append("tablet left out (no --device, --android-bin, --apk and --pak)")
+            continue
         command = [sys.executable, "-X", "utf8", "-I", str(TREE / "tools/lumacore/luma_test.py"), "run", str(ROUTE),
                    "--bin", args.android_bin if tablet else args.bin, "--work", str(folder), "--who", "measure",
                    "--renderer", renderer, "--commit", args.commit,
                    # The harness refuses a run without a run lock file; each run has its own beside its folder.
                    "--lock", str(work / ("harness-%s.lock" % name))]
-        if tablet:
-            command += ["--device", args.device] + (["--device-lock", args.device_lock] if args.device_lock else [])
         env = dict(os.environ)
         if args.paks:
             env["LUMA_TEST_PAKS"] = args.paks
-        old = processor_mask(cores)
-        try:
-            if tablet:
-                print("measure.py: the tablet for the run: %s" % tablet.set_for_run(), flush=True)
-            code = runner(command, env=env, check=False).returncode
-        finally:
-            restore_mask(old)
-            if tablet:
-                print("measure.py: the tablet put back: %s" % tablet.put_back(), flush=True)
-        found = run_folder_of(folder, renderer)
+        why = None
+        if tablet:
+            code, why = on_tablet(args, command, env, runner, device, gate)
+        else:
+            old = processor_mask(cores)
+            try:
+                code = runner(command, env=env, check=False).returncode
+            finally:
+                restore_mask(old)
+        found = None if why else run_folder_of(folder, renderer)
         if found is None:
-            said.append("%s no run (harness exit %d)" % (name, code))
+            said.append("%s no run (%s)" % (name, why or "harness exit %d" % code))
             failed = True
             continue
-        device = "tablet" if tablet else ("pc-4cores" if cores else "pc")
-        line = history_line(figures(found), args.commit[:9], device, renderer, "120", found)
+        device_name = "tablet" if tablet else ("pc-4cores" if cores else "pc")
+        line = history_line(figures(found), args.commit[:9], device_name, renderer, "120", found)
         earlier = read_history(args.history)
         add_history(args.history, line)
         verdicts = compare(line, earlier)
-        print("%s (%s %s, harness exit %d):" % (name, device, renderer, code))
+        print("%s (%s %s, harness exit %d):" % (name, device_name, renderer, code))
         for figure, value, spread, verdict in verdicts:
             print("  %-14s %-10s %-30s %s" % (figure, value if isinstance(value, str) else "%.6g" % value, spread,
                                               verdict))
@@ -388,6 +422,9 @@ def main(argv=None):
     r.add_argument("--device", default="")
     r.add_argument("--device-lock", default="")
     r.add_argument("--android-bin", default="")
+    r.add_argument("--apk", default="", help="the test app the tablet's run installs (build_apk.ps1 -Debuggable -Harness)")
+    r.add_argument("--pak", default="", help="the game.pak the tablet's run copies into the test app")
+    r.add_argument("--device-wait", type=float, default=120.0, help="minutes to wait for the device's lock")
     r.add_argument("--history", default=str(HISTORY))
     r.add_argument("--lock", default="D:/NebulaWork/plan/measure.lock")
     r.add_argument("--gate-lock", default="")

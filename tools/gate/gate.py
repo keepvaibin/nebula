@@ -745,23 +745,33 @@ MEASURE = TREE / "tools" / "measure" / "measure.py"
 MEASURE_BINS = pathlib.Path("D:/NebulaWork/build/measure-bins")
 
 
-def measure_command(sha, bin_dir, android_bin, work, args):
+def measure_command(sha, bin_dir, android_bin, apk, work, args):
     """tools/measure/measure.py run: the play route on the PC's renderers, the PC held to four cores, and the tablet
-    when the gate has one (N-1043, 07-BASE-FIRST stage 1 item 1)."""
-    runs = "d3d12,vulkan,d3d11,d3d12-4cores" + (",tablet" if args.tablet and android_bin else "")
+    when the gate has one (N-1043, 07-BASE-FIRST stage 1 item 1). The tablet's run installs the test app `apk` with
+    the gate's pak and removes it after, inside the tablet's lock (P-321)."""
+    tablet = bool(args.tablet and android_bin and apk)
+    runs = "d3d12,vulkan,d3d11,d3d12-4cores" + (",tablet" if tablet else "")
     cmd = [sys.executable, "-X", "utf8", "-I", str(MEASURE), "run", "--bin", str(bin_dir), "--work", str(work),
            "--commit", sha, "--runs", runs, "--history", str(pathlib.Path(args.work) / "measure-history.tsv"),
            "--paks", args.paks, "--who", args.who]
-    if args.tablet and android_bin:
-        cmd += ["--device", args.tablet, "--android-bin", str(android_bin), "--device-lock", args.tablet_lock]
+    if tablet:
+        cmd += ["--device", args.tablet, "--android-bin", str(android_bin), "--apk", str(apk), "--pak", args.pak,
+                "--device-lock", args.tablet_lock]
     return cmd
+
+
+def test_apk(args):
+    """The gate's build of the test app (build/android, platform/android/build_apk.ps1 -Debuggable -Harness)."""
+    return pathlib.Path(args.build_root) / "android" / "Nebula.apk"
 
 
 def measure_route(g):
     """The play route measure in the long run (the part holds the gate lock): one line per run in
     gate-runs/measure-history.tsv, compared with the last ten of its device and renderer."""
     def fn(log):
-        code = run(measure_command(g.commit, g.bin, g.android_bin, g.work / "measure", g.args), log)
+        apk = test_apk(g.args)
+        code = run(measure_command(g.commit, g.bin, g.android_bin, apk if apk.is_file() else None, g.work / "measure",
+                                   g.args), log)
         text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")
         said = next((l for l in reversed(text.splitlines()) if l.startswith("measure: ")), "measure: no summary")
         return code == 0, said[len("measure: "):]
@@ -790,13 +800,16 @@ def start_measure(sha, g, args, popen=subprocess.Popen, bins=MEASURE_BINS):
     try:
         shutil.rmtree(copy, ignore_errors=True)
         shutil.copytree(g.bin, copy / "bin")
-        android = None
-        if args.tablet and pathlib.Path(g.android_bin).is_dir():
+        android = apk = None
+        if args.tablet and pathlib.Path(g.android_bin).is_dir() and test_apk(args).is_file():
+            # The test app with its bins: the tablet's run installs it (P-321), as the gate's tablet part did.
             android = copy / "android"
             shutil.copytree(g.android_bin, android)
+            apk = copy / "Nebula.apk"
+            shutil.copy2(test_apk(args), apk)
     except OSError as e:
         return "no measure: the build could not be copied: %s" % e
-    cmd = measure_command(sha, copy / "bin", android, pathlib.Path(args.work) / ("%s-measure" % g.name), args)
+    cmd = measure_command(sha, copy / "bin", android, apk, pathlib.Path(args.work) / ("%s-measure" % g.name), args)
     cmd += ["--gate-lock", args.gate_lock, "--board", args.board]
     log = pathlib.Path(args.work) / ("measure-%s.log" % sha[:9])
     detach = {"creationflags": 0x8 | 0x200} if os.name == "nt" else {"start_new_session": True}
@@ -886,7 +899,7 @@ def device_step(g, step):
         args = [sys.executable, "-X", "utf8", "-I", TREE / "tools" / "lumacore" / "luma_test_android.py", step,
                 "--device", g.args.tablet]
         if step == "prepare":
-            args += ["--apk", pathlib.Path(g.args.build_root) / "android" / "Nebula.apk", "--pak", g.args.pak,
+            args += ["--apk", test_apk(g.args), "--pak", g.args.pak,
                      "--who", "gate"]
         code = run(args, log, timeout=3600)
         return code == 0, last_line(pathlib.Path(log).read_text(encoding="utf-8", errors="replace"))
