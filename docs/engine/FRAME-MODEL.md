@@ -601,3 +601,80 @@ before that group's landing.
 
 So each landing of E3 is proved on every tour stop and renderer by pictures of both paths from one run, not by two
 runs whose frames could differ.
+
+### 2.8 Step 1's first landing, to the file
+
+Read at d4246a703. `nebula_model.h`, `native/petari/{src,include}/Game/Render`, `registries.cpp` and
+`crates/nebula-import` are the same at 5526e1cf0 (`git diff --stat d4246a703 5526e1cf0` on them: empty).
+
+**What 12 is.** One block in host order, used in place (`nebula_model.h:1-3`). A header of 28 words
+(`nebula_model.h:49-59`, written at `model_write.rs:854-886`): magic, version, size, flags, 11 counts, 12 offsets
+and the geometry's size. Records hold offsets from the block's start to their own parts (a mesh's streams, a
+material's forms and slots). `model_write::write` lays the block out in this order (`:436-853`): joints, steps, joint meshes, draw matrices,
+envelopes, mixes, inverse binds (16-aligned), important joints, meshes, materials with their parts (coordinates,
+slots, coordinate matrices, warps, forms with their rows, texture lists and inputs), textures, names, geometry
+(each stream 32-aligned), and last the texture images (32-aligned, the textures' `record_at`).
+
+Two arrays have no count in 12's header; their readers assume one:
+
+- The inverse binds. The host reads 12 x `joint_count` floats whenever there are envelopes
+  (`registries.cpp:367-371`). The cook writes them only when the disc's `EVP1` has them (`model_ir.rs:1442-1450`)
+  and for every joint of a glTF model with envelopes (`gltf.rs:2130-2139`). A disc model with envelopes and no
+  inverse binds would have the host read the next arrays as matrices; whether one exists is not checked.
+- The important joints: one per draw matrix (`model_ir.rs:1303-1319`).
+
+**The landing.** The format number and the layout change; no record changes, so every offset inside a record still
+holds.
+
+1. The header becomes magic, version 13, size, flags (the scale mode and `NEBULA_MODEL_*` as now), `section_count`,
+   `sections_at`. Its room stays 112 bytes, the rest zero, and the section table goes at the block's end. So every
+   array lies where 12 put it, and the proof below is a byte compare.
+2. A section is `{name, flags, at, size, count, stride}`, six words. Flag bit 0: required. The table in file order:
+
+| Section | Holds | Count | Stride |
+| --- | --- | --- | --- |
+| `MODL` | the model's scalars: `full_weight_count`, `source_vertex_count`; fields only added at the end | 1 | 8 |
+| `JNTS` | joints | `joint_count` | 96 |
+| `STEP` | the joint walk's steps | `step_count` | 8 |
+| `JMSH` | each joint's meshes | `joint_mesh_count` | 4 |
+| `DMTX` | draw matrices | `draw_matrix_count` | 8 |
+| `ENVL` | envelopes | `envelope_count` | 8 |
+| `MIXS` | mixes | `mix_count` | 8 |
+| `IBND` | inverse binds, written count (none when the disc has none) | its own | 48 |
+| `IMPT` | important joints | `draw_matrix_count` | 4 |
+| `MESH` | meshes | `mesh_count` | 100 |
+| `MT12` | 12's material records; their parts lie inside the section's span | `material_count` | 208 |
+| `TEXR` | textures | `texture_count` | 40 |
+| `NAME` | the names' text | bytes | 1 |
+| `GEOM` | every stream, for one copy to the GPU | bytes | 1 |
+| `TIMG` | the texture images | bytes | 1 |
+
+   2.7.2's table lacks `MODL`, `IMPT`'s count, `MT12` and `TIMG`; this table is the one the code follows. `MT12` is
+   required and goes in step 1's next landing, when `MATL`, `GXMT` and `FORM` replace it (2.7.2). It cannot be
+   `MATL`, because removing fields from a record is not an added field.
+3. Readers. One lookup in C, `nebula_model_section(const NebulaModelHeader*, uint32_t name)` in `nebula_model.h`,
+   and one in Rust, `model_write::sections`. Each reader resolves its sections once, at load, into what it uses now:
+   - The game: `ModelData.cpp` `loadFile` (`:56-130` and on), the accessors of `ModelData.hpp:133-193` (counts,
+     the first joint, names, draw matrices, inverse binds), `Material.cpp:195`, `Model.cpp:155-156`. `ModelData`
+     keeps the resolved arrays and counts, filled at load, in place of `mFile`'s header fields.
+   - The host: `registries.cpp` `read_model` (`:351-380`), `place_model` (`:403`), `model_register` (`:430`) and
+     `restart` (`:569`): 36 reads of header fields (`geometry_size` 8, `mesh_count` 5, `joint_count` 4, `geometry_at` 3,
+     `envelope_count` 3, `draw_matrix_count` 3, `mix_count` 2, `meshes_at` 2, and one each of `mixes_at`,
+     `joints_at`, `inverse_binds_at`, `flags`, `envelopes_at`, `draw_matrices_at`). The inverse binds are taken by
+     `IBND`'s count, not `joint_count`.
+   - The importer: `model_write::names` (`:899-926`); `gltf.rs` `GameModel::read` (`:955-978`) and `skeleton_gltf`
+     (`:986-992`), which read header words 4 and 15 by number.
+   - Tests that read the header: `gltf_tests.rs:75-86`, `:198`, `:1063-1064`.
+   - Outside this repository (LumaKit, LumaLink): not checked.
+   - A missing required section stops the load naming it, and a model of another version names its version
+     (2.7.2).
+4. `NEBULA_MODEL_VERSION` and `model_write::VERSION` become 13, and the store version goes up by one, so the store
+   is cooked again. A mod's model is cooked by the same cooker (2.7.1).
+5. Proof:
+   - Once, for the landing (a script in `tools/verify`, its log kept with the gate's run): main's importer and the
+     branch's cook the US disc, and every model's block from byte 112 to 12's end is equal.
+   - A test in `crates/nebula-import` keeps it: the writer records each array's place and count as it writes, and
+     the section table says the same.
+   - A C test reads a cooked model through `nebula_model_section` and finds every section and count.
+   - The gate's pictures on every stop and renderer are unchanged, and the replay is identical.
+   - No switch (2.7.3) is needed: no path draws differently. The switch starts with step 1's second landing.
