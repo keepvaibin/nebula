@@ -85,11 +85,11 @@ What the hits are, by search (each line read at a1f423dd8):
 
 | Area | Files | Read |
 | --- | --- | --- |
-| The game's sound code (`Game/AudioLib`, `Game/GameAudio`, `Game/Sound`, `Game/Speaker`, `Game/RhythmLib`) | 170 | `Sound`'s engine and the host mixer read; all swept by pattern, every hit read; P-186 |
+| The game's sound code (`Game/AudioLib`, `Game/GameAudio`, `Game/Sound`, `Game/Speaker`, `Game/RhythmLib`) | 170 | read whole by the readall harness at 0c98b11c2 (its Sound, AudioLib, GameAudio, Speaker and RhythmLib reports), every finding checked at 241395b49; P-186, P-192, P-193, P-221 to P-228 |
 | Archives and the game's file access (`Game/System` archive and resource holders, `Game/Util/FileUtil`, the store) | 11 | the load path read: modern |
 | Text (`MessageHolder`, the `NMSG` reader, the host's `message_utf8`) | not counted | the record and readers read; 16-bit codes open |
 | Layouts and fonts (`Game/Ui`, `Game/System` font holders) | `Game/Ui` 51 | `Layout::Build`, `Material`, `ResFont` read; P-184 |
-| The 2D screens, the image effects, the pointer, the movies (`Game/Screen`) | 289 (144 sources, 145 headers; 44,869 lines) | read whole at 6577392b5; P-197 to P-212, P-184's 2D colours |
+| The 2D screens, the image effects, the pointer, the movies (`Game/Screen`) | 289 (144 sources, 145 headers; 44,869 lines) | read whole at 6577392b5, and by the readall harness at 0c98b11c2 (checked at 241395b49); P-197 to P-220, P-184's 2D colours |
 | Input (the host's and the game's) | not counted | the game's record read: modern |
 | The game's own files E14 did not reach (Agent 3's hand-over, `docs/plan/HANDOVER-AGENT-3.md` on `app/work`: Player 99, Sound 76, Enemy 109, Boss 166, Ride 19, NPC 76, MapObj 314, LiveActor 62) | 921 | swept by pattern (below), every hit read; not read whole |
 
@@ -138,6 +138,17 @@ What is read so far (at a1f423dd8):
   (`FullScreenBlur.cpp:38-46`), the heat haze's board placed at the step's camera (`HeatHazeEffect.cpp:19-30`), the
   lens flare; and two run checks: whether the picture font's sheet takes the icons' sharp copy (`NebulaIcons.cpp:1804-1813`),
   and Nebula's screens stepping faster while a cutscene skip runs extra `update()` calls (`GameSystem.cpp:199-202`).
+  The readall harness's second whole read (at 0c98b11c2; each line it cites read again at 241395b49) added: the
+  image effects' constants at the registers' 8-bit precision (P-213); draws that do step work, while the frame draws
+  once and may step more (`GameSystem.cpp:182-205`): the galaxy map's capture, the pointer's blur, a message's sound
+  tag, the movie's frame pick (P-214); two reads past a message by a tag's claimed length (P-215); the icons' sharp
+  sheets handed over from one reused record while the store keeps its pointer for a device restart
+  (`texture_store.cpp:593`, `:335-337`; P-216); a row button written at index -1 (P-217); the cooked layout's
+  console field widths, 16-bit pane links and 16-character names (P-218); the movie volume as 0..127 and the
+  pointer unprojected through the GX projection and viewport vectors (P-219); game behaviour chosen by
+  `__ANDROID__` (5 of the 30 platform branches in `native/petari`; P-220); and the pointer's hit tests and the
+  HOME menu on P-197's two-shape switch. Six of its claims fell on reading (kept with the inventory's notes), for
+  example the staff roll following the display (`MR::getScreenHeight` is the constant 456, `ScreenUtil.hpp:18-20`).
 - Text. Cooked `NMSG` (`MessageHolder.hpp:8-32`): host-order counts and offsets, the text as `char16_t`, flow nodes
   and branches as records. Fonts: cooked `NFNT` (`native_data.rs:244-257`): host order, sheets as distance fields
   (`cook::distance`) or pictures, a glyph found through two 256-entry pages by the code's high and low byte. Both read
@@ -161,6 +172,18 @@ What is read so far (at a1f423dd8):
   (`native_data.rs:542-545`, `CSW`); the host resamples player 1's into the output (`host_main.cpp:4016-4025`,
   `wiimote_speaker.h`): the game's content. The volume ramp (`audio_mixer.cpp:669-680`, `make_ramp`) reaches its target
   65 samples of 32 kHz into each tick, at any output rate: how the game's sounds change volume, as made; stays.
+  The readall harness read the 170 files whole (at 0c98b11c2; each line it cites read again at 241395b49). The
+  console's shape it found: the Me phrases' operands and the jump tables still big-endian, the rhythm look-ahead
+  over raw bytes (P-186's 11-18 line); banks, effect categories, wave groups, resource numbers, talk voices,
+  limited sounds, speaker and chord ids at the console's widths or counts (P-192's two 11-18 lines); a note's sends
+  as the driver's packed mix-config words decoded each update (P-221); effect, filter, switch and format values in
+  the DSP's and the table's encodings (P-222, the values themselves as made); and the step learning a music
+  stream's end from the audio device (P-226; the beat itself is read only by the audio thread's sequence clock,
+  `RhythmSystem.cpp:100-110`). Faults on the way: linear lookups on the sound paths (P-223), cooked and program
+  values trusted (P-224), streams played from the mapped store inside the mix (P-225), handles left pointed to by
+  the sound they were taken from (P-227), music tables read with no bound (P-228). Kept: the driver's 7 ticks a step
+  in its own conversions (`SeqTrack.cpp:676`, `AudSystem.cpp:363`), the categories' limits, an actor's own handles,
+  the remix's 16 note ids (as made, 5.H.5); the 4096 host voices grow with P-192.
 - Archives and file access. The game's archive names (`.arc`, `.szs` in 18 runtime, 6 game and 10 header lines) are
   names only: the store drops the ending (`asset_store.h:118-119`, `asset_store.cpp:33`). The game reads the store
   (`game.pak`, `cook/store.rs`) through `AssetFolder` and `GameAssets::load` (`FileUtil.cpp:88`); `ResourceHolder`
@@ -270,6 +293,22 @@ Each: where; what of it is the console's; the modern form; row; state; proof.
 | The A button's pictures by size and format | `NebulaIcons.cpp:2368-2390` | a picture known by its 48 or 40 texel IA4 texture | by the texture's name, the whole tree walked | P-210 | open | not yet |
 | A mod's ABOUT picture over 1024 | `NebulaSettingsMenu.cpp:321`, `:4996-5001` | none of the console's: a fixed copy size | the texture made at the picture's size, never dropped | P-211 | open | not yet |
 | A bound of 4 over 3 | `NebulaSettingsMenu.cpp:5521`, `:5719` | none (a fault) | bound by the array's size | P-212 | open | not yet |
+| Image-effect constants as bytes | `ImageEffectState.cpp:103-113`, `BloomEffect.cpp:61-65`, `BloomEffectSimple.cpp:26-35`, `ScreenBlurEffect.cpp:75`; unpacked by every renderer | the TEV registers' 8-bit colours | float constants written once a step | P-213 | open | not yet |
+| Draws that do step work | `GalaxyMapController.cpp:161-163`, `:168-183`; `StarPointerLayout.cpp:545-581`, `:844`; `CustomTagProcessor.cpp:478-499`; `MoviePlayerSimple.cpp:73`, `:128` | draw and step one to one under the retrace | the step decides and stores; draw() only records | P-214 | open | not yet |
+| Reads past a message by a tag's length | `CustomTagProcessor.cpp:644-654`, `NebulaUi.cpp:154-160` | none (a fault) | bound by the text's length | P-215 | open | not yet |
+| One record for every sharp sheet | `NebulaIcons.cpp:1826-1857`, `:2078`, `:2490`; `texture_store.cpp:593`, `:335-337` | none (a fault) | a record per sheet kept while handed over; retire at the frame fence | P-216 | open | not yet |
+| A row button at index -1 | `NebulaSettingsMenu.cpp:4591-4597` | none (a fault) | no button when none can be made | P-217 | open | not yet |
+| The cooked layout's console widths | `UiData.hpp:46-59`, `Pane.hpp:154-155`, `LayoutManager.hpp:79-81` | BRLYT's 16-bit links, 16-character names, 8-byte user data | 32-bit links, whole names resolved to ids, length-prefixed user data | P-218 | open | not yet |
+| Console parameter forms at the host | `MoviePlayerSimple.cpp:141`, `MovieStream.cpp:235-242`; `StarPointerDirector.hpp:20-21` | THP's 0..127 volume; GX's projection and viewport vectors | an f32 gain and ramp; the inverse view-projection in the host's terms | P-219 | open | not yet |
+| Behaviour by operating system | `TitleSequenceProduct.cpp:72-93`, `:234-238`; `StarPointerGuidance.cpp:61-66`, `:84-88`, `:150-154` | none (the port's own) | by the input in use and the device's capabilities | P-220 | open | not yet |
+| A note's sends as mix-config words | `SoundVoices.hpp:123`, `SoundVoices.cpp:564-579`, `:704-786`; `StreamPlayer.hpp:101` | the sound driver's packed bus and curve words | typed send records; a bus map per output mode made once | P-221 | open | not yet |
+| Sound settings in DSP and table encodings | `SoundEngine.cpp:596-606`, `SoundVoices.hpp:214-234`, `SoundAudibleParam.hpp:11-40`, `SoundVoices.cpp:128-132` | Q15 integers, a filter mode word, packed switch bits, the disc's format code | floats of the same values, named flags, a playable flag and category | P-222 | open | not yet |
+| Linear lookups on the sound paths | `SoundArchive.cpp:131-137`, `SoundBank.cpp:70-98` | tables small enough to walk | maps made at load; per-id group lists | P-223 | open | not yet |
+| Cooked sound values trusted | `StreamPlayer.cpp:33-36`, `:177-221`; `SeqTrack.cpp:1412-1426`; `EffectManager.cpp:162-168`; `PlayerLink.cpp:128-133`; `EffectSound.cpp:134`, `:152` | none (a fault) | every count, index and offset checked at load; ports bounded by the cook | P-224 | open | not yet |
+| Streams played from the mapped store | `StreamPlayer.cpp:207-208`, `StreamSound.cpp:105` | none (the port's own) | a reader thread fills a ring ahead of the play position | P-225 | open | not yet |
+| A stream's end told by the device | `StreamPlayer.hpp:26-28`, `StreamSound.cpp:122-124`, `:263-266`, `AudBgm.hpp:76-82`, `SoundUtil.cpp:378-440` | sound and picture from one clock | the end known by the step clock; the audio follows | P-226 | open | not yet |
+| Sound handles taken over | `AudMePlayer.cpp:76-91`, `:186-194`, `:235-244`; `SpkSound.cpp:34-35`, `:74-90`, `:151-166` | none (a fault) | a handle and its sound detach as a pair | P-227 | open | not yet |
+| Music tables read with no bound | `AudStageBgmWrap.cpp:110-112`, `:137-139`; `AudBgmSetting.cpp:283-299`; `AudTrackController.cpp:78` | tables sized to the disc's music | each number checked; settings as records keyed by sound id | P-228 | open | not yet |
 | Texture headers in the console's form | `ResTIMG`, 137 lines in 59 files | the J3D texture header and its filter codes | a host id and a sampler resolved at load (E3 step 2) | P-155 | open (F4) | not yet |
 
 ## 4. Section 3's test, and the owner's answers of 2026-11-18 18:18
