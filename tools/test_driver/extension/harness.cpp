@@ -460,6 +460,9 @@ struct State {
     bool finished = false;
     // The end step's frame while a picture it follows is still to be taken by a present (picture_path ends the run).
     std::optional<std::int64_t> end_at;
+    // The last picture was taken: the run ends at the next present, once that picture's present is done (the window
+    // closing never cuts off the present that takes it).
+    bool end_after_present = false;
 } g;
 
 std::recursive_mutex g_lock;
@@ -1332,6 +1335,12 @@ void controls(std::uint64_t game_frames, NebulaExtensionControls* out) {
 
 const char* picture_path(std::uint64_t game_frame, std::uint32_t kind) {
     std::lock_guard<std::recursive_mutex> hold(g_lock);
+    if (g.end_after_present) {
+        // The render thread presents in order: the last picture's present has ended.
+        g.end_after_present = false;
+        finish({}, {});
+        return nullptr;
+    }
     if (!g.on || g.pictures.empty() || kind == NEBULA_EXT_PICTURE_GENERATED || game_frame < g.pictures.front().game_frame) {
         return nullptr;
     }
@@ -1341,7 +1350,7 @@ const char* picture_path(std::uint64_t game_frame, std::uint32_t kind) {
     write_fact("picture." + p.name, "{\"game_frame\":" + std::to_string(game_frame) + ",\"asked_at\":" +
                                         std::to_string(static_cast<long long>(p.game_frame) - static_cast<long long>(g.base.value_or(0u))) + "}");
     if (g.end_at && g.pictures.empty()) {
-        finish({}, {});
+        g.end_after_present = true;
     }
     return g.picture_file.c_str();
 }

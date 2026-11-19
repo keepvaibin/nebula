@@ -1120,6 +1120,16 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_CLOSE) {
         save_native_settings_now();
         host_window::quit_request.store(true, std::memory_order_release);
+        // The surface is withdrawn before the window goes (host_window.h): a present between its image's acquire and
+        // its present ends first, and none starts after. A Vulkan swap chain whose window is destroyed under such a
+        // present can leave its image's semaphore unsignalled and the queue waiting on it for good. Two seconds at most,
+        // so a stalled render thread cannot hold the window.
+        host_window::surface_withdrawn.store(true, std::memory_order_release);
+        if (host_window::surface_use.try_lock_for(std::chrono::seconds(2))) {
+            host_window::surface_use.unlock();
+        } else {
+            std::fprintf(stderr, "[window] the renderer kept the surface past 2 s\n");
+        }
         DestroyWindow(hwnd);
         return 0;
     }
