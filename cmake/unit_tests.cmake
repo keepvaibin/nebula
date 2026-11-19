@@ -165,6 +165,8 @@ galaxy_test(galaxy_vsync_grid_tests SOURCES ${rt}/vsync_grid_tests.cpp)
 # The draw walker's plans for a list (header-only).
 galaxy_test(galaxy_walk_plan_tests SOURCES ${render_src}/core/walk_plan_tests.cpp)
 target_include_directories(galaxy_walk_plan_tests PRIVATE "${galaxy_root}/runtime/src" "${galaxy_root}/native/include")
+# Frame lists recorded from tours (--diagnostics frame-plans): their plans must not change unseen (P-044).
+target_compile_definitions(galaxy_walk_plan_tests PRIVATE WALK_PLAN_FIXTURES="${galaxy_root}/runtime/src/render/core/testdata/frame-plans")
 # A frame list let go of with release and taken back with acquire (nebula_frame_list.h, P-005): two threads, here so
 # the Linux thread sanitizer job runs it (the root list is Windows' alone).
 galaxy_test(galaxy_frame_list_release_tests SOURCES ${render_src}/core/frame_list_release_tests.cpp)

@@ -38,6 +38,8 @@ enum Diagnostic : unsigned {
                                          // (HdrPattern::Highlights) in place of the SDR picture
     kDiagnoseProbeReads = 1u << 19u,     // probe-reads: each screen probe read of the step, with the frame it was
                                          // answered for and its values' hash (ledger P-242)
+    kDiagnoseFramePlans = 1u << 20u,     // frame-plans: every 60th frame list's shape and the walk's plans of it
+                                         // (frame-plans-<pid>.txt; walk_plan_tests' fixtures, ledger P-044)
 };
 
 // The names --diagnostics takes, each one item or a set. "1" is the launcher's recording.
@@ -68,6 +70,7 @@ inline constexpr DiagnosticName kDiagnosticNames[] = {
     {"resolution-steps", kDiagnoseResolutionSteps},
     {"hdr-highlights", kDiagnoseHdrHighlights},
     {"probe-reads", kDiagnoseProbeReads},
+    {"frame-plans", kDiagnoseFramePlans},
     {"frames", kDiagnoseFrames},
     {"gpu", kDiagnoseGpuPasses},
     {"threads", kDiagnoseThreadCpu | kDiagnoseProfile},

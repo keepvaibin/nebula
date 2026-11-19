@@ -11,6 +11,7 @@
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/scene_camera_shape.h"
 #include "render/core/walk_plan.h"
+#include "render/core/walk_plan_shape.h"
 
 #include <algorithm>
 #include <bit>
@@ -18,6 +19,8 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <mutex>
 #include <set>
 #include <utility>
@@ -71,6 +74,22 @@ struct PlanLookup {
     }
     [[nodiscard]] static bool is_target(std::uint32_t texture) noexcept { return TextureStore::is_target(texture); }
 };
+
+// --diagnostics frame-plans: every kFramePlanEvery-th list's shape and its plans (walk_plan_shape.h), appended to the
+// diagnostics folder's frame-plans-<pid>.txt; a tour's file becomes walk_plan_tests' fixtures (ledger P-044).
+constexpr std::uint32_t kFramePlanEvery = 60u;
+
+void write_frame_plan(const NebulaFrameList& list, const PlanLookup& lookup, const core::ListData& now) {
+    const std::filesystem::path folder = ::galaxy::nebula_diagnostics_directory();
+    if (folder.empty()) {
+        return;
+    }
+    std::string text;
+    core::write_plan_shape(list, lookup, now.early_targets, now.early_probes, now.late_depth_clears, text);
+    std::ofstream file(folder / ("frame-plans-" + std::to_string(::galaxy::current_process_id()) + ".txt"),
+                       std::ios::binary | std::ios::app);
+    file << text;
+}
 
 inline Affine34 affine_of(const float (*rows)[4]) noexcept {
     Affine34 out;
@@ -1480,6 +1499,9 @@ void RenderCore::walk_list(ListData& now, ListData* before, const WalkTime& time
         core::plan_early_targets(list, lookup, now.early_targets);
         core::plan_early_probes(list, lookup, now.early_probes);
         core::plan_late_depth_clears(list, lookup, now.late_depth_clears);
+        if (::galaxy::diagnosing(::galaxy::kDiagnoseFramePlans) && list.game_frame % kFramePlanEvery == 0u) [[unlikely]] {
+            write_frame_plan(list, lookup, now);
+        }
     }
     for (const core::ListData::EarlyTargets& run : now.early_targets) {
         if (run.scene != NEBULA_NONE32) {

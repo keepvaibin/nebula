@@ -3,8 +3,14 @@
 // are asked, which scene depth clears wait for the next pass. No GPU: a lookup gives each pipeline's state word and
 // each texture table's textures.
 #include "render/core/walk_plan.h"
+#include "render/core/walk_plan_shape.h"
 
+#include <algorithm>
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <string>
 #include <vector>
 
 using namespace galaxy::render::core;
@@ -293,12 +299,128 @@ void test_late_depth_clears() {
     }
 }
 
+
+// Lists recorded from tours (--diagnostics frame-plans, walk_plan_shape.h): each list's plans made again equal the plans
+// written beside it. E4 rewrites the planners; a plan that changes on a real list is seen here, and the fixture is
+// written again only with the change's reason in its commit (ledger P-044).
+struct Recorded {
+    std::vector<NebulaFramePass> passes;
+    std::vector<NebulaFrameItem> items;
+    std::vector<std::uint32_t> states;
+    std::vector<std::vector<std::uint32_t>> reads;
+    NebulaFrameList list{};
+};
+
+struct RecordedLookup {
+    const Recorded& r;
+    std::uint32_t state(std::uint32_t pipeline) const { return r.states[pipeline]; }
+    template <class Fn>
+    void textures(std::uint32_t table, Fn&& fn) const {
+        for (const std::uint32_t texture : r.reads[table]) {
+            fn(texture);
+        }
+    }
+    static bool is_target(std::uint32_t texture) { return (texture & kTarget) != 0u; }
+};
+
+// One fixture file: its lists, each checked; the count of lists checked.
+std::uint32_t test_recorded_file(const std::filesystem::path& path) {
+    std::ifstream in(path, std::ios::binary);
+    std::string line, wanted;
+    Recorded r;
+    std::uint32_t lists = 0u;
+    while (std::getline(in, line)) {
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+        std::istringstream words(line);
+        std::string head;
+        words >> head;
+        if (head == "list") {
+            r = Recorded{};
+            wanted.clear();
+            words >> r.list.game_frame;
+        } else if (head == "p") {
+            unsigned kind = 0, layer = 0, load = 0, clear = 0, count = 0;
+            NebulaFramePass pass{};
+            words >> kind >> layer >> load >> clear >> pass.target >> pass.over_frame_texture >> pass.over_frame_depth >> count;
+            pass.kind = static_cast<std::uint8_t>(kind);
+            pass.layer = static_cast<std::uint8_t>(layer);
+            pass.load = static_cast<std::uint8_t>(load);
+            pass.clear_channels = static_cast<std::uint8_t>(clear);
+            pass.first_item = static_cast<std::uint32_t>(r.items.size());
+            pass.item_count = count;
+            r.passes.push_back(pass);
+        } else if (head == "i") {
+            std::uint32_t run = 0u, state = 0u, texture = 0u;
+            words >> run >> state;
+            std::vector<std::uint32_t> reads;
+            while (words >> texture) {
+                reads.push_back(texture);
+            }
+            for (std::uint32_t k = 0; k < run; ++k) {
+                NebulaFrameItem item{};
+                item.pipeline = static_cast<std::uint32_t>(r.states.size());
+                item.textures = item.pipeline;
+                r.states.push_back(state);
+                r.reads.push_back(reads);
+                r.items.push_back(item);
+            }
+        } else if (head == "plan") {
+            wanted += line + "\n";
+        } else if (head == "end") {
+            std::uint32_t counted = 0u;
+            for (const NebulaFramePass& pass : r.passes) {
+                counted += pass.item_count;
+            }
+            check(counted == r.items.size(), "a recorded list's item runs add up to its passes' items");
+            r.list.passes = r.passes.data();
+            r.list.items = r.items.data();
+            r.list.pass_count = static_cast<std::uint32_t>(r.passes.size());
+            r.list.item_count = static_cast<std::uint32_t>(r.items.size());
+            const RecordedLookup lookup{r};
+            std::vector<EarlyTargets> targets;
+            std::vector<EarlyProbe> probes;
+            std::vector<std::uint32_t> clears;
+            plan_early_targets(r.list, lookup, targets);
+            plan_early_probes(r.list, lookup, probes);
+            plan_late_depth_clears(r.list, lookup, clears);
+            std::string made;
+            write_plans(targets, probes, clears, made);
+            if (made != wanted) {
+                std::printf("FAIL: %s, list of frame %u: plans made\n%swritten\n%s", path.filename().string().c_str(),
+                            r.list.game_frame, made.c_str(), wanted.c_str());
+                ++failures;
+            }
+            ++lists;
+        }
+    }
+    return lists;
+}
+
+void test_recorded_lists() {
+    std::vector<std::filesystem::path> files;
+    for (const auto& entry : std::filesystem::directory_iterator(WALK_PLAN_FIXTURES)) {
+        if (entry.path().extension() == ".txt") {
+            files.push_back(entry.path());
+        }
+    }
+    std::sort(files.begin(), files.end());
+    std::uint32_t lists = 0u;
+    for (const std::filesystem::path& file : files) {
+        lists += test_recorded_file(file);
+    }
+    check(!files.empty() && lists >= 20u, "the recorded tours' lists are there (at least 20)");
+    std::printf("walk plan tests: %u recorded lists from %u tours\n", lists, static_cast<unsigned>(files.size()));
+}
+
 }  // namespace
 
 int main() {
     test_early_targets();
     test_early_probes();
     test_late_depth_clears();
+    test_recorded_lists();
     if (failures == 0) {
         std::printf("walk plan tests: all pass\n");
     }
