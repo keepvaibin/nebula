@@ -444,7 +444,7 @@ it. Pile A: the foundation does not touch its code; it comes after. Where this d
 | I-014 | C | F6, E6b | wrong behaviour (T2), suspected. Game-declared camera cuts come from t |  |
 | P-078 | C | F6, E6b | wrong behaviour (suspected). The star pointer and the mod look are sam |  |
 | P-163 | C | F6, E6b | performance (input latency, small): the menu reads the mouse, touch an |  |
-| P-040 | C | F7 | The step has no worker parallelism, and the shared state that blocks i |  |
+| P-040 | C | F7 | The step has no worker parallelism, and the shared state that blocks i | with it N-3013 and N-3014, the faults GitHub found in its frozen commits (`app/work`'s ledger, Agent 3's rows): the headless host's include, the pool counting processors the process may not use |
 | P-146 | C | F7 | frame-list building, skeleton evaluation and collision results live in |  |
 | P-082 | A | after the foundation: lost data | wrong behaviour (suspected). The in-game import's write is not ordered |  |
 | P-094 | A | after the foundation: lost data | Setting up again deletes the installed game before the new one is buil |  |
