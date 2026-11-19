@@ -1,0 +1,101 @@
+# Console free: the inventory
+
+What of Nebula is still the console's implementation, each part with its modern form, its row and its proof. The
+100% statement of `D:/NebulaWork/plan/08-CONSOLE-FREE-ORDER.md` (section 6) is made from this file and from nothing
+else. Its test (that file, section 3): code, a data format, a limit or a timing that is there because of the console's
+hardware or SDK, not because of what the game does. The game's own rules, the fixed 60 Hz game step, its content and
+the importer reading the disc once at setup stay.
+
+State: pass one run at a1f423dd8 (2026-11-18); pass two started. Not 100%.
+
+## 1. Pass one: whole-tree searches
+
+Run with `git grep -c -I -E <pattern> HEAD -- runtime native/host native/petari native/include native/math platform
+crates ':(exclude)*_tests.cpp' ':(exclude)*_test.cpp' ':(exclude)*/tests/*' ':(exclude)third_party'` at a1f423dd8,
+by the script `tools/verify/console_free_search.py` (to be added with the first item that closes a search; until then
+the patterns are these). Each cell is files/lines. `native/math` was searched too and had no hit in any search.
+
+| Search | Pattern | runtime | native/host | native/petari | native/include | platform | crates (importer) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| GX (graphics SDK) | `\bGX[A-Z][A-Za-z0-9]*\b\|\bGX_[A-Z0-9_]+\b` | 0/0 | 0/0 | 0/0 | 0/0 | 0/0 | 0/0 |
+| GD | `\bGD[A-Z][a-z][A-Za-z0-9]*\b` | 0/0 | 0/0 | 0/0 | 0/0 | 0/0 | 0/0 |
+| VI | `\bVI[A-Z][a-z][A-Za-z0-9]*\b\|\bVI_[A-Z0-9_]+\b` | 0/0 | 0/0 | 0/0 | 0/0 | 0/0 | 0/0 |
+| OS | `\bOS[A-Z][a-z][A-Za-z0-9]*\b` | 0/0 | 0/0 | 0/0 | 0/0 | 1/1 | 0/0 |
+| DVD, NAND, PAD | `\b(DVD\|NAND\|PAD)[A-Z][a-z][A-Za-z0-9]*\b` (three searches) | 0/0 | 0/0 | 0/0 | 0/0 | 0/0 | 0/0 |
+| WPAD, KPAD | `\b(W\|K)PAD[A-Z_][A-Za-z0-9_]*\b` (two searches) | 0/0 | 0/0 | 0/0 | 0/0 | 0/0 | 0/0 |
+| AX (DSP sound) | `\bAX[A-Z][a-z][A-Za-z0-9]*\b\|\bAX_[A-Z0-9_]+\b` | 0/0 | 0/0 | 0/0 | 0/0 | 0/0 | 0/0 |
+| THP | `\bTHP[A-Z_][A-Za-z0-9_]*\b` | 2/2 | 0/0 | 0/0 | 1/1 | 0/0 | 0/0 |
+| RVL | `\bRVL\b\|\bRVL[A-Z_][A-Za-z0-9_]*\b\|<revolution` | 2/4 | 0/0 | 0/0 | 0/0 | 1/2 | 0/0 |
+| J3D | `\bJ3D[A-Z][A-Za-z0-9]*\b` | 0/0 | 0/0 | 0/0 | 0/0 | 0/0 | 1/1 |
+| JKR, JUT, JAI, JAS | `\bJ(KR\|UT\|AI\|AS)[A-Z][A-Za-z0-9]*\b` (four searches) | 0/0 | 0/0 | 0/0 | 0/0 | 0/0 | 0/0 |
+| JPA | `\bJPA[A-Z][A-Za-z0-9]*\b` | 0/0 | 0/0 | 0/0 | 0/0 | 0/0 | 2/3 |
+| J2D | `\bJ2D[A-Z][A-Za-z0-9]*\b` | 0/0 | 0/0 | 0/0 | 1/1 | 0/0 | 0/0 |
+| JGeometry, JMath, JSupport, JGadget, JStage, JDrama, JStudio | `\bJ(Geometry\|Math\|Support\|Gadget\|Stage\|Drama\|Studio)\b` | 0/0 | 0/0 | 0/0 | 0/0 | 0/0 | 0/0 |
+| NW4R | `\bnw4r\b\|\bNW4R\b` | 0/0 | 0/0 | 0/0 | 0/0 | 0/0 | 1/1 |
+| The console's heaps | `\b(JKRHeap\|JKRExpHeap\|JKRSolidHeap\|MEMHeap\|MEM[A-Z][a-z]+Heap\|OSAlloc\|mem1\|mem2\|MEM1\|MEM2)\b` | 0/0 | 0/0 | 0/0 | 0/0 | 0/0 | 0/0 |
+| Retrace waits | `\bVIWaitForRetrace\|\bwaitForRetrace\|\bretrace\b\|\bRetrace\b` | 0/0 | 0/0 | 1/1 | 0/0 | 0/0 | 0/0 |
+| Disc model and animation formats | `\b(BMD\|BDL\|BTK\|BRK\|BCK\|BTP\|BVA\|BPK\|BLK\|BMT)\b\|\.(bmd\|bdl\|btk\|brk\|bck\|btp\|bva\|bpk\|blk\|bmt)\b` | 2/2 | 0/0 | 7/7 | 3/3 | 0/0 | 12/78 |
+| Disc archive formats | `\b(RARC\|Yaz0\|SZS\|U8)\b\|\.(arc\|szs)\b` | 11/18 | 0/0 | 6/6 | 4/10 | 0/0 | 31/283 |
+| Disc table, text, layout and font formats | `\b(BCSV\|BMG\|BLO\|BRFNT\|BRLYT\|BRLAN\|BNR\|BCAM\|JMP)\b\|\.(bcsv\|bmg\|blo\|brfnt\|brlyt\|brlan\|bcam)\b` | 3/5 | 0/0 | 29/53 | 1/1 | 0/0 | 32/583 |
+| Disc sound formats | `\b(BRSAR\|BRSTM\|BRWSD\|BRBNK\|BRSEQ\|BRWAR\|BAS\|AST)\b\|\.(brsar\|...)\b` | 1/1 | 0/0 | 2/2 | 1/2 | 0/0 | 8/33 |
+| Disc particle formats | `\b(JPAC\|JEFFjpa\|JPC\|JPA1\|BREFF\|BREFT)\b\|\.(jpc\|breff\|breft)\b` | 1/1 | 0/0 | 1/1 | 0/0 | 0/0 | 7/18 |
+| Byte swaps | `bswap\|byteswap\|_byteswap_\|__builtin_bswap\|swap_endian\|byte_swap\|BigEndian\|big_endian\|be16\|be32\|\bswap16\b\|\bswap32\b` | 5/28 | 0/0 | 2/14 | 0/0 | 0/0 | 20/489 |
+| 60 Hz constants | `\b60(\.0+)?f?\b\|\b1\.0f? ?/ ?60\|\b16\.6+\|\b0\.0166` | 46/101 | 1/6 | 232/454 | 3/5 | 7/13 | 22/48 |
+| 4:3 and 480-line constants | `\b4\.0f? ?/ ?3\.0\|\b4 ?/ ?3\b\|\b1\.333\|\b640\b\|\b480\b\|\b448\b\|\b456\b\|\b608\b` | 14/25 | 2/5 | 24/59 | 3/7 | 3/3 | 5/12 |
+| Tables sized by a constant | `\[(c\|k)Max[A-Z][A-Za-z]*\]\|\[MAX_[A-Z_]+\]\|\b(c\|k)Max[A-Z][A-Za-z]*(Num\|Count\|Size)\b` | 4/5 | 1/5 | 3/9 | 0/0 | 2/7 | 0/0 |
+
+Second way (7.3.6, the SDK searches came back almost empty): plain substrings, `git grep -c -I -F` over the same
+areas at a1f423dd8: `JKR`, `WPAD`, `OSReport`, `VIWait`, `DVDRead`, `revolution`, `PSMTX`, `PSVEC`, `JMap`,
+`JMapInfo`, `GXColor` 0 lines; `J3D` 22 lines in 4 files, `nw4r` 1 and `JPA` 5 lines in 3 files, all in `crates` (the
+importer's names for what it reads); `GX` 10 lines in 9 files (runtime 6, native/include 1, crates 3), `JUT` 2 lines and
+`J2D` 4 lines (native/petari, native/include), not yet read. So the SDK's and the middleware's names are gone from the
+game and the host; the console's shapes are not found by names, and pass two reads for them. Names the game kept from
+the console that do hold its shapes: `ResTIMG` (the J3D texture header: 137 lines in 59 files of native/petari and
+native/include, and 16 lines in 5 importer files; P-155), `Mtx44` (67 lines in 25 files, not yet classed).
+
+What the hits are, by search (each line read at a1f423dd8):
+
+- Disc formats in `native/petari` and `runtime`: the names of files the game opens (`"%s.bcsv"`, `"Message.bmg"`,
+  `"%s.brlyt"`, `"MessageFont26.brfnt"`, ...). What is read at run time is the importer's cooked layout, checked by
+  its magic at load: tables `NTBL` (`native/petari/src/Game/Util/Table.cpp:17`, panics on another), messages `NMSG`
+  (`native/petari/include/Game/System/MessageHolder.hpp:11`, `MessageHolder.cpp:140-141`), fonts `NFNT`
+  (`crates/nebula-import/src/cook/native_data.rs:244`), movies `NMOV` (`native/petari/src/Game/Screen/MovieStream.cpp:58`),
+  layouts `NLYT` and their animations `NLAN` (`native/petari/include/Game/Ui/UiData.hpp:9`; `Layout::Build`,
+  `native/petari/src/Game/Ui/Layout.cpp:249-257`, refuses another magic or version). Class: the importer at setup, with
+  the run time's check named above. The layout's material record still holds console fields: section 3.
+- `RVL` in `runtime` and `platform`: the Wii Remote's product names (`RVL-CNT-01`) of the real-remote drivers
+  (`wiimote_hid.h:20-21`, `WiimoteUsb.java:39-40`, `wiimote_protocol.cpp:114`): a device the player plugs in, not
+  the console. Stays.
+- `THP` in `runtime` and `native/include`: the movie decoder adapted from the SDK's (`movie_video.cpp:2`,
+  `movie_video.h:18`) and the YUV shader's coefficients: the game's own movies are cooked to `NMOV` with codec 0, the
+  THP frames, decoded while the game runs by native SSE2 and FMA3 kernels (`movie_video_tests.cpp`). The frames are the
+  game's content; the SDK's IDCT column swap (`movie_video.cpp:104`) is P-118, which the owner decided stays. Not yet
+  classed: whether a cook to a current codec is the modern form is weighed in pass two (section 3).
+
+## 2. Pass two: the areas read for the console's shape
+
+| Area | Files | Read |
+| --- | --- | --- |
+| The game's sound code (`Game/AudioLib`, `Game/GameAudio`, `Game/Sound`, `Game/Speaker`, `Game/RhythmLib`) | 170 | not read whole |
+| Archives and the game's file access (`Game/System` archive and resource holders, `Game/Util/FileUtil`, the store) | not counted | not read whole |
+| Text (`MessageHolder`, the `NMSG` reader, the host's `message_utf8`) | not counted | not read whole |
+| Layouts and fonts (`Game/Ui`, `Game/Screen`'s layout code, `Game/System` font holders) | `Game/Ui` 51, `Game/Screen` 289 | started: `Layout::Build`, `Material`'s record and draw (section 3) |
+| Input (the host's and the game's) | not counted | read for master report 6, not for this test |
+| The game's own files E14 did not reach | 921 at E14's last count | not read whole |
+
+File counts: `git ls-files native/petari/src native/petari/include` by folder at a1f423dd8: MapObj 633, Boss 333,
+Screen 289, System 260, Enemy 218, Player 179, Map 164, Util 158, Camera 158, NPC 155, LiveActor 122, Sound 74,
+AreaObj 72, Demo 63, AudioLib 58, Ui 51, Scene 44, Effect 43, Ride 38, Particle 35, Gravity 28, NameObj 25, Animation
+22, Render 18, GameAudio 16, Speaker 12, RhythmLib 10, Mii 7.
+
+## 3. Items
+
+Each: where; what of it is the console's; the modern form; row; state; proof.
+
+| Item | Where | The console's part | Modern form | Row | State | Proof |
+| --- | --- | --- | --- | --- | --- | --- |
+| The frame's rows | `FRAME-MODEL.md` 1.9 and 1.10 (pile B) | 1.9's parts | `FRAME-MODEL.md` part 2 | P-010, P-042 to P-181 as 1.10 and 2.6 place them; P-022 | open; P-022 parts 1-2 written on `rows/p022` | not yet |
+| A layout material's blend kept in the console's codes and turned into the renderer's at every draw | `native/petari/include/Game/Ui/UiData.hpp:163-182` (`mBlend`: type, factors, op as the console wrote them; `mAlphaCompare`: two compares packed in a byte; `mGenerators`: texture coordinate generators as type, source, matrix); `native/petari/src/Game/Ui/Material.cpp:702-714` (each draw maps the blend type, and the source factor's two destination-colour codes, to `NEBULA_BLEND_*`, `NEBULA_FACTOR_*`) | the console's blend and compare encodings in the cooked record | the cook writes the material's pass state word (`PassState`) and the compare in the renderer's terms; the draw copies it | P-184 | open | not yet |
+| Columns found by name at every read | `native/petari/src/Game/Util/Table.cpp:33-48` (`searchItemInfo`: the column's hash searched over the fields on each `getValue` by name) | the console's JMapInfo access, cheap only for its small tables | not decided: pass two reads how often the game reads by name in a step | none yet | to read | not yet |
+| The game's movies decoded with the SDK's THP codec while the game runs | `runtime/src/movie_video.cpp`, `MovieStream.cpp` | the console's video codec; its IDCT order is P-118 (owner: stays) | not decided: pass two weighs a cook to a current codec against the decoder's cost | none yet | to read | not yet |
+| Texture headers in the console's form | `ResTIMG`, 137 lines in 59 files | the J3D texture header and its filter codes | a host id and a sampler resolved at load (E3 step 2) | P-155 | open (F4) | not yet |
