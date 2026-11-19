@@ -39,6 +39,9 @@ picture	pc	engine	luigi-stages	vulkan	third	1280	720	246f2556bf0a4d3b56714ab93b4
 picture	pc	engine	menu-key-icons	d3d11	menu	1280	720	e518d1329d89c6923d77b07aaafa5c38812d5a216e5218c7c1dbbb0dc13495fa
 picture	pc	engine	menu-key-icons	d3d12	menu	1280	720	e6899136c7c4348ec79df09a7aad725db0480fe70ee1b7f346493b48f19ab250
 picture	pc	engine	menu-key-icons	vulkan	menu	1280	720	ec1afd6f3cc75bfbda4ed59f0e37c889a5bfd04a9a310243e76b33c8f5843326
+picture	pc	engine	pictures-in-a-row	d3d12	row-1	1280	720	f189727a9e71c24be5548f665bb2e25224ef4cbd8bbe6b189f6290ee5428c574
+picture	pc	engine	pictures-in-a-row	d3d12	row-2	1280	720	a09c2c029cb8021c74b3e02259ae16d580dc6f027ac3df31607ef25ae9f169e6
+picture	pc	engine	pictures-in-a-row	d3d12	row-3	1280	720	ef482287b6c32d76171b5e2f03cd677bca224087ebdc5dac1056f8ed4275d061
 picture	pc	engine	talk-balloon-edge	d3d11	arrive	1280	720	4aef64b9bb13528781be2af803901bd4564872769f0e079e57372f8d086e97ad
 picture	pc	engine	talk-balloon-edge	d3d12	arrive	1280	720	73537b7027e242547a2e66a501c282062a477a709b7369aa95f6c4f1354f813b
 picture	pc	engine	talk-balloon-edge	vulkan	arrive	1280	720	e1e6416f5ff919bd18952482270c8f4fb87c996cec9603ca12326b9d284abc99
@@ -87,6 +90,12 @@ picture	pc	engine	window-tall	vulkan	play	1080	1350	aad37f33528958e12a661faa9537
 picture	pc	engine	window-wide	d3d11	play	1920	360	c8449b0678b4940edd98dc3d22d96fa10bdfbf5c6e4e7edde108a0ec6e2d4c80
 picture	pc	engine	window-wide	d3d12	play	1920	360	226e92c1c3c5c7d5c250b182c182dcd9d8b4000e5c383570e49251395ee42a0b
 picture	pc	engine	window-wide	vulkan	play	1920	360	d15b2fc8371e87e43131e174ac1f466409a374190a493e2fc17d5f6e465b584e
+picture	pc	pictures-in-a-row	pictures-in-a-row	d3d11	row-1	1280	720	74ce0295b542ed9bdef8784328a14098c55758b0e23008ef8118f97175ebe0a4
+picture	pc	pictures-in-a-row	pictures-in-a-row	d3d11	row-2	1280	720	a779f6acb0f9d63421c1f7cf0a8002c98fa5bde99cc0cfef31d4168bf76674b6
+picture	pc	pictures-in-a-row	pictures-in-a-row	d3d11	row-3	1280	720	145cc98bb3a55b280d313eff48974f97287e7883e8c87efcc96b71f315491e39
+picture	pc	pictures-in-a-row	pictures-in-a-row	vulkan	row-1	1280	720	165e80430d06ac7c6f27b4132947dae43a0d8d21a9736153654c5344824a3a65
+picture	pc	pictures-in-a-row	pictures-in-a-row	vulkan	row-2	1280	720	bb55fd8107b2e1f2a1c9bcbe62aecfeedc59bb7a9fecebbfd7de2e4164841788
+picture	pc	pictures-in-a-row	pictures-in-a-row	vulkan	row-3	1280	720	764b49f6cf77c4631096243c6ee153d73daf515a91bfcca1e4d04d5a1c5cba05
 picture	pc	tour	001-BattleShipGalaxy-1	d3d11	after	1280	720	606c8e5b9f080954a8b5f0009c29cb41adeb1f3ba26c0c08c53cb38b987b6380
 picture	pc	tour	001-BattleShipGalaxy-1	d3d11	arrive	1280	720	21f687927dbfbd083f838d9db07940799b1f240c0559de1e680f57bdceee45d2
 picture	pc	tour	001-BattleShipGalaxy-1	d3d12	after	1280	720	9cb80134092949df1d1dc01937aa2e1a0c0e292b80db3741da04052af456b6fb
