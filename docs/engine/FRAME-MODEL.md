@@ -327,7 +327,8 @@ is the first case):
 
 ### 2.4 Model format 13
 
-What the importer writes, by E3's steps (file 01, E3, where it is named 12):
+What the importer writes, by E3's steps (file 01, E3, where it is named 12); its sections, records and the switch
+between the two paths are in 2.7:
 
 | Step | Written at cook | Ends in the engine |
 | --- | --- | --- |
@@ -465,3 +466,108 @@ it. Pile A: the foundation does not touch its code; it comes after. Where this d
 Of the render path as read for this file (1.9), nothing falls outside P-022, E3, E4, E6b and the step's threading: the
 three new rows fall in E4 and F7. The areas 1.10 lists as not read whole may hold more; E14's read, paused, is where
 they would come from.
+
+### 2.7 The data path: records, format 13 by step, and both paths side by side
+
+#### 2.7.1 What a record is, who writes it, when it changes
+
+A record is plain data in its final form that the renderer reads by id: no console code is decoded and no meaning is
+searched for after the cook. It is written once by one owner and changed afterwards only in named fields, by one
+thread.
+
+| Record | Written by | When | Read by | Changes |
+| --- | --- | --- | --- | --- |
+| The model's sections (2.7.2) | the importer (`crates/nebula-import/src/cook/model_write.rs`); for a mod, the same cooker through `assets.cook` | at the cook | `ModelData` (game) and `Registries::model_register` (host), in place in the store | never; a new store version cooks again |
+| A material form: programs, state, inputs, kind, texture list, constant block | the importer | at the cook | registered at load: its pipeline made on the workers (P-010), its constant block a slot (`material_register`) | never |
+| A form's changing rows | the game thread (`Material`, from the form's list of changing rows: texture matrices, colour tracks, a colour a switch sets) | once a step, and only the rows that changed | the walk: the item names the form's slot and this step's changed rows | per step |
+| A texture and its sampler | the importer; the game for a texture it makes (targets, mod pictures) | at the cook; when made | `Registries` at load: one id, one sampler | never; a target when its size changes |
+| A site's shape (step 4) | the game, once at its start (`SiteMeshData`, today one user) | once | the walk, as any registered mesh | never |
+| A site's material (step 4) | the game, at the site's init, content-addressed | at load | as a material form | its changing rows, per step |
+| A pose (step 5) | the game thread | once a step: each block's joints in the list (the list before holds the step before) | one GPU pass per picture makes the matrices at t | per step |
+| A light (step 6) | the game thread (`LightDirector`), in world space, one table per list; an item names its light set | once a step | the GPU, the view applied there | per step |
+
+The render thread writes no record. Per picture it writes the camera, t and the GPU pass's inputs; everything else
+it reads.
+
+#### 2.7.2 The file: sections by name
+
+Format 13 is the last format number E3 needs. Its header is magic, version 13, size, flags, `section_count`,
+`sections_at`; each section is `{name (four characters), flags, at, size, count, stride}`. A reader finds a section
+by name, reads the fields it knows of each entry (fields are only added at the end, so `stride` may be larger than
+it knows) and skips a section it does not know. A section flagged required that a reader does not know makes it
+refuse the file, naming the section. So a later field or section makes no format 14, and a mod's model cooked by
+this cooker keeps loading. A model cooked at 12 is refused at load with its version, as today
+(`model_write.rs:908`); no mod has shipped one, since LumaCore v1 ships with 13.
+
+| Section | Holds | Written from | Read until |
+| --- | --- | --- | --- |
+| `JNTS`, `STEP`, `JMSH`, `DMTX`, `ENVL`, `MIXS`, `IBND`, `IMPT`, `MESH`, `TEXR`, `GEOM`, `NAME` | 12's arrays as they are, by name instead of by fixed offset | the first landing (step 1's) | kept |
+| `MATL` | per material: name, `same_as`, mesh, joint, state word, its forms' and slots' ranges | step 1 | kept |
+| `GXMT` | the console's material fields, apart: registers, constant and material colours, channels, alpha codes and references, coordinate generators by GX type and source, fog codes | step 1 (moved out of the material) | the last landing of step 3: no reader is left, and the cooker stops writing it |
+| `FORM` | per form: programs, state, inputs; its kind (opaque, alpha-tested, blended, water), the alpha cutoff as a float and its mode, the glow row and colour, the base map's slot, which texture or vertex colour is baked light, each coordinate's source (one that reads the eye is marked), reads a copy of the screen, two-sided; its ranges in `TXLS`, `CBLK`, `CROW` | step 1 | kept |
+| `SAMP` | samplers in final form: min, mag and mip filter, wrap, anisotropy, lod range and bias as floats | step 2 | kept |
+| `TXLS` | per form, its texture list: texture and sampler by index | step 2 | kept |
+| `CBLK` | per form, its constant rows in final floats (colours divided once, the alpha reference a float, fog per view, not per draw) | step 3 | kept |
+| `CROW` | per form, the rows that change: the row, its source (coordinate matrix n, colour track n, register n, ambient from the item's light set) and how it is written (a copy, three matrix rows) | step 3 | kept |
+
+Step 4's records are the game's own, made at load (2.7.1): no model section. Particle materials go through the effect
+cook (`luma_content_fx.h`), whose material entry takes the same `FORM`, `TXLS`, `CBLK` and `CROW` fields; that cook's
+format has the same section table from step 4's first landing. Step 5 changes no file. Step 6's lights come from the
+stage's light tables, read by the game; if the cook of those tables changes, it is in their own file, not the model.
+
+The first landing writes 12's data under the section table and nothing more. Its proof: the arrays of every model of
+the cooked store are byte for byte those of 12's cook of the same disc, and every picture is unchanged. The store
+version goes up at each landing that changes what the cooker writes, so the store is cooked once again then.
+
+#### 2.7.3 Both paths while a step lasts: the switch
+
+A step's old and new path live side by side until its last landing. Which one draws is chosen per group; a landing
+moves one group.
+
+| Step | A group is | The groups |
+| --- | --- | --- |
+| 1 to 3 | a class of material forms, by `FORM`'s kind and pass | plain unlit; plain lit; alpha-tested; blended; water and indirect; billboard materials; each replacing pass (player light, reflection alpha, player opacity, flexible coordinates) |
+| 4 | a family of draw sites (the 109 sites in 47 files of P-154) | quads, then fans (fixed index pattern, first); strips; shadows (volume, surface, drop: with P-143 and P-181); particles (P-149, P-150); widened lines and points; the three sites that choose their primitive at run time; 2-D gauges and glows |
+| 5 | a kind of block | one joint; many rigid joints; weighted (skinned); billboard and calc mode 1; calc mode 2; eye-space blocks |
+| 6 | a kind of light | the actor's lights (`loadActorLightInfo`); point lights; the player's light; the map's lights |
+
+- The switch is one table in the game module, a default per step and group (`Game/Render/RenderPath.hpp`). A landing
+  changes one group's default. The writer reads it where it writes a record into the list (`Material::constantsOf`,
+  `TypedDraw`, `LightFunction`, the block writer); the item or block it writes carries which path made it (a flag
+  bit per step), so the walk serves both without a table of its own and two groups in one list draw side by side.
+- A test run can set every group (`old`, `new`) or ask for both (2.7.4) by a plan line. The settings screen has no
+  such choice, and a release ships each group as main's default has it.
+- The mod draw services (`draw.mesh`, `draw.inst`, `draw.native`, post programs) write their items by the default;
+  the mod suites run on every landing.
+- The last landing of a step deletes the old path, its flag bit and its groups in the table. Steps 1 to 3 share
+  `GXMT`: it goes with step 3's last landing.
+- P-173 goes with step 3's first group: a form's slot holds its constant block for good, and the changed rows ride in
+  the list, so no material falls to a per-frame fill.
+
+No step needs a landing that cannot be split this way: steps 1 to 3 and 6 split by what a draw is, step 4 by the file
+family that writes it, step 5 by the block. If a group turns out to need two paths in one draw, the board says so
+before that group's landing.
+
+#### 2.7.4 How the gate compares both paths in one run
+
+- The plan line `paths both` makes each picture frame give two pictures of the same game frame: one with every group
+  on the old path, one with every group of the step on the new path (the others at their default).
+- For steps 1 to 4 and 6 the writer is the game thread: at a picture frame it writes the step's list twice from the
+  same state, once per path, and submits both. Writing a list reads the step's state and writes only the list and the
+  render caches; the step hash (`tools/verify/step_hash.py`) after a picture frame is the same with `paths both` as
+  without, and the gate checks that, so the second list changes no game state. The second list carries no probe pass:
+  probes are answered from the first, the run's default.
+- For step 5 the list is the same: the render thread walks it twice, once with the CPU's matrices, once with the GPU
+  pass. Because step 5 is about in-between pictures, its pictures include one at a fixed t between two frames, both
+  walks at that t.
+- The render thread walks the two lists at the same t into two pictures; the harness writes `<name>.old.png` and
+  `<name>.new.png` beside the picture it keeps (the default path's), on every renderer.
+- The gate compares the new picture with the old one, as `tools/verify/compare_snapshots.py` compares two renderers
+  (largest and mean difference of any channel, pixels past the tolerance of 1), and the kept picture with its
+  reference as before. A difference fails the landing, naming the stop, the picture, the renderer and the group, with
+  the difference picture kept in the run. Step 5's GPU sums may differ from the CPU's in the last bit; its tolerance
+  is the one Vulkan is held to against Direct3D 12, not wider.
+- The cost is only at picture frames, in test runs; a player's run writes one list per step.
+
+So each landing of E3 is proved on every tour stop and renderer by pictures of both paths from one run, not by two
+runs whose frames could differ.
