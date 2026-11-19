@@ -45,6 +45,11 @@ native_test(native_arena_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/arena_tests.cp
 if(NEBULA_SANITIZE AND WIN32)
     # NebulaArena.cpp defines operator new/delete, as in the module: the sanitizer runtime's own give way (N-1062).
     target_link_options(native_arena_tests PRIVATE LINKER:/force:multiple)
+elseif(NEBULA_SANITIZE MATCHES "thread")
+    # The same on Linux: the address sanitizer's operators are weak and give way by themselves, the thread sanitizer's
+    # are not (its C++ runtime, tsan_new_delete.cpp), so the program is linked without that runtime and the arena's
+    # operators are the program's, as in the module (P-012).
+    target_link_options(native_arena_tests PRIVATE -fno-sanitize-link-c++-runtime)
 endif()
 # The frame-list writer, against the list the renderer reads.
 native_test(native_frame_list_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/frame_list_tests.cpp" "${game_src}/Render/FrameList.cpp")
