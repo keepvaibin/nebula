@@ -620,7 +620,10 @@ Two arrays have no count in 12's header; their readers assume one:
 - The inverse binds. The host reads 12 x `joint_count` floats whenever there are envelopes
   (`registries.cpp:367-371`). The cook writes them only when the disc's `EVP1` has them (`model_ir.rs:1442-1450`)
   and for every joint of a glTF model with envelopes (`gltf.rs:2130-2139`). A disc model with envelopes and no
-  inverse binds would have the host read the next arrays as matrices; whether one exists is not checked.
+  inverse binds would have the host read the next arrays as matrices. None exists: in the US, PAL and JP stores of
+  version 37 (1,762 models each), every model with envelopes (144 in the US store) has one bind per joint (a scan of
+  each store's model headers, `D:/NebulaWork/plan/a1/inv/ibnd_scan.py`). A mod's glTF model with envelopes gets one
+  per joint too.
 - The important joints: one per draw matrix (`model_ir.rs:1303-1319`).
 
 **The landing.** The format number and the layout change; no record changes, so every offset inside a record still
