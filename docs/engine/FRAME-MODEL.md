@@ -1634,3 +1634,61 @@ at the picture's moment; every platform does the same or says on screen why not.
 - Linux and Apple: built by the CI jobs, the Mac job's start check run; their measures are the owner's runs.
 - After landing 1: `git grep -n -E "interp_start_pending_|interp_list_waiting_|run_pending_interp_start" runtime`: 0.
 - The game step's time and the walk's, PC and tablet, before and after (file 08 7.4: never slower).
+
+### 2.17 F7: the game step on the cores
+
+Read at 241395b49 (11-19), from audit file B R8.2 (what stops each part running on workers), each blocker found again
+at this commit. File 08 5.D.6: it lands only with the replay identical, the thread sanitizer clean and both soaks
+clean. Its rows: P-040, P-146 (with N-3013 and N-3014, `app/work`'s), N-1083. E7's other changes (collision and
+sensors found by position, P-129 to P-141) are faster single-threaded work and are not this section's.
+
+**Today.** The step runs on one thread (`git grep -n -E "std::thread|parallel_for" 241395b49 -- native/petari/src`:
+0). What a second thread would collide with:
+
+| Part | Shared state at 241395b49 |
+| --- | --- |
+| Animation and skinning | the `Skeleton` globals (`Model.cpp:13-19`) and its one stack (:136); joint callbacks call actor code (:175) |
+| Visibility | `ClippingActorHolder::movement` (`ClippingActorHolder.cpp:36`) moves actors between lists as it judges them; `LiveActor::sClipScope` is one global mode (`LiveActor.cpp:292`, set at `ClippingActorInfo.cpp:78-114`) |
+| Particles | one `EmitterWork` for every emitter (`EmitterManager.cpp:65`) |
+| Collision | each keeper's one result array (`CollisionCategorizedKeeper.cpp:14`); `sAreaPrisms` (`CollisionParts.cpp:527-530`); the binder's `sLocalPlanes` (`Binder.cpp:78`) |
+| Shadows | the holder's request list (`ShadowController.cpp:43`) and the collision queries above |
+| Frame list | 13 file-scope variables of the writer (`FrameList.cpp:250-320`) |
+| Loads | every read copies from the mapped store on the game thread (N-1083) |
+
+**The target.**
+
+1. One worker pool for the host and the game, sized from the processors the process may use (N-3014), at the game
+   thread's priority, with a fork-and-join call the game makes inside its step: the game thread takes a share and
+   returns when every share is done. No work crosses a step.
+2. Order is the game's. Each parallel part computes into per-item results and the game thread applies them in list
+   order, so a step's effects are the same as one thread's whatever the worker count:
+   - visibility: a pure judge (camera planes and the actor's sphere) writes one result per actor; the moves between
+     lists and the draw-list changes are applied after, in order; the ground cache a judge reads is filled first;
+   - animation: models with no joint callback and no calc callback pose on workers, each with its own skeleton state
+     (a struct passed by pointer, replacing the globals); the rest pose on the game thread in list order;
+   - particles: emitters with no callback run on workers, each worker with its own work record and chunk cache;
+     finished emitters are freed on the game thread in order; seeds stay per emitter;
+   - shadows: once a collision query takes its caller's result buffer and an extra part as a candidate (not inserted
+     in the shared zone), the requested shadow updates run on workers: they read collision after all movement ran;
+   - frame list: one recorder per worker holding today's file-scope state, one store each, joined in category order
+     with indices rebased; the material and pose caches written in drawing get a per-step first-writer rule.
+3. Actor movement stays on the game thread in order: an actor's bind reads parts moved by actors before it in the
+   same step. That is the game's rule, not a console limit.
+4. Loads: what a step will read is read ahead by the loader's thread; the game thread copies only what is in memory
+   (N-1083, 2.1 rule 3).
+5. The owner's P-191 (c), every actor running every step, is decided after F7: its cost lands on these workers.
+
+**Landings,** each behind a switch (workers on or off, and a worker count), the old path beside it:
+
+1. The pool and the fork-and-join call; N-3013 and N-3014.
+2. Visibility's judge.
+3. Collision queries with caller buffers; shadows on workers.
+4. Animation without callbacks.
+5. Particles without callbacks.
+6. The frame list's recorders.
+7. Loads read ahead.
+
+**Proof.** The replay's step hash identical with workers off, on, and at one, two and every core, over the tour and
+the replay suite; the frame list's hash identical the same way; the thread sanitizer clean over the tour (the SDL
+host on Linux); both soaks clean; the step's time on the tablet in the five heaviest stops before and after each
+landing, and on the PC never slower (a step of 1.4 ms at most there: the pool's cost must not show).
