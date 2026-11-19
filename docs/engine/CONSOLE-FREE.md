@@ -472,3 +472,30 @@ The law (written 11-19, before P-193's code; each line a property its test asser
    7.1.4); a render of known sounds through the real mixer to a file for each layout, each channel's energy and
    phase checked against 1 to 8. Windows and Android in the gate; Linux and Mac built with it. The owner's listening
    comes later and is not a gate.
+
+What P-202 and P-187 start from (read at 697535a86, 11-19; the form written before their code, file 08 7.4):
+
+- The cooked message file (`NMSG`, `crates/nebula-import/src/cook/message.rs:1-15`, read by `MessageData`,
+  `MessageHolder.hpp:8-62`) keeps the disc's text as it was: UTF-16 units with the message editor's tags inside the
+  text (a 0x1A unit, then the tag's length in bytes and group, then its id and parameters in units).
+- Every reader finds the tags by scanning for 0x1A: `git grep -n -E "0x1A|0x001A" 697535a86 -- native/petari/src`
+  gives 26 hits, 17 of them message tags: `CustomTagProcessor.cpp:408`, `:429`; `MessageTagSkipTagProcessor.cpp:95`,
+  `:103`; `ReplaceTagProcessor.cpp:53`, `:87`, `:117`, `:158`, `:308`; `NebulaUi.cpp:131-134`;
+  `NebulaSettingsMenu.cpp:890`; `StaffRoll.cpp:647`; `TitleSequenceProduct.cpp:90`; `NebulaAchievementToast.cpp:54-64`
+  (writes them). The other 9 are other things (a sound id, effect floors, a timer, a colour, filter tables). The mod
+  surface writes the same records (`nebula_text_tags.h`, P-320), and the tag processors take one 16-bit code a
+  character (`TagProcessorBase.hpp:37-38`), so a character past U+FFFF cannot pass (P-187).
+- The form: the cook parses each message once into runs: text runs of code points (32-bit) and typed tag records
+  (kind, parameters, and a string of its own where the tag names one), with the message's run list and its plain text
+  apart. Readers walk runs; nothing scans for 0x1A or reads a length from inside the text (P-215 goes with it). The
+  tag processors take a code point; the cooked font maps code points by range (`NFNT` version 2, P-187). Mods and
+  Nebula's own text (`NebulaText.txt`) build runs through the same builder, decoded by the one UTF-8 decoder (P-209,
+  P-320).
+- Landings: (1) `NMSG` version 2 cooked beside version 1, the reader's run API, and a test that every message of
+  the three discs (RMGE01, RMGP01, RMGJ01) in every language gives the same characters and tags from both versions; (2) the
+  tag processors on runs; (3) `NebulaUi`, `NebulaSettingsMenu`, `NebulaAchievementToast`, `StaffRoll`,
+  `TitleSequenceProduct` and the mod surface on runs; (4) code points through the font (P-187); (5) version 1 and the
+  in-text format deleted, the search above then giving only the 9 other hits.
+- Proof: the text-layout test (every message's glyph sequence and pen positions, old path against new, every
+  language and region) identical through landings 1 to 4; the gate's pictures; a fuzz test of malformed tags against
+  the cook's parser; the search's count after landing 5.
