@@ -15,6 +15,7 @@ Each JSON file holds the wording of one page.
 | `play-saves.json`       | Saves                    |
 | `help.json`             | Help and troubleshooting |
 | `help-error-codes.json` | Error code guide         |
+| `donate.json`           | Donate                   |
 | `credits.json`          | Credits                  |
 | `legal.json`            | Legal and privacy        |
 | `not-found.json`        | Page not found (404)     |

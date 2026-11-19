@@ -55,6 +55,11 @@
     "copy": "content/pages/help-error-codes.json"
   },
   {
+    "path": "donate/",
+    "template": "templates/pages/donate.html",
+    "copy": "content/pages/donate.json"
+  },
+  {
     "path": "credits/",
     "template": "templates/pages/credits.html",
     "copy": "content/pages/credits.json"

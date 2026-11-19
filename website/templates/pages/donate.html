@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#050609" />
+    <link rel="icon" href="../favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" href="../favicon-32.png" />
+    <link rel="apple-touch-icon" href="../apple-touch-icon.png" />
+    <title>{{metadata.title}}</title>
+    <meta name="description" content="{{metadata.description}}" />
+    <meta property="og:title" content="{{metadata.title}}" />
+    <meta property="og:description" content="{{metadata.description}}" />
+    <link rel="preload" href="../fonts/Delfino.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="../style.css" />
+    <link rel="stylesheet" href="../reference-ui.css" />
+    <link rel="stylesheet" href="../player-site.css" />
+  </head>
+  <body class="inner-page">
+    <a class="skip" href="#main-content">{{text.general.link_1}}</a>
+    <header class="site-header">
+      <a class="brand" href="../" aria-label="{{text.header.aria_label_1}}"
+        ><img class="brand-logo" src="../brand-logo.png" alt="" width="34" height="34" />
+        {{text.header.link_1}}</a
+      ><button class="nav-toggle" aria-expanded="false" aria-controls="main-navigation">
+        {{text.header.button_1}} <span aria-hidden="true">{{text.header.label_2}}</span>
+      </button>
+      <nav id="main-navigation" aria-label="{{text.header.aria_label_2}}">
+        <a href="../v2/">{{text.header.link_2}}</a><a href="../guide/">{{text.header.link_3}}</a
+        ><a href="../play/">{{text.header.link_4}}</a
+        ><a href="../modding/docs/">{{text.header.link_5}}</a
+        ><a href="../help/">{{text.header.link_6}}</a><a href="../blog/">{{text.header.link_8}}</a
+        ><a aria-current="page" href="../donate/">{{text.header.link_9}}</a
+        ><a href="../download/">{{text.header.link_7}}</a>
+      </nav>
+    </header>
+    <main id="main-content" class="inner-main">
+      <div class="page-heading">
+        <a class="breadcrumb" href="../">{{text.page.link_1}}</a>
+        <p class="eyebrow">{{text.page.paragraph_1}}</p>
+        <h1>{{text.page.title_1}}</h1>
+        <p>{{text.page.paragraph_2}}</p>
+      </div>
+      <section class="content" id="ko-fi">
+        <div class="section-label">{{text.ko-fi.div_1}}</div>
+        <div class="section-body">
+          <h2>{{text.ko-fi.heading_1}}</h2>
+          <p>{{text.ko-fi.paragraph_1}}</p>
+          <p>{{text.ko-fi.paragraph_2}}</p>
+          <a class="button primary" href="https://ko-fi.com/keepvaibin" rel="noopener"
+            >{{text.ko-fi.link_1}}</a
+          >
+        </div>
+      </section>
+    </main>
+    <footer class="site-footer">
+      <div class="footer-top">
+        <a class="brand" href="../"
+          ><img class="brand-logo" src="../brand-logo.png" alt="" width="34" height="34" />
+          {{text.footer.link_1}}</a
+        >
+        <p>{{text.footer.paragraph_1}}</p>
+      </div>
+      <div class="footer-links">
+        <div>
+          <h3>{{text.footer.subheading_1}}</h3>
+          <a class="text-link" href="../v2/">{{text.footer.link_2}}</a
+          ><a class="text-link" href="../play/">{{text.footer.link_3}}</a
+          ><a class="text-link" href="../modding/docs/">{{text.footer.link_4}}</a
+          ><a class="text-link" href="../blog/">{{text.footer.link_15}}</a>
+        </div>
+        <div>
+          <h3>{{text.footer.subheading_2}}</h3>
+          <a class="text-link" href="../download/">{{text.footer.link_5}}</a
+          ><a class="text-link" href="../guide/">{{text.footer.link_6}}</a
+          ><a class="text-link" href="../play/controls/">{{text.footer.link_7}}</a>
+        </div>
+        <div>
+          <h3>{{text.footer.subheading_3}}</h3>
+          <a class="text-link" href="../help/">{{text.footer.link_8}}</a
+          ><a class="text-link" href="../help/#report">{{text.footer.link_9}}</a
+          ><a class="text-link" href="https://discord.gg/2fJEdhAw2f">{{text.footer.link_10}}</a>
+        </div>
+        <div>
+          <h3>{{text.footer.subheading_4}}</h3>
+          <a class="text-link" href="../credits/">{{text.footer.link_12}}</a
+          ><a class="text-link" href="../legal/">{{text.footer.link_13}}</a
+          ><a class="text-link" href="../donate/">{{text.footer.link_16}}</a
+          ><a class="text-link" href="https://github.com/keepvaibin/nebula"
+            >{{text.footer.link_14}}</a
+          >
+        </div>
+      </div>
+      <p class="legal-line">{{text.footer.paragraph_2}}</p>
+    </footer>
+    <script type="module" src="../site.js"></script>
+
+    {{runtimeMessages}}
+  </body>
+</html>
