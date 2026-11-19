@@ -7,9 +7,8 @@ hardware or SDK, not because of what the game does. The game's own rules, the fi
 the importer reading the disc once at setup stay.
 
 State (2026-11-18, the code of a1f423dd8): pass one run; pass two has read each area of `FRAME-MODEL.md` 1.10 for
-the console's shape, the 921 actor files by a pattern sweep with every hit read. Not read yet: the 921 files whole,
-`SoundArchive`, `ParticleResourceHolder`, `ErrorMessageArchive`, `EffectKeeper`'s extra emitters. Items open: the
-frame's rows (FRAME-MODEL 1.9), P-155, P-184, P-185, P-186, P-187. Not 100%.
+the console's shape, the 921 actor files by a pattern sweep with every hit read. Not read yet: the 921 files whole.
+Items open: the frame's rows (FRAME-MODEL 1.9), P-155, P-184, P-185, P-186, P-187, P-188. Not 100%.
 
 ## 1. Pass one: whole-tree searches
 
@@ -134,7 +133,9 @@ What is read so far (at a1f423dd8):
   (`game.pak`, `cook/store.rs`) through `AssetFolder` and `GameAssets::load` (`FileUtil.cpp:88`); `ResourceHolder`
   files a folder's entries into tables by the cooked kind (`ResourceHolder.hpp:22-29`, `NEBULA_ASSET_KIND_*`). No
   archive or compression is read while the game runs. Class: modern; nothing of the console's file system is left in
-  this path. Not yet read: `SoundArchive`, `ParticleResourceHolder`, `ErrorMessageArchive`.
+  this path. `SoundArchive` maps the cooked sound archive from the store (`SoundArchive.hpp:9-11`);
+  `ErrorMessageArchive.hpp` reads the cooked game data tables; `ParticleResourceHolder` (`ParticleResourceHolder.cpp:9-34`)
+  reads the cooked particles and their name table, and keeps a particle's index as 16 bits: P-188.
 - Input. The game takes one record per player per read, whatever the device (`nebula_game_api.h:287-322`,
   `NebulaInputSample`): buttons by the game's own names, the stick and the pointer in -1..1 of the picture, tilt in g,
   spins counted between reads. No report of the console's controller reaches the game. Class: modern. The timing of
@@ -159,8 +160,9 @@ What is read so far (at a1f423dd8):
   (`NameObjGroup::registerObj`, `NameObjGroup.cpp:15-23`, under `LiveActorGroup` and `MiiFacePartsHolder`), as do
   `MiiFaceIconHolder::registerIcon` (`MiiFaceIconHolder.cpp:27-34`), the clipping groups (`ClippingGroupHolder.cpp:23-24`,
   `room`) and the shadow's polygon lists (`MarioShadow.cpp:207`). Pools of actors made ahead (`DinoPackunVs2.cpp:34-35`:
-  64 and 16 fires) are how many fires the boss has: the game's. Not read: `EffectKeeper`'s extra emitters
-  (`MarioEffect.cpp:728`, `0xB8`). Inline arrays of
+  64 and 16 fires) are how many fires the boss has: the game's. `EffectKeeper`'s emitters (`MarioEffect.cpp:728`,
+  `0xB8` extra) are an `MR::Vector` sized to start at the model's effects and the extra (`EffectKeeper.cpp:59-61`,
+  `EffectKeeper.hpp:60`), so they grow too. Inline arrays of
   16 or more outside the actor folders: the collision query's and the draw rows' are small-buffer rooms that move to the
   heap past their size (`CollisionParts.cpp:299-317`, `TypedDraw.hpp`), the rest are the game's tables and text
   buffers.
@@ -212,4 +214,5 @@ Each: where; what of it is the console's; the modern form; row; state; proof.
 | Blur radii stretched for one wide shape only | `BloomEffectSimple.cpp:28`, `ImageEffectLocalUtil.cpp:146` (`isScreen16Per9() ? 1.333f : 1.0f`) | the console's two screen shapes, 4:3 and 16:9 | the vertical factor from the frame's aspect over 4:3, so the blur keeps its shape on every screen | P-185 | open | not yet |
 | Sound sequences' data kept in the console's byte order | `native/petari/src/Game/Sound/SeqTrack.cpp:29-37`, `:706-745`, `:1505-1525` | the sequence file's data section as the console stored it (big-endian), swapped at every read on the sound thread | the cook, which already decodes the operations, writes each table they read in host order and typed (envelope points, filter weights, 8-, 16-, 24-, 32-bit tables); the run time reads records | P-186 | open | not yet |
 | Characters as 16-bit codes | `native/petari/src/Game/Ui/CharStrmReader.cpp:10-33`, the font's two 256-entry pages (`native_data.rs:244-257`), `TagProcessorBase` (`u16 code`) | the console font format's code range (a character past U+FFFF cannot be drawn) | code points as 32-bit values through the readers, the tag processors and the cooked font (`NFNT` version 2: a code table by range) | P-187 | open | not yet |
+| Particle indices of 16 bits | `ParticleResourceHolder.cpp:24`, `:45-47` (rows past 65,534 are not named; `0xFFFF` is none), `SingleEmitter.hpp:32` (`u16 mResourceId`), `EffectSystemUtil.hpp:30`, `:54`, `MultiEmitter.cpp:379-391` | the console particle library's 16-bit resource index | a 32-bit index from the name table to the emitter | P-188 | open | not yet |
 | Texture headers in the console's form | `ResTIMG`, 137 lines in 59 files | the J3D texture header and its filter codes | a host id and a sampler resolved at load (E3 step 2) | P-155 | open (F4) | not yet |
