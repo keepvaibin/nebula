@@ -137,6 +137,25 @@ What is read so far (at a1f423dd8):
   16 or more outside the actor folders: the collision query's and the draw rows' are small-buffer rooms that move to the
   heap past their size (`CollisionParts.cpp:299-317`, `TypedDraw.hpp`), the rest are the game's tables and text
   buffers.
+- Byte swaps (pass one: runtime 28 lines, native/petari 14), each read. The console's byte order read while the game
+  runs: the sound sequences' data section (`SeqTrack.cpp:29-37` `be16`, `be24`, `be32`; envelope tables
+  `setOscTable` `:706-724`, filter weights `setFIR` `:739-745`, the table-reading operations `:1505-1525`): P-186.
+  The rest read data that is not the game's: the Wii Remote's own calibration report (`wiimote_input.cpp:149-158`), a
+  console save or Mii file the player imports (`save_transfer.cpp`, `mii_formats.cpp`: the importer of the player's
+  data, run when the player asks), a PNG header (`native_settings.cpp:2627-2632`), the update's signature
+  (`update_crypto.cpp:39-42`).
+- 60 Hz (pass one: 627 lines). Outside the game (runtime 101, native/host 6, native/include 5, platform 13), each read:
+  the game step and what follows it (`NEBULA_STEPS_PER_SECOND`, `game_step.h:10`, the pacing and interpolation code
+  that names the step's 60), the benchmark's "holds 60" verdict and graph lines (judged on the game's steps), the
+  frame-rate setting's default (`render_config.h:52`, `settings_table.tsv:41`: the game's own frames, 60, while
+  interpolation is off), and numbers that are not a rate (seconds, minutes, sizes, a touch opacity, table entries).
+  A frame count as a time: the VRAM report once an hour as 216,000 game frames (`render_core.cpp:1862`: game frames
+  are steps, so exact) and the Direct3D 12 timeline's clock pairing every 60 frames (`renderer_d3d12.cpp:3836-3841`,
+  a debug timeline, its period immaterial). No 60 Hz assumption of the console's found outside the step. Inside the
+  game outside the actor folders, every line naming a rate or a conversion was read: steps (`InputRumbleData`,
+  `GameSystemRestartProcess`, `NebulaAchievements`), clock arithmetic, the settings menu's 60 and 30 FPS graph lines,
+  and the old saves' times in the console's 60.75 MHz ticks, read and turned into seconds (`NebulaCalendar.hpp:11-15`:
+  saves now hold seconds). The actor folders: E14's sweep ("no clock or display rate outside System/LumaTime.cpp").
 - The 4:3 and 480-line hits (pass one, 111 lines), each read. The game's own: the 2D canvas of 456 lines and the
   layouts' 608 width (`NEBULA_AUTHORED_LINES`, `NebulaFrameClock.hpp:10-14`: units, "nothing renders at this size"),
   lines and points sized in lines of a 456-line picture (`FrameList.hpp:18`, `ParticleDraw.hpp:43`), gameplay numbers
@@ -164,6 +183,7 @@ Each: where; what of it is the console's; the modern form; row; state; proof.
 | The frame's rows | `FRAME-MODEL.md` 1.9 and 1.10 (pile B) | 1.9's parts | `FRAME-MODEL.md` part 2 | P-010, P-042 to P-181 as 1.10 and 2.6 place them; P-022 | open; P-022 parts 1-2 written on `rows/p022` | not yet |
 | A layout material's blend kept in the console's codes and turned into the renderer's at every draw | `native/petari/include/Game/Ui/UiData.hpp:163-182` (`mBlend`: type, factors, op as the console wrote them; `mAlphaCompare`: two compares packed in a byte; `mGenerators`: texture coordinate generators as type, source, matrix); `native/petari/src/Game/Ui/Material.cpp:702-714` (each draw maps the blend type, and the source factor's two destination-colour codes, to `NEBULA_BLEND_*`, `NEBULA_FACTOR_*`) | the console's blend and compare encodings in the cooked record | the cook writes the material's pass state word (`PassState`) and the compare in the renderer's terms; the draw copies it | P-184 | open | not yet |
 | Blur radii stretched for one wide shape only | `BloomEffectSimple.cpp:28`, `ImageEffectLocalUtil.cpp:146` (`isScreen16Per9() ? 1.333f : 1.0f`) | the console's two screen shapes, 4:3 and 16:9 | the vertical factor from the frame's aspect over 4:3, so the blur keeps its shape on every screen | P-185 | open | not yet |
+| Sound sequences' data kept in the console's byte order | `native/petari/src/Game/Sound/SeqTrack.cpp:29-37`, `:706-745`, `:1505-1525` | the sequence file's data section as the console stored it (big-endian), swapped at every read on the sound thread | the cook, which already decodes the operations, writes each table they read in host order and typed (envelope points, filter weights, 8-, 16-, 24-, 32-bit tables); the run time reads records | P-186 | open | not yet |
 | Columns found by name at every read | `native/petari/src/Game/Util/Table.cpp:33-48` (`searchItemInfo`: the column's hash searched over the fields on each `getValue` by name) | the console's JMapInfo access, cheap only for its small tables | not decided: pass two reads how often the game reads by name in a step | none yet | to read | not yet |
 | The game's movies decoded with the SDK's THP codec while the game runs | `runtime/src/movie_video.cpp`, `MovieStream.cpp` | the console's video codec; its IDCT order is P-118 (owner: stays) | not decided: pass two weighs a cook to a current codec against the decoder's cost | none yet | to read | not yet |
 | Texture headers in the console's form | `ResTIMG`, 137 lines in 59 files | the J3D texture header and its filter codes | a host id and a sampler resolved at load (E3 step 2) | P-155 | open (F4) | not yet |
