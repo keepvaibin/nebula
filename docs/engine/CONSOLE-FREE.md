@@ -6,9 +6,10 @@ else. Its test (that file, section 3): code, a data format, a limit or a timing 
 hardware or SDK, not because of what the game does. The game's own rules, the fixed 60 Hz game step, its content and
 the importer reading the disc once at setup stay.
 
-State (2026-11-18, the code of a1f423dd8): pass one run; pass two has read every area of `FRAME-MODEL.md` 1.10 for
-the console's shape, the 921 actor files by a pattern sweep with every hit read (a whole read is not done). Items
-open: the frame's rows (FRAME-MODEL 1.9), P-155, P-184, P-185, P-186, P-187. Not 100%.
+State (2026-11-18, the code of a1f423dd8): pass one run; pass two has read each area of `FRAME-MODEL.md` 1.10 for
+the console's shape, the 921 actor files by a pattern sweep with every hit read. Not read yet: the 921 files whole,
+`SoundArchive`, `ParticleResourceHolder`, `ErrorMessageArchive`, `EffectKeeper`'s extra emitters. Items open: the
+frame's rows (FRAME-MODEL 1.9), P-155, P-184, P-185, P-186, P-187. Not 100%.
 
 ## 1. Pass one: whole-tree searches
 
@@ -39,7 +40,7 @@ the patterns are these). Each cell is files/lines. `native/math` was searched to
 | Disc model and animation formats | `\b(BMD\|BDL\|BTK\|BRK\|BCK\|BTP\|BVA\|BPK\|BLK\|BMT)\b\|\.(bmd\|bdl\|btk\|brk\|bck\|btp\|bva\|bpk\|blk\|bmt)\b` | 2/2 | 0/0 | 7/7 | 3/3 | 0/0 | 12/78 |
 | Disc archive formats | `\b(RARC\|Yaz0\|SZS\|U8)\b\|\.(arc\|szs)\b` | 11/18 | 0/0 | 6/6 | 4/10 | 0/0 | 31/283 |
 | Disc table, text, layout and font formats | `\b(BCSV\|BMG\|BLO\|BRFNT\|BRLYT\|BRLAN\|BNR\|BCAM\|JMP)\b\|\.(bcsv\|bmg\|blo\|brfnt\|brlyt\|brlan\|bcam)\b` | 3/5 | 0/0 | 29/53 | 1/1 | 0/0 | 32/583 |
-| Disc sound formats | `\b(BRSAR\|BRSTM\|BRWSD\|BRBNK\|BRSEQ\|BRWAR\|BAS\|AST)\b\|\.(brsar\|...)\b` | 1/1 | 0/0 | 2/2 | 1/2 | 0/0 | 8/33 |
+| Disc sound formats | `\b(BRSAR\|BRSTM\|BRWSD\|BRBNK\|BRSEQ\|BRWAR\|BAS\|AST)\b\|\.(brsar\|brstm\|brwsd\|brbnk\|brseq\|brwar\|bas\|ast)\b` | 1/1 | 0/0 | 2/2 | 1/2 | 0/0 | 8/33 |
 | Disc particle formats | `\b(JPAC\|JEFFjpa\|JPC\|JPA1\|BREFF\|BREFT)\b\|\.(jpc\|breff\|breft)\b` | 1/1 | 0/0 | 1/1 | 0/0 | 0/0 | 7/18 |
 | Byte swaps | `bswap\|byteswap\|_byteswap_\|__builtin_bswap\|swap_endian\|byte_swap\|BigEndian\|big_endian\|be16\|be32\|\bswap16\b\|\bswap32\b` | 5/28 | 0/0 | 2/14 | 0/0 | 0/0 | 20/489 |
 | 60 Hz constants | `\b60(\.0+)?f?\b\|\b1\.0f? ?/ ?60\|\b16\.6+\|\b0\.0166` | 46/101 | 1/6 | 232/454 | 3/5 | 7/13 | 22/48 |
@@ -188,10 +189,10 @@ What is read so far (at a1f423dd8):
   that happen to be 448, 456, 480, 608, 640 (class ids, steps, sizes, the Bezier surface's weights), text buffers of
   640 bytes. The host's: the 480-line floor of the resolution fit and the PERFORMANCE preset (`resolution_fit.h:64-80`,
   `render_config.h:395-398`), the window's first height (`render_config.h:143`): choices of this port, not the
-  console's. To read further (not classed): effect targets sized in a 640 x 456 grid of authored texels and then given
-  to the renderer as a share of the frame (`NebulaFrameClock.hpp:15-17`, `GameTexture.cpp:66-72`: whether every
-  renderer sizes them by the share and not by the 640 is not yet read); the 16:9 picture as the console's anamorphic
-  832 units over a 640-unit scene (`display_aspect.h:21`). The blur radii made 1.333 taller at 16:9
+  console's. Effect targets are sized in a 640 x 456 grid of authored texels (`NebulaFrameClock.hpp:15-17`,
+  `GameTexture.cpp:66-72`); the one walker all four renderers share makes each target at the frame's real size, the
+  authored size times the frame map's scale (`draw_walker.cpp:1435-1439`): units, drawn at the real resolution. The
+  game's widescreen width of 832 units over its 640 (`display_aspect.h:21`) is likewise its 2D and camera units. The blur radii made 1.333 taller at 16:9
   (`BloomEffectSimple.cpp:28`, `ImageEffectLocalUtil.cpp:146`) are read: the radius is a fraction of the frame, so
   1.333 (16:9 over 4:3) keeps the console's shape on a 16:9 screen, but every wider shape gets 1.333 too: P-185.
 
@@ -206,7 +207,7 @@ Each: where; what of it is the console's; the modern form; row; state; proof.
 
 | Item | Where | The console's part | Modern form | Row | State | Proof |
 | --- | --- | --- | --- | --- | --- | --- |
-| The frame's rows | `FRAME-MODEL.md` 1.9 and 1.10 (pile B) | 1.9's parts | `FRAME-MODEL.md` part 2 | P-010, P-042 to P-181 as 1.10 and 2.6 place them; P-022 | open; P-022 parts 1-2 written on `rows/p022` | not yet |
+| The frame's rows | `FRAME-MODEL.md` 1.9 and 1.10 (pile B) | 1.9's parts | `FRAME-MODEL.md` part 2 | the rows 1.9 names, placed in steps by 2.6; P-022 among them | open; P-022 parts 1-2 written on `rows/p022` | not yet |
 | A layout material's blend kept in the console's codes and turned into the renderer's at every draw | `native/petari/include/Game/Ui/UiData.hpp:163-182` (`mBlend`: type, factors, op as the console wrote them; `mAlphaCompare`: two compares packed in a byte; `mGenerators`: texture coordinate generators as type, source, matrix); `native/petari/src/Game/Ui/Material.cpp:702-714` (each draw maps the blend type, and the source factor's two destination-colour codes, to `NEBULA_BLEND_*`, `NEBULA_FACTOR_*`) | the console's blend and compare encodings in the cooked record | the cook writes the material's pass state word (`PassState`) and the compare in the renderer's terms; the draw copies it | P-184 | open | not yet |
 | Blur radii stretched for one wide shape only | `BloomEffectSimple.cpp:28`, `ImageEffectLocalUtil.cpp:146` (`isScreen16Per9() ? 1.333f : 1.0f`) | the console's two screen shapes, 4:3 and 16:9 | the vertical factor from the frame's aspect over 4:3, so the blur keeps its shape on every screen | P-185 | open | not yet |
 | Sound sequences' data kept in the console's byte order | `native/petari/src/Game/Sound/SeqTrack.cpp:29-37`, `:706-745`, `:1505-1525` | the sequence file's data section as the console stored it (big-endian), swapped at every read on the sound thread | the cook, which already decodes the operations, writes each table they read in host order and typed (envelope points, filter weights, 8-, 16-, 24-, 32-bit tables); the run time reads records | P-186 | open | not yet |
