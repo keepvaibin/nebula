@@ -534,14 +534,14 @@ this cooker keeps loading. A model of another version stops the load today witho
 | `JNTS`, `STEP`, `JMSH`, `DMTX`, `ENVL`, `MIXS`, `IBND`, `IMPT`, `MESH`, `TEXR`, `GEOM`, `NAME` | 12's arrays as they are, by name instead of by fixed offset | the first landing (step 1's) | kept |
 | `MATL` | per material: name, `same_as`, mesh, joint, state word, its forms' and slots' ranges | step 1 | kept |
 | `GXMT` | the console's material fields, apart: registers, constant and material colours, channels, alpha codes and references, coordinate generators by GX type and source, fog codes | step 1 (moved out of the material) | the last landing of step 3: no reader is left, and the cooker stops writing it |
-| `FORM` | per form: programs and inputs (the state word is the material's, 2.9); added with their first reader (2.9): its kind (opaque, alpha-tested, blended, water), the alpha cutoff as a float and its mode, the glow row and colour, the base map's slot, which texture or vertex colour is baked light, each coordinate's source (one that reads the eye is marked), reads a copy of the screen, two-sided; its ranges in `TXLS`, `CBLK`, `CROW` | step 1 | kept |
+| `FORM` | per form: programs and inputs (the state word is the material's, 2.9); added with their first reader (2.9): its kind (opaque, alpha-tested, blended, water), the alpha cutoff as a float and its mode, the glow row and colour, the base map's slot, which texture or vertex colour is baked light, each coordinate's source (one that reads the eye is marked), reads a copy of the screen, two-sided; its ranges in `FTEX`, `CBLK`, `CROW` | step 1 | kept |
 | `SAMP` | samplers in final form: min, mag and mip filter, wrap, anisotropy, lod range and bias as floats | step 2 | kept |
-| `TXLS` | per form, its texture list: texture and sampler by index | step 2 | kept |
+| `FTEX` | per form, its texture list: the material's map numbers; a texture names its sampler (`TEXR`, 2.10) | step 1 (2.9) | kept |
 | `CBLK` | per form, its constant rows in final floats (colours divided once, the alpha reference a float, fog per view, not per draw) | step 3 | kept |
-| `CROW` | per form, the rows that change: the row, its source (coordinate matrix n, colour track n, register n, ambient from the item's light set) and how it is written (a copy, three matrix rows) | step 3 | kept |
+| `CROW` | per form, every row's source (a coordinate matrix, register, constant, material or ambient colour, fog, the replacing pass's values, a map's size, or none) and how it is written (a copy, three matrix rows); which rows change is decided at run time by the sources written (2.11) | step 3 | kept |
 
 Step 4's records are the game's own, made at load (2.7.1): no model section. Particle materials go through the effect
-cook (`luma_content_fx.h`), whose material entry takes the same `FORM`, `TXLS`, `CBLK` and `CROW` fields; that cook's
+cook (`luma_content_fx.h`), whose material entry takes the same `FORM`, `FTEX`, `CBLK` and `CROW` fields; that cook's
 format has the same section table from step 4's first landing. Step 5 changes no file. Step 6's lights come from the
 stage's light tables, read by the game; if the cook of those tables changes, it is in their own file, not the model.
 
@@ -730,8 +730,8 @@ landing.
 | `MATL` | `name_at`, `name_hash`, `same_as`, `mesh`, `joint`; `flags`: translucent (12's `mode & 3` is 0, decided at the cook), normal scale (12's `has_scale`), on a billboard; `state`; `light_masks[4]` (a channel's mask, 0 when 12's `enable` is 0); `gx` (its `GXMT` entry); `first_slot`, `slot_count`; `first_form`, `form_count`; `normal_scale[3]` | 64 | kept |
 | `FORM` | `vertex`, `pixel` (the programs' hashes); `material`; `first_vertex_row`, `vertex_row_count`, `first_pixel_row`, `pixel_row_count` (in `FROW`); `first_texture`, `texture_count` (in `FTEX`); `first_input`, `input_count` (in `FINP`); `replace`, `flags`, `pass` as in 12 | 56 | kept |
 | `FINP` | a form's vertex inputs, `NEBULA_INPUT_*` | 1 | kept |
-| `SLOT` | 12's `NebulaModelSlot` | 8 | kept: map n is what the game's texture animation changes (`Material::setTextureIndex`, from `BtpPlayer.cpp:17`); step 2 says whether `TXLS` takes its texture column |
-| `FTEX` | a form's material map numbers | 1 | until step 2's last landing (`TXLS`) |
+| `SLOT` | 12's `NebulaModelSlot` | 8 | kept: map n is what the game's texture animation changes (`Material::setTextureIndex`, from `BtpPlayer.cpp:17`); its texture column stays (2.10) |
+| `FTEX` | a form's material map numbers | 1 | kept (2.10: no `TXLS`) |
 | `FROW` | a form's rows, `NEBULA_ROW_*`, vertex rows then pixel rows | 4 | until step 3's last landing (`CBLK`, `CROW`) |
 | `GXMT` | `flags` (ambient, stage colours, indirect, fog); material and ambient colours; registers; constants; `alpha_ref0`, `alpha_ref1`; fog; `first_coord`, `coord_count`; `first_matrix`, `matrix_count`; `first_warp`, `warp_count` | 120 | until step 3's last landing |
 | `GXTG` | coordinate generators, 12's `NebulaModelCoord` | 8 | until step 3's last landing |
@@ -831,3 +831,113 @@ Read at c8222595e.
 - The gate's pictures on every stop and renderer unchanged, the replay identical.
 - `git grep -n "mMinType" native/petari/src/Game/Render/Material.cpp` and `RenderTexture::idOf` in the same file: 0.
 - The walk's time per frame on the play route on the PC and the tablet, before and after (file 08 7.4: never slower).
+
+### 2.11 Step 3: a form's constant rows written at the cook, the game writing only what changes
+
+Read at cfc2e368e.
+
+**Today.**
+
+1. A form names its constant rows by the console's registers: `NEBULA_ROW_*` (`nebula_model.h:138-155`), a kind and
+   an index: registers 1 to 3, constant colours 0 to 3, material and ambient colours, fog, fog colour, the alpha
+   reference, the replacing pass's values, and per coordinate its scale, its warp rows and its three matrix rows. 2.9
+   keeps the lists as `FROW`.
+2. The game turns each into four floats in `Material::fillRow` (`Material.cpp:296-424`), one case per kind: bytes and
+   the registers' 16-bit values divided by 255 at every fill, the alpha reference divided by 255, a scale row read from
+   the texture header of the map's current texture (`:350-371`), a coordinate's rows from its matrix, and for a
+   billboard's matrix that reads the eye, multiplied by the step's view (`:313-324`, `ModelSys::mViewMtx`).
+3. `MaterialDraw::constantsOf` (`:713-768`): a form whose material nothing has touched since it was registered is one
+   registered slot (`:730-741`; slots are content-addressed and kept for the registries' life, `registries.cpp:615-638`,
+   `:538`). Any other form
+   is filled whole into the frame's arena once a frame, or at every draw when the draw edits it (`:743-767`), and the
+   edits are copied over the filled rows (`applyEdits`, `:641-679`). One `touch()` (`Material.hpp:235-237`) moves a
+   material to the per-frame fill for good (P-173), and the getters touch even to read (`Material.hpp:180-183`,
+   `:195-218`): `NormalMapBase::drawMaterialSetting` only reads a material's colours (`NormalMapBase.cpp:359-385`) and
+   the mod call that lists a model's materials only reads their coordinates (`NebulaModCalls.cpp:129-131`), and each
+   moves those materials to the per-frame fill.
+   `Material::calc` copies every coordinate matrix before and after its calc and compares them (`Material.cpp:262-276`).
+4. The ambient colours are a global pair (`MaterialAmbient`): set by each actor's light load
+   (`LightFunction.cpp:189`), by a material with its own ambient when it is sent (`Material.cpp:481-488`), and to black
+   by the 2-D layers (`Ui/Material.cpp:749-750`, `DrawUtil.cpp:32-33`). A form that reads them is filled again when the
+   pair's generation changes in the plain module, and at every draw in a module with hook points
+   (`Material.cpp:746-750`); a material that reads the pair after another set it reads that one's.
+5. The render thread (`draw_walker.cpp:588-612`, `:620-664`): a slot is used as it is; a form's rows in the list are
+   copied into the constant ring at each walk, and between two steps mixed component by component, coordinate rows as
+   matrices (`tex_matrix_at`, `:659`), when the same form's rows of the step before are found by pairing. The frame's
+   ring is sized for every listed form's rows (`render_core.cpp:1906-1910`).
+
+Who writes, at run time (`git grep` of each setter over `native/petari`):
+
+| What | Writers |
+| --- | --- |
+| a coordinate matrix | clips (`BtkPlayer.cpp:19-23`); `MaterialCtrl.cpp:143`, `:198`, `:256` |
+| registers 0 to 2, constant colours | clips (`BrkPlayer.cpp:16`, `:23`, rounded to the console's 11-bit and byte forms, `Clip.cpp:124-133`, `:169-184`); mods (`LumaContentModel.cpp:760-793`, a mod's floats rounded to steps of 1/255 and clamped to the console's ranges, `:775-778`) |
+| a material colour | clips (`BpkPlayer.cpp:15`); `MaterialCtrl.cpp:71` |
+| a map's texture (its scale rows) | clips (`BtpPlayer.cpp:17`) |
+| one draw's values | `PlayerModel.cpp:107-145`, `:237-292` (registers, colours, fog, opacity, the screen as map 0); `MarioSearchLight.cpp:268-326` (the replacing pass's values); `ElectricRailMoving.cpp:85-86`; `FlexibleSphere.cpp:42-45` |
+
+The cook knows which registers the game's register clips write, by material name (`programs.rs:1853-1891`, from every
+`.brk` of the disc, `:1630-1641`), and folds the rest into the programs; it does not know what game code or a mod
+writes.
+
+**The file.**
+
+- `CBLK`: per form, every row in final floats, as `fillRow` gives it at load for the material's cooked values (colours
+  divided once, the alpha reference a float, the scale rows from the cooked texture sizes, a coordinate's rows from its
+  cooked matrix). The `PLAYER_OPACITY` form's alpha reference is written 0, the pass's edit (`Material.cpp:551-553`).
+- `CROW`: per form, per row, its source and how it is written: a coordinate matrix n (three rows, or two for a warp),
+  register n, constant n, material colour n, ambient n, fog, fog colour, the replacing pass's values, map n's size (a
+  scale row: map n and its scale map, `:350-371`), or none (a row nothing writes, the warp rows when the material has
+  no indirect stage, `:334-339`). A coordinate that reads the eye under a billboard is marked: its view is applied by
+  the render thread per picture, not by the game per step.
+- 2.7.2's `CROW` held only rows that change. Since game code and mods write any register of any material, which rows
+  change is not known at the cook; every row names its source, and what changes is decided at run time by which
+  sources were written. 2.7.2 is corrected by this.
+- `FROW` and `GXMT`, `GXTG`, `GXTM`, `GXWP` go with this step's last landing. The cook keeps the console's codes only
+  as its input.
+
+**The engine.**
+
+- The game holds, per material it draws, the sources' values (a few float4s), and no rows. A clip, a game call or a
+  mod writes a source; the write marks it changed for the step. The game's setters take floats: the colour getters
+  that hand out a writable pointer and touch to read go; `Material::calc`'s before-and-after compare goes, a matrix's
+  calc reports whether it changed.
+- At load the game registers each form's `CBLK` once (`material_register`, as the plain path today) and its `CROW` with
+  it. A material written since its load (its own copy, `Model::ownMaterial`) has an instance: one record of its
+  sources' values on the render thread, made at the first write. Per step the list carries only the sources written
+  that step: `(instance, source, value)`. A draw's own values (the last row of the writers' table) ride on the item
+  as its sources, as `MaterialDraw`'s edits do today, without a whole block in the arena.
+- The render thread keeps each instance's block in GPU memory, built from the form's `CBLK` and `CROW` with the
+  instance's sources, and writes it again only in a frame where one of its sources changed (a block per frame in
+  flight while it changes, then one). Between two steps it mixes only the changed sources, a coordinate matrix as a
+  matrix, as today's walk does for the whole block. So a material written once returns to a block written once (P-173),
+  and `fillRow`, `applyEdits` and the per-frame fill go (P-151).
+- The ambient pair: in this step the ambient in effect is a source of the list, written when the global pair changes,
+  and an item names the entry in effect at its draw, as a light set is named; the picture of a draw that reads another
+  material's ambient is unchanged. Step 6 moves it into the item's light set and removes `MaterialAmbient`.
+- Clip colours: the first landing keeps the clips' and the mod call's rounding, so its pictures are unchanged. A
+  later landing of the step gives sources the clips' floats and the mod's floats as given, with its pictures looked at
+  and approved and the mod call's text updated (LumaCore's `content.model.set_param`).
+- P-060 and P-064, the Direct3D 11 constant uploads, are placed with this step by 2.6. Today `write_roots`
+  (`renderer_d3d11.cpp:1087` on) appends with `NO_OVERWRITE` where the device allows and discards only when the run does
+  not fit, and `upload_written` (`d3d11_context.cpp:509-559`) skips buffers with no video-memory copy and copies the
+  written pages. With this step the constant ring carries only changed blocks; both rows are measured again at its
+  landing (pages written per frame on Direct3D 11 on the play route), and closed or rewritten by what that shows.
+
+**Groups.** As 2.7.3: plain unlit, plain lit, alpha-tested, blended, water and indirect, billboard materials, each
+replacing pass. The billboard group moves the eye's view to the render thread; its in-between pictures change, its
+pictures at a step do not.
+
+**Proof.**
+
+- A test in `crates/nebula-import`: for every form of every model of the US disc, `CBLK` equals the rows `fillRow`
+  gives the cooked material (the rule restated in Rust from `Material.cpp:296-424`, checked against a dump of the game's
+  own fill for the tour's models), and each `CROW` entry names the source that rule reads.
+- A C test of the render thread's block: a form's block from `CBLK` and `CROW` with a set of sources equals the rows
+  of today's fill and edit for the same values; between two steps the mixed block equals today's mix.
+- The gate's pictures of both paths on every stop and renderer (2.7.4) equal, and the replay identical.
+- A count from a test run: the bytes of constants the list carries per frame and the blocks the render thread writes,
+  before and after, on the play route and in the tours' animated stops (P-151 asked for a fill count in
+  HoneyBeeKingdom and SeaGalaxy); after the last landing, materials on a per-frame fill: 0.
+- `git grep -n "NEBULA_ROW_\|fillRow\|MaterialAmbient" native runtime platform`: 0 after step 6.
+- The walk's time and the game step's time on the PC and the tablet, before and after (file 08 7.4: never slower).
