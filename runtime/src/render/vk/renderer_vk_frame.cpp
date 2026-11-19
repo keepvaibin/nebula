@@ -3542,7 +3542,13 @@ void RendererVk::set_debug_capture_paths(std::string backbuffer_ppm_path) {
 std::shared_ptr<vk::Buffer> RendererVk::capture_buffer(std::uint64_t bytes, const char* name) {
     std::shared_ptr<vk::Buffer> readback =
         captures_.spare([bytes](const std::shared_ptr<vk::Buffer>& kept) { return kept->size >= bytes; });
-    return readback ? readback : vk::Context::get().create_readback_buffer(bytes, name);
+    if (!readback) {
+        readback = vk::Context::get().create_readback_buffer(bytes, name);
+    }
+    if (!readback) {
+        std::cerr << "[capture] no readback for the " << name << " (" << bytes << " bytes): the picture is not written\n";
+    }
+    return readback;
 }
 
 bool RendererVk::debug_copy_selected_display_to_readback(const DisplayTexture& source) {

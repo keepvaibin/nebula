@@ -37,6 +37,9 @@
     },
     {
       "no_log": "the renderer kept the surface past 2 s"
+    },
+    {
+      "no_log": "\\[capture\\] no readback for the"
     }
   ]
 }

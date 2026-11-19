@@ -658,7 +658,13 @@ void write_rgb(std::string path, const std::uint8_t* rgba, unsigned width, unsig
 std::shared_ptr<mtl::Buffer> RendererMtl::capture_buffer(std::uint64_t bytes, const char* name) {
     std::shared_ptr<mtl::Buffer> readback =
         captures_.spare([bytes](const std::shared_ptr<mtl::Buffer>& kept) { return kept->size >= bytes; });
-    return readback ? readback : mtl::Context::get().create_buffer(bytes, mtl::Storage::Shared, name);
+    if (!readback) {
+        readback = mtl::Context::get().create_buffer(bytes, mtl::Storage::Shared, name);
+    }
+    if (!readback) {
+        std::cerr << "[capture] no readback for the " << name << " (" << bytes << " bytes): the picture is not written\n";
+    }
+    return readback;
 }
 
 bool RendererMtl::debug_copy_selected_display_to_readback(const DisplayTexture& source) {

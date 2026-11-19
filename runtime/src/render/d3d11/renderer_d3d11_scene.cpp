@@ -1294,6 +1294,7 @@ d3d11::ComPtr<ID3D11Texture2D> RendererD3D11::capture_staging(unsigned width, un
         return had.Width == width && had.Height == height && had.Format == format;
     });
     if (!staging && !ensure_staging(staging, width, height, format)) {
+        std::cerr << "[capture] no readback for the " << width << 'x' << height << " picture: the picture is not written\n";
         return {};
     }
     return staging;
