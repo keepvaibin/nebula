@@ -274,10 +274,10 @@ public:
     [[nodiscard]] bool record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes, bool compared);
     [[nodiscard]] const float* screen_probes_finished(std::size_t slot);
 
-    // Test captures: the presented picture as PPM files (paths from set_debug_capture_paths).
+    // Test captures: the presented picture as PPM files (paths from set_debug_capture_paths). Writes every capture
+    // whose frame the GPU has finished.
     void debug_log_backbuffer_readback();
     bool debug_copy_selected_display_to_readback(const DisplayTexture& source);
-    void debug_log_display_readback();
     void set_debug_capture_paths(std::string backbuffer_ppm_path);
 
     [[nodiscard]] gpu::Device* device() const noexcept { return static_cast<gpu::Device*>(mtl::Context::get().device()); }
@@ -359,10 +359,6 @@ private:
         gpu::TextureRef texture;
         unsigned width = 0;
         unsigned height = 0;
-    };
-    struct Readback {
-        std::shared_ptr<mtl::Buffer> buffer;  // shared memory
-        std::uint64_t fence = 0;              // 0: idle
     };
     // A scene target: its colour and depth, and with MSAA the multisampled targets the pass draws into (the colour
     // resolves into `color` as each pass ends; the depth is resolved on demand, resolve_scene_depth).
@@ -750,16 +746,12 @@ private:
 
     // Captures and telemetry.
     std::string backbuffer_capture_path_;
-    Readback backbuffer_capture_;
-    std::string backbuffer_capture_pending_path_;
-    unsigned backbuffer_capture_width_ = 0;
-    unsigned backbuffer_capture_height_ = 0;
     gpu::TextureRef capture_target_;  // the presented picture drawn again for a capture (RGBA8)
-    Readback display_capture_;
-    std::string display_capture_pending_path_;
-    unsigned display_capture_width_ = 0;
-    unsigned display_capture_height_ = 0;
-    bool display_capture_ten_bit_ = false;
+    // The pictures copied out (the presented picture and the display picture), each its own shared buffer.
+    using Captures = PictureCaptures<std::shared_ptr<mtl::Buffer>>;
+    Captures captures_;
+    // A buffer for a capture of `bytes`: a spare one, or a new one.
+    [[nodiscard]] std::shared_ptr<mtl::Buffer> capture_buffer(std::uint64_t bytes, const char* name);
     // The picture as the window shows it, drawn into `target` (an id<MTLTexture> of the layer's size and `format`):
     // black, the picture in its content rectangle through the post chain's last pass or the plain blit.
     void draw_presented_picture(mtl::Object target, mtl::Format format, const mtl::Texture& picture,

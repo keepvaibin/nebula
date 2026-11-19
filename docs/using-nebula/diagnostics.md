@@ -78,7 +78,7 @@ Every check that starts the game is a harness test: a `test.json` that `tools/lu
 
 | Where | What |
 |---|---|
-| `tests/engine` | The engine's own tests: the start, device loss, window shapes and live resizing, stage loads as Luigi, save files. |
+| `tests/engine` | The engine's own tests: the start, device loss, window shapes and live resizing, pictures on frames in a row, stage loads as Luigi, save files. |
 | `tools/gate/gate_tour.py` | The galaxy tour (`tools/verify/tours/tour_enterable.txt`) as harness tests. |
 | `tests/mods` | The mod engine's tests (`tools/lumacore/mod_tests.py`). |
 | `tools/gate/pictures.py` | The approved pictures of each test and renderer, checked exactly, and approved after review. |

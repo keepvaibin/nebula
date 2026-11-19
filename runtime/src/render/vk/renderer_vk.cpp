@@ -1815,9 +1815,7 @@ void RendererVk::shutdown() {
         }
         probe_slots_.clear();
         held_probe_slots_.clear();
-        backbuffer_capture_ = Readback{};
-        display_capture_ = Readback{};
-        display_capture_pending_path_.clear();
+        captures_.clear();
         vertex_ring_.reset();
         index_ring_.reset();
         constant_ring_.reset();
@@ -2171,13 +2169,7 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
             probes.fence = fence;
         }
     }
-    if (backbuffer_capture_.buffer && backbuffer_capture_.fence == 0u &&
-        !backbuffer_capture_pending_path_.empty()) {
-        backbuffer_capture_.fence = fence;
-    }
-    if (display_capture_.buffer && display_capture_.fence == 0u && !display_capture_pending_path_.empty()) {
-        display_capture_.fence = fence;
-    }
+    captures_.submitted(fence);
     if (on_submitted != nullptr) {
         on_submitted(submission_context, fence);
     }
@@ -3063,11 +3055,11 @@ bool RendererVk::capture_sdr_picture(VkCommandBuffer commands, const vk::Texture
             }
         }
     }
-    const std::uint64_t bytes = static_cast<std::uint64_t>(width) * height * 4u;
-    if (!backbuffer_capture_.buffer || backbuffer_capture_.buffer->size < bytes) {
-        backbuffer_capture_.buffer = context.create_readback_buffer(bytes, "backbuffer capture");
+    if (!hdr_capture_) {
+        return false;
     }
-    if (!hdr_capture_ || !backbuffer_capture_.buffer) {
+    std::shared_ptr<vk::Buffer> readback = capture_buffer(static_cast<std::uint64_t>(width) * height * 4u, "backbuffer capture");
+    if (!readback) {
         return false;
     }
     VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
@@ -3096,14 +3088,9 @@ bool RendererVk::capture_sdr_picture(VkCommandBuffer commands, const vk::Texture
     VkBufferImageCopy region{};
     region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
     region.imageExtent = {width, height, 1};
-    vkCmdCopyImageToBuffer(commands, hdr_capture_->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                           backbuffer_capture_.buffer->buffer, 1, &region);
+    vkCmdCopyImageToBuffer(commands, hdr_capture_->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, readback->buffer, 1, &region);
     hdr_capture_->layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    backbuffer_capture_.fence = 0u;
-    backbuffer_capture_pending_path_ = backbuffer_capture_path_;
-    backbuffer_capture_width_ = width;
-    backbuffer_capture_height_ = height;
-    backbuffer_capture_bgra_ = false;
+    captures_.recorded({std::move(readback), 0u, backbuffer_capture_path_, width, height, width * 4u, Captures::Form::Rgba8});
     return true;
 }
 
@@ -3262,19 +3249,16 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
     };
 
     // Screenshots and test pictures stay SDR: an HDR10 image is not one the gates compare, so the SDR picture is drawn again.
-    if (capture_backbuffer && swapchain_.hdr && !backbuffer_capture_path_.empty() && backbuffer_capture_pending_path_.empty() &&
+    if (capture_backbuffer && swapchain_.hdr && !backbuffer_capture_path_.empty() &&
         capture_sdr_picture(commands, *shown, content, allocate)) {
         hand_to_amd();
         return true;
     }
-    if (capture_backbuffer && swapchain_.copyable && !swapchain_.hdr && !backbuffer_capture_path_.empty() &&
-        backbuffer_capture_pending_path_.empty()) {
+    if (capture_backbuffer && swapchain_.copyable && !swapchain_.hdr && !backbuffer_capture_path_.empty()) {
         // The finished image, copied out for a test snapshot (PRESENT_SRC -> TRANSFER_SRC and back).
-        const std::uint64_t bytes = static_cast<std::uint64_t>(bb_w) * bb_h * 4u;
-        if (!backbuffer_capture_.buffer || backbuffer_capture_.buffer->size < bytes) {
-            backbuffer_capture_.buffer = context.create_readback_buffer(bytes, "backbuffer capture");
-        }
-        if (backbuffer_capture_.buffer) {
+        std::shared_ptr<vk::Buffer> readback =
+            capture_buffer(static_cast<std::uint64_t>(swapchain_.image.width) * swapchain_.image.height * 4u, "backbuffer capture");
+        if (readback) {
             image_barrier(commands, swapchain_.images[image], VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                           VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_COPY_BIT,
@@ -3282,15 +3266,13 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
             VkBufferImageCopy region{};
             region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
             region.imageExtent = {swapchain_.image.width, swapchain_.image.height, 1};
-            vkCmdCopyImageToBuffer(commands, swapchain_.images[image], VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                                   backbuffer_capture_.buffer->buffer, 1, &region);
+            vkCmdCopyImageToBuffer(commands, swapchain_.images[image], VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, readback->buffer, 1,
+                                   &region);
             image_barrier(commands, swapchain_.images[image], VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::CopySource,
                           gpu::Use::Present, gpu::Contents::Keep, 1u);
-            backbuffer_capture_.fence = 0u;
-            backbuffer_capture_pending_path_ = backbuffer_capture_path_;
-            backbuffer_capture_width_ = swapchain_.image.width;
-            backbuffer_capture_height_ = swapchain_.image.height;
-            backbuffer_capture_bgra_ = swapchain_.format == VK_FORMAT_B8G8R8A8_UNORM;
+            captures_.recorded({std::move(readback), 0u, backbuffer_capture_path_, swapchain_.image.width,
+                                swapchain_.image.height, swapchain_.image.width * 4u,
+                                swapchain_.format == VK_FORMAT_B8G8R8A8_UNORM ? Captures::Form::Bgra8 : Captures::Form::Rgba8});
             hand_to_amd();
             return true;
         }

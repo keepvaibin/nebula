@@ -384,7 +384,7 @@ void RendererD3D11::shutdown() {
         target_slots_.clear();
         pictures_.clear();
         frame_pass_targets_.clear();
-        backbuffer_capture_ = display_capture_ = Readback{};
+        captures_.clear();
         probe_slots_.clear();
         for (Frame& frame : frames_) {
             frame = Frame{};
@@ -697,12 +697,7 @@ std::uint64_t RendererD3D11::end_frame(bool present_swap_chain, SubmissionCallba
             probes.fence = fence;
         }
     }
-    if (backbuffer_capture_.staging && backbuffer_capture_.fence == 0u && !backbuffer_capture_pending_path_.empty()) {
-        backbuffer_capture_.fence = fence;
-    }
-    if (display_capture_.staging && display_capture_.fence == 0u && !display_capture_pending_path_.empty()) {
-        display_capture_.fence = fence;
-    }
+    captures_.submitted(fence);
     if (on_submitted != nullptr) {
         on_submitted(submission_context, fence);
     }
@@ -1368,6 +1363,10 @@ bool RendererD3D11::present(const DisplayTexture* source, bool capture_backbuffe
         content = galaxy::ContentViewport{0, 0, bb_w, bb_h};
     }
     (void)galaxy::g_presentation_content.publish(bb_w, bb_h, content);
+    if (capture_backbuffer && !present_black_) {
+        // A test snapshot also keeps the picture itself, before it is scaled to the window.
+        static_cast<void>(debug_copy_selected_display_to_readback(*source));
+    }
     draw_presented_picture(backbuffer_rtv_.Get(), *source->texture, source->width, source->height, content);
     // The swap chain's buffer is not bound past here: the flip model takes it at present.
     context()->OMSetRenderTargets(0u, nullptr, nullptr);
@@ -1375,29 +1374,16 @@ bool RendererD3D11::present(const DisplayTexture* source, bool capture_backbuffe
     host_window::native_settings_present();
     reset_draw_bindings();
     // A test capture of the presented picture: the buffer as drawn, copied before the present takes it.
-    if (capture_backbuffer && !present_black_ && !backbuffer_capture_path_.empty() && backbuffer_capture_pending_path_.empty()) {
+    if (capture_backbuffer && !present_black_ && !backbuffer_capture_path_.empty()) {
         d3d11::ComPtr<ID3D11Texture2D> buffer;
-        D3D11_TEXTURE2D_DESC desc{};
         if (SUCCEEDED(swap_chain_->GetBuffer(0u, IID_PPV_ARGS(&buffer)))) {
+            D3D11_TEXTURE2D_DESC desc{};
             buffer->GetDesc(&desc);
-            desc.BindFlags = 0u;
-            desc.MiscFlags = 0u;
-            desc.Usage = D3D11_USAGE_STAGING;
-            desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
-            D3D11_TEXTURE2D_DESC had{};
-            if (backbuffer_capture_.staging) {
-                backbuffer_capture_.staging->GetDesc(&had);
-            }
-            if (!backbuffer_capture_.staging || had.Width != desc.Width || had.Height != desc.Height) {
-                backbuffer_capture_.staging.Reset();
-                (void)d3d11::Context::get().device()->CreateTexture2D(&desc, nullptr, &backbuffer_capture_.staging);
-            }
-            if (backbuffer_capture_.staging) {
-                context()->CopyResource(backbuffer_capture_.staging.Get(), buffer.Get());
-                backbuffer_capture_.fence = 0u;
-                backbuffer_capture_pending_path_ = backbuffer_capture_path_;
-                backbuffer_capture_width_ = desc.Width;
-                backbuffer_capture_height_ = desc.Height;
+            d3d11::ComPtr<ID3D11Texture2D> staging = capture_staging(desc.Width, desc.Height, desc.Format);
+            if (staging) {
+                context()->CopyResource(staging.Get(), buffer.Get());
+                captures_.recorded({std::move(staging), 0u, backbuffer_capture_path_, desc.Width, desc.Height, 0u,
+                                    desc.Format == DXGI_FORMAT_R10G10B10A2_UNORM ? Captures::Form::TenBit : Captures::Form::Rgba8});
                 return true;
             }
         }

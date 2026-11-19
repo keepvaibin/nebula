@@ -1276,15 +1276,10 @@ void RendererD3D11::finish_pictures() {
     if (context.ready()) {
         // A copy recorded since the last frame's end is fenced here, as that end would have fenced it.
         const std::uint64_t fence = context.signal();
-        if (backbuffer_capture_.staging && backbuffer_capture_.fence == 0u && !backbuffer_capture_pending_path_.empty()) {
-            backbuffer_capture_.fence = fence;
-        }
-        if (display_capture_.staging && display_capture_.fence == 0u && !display_capture_pending_path_.empty()) {
-            display_capture_.fence = fence;
-        }
+        captures_.submitted(fence);
         (void)context.wait(fence);
     }
-    debug_log_backbuffer_readback();  // the display picture's too
+    debug_log_backbuffer_readback();
     wait_picture_files();
 }
 
@@ -1292,9 +1287,20 @@ void RendererD3D11::set_debug_capture_paths(std::string backbuffer_ppm_path) {
     backbuffer_capture_path_ = std::move(backbuffer_ppm_path);
 }
 
+d3d11::ComPtr<ID3D11Texture2D> RendererD3D11::capture_staging(unsigned width, unsigned height, DXGI_FORMAT format) {
+    d3d11::ComPtr<ID3D11Texture2D> staging = captures_.spare([&](const d3d11::ComPtr<ID3D11Texture2D>& kept) {
+        D3D11_TEXTURE2D_DESC had{};
+        kept->GetDesc(&had);
+        return had.Width == width && had.Height == height && had.Format == format;
+    });
+    if (!staging && !ensure_staging(staging, width, height, format)) {
+        return {};
+    }
+    return staging;
+}
+
 bool RendererD3D11::debug_copy_selected_display_to_readback(const DisplayTexture& source) {
-    if (backbuffer_capture_path_.empty() || !display_capture_pending_path_.empty() || !source.texture || source.width == 0u ||
-        source.height == 0u) {
+    if (backbuffer_capture_path_.empty() || !source.texture || source.width == 0u || source.height == 0u) {
         return false;
     }
     const d3d11::Texture& texture = *source.texture;
@@ -1303,45 +1309,26 @@ bool RendererD3D11::debug_copy_selected_display_to_readback(const DisplayTexture
         texture.width < source.width || texture.height < source.height || texture.samples != 1u) {
         return false;
     }
-    if (!ensure_staging(display_capture_.staging, source.width, source.height, texture.format)) {
+    d3d11::ComPtr<ID3D11Texture2D> staging = capture_staging(source.width, source.height, texture.format);
+    if (!staging) {
         return false;
     }
     end_scene_pass();
     const D3D11_BOX box{0u, 0u, 0u, source.width, source.height, 1u};
-    context()->CopySubresourceRegion(display_capture_.staging.Get(), 0u, 0u, 0u, 0u, texture.texture.Get(), 0u, &box);
-    display_capture_.fence = 0u;
-    display_capture_pending_path_ = backbuffer_capture_path_ + ".display.ppm";
-    display_capture_width_ = source.width;
-    display_capture_height_ = source.height;
+    context()->CopySubresourceRegion(staging.Get(), 0u, 0u, 0u, 0u, texture.texture.Get(), 0u, &box);
+    captures_.recorded({std::move(staging), 0u, backbuffer_capture_path_ + ".display.ppm", source.width, source.height, 0u,
+                        texture.format == DXGI_FORMAT_R10G10B10A2_UNORM ? Captures::Form::TenBit : Captures::Form::Rgba8});
     return true;
 }
 
-void RendererD3D11::debug_log_display_readback() {
-    if (display_capture_pending_path_.empty() || display_capture_.fence == 0u || completed_fence_value() < display_capture_.fence) {
-        return;
-    }
-    const std::vector<std::uint8_t> rgba =
-        read_staging(context(), display_capture_.staging.Get(), display_capture_width_, display_capture_height_);
-    if (!rgba.empty()) {
-        write_rgba_ppm_async(std::move(display_capture_pending_path_), rgba, display_capture_width_, display_capture_height_);
-    }
-    display_capture_pending_path_.clear();
-    display_capture_.fence = 0u;
-}
-
 void RendererD3D11::debug_log_backbuffer_readback() {
-    debug_log_display_readback();
-    if (backbuffer_capture_pending_path_.empty() || backbuffer_capture_.fence == 0u ||
-        completed_fence_value() < backbuffer_capture_.fence) {
-        return;
-    }
-    const std::vector<std::uint8_t> rgba =
-        read_staging(context(), backbuffer_capture_.staging.Get(), backbuffer_capture_width_, backbuffer_capture_height_);
-    if (!rgba.empty()) {
-        write_rgba_ppm_async(std::move(backbuffer_capture_pending_path_), rgba, backbuffer_capture_width_, backbuffer_capture_height_);
-    }
-    backbuffer_capture_pending_path_.clear();
-    backbuffer_capture_.fence = 0u;
+    captures_.finished(completed_fence_value(), [this](Captures::Capture& capture) {
+        // read_staging reads by the staging texture's own format (10-bit words to RGBA8).
+        const std::vector<std::uint8_t> rgba = read_staging(context(), capture.readback.Get(), capture.width, capture.height);
+        if (!rgba.empty()) {
+            write_rgba_ppm_async(std::move(capture.path), rgba, capture.width, capture.height);
+        }
+    });
 }
 
 }  // namespace galaxy::render

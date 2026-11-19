@@ -3539,9 +3539,14 @@ void RendererVk::set_debug_capture_paths(std::string backbuffer_ppm_path) {
     backbuffer_capture_path_ = std::move(backbuffer_ppm_path);
 }
 
+std::shared_ptr<vk::Buffer> RendererVk::capture_buffer(std::uint64_t bytes, const char* name) {
+    std::shared_ptr<vk::Buffer> readback =
+        captures_.spare([bytes](const std::shared_ptr<vk::Buffer>& kept) { return kept->size >= bytes; });
+    return readback ? readback : vk::Context::get().create_readback_buffer(bytes, name);
+}
+
 bool RendererVk::debug_copy_selected_display_to_readback(const DisplayTexture& source) {
-    if (backbuffer_capture_path_.empty() || !display_capture_pending_path_.empty() || !source.texture || source.width == 0u ||
-        source.height == 0u) {
+    if (backbuffer_capture_path_.empty() || !source.texture || source.width == 0u || source.height == 0u) {
         return false;
     }
     vk::Texture& texture = *source.texture;
@@ -3552,83 +3557,52 @@ bool RendererVk::debug_copy_selected_display_to_readback(const DisplayTexture& s
         texture.height < source.height) {
         return false;
     }
-    vk::Context& context = vk::Context::get();
-    const std::uint64_t bytes = static_cast<std::uint64_t>(source.width) * source.height * (wide ? 8u : 4u);
-    if (!display_capture_.buffer || display_capture_.buffer->size < bytes) {
-        display_capture_.buffer = context.create_readback_buffer(bytes, "display picture capture");
-        if (!display_capture_.buffer) {
-            return false;
-        }
+    const unsigned pitch = source.width * (wide ? 8u : 4u);
+    std::shared_ptr<vk::Buffer> readback = capture_buffer(static_cast<std::uint64_t>(pitch) * source.height, "display picture capture");
+    if (!readback) {
+        return false;
     }
     image_barrier(commands_, texture.image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::PixelRead, gpu::Use::CopySource);
     VkBufferImageCopy region{};
     region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
     region.imageExtent = {source.width, source.height, 1};
-    vkCmdCopyImageToBuffer(commands_, texture.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, display_capture_.buffer->buffer, 1,
-                           &region);
+    vkCmdCopyImageToBuffer(commands_, texture.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, readback->buffer, 1, &region);
     image_barrier(commands_, texture.image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::CopySource, gpu::Use::PixelRead);
-    display_capture_.fence = 0u;
-    display_capture_pending_path_ = backbuffer_capture_path_ + ".display.ppm";
-    display_capture_width_ = source.width;
-    display_capture_height_ = source.height;
-    display_capture_ten_bit_ = ten_bit;
-    display_capture_wide_ = wide;
+    captures_.recorded({std::move(readback), 0u, backbuffer_capture_path_ + ".display.ppm", source.width, source.height, pitch,
+                        wide ? Captures::Form::Half : ten_bit ? Captures::Form::TenBit : Captures::Form::Rgba8});
     return true;
 }
 
-void RendererVk::debug_log_display_readback() {
-    if (display_capture_pending_path_.empty() || display_capture_.fence == 0u || completed_fence_value() < display_capture_.fence) {
-        return;
-    }
-    vk::Context::get().invalidate(*display_capture_.buffer);
-    const auto* pixels = reinterpret_cast<const std::uint8_t*>(display_capture_.buffer->mapped);
-    const std::size_t count = static_cast<std::size_t>(display_capture_width_) * display_capture_height_;
-    std::vector<std::uint8_t> rgba(count * 4u);
-    if (display_capture_wide_) {
-        // The halves as 10-bit words (the capture's range ends at 1, as the SDR view), then as RGBA8.
-        std::vector<std::uint8_t> words(count * 4u);
-        half4_to_ten_bit(pixels, words.data(), display_capture_width_, display_capture_height_, display_capture_width_ * 8u,
-                         display_capture_width_ * 4u);
-        ten_bit_to_rgba8(words.data(), rgba.data(), display_capture_width_, display_capture_height_, display_capture_width_ * 4u,
-                         display_capture_width_ * 4u);
-    } else if (display_capture_ten_bit_) {
-        ten_bit_to_rgba8(pixels, rgba.data(), display_capture_width_, display_capture_height_, display_capture_width_ * 4u,
-                         display_capture_width_ * 4u);
-    } else {
-        std::memcpy(rgba.data(), pixels, rgba.size());
-    }
-    std::vector<std::uint8_t> rgb(count * 3u);
-    for (std::size_t i = 0; i < count; ++i) {
-        rgb[i * 3u] = rgba[i * 4u];
-        rgb[i * 3u + 1u] = rgba[i * 4u + 1u];
-        rgb[i * 3u + 2u] = rgba[i * 4u + 2u];
-    }
-    write_ppm_async(std::move(display_capture_pending_path_), std::move(rgb), display_capture_width_, display_capture_height_);
-    display_capture_pending_path_.clear();
-    display_capture_.fence = 0u;
-}
-
 void RendererVk::debug_log_backbuffer_readback() {
-    debug_log_display_readback();
-    if (backbuffer_capture_pending_path_.empty() || backbuffer_capture_.fence == 0u ||
-        completed_fence_value() < backbuffer_capture_.fence) {
-        return;
-    }
-    vk::Context::get().invalidate(*backbuffer_capture_.buffer);
-    const auto* pixels = reinterpret_cast<const std::uint8_t*>(backbuffer_capture_.buffer->mapped);
-    const unsigned red = backbuffer_capture_bgra_ ? 2u : 0u;
-    const unsigned blue = backbuffer_capture_bgra_ ? 0u : 2u;
-    std::vector<std::uint8_t> rgb(static_cast<std::size_t>(backbuffer_capture_width_) * backbuffer_capture_height_ *
-                                  3u);
-    for (std::size_t i = 0, n = rgb.size() / 3u; i < n; ++i) {
-        rgb[i * 3u] = pixels[i * 4u + red];
-        rgb[i * 3u + 1u] = pixels[i * 4u + 1u];
-        rgb[i * 3u + 2u] = pixels[i * 4u + blue];
-    }
-    write_ppm_async(std::move(backbuffer_capture_pending_path_), std::move(rgb), backbuffer_capture_width_,
-                    backbuffer_capture_height_);
-    backbuffer_capture_pending_path_.clear();
-    backbuffer_capture_.fence = 0u;
+    captures_.finished(completed_fence_value(), [](Captures::Capture& capture) {
+        vk::Context::get().invalidate(*capture.readback);
+        const auto* pixels = reinterpret_cast<const std::uint8_t*>(capture.readback->mapped);
+        const unsigned width = capture.width;
+        const unsigned height = capture.height;
+        const std::size_t count = static_cast<std::size_t>(width) * height;
+        std::vector<std::uint8_t> rgba;
+        if (capture.form == Captures::Form::Half) {
+            // The halves as 10-bit words (the capture's range ends at 1, as the SDR view), then as RGBA8.
+            std::vector<std::uint8_t> words(count * 4u);
+            half4_to_ten_bit(pixels, words.data(), width, height, capture.pitch, width * 4u);
+            rgba.resize(count * 4u);
+            ten_bit_to_rgba8(words.data(), rgba.data(), width, height, width * 4u, width * 4u);
+            pixels = rgba.data();
+        } else if (capture.form == Captures::Form::TenBit) {
+            rgba.resize(count * 4u);
+            ten_bit_to_rgba8(pixels, rgba.data(), width, height, capture.pitch, width * 4u);
+            pixels = rgba.data();
+        }
+        const unsigned red = capture.form == Captures::Form::Bgra8 ? 2u : 0u;
+        const unsigned blue = capture.form == Captures::Form::Bgra8 ? 0u : 2u;
+        std::vector<std::uint8_t> rgb(count * 3u);
+        for (std::size_t i = 0; i < count; ++i) {
+            rgb[i * 3u] = pixels[i * 4u + red];
+            rgb[i * 3u + 1u] = pixels[i * 4u + 1u];
+            rgb[i * 3u + 2u] = pixels[i * 4u + blue];
+        }
+        write_ppm_async(std::move(capture.path), std::move(rgb), width, height);
+    });
 }
 
 

@@ -374,12 +374,12 @@ public:
     [[nodiscard]] bool record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes, bool compared);
     [[nodiscard]] const float* screen_probes_finished(std::size_t slot);
 
-    // Test captures: the presented backbuffer as PPM files (paths from set_debug_capture_paths).
+    // Test captures: the presented backbuffer as PPM files (paths from set_debug_capture_paths). Writes every capture
+    // whose frame the GPU has finished.
     void debug_log_backbuffer_readback();
     // The presented display picture itself (before the post chain), copied in the present's command buffer to
     // <backbuffer path>.display.ppm, as the Direct3D 12 renderer's selected-display capture.
     bool debug_copy_selected_display_to_readback(const DisplayTexture& source);
-    void debug_log_display_readback();
     void set_debug_capture_paths(std::string backbuffer_ppm_path);
 
     [[nodiscard]] gpu::Device* device() const noexcept { return vk::Context::get().device(); }
@@ -527,10 +527,6 @@ private:
         unsigned height = 0;
         std::uint64_t bytes = 0;
         std::uint64_t last_used = 0;
-    };
-    struct Readback {
-        std::shared_ptr<vk::Buffer> buffer;  // host-visible, mapped
-        std::uint64_t fence = 0;             // 0: idle
     };
     // Device objects.
     bool create_surface_and_device();
@@ -1078,17 +1074,11 @@ private:
 
     // Captures and telemetry.
     std::string backbuffer_capture_path_;
-    Readback backbuffer_capture_;
-    std::string backbuffer_capture_pending_path_;
-    unsigned backbuffer_capture_width_ = 0;
-    unsigned backbuffer_capture_height_ = 0;
-    bool backbuffer_capture_bgra_ = false;
-    Readback display_capture_;
-    std::string display_capture_pending_path_;
-    unsigned display_capture_width_ = 0;
-    unsigned display_capture_height_ = 0;
-    bool display_capture_ten_bit_ = false;
-    bool display_capture_wide_ = false;  // an RGBA16F picture (the float scene's), read as 10-bit words
+    // The pictures copied out (the presented picture and the display picture), each its own host-visible buffer.
+    using Captures = PictureCaptures<std::shared_ptr<vk::Buffer>>;
+    Captures captures_;
+    // A buffer for a capture of `bytes`: a spare one, or a new one.
+    [[nodiscard]] std::shared_ptr<vk::Buffer> capture_buffer(std::uint64_t bytes, const char* name);
     std::atomic<double> measured_present_hz_{0.0};
     double display_refresh_hz_ = 0.0;
     // The display varies its refresh with the presents (next_variable_refresh): display_refresh_hz_ is then the cap that keeps

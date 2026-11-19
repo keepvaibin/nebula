@@ -383,7 +383,7 @@ void RendererMtl::shutdown() {
         pictures_.clear();
         frame_pass_targets_.clear();
         capture_target_.reset();
-        backbuffer_capture_ = display_capture_ = Readback{};
+        captures_.clear();
         probe_slots_.clear();
         held_probe_slots_.clear();
         pass_visibility_.reset();
@@ -807,12 +807,7 @@ std::uint64_t RendererMtl::end_frame(bool present_swap_chain, SubmissionCallback
             probes.fence = fence;
         }
     }
-    if (backbuffer_capture_.buffer && backbuffer_capture_.fence == 0u && !backbuffer_capture_pending_path_.empty()) {
-        backbuffer_capture_.fence = fence;
-    }
-    if (display_capture_.buffer && display_capture_.fence == 0u && !display_capture_pending_path_.empty()) {
-        display_capture_.fence = fence;
-    }
+    captures_.submitted(fence);
     if (on_submitted != nullptr) {
         on_submitted(submission_context, fence);
     }
@@ -1212,7 +1207,7 @@ bool RendererMtl::present(const DisplayTexture* source, bool capture_backbuffer,
     host_window::native_settings_present();
     reset_draw_bindings();
     // Screenshots and test pictures: the same picture drawn again into a texture that can be read (a drawable is not).
-    if (capture_backbuffer && !backbuffer_capture_path_.empty() && backbuffer_capture_pending_path_.empty()) {
+    if (capture_backbuffer && !backbuffer_capture_path_.empty()) {
         const std::uint32_t width = layer_.width;
         const std::uint32_t height = layer_.height;
         capture_used_step_ = idle_clock();
@@ -1224,11 +1219,9 @@ bool RendererMtl::present(const DisplayTexture* source, bool capture_backbuffer,
                                                                  mtl::kUseTarget | mtl::kUseSample, mtl::Storage::Private,
                                                                  "presented picture capture");
         }
-        const std::uint64_t bytes = static_cast<std::uint64_t>(width) * height * 4u;
-        if (!backbuffer_capture_.buffer || backbuffer_capture_.buffer->size < bytes) {
-            backbuffer_capture_.buffer = mtl::Context::get().create_buffer(bytes, mtl::Storage::Shared, "backbuffer capture");
-        }
-        if (capture_target_ && backbuffer_capture_.buffer) {
+        std::shared_ptr<mtl::Buffer> readback =
+            capture_target_ ? capture_buffer(static_cast<std::uint64_t>(width) * height * 4u, "backbuffer capture") : nullptr;
+        if (readback) {
             draw_presented_picture(capture_target_->texture, mtl::Format::Rgba8, shown, content, true);
             @autoreleasepool {
                 id<MTLBlitCommandEncoder> const blit = [commands_of(commands_) blitCommandEncoder];
@@ -1238,16 +1231,14 @@ bool RendererMtl::present(const DisplayTexture* source, bool capture_backbuffer,
                                  sourceLevel:0
                                 sourceOrigin:MTLOriginMake(0, 0, 0)
                                   sourceSize:MTLSizeMake(width, height, 1)
-                                    toBuffer:buffer_of(backbuffer_capture_.buffer)
+                                    toBuffer:buffer_of(readback)
                            destinationOffset:0
                       destinationBytesPerRow:NSUInteger{width} * 4u
                     destinationBytesPerImage:NSUInteger{width} * height * 4u];
                 [blit endEncoding];
             }
-            backbuffer_capture_.fence = 0u;
-            backbuffer_capture_pending_path_ = backbuffer_capture_path_;
-            backbuffer_capture_width_ = width;
-            backbuffer_capture_height_ = height;
+            captures_.recorded({std::move(readback), 0u, backbuffer_capture_path_, width, height, width * 4u,
+                                Captures::Form::Rgba8});
             return true;
         }
     }

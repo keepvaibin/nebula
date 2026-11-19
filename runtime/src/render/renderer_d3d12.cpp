@@ -3096,7 +3096,7 @@ void RendererD3D12::list_live_objects(Kept& kept) {
 RendererD3D12::Kept RendererD3D12::take_apart_lost_device() {
     keep_window_ = true;
     device_gone_ = true;
-    backbuffer_readback_pending_ = selected_display_readback_pending_ = false;
+    captures_.clear();  // their copies went with the device
     try {
         shutdown();
     } catch (const std::exception& error) {
@@ -3142,14 +3142,9 @@ void RendererD3D12::shutdown() {
     }
     // A diagnostic copy can be the last submitted list: its data goes to the
     // background PPM writers before any D3D resource is released.
-    retain_shutdown_failure("backbuffer diagnostic readback", [&] {
+    retain_shutdown_failure("diagnostic captures", [&] {
         debug_log_backbuffer_readback();
-    });
-    retain_shutdown_failure("selected display picture diagnostic readback", [&] {
-        debug_log_selected_display_readback();
-    });
-    retain_shutdown_failure("diagnostic writer drain", [&] {
-        reap_debug_capture_writers(true);
+        wait_picture_files();
     });
     // Streamline shuts down before the swap chain and device it wraps go.
     retain_shutdown_failure("Streamline", [&] {
@@ -3214,7 +3209,6 @@ void RendererD3D12::shutdown() {
     timestamp_readback_.Reset();
     timestamp_pending_.fill(false);
     timestamp_frequency_ = 0;
-    backbuffer_readback_buf_.Reset();
     hdr_capture_target_.Reset();
     hdr_capture_rtv_heap_.Reset();
     hdr_active_ = false;
@@ -3223,19 +3217,7 @@ void RendererD3D12::shutdown() {
     display_read_ = false;
     display_reading_ = OutputHdr{};
     set_display_hdr(DisplayHdr{});
-    backbuffer_readback_pending_ = false;
-    backbuffer_readback_fence_value_ = 0;
-    backbuffer_readback_width_ = backbuffer_readback_height_ =
-        backbuffer_readback_row_pitch_ = 0;
-    next_backbuffer_capture_path_.clear();
-    backbuffer_readback_capture_path_.clear();
-    selected_display_readback_buf_.Reset();
-    selected_display_readback_source_.Reset();
-    selected_display_readback_pending_ = false;
-    selected_display_readback_fence_ = 0;
-    selected_display_readback_width_ = selected_display_readback_height_ =
-        selected_display_readback_pitch_ = 0;
-    selected_display_readback_path_.clear();
+    captures_.clear();
     if (frame_pass_requests_ != 0u) {
         std::cerr << "[frame-pass-work] requests=" << frame_pass_requests_
                   << " passes=" << frame_passes_drawn_ << '\n';
@@ -4694,13 +4676,7 @@ std::uint64_t RendererD3D12::end_frame(
         d3d_check(signal_hr, "Queue Signal");
     }
     // Readbacks recorded on this list complete at this signal; nothing waits for them here.
-    if (backbuffer_readback_pending_ &&
-        backbuffer_readback_fence_value_ == 0u) {
-        backbuffer_readback_fence_value_ = submitted_fence;
-    }
-    if (selected_display_readback_pending_ && selected_display_readback_fence_ == 0u) {
-        selected_display_readback_fence_ = submitted_fence;
-    }
+    captures_.submitted(submitted_fence);
     // Reached only after a successful signal; presenting follows.
     if (on_submitted != nullptr) {
         on_submitted(submission_context, submitted_fence);
@@ -6754,122 +6730,11 @@ void RendererD3D12::finish_pictures() {
         wait_for_gpu();
     }
     debug_log_backbuffer_readback();
-    debug_log_selected_display_readback();
-    reap_debug_capture_writers(true);
+    wait_picture_files();
 }
 
 void RendererD3D12::set_debug_capture_paths(std::string backbuffer_ppm_path) {
     next_backbuffer_capture_path_ = std::move(backbuffer_ppm_path);
-}
-
-void RendererD3D12::reap_debug_capture_writers(bool wait_for_all) {
-    for (auto it = debug_ppm_writers_.begin();
-         it != debug_ppm_writers_.end();) {
-        if (!wait_for_all &&
-            it->completion.wait_for(std::chrono::seconds(0)) !=
-                std::future_status::ready) {
-            ++it;
-            continue;
-        }
-        try {
-            it->completion.get();
-        } catch (const std::exception& error) {
-            std::cerr << '[' << it->tag << "] failed path=" << it->path
-                      << " error=" << error.what() << '\n';
-            it = debug_ppm_writers_.erase(it);
-            continue;
-        }
-        std::cerr << '[' << it->tag << "] wrote " << it->path << '\n';
-        it = debug_ppm_writers_.erase(it);
-    }
-}
-
-void RendererD3D12::queue_debug_ppm_capture(
-    const char* tag,
-    const std::string& path,
-    const std::uint8_t* source,
-    unsigned width,
-    unsigned height,
-    unsigned row_pitch,
-    bool ten_bit) {
-    constexpr std::size_t kMaximumPendingDebugCaptures = 8u;
-    reap_debug_capture_writers(false);
-    if (debug_ppm_writers_.size() >= kMaximumPendingDebugCaptures) {
-        std::cerr << '[' << tag << "] skipped=writer-queue-full path="
-                  << path << '\n';
-        return;
-    }
-    if (source == nullptr || width == 0u || height == 0u ||
-        row_pitch < width * 4u) {
-        throw std::runtime_error("invalid mapped debug PPM capture");
-    }
-    const std::size_t source_row_bytes =
-        static_cast<std::size_t>(width) * 4u;
-    if (height > std::numeric_limits<std::size_t>::max() / source_row_bytes) {
-        throw std::runtime_error("debug PPM capture size overflow");
-    }
-    std::vector<std::uint8_t> rgba(
-        source_row_bytes * static_cast<std::size_t>(height));
-    if (ten_bit) {
-        ten_bit_to_rgba8(source, rgba.data(), width, height, row_pitch, static_cast<unsigned>(source_row_bytes));
-    } else {
-        for (unsigned y = 0u; y < height; ++y) {
-            std::memcpy(
-                rgba.data() + static_cast<std::size_t>(y) * source_row_bytes,
-                source + static_cast<std::size_t>(y) * row_pitch,
-                source_row_bytes);
-        }
-    }
-
-    DebugPpmWriter writer{};
-    writer.tag = tag;
-    writer.path = path;
-    writer.completion = std::async(
-        std::launch::async,
-        [path, width, height, rgba = std::move(rgba)]() {
-            FILE* capture = nullptr;
-            if (fopen_s(&capture, path.c_str(), "wb") != 0 ||
-                capture == nullptr) {
-                throw std::runtime_error("could not open output file");
-            }
-            const auto close_capture = [&capture]() noexcept {
-                if (capture != nullptr) {
-                    std::fclose(capture);
-                    capture = nullptr;
-                }
-            };
-            try {
-                if (std::fprintf(capture, "P6\n%u %u\n255\n", width, height) <
-                    0) {
-                    throw std::runtime_error("could not write PPM header");
-                }
-                std::vector<std::uint8_t> rgb(
-                    static_cast<std::size_t>(width) * 3u);
-                for (unsigned y = 0u; y < height; ++y) {
-                    const auto* source_row = rgba.data() +
-                        static_cast<std::size_t>(y) *
-                            static_cast<std::size_t>(width) * 4u;
-                    for (unsigned x = 0u; x < width; ++x) {
-                        rgb[x * 3u + 0u] = source_row[x * 4u + 0u];
-                        rgb[x * 3u + 1u] = source_row[x * 4u + 1u];
-                        rgb[x * 3u + 2u] = source_row[x * 4u + 2u];
-                    }
-                    if (std::fwrite(rgb.data(), 1u, rgb.size(), capture) !=
-                        rgb.size()) {
-                        throw std::runtime_error("could not write PPM pixels");
-                    }
-                }
-                if (std::fclose(capture) != 0) {
-                    capture = nullptr;
-                    throw std::runtime_error("could not finalize output file");
-                }
-                capture = nullptr;
-            } catch (...) {
-                close_capture();
-                throw;
-            }
-        });
-    debug_ppm_writers_.push_back(std::move(writer));
 }
 
 bool RendererD3D12::present(
@@ -6884,25 +6749,10 @@ bool RendererD3D12::present(
             "present requested without a valid display picture blit source");
     }
     const DisplayTexture* source = frame;
+    debug_log_backbuffer_readback();
     if (capture_backbuffer) {
-        if (selected_display_readback_pending_ && selected_display_readback_fence_ != 0u) {
-            wait_for_fence_value(selected_display_readback_fence_);
-        }
-        if (backbuffer_readback_pending_ && backbuffer_readback_fence_value_ != 0u) {
-            wait_for_fence_value(backbuffer_readback_fence_value_);
-        }
-        debug_log_backbuffer_readback();
-        debug_log_selected_display_readback();
-        if (backbuffer_readback_pending_ || selected_display_readback_pending_ ||
-            next_backbuffer_capture_path_.empty()) {
-            std::cerr << "[backbuffer-dump] skipped="
-                      << (next_backbuffer_capture_path_.empty()
-                              ? "no-output-path" : "prior-readback-pending")
-                      << " path=" << next_backbuffer_capture_path_ << '\n';
-            capture_backbuffer = false;
-        } else {
-            capture_backbuffer = debug_copy_selected_display_to_readback(*source);
-        }
+        // Each capture has its own readback (P-323): one still in flight neither waits nor drops this one.
+        capture_backbuffer = debug_copy_selected_display_to_readback(*source);
     }
 
     const auto ultrawide =
@@ -7023,36 +6873,12 @@ bool RendererD3D12::present(
         }
     }
     if (capture_backbuffer) {
-        if (backbuffer_readback_pending_) {
-            throw std::runtime_error(
-                "backbuffer capture requested while a prior readback is pending");
-        }
         const UINT w = host_window::backbuffer_width;
         const UINT h = host_window::backbuffer_height;
         const UINT row_pitch =
             (w * 4u + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u) &
             ~(D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u);
-        const UINT64 required_bytes = static_cast<UINT64>(row_pitch) * h;
-        if (!backbuffer_readback_buf_ ||
-            backbuffer_readback_buf_->GetDesc().Width < required_bytes) {
-            backbuffer_readback_buf_.Reset();
-            D3D12_HEAP_PROPERTIES hp{};
-            hp.Type = D3D12_HEAP_TYPE_READBACK;
-            D3D12_RESOURCE_DESC rd{};
-            rd.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-            rd.Width = required_bytes;
-            rd.Height = 1;
-            rd.DepthOrArraySize = 1;
-            rd.MipLevels = 1;
-            rd.SampleDesc.Count = 1;
-            rd.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-            d3d_check(
-                device_->CreateCommittedResource(
-                    &hp, D3D12_HEAP_FLAG_NONE, &rd,
-                    D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
-                    IID_PPV_ARGS(&backbuffer_readback_buf_)),
-                "Create backbuffer readback");
-        }
+        CaptureReadback readback = capture_readback(static_cast<UINT64>(row_pitch) * h, L"backbuffer capture");
 
         BarriersD3D12 capture{command_list_.Get()};
         capture.texture(capture_from, gpu::Use::ColorWrite, gpu::Use::CopySource);
@@ -7061,7 +6887,7 @@ bool RendererD3D12::present(
         D3D12_TEXTURE_COPY_LOCATION src{}, dst{};
         src.pResource = capture_from;
         src.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-        dst.pResource = backbuffer_readback_buf_.Get();
+        dst.pResource = readback.buffer.Get();
         dst.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
         dst.PlacedFootprint.Footprint.Format = kBackbufferFormat;
         dst.PlacedFootprint.Footprint.Width = w;
@@ -7072,27 +6898,41 @@ bool RendererD3D12::present(
             &dst, 0, 0, 0, &src, nullptr);
 
         capture.undo();
-        backbuffer_readback_pending_ = true;
-        backbuffer_readback_fence_value_ = 0u;
-        backbuffer_readback_width_ = w;
-        backbuffer_readback_height_ = h;
-        backbuffer_readback_row_pitch_ = row_pitch;
-        backbuffer_readback_capture_path_ = next_backbuffer_capture_path_;
+        // A resize after this copy is recorded leaves its own footprint with it.
+        captures_.recorded({std::move(readback), 0u, next_backbuffer_capture_path_, w, h, row_pitch, Captures::Form::Rgba8});
     }
 
     back.undo();
     return capture_backbuffer;
 }
 
+RendererD3D12::CaptureReadback RendererD3D12::capture_readback(UINT64 bytes, const wchar_t* name) {
+    CaptureReadback readback =
+        captures_.spare([bytes](const CaptureReadback& kept) { return kept.buffer->GetDesc().Width >= bytes; });
+    if (readback.buffer) {
+        return readback;
+    }
+    D3D12_HEAP_PROPERTIES heap{};
+    heap.Type = D3D12_HEAP_TYPE_READBACK;
+    D3D12_RESOURCE_DESC buffer{};
+    buffer.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    buffer.Width = bytes;
+    buffer.Height = 1;
+    buffer.DepthOrArraySize = 1;
+    buffer.MipLevels = 1;
+    buffer.SampleDesc.Count = 1;
+    buffer.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    d3d_check(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &buffer, D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+                                               IID_PPV_ARGS(&readback.buffer)),
+              "Create capture readback");
+    (void)readback.buffer->SetName(name);
+    return readback;
+}
+
 // Captures the presented display picture itself, in the same command list (and fence) as the
 // final blit. The source is held until the copy completes; nothing waits here.
 bool RendererD3D12::debug_copy_selected_display_to_readback(const DisplayTexture& source) {
-    debug_log_selected_display_readback();
-    if (selected_display_readback_pending_ || next_backbuffer_capture_path_.empty()) {
-        std::cerr << "[selected-display-capture] skipped="
-                  << (next_backbuffer_capture_path_.empty()
-                          ? "no-output-path" : "prior-readback-pending")
-                  << " path=" << next_backbuffer_capture_path_ << '\n';
+    if (next_backbuffer_capture_path_.empty()) {
         return false;
     }
     const auto desc = source.texture->GetDesc();
@@ -7105,34 +6945,16 @@ bool RendererD3D12::debug_copy_selected_display_to_readback(const DisplayTexture
         throw std::runtime_error("selected display picture capture has inconsistent extent/format");
     }
     const UINT pitch = (source.width * (wide ? 8u : 4u) + 255u) & ~255u;
-    const UINT64 bytes = static_cast<UINT64>(pitch) * source.height;
-    if (!selected_display_readback_buf_ || selected_display_readback_buf_->GetDesc().Width < bytes) {
-        selected_display_readback_buf_.Reset();
-        D3D12_HEAP_PROPERTIES heap{};
-        heap.Type = D3D12_HEAP_TYPE_READBACK;
-        D3D12_RESOURCE_DESC buffer{};
-        buffer.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-        buffer.Width = bytes;
-        buffer.Height = 1;
-        buffer.DepthOrArraySize = 1;
-        buffer.MipLevels = 1;
-        buffer.SampleDesc.Count = 1;
-        buffer.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        d3d_check(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE,
-            &buffer, D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
-            IID_PPV_ARGS(&selected_display_readback_buf_)), "Create selected display picture readback");
-    }
+    CaptureReadback readback = capture_readback(static_cast<UINT64>(pitch) * source.height, L"display picture capture");
     BarriersD3D12 uses{command_list_.Get()};
     uses.texture(source.texture.Get(), gpu::Use::PixelRead, gpu::Use::CopySource);
     uses.issue();
     D3D12_TEXTURE_COPY_LOCATION src{}, dst{};
     src.pResource = source.texture.Get();
     src.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-    dst.pResource = selected_display_readback_buf_.Get();
+    dst.pResource = readback.buffer.Get();
     dst.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
     dst.PlacedFootprint.Footprint.Format = desc.Format;
-    selected_display_readback_ten_bit_ = desc.Format == DXGI_FORMAT_R10G10B10A2_UNORM || wide;
-    selected_display_readback_wide_ = wide;
     dst.PlacedFootprint.Footprint.Width = source.width;
     dst.PlacedFootprint.Footprint.Height = source.height;
     dst.PlacedFootprint.Footprint.Depth = 1;
@@ -7141,114 +6963,48 @@ bool RendererD3D12::debug_copy_selected_display_to_readback(const DisplayTexture
     const D3D12_BOX picture{0u, 0u, 0u, source.width, source.height, 1u};
     command_list_->CopyTextureRegion(&dst, 0, 0, 0, &src, &picture);
     uses.undo();
-    selected_display_readback_source_ = source.texture;
-    selected_display_readback_width_ = source.width;
-    selected_display_readback_height_ = source.height;
-    selected_display_readback_pitch_ = pitch;
-    selected_display_readback_path_ = next_backbuffer_capture_path_ + ".display.ppm";
-    selected_display_readback_fence_ = 0u;
-    selected_display_readback_pending_ = true;
-    std::cerr << "[selected-display-capture] slot=" << source.slot
-              << " resource=0x" << std::hex << reinterpret_cast<std::uintptr_t>(source.texture.Get())
-              << std::dec << " serial=" << source.picture_number << " stamp=" << source.frame_stamp
-              << " extent=" << source.width << 'x' << source.height
-              << " path=" << selected_display_readback_path_ << '\n';
+    readback.held = source.texture;
+    captures_.recorded({std::move(readback), 0u, next_backbuffer_capture_path_ + ".display.ppm", source.width, source.height,
+                        pitch, wide ? Captures::Form::Half : desc.Format == DXGI_FORMAT_R10G10B10A2_UNORM
+                                                                 ? Captures::Form::TenBit
+                                                                 : Captures::Form::Rgba8});
     return true;
 }
 
-void RendererD3D12::debug_log_selected_display_readback() {
-    if (!selected_display_readback_pending_ || selected_display_readback_fence_ == 0u ||
-        completed_fence_value() < selected_display_readback_fence_) return;
-    const SIZE_T bytes = static_cast<SIZE_T>(selected_display_readback_pitch_) *
-        selected_display_readback_height_;
-    void* mapped = nullptr;
-    const D3D12_RANGE range{0, bytes};
-    d3d_check(selected_display_readback_buf_->Map(0, &range, &mapped), "Map selected display picture readback");
-    try {
-        const auto* base = static_cast<const std::uint8_t*>(mapped);
-        unsigned pitch = selected_display_readback_pitch_;
-        // An RGBA16F picture's halves as the 10-bit format's words (the capture's range ends at 1, as the SDR view).
-        std::vector<std::uint8_t> words;
-        if (selected_display_readback_wide_) {
-            pitch = selected_display_readback_width_ * 4u;
-            words.resize(static_cast<std::size_t>(pitch) * selected_display_readback_height_);
-            half4_to_ten_bit(base, words.data(), selected_display_readback_width_, selected_display_readback_height_,
-                             selected_display_readback_pitch_, pitch);
-            base = words.data();
-        }
-        queue_debug_ppm_capture("selected-display-dump", selected_display_readback_path_, base,
-            selected_display_readback_width_, selected_display_readback_height_, pitch,
-            selected_display_readback_ten_bit_);
-    } catch (...) {
-        const D3D12_RANGE no_write{0, 0};
-        selected_display_readback_buf_->Unmap(0, &no_write);
-        throw;
-    }
-    const D3D12_RANGE no_write{0, 0};
-    selected_display_readback_buf_->Unmap(0, &no_write);
-    selected_display_readback_pending_ = false;
-    selected_display_readback_fence_ = 0u;
-    selected_display_readback_source_.Reset();
-    selected_display_readback_path_.clear();
-}
-
 void RendererD3D12::debug_log_backbuffer_readback() {
-    reap_debug_capture_writers(false);
-    if (!backbuffer_readback_pending_ || !backbuffer_readback_buf_) {
-        return;
-    }
-    if (backbuffer_readback_fence_value_ == 0u ||
-        completed_fence_value() < backbuffer_readback_fence_value_) {
-        return;
-    }
-    backbuffer_readback_pending_ = false;
-    backbuffer_readback_fence_value_ = 0u;
-
-    // A resize may have completed after this copy was recorded. Decode using
-    // the captured footprint rather than the current swap-chain extent.
-    const UINT w = backbuffer_readback_width_;
-    const UINT h = backbuffer_readback_height_;
-    const UINT row_pitch = backbuffer_readback_row_pitch_;
-    if (w == 0u || h == 0u || row_pitch == 0u) {
-        throw std::runtime_error(
-            "pending backbuffer readback has no captured footprint");
-    }
-    const SIZE_T byte_count = static_cast<SIZE_T>(row_pitch) * h;
-    void* mapped = nullptr;
-    const D3D12_RANGE read_range{0, byte_count};
-    if (FAILED(
-            backbuffer_readback_buf_->Map(
-                0, &read_range, &mapped))) {
-        backbuffer_readback_capture_path_.clear();
-        backbuffer_readback_width_ = 0;
-        backbuffer_readback_height_ = 0;
-        backbuffer_readback_row_pitch_ = 0;
-        return;
-    }
-
-    bool mapped_active = true;
-    const D3D12_RANGE no_write{0, 0};
-    const ScopeExit unmap_readback([&]() noexcept {
-        if (mapped_active) backbuffer_readback_buf_->Unmap(0, &no_write);
+    captures_.finished(completed_fence_value(), [](Captures::Capture& capture) {
+        capture.readback.held.Reset();
+        const unsigned width = capture.width;
+        const unsigned height = capture.height;
+        const std::size_t count = static_cast<std::size_t>(width) * height;
+        const D3D12_RANGE range{0, static_cast<SIZE_T>(capture.pitch) * height};
+        void* mapped = nullptr;
+        d3d_check(capture.readback.buffer->Map(0, &range, &mapped), "Map capture readback");
+        const D3D12_RANGE no_write{0, 0};
+        const ScopeExit unmap([&]() noexcept { capture.readback.buffer->Unmap(0, &no_write); });
+        const auto* rows = static_cast<const std::uint8_t*>(mapped);
+        std::vector<std::uint8_t> rgba(count * 4u);
+        if (capture.form == Captures::Form::Half) {
+            // The halves as the 10-bit format's words (the capture's range ends at 1, as the SDR view), then as RGBA8.
+            std::vector<std::uint8_t> words(count * 4u);
+            half4_to_ten_bit(rows, words.data(), width, height, capture.pitch, width * 4u);
+            ten_bit_to_rgba8(words.data(), rgba.data(), width, height, width * 4u, width * 4u);
+        } else if (capture.form == Captures::Form::TenBit) {
+            ten_bit_to_rgba8(rows, rgba.data(), width, height, capture.pitch, width * 4u);
+        } else {
+            for (unsigned y = 0u; y < height; ++y) {
+                std::memcpy(rgba.data() + static_cast<std::size_t>(y) * width * 4u,
+                            rows + static_cast<std::size_t>(y) * capture.pitch, static_cast<std::size_t>(width) * 4u);
+            }
+        }
+        std::vector<std::uint8_t> rgb(count * 3u);
+        for (std::size_t i = 0; i < count; ++i) {
+            rgb[i * 3u] = rgba[i * 4u];
+            rgb[i * 3u + 1u] = rgba[i * 4u + 1u];
+            rgb[i * 3u + 2u] = rgba[i * 4u + 2u];
+        }
+        write_ppm_async(std::move(capture.path), std::move(rgb), width, height);
     });
-    const auto* base = static_cast<const std::uint8_t*>(mapped);
-    if (!backbuffer_readback_capture_path_.empty()) {
-        queue_debug_ppm_capture(
-            "backbuffer-dump",
-            backbuffer_readback_capture_path_,
-            base,
-            w,
-            h,
-            row_pitch);
-    }
-
-    backbuffer_readback_capture_path_.clear();
-    backbuffer_readback_width_ = 0;
-    backbuffer_readback_height_ = 0;
-    backbuffer_readback_row_pitch_ = 0;
-
-    backbuffer_readback_buf_->Unmap(0, &no_write);
-    mapped_active = false;
 }
 
 }  // namespace galaxy::render

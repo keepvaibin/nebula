@@ -16,6 +16,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <limits>
 #include <string>
 #include <string_view>
@@ -206,10 +207,80 @@ private:
 [[nodiscard]] std::string dxgi_driver_version(::IDXGIAdapter* adapter);
 #endif
 
-// A test capture's pixels (RGB rows, top first) as a binary PPM at `path`, written off the render thread (the Vulkan
-// and Metal renderers; Direct3D 12 keeps its own writers). wait_picture_files returns once every one asked is written:
+// A test capture's pixels (RGB rows, top first) as a binary PPM at `path`, written off the render thread (every
+// renderer). wait_picture_files returns once every one asked is written:
 // the renderers' finish_pictures, before a process that ends without their shutdown.
 void write_ppm_async(std::string path, std::vector<std::uint8_t> rgb, unsigned width, unsigned height);
 void wait_picture_files();
+
+// Test pictures copied out of the GPU (ledger P-323). Each capture has its own readback (`Readback`: the renderer's
+// buffer or staging texture), fenced with the frame that recorded it, and is handed back for writing once that fence
+// is reached, oldest first. A capture asked while others are in flight takes another readback, never one in flight, so
+// no picture asked is dropped; written ones are kept for later captures (kSpares at most).
+template <class Readback>
+class PictureCaptures {
+public:
+    enum class Form : std::uint8_t {
+        Rgba8,   // RGBA8 rows
+        Bgra8,   // BGRA8 rows
+        TenBit,  // R10G10B10A2 words
+        Half,    // RGBA16F halves (the float scene's), read with the 10-bit range
+    };
+    struct Capture {
+        Readback readback{};
+        std::uint64_t fence = 0u;  // 0: recorded in the frame not yet submitted
+        std::string path;
+        unsigned width = 0u;
+        unsigned height = 0u;
+        unsigned pitch = 0u;  // bytes from one row to the next in the readback
+        Form form = Form::Rgba8;
+    };
+
+    // A kept readback that `fits` accepts, taken from the spares; an empty one when none fits (the renderer makes one).
+    template <class Fits>
+    [[nodiscard]] Readback spare(Fits&& fits) {
+        for (auto it = spares_.begin(); it != spares_.end(); ++it) {
+            if (fits(*it)) {
+                Readback taken = std::move(*it);
+                spares_.erase(it);
+                return taken;
+            }
+        }
+        return Readback{};
+    }
+    // A copy recorded in the open frame.
+    void recorded(Capture capture) { in_flight_.push_back(std::move(capture)); }
+    // The open frame was submitted with `fence`.
+    void submitted(std::uint64_t fence) noexcept {
+        for (Capture& capture : in_flight_) {
+            if (capture.fence == 0u) {
+                capture.fence = fence;
+            }
+        }
+    }
+    // Hands each capture whose fence `completed` has reached to `write(Capture&)`, oldest first, and keeps its readback.
+    template <class Write>
+    void finished(std::uint64_t completed, Write&& write) {
+        while (!in_flight_.empty() && in_flight_.front().fence != 0u && in_flight_.front().fence <= completed) {
+            Capture capture = std::move(in_flight_.front());
+            in_flight_.pop_front();
+            write(capture);
+            if (spares_.size() < kSpares) {
+                spares_.push_back(std::move(capture.readback));
+            }
+        }
+    }
+    [[nodiscard]] bool in_flight() const noexcept { return !in_flight_.empty(); }
+    // The device is gone: so is every readback (the pictures in flight are not written).
+    void clear() noexcept {
+        in_flight_.clear();
+        spares_.clear();
+    }
+
+private:
+    static constexpr std::size_t kSpares = 4u;
+    std::deque<Capture> in_flight_;
+    std::vector<Readback> spares_;
+};
 
 }  // namespace galaxy::render

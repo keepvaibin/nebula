@@ -655,9 +655,14 @@ void write_rgb(std::string path, const std::uint8_t* rgba, unsigned width, unsig
 
 }  // namespace
 
+std::shared_ptr<mtl::Buffer> RendererMtl::capture_buffer(std::uint64_t bytes, const char* name) {
+    std::shared_ptr<mtl::Buffer> readback =
+        captures_.spare([bytes](const std::shared_ptr<mtl::Buffer>& kept) { return kept->size >= bytes; });
+    return readback ? readback : mtl::Context::get().create_buffer(bytes, mtl::Storage::Shared, name);
+}
+
 bool RendererMtl::debug_copy_selected_display_to_readback(const DisplayTexture& source) {
-    if (backbuffer_capture_path_.empty() || !display_capture_pending_path_.empty() || !source.texture || source.width == 0u ||
-        source.height == 0u) {
+    if (backbuffer_capture_path_.empty() || !source.texture || source.width == 0u || source.height == 0u) {
         return false;
     }
     const mtl::Texture& texture = *source.texture;
@@ -666,53 +671,30 @@ bool RendererMtl::debug_copy_selected_display_to_readback(const DisplayTexture& 
     if ((!ten_bit && texture.format != mtl::Format::Rgba8) || texture.width < source.width || texture.height < source.height) {
         return false;
     }
-    const std::uint64_t bytes = static_cast<std::uint64_t>(source.width) * source.height * 4u;
-    if (!display_capture_.buffer || display_capture_.buffer->size < bytes) {
-        display_capture_.buffer = mtl::Context::get().create_buffer(bytes, mtl::Storage::Shared, "display picture capture");
-        if (!display_capture_.buffer) {
-            return false;
-        }
+    std::shared_ptr<mtl::Buffer> readback =
+        capture_buffer(static_cast<std::uint64_t>(source.width) * source.height * 4u, "display picture capture");
+    if (!readback) {
+        return false;
     }
     @autoreleasepool {
-        copy_texture_out(commands_of(commands_), texture_of(texture), buffer_of(display_capture_.buffer), source.width,
-                         source.height);
+        copy_texture_out(commands_of(commands_), texture_of(texture), buffer_of(readback), source.width, source.height);
     }
-    display_capture_.fence = 0u;
-    display_capture_pending_path_ = backbuffer_capture_path_ + ".display.ppm";
-    display_capture_width_ = source.width;
-    display_capture_height_ = source.height;
-    display_capture_ten_bit_ = ten_bit;
+    captures_.recorded({std::move(readback), 0u, backbuffer_capture_path_ + ".display.ppm", source.width, source.height,
+                        source.width * 4u, ten_bit ? Captures::Form::TenBit : Captures::Form::Rgba8});
     return true;
 }
 
-void RendererMtl::debug_log_display_readback() {
-    if (display_capture_pending_path_.empty() || display_capture_.fence == 0u || completed_fence_value() < display_capture_.fence) {
-        return;
-    }
-    const auto* pixels = reinterpret_cast<const std::uint8_t*>(display_capture_.buffer->mapped);
-    const std::size_t count = static_cast<std::size_t>(display_capture_width_) * display_capture_height_;
-    std::vector<std::uint8_t> rgba(count * 4u);
-    if (display_capture_ten_bit_) {
-        ten_bit_to_rgba8(pixels, rgba.data(), display_capture_width_, display_capture_height_, display_capture_width_ * 4u,
-                         display_capture_width_ * 4u);
-    } else {
-        std::memcpy(rgba.data(), pixels, rgba.size());
-    }
-    write_rgb(std::move(display_capture_pending_path_), rgba.data(), display_capture_width_, display_capture_height_);
-    display_capture_pending_path_.clear();
-    display_capture_.fence = 0u;
-}
-
 void RendererMtl::debug_log_backbuffer_readback() {
-    debug_log_display_readback();
-    if (backbuffer_capture_pending_path_.empty() || backbuffer_capture_.fence == 0u ||
-        completed_fence_value() < backbuffer_capture_.fence) {
-        return;
-    }
-    write_rgb(std::move(backbuffer_capture_pending_path_), reinterpret_cast<const std::uint8_t*>(backbuffer_capture_.buffer->mapped),
-              backbuffer_capture_width_, backbuffer_capture_height_);
-    backbuffer_capture_pending_path_.clear();
-    backbuffer_capture_.fence = 0u;
+    captures_.finished(completed_fence_value(), [](Captures::Capture& capture) {
+        const auto* pixels = reinterpret_cast<const std::uint8_t*>(capture.readback->mapped);
+        if (capture.form == Captures::Form::TenBit) {
+            std::vector<std::uint8_t> rgba(static_cast<std::size_t>(capture.width) * capture.height * 4u);
+            ten_bit_to_rgba8(pixels, rgba.data(), capture.width, capture.height, capture.pitch, capture.width * 4u);
+            write_rgb(std::move(capture.path), rgba.data(), capture.width, capture.height);
+        } else {
+            write_rgb(std::move(capture.path), pixels, capture.width, capture.height);
+        }
+    });
 }
 
 // ---- the temporal scene ----

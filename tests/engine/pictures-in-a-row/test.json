@@ -1,0 +1,42 @@
+{
+  "harness": 1,
+  "name": "pictures-in-a-row",
+  "about": "Three pictures asked on three frames in a row, the window closed on the next: each is copied while the one before is still in flight, and every one is written (ledger P-323); the render thread answers at exit (P-322).",
+  "save": {
+    "spin": true
+  },
+  "stage": {
+    "name": "BattleShipGalaxy",
+    "scenario": 1
+  },
+  "limit_seconds": 240,
+  "steps": [
+    {
+      "at": 300,
+      "picture": "row-1"
+    },
+    {
+      "at": 301,
+      "picture": "row-2"
+    },
+    {
+      "at": 302,
+      "picture": "row-3"
+    },
+    {
+      "at": 303,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "no_log": "the pictures asked were not all written at exit"
+    },
+    {
+      "no_log": "the render thread held at exit"
+    },
+    {
+      "no_log": "the renderer kept the surface past 2 s"
+    }
+  ]
+}

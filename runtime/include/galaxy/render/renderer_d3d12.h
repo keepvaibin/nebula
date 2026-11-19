@@ -612,9 +612,9 @@ public:
     // `compared` probes are answered with their depth too: the read breaks no render pass here.
     [[nodiscard]] bool record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes, bool compared);
     [[nodiscard]] const float* screen_probes_finished(std::size_t slot);  // throws when the device is gone
+    // Writes every test capture whose frame the GPU has finished.
     void debug_log_backbuffer_readback();
     bool debug_copy_selected_display_to_readback(const DisplayTexture& source);
-    void debug_log_selected_display_readback();
     // The backend binds the exact output paths to the frame before recording
     // its optional readbacks. Paths are retained with the pending readback so
     // a later nonblocking completion cannot write to a subsequent frame's
@@ -696,15 +696,6 @@ private:
     // windowed or borderless, mode, window size) at a frame
     // boundary.
     void reconcile_display_state();
-    void reap_debug_capture_writers(bool wait_for_all);
-    void queue_debug_ppm_capture(
-        const char* tag,
-        const std::string& path,
-        const std::uint8_t* source,
-        unsigned width,
-        unsigned height,
-        unsigned row_pitch,
-        bool ten_bit = false);
     bool create_scene_targets(const FrameMap& map);
     // The MSAA sample count the settings ask for and the device has for the scene target's formats: 1 without MSAA, and
     // with a temporal upscaler, which reads the scene target's single-sample targets directly.
@@ -1256,30 +1247,17 @@ private:
     std::uint64_t next_fence_value_ = 0;
 
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> backbuffer_readback_buf_;
-    bool backbuffer_readback_pending_ = false;
-    std::uint64_t backbuffer_readback_fence_value_ = 0;
-    UINT backbuffer_readback_width_ = 0;
-    UINT backbuffer_readback_height_ = 0;
-    UINT backbuffer_readback_row_pitch_ = 0;
     std::string next_backbuffer_capture_path_;
-    std::string backbuffer_readback_capture_path_;
-    Microsoft::WRL::ComPtr<ID3D12Resource> selected_display_readback_buf_;
-    Microsoft::WRL::ComPtr<ID3D12Resource> selected_display_readback_source_;
-    bool selected_display_readback_pending_ = false;
-    bool selected_display_readback_ten_bit_ = false;
-    bool selected_display_readback_wide_ = false;  // an RGBA16F picture (the float scene's): read as 10-bit words
-    std::uint64_t selected_display_readback_fence_ = 0;
-    UINT selected_display_readback_width_ = 0;
-    UINT selected_display_readback_height_ = 0;
-    UINT selected_display_readback_pitch_ = 0;
-    std::string selected_display_readback_path_;
-    struct DebugPpmWriter {
-        std::string tag;
-        std::string path;
-        std::future<void> completion;
+    // The pictures copied out (the presented picture and the display picture), each its own readback buffer; a display
+    // picture's texture is held until its copy is done.
+    struct CaptureReadback {
+        Microsoft::WRL::ComPtr<ID3D12Resource> buffer;
+        Microsoft::WRL::ComPtr<ID3D12Resource> held;
     };
-    std::vector<DebugPpmWriter> debug_ppm_writers_;
+    using Captures = PictureCaptures<CaptureReadback>;
+    Captures captures_;
+    // A readback buffer for a capture of `bytes`: a spare one, or a new one.
+    [[nodiscard]] CaptureReadback capture_readback(UINT64 bytes, const wchar_t* name);
 
     // Presentation telemetry: successful DXGI submissions, distinct display picture
     // updates, frame-latency waits, Present blocking, and GPU timestamps.
