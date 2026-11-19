@@ -1692,3 +1692,63 @@ sensors found by position, P-129 to P-141) are faster single-threaded work and a
 the replay suite; the frame list's hash identical the same way; the thread sanitizer clean over the tour (the SDL
 host on Linux); both soaks clean; the step's time on the tablet in the five heaviest stops before and after each
 landing, and on the PC never slower (a step of 1.4 ms at most there: the pool's cost must not show).
+
+### 2.18 5.H.2: what the game runs no longer follows the screen
+
+The owner's decisions (file 08 5.H.2; the rows' "Owner 11-19" answers): every actor of the loaded scene runs in every
+step (P-191 (c)); a rule that asks whether something is seen asks one reference view volume, the same on every screen
+(P-243, P-256); no rule follows one player's screen or place (P-244, P-253). Built after F7 (2.17), behind a switch,
+kept if file 00 4.3's measures hold on the three Windows renderers and the tablet at each offered rate; else (b), one
+run volume the same on every screen. Its rows: P-191, P-243, P-253, P-256, and the actors' own skips the owner's
+answer brings in (P-191's OceanBowl, P-253's view groups and SimpleEffectObj).
+
+**Today** (from the rows, read at 241395b49). One state, "clipped", does three jobs: it stops an actor's step, it hides
+its picture, and game rules read it as "unseen". `ClippingJudge` builds its volumes with `MR::getAspect()`
+(`ClippingJudge.cpp:20-21`, `:33`, `:42`), so a wider screen runs more actors (N-1034: the tablet and the PC differ in
+steps at 100 of 101 stops). Beside it, actors skip by themselves: the ocean bowl by distance (`OceanBowl.cpp:160-163`),
+view groups by the player's cube with the port's 30-step hold (`ViewGroupCtrl.cpp:15`, `:60-99`).
+
+**The reads of the clipped state**, all 42 (`git grep -n -E "isClipped|isInvalidClipping|isClippingInvalid" 697535a86
+-- 'native/petari/src/*.cpp'`: 42), classed. 14 were read with their function (`CameraTargetObj` both, `MogucchiHill`,
+`LiveActor`, `SensorHitChecker`, `OceanHomeMapCtrl`, `Butterfly` both, `BenefitItemObj`, `Candlestand`, `CrystalCage`,
+`MorphItemObjNeo`, `PhantomTorch`, `WoodBox`); the other 28 from their line and its condition only, and each is read
+whole in the landing that changes it.
+
+| Class | Reads | Under (c) |
+| --- | --- | --- |
+| The machinery (16) | `ClippingActorHolder.cpp:152`, `:158`, `:171`; `ClippingActorInfo.cpp:26`, `:31`, `:40`; `ClippingGroupHolder.cpp:27`, `:30`, `:42`, `:52`, `:60`, `:70`; `LiveActor.cpp:57`; `LiveActorUtil.cpp:722`, `:726`; `BenefitItemObj.cpp:76` (a shadow's clip actor passing its end on) | the holder no longer calls `startClipped`; it judges each actor once a step against the reference volume and stores "seen" |
+| Rules asking "is it seen" (4) | `CrystalCage.cpp:190` (removed unseen, broken when seen); `MogucchiHill.cpp:130` (a piece unseen is killed, a seen one crumbles); `Candlestand.cpp:94`, `PhantomTorch.cpp:75` (the fire's effect started on appearing when seen) | ask "seen" in the reference volume (P-243): the same answer on every screen |
+| Work stopped while the actor is stopped (8) | `CameraTargetObj.cpp:30`, `:97`; `GravityFollower.cpp:16`; `SensorHitChecker.cpp:13`; `OceanHomeMapCtrl.cpp:52`; `FlashingCtrl.cpp:24`; `MirrorReflectionModel.cpp:55`; `PartsModel.cpp:93` | never true: the actor runs, so its gravity follows, its sensors hit and its timers count |
+| Drawing (8) | `FlashingCtrl.cpp:47`; `MirrorActor.cpp:35`; `MirrorReflectionModel.cpp:34`; `PartsModel.cpp:67`; `FurCtrl.cpp:37`; `WoodBox.cpp:119`; `LumaContentFx.cpp:733`, `:908` | the picture's own culling by the real view (E3's draw records), apart from the step |
+| Forced running (6) | `DemoCtrlBase.cpp:64`, `DemoExecutor.cpp:103`, `Butterfly.cpp:339`, `:349`, `MorphItemObjNeo.cpp:649`, `TalkDirector.cpp:300` (`invalidateClipping` and its readers) | no effect on running, which is always; the calls stay, as they mean "must run" with the switch off and for mods |
+
+**The target.**
+
+1. Two facts, not one state. *Runs*: every actor of the scene, every step (the switch off: today's judge). *Seen*: an
+   answer the step computes once for each actor against the reference view volume: the game camera's position and
+   direction, with a volume at least as wide and as tall as the widest and tallest picture offered (48:9 and the
+   tallest phone shape), the game's far distances kept. *Drawn* is not the step's: each picture culls by its own view.
+2. The reference volume's numbers are data in one place (the widest and tallest shapes offered), never read from the
+   window, so a screen added later widens no rule unless the data says so.
+3. The actors' own skips go with (c): the ocean bowl's distance skip, the view groups and their hold (the groups'
+   cubes stay for what the game does on entering them, not for running), the far distances of always-on effects.
+4. The cost lands on F7's workers: visibility's judge becomes the "seen" judge (2.17 landing 2); actors run in list
+   order on the game thread (2.17 rule 3).
+5. Multiplayer: "seen" is asked of one volume made from the game camera; a mod with two cameras asks each, and a
+   rule may say "seen by any". No rule reads one player's screen.
+
+**Landings,** behind the switch (run all or run by the judge), the old path beside it:
+
+1. The "seen" judge on the reference volume, stored per actor; the 4 "is it seen" reads take it. (With the switch off
+   the judge's numbers are today's, so this landing alone changes nothing.)
+2. Running split from the judge: the holder stops calling `startClipped` when the switch is on; the 8 "stopped" reads
+   are then never true.
+3. Drawing culled per picture for the 8 drawing reads (on E3's records).
+4. The actors' own skips (ocean bowl, view groups and their hold, the effects' far distances).
+5. The measure (file 00 4.3, every renderer and the tablet, each offered rate; no step over budget): (c) kept, or (b)
+   built with the same "seen" volume as its run volume. The replay's reference changes once; said on the board.
+
+**Proof.** One test plays the same inputs at 4:3, 16:9, 21:9, 48:9 and the tablet's and a tall phone's shape and gets
+the same step hash at every step; every tour stop and both soaks green; the 42 reads above each checked under the new
+rule and named in the landing that changes it; the search for the clipped state run again at the last landing, its
+hits only the machinery and the forced-running calls.
