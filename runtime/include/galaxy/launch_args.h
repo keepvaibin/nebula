@@ -36,6 +36,8 @@ enum Diagnostic : unsigned {
                                            // every step, on a GPU that never needs one)
     kDiagnoseHdrHighlights = 1u << 18u,  // hdr-highlights: with HDR output, captures show the light past the paper white
                                          // (HdrPattern::Highlights) in place of the SDR picture
+    kDiagnoseProbeReads = 1u << 19u,     // probe-reads: each screen probe read of the step, with the frame it was
+                                         // answered for and its values' hash (ledger P-242)
 };
 
 // The names --diagnostics takes, each one item or a set. "1" is the launcher's recording.
@@ -65,6 +67,7 @@ inline constexpr DiagnosticName kDiagnosticNames[] = {
     {"ring-stress", kDiagnoseRingStress},
     {"resolution-steps", kDiagnoseResolutionSteps},
     {"hdr-highlights", kDiagnoseHdrHighlights},
+    {"probe-reads", kDiagnoseProbeReads},
     {"frames", kDiagnoseFrames},
     {"gpu", kDiagnoseGpuPasses},
     {"threads", kDiagnoseThreadCpu | kDiagnoseProfile},

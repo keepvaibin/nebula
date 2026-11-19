@@ -26,6 +26,7 @@ Files go to the `diagnostics` folder in Nebula's data folder, named with the pro
 | `pipelines` | The pipelines the run created, written at exit to `pipelines-PROCESS-ID.bin`. `tools/dev/site_pipelines.py` reads it. |
 | `pointer-latency` | The time from the pointer selecting something to the picture that shows it. |
 | `present-stats` | Presented frames, new frames, and GPU and CPU times, each second. |
+| `probe-reads` | Each screen probe read of the game's step: its frame, its channel, the frame whose answers it got, and a hash of their values, so two runs of one replay are compared read by read. |
 | `programs-drawn` | Each pair of shader programs a draw asks for, once. A stage compiles only those. |
 | `profile` | The game thread and the render thread, each sampled each millisecond with its callers, until the run ends (10 minutes at most), in `game-profile-PROCESS-ID.txt` and `render-profile-PROCESS-ID.txt`. Each sample carries the timeline's clock. `tools/perf/game_profile.py` names the game module's functions from its link map; `--ranges` keeps the samples inside given stretches of the timeline. |
 | `ring-stress` | A test: the upload rings are made again every 5 frames, so a test run proves that old rings outlive every frame that reads them. |

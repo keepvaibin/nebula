@@ -1606,7 +1606,24 @@ std::uint32_t RenderCore::screen_probe_results(std::uint32_t channel, ScreenProb
         }
         break;
     }
-    return probe_book_.answers(channel, game_frame, probes, capacity);
+    std::uint32_t from = core::ProbeBook::kNone;
+    const std::uint32_t count = probe_book_.answers(channel, game_frame, probes, capacity, &from);
+    if (::galaxy::diagnosing(::galaxy::kDiagnoseProbeReads)) [[unlikely]] {
+        // Which frame's answers the step read, and their values (FNV-1a over the floats' bits), so two runs of one replay
+        // are compared read by read (ledger P-242).
+        std::uint64_t hash = 0xcbf29ce484222325ull;
+        for (std::uint32_t i = 0; i < count; ++i) {
+            std::uint32_t bits = 0u;
+            std::memcpy(&bits, &probes[i].value, sizeof(bits));
+            for (unsigned b = 0; b < 4u; ++b) {
+                hash = (hash ^ ((bits >> (b * 8u)) & 0xffu)) * 0x100000001b3ull;
+            }
+        }
+        std::fprintf(stderr, "[probe-read] frame %u channel %u from %d count %u values %016llx\n", game_frame, channel,
+                     from == core::ProbeBook::kNone ? -1 : static_cast<int>(from), count,
+                     static_cast<unsigned long long>(hash));
+    }
+    return count;
 }
 
 void RenderCore::probes_walked(std::uint32_t game_frame) {

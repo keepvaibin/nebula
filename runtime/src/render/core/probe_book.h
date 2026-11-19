@@ -94,8 +94,11 @@ public:
         return std::none_of(pending_.begin(), pending_.end(), [&](const Pending& p) { return p.frame <= target; });
     }
 
-    // The answers on `channel` of the newest frame at or before `asked` - kDelay; their count (0 when none).
-    std::uint32_t answers(std::uint32_t channel, std::uint32_t asked, NebulaScreenProbe* out, std::uint32_t capacity) const {
+    // The answers on `channel` of the newest frame at or before `asked` - kDelay; their count (0 when none). `from`, when
+    // given, is set to the frame they were asked by (kNone when none).
+    std::uint32_t answers(std::uint32_t channel, std::uint32_t asked, NebulaScreenProbe* out, std::uint32_t capacity,
+                          std::uint32_t* from = nullptr) const {
+        if (from != nullptr) *from = kNone;
         if (asked < kDelay) return 0u;
         const std::uint32_t target = asked - kDelay;
         for (const Channel& c : channels_) {
@@ -104,6 +107,7 @@ public:
                 if (it->frame <= target) {
                     const auto count = static_cast<std::uint32_t>(std::min<std::size_t>(it->probes.size(), capacity));
                     if (count != 0u) std::memcpy(out, it->probes.data(), count * sizeof(NebulaScreenProbe));
+                    if (from != nullptr) *from = it->frame;
                     return count;
                 }
             }
