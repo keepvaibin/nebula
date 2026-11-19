@@ -11,6 +11,24 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 import gate  # noqa: E402
 
 
+class TestClock:
+    """The wait's clock: it moves only when the wait sleeps, so a loaded machine cannot run a wait out before its
+    first poll (P-327: the gate of c01117add failed "a wait for a held lock waits" on the wall clock)."""
+
+    def __init__(self):
+        self.now = 1000.0
+
+    def __call__(self):
+        return self.now
+
+    def sleep(self, also=None):
+        def step(seconds):
+            if also is not None:
+                also(seconds)
+            self.now += seconds
+        return step
+
+
 def main():
     failures = []
 
@@ -32,8 +50,9 @@ def main():
         check(held is not None and "is held" in held and "Tree@c0ffee" in held, "a held lock is refused, naming its holder")
 
         slept = []
+        clock = TestClock()
         held = gate.take_gate_lock(lock, "full gate of Other@beef pid 1", 0.001, str(board), "Agent 2",
-                                   alive=lambda pid: True, sleep=slept.append, poll=0.01)
+                                   alive=lambda pid: True, sleep=clock.sleep(slept.append), poll=0.01, clock=clock)
         check(held is not None and slept, "a wait for a held lock waits, then refuses at its end")
 
         gate.free_gate_lock(lock, "full gate of Other@beef pid 1", str(board), "Agent 2", "x")
@@ -78,14 +97,17 @@ def main():
         def free_hand_lock(_):
             shutil.rmtree(lock, ignore_errors=True)
 
+        clock = TestClock()
         held = gate.take_gate_lock(lock, me, 0.002, str(board), "Agent 1", alive=lambda pid: alive.get(pid, False),
-                                   sleep=free_hand_lock, poll=0.01)
+                                   sleep=clock.sleep(free_hand_lock), poll=0.01, clock=clock)
         check(held is not None and not lock.exists(), "Agent 1 does not take the freed lock while Agent 3's gate waits before it")
         check(agent3.exists() and [f.name for f in queue.glob("*.txt")] == ["0-1-4242.txt"],
               "a waiter that gives up leaves the queue; the others stay")
         alive[4242] = False
+        clock = TestClock()
         check(gate.take_gate_lock(lock, me, 0.002, str(board), "Agent 1", alive=lambda pid: alive.get(pid, False),
-                                  sleep=lambda _: None, poll=0.01) is None, "a waiter whose process ended loses its place")
+                                  sleep=clock.sleep(), poll=0.01, clock=clock) is None,
+              "a waiter whose process ended loses its place")
         check(not agent3.exists() and not list(queue.glob("*.txt")), "the queue is empty once the lock is taken")
         gate.free_gate_lock(lock, me, str(board), "Agent 1", "x")
         check(gate.queue_rank("quick gate of Nebula-A1@abc pid 1") == 0 and gate.queue_rank("main gate of x pid 2") == 0
