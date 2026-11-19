@@ -1455,3 +1455,182 @@ both paths' pictures in one run:
   before and after; the targets' memory before and after.
 - After the last landing: `git grep -n -E "plan_early_targets|plan_late_depth_clears|swap_target_set|discard_color_passes" runtime`: 0.
 - The game step's and the walk's time on the PC and the tablet, before and after (file 08 7.4: never slower).
+
+### 2.16 E6b: how a picture reaches the display, and what it costs
+
+Read at 241395b49 and, for the schedule, at I-016's commit on `rows/i016` (697535a86, built, not landed), on 11-19.
+File 01's E6b with audit file F (11-17) and its measures; the owner's decisions of file 00 section 3 ("Frame rate":
+a device that cannot hold 120 is never switched to 60 by itself; the 59.94 lock at 0.2%). Done when every measure of
+file 00 4.3 holds on the PC and the tablet.
+
+**Today.**
+
+1. The schedule. I-016 moves it out of `render_core.cpp` into `FrameSchedule` (`runtime/src/render/frame_schedule.cpp`
+   on `rows/i016`), which asks the display and the GPU through `ScheduleDisplay` (`frame_schedule.h:27-47`) and is
+   driven by `frame_schedule_tests.cpp` on simulated displays. What file F section 3 found right stays in it: slots on
+   the display's vblanks where they are timed (`frame_schedule.cpp:136-141`), the step clock's delay that tracks the
+   frames' lateness at its 97th percentile and moves by at most 2% of a step a frame (:98-121), a stall that skips the
+   slots it missed (:461-467), and the two governors (GPU :160-212, cadence :214-379).
+2. A frame's in-between pictures start a step late (G1, I-004). A list that shows is held (`render_core.cpp` on
+   `rows/i016` :2230-2245) until the next step asks for its present; only then does its sequence start (:1504-1510),
+   with the present's asked moment as its arrival (`frame_schedule.cpp:63-64`). Measured 11-17: 17 to 23 ms.
+3. The real frame is rarely shown on vblanks (I-002). A lead that puts `t = 1` on a slot is given only off vblanks
+   (`locked`, `frame_schedule.cpp:84-85`, :135); on vblanks the lead is 0, `t = 1` falls between refreshes, and the
+   next sequence's start walks the frame unseen (`render_core.cpp` on `rows/i016` :796-805). Measured: the real frame
+   shown for 5 to 13 of about 2,640 steps with VSync on.
+4. The present, by renderer.
+   - Direct3D 12 and 11: flip model, frame latency 1 (`renderer_d3d12.cpp:3356`, `d3d11/renderer_d3d11.cpp:308`); the
+     render thread waits on the latency object before each present (:4405-4413). A game frame at 60 goes out with sync
+     interval 1 (aba64e331, M1: `present_sync_interval`, :4305-4331). The frame statistics are read after every present
+     into the pacing recorder (`dxgi_pacing.h:15-37`, :4479-4483). No display time is asked. At 240 Hz a picture
+     reached the display two refreshes after its moment, against one on Vulkan (M2, measured 11-17; no change since).
+   - Vulkan: with VSync, the present before the last must be shown before a picture on the slot clock is queued
+     (present wait, `renderer_vk.cpp:2276-2299`). Present timing is taken where the surface offers it
+     (`:1034-1058`), for the reports only: no time is asked with it (:2324-2334). On Android the display timing
+     extension asks each picture's time on the vsync grid (:2361-2398). A frame a refresh late goes out as FIFO_RELAXED
+     (:2335-2349).
+   - Metal: a drawable is presented as soon as its commands are scheduled (`renderer_mtl.mm:802-803`); its presented
+     time is reported (:788-801). A drawable that waited over `kDrawableWaitMs` drops that picture, never two running
+     (:1222-1237): right for the game's own frames, a lost picture for an in-between one (I-006). The clock is
+     `CVDisplayLink` on macOS and `CADisplayLink` at the display's fastest rate on iOS
+     (`display_clock_apple.mm:76-105`, :143-157), held while out of sight (:243-262, 17ad0a4cd; P-034's proof owed).
+   - Linux: no display clock (`platform/sdl/display_clock.cpp:202-220`).
+   - Variable refresh: detected when the measured vblank interval is under 0.8 of the mode's
+     (`renderer_common.h:166-174`), which in-between pictures near the full rate hide (I-007); presents are held under
+     the mode less mode² / 3600 (:175-179).
+5. What is measured. The pacing recorder is on in every run on every renderer and writes the `[pace]` measures of
+   file 00 4.3 every ten seconds (`pacing_recorder.h:4-24`). The timeline is Windows only (I-012). A pointer's
+   latency from its sample to its picture is counted (`render_core.cpp:476-487`).
+6. Waits. A wait to a slot sleeps and then spins the last margin, which follows the timer's lateness between 100 µs
+   and 2 ms (`precise_wait.h:38-50`, :72-86); M4 measured the render thread at 163 ms of CPU a second at 120 pictures
+   a second on the PC, and it has not been measured on a phone. With VSync off and a cap, `PresentPacer` sleeps up to
+   2 ms (`renderer_common.h:181-202`).
+7. Holding the rate. The GPU governor fits the in-between pictures into nine tenths of a step by a GPU reading
+   (`frame_schedule.cpp:160-212`); the cadence governor drops them when they cost the game its steps and tries again
+   with back-off (:214-379). Dynamic resolution aims the scene's GPU time at a picture's budget
+   (`resolution_governor.h:3-10`, :58-60). Neither knows of the other (I-010); neither reads what is shown (T3: 72
+   uneven pictures a second, nothing acting); the GPU reading follows the clock speed the governor's own decision
+   left (T4). The performance hint's target is the game step (`native/host/host_main.cpp:1191`), told the busier
+   thread's wall time a step (`perf_hint.h:4-9`, P-069). Nothing in play reads the device's heat
+   (`git grep -n -i -E "thermal|headroom" 241395b49 -- runtime platform`: the benchmark's own heat measure and
+   unrelated names only).
+8. What the hand controls is drawn from the list: the pointer and the menu's cursor as old as their step (P-078,
+   P-163).
+9. Cuts and teleports. Two places state a camera cut (`CameraAnim.cpp:132`, `CameraViewInterpolator.cpp:209`, through
+   `MotionSignal::cameraCut`, `MotionSignal.cpp:136-137`), carried as `NEBULA_FRAME_CAMERA_CUT`
+   (`FrameList.cpp:502-504`); a turn is never a cut (`frame_interpolation.h:35-45`, M-068), a jump of the eye past the
+   limits is. Stated teleports: a new life, a death, the player placed, a draw slot's epoch (`LiveActor.cpp:88`,
+   `MarioActorGameOver.cpp:66`, `MarioAccess.cpp:264`, :552, `ActorMovementUtil.cpp:511`, `NameObjCategoryList.cpp:25`).
+   The list's `camera_epoch` is written (`FrameList.cpp:502`) and read by nothing
+   (`git grep -n camera_epoch 241395b49 -- runtime`: 0).
+
+**The target.** File F section 5's rules, with rule 1 as I-001 landed it (`step_lock.h`): exactly 60 steps a second
+except a lock within 0.2% with in-between pictures off; each picture shows the game at the moment it reaches the
+display less one constant delay; a picture's CPU cost does not grow with what is drawn; what the hand controls is read
+at the picture's moment; every platform does the same or says on screen why not.
+
+1. Start at arrival. A list's sequence starts when the list arrives. Its reference is its own step's moment plus the
+   step clock's delay, tracked as now; the held list and the present-only gate go, and the next step's present request
+   only feeds the cadence count. A slot before the reference (a list in earlier than its step's usual delay) shows
+   the sequence before at its own `t`, as N-1084's row says, never the frame before early. The step clock keeps its due
+   times (P-274's form: missed steps run back to back up to a bound, the rest dropped with a log line), so the
+   reference never slips against the wall clock.
+2. The phase at whole multiples. On vblanks at a rate that is a whole multiple of 60 with the step locked to the
+   display (`step_lock.h`, exact multiples only with in-between pictures on), the sequence takes the lead that puts
+   `t = 1` on a refresh: the real frame is shown and no walk is thrown away at 120, 240 and 360 Hz. At other rates the
+   unseen walk goes with E4's named last real frame (2.15, the engine's item 5).
+3. A display model. `ScheduleDisplay` answers two more questions, through each platform: when will a picture presented
+   now be shown, and when was the last one shown. The schedule then picks each picture's `t` from its predicted
+   display time and corrects the lead from the actual one.
+   - Windows: the frame statistics already read at every present feed the model; the lead adapts as Android's does
+     (`present_slots`), so a picture starts as late as it safely can. M2's second refresh is traced with those
+     statistics before anything changes (the latency object's wait, the flip queue or the compositor), and the change
+     makes a picture show at the first refresh after its slot, as on Vulkan.
+   - Vulkan: present timing asks each picture's time where the surface offers it (the same check that already takes
+     its reports); otherwise present wait as now. Android adds present timing beside the display timing extension,
+     each picked at start by what the device offers. Android's lead at 60 Hz (T6: three refreshes) comes down to what
+     the device holds once its GPU clock is held (5. below): file 00 4.3 asks two.
+   - Linux: present timing where present; otherwise a refresh grid measured from when presents complete (present
+     wait's answers). Until one runs, the settings mark in-between pictures on Linux as not synchronised.
+   - Apple: the newer Metal display link, which gives each frame its target presentation time, replaces the display
+     clock and paces the render thread; the drawable is presented at that time; the rate is asked as a range; an
+     in-between picture is never dropped for a drawable wait (I-006). The names and versions are taken from Apple's
+     documentation in the landing. Built by the Mac job, run by the owner later.
+   - Variable refresh: told by the system where it says so; otherwise measured on the display clock's own vblank
+     waits with no in-between picture in flight, so its pictures cannot hide it. Its own path: presents spaced evenly
+     by the precise wait under the cap, each drawn for its own moment; any target rate is then even.
+4. The spin. Where a display time is asked (Vulkan present timing, Android display timing, Metal's display link), the
+   render thread starts a picture its lead ahead and the display holds it to its time; the closing spin of
+   `PreciseWait` stays only where no time can be asked. The render thread's CPU time a second is measured on the tablet
+   before and after.
+5. Holding the target (6.4). One arbiter in the schedule, pure and under its tests, replaces the GPU governor's
+   picture cap and feeds dynamic resolution. Its inputs: the share of pictures on time and the late moments (the
+   pacing recorder's counts), the wall time from picture to picture against the slot, the GPU time, and the device's
+   thermal headroom. Its order: resolution first, then nothing else; the one reduction of pictures that stays is the
+   cadence guard that protects the game's own 60 steps. No decision reads a GPU time taken under a clock its own
+   decision left: the performance hint holds the clock (its target the slot, told the wall time of a picture's CPU and
+   GPU work with the newest calls the system has), and a return is judged by trying it, with back-off. When the guard
+   acts its pictures are placed on every n-th refresh by the display clock (T5). A target missed for a sustained time
+   is said in the settings with what to change; nothing switches by itself. The first start's measure picks a target
+   the device holds.
+6. Fresh input (6.5). The pointer and the menu's cursor are drawn from the newest device sample at the picture's
+   moment; the game's logic keeps its per-step value. A mod's free-look camera: the host applies the newest look
+   rotation to the picture's view through one call; LumaKit's mark for it waits for the mods' work (parked 11-18).
+7. Stated cuts and teleports (6.6). Every place the camera code changes view without blending states the cut, and
+   every warp or respawn of an object states it (the landing reads `Game/Camera` and the position setters whole and
+   lists them); the thresholds stay as a net. The host compares `camera_epoch` between the two lists of a pair instead
+   of the flag, so a cut in a list never shown still parts the pair; the flag goes.
+8. The cost of a picture (6.3). No unseen walk (2. and E4); blending on the GPU (E3 step 5, 2.13); a step's draws
+   recorded once and executed again for each picture where the API allows it, by each API's own rule read in its
+   documentation, else recorded with no per-draw arithmetic; a pass none of whose read versions changes with `t` (E4's
+   versions say this exactly) is kept from the real frame, not drawn again. Each is measured per pass on the tablet
+   first.
+9. Defaults (6.7). A 120 Hz display starts at 120 once the measures hold (P-042, the owner's recommendation); every
+   setting on these pages shows only where it acts.
+
+**Rows.**
+
+| Row | What E6b does | Landing |
+| --- | --- | --- |
+| I-004, N-1084, P-274 | the sequence starts at its list's arrival on its step's moment; an early slot shows the sequence before; the step keeps its due times | 1 |
+| I-013 | the step's phase measured from the step's own work, with the start moved | 1 |
+| I-002 | the lead at whole multiples on vblanks (the rest with E4's last real frame) | 2 |
+| I-005, I-006, I-007, I-012 | a display model per platform; the Linux clock; the Apple display link; variable refresh told or measured unhidden; the timeline on every platform | 3 |
+| P-312 (M2), P-317 (T6) | a picture at the first refresh after its slot on Direct3D; Android's lead down to what the held clock allows | 3 |
+| P-314 (M4) | no closing spin where a display time is asked | 4 |
+| I-010, P-315 (T4), P-316 (T5), P-318 (T3) | one arbiter on what is shown, the clock held, capped pictures placed evenly | 5 |
+| P-078, P-163 | the pointer, the cursor and a mod's look read at the picture | 6 |
+| I-014 | every cut and warp stated; `camera_epoch` read by the host | 7 |
+| I-003 | the cost of a picture (with E3 step 5 and E4) | 8 |
+| P-042 | the default at 120 | 9 |
+| P-311 (M1), P-034 | the after-measure of aba64e331 on the PC; P-034's start check in the Mac job | 3 |
+| P-313 (M3) | traced with the timeline at a scene restart on Vulkan; fixed where it lies | 3 |
+| P-319 (T7) | the bloom's share on the tablet: E4's after-scene instance and the phone setting (2.15, landing 6) | E4 |
+
+**Landings,** each behind its own switch with the old path beside it until its measures hold:
+
+1. The start at arrival in `FrameSchedule`, with its tests; the step's due times (P-274).
+2. The lead at whole multiples.
+3. The display model, one platform at a time (Windows, Vulkan and Android, Linux, Apple, variable refresh), each
+   with the `[pace]` measures before and after.
+4. No closing spin where a time is asked.
+5. The arbiter, the hint's target and calls, the heat input.
+6. Fresh pointer, cursor and look.
+7. Stated cuts and teleports; `camera_epoch`.
+8. The cost of a picture, with E3 step 5 and E4 landing 2.
+9. The default.
+
+**Proof.**
+
+- `frame_schedule_tests.cpp` on simulated displays at every rate of file E A.5, under steady, varying and spiking
+  load: a sequence starts at its arrival; at 120, 240 and 360 Hz with the step locked a refresh lands on `t = 1`;
+  every slot's `t` is its predicted display time's; the arbiter lowers resolution before anything else, never reads
+  its own clock's effect (a simulated GPU whose time rises when it idles), places capped pictures evenly, and returns
+  by trying.
+- The `[pace]` measures of file 00 4.3, recorded by the game: on the PC with Direct3D 12, Direct3D 11 and Vulkan at
+  60, 120, 144 and 240 Hz with VSync on and off; on the tablet at 60 and 120 Hz in every tour stop, with Mario moving
+  where scripted input reaches. The tablet at 120 Hz holds in all 102 stops.
+- The render thread's CPU time a second on the tablet before and after landing 4.
+- Linux and Apple: built by the CI jobs, the Mac job's start check run; their measures are the owner's runs.
+- After landing 1: `git grep -n -E "interp_start_pending_|interp_list_waiting_|run_pending_interp_start" runtime`: 0.
+- The game step's time and the walk's, PC and tablet, before and after (file 08 7.4: never slower).
