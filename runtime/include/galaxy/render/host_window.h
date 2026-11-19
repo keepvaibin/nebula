@@ -49,7 +49,8 @@ extern std::atomic<bool> quit_request;
 extern std::atomic<std::uint64_t> pending_resize_extent;
 // Set by the overlay when Match Output is switched on, so the render thread derives the scale for the current window.
 // The window's drawing surface is withdrawn (Android: the activity out of sight, or a fold moving it to the other
-// display; Windows: the window closing, before it is destroyed). The platform sets surface_withdrawn and then takes surface_use, which the renderer holds from acquiring a
+// display; never on Windows, where closing hides the window and close_game_window destroys it after the renderer let its
+// swap chain and surface go). The platform sets surface_withdrawn and then takes surface_use, which the renderer holds from acquiring a
 // swap-chain image until it is presented, so once the platform holds it no present uses the surface. The renderer
 // drops its swap chain and surface at its next frame, presents nothing until surface_withdrawn is cleared, then
 // recreates both.

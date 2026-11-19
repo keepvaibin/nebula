@@ -1118,19 +1118,21 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return msg == WM_QUERYENDSESSION ? TRUE : 0;
     }
     if (msg == WM_CLOSE) {
+        // Closing asks the game to end; it does not end the window. The window outlives the swap chain and surface made
+        // for it: it is destroyed by close_game_window after the renderer has let both go, or with the process (as the
+        // SDL hosts do). Destroyed here, under frames still in flight, a Vulkan queue could wait for good on an image
+        // the presentation engine never hands back, and the frames' probes and pictures were lost (ledger P-322). The
+        // player sees it go at once: it is hidden, and the input it held is let go.
         save_native_settings_now();
         host_window::quit_request.store(true, std::memory_order_release);
-        // The surface is withdrawn before the window goes (host_window.h): a present between its image's acquire and
-        // its present ends first, and none starts after. A Vulkan swap chain whose window is destroyed under such a
-        // present can leave its image's semaphore unsignalled and the queue waiting on it for good. Two seconds at most,
-        // so a stalled render thread cannot hold the window.
-        host_window::surface_withdrawn.store(true, std::memory_order_release);
-        if (host_window::surface_use.try_lock_for(std::chrono::seconds(2))) {
-            host_window::surface_use.unlock();
-        } else {
-            std::fprintf(stderr, "[window] the renderer kept the surface past 2 s\n");
-        }
-        DestroyWindow(hwnd);
+        wake_main_thread();
+        raw_mouse_detach(hwnd);
+        invalidate_pointer_focus_once();
+        clear_pointer_buttons();
+        host_window::pointer_hwnd.store(0u, std::memory_order_release);
+        s_system_menu_active.store(false, std::memory_order_release);
+        host_window::move_size_active.store(false, std::memory_order_release);
+        ShowWindow(hwnd, SW_HIDE);
         return 0;
     }
     if (msg == WM_DESTROY) {

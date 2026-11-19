@@ -4724,6 +4724,22 @@ void hand_off_to(galaxy::render::RendererKind kind, const char* why) {
     // the GPU and written first, as that shutdown would.
     if (galaxy::extensions::keeps_pictures() && !galaxy::render::finish_pictures(5000u)) {
         log_line("host:", "the pictures asked were not all written at exit");
+#if defined(_WIN32)
+        // The render thread did not answer: every thread's stack, as the stall watch writes them, so the call that
+        // held it is named (ledger P-322).
+        static wchar_t held[1024];
+        DWORD held_error = 0;
+        DWORD held_snapshot = 0;
+        const galaxy::crash_watch::Result written = galaxy::crash_watch::write_dump(
+            GetCurrentThreadId(), nullptr,
+            MiniDumpWithIndirectlyReferencedMemory | MiniDumpWithThreadInfo | MiniDumpIgnoreInaccessibleMemory, held,
+            sizeof(held) / sizeof(held[0]), &held_error, &held_snapshot, 30000u, L"nebula-hang");
+        char text[MAX_PATH + 160];
+        std::snprintf(text, sizeof(text), "the render thread held at exit: %s %ls (0x%08lX, snapshot 0x%08lX)",
+                      written == galaxy::crash_watch::Result::kWritten ? "every thread's stack in" : "no dump",
+                      fs::path(held).filename().c_str(), held_error, held_snapshot);
+        log_line("host:", text);
+#endif
     }
 #endif
 #if defined(NEBULA_HOST_RENDERER)
