@@ -354,7 +354,7 @@ between the two paths are in 2.7:
 
 | Step | Written at cook | Ends in the engine |
 | --- | --- | --- |
-| 1 | the section table (2.8); per material form: which row glows, the map rows, the glow value, the alpha cutoff and mode; the console's material fields apart (`GXMT`) | every pipeline made at load (P-010, N-1067). The search for console register codes at load that file 01 names here was the tracer's and went with it (E13a stage 4a, a778266de): no `NEBULA_ROW_` is read in `runtime/` (grep: no file), and no stage record is written. What is left of P-157 is the register-shaped record (`NebulaModelMaterial`, `nebula_model.h:246-264`), read per draw by `Material::fillRow` (`Material.cpp:296-424`): step 3 |
+| 1 | the section table (2.8); the material apart from the console's fields (2.9: `MATL`, `FORM`, `GXMT`); a form's descriptions of 2.3 (the glow row, the alpha cutoff and mode) each with its first reader (2.9) | every pipeline made at load (P-010, N-1067). The search for console register codes at load that file 01 names here was the tracer's and went with it (E13a stage 4a, a778266de): no `NEBULA_ROW_` is read in `runtime/` (grep: no file), and no stage record is written. What is left of P-157 is the register-shaped record (`NebulaModelMaterial`, `nebula_model.h:246-264`), read per draw by `Material::fillRow` (`Material.cpp:296-424`): step 3 |
 | 2 | samplers in final form, each form's texture list | hashing a texture's address and decoding filter codes per draw; the per-frame table rebuilds (`draw_walker.cpp:878`, :920); the sampler heap's and arrays' waits (P-048, P-056, P-066) |
 | 3 | per form: a block of final constant rows, and the short list of rows that change, with their source | filling register rows at draw time |
 | 4 | prepared material records for the immediate-style draw sites and particles; fixed shapes as meshes registered once | vertices and indices built on the CPU each frame |
@@ -534,7 +534,7 @@ this cooker keeps loading. A model of another version stops the load today witho
 | `JNTS`, `STEP`, `JMSH`, `DMTX`, `ENVL`, `MIXS`, `IBND`, `IMPT`, `MESH`, `TEXR`, `GEOM`, `NAME` | 12's arrays as they are, by name instead of by fixed offset | the first landing (step 1's) | kept |
 | `MATL` | per material: name, `same_as`, mesh, joint, state word, its forms' and slots' ranges | step 1 | kept |
 | `GXMT` | the console's material fields, apart: registers, constant and material colours, channels, alpha codes and references, coordinate generators by GX type and source, fog codes | step 1 (moved out of the material) | the last landing of step 3: no reader is left, and the cooker stops writing it |
-| `FORM` | per form: programs, state, inputs; its kind (opaque, alpha-tested, blended, water), the alpha cutoff as a float and its mode, the glow row and colour, the base map's slot, which texture or vertex colour is baked light, each coordinate's source (one that reads the eye is marked), reads a copy of the screen, two-sided; its ranges in `TXLS`, `CBLK`, `CROW` | step 1 | kept |
+| `FORM` | per form: programs and inputs (the state word is the material's, 2.9); added with their first reader (2.9): its kind (opaque, alpha-tested, blended, water), the alpha cutoff as a float and its mode, the glow row and colour, the base map's slot, which texture or vertex colour is baked light, each coordinate's source (one that reads the eye is marked), reads a copy of the screen, two-sided; its ranges in `TXLS`, `CBLK`, `CROW` | step 1 | kept |
 | `SAMP` | samplers in final form: min, mag and mip filter, wrap, anisotropy, lod range and bias as floats | step 2 | kept |
 | `TXLS` | per form, its texture list: texture and sampler by index | step 2 | kept |
 | `CBLK` | per form, its constant rows in final floats (colours divided once, the alpha reference a float, fog per view, not per draw) | step 3 | kept |
@@ -681,3 +681,92 @@ holds.
    - A C test reads a cooked model through `nebula_model_section` and finds every section and count.
    - The gate's pictures on every stop and renderer are unchanged, and the replay is identical.
    - No switch (2.7.3) is needed: no path draws differently. The switch starts with step 1's second landing.
+
+### 2.9 Step 1's second landing, to the file: the material apart from the console's fields
+
+Read at c8222595e. In 12 a material is one record of 208 bytes (`NebulaModelMaterial`, `nebula_model.h:246-264`,
+written at `model_write.rs:587-632`) followed by its parts (coordinates, slots, coordinate matrices, warps, forms with
+their rows, texture numbers and inputs, `:633-718`); the record holds the parts' places as offsets from the block's
+start. 2.8 keeps all of it as `MT12`. This landing replaces `MT12` with typed sections; no picture changes.
+
+**Who reads the material record.** No file of `runtime/` or `platform/` names `NebulaModelMaterial` or `materials_at`
+(`git grep` at c8222595e: the hits are `native/` and `crates/` only). In the game:
+
+| Field | Read at |
+| --- | --- |
+| `name_at` | `ModelData.hpp:174` (`getMaterialName`) |
+| `name_hash` | `Material.cpp:205` (the draw's source hash), `ModelData.cpp:193` (find by name) |
+| `same_as` | `Material.hpp:151`, for `Model.cpp:445` |
+| `mesh`, `joint` | `Material.cpp:199-200` |
+| `mode` | `Material.hpp:155-157` (`isTranslucent`: neither of the low two bits), for `DrawBuffer.cpp:257` |
+| `flags` | ambient `Material.hpp:220`; stage colours `Material.cpp:297`; billboard `:257`, `:313`; indirect `:334`; fog `:384`, `:392`, `:604` |
+| slots | `Material.cpp:208-212`, `Material.hpp:223-228`, the scale rows `Material.cpp:363` |
+| coordinates | `Material.cpp:231-237`, `Material.hpp:184-186` |
+| coordinate matrices | `Material.cpp:238-258` |
+| warps | `Material.cpp:340-344` |
+| forms | `Material.cpp:279-293`, `:426-449`, `:696-710`, `:713-820`, `:917-1024` |
+| colours, registers, constants, fog | `Material.cpp:213-229` |
+| `channels` (enable and light mask only) | `Material.hpp:230-233` (`usesLight`), for `ModelUtil.cpp:274-294` and `NPCUtil.cpp:253`, `:266` |
+| `alpha_ref0`, `alpha_ref1` | `Material.cpp:377-378` |
+| `has_scale`, `normal_scale` | `Model.cpp:605-616`; `Model.hpp:229` keeps the record's address |
+| `state` | `Material.cpp:614` |
+
+Read by nothing outside the importer (`git grep -nw` of each name over `native`, `runtime` and `platform`, without
+`nebula_model.h`): `cull`, `early_depth`, `channel_count`, `alpha_comp0`, `alpha_op`, `alpha_comp1`, `blend_type`,
+the channels' `material_source` and `ambient_source` (0 hits each); `blend_src`, `blend_dst`, `depth_test`,
+`depth_func`, `depth_write`, `diffuse` and `attenuation` have hits, all in other records (the pass state, particles,
+the Mii head), none through a material. The cooker turned them into the state word (`model_write.rs:36-44`) and the
+programs. The mod calls read a material through `Material` (`NebulaModCalls.cpp:129`, `:138`), not the file.
+
+In the importer: `model_write::names` (`:923`, the names by `MATERIAL_BYTES`); the tests `gltf_tests.rs:198-206` and
+`:1241-1246` (the slots at `MATERIAL_BYTES - 16`). Outside this repository: not checked.
+
+**The sections.** Records name their parts by index and count in a section, not by offset; names stay offsets of
+the block, as in every other record. Names starting `GX` hold the console's material, read until step 3's last
+landing.
+
+| Section | Entry | Stride | Kept |
+| --- | --- | --- | --- |
+| `MATL` | `name_at`, `name_hash`, `same_as`, `mesh`, `joint`; `flags`: translucent (12's `mode & 3` is 0, decided at the cook), normal scale (12's `has_scale`), on a billboard; `state`; `light_masks[4]` (a channel's mask, 0 when 12's `enable` is 0); `gx` (its `GXMT` entry); `first_slot`, `slot_count`; `first_form`, `form_count`; `normal_scale[3]` | 64 | kept |
+| `FORM` | `vertex`, `pixel` (the programs' hashes); `material`; `first_vertex_row`, `vertex_row_count`, `first_pixel_row`, `pixel_row_count` (in `FROW`); `first_texture`, `texture_count` (in `FTEX`); `first_input`, `input_count` (in `FINP`); `replace`, `flags`, `pass` as in 12 | 56 | kept |
+| `FINP` | a form's vertex inputs, `NEBULA_INPUT_*` | 1 | kept |
+| `SLOT` | 12's `NebulaModelSlot` | 8 | kept: map n is what the game's texture animation changes (`Material::setTextureIndex`, from `BtpPlayer.cpp:17`); step 2 says whether `TXLS` takes its texture column |
+| `FTEX` | a form's material map numbers | 1 | until step 2's last landing (`TXLS`) |
+| `FROW` | a form's rows, `NEBULA_ROW_*`, vertex rows then pixel rows | 4 | until step 3's last landing (`CBLK`, `CROW`) |
+| `GXMT` | `flags` (ambient, stage colours, indirect, fog); material and ambient colours; registers; constants; `alpha_ref0`, `alpha_ref1`; fog; `first_coord`, `coord_count`; `first_matrix`, `matrix_count`; `first_warp`, `warp_count` | 120 | until step 3's last landing |
+| `GXTG` | coordinate generators, 12's `NebulaModelCoord` | 8 | until step 3's last landing |
+| `GXTM` | coordinate matrices, 12's `NebulaModelCoordMatrix` | 104 | until step 3's last landing, which names the record that takes the game's matrix values (the mode by name, not the info byte) |
+| `GXWP` | warps, 12's `NebulaModelWarp` | 24 | until step 3's last landing |
+
+The fields read by nothing are not written. `MT12` and `NebulaModelMaterial` go. The light masks leave the console's
+channels now because the game counts a material's lights (`ModelUtil.cpp:274-294`) after `GXMT` is gone; step 6 says
+how a material names its lights when lights are records.
+
+Corrections to 2.7.2 and 2.4. The state word is the material's: every form of a material is listed with its
+material's state (`model_write.rs:748-756`), so it is in `MATL`, not `FORM`. The descriptions of 2.3 (the kind, the
+alpha cutoff, the glow row, the base map, the baked light, the coordinate sources, the copy of the screen, two-sided)
+are not written in step 1: nothing on main reads them, and a field written with no reader cannot be proved. Each is
+added at `FORM`'s end by the landing that brings its first reader; `stride` makes that an added field, not a format.
+2.4's row 1 lists them as step 1's: they are not. The pipelines a model needs are already written at the cook
+(`NebulaData/Pipelines.bin`, `pipeline_list.rs:1-5`, `:102-114`) and registered at boot; what is left of P-010 is that a
+draw whose pipeline is not made yet builds it on the render thread, which is E5's code and needs nothing more from the
+file.
+
+**Readers.** `ModelData` resolves the sections once at load (2.8's lookup) and keeps the arrays. `Material` keeps its
+`MATL` and `GXMT` entries in place of 12's record; every form reader takes the form's ranges in place of `*_at`;
+`Material`'s accessors keep their names and results, so `DrawBuffer`, `ModelUtil`, `MaterialCtrl` and the mod calls do
+not change. `Model.hpp:229` keeps the `MATL` entry's address. In Rust, `model_write::names` reads `MATL`, and the two
+tests read `SLOT` through `MATL`'s `first_slot`.
+
+**Proof.**
+
+- A test in `crates/nebula-import` cooks every model of the US disc with 2.8's writer and with this one and compares,
+  per material, every field of the reading table: `MATL` and `GXMT` with 12's record, `SLOT`, `GXTG`, `GXTM` and
+  `GXWP` with its parts, each form's programs, rows, map numbers, inputs, `replace`, `flags` and `pass`; every other
+  section byte for byte.
+- `git grep -nw` of each field 12 dropped over `native/include`: 0. `NebulaModelMaterial`, `MATERIAL_BYTES` and
+  `MT12` over the tree, outside `docs/`: 0.
+- A C test: a model without `MATL` is refused, naming it.
+- The gate's pictures on every stop and renderer are unchanged and the replay is identical; the store version goes up
+  by one.
+- No switch: no path draws differently.
