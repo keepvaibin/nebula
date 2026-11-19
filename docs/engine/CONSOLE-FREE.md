@@ -8,7 +8,8 @@ the importer reading the disc once at setup stay.
 
 State (2026-11-18, the code of a1f423dd8): pass one run; pass two has read each area of `FRAME-MODEL.md` 1.10 for
 the console's shape, the 921 actor files by a pattern sweep with every hit read. Not read yet: the 921 files whole.
-Items open: the frame's rows (FRAME-MODEL 1.9), P-155, P-184, P-185, P-186, P-187, P-188. Not 100%.
+Items open: the frame's rows (FRAME-MODEL 1.9), P-155, P-184 to P-194. Section 4 applies file 08's
+test (section 3) and the owner's answers of 18:18 (file 08 5.H). Not 100%.
 
 ## 1. Pass one: whole-tree searches
 
@@ -215,4 +216,37 @@ Each: where; what of it is the console's; the modern form; row; state; proof.
 | Sound sequences' data kept in the console's byte order | `native/petari/src/Game/Sound/SeqTrack.cpp:29-37`, `:706-745`, `:1505-1525` | the sequence file's data section as the console stored it (big-endian), swapped at every read on the sound thread | the cook, which already decodes the operations, writes each table they read in host order and typed (envelope points, filter weights, 8-, 16-, 24-, 32-bit tables); the run time reads records | P-186 | open | not yet |
 | Characters as 16-bit codes | `native/petari/src/Game/Ui/CharStrmReader.cpp:10-33`, the font's two 256-entry pages (`native_data.rs:244-257`), `TagProcessorBase` (`u16 code`) | the console font format's code range (a character past U+FFFF cannot be drawn) | code points as 32-bit values through the readers, the tag processors and the cooked font (`NFNT` version 2: a code table by range) | P-187 | open | not yet |
 | Particle indices of 16 bits | `ParticleResourceHolder.cpp:24`, `:45-47` (rows past 65,534 are not named; `0xFFFF` is none), `SingleEmitter.hpp:32` (`u16 mResourceId`), `EffectSystemUtil.hpp:30`, `:54`, `MultiEmitter.cpp:379-391` | the console particle library's 16-bit resource index | a 32-bit index from the name table to the emitter | P-188 | open | not yet |
+| Table fields found by column name | `native/petari/src/Game/Util/Table.cpp:33-48` (the column search), 241 reads in 56 files (section 2) | a table kept as the disc's column list, each field found by its name's hash when read | the cook writes each table kind as a typed record with its columns resolved; the game reads fields by index, the name search gone | P-189 | open (E) | not yet |
+| A normal map remade on the CPU and lit through a gradient texture | `native/petari/src/Game/MapObj/NormalMapBase.cpp:114`, `:119`, `:483-523` (`createGradTexture`: an LA8 gradient built on the CPU), `:525` on (`swapColorGB`: each RGBA8 texel's normal decoded and written back as 0, g, b, r in a copy), its own draw settings (`drawMaterialSetting`, `setStageForObject`) | the console's way of lighting a normal map by a texture lookup (read from the code; the shader's side not read yet) | the normal map used as it is cooked, lit by the renderer's lighting in the shader; nothing remade on the CPU | P-190 | open (E3) | not yet |
+| What the game runs follows the screen's shape | `native/petari/src/Game/LiveActor/ClippingJudge.cpp:20-21`, `:33`, `:42` (`MR::getAspect()` in the volumes that decide which actors run); 42 lines of `native/petari/src` read an actor's clipped state (`isClipped`, `isInvalidClipping`, `isClippingInvalid`: `grep -rn ... --include=*.cpp`, 42 hits) | the console's culling of actors' runs by the one screen it had | (c) first: every actor of the loaded scene runs in every step, drawing culled by the real view; (b) if (c) misses a measure: one run volume the same on every screen | P-191 | open, after D.6 (file 08 5.H.2) | not yet |
+| Shared counts and widths that can cap what a mod adds | `MR::Vector`, holders, registries, groups (section 2, Limits); id and index widths: `Sound.hpp:26-27` (`SoundID`: section 8 bits, group 8 bits, wave 16 bits; `SoundVoices.cpp:70`), P-188's particle index; the 138 literal tables and the pools, each read | a width or a size chosen for the console's content | every shared holder grows and every id or index is 32 bits wide or more; an actor's own count stays its number | P-192 | open (E; the tables' classing in the whole read) | not yet |
+| Surround output by a written law | `runtime/include/galaxy/audio_mixer.h:90-95`, `runtime/src/audio_device_wasapi.cpp:222`, the game's sound code (not read for this yet) | none kept: the two-channel output stays as made (owner, 5.H.5); the surround law is new | a law from a sound's pan and surround amounts to each reported layout's speaker gains, written here before the code, each property asserted by a test, a render-to-file test through the real mixer | P-193 | open (E, with the sound work) | not yet |
+| Actors that draw for themselves | 100 files of `native/petari/src` define `draw() const` (`grep -rlE "void \w+::draw\(\) const" native/petari/src`), 55 of them name a draw helper (`Material`, `TDDraw`, `setStage`, `RenderTexture`, `NebulaPass`, `drawFillBox`, `GameTexture`) | not read yet; `FRAME-MODEL.md` does not name them | each read; those with the console's shape placed in E3 or E4's steps | P-194 | open (the whole read, 5.H.1) | not yet |
 | Texture headers in the console's form | `ResTIMG`, 137 lines in 59 files | the J3D texture header and its filter codes | a host id and a sampler resolved at load (E3 step 2) | P-155 | open (F4) | not yet |
+
+## 4. Section 3's test, and the owner's answers of 2026-11-18 18:18
+
+File 08 section 3 asks of every line this file put in "the game itself": can the code take its modern form with the
+replay identical? Yes: an item. No: listed with the reason, a question for the owner. Applied at a1f423dd8:
+
+- Table reads by column name (section 2, Tables): handling, the replay unchanged: P-189.
+- The actor folders' packed and offset reads (section 2): `MarioSearchLight.cpp:297` packs an RGBA8 word for a 2D
+  box, the renderer's own format: not the console's shape. `NormalMapBase.cpp:538` is part of P-190. `SoundID`'s
+  widths (`Sound.hpp:26-27`, `SoundVoices.cpp:70`): P-192. The 14 reads by offset (`GhostPlayer.cpp:165`,
+  `MarioConst.cpp:1061-1067`, `ChordInfo.cpp:18`, `SeqTrack.cpp:278-282`, `SoundArchive.cpp:11`, `:101`, `:147`,
+  `SoundTable.cpp:5`, `:14`) walk cooked host-order records where they lie: the modern form already, except the
+  sequences' big-endian data (P-186).
+- The 138 tables of a literal size and the pools made ahead: P-192 by the owner's rule, each classed by reading the
+  code that fills it, in the whole read. An actor's own count (`DinoPackunVs2.cpp:34-35`, 64 and 16 fires) stays,
+  the owner's words.
+- Units of the console's picture (the 456-line canvas, the 608 and 832 widths, lines sized in 456-line units, the
+  640 x 456 grid of effect targets): coordinates of the content, drawn at the real resolution by every renderer
+  (section 2): no handling of the console's shape. Not items.
+- The sound driver's tick, the filters made for 32 kHz, the volume ramp, the speaker's 6 kHz waves, the two-channel
+  fold: kept, the owner's answer ("Sound stays as it was made"). The surround output: P-193.
+- Movies, the disc's frames: kept, the owner's answer ("Keep them"). No item.
+- The 60 Hz game step: the owner's decision (file 08 section 3).
+- New by this test: actors that draw for themselves (P-194), a class `FRAME-MODEL.md` does not name.
+
+The whole read of the 921 actor files comes after the code items of D and E or after the weekly reset (file 08
+5.H.1); the pattern sweep closes no area.
