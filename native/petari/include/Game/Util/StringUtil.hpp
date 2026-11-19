@@ -127,4 +127,11 @@ namespace MR {
         u32 mRoom;
         char16_t mInline[cInline];
     };
+
+    // UTF-8 as the game's 16-bit text: past U+FFFF a surrogate pair; a sequence cut short, a stray continuation
+    // byte, a longer form than its code needs, a code past Unicode or a surrogate's own code becomes U+FFFD. Writes
+    // the text and its end to pDst (when not null); returns the code units it takes, its end included.
+    u32 utf8ToText16(char16_t* pDst, const char* pSrc);
+    // The whole UTF-8 text as rText's text.
+    const char16_t* setTextFromUtf8(Text16& rText, const char* pSrc);
 };  // namespace MR

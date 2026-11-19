@@ -211,52 +211,14 @@ namespace {
         return pId != nullptr && pId[0] == 'm' && pId[1] == 'o' && pId[2] == 'd' && pId[3] == ':';
     }
 
-    // The host's UTF-8 as the game's 16-bit text (past 16 bits, a surrogate pair); the units it takes, its end included.
-    s32 fromUtf8(char16_t* pDst, const char* pSrc) {
-        const u8* p = reinterpret_cast< const u8* >(pSrc);
-        s32 length = 0;
-        while (*p != 0) {
-            const u32 lead = *p++;
-            s32 more = lead >= 0xF0 ? 3 : lead >= 0xE0 ? 2 : lead >= 0xC0 ? 1 : 0;
-            u32 c = lead & (more == 3 ? 0x07 : more == 2 ? 0x0F : more == 1 ? 0x1F : 0x7F);
-            for (; more > 0 && (*p & 0xC0) == 0x80; more--) {
-                c = (c << 6) | (*p++ & 0x3F);
-            }
-            // Cut short, a stray continuation byte, past Unicode, or a surrogate's own code: the replacement character.
-            if (more != 0 || (lead >= 0x80 && lead < 0xC0) || lead >= 0xF8 || c > 0x10FFFF || (c >= 0xD800 && c < 0xE000)) {
-                c = 0xFFFD;
-            }
-            if (c >= 0x10000) {
-                if (pDst != nullptr) {
-                    pDst[length] = static_cast< char16_t >(0xD800 + ((c - 0x10000) >> 10));
-                    pDst[length + 1] = static_cast< char16_t >(0xDC00 + ((c - 0x10000) & 0x3FF));
-                }
-                length += 2;
-            } else {
-                if (pDst != nullptr) {
-                    pDst[length] = static_cast< char16_t >(c);
-                }
-                length++;
-            }
-        }
-        if (pDst != nullptr) {
-            pDst[length] = 0;
-        }
-        return length + 1;
-    }
-
-    void textFromUtf8(MR::Text16& rText, const char* pSrc) {
-        fromUtf8(rText.room(fromUtf8(nullptr, pSrc)), pSrc);
-    }
-
     // A mod's achievement waits for its pop-up, with its name.
     void enqueueMod(s32 mod) {
         const char* pName = nullptr;
         if (!NebulaHost::modAchievement(mod, nullptr, &pName, nullptr, nullptr) || pName == nullptr) {
             return;
         }
-        Waiting& rWaiting = pushWaiting(static_cast< u32 >(fromUtf8(nullptr, pName)));
-        fromUtf8(rWaiting.mName, pName);
+        Waiting& rWaiting = pushWaiting(MR::utf8ToText16(nullptr, pName));
+        MR::utf8ToText16(rWaiting.mName, pName);
         rWaiting.mIcon = &cIconMod;
     }
 
@@ -593,7 +555,7 @@ namespace NebulaAchievements {
 
     void getModDescription(MR::Text16& rText, s32 index) {
         const char* pDescription = nullptr;
-        textFromUtf8(rText, modAt(index, nullptr, nullptr, &pDescription, nullptr) && pDescription != nullptr ? pDescription : "");
+        MR::setTextFromUtf8(rText, modAt(index, nullptr, nullptr, &pDescription, nullptr) && pDescription != nullptr ? pDescription : "");
     }
 
     const char* getId(s32 index) {
@@ -610,11 +572,11 @@ namespace NebulaAchievements {
                 const char* pKey = nullptr;
                 const char* pName = nullptr;
                 if (modAt(i, &pKey, &pName, nullptr, nullptr) && MR::isEqualString(pKey, pId) && pName != nullptr) {
-                    textFromUtf8(rText, pName);
-                    return fromUtf8(nullptr, pName) - 1;
+                    MR::setTextFromUtf8(rText, pName);
+                    return static_cast< s32 >(MR::utf8ToText16(nullptr, pName)) - 1;
                 }
             }
-            textFromUtf8(rText, "");
+            MR::setTextFromUtf8(rText, "");
             return 0;
         }
         MR::FormattedName textId;

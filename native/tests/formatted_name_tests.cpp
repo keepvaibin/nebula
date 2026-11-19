@@ -1,5 +1,6 @@
 // MR::FormattedName, MR::Text16 and the name helpers built on them: names far longer than their inline room; and
-// MR::GrowBuffer, the room of the achievement pop-up queue, past the 40 entries its old fixed array held.
+// MR::GrowBuffer, the room of the achievement pop-up queue, past the 40 entries its old fixed array held; and
+// MR::utf8ToText16, the one UTF-8 decoder of the game's 16-bit text.
 // StringUtil.cpp is linked with the few game functions it calls given below.
 #include "Game/Screen/ReplaceTagProcessor.hpp"
 #include "Game/Util/Array.hpp"
@@ -227,6 +228,55 @@ int main() {
             sRing.pop();
         }
         check(wrapped && sRing.count() == 0, "a wrapped ring that grows keeps its order");
+    }
+
+    // MR::utf8ToText16 (P-209): every length of sequence, a pair past U+FFFF, and each bad form as U+FFFD.
+    {
+        struct Case {
+            const char* mUtf8;
+            std::u16string mWant;
+            const char* mWhat;
+        };
+        const Case cases[] = {
+            {"", u"", "empty text"},
+            {"Az", u"Az", "one-byte sequences"},
+            {"\xC3\xA9", u"é", "a two-byte sequence"},
+            {"\xE3\x81\x82", u"あ", "a three-byte sequence"},
+            {"\xF0\x9F\x98\x80!", u"\xD83D\xDE00!", "a four-byte sequence becomes a surrogate pair"},
+            {"\xF4\x8F\xBF\xBF", u"\xDBFF\xDFFF", "the last code of Unicode"},
+            {"\x80" "A", u"\xFFFD" "A", "a stray continuation byte"},
+            {"\xE3\x81", u"\xFFFD", "a sequence cut short by the end"},
+            {"\xE3" "A", u"\xFFFD" "A", "a sequence cut short by a lead byte"},
+            {"\xED\xA0\x80", u"\xFFFD", "a surrogate's own code"},
+            {"\xF4\x90\x80\x80", u"\xFFFD", "a code past Unicode"},
+            {"\xC2\x80\xE0\xA0\x80", u"\u0080ࠀ", "the least code of two and three bytes"},
+            {"\xC0\x80" "A", u"\xFFFD" "A", "a two-byte form of 0"},
+            {"\xE0\x80\xAF", u"\xFFFD", "a three-byte form of a one-byte code"},
+            {"\xF0\x8F\xBF\xBF", u"\xFFFD", "a four-byte form of a three-byte code"},
+            // The lead takes three continuation bytes as a four-byte one does; the fifth is then a stray byte.
+            {"\xF8\x88\x80\x80\x80", u"\xFFFD\xFFFD", "a five-byte lead"},
+        };
+        for (const Case& rCase : cases) {
+            const u32 units = MR::utf8ToText16(nullptr, rCase.mUtf8);
+            std::u16string out(units, u'?');
+            const u32 written = MR::utf8ToText16(&out[0], rCase.mUtf8);
+            check(units == rCase.mWant.size() + 1 && written == units && out.back() == u'\0' &&
+                      out.substr(0, units - 1) == rCase.mWant,
+                  rCase.mWhat);
+        }
+
+        // Past the inline room of 128 units, whole.
+        std::string longText;
+        for (u32 i = 0; i < 300; i++) {
+            longText += "\xE3\x81\x82";
+        }
+        MR::Text16 text;
+        const char16_t* const pText = MR::setTextFromUtf8(text, longText.c_str());
+        bool whole = pText == text.c_str() && pText[300] == u'\0';
+        for (u32 i = 0; i < 300; i++) {
+            whole = whole && pText[i] == u'あ';
+        }
+        check(whole, "a UTF-8 text longer than Text16's inline room");
     }
 
     if (sFailures != 0) {

@@ -604,4 +604,45 @@ namespace MR {
             ::free(mText);
         }
     }
+
+    u32 utf8ToText16(char16_t* pDst, const char* pSrc) {
+        const u8* p = reinterpret_cast< const u8* >(pSrc);
+        u32 length = 0;
+        while (*p != 0) {
+            const u32 lead = *p++;
+            const s32 need = lead >= 0xF0 ? 3 : lead >= 0xE0 ? 2 : lead >= 0xC0 ? 1 : 0;
+            u32 c = lead & (need == 3 ? 0x07 : need == 2 ? 0x0F : need == 1 ? 0x1F : 0x7F);
+            s32 more = need;
+            for (; more > 0 && (*p & 0xC0) == 0x80; more--) {
+                c = (c << 6) | (*p++ & 0x3F);
+            }
+            // The least code each length may carry: a longer form than the code needs (C0 80 for 0) is refused.
+            const u32 least = need == 3 ? 0x10000 : need == 2 ? 0x800 : need == 1 ? 0x80 : 0;
+            if (more != 0 || (lead >= 0x80 && lead < 0xC0) || lead >= 0xF8 || c < least || c > 0x10FFFF ||
+                (c >= 0xD800 && c < 0xE000)) {
+                c = 0xFFFD;
+            }
+            if (c >= 0x10000) {
+                if (pDst != nullptr) {
+                    pDst[length] = static_cast< char16_t >(0xD800 + ((c - 0x10000) >> 10));
+                    pDst[length + 1] = static_cast< char16_t >(0xDC00 + ((c - 0x10000) & 0x3FF));
+                }
+                length += 2;
+            } else {
+                if (pDst != nullptr) {
+                    pDst[length] = static_cast< char16_t >(c);
+                }
+                length++;
+            }
+        }
+        if (pDst != nullptr) {
+            pDst[length] = 0;
+        }
+        return length + 1;
+    }
+
+    const char16_t* setTextFromUtf8(Text16& rText, const char* pSrc) {
+        utf8ToText16(rText.room(utf8ToText16(nullptr, pSrc)), pSrc);
+        return rText.c_str();
+    }
 };  // namespace MR
