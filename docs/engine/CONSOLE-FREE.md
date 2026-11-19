@@ -7,7 +7,8 @@ hardware or SDK, not because of what the game does. The game's own rules, the fi
 the importer reading the disc once at setup stay.
 
 State (2026-11-18, the code of a1f423dd8): pass one run; pass two has read each area of `FRAME-MODEL.md` 1.10 for
-the console's shape, the 921 actor files by a pattern sweep with every hit read. Not read yet: the 921 files whole.
+the console's shape, the 921 actor files by a pattern sweep with every hit read, then whole by the readall harness
+(its 49 area reports folded 11-19, each cited line read at 241395b49); the actor tables and pools classed 11-19.
 Items open: the frame's rows (FRAME-MODEL 1.9), P-155, P-184 to P-194. Section 4 applies file 08's
 test (section 3) and the owner's answers of 18:18 (file 08 5.H). Not 100%.
 
@@ -292,7 +293,7 @@ Each: where; what of it is the console's; the modern form; row; state; proof.
 | Table fields found by column name | `native/petari/src/Game/Util/Table.cpp:33-48` (the column search), 241 reads in 56 files (section 2) | a table kept as the disc's column list, each field found by its name's hash when read | the cook writes each table kind as a typed record with its columns resolved; the game reads fields by index, the name search gone | P-189 | open (E) | not yet |
 | A normal map remade on the CPU and lit through a gradient texture | `native/petari/src/Game/MapObj/NormalMapBase.cpp:114`, `:119`, `:483-523` (`createGradTexture`: an LA8 gradient built on the CPU), `:525` on (`swapColorGB`: each RGBA8 texel's normal decoded and written back as 0, g, b, r in a copy), its own draw settings (`drawMaterialSetting`, `setStageForObject`) | the console's way of lighting a normal map by a texture lookup (read from the code; the shader's side not read yet) | the normal map used as it is cooked, lit by the renderer's lighting in the shader; nothing remade on the CPU | P-190 | open (E3) | not yet |
 | What the game runs follows the screen's shape | `native/petari/src/Game/LiveActor/ClippingJudge.cpp:20-21`, `:33`, `:42` (`MR::getAspect()` in the volumes that decide which actors run); 42 lines of `native/petari/src` read an actor's clipped state (`isClipped`, `isInvalidClipping`, `isClippingInvalid`: `grep -rn ... --include=*.cpp`, 42 hits) | the console's culling of actors' runs by the one screen it had | (c) first: every actor of the loaded scene runs in every step, drawing culled by the real view; (b) if (c) misses a measure: one run volume the same on every screen | P-191 | open, after D.6 (file 08 5.H.2) | not yet |
-| Shared counts and widths that can cap what a mod adds | `MR::Vector`, holders, registries, groups (section 2, Limits); id and index widths: `Sound.hpp:26-27` (`SoundID`: section 8 bits, group 8 bits, wave 16 bits; `SoundVoices.cpp:70`), P-188's particle index; the 138 literal tables and the pools, each read | a width or a size chosen for the console's content | every shared holder grows and every id or index is 32 bits wide or more; an actor's own count stays its number | P-192 | open (E; the tables' classing in the whole read) | not yet |
+| Shared counts and widths that can cap what a mod adds | `MR::Vector`, holders, registries, groups (section 2, Limits); id and index widths: `Sound.hpp:26-27` (`SoundID`: section 8 bits, group 8 bits, wave 16 bits; `SoundVoices.cpp:70`), P-188's particle index; the 138 literal tables and the pools, each read (section 4: none grows past P-192's list) | a width or a size chosen for the console's content | every shared holder grows and every id or index is 32 bits wide or more; an actor's own count stays its number | P-192 | open (E) | not yet |
 | Surround output by a written law | `runtime/src/audio_mixer.cpp:244-269`, `:704-729`; `runtime/src/native_audio.cpp:95-131`; `runtime/src/audio_device_wasapi.cpp:135-155`, `:207-230`; `platform/sdl/audio_device_sdl.cpp:33`; `native/petari/src/Game/Sound/SoundVoices.cpp:665-786` (section 4 says what each does) | none kept: the two-channel output stays as made (owner, 5.H.5); the surround law is new | a law from a sound's pan and surround amounts to each reported layout's speaker gains, written here before the code, each property asserted by a test, a render-to-file test through the real mixer | P-193 | open (E, with the sound work) | not yet |
 | Actors that draw for themselves | 100 files of `native/petari/src` define `draw() const` (`grep -rlE "void \w+::draw\(\) const" native/petari/src`), 55 of them name a draw helper (`Material`, `TDDraw`, `setStage`, `RenderTexture`, `NebulaPass`, `drawFillBox`, `GameTexture`) | not read yet; `FRAME-MODEL.md` does not name them | each read; those with the console's shape placed in E3 or E4's steps | P-194 | open (the whole read, 5.H.1) | not yet |
 | The layouts' anamorphic canvas | `LayoutManager.cpp:200-211`, `:477-482`; `Pane.cpp:69`, `:185-187`; `LayoutUtil.cpp:669-678`; `DrawUtil.cpp:113-126`; undone again in `NebulaUi.cpp:568-578`, `NebulaAchievementToast.cpp:388`, `NebulaAchievementBoard.cpp:53`, `WipeRing.cpp:209`; empty `isScreen16Per9` branches `StarPointerCommandStream.cpp:91-92`, `StarPointerLayout.cpp:708-710` | the console's 16:9 picture as a 4:3 canvas stretched (a layout unit 4/3 wide), flagged panes narrowed by 0.75 | square layout units: the canvas 608 * 4/3 wide at 16:9, unflagged panes given the 4/3 width, flagged panes nothing; the 0.75 code goes | P-197 | open | not yet |
@@ -362,9 +363,40 @@ replay identical? Yes: an item. No: listed with the reason, a question for the o
   `MarioConst.cpp:1061-1067`, `ChordInfo.cpp:18`, `SeqTrack.cpp:278-282`, `SoundArchive.cpp:11`, `:101`, `:147`,
   `SoundTable.cpp:5`, `:14`) walk cooked host-order records where they lie: the modern form already, except the
   sequences' big-endian data (P-186).
-- The 138 tables of a literal size and the pools made ahead: P-192 by the owner's rule, each classed by reading the
-  code that fills it, in the whole read. An actor's own count (`DinoPackunVs2.cpp:34-35`, 64 and 16 fires) stays,
-  the owner's words.
+- The 138 tables of a literal size and the pools made ahead, classed for P-192 by the owner's rule (file 08 5.H.3)
+  on 11-19 at 241395b49, each by reading the code that fills it. An actor's own count (`DinoPackunVs2.cpp:34-35`, 64
+  and 16 fires) stays, the owner's words.
+  - Tables: `git grep -n -E '^\s*(static\s+)?(const\s+|constexpr\s+)?[A-Za-z_][A-Za-z0-9_:<>, ]*[ *&]+m?[A-Za-z_][A-Za-z0-9_]*\s*\[\s*[0-9]+\s*\]' 241395b49 -- native/petari/{src,include}/Game/{Player,Enemy,Boss,Ride,NPC,MapObj,LiveActor,Sound}`:
+    149 hits, 11 of them an index inside an expression (`MarioActorMorph.cpp:25-28`, `MarioActorParts.cpp:245`,
+    `SkeletalFishBossRailHolder.cpp:29`, `HitSensorKeeper.cpp:42`, `:105`, `ShadowController.cpp:70`,
+    `SoundVoices.hpp:111`, `RhythmSystem.cpp:361`), so 138 tables. Each hit is classed once, none left, by
+    `D:/NebulaWork/plan/a1/inv/tables_actors_class.py` over `out/tables_actors.txt`: a function's working array 33; a
+    field of a cooked record or a triangle, fixed by its format, 14; the game's own values 36 (`MarioAnimatorData`,
+    `MarioConst`, the sound driver's tables, `SoundEmitter`'s 33 sounds, an argument past them silent by design,
+    `SoundEmitter.cpp:35-36`); the parts an actor is made of 38 (a boss's legs, walls and joints; BigBubble's six
+    neighbours, one per axis, `BigBubble.cpp:1140-1147`; ArrowSwitchMulti's four targets, `ArrowSwitchMulti.cpp:72-77`,
+    `:137`; RingBeam's 32 points, `RingBeam.cpp:49-58`; SkeletalFishBossBattleDirector's four guard models, which play
+    the power-up demos' fixed two and four animations, `SkeletalFishBossBattleDirector.cpp:57-73`); the sound
+    driver's state as made 17 (5.H.5). Two that looked shared are not caps: GroupCheckManager's two groups are each a
+    `NameIndex`, which grows past the 32 and 8 it is made with (`GroupChecker.cpp:28-29`, `NameIndex.hpp:80-82`);
+    StarPieceDirector's two shooters are one per controller port (`StarPieceDirector.cpp:49-51`, `:332`). No table
+    grows that P-192 does not already list.
+  - Pools: actors taken from a group when dead (`git grep -n -E 'getDeadActor\(\)|getDeadMember|getDeadObj|findDeadActor|getDeadWeakestActor' 241395b49 -- native/petari/src`,
+    28 lines) and free slots found by a loop (`git grep -n -E 'isDead\(m[A-Za-z0-9_]+\[[a-z]+\]\)|isDead\([a-zA-Z_>.-]*m[A-Za-z0-9_]+\[[a-z]+\]\)' 241395b49 -- native/petari/src`,
+    40 lines), each read. Made again when empty: star pieces (`StarPieceDirector.cpp:257-263`), coins
+    (`CoinHolder.cpp:131-152`), air bubbles (`AirBubbleHolder.cpp:14-26`), big bubbles (`BigBubbleHolder.cpp:65-76`);
+    their making inside a step is P-247. Scene pools shared by every instance that answer none when full: Kabokuri
+    fires, Kameck beams, fire balls and turtles, TakoHei ink (16 each), clip-area drops (32), the four short talk
+    balloons, NoteFairy's and RockCreator's 1024: each grows, in P-192 already. The rest are one actor's own, and
+    stay: a boss's bombs, fires, rocks and rings (`BossStinkBug.cpp:408`, `DinoPackunBattleVs2Lv1.cpp:366`, `:390`,
+    `KoopaParts.cpp:59-116`, `PoltaFunction.cpp:150-220`, `Syati.cpp:606`, `:664`); a launcher's or group's members
+    sized by its placement (`BegomanLauncher.cpp:50`, `MeteorStrikeLauncher.cpp:58`, `PlantGroup.cpp:120`,
+    `StarPieceGroup.cpp:90-132`); fixed beams, bullets, ice and hills (`BallBeamer.cpp:53`, `RingBeamer.cpp:50`,
+    `WaterBazooka.cpp:913`, `IceMerameraKing.cpp:112`, `WormEatenPlanet.cpp:132`); a Kameck's eight summoned actors,
+    a rule it checks before it attacks (`ActiveActorList(8)`, `Kameck.cpp:51`, `:397`; `BossKameck.cpp:36`,
+    `BossKameckStateBattle.cpp:169`). The screens' slots are pages or content: eight Mii icons a page
+    (`MiiSelect.hpp:115`, `MiiSelect.cpp:499`, `mBaseIndex + i`), the file select's fellow models
+    (`FileSelectItem.cpp:98`, `:391`), the staff roll's lines (P-208).
 - Units of the console's picture (the 456-line canvas, the 608 and 832 widths, lines sized in 456-line units, the
   640 x 456 grid of effect targets): coordinates of the content, drawn at the real resolution by every renderer
   (section 2): no handling of the console's shape. Not items.
@@ -374,8 +406,9 @@ replay identical? Yes: an item. No: listed with the reason, a question for the o
 - The 60 Hz game step: the owner's decision (file 08 section 3).
 - New by this test: actors that draw for themselves (P-194), a class `FRAME-MODEL.md` does not name.
 
-The whole read of the 921 actor files comes after the code items of D and E or after the weekly reset (file 08
-5.H.1); the pattern sweep closes no area.
+The 921 actor files were read whole by the readall harness (file 08 5.H.1; section 2, the actors' row), its
+findings checked line by line at 241395b49 and filed as P-243 to P-253 and P-264; the tables and pools above were
+classed by reading after it.
 
 What P-193 starts from (read at a1f423dd8 for 5.H.5; the law itself is written in this file when P-193 starts, before
 its code):
