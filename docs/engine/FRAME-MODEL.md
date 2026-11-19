@@ -1,9 +1,10 @@
 # The frame model
 
 How a frame moves through Nebula's threads: who owns what, where data changes hands, and what may wait for what.
-Part 1 is the code as it is today, with file and line. Every line it names is the code of a1f423dd8 (rows/p022, the
-top of the chain landing with this file), each checked by reading it there. Part 2 is the target and the
-rules the later stages hold (07-BASE-FIRST, stage 2 item 1). Part 1 grows section by section.
+Part 1 is the code as it is today, with file and line. Every line it names is the code of a1f423dd8 (rows/p022 before
+its restack of 11-18; its code is 5526e1cf0's, where only `native/tests/CMakeLists.txt` differs), each checked by
+reading it there; parts 1 and 2 were read once more against that code as a second reader (file 08 5.C, 11-18). Part 2
+is the target and the rules the later stages hold (07-BASE-FIRST, stage 2 item 1). Part 1 grows section by section.
 
 ## Part 1. Today
 
@@ -45,8 +46,9 @@ frame; they are listed in 1.6 with what each may touch.
    its list at once (:1459-1463).
 5. A list is released when the render thread no longer needs it: it keeps the newest list it walked and the one before
    (the in-between pictures read both), and `release_lists_before` (:1803) releases every older one with a release
-   fence first (:1806), so every read of the list comes before the game writes it again. The game writes a list again
-   only once it sees the release (`native/host/host_main.cpp:2077`).
+   fence first (:1806), so every read of the list comes before the game writes it again. The game never waits for a
+   release: it writes the next step into a store whose list is released, or makes one more store
+   (`native/petari/src/Game/Render/FrameList.cpp:343-361`, `store()`).
 6. Waits on the whole render thread: `RenderCore::wait_for_render_idle` (:687) holds the game until the queue is empty
    and no chunk is in flight. It is called at `native/host/host_main.cpp:2100` and :3228 (named in 1.5 with why).
 
@@ -77,16 +79,23 @@ Two frames are in flight (`kFramesInFlight`, `runtime/include/galaxy/render/rend
 
 | Renderer | Per frame | Inside a frame, the whole GPU |
 | --- | --- | --- |
-| Direct3D 12 | the slot about to be used again (`renderer_d3d12.cpp:3809-3817`); the oldest history ring segment when it is reused (:3966-3970); the frame latency waitable, 100 ms bound (:4356) | `wait_for_gpu` (:916) in `reset_sampler_frame` (:1410), `prepare_temporal_upscaler` (:5019, :5052), `record_temporal_upscale` (:5214), and a capture's readback (:6889, :6892) |
-| Vulkan | the slot (`vk/renderer_vk.cpp:2012`); the history ring segment (:2110) | `vkDeviceWaitIdle` when a size no longer matches: the temporal upscaler's preparation and record (`vk/renderer_vk_frame.cpp:922`, :953, :1428) and frame generation's HUD-less targets (:1455, :1495, :1548) |
+| Direct3D 12 | the slot about to be used again (`renderer_d3d12.cpp:3809-3817`); the oldest history ring segment when it is reused (:3966-3970); the frame latency waitable, 100 ms bound (:4356); the copy queue's slot before its staging is written again (`gpu_texture_backend_d3d12.cpp:513`, from `texture_store.cpp:666`) | `wait_for_gpu` (:916) in `reset_sampler_frame` (:1410), `prepare_temporal_upscaler` (:5019, :5052), `record_temporal_upscale` (:5214), and a capture's readback (:6889, :6892) |
+| Vulkan | the slot (`vk/renderer_vk.cpp:2012`); the history ring segment (:2110) | `vkDeviceWaitIdle` when a size no longer matches: the temporal upscaler's preparation and record (`vk/renderer_vk_frame.cpp:922`, :953, :1428) and frame generation's HUD-less targets (:1455, :1495, :1548); the sampler array's restart waits for the last submitted frame (:2710, :2729); the post-process's self-test, in the first frame it is built (`vk/post_process_vk.cpp:947`, 1.8) |
 | Direct3D 11 | the slot (`d3d11/renderer_d3d11.cpp:530`); the frame latency waitable, 100 ms bound (:653) | none; a window size change waits for the GPU idle (`d3d11/renderer_d3d11_scene.cpp:246`) |
-| Metal | the slot (`mtl/renderer_mtl.mm:592`, `wait_for_fence_value`); a drawable (`nextDrawable`, :1183, in `present`) | `wait_for_gpu_idle` (:499) when the temporal upscaler's size no longer matches (`mtl/renderer_mtl_draw.mm:736`, :757); the sampler array restarts when nearly full, its slots written once the GPU is past the frames that read them (:245-249; P-066 names its waits) |
+| Metal | the slot (`mtl/renderer_mtl.mm:592`, `wait_for_fence_value`); the history ring segment (:679); a drawable (`nextDrawable`, :1183, in `present`) | `wait_for_gpu_idle` (:499) when the temporal upscaler's size no longer matches (`mtl/renderer_mtl_draw.mm:736`, :757); the sampler array restarts when nearly full and waits for the last submitted frame (:244-247, the wait :261; P-066); the post-process's self-test, in the first frame it is built (`mtl/post_process_mtl.mm:792`, 1.8) |
 
 Outside a frame, `wait_for_gpu` drains the GPU at a window size change (:1955), a swap chain's re-creation or resize
 (:3371, :3419), an HDR switch (:4164), shutdown (:3114, :3141) and the pictures at exit (:6754). Those are allowed by the
 rules of part 2; the waits inside a frame are not, and are in the list (1.9). Metal drains at a window size change (`mtl/renderer_mtl_scene.mm:353`), the pictures at exit
 (`mtl/renderer_mtl_draw.mm:618`) and shutdown (`mtl/renderer_mtl.mm:366`). Vulkan drains the same way at window size changes,
-a swap chain's re-creation and shutdown (`vk/renderer_vk_frame.cpp:425`, `vk/renderer_vk.cpp:1062`, :3022, :1723).
+a swap chain's re-creation and shutdown (`vk/renderer_vk_frame.cpp:425`, `vk/renderer_vk.cpp:1062`, :3022, :1723),
+when FSR's swap chain is made anew (`vk/renderer_vk.cpp:1067`), when the surface is let go (:1449) and for the pictures
+at exit (`vk/renderer_vk_frame.cpp:3533`); Direct3D 11 at shutdown (`d3d11/renderer_d3d11.cpp:374`).
+
+With vsync off and a frame-rate cap, each renderer's `PresentPacer::pace` sleeps up to 2 ms toward the present's slot
+before it presents (`runtime/include/galaxy/render/renderer_common.h:181-202`; `renderer_d3d12.cpp:4311`, `vk/renderer_vk.cpp:2246`,
+`d3d11/renderer_d3d11.cpp:649`, `mtl/renderer_mtl.mm:736`): a wait of the render thread on the clock, not on the GPU,
+and pacing's (E6b).
 
 The game thread waits on the render thread at three places: queue room (1.2 item 3), the render thread idle (1.2 item
 6), and a screen probe's answers for frame F - 2 (`render_core.cpp:1585`, bounded by `kProbeWaitNs`), which waits only
@@ -132,7 +141,12 @@ game touches goes through the save worker.
 
 Not part of a frame: controllers (`controller_hid.cpp`, `wiimote_hid.cpp`, `switch2_ble_win.cpp`), mods' services
 (`luma_net.cpp`, `luma_fs.cpp`, `luma_mods.cpp`, `luma_assets.cpp`, `luma_capture.cpp`, `luma_input.cpp`), the settings
-screen's workers (`ui/native_settings.cpp`), updates (`update/update.cpp`), vendor downloads, Discord.
+screen's workers (`ui/native_settings.cpp`), updates (`update/update.cpp`), vendor downloads, Discord. Nor the host's
+and the platforms' own: the crash writer (`native/host/host_main.cpp:1904`), the benchmark report's sender (:1965),
+the start-again hand-over (:4513, :4603), the mods' background cook (:5505; it waits for the layers the mods' code
+chooses, and nothing waits for it inside a step), the sound clock of a build without a renderer (:6507), the SDL
+hosts' log reader (`platform/sdl/host_window_sdl.cpp:249`), their system jobs (`platform/sdl/luma_system_sdl.cpp:162`)
+and thread sampler (`platform/sdl/thread_sampler.cpp:197`), and Apple's setup (`platform/apple/setup_apple.mm:192`).
 
 ### 1.7 The walk (`runtime/src/render/core/draw_walker.cpp`)
 
@@ -178,11 +192,18 @@ Read for the rules (whole-GPU waits, compiles, file reads on the render thread):
   The temporal upscaler's preparation and record drain the whole GPU (1.4; P-028, written).
 - Vulkan: the bloom's pipelines are built in `begin_frame` the first time it runs (`vk/renderer_vk.cpp:1997`,
   `vk/game_bloom_vk.cpp:52`) and the post-process's in `sync_post_process` the first frame that needs them
-  (`vk/renderer_vk.cpp:2821`, `vk/post_process_vk.cpp:441`): compiles inside a frame. A swap chain made again builds
+  (`vk/renderer_vk.cpp:2821`, `vk/post_process_vk.cpp:441`): compiles inside a frame, and the post-process's
+  self-test then waits for the GPU in that frame (`vk/post_process_vk.cpp:947`). A swap chain made again builds
   the present pipelines again (`vk/post_process_vk.cpp:152-170`, from `create_swapchain`), outside a frame's walk.
-- Metal: the post-process, bloom, ambient occlusion and MetalFX depth copy compile their programs from MSL source when
-  first made (`mtl/post_process_mtl.mm:130`, `mtl/game_bloom_mtl.mm:56`, `mtl/ambient_occlusion_mtl.mm:59`,
-  `mtl/metalfx_mtl.mm:244`), as the game's own pipelines do (`mtl/pipelines_mtl.mm:283`).
+- Metal: the post-process and bloom compile their MSL on a worker from the renderer's start
+  (`mtl/post_process_mtl.mm:112-130`, `mtl/game_bloom_mtl.mm:46-56`); the render thread makes their pipeline states
+  from it the first frame it is ready (`poll_ready`, `post_process_mtl.mm:272`, `game_bloom_mtl.mm:107`), and the
+  post-process's self-test waits for the GPU there (`post_process_mtl.mm:792`). Ambient occlusion compiles at the
+  renderer's start (`mtl/ambient_occlusion_mtl.mm:59`, from `mtl/renderer_mtl.mm:118`). The utility pipelines
+  (`mtl/renderer_mtl_scene.mm:56`, from `utility_pipeline` :67) and the scene camera's (`mtl/scene_camera_mtl.mm:45`,
+  from `pipeline` :108) compile from source on the render thread when a key is first asked for; SGSR 2
+  (`mtl/sgsr2_mtl.mm:58`) and the MetalFX depth copy (`mtl/metalfx_mtl.mm:244`) when their upscaler is made; the game's
+  programs from their text when their pipeline is made (`mtl/pipelines_mtl.mm:283`).
 - The upscalers' and frame generation's bodies (XeSS, FSR, the Vulkan temporal upscaler, SGSR 2) wait for no fence and
   read no file in a frame.
 
@@ -197,7 +218,7 @@ with no row has a new one.
 | A draw whose pipeline is not ready compiles it on the render thread | `core/pipelines.cpp:253` (`create_now`) | P-010, E3 step 1 (a form known at load) |
 | Utility pipelines compiled on the render thread at first use, outside the cache | `core/pipelines.cpp` | P-052 (written, engine/b) |
 | A present waits for every pipeline creation in flight (Direct3D 12) | `core/present_gate.h` | N-1067, E3 step 1 |
-| The sampler heap, full, drains the whole GPU | `renderer_d3d12.cpp:1410` (`reset_sampler_frame`) | P-048, E3 step 2 |
+| The sampler heap or array, full, waits for the whole GPU | `renderer_d3d12.cpp:1410`; `vk/renderer_vk_frame.cpp:2710`, :2729; `mtl/renderer_mtl_draw.mm:261` (each `reset_sampler_frame`) | P-048, P-056, P-066, E3 step 2 |
 | Size changes drain the whole GPU inside a frame | `renderer_d3d12.cpp:5019`, :5052, :5214 (the temporal upscaler), :1955; Vulkan's at size changes inside a frame (1.4) | P-028 (written for Direct3D 12 on engine/b; Vulkan's side open) |
 | The game thread waits for frame F - 2's probe answers | `render_core.cpp:1585` | N-1068, E4 |
 | The game thread waits for the whole render queue at an aspect change | `host_main.cpp:3228` | N-1081 |
@@ -211,8 +232,8 @@ with no row has a new one.
 | A copy before the list writes the frame reads the picture shown last, as the console's frame buffer held it | `draw_walker.cpp:1583` | E4 (the last picture asked for by name) |
 | The scene's camera found at its opaque end, as the game loads its projection after the scene begins | `draw_walker.cpp:1356` | E4 (`GameScene::draw3D` states its passes) |
 | A target's texture table rebuilt each frame; each draw names its textures again | `draw_walker.cpp:878`, :920 | E3 step 2 (each form's texture list) |
-| Vulkan's bloom and post-process pipelines built on the render thread in the first frame that needs them | `vk/renderer_vk.cpp:1997`, :2821 | P-052 (its Vulkan half: open) |
-| Metal's own programs (post-process, bloom, ambient occlusion, MetalFX depth copy) compiled from source at first use | `mtl/*_mtl.mm` (1.9) | P-065 |
+| Vulkan's bloom and post-process pipelines built on the render thread in the first frame that needs them, and the post-process's self-test waiting for the GPU there | `vk/renderer_vk.cpp:1997`, :2821; `vk/post_process_vk.cpp:947` | P-052 (its Vulkan half: open) |
+| Metal's own pipelines made on the render thread in a frame: the utility and scene camera pipelines compiled from source there, the post-process's and bloom's states made from a worker's compile, and the post-process's self-test waiting for the GPU | `mtl/*_mtl.mm` (1.8) | P-065 (its text says every compile is on the render thread: the post-process's and bloom's are on a worker, ambient occlusion's at the start) |
 
 This list covers the render path as read for this file: every file of 1.1 to 1.8, with the files stage 2 item 1
 names (draw_walker.cpp whole; the post-process, upscaler and frame-generation files for waits, compiles and file
@@ -245,19 +266,19 @@ whose title names the console:
 | P-168 | collision arithmetic rounds differently from the console | A | after the foundation (E8; gameplay) |
 | P-074 | a Wii Remote Nunchuk takes its centre from the first report | A | after the foundation |
 
-The engine's areas this file does not walk, by what the ledger and the audit's master report (sections 6 and 10)
-hold of the console's shape there:
+The engine's areas this file does not walk, by what the ledger, the audit's master report (sections 6 and 10) and the
+inventory's pass two (`CONSOLE-FREE.md` 2, 11-18) hold of the console's shape there:
 
 | Area | The console's shape known | Read |
 | --- | --- | --- |
 | The game's arenas | the console's heaps are gone (NebulaArena); objects and deletes search every arena linearly (P-013), new and delete belong to one thread (P-012, fixed) | read whole for P-012 and P-013 |
-| Sound | none known; the mixer has rows (P-037, P-071, P-072) | the mixer read; the game's own sound code not read (master report 10) |
+| Sound | the sequences read in the console's byte order (P-186); surround by a written law (P-193); the mixer's rows (P-037, P-071, P-072) | the sound engine and the mixer read, the rest swept by pattern, every hit read |
 | Input | sampled once a game step for the star pointer and the menu (P-078, P-163; F6); the Nunchuk's centre (P-074) | read (master report 6) |
-| Files and archives | the step copies its loads from the mapped store on the game thread (N-1083) | the store's read path read for this file; the archive code not read whole |
+| Files and archives | the step copies its loads from the mapped store on the game thread (N-1083); a particle's index in 16 bits (P-188) | the load path read: no archive or compression is read while the game runs |
 | Saves | none known; the faults that lose data are section 4.6's rows | read (master report 6) |
-| Text | none known; the game's messages stay in the disc's format and are converted where the host shows them (`message_utf8`, `host_main.cpp:2159`) | not read whole |
-| Layouts and fonts | the owner's order of 11-04 names both for rewriting; no open row in this ledger names them | not read whole |
-| The game's actor classes | E14's read is paused; its rows (N-3xxx) are in its branch | not read whole (master report 10) |
+| Text | 16-bit character codes, the console font's range (P-187); the messages are cooked (`NMSG`) | the record and its readers read |
+| Layouts and fonts | a layout material keeps the console's codes (P-184); a glyph sheet found by its bytes' address (P-155) | `Layout::Build`, `Material`, `ResFont` read |
+| The game's actor classes | actors that draw for themselves (P-194); what runs follows the screen's shape (P-191); shared counts and id widths (P-192) | swept by pattern, every hit read; read whole in the whole read (file 08 5.H.1) |
 
 ## Part 2. The target
 
@@ -272,7 +293,8 @@ hold of the console's shape there:
    holding the step.
 3. The game thread reads no file inside a step: what a step loads was read ahead by the loader's thread.
 4. Each hand-over has one owner at a time and a release and acquire pair (1.2's list, the pipeline cells, the decoded
-   textures); a debug build asserts the thread at each hand-over (`render_thread_only()`, `game_thread_only()`).
+   textures); a debug build asserts the thread at each hand-over (`render_thread_only()`, `game_thread_only()`: neither
+   exists yet; each hand-over gets its assert in the step that rewrites it).
 5. The CPU work of a picture does not grow with what the scene holds: an in-between picture is a GPU pass over both
    poses, not a second walk.
 
@@ -333,7 +355,7 @@ between the two paths are in 2.7:
 | Step | Written at cook | Ends in the engine |
 | --- | --- | --- |
 | 1 | per material form: which row glows, the map rows, the glow value, the alpha cutoff and mode | searching console register codes at load; with it, every pipeline made at load (P-010, N-1067) |
-| 2 | samplers in final form, each form's texture list | hashing a texture's address and decoding filter codes per draw; the per-frame table rebuilds (`draw_walker.cpp:878`, :920); the sampler heap's drain (P-048) |
+| 2 | samplers in final form, each form's texture list | hashing a texture's address and decoding filter codes per draw; the per-frame table rebuilds (`draw_walker.cpp:878`, :920); the sampler heap's and arrays' waits (P-048, P-056, P-066) |
 | 3 | per form: a block of final constant rows, and the short list of rows that change, with their source | filling register rows at draw time |
 | 4 | prepared material records for the immediate-style draw sites and particles; fixed shapes as meshes registered once | vertices and indices built on the CPU each frame |
 | 5 | (engine only) both poses once a step; a GPU pass makes each picture's matrices; skinning on the GPU | matrices, skin sums and blends on the CPU for every picture |
@@ -503,8 +525,9 @@ Format 13 is the last format number E3 needs. Its header is magic, version 13, s
 by name, reads the fields it knows of each entry (fields are only added at the end, so `stride` may be larger than
 it knows) and skips a section it does not know. A section flagged required that a reader does not know makes it
 refuse the file, naming the section. So a later field or section makes no format 14, and a mod's model cooked by
-this cooker keeps loading. A model cooked at 12 is refused at load with its version, as today
-(`model_write.rs:908`); no mod has shipped one, since LumaCore v1 ships with 13.
+this cooker keeps loading. A model of another version stops the load today without naming it
+(`native/petari/src/Game/Render/ModelData.cpp:58-60`; the cooker's own reader names it, `model_write.rs:907-908`);
+13's reader names the version it found. No mod has shipped a model of 12, since LumaCore v1 ships with 13.
 
 | Section | Holds | Written from | Read until |
 | --- | --- | --- | --- |

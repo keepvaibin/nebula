@@ -6,7 +6,8 @@ else. Its test (that file, section 3): code, a data format, a limit or a timing 
 hardware or SDK, not because of what the game does. The game's own rules, the fixed 60 Hz game step, its content and
 the importer reading the disc once at setup stay.
 
-State (2026-11-18, the code of a1f423dd8): pass one run; pass two has read each area of `FRAME-MODEL.md` 1.10 for
+State (2026-11-18, the code of a1f423dd8, rows/p022 before its restack; its code is 5526e1cf0's, where only
+`native/tests/CMakeLists.txt` differs): pass one run; pass two has read each area of `FRAME-MODEL.md` 1.10 for
 the console's shape, the 921 actor files by a pattern sweep with every hit read. Not read yet: the 921 files whole.
 Items open: the frame's rows (FRAME-MODEL 1.9), P-155, P-184 to P-194. Section 4 applies file 08's
 test (section 3) and the owner's answers of 18:18 (file 08 5.H). Not 100%.
