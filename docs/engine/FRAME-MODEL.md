@@ -510,7 +510,7 @@ thread.
 | A material form: programs, state, inputs, kind, texture list, constant block | the importer | at the cook | registered at load: its pipeline made on the workers (P-010), its constant block a slot (`material_register`) | never |
 | A form's changing rows | the game thread (`Material`, from the form's list of changing rows: texture matrices, colour tracks, a colour a switch sets) | once a step, and only the rows that changed | the walk: the item names the form's slot and this step's changed rows | per step |
 | A texture and its sampler | the importer; the game for a texture it makes (targets, mod pictures) | at the cook; when made | `Registries` at load: one id, one sampler | never; a target when its size changes |
-| A site's shape (step 4) | the game, once at its start (`SiteMeshData`, today one user) | once | the walk, as any registered mesh | never |
+| A site's shape (step 4) | the game, once at its start (`SiteMesh`, today nine files, 2.12) | once | the walk, as any registered mesh | never |
 | A site's material (step 4) | the game, at the site's init, content-addressed | at load | as a material form | its changing rows, per step |
 | A pose (step 5) | the game thread | once a step: each block's joints in the list (the list before holds the step before) | one GPU pass per picture makes the matrices at t | per step |
 | A light (step 6) | the game thread (`LightDirector`), in world space, one table per list; an item names its light set | once a step | the GPU, the view applied there | per step |
@@ -959,8 +959,15 @@ gauges, glows, particles, the mods' draw services. It draws through `TypedDraw` 
    the other end and a corner code, and six indices (`widen`, `:457-513`).
 3. Each draw's matrix and a flag word are copied into the arena as a new block (`block`, `:291-319`); a draw under a
    camera other than the scene's compares the matrix to find the camera's role (`:133`, `:140`).
-4. `SiteMeshData` (`:522-582`) is the registered form: written once, handed to the host, drawn by id. Three users:
-   `WaterRoad.cpp:182`, `MiiHead.cpp:33-37`, `FurShader.cpp:75`, `:132`.
+4. `SiteMeshData` (`TypedDraw.cpp:522-582`) and its typed form `SiteMesh<T>` (`TypedDraw.hpp:622-645`) are the
+   registered form: written once, handed to the host, drawn by id. Nine files use it: `OceanRingDrawer.cpp`,
+   `OceanRingPipeInside.cpp`, `OceanRingPipeOutside.cpp`, `OceanSphere.cpp`, `WaterRoad.cpp`, `ElectricRail.cpp`,
+   `ElectricRailMoving.cpp`, `MiiHead.cpp:33-37` and `FurShader.cpp:75`, `:132`. Five sites switch between the kept
+   mesh and writing the same shape into the ring at each draw (P-195): the ocean sphere waves near the player and
+   stands still beyond 10000 (`OceanSphere.cpp:412-416`); an ocean ring's part is written near the player
+   (`OceanRingDrawer.cpp:124-130`); a water road is cut at its rail coordinate in its growing demo
+   (`WaterRoad.cpp:706-711`); the electric rails are written at each draw while they vanish
+   (`ElectricRail.cpp:282-287`, `ElectricRailMoving.cpp:89-93`).
 
 The sites (`git grep` of `vertices<` and `.vertices(` over `native/petari`, less `TypedDraw` itself and
 `MiiHead.cpp:41`, which reads a Mii shape): 109 in 47 files, 56 triangle strips, 36 quads, 8 fans, 4 triangle lists,
@@ -993,10 +1000,10 @@ times at scales 1, 0.9 and 0.81 (`ShadowSurfaceOval.cpp:59-65`). Every renderer'
 - Indices of the fixed patterns (quads, strips, fans) are one index list per pattern, made once by the render thread
   for the longest run asked and grown when a longer one comes (no cap). An item names the pattern and its count;
   `writeIndices` goes.
-- Each site's shape is one of three kinds, decided per site in the first landing, which writes the table of the 109
-  sites (file, line, kind, group) into this file:
+- Each site's shape is one of three kinds, decided per site in 2.12.1's table (the first landing checks it against
+  the code at its commit):
   - a fixed shape under a matrix (a box, a unit circle, a quad of fixed size, the line volume's ends): a mesh
-    registered once, drawn with a matrix and its values, as `SiteMeshData` does today;
+    registered once, drawn with a matrix and its values, as `SiteMesh` does today;
   - a shape from a few numbers (`TDDraw`'s circles, cylinders and spheres by their segment count; a quad by its size):
     one unit mesh per shape and count, and the numbers in the item's matrix or a value row;
   - a shape from the game's state (ropes, ribbons, flags, water surfaces, beams along a path): written by the game
@@ -1036,6 +1043,140 @@ its sites, by the table, to their kind.
   vertex and index rings per frame, arena bytes for site constants, `texture_table` calls; after the last landing
   `git grep -n "writeIndices\|SiteTextures::toFrame\|void TypedDraw::widen" native`: 0.
 - The game step's and the walk's time on the PC and the tablet, before and after (file 08 7.4: never slower).
+
+#### 2.12.1 The 109 sites
+
+Read at cfc2e368e, each site with its lines before and after and, where the shape's points come from elsewhere in the
+file, the code that makes them. The kinds are 2.12's: **fixed**, a shape that is the same at every draw under a
+matrix (made once, or once at the actor's start); **numbers**, a shape made from a few values at each draw;
+**state**, a shape from a list of points the actor keeps, read at each draw (which of those lists change at every
+step is read with each family). The primitives agree with 2.12's count: 56 strips,
+36 quads, 8 fans, 4 lists, 1 line list, 1 line strip, 3 chosen as they run.
+
+- Kinds: 22 fixed, 51 from numbers, 36 from state.
+- Groups (2.7.3's order): quads 15, fans 4, strips 41, shadows 19, particles 2, lines 2, points 1, 2-D 18, mods 7.
+- Paths are under `native/petari/src/Game`.
+
+| # | Site | Primitive | Kind | Group | Read |
+| --- | --- | --- | --- | --- | --- |
+| 1 | `Enemy/RingBeam.cpp:80` | strip | state | shadows | RingBeamShadowDrawer; 32 point matrices along the beam's ring, band top |
+| 2 | `Enemy/RingBeam.cpp:92` | strip | state | shadows | band 500 down |
+| 3 | `Enemy/RingBeam.cpp:111` | strip | state | shadows | -x wall |
+| 4 | `Enemy/RingBeam.cpp:126` | strip | state | shadows | +x wall |
+| 5 | `LiveActor/ShadowSurfaceBox.cpp:72` | quad | fixed | shadows | unit box face, one of 8 arrangements by setPart; matrix carries size |
+| 6 | `LiveActor/ShadowSurfaceBox.cpp:78` | quad | fixed | shadows | as 5 |
+| 7 | `LiveActor/ShadowSurfaceBox.cpp:84` | quad | fixed | shadows | as 5 |
+| 8 | `LiveActor/ShadowSurfaceCircle.cpp:70` | fan | fixed | shadows | unit circle, cSegments; radius in the matrix |
+| 9 | `LiveActor/ShadowVolumeBox.cpp:136` | strip | numbers | shadows | 14 corners from the box and its drop (mPoints) |
+| 10 | `LiveActor/ShadowVolumeBox.cpp:154` | fan | numbers | shadows | as 9, cap |
+| 11 | `LiveActor/ShadowVolumeBox.cpp:166` | fan | numbers | shadows | as 9, cap |
+| 12 | `LiveActor/ShadowVolumeLine.cpp:90` | quad | numbers | shadows | two ends, widths, drops (8 points) |
+| 13 | `LiveActor/ShadowVolumeLine.cpp:96` | quad | numbers | shadows | as 12 |
+| 14 | `LiveActor/ShadowVolumeLine.cpp:102` | strip | numbers | shadows | as 12 |
+| 15 | `Map/Flag.cpp:394` | strip | state | strips | cloth points, one strip per row |
+| 16 | `Map/Flag.cpp:417` | strip | numbers | strips | stick: position, up, length |
+| 17 | `Map/OceanBowl.cpp:328` | strip | state | strips | wave grid, one strip per column |
+| 18 | `Map/OceanBowlBloomDrawer.cpp:30` | strip | state | strips | 17's grid, bloom pass |
+| 19 | `Map/OceanRingDrawer.cpp:152` | strip | state | strips | ring part's water points |
+| 20 | `Map/OceanRingDrawer.cpp:162` | strip | state | strips | 19's points, bloom pass; near the camera only |
+| 21 | `Map/OceanSphere.cpp:696` | strip | state | strips | wave points (updatePoints); SiteMesh twin mMeshFace drawn beyond 10000 from the player (OceanSphere.cpp:412-416) |
+| 22 | `Map/OceanSphere.cpp:700` | strip | state | strips | as 21, mMeshBack |
+| 23 | `Map/WaterPlant.cpp:284` | strip | state | strips | per plant swing, 4 points |
+| 24 | `Map/WaterRoad.cpp:285` | strip | numbers | strips | the kept mesh (mMeshHigh, WaterRoad.cpp:241-260) cut at the rail coordinate in its demo, the end row mixed (:262-325, from :710) |
+| 25 | `Map/WhirlPoolAccelerator.cpp:136` | strip | state | strips | whirl points |
+| 26 | `MapObj/AstroDomeOrbit.cpp:133` | strip | numbers | strips | ring: center, radius, width, height (mRingCos/Sin fixed) |
+| 27 | `MapObj/AstroDomeOrbit.cpp:164` | strip | numbers | strips | as 26, side wall |
+| 28 | `MapObj/ClipFieldFillDraw.cpp:54` | strip | fixed | 2-D | screen quad in eye space, screen size in the matrix; stencil fill |
+| 29 | `MapObj/ElectricRail.cpp:462` | strip | numbers | strips | vanishing: the kept mesh (ElectricRail.cpp:441-446, drawn while waiting, :283-287) at radius mEaseIn |
+| 30 | `MapObj/ElectricRailMoving.cpp:269` | strip | numbers | strips | as 29 at mRailWidth (ElectricRailMoving.cpp:89-93, :244-249) |
+| 31 | `MapObj/GCaptureRibbon.cpp:17` | strip | numbers | strips | quad from start, end, offset |
+| 32 | `MapObj/SnowFloor.cpp:663` | quad | state | quads | footprint trail, one quad per segment |
+| 33 | `MapObj/SnowFloorTile.cpp:469` | quad | numbers | quads | tile quad; drawn 16 times identical per layer (sStripCount), as Petari's drawLayer at cec16c113 |
+| 34 | `MapObj/SpiderThreadPart.cpp:517` | strip | numbers | strips | two points, side, up: upper edge |
+| 35 | `MapObj/SpiderThreadPart.cpp:524` | strip | numbers | strips | as 34, right lower |
+| 36 | `MapObj/SpiderThreadPart.cpp:531` | strip | numbers | strips | as 34, left lower |
+| 37 | `MapObj/SpiderThreadPart.cpp:545` | strip | state | strips | thread points |
+| 38 | `MapObj/SpiderThreadPart.cpp:561` | strip | state | strips | as 37 |
+| 39 | `MapObj/SpiderThreadPart.cpp:576` | strip | state | strips | as 37 |
+| 40 | `MapObj/SpinDriverPathDrawer.cpp:312` | strip | fixed | strips | path made once (initPositionList, SpinDriverPathDrawer.cpp:132); coord, mask, fade are values |
+| 41 | `MapObj/TrampleStar.cpp:617` | list | state | strips | surface rebuilt by calcSurface each step (TrampleStar.cpp:293-338) |
+| 42 | `MapObj/WarpPod.cpp:606` | quad | fixed | quads | two crossed quads per segment of a path made once (WarpPod.cpp:501-517) |
+| 43 | `MapObj/WhirlPool.cpp:112` | strip | state | strips | whirl points |
+| 44 | `Mii/MiiFaceTexture.cpp:179` | quad | fixed | 2-D | unit quad under an eye matrix, into the face texture |
+| 45 | `Particle/ParticleDraw.cpp:243` | chosen | state | particles | corner batch |
+| 46 | `Particle/ParticleDraw.cpp:245` | chosen | state | particles | corner batch with extras |
+| 47 | `Player/MarineSnow.cpp:174` | quad | state | points | one camera-facing quad per flake: an instance per point |
+| 48 | `Player/MarioActorSpecialDraw.cpp:144` | quad | numbers | 2-D | screen box from position and size |
+| 49 | `Player/MarioActorSpecialDraw.cpp:411` | fan | fixed | fans | 16-segment circle under a matrix (position, normal, radius) |
+| 50 | `Player/MarioActorSpecialDraw.cpp:446` | strip | fixed | 2-D | screen quad (frame ripple) |
+| 51 | `Player/MarioActorSpecialDraw.cpp:689` | quad | numbers | 2-D | screen box from a projected radius |
+| 52 | `Player/MarioFoo.cpp:658` | quad | numbers | quads | beam: center, side, front, length |
+| 53 | `Player/MarioFoo.cpp:668` | quad | numbers | quads | as 52, other side |
+| 54 | `Player/MarioFoo.cpp:737` | quad | state | quads | trail points |
+| 55 | `Player/MarioFoo.cpp:745` | quad | state | quads | as 54 |
+| 56 | `Player/MarioShadow.cpp:331` | chosen | state | shadows | collision polygons under the player (3 or 4 corners) |
+| 57 | `Player/MarioShadow.cpp:441` | fan | fixed | shadows | 16-segment ellipse in the shadow target's alpha |
+| 58 | `Player/MarioShadow.cpp:520` | list | state | shadows | edge polygons |
+| 59 | `Ride/Creeper.cpp:492` | strip | state | strips | vine points |
+| 60 | `Ride/Creeper.cpp:498` | strip | state | strips | as 59 |
+| 61 | `Ride/Creeper.cpp:504` | strip | state | strips | as 59 |
+| 62 | `Ride/PlantStalk.cpp:164` | strip | state | strips | grown points |
+| 63 | `Ride/PlantStalk.cpp:177` | strip | state | strips | as 62 |
+| 64 | `Ride/PlantStalk.cpp:190` | strip | state | strips | as 62 |
+| 65 | `Ride/SpaceCocoon.cpp:819` | strip | state | strips | stalk points |
+| 66 | `Ride/SwingRope.cpp:678` | strip | numbers | strips | one segment: two points, side, front |
+| 67 | `Ride/SwingRope.cpp:688` | strip | state | strips | rope points |
+| 68 | `Ride/Trapeze.cpp:679` | strip | numbers | strips | rope segment A to B, side, front |
+| 69 | `Ride/Trapeze.cpp:693` | strip | numbers | strips | as 68 |
+| 70 | `Ride/Trapeze.cpp:707` | strip | numbers | strips | as 68 |
+| 71 | `Screen/DepthOfFieldBlur.cpp:109` | strip | numbers | 2-D | ramp of 4 stops from two distances |
+| 72 | `Screen/ImageEffectLocalUtil.cpp:132` | strip | fixed | 2-D | unit quad |
+| 73 | `Screen/MovieDraw.cpp:46` | quad | numbers | 2-D | x, y, width, height |
+| 74 | `Screen/ScreenBlurEffect.cpp:81` | strip | numbers | 2-D | quad at -scale from fovy and aspect |
+| 75 | `Screen/StarPointerBlur.cpp:157` | strip | state | 2-D | pointer trail points, runs of the trail |
+| 76 | `Screen/StarPointerBlur.cpp:178` | strip | state | 2-D | as 75 |
+| 77 | `Screen/WaterCameraFilter.cpp:141` | strip | numbers | 2-D | screen quad, texture centred on the player's screen position |
+| 78 | `System/LumaDraw.cpp:353` | quad | numbers | mods | 2-D rect |
+| 79 | `System/LumaDraw.cpp:745` | quad | numbers | mods | 2-D thick line |
+| 80 | `System/LumaDraw.cpp:780` | list | numbers | mods | 2-D triangle |
+| 81 | `System/LumaDraw.cpp:837` | quad | numbers | mods | 2-D image |
+| 82 | `System/LumaDraw.cpp:1372` | quad | numbers | mods | 3-D line, thickness |
+| 83 | `System/LumaDraw.cpp:1398` | list | numbers | mods | 3-D triangle |
+| 84 | `System/LumaDraw.cpp:1621` | quad | numbers | mods | 3-D camera-facing image |
+| 85 | `Ui/UiCommon.cpp:51` | quad | numbers | 2-D | layout pane quad: base, size, colours, coords |
+| 86 | `Util/BezierSurface.cpp:716` | strip | numbers | strips | patch from its control points, by a table per divide level |
+| 87 | `Util/BezierSurface.cpp:746` | strip | numbers | strips | as 86 with normals and coords |
+| 88 | `Util/DirectDraw.cpp:50` | line list | numbers | lines | TDDraw::drawLine |
+| 89 | `Util/DirectDraw.cpp:75` | line strip | numbers | lines | TDDraw::drawCircle outline, segments |
+| 90 | `Util/DirectDraw.cpp:86` | fan | numbers | fans | TDDraw::drawFillCircle (2-D), segments |
+| 91 | `Util/DirectDraw.cpp:108` | fan | numbers | fans | TDDraw::drawFillCircle by a normal |
+| 92 | `Util/DirectDraw.cpp:128` | fan | numbers | fans | TDDraw::drawFillFan, angles |
+| 93 | `Util/DirectDraw.cpp:160` | strip | numbers | strips | TDDraw::drawCylinder, segments |
+| 94 | `Util/DirectDraw.cpp:191` | strip | numbers | strips | TDDraw::drawSpherePart, segments |
+| 95 | `Util/DirectDraw.cpp:227` | quad | numbers | 2-D | TDDraw::drawTexture: position, size |
+| 96 | `Util/DirectDraw.cpp:258` | quad | numbers | quads | TDDraw::drawTexture3D: center, normal, up, width, height, flips |
+| 97 | `Util/DirectDraw.cpp:266` | quad | numbers | quads | TDDraw::drawFillBox (3-D): one quad from two corners |
+| 98 | `Util/DirectDraw.cpp:276` | quad | numbers | 2-D | TDDraw::drawFillBox (2-D) |
+| 99 | `Util/DirectDraw.cpp:296` | quad | fixed | quads | TDDraw::drawFillBox3D: unit cube face under the matrix (center, height, side, front) |
+| 100 | `Util/DirectDraw.cpp:302` | quad | fixed | quads | as 99 |
+| 101 | `Util/DirectDraw.cpp:308` | quad | fixed | quads | as 99 |
+| 102 | `Util/DirectDraw.cpp:314` | quad | fixed | quads | as 99 |
+| 103 | `Util/DirectDraw.cpp:320` | quad | fixed | quads | as 99 |
+| 104 | `Util/DirectDraw.cpp:326` | quad | fixed | quads | as 99 |
+| 105 | `Util/DrawUtil.cpp:80` | quad | fixed | 2-D | screen colour quad |
+| 106 | `Util/DrawUtil.cpp:99` | quad | fixed | 2-D | screen picture quad |
+| 107 | `Util/DrawUtil.cpp:158` | strip | fixed | shadows | screen quad clearing the stencil |
+| 108 | `Util/DrawUtil.cpp:179` | quad | numbers | 2-D | fillScreenArea: min, max |
+| 109 | `Util/DrawUtil.cpp:220` | strip | fixed | shadows | screen quad, half black where the stencil is set |
+
+Read in passing:
+
+- `SnowFloorTile::drawLayer` draws the same full-tile quad 16 times for each of the 12 layers, blended by alpha with
+  depth written (`SnowFloorTile.cpp:434-475`), as Petari's `drawLayer` does at cec16c113: 192 quads a tile where 12
+  give the same colour by a closed form, one quad a layer with the program's alpha `1 - (1 - a)^16` (P-196).
+- Of the 36 state sites, 22 draw a band along a list of points with an offset to each side (20 strips and the 2
+  trail quads: sites 1-4, 23, 25, 37-39, 43, 54-55, 59-65, 67, 75-76): one family whose points could be kept by the
+  site and widened by the vertex program, as 2.12 leaves to that family's reading.
 
 ### 2.13 Step 5: both poses once a step, the matrices of each picture made on the GPU
 
