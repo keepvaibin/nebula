@@ -518,6 +518,14 @@ int main() {
         check(encoded("[[a] [nope 1] [wait] [wait x] [color 256]") == u"[a] [nope 1] [wait] [wait x] [color 256]", "anything else stays as written");
         check(encoded("[wait 1") == u"[wait 1", "an unclosed bracket stays");
         check(encoded("\xC3\xA9\xF0\x9F\x98\x80") == std::u16string({0xE9, 0xD83D, 0xDE00}), "UTF-8 to UTF-16");
+        // The game's one set of UTF-8 rules (nebula_utf8.h, P-320): each bad form is U+FFFD, the byte after it read anew.
+        check(encoded("\x80" "A") == std::u16string({0xFFFD, u'A'}), "a stray continuation byte");
+        check(encoded("\xE3" "A[page]") == std::u16string({0xFFFD, u'A', 0x1A, 6 | (1 << 8), 1}),
+              "a sequence cut short by a byte that does not continue it");
+        check(encoded("x\xE3\x81") == std::u16string({u'x', 0xFFFD}), "a sequence cut short by the end");
+        check(encoded("\xC0\x80" "\xE0\x80\xAF") == std::u16string({0xFFFD, 0xFFFD}), "longer forms than the code needs");
+        check(encoded("\xED\xA0\x80" "\xF4\x90\x80\x80") == std::u16string({0xFFFD, 0xFFFD}),
+              "a surrogate's own code and a code past Unicode");
         char16_t small[4];
         check(nebula_text::encode("abcdef", small, 4) == 6u && small[2] == u'c' && small[3] == 0, "cut to its room, with its 0");
     }

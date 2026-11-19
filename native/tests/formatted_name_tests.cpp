@@ -1,6 +1,6 @@
 // MR::FormattedName, MR::Text16 and the name helpers built on them: names far longer than their inline room; and
 // MR::GrowBuffer, the room of the achievement pop-up queue, past the 40 entries its old fixed array held; and
-// MR::utf8ToText16, the one UTF-8 decoder of the game's 16-bit text.
+// MR::utf8ToText16 and nebula_utf8.h, the one set of UTF-8 rules of the game's 16-bit text.
 // StringUtil.cpp is linked with the few game functions it calls given below.
 #include "Game/Screen/ReplaceTagProcessor.hpp"
 #include "Game/Util/Array.hpp"
@@ -9,6 +9,7 @@
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Util/TextString.hpp"
+#include <nebula_utf8.h>
 
 #include <cstdarg>
 #include <cstdio>
@@ -277,6 +278,19 @@ int main() {
             whole = whole && pText[i] == u'あ';
         }
         check(whole, "a UTF-8 text longer than Text16's inline room");
+
+        // nebula_utf8::next within a bounded text (NebulaText's lines, the mods' text, P-320): the bound ends a
+        // sequence as the text's end does, and a whole sequence before it reads as it is.
+        const u8 bytes[] = {0xE3, 0x81, 0x82, 0xE3, 0x81, 0x82};
+        const u8* p = bytes;
+        const u32 first = nebula_utf8::next(p, bytes + 5);
+        const u32 cut = nebula_utf8::next(p, bytes + 5);
+        check(first == 0x3042u && cut == nebula_utf8::kReplacement && p == bytes + 5,
+              "a sequence cut short by the text's bound, not read past it");
+        char16_t pair[2] = {};
+        check(nebula_utf8::put_utf16(0x1F600u, pair) == 2u && pair[0] == 0xD83Du && pair[1] == 0xDE00u &&
+                  nebula_utf8::put_utf16(0x41u, nullptr) == 1u,
+              "a code as UTF-16 units");
     }
 
     if (sFailures != 0) {

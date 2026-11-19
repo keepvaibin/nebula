@@ -1,5 +1,6 @@
 #include "Game/System/NebulaText.hpp"
 #include <nebula_module.h>
+#include <nebula_utf8.h>
 
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/System/GameAssets.hpp"
@@ -105,28 +106,20 @@ namespace {
         return -1;
     }
 
-    // One UTF-8 line's value into sText, with \n and \\ unescaped; its start. A value's bytes make at most as many
-    // UTF-16 units (a 4-byte sequence makes 2), which load sized sText by.
+    // One UTF-8 line's value into sText, with \n and \\ unescaped, read by the game's one set of UTF-8 rules
+    // (nebula_utf8.h: a bad form is U+FFFD); its start. A value's bytes make at most as many UTF-16 units (a 4-byte
+    // sequence makes 2, a bad byte 1), which load sized sText by.
     s32 storeValue(const u8* pValue, const u8* pEnd) {
         const s32 start = sTextUsed;
         while (pValue < pEnd) {
-            u32 code = *pValue++;
-            if (code == '\\' && pValue < pEnd && (*pValue == 'n' || *pValue == '\\')) {
-                code = *pValue++ == 'n' ? '\n' : '\\';
-            } else if (code >= 0xC0) {
-                const s32 extra = code >= 0xF0 ? 3 : code >= 0xE0 ? 2 : 1;
-                code &= extra == 3 ? 0x07 : extra == 2 ? 0x0F : 0x1F;
-                for (s32 i = 0; i < extra && pValue < pEnd && (*pValue & 0xC0) == 0x80; i++) {
-                    code = (code << 6) | (*pValue++ & 0x3F);
-                }
-            }
-            if (code >= 0x10000) {
-                code -= 0x10000;
-                sText[sTextUsed++] = static_cast< char16_t >(0xD800 + (code >> 10));
-                sText[sTextUsed++] = static_cast< char16_t >(0xDC00 + (code & 0x3FF));
+            u32 code;
+            if (*pValue == '\\' && pValue + 1 < pEnd && (pValue[1] == 'n' || pValue[1] == '\\')) {
+                code = pValue[1] == 'n' ? '\n' : '\\';
+                pValue += 2;
             } else {
-                sText[sTextUsed++] = static_cast< char16_t >(code);
+                code = nebula_utf8::next(pValue, pEnd);
             }
+            sTextUsed += static_cast< s32 >(nebula_utf8::put_utf16(code, sText + sTextUsed));
         }
         sText[sTextUsed++] = 0;
         return start;

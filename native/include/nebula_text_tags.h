@@ -1,6 +1,7 @@
 /* A mod's text (UTF-8) as the game's message text (UTF-16 units), with the game's message tags written in brackets.
    The words, their groups and arguments are luma_text_tags.h's table, the one LumaScript's runtime and LumaLink's cook
-   use too; "[[" is one "[", and brackets that name no tag stay as written.
+   use too; "[[" is one "[", and brackets that name no tag stay as written. The UTF-8 is read by the game's one set of
+   rules (nebula_utf8.h): a bad form is U+FFFD.
 
    Header-only, no library calls: the game module (NebulaMods) and the host's tests use it. */
 #ifndef NEBULA_TEXT_TAGS_H
@@ -9,6 +10,7 @@
 #include <stdint.h>
 
 #include "luma_text_tags.h"
+#include "nebula_utf8.h"
 
 #ifdef __cplusplus
 
@@ -54,19 +56,14 @@ inline uint32_t encode(const char* pUtf8, char16_t* pOut, uint32_t room) {
                 continue;
             }
         }
-        const uint8_t lead = static_cast< uint8_t >(pUtf8[i]);
-        const uint32_t extra = lead < 0x80 ? 0 : lead < 0xE0 ? 1 : lead < 0xF0 ? 2 : 3;
-        uint32_t code = extra == 0 ? lead : extra == 1 ? lead & 0x1Fu : extra == 2 ? lead & 0x0Fu : lead & 0x07u;
-        for (uint32_t c = 1; c <= extra && i + c < length; c++) {
-            code = (code << 6) | (static_cast< uint8_t >(pUtf8[i + c]) & 0x3Fu);
-        }
-        i += extra + 1;
-        if (code >= 0x10000u) {
-            code -= 0x10000u;
-            writer.put(0xD800u | (code >> 10));
-            writer.put(0xDC00u | (code & 0x3FFu));
-        } else {
-            writer.put(code);
+        // The game's one set of UTF-8 rules (nebula_utf8.h): a bad form is U+FFFD.
+        const uint8_t* const pText = reinterpret_cast< const uint8_t* >(pUtf8);
+        const uint8_t* p = pText + i;
+        char16_t units[2];
+        const uint32_t count = nebula_utf8::put_utf16(nebula_utf8::next(p, pText + length), units);
+        i = static_cast< uint32_t >(p - pText);
+        for (uint32_t k = 0; k < count; k++) {
+            writer.put(units[k]);
         }
     }
     if (pOut != nullptr && room != 0) {
