@@ -133,7 +133,7 @@ What is read so far (at a1f423dd8):
   (`game.pak`, `cook/store.rs`) through `AssetFolder` and `GameAssets::load` (`FileUtil.cpp:88`); `ResourceHolder`
   files a folder's entries into tables by the cooked kind (`ResourceHolder.hpp:22-29`, `NEBULA_ASSET_KIND_*`). No
   archive or compression is read while the game runs. Class: modern; nothing of the console's file system is left in
-  this path. `SoundArchive` maps the cooked sound archive from the store (`SoundArchive.hpp:9-11`);
+  this path. `SoundArchive` maps the cooked sound archive from the store (`SoundArchive.hpp:11-13`);
   `ErrorMessageArchive.hpp` reads the cooked game data tables; `ParticleResourceHolder` (`ParticleResourceHolder.cpp:9-34`)
   reads the cooked particles and their name table, and keeps a particle's index as 16 bits: P-188.
 - Input. The game takes one record per player per read, whatever the device (`nebula_game_api.h:287-322`,
@@ -161,7 +161,7 @@ What is read so far (at a1f423dd8):
   `MiiFaceIconHolder::registerIcon` (`MiiFaceIconHolder.cpp:27-34`), the clipping groups (`ClippingGroupHolder.cpp:23-24`,
   `room`) and the shadow's polygon lists (`MarioShadow.cpp:207`). Pools of actors made ahead (`DinoPackunVs2.cpp:34-35`:
   64 and 16 fires) are how many fires the boss has: the game's. `EffectKeeper`'s emitters (`MarioEffect.cpp:728`,
-  `0xB8` extra) are an `MR::Vector` sized to start at the model's effects and the extra (`EffectKeeper.cpp:59-61`,
+  `0xB8` extra) are an `MR::Vector` sized to start at the model's effects and the extra (`EffectKeeper.cpp:60-62`,
   `EffectKeeper.hpp:60`), so they grow too. Inline arrays of
   16 or more outside the actor folders: the collision query's and the draw rows' are small-buffer rooms that move to the
   heap past their size (`CollisionParts.cpp:299-317`, `TypedDraw.hpp`), the rest are the game's tables and text
