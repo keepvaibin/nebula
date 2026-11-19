@@ -1098,3 +1098,60 @@ eye-space blocks.
   at an unlimited picture rate in HoneyBeeKingdom (P-156's scene) on the PC and the tablet; the game step's time
   unchanged or lower (file 08 7.4).
 - After the last landing: `git grep -n "compose_rows\|joints_at" runtime`: 0, and the walk writes no matrix row.
+
+### 2.14 Step 6: lights as world records, a draw naming its set
+
+Read at cfc2e368e.
+
+**Today.**
+
+1. The game loads lights into numbered places, the console's eight registers: all eight to white at every scene draw
+   (`initLightRegisterAll`, `LightFunction.cpp:14-28`, from `GameScene.cpp:323`); an actor's two lights, its alpha light
+   and its ambient before each run of its draws (`loadActorLightInfo`, `:178-190`, from `ActorLightCtrl::loadLight`,
+   `ActorLightCtrl.cpp:30-38`, and `LightUtil.cpp:27-31`); the coin's shine (`:192-203`); one point light (`:205-216`);
+   eight white lights at the eye (`:218-230`, from `LightDirector.cpp:18` and the mods' `LumaDraw.cpp:1538`). A light
+   fixed in the world is multiplied by the step's view at each load (`:170`, `:209`); a light that follows the camera is
+   given in eye space and marked (`Frame::setLightFollows`).
+2. The frame list copies the places into a new set whenever one changed or the block's camera did
+   (`currentLightSet`, `FrameList.cpp:713-744`; `setLight`, `:746-758`); a set is a run of lights in eye space with
+   follow bits (`nebula_frame_list.h:38-56`); an item names its set.
+3. The render thread writes each set's rows at every walk, and between two steps mixes each light with its pair,
+   taking a world light through the camera's motion (`draw_walker.cpp:317-343`, `light_rows_at`).
+4. The ambient is not in the set: it is `MaterialAmbient`'s global pair (2.11), set by the same `loadActorLightInfo`
+   (`:189`).
+5. In the game step: every visible actor looks for its light area through every light area (P-152:
+   `ActorLightCtrl::update`, `ActorLightCtrl.cpp:23-28`), and every moving actor asks for its shadow's drop to be found
+   again (P-140).
+
+**The engine.**
+
+- A light is a record in the world (or in the eye, for a light that follows the camera, named as such): colour,
+  terms, position, direction. The area lights' entries (player, strong, weak, planet: two lights, the alpha light and
+  the ambient each, `getAreaLightLightData`, `:85-92`) are records made when the light data loads; the coin's shine,
+  the point lights and the white eye lights likewise. A record changes only when its source does (a point light that
+  moves, an actor's blend between two area lights, once a step while it lasts).
+- A light set is a short list of light records and an ambient colour: one per area-light entry, one per blend in
+  progress, one for the eye's white lights. An item names its set, as today; the set's lights are not copied into
+  the list at each change of place, only named. The view is applied by the GPU with the picture's camera (in step 5's
+  pass or the light's own rows), so no light is multiplied by the view on the CPU and none is mixed through the
+  camera's motion: a world light does not move between two steps unless its record did.
+- `initLightRegisterAll` and the numbered places go; `MaterialAmbient` goes (its readers, 2.11, read the set's
+  ambient). A material names a light by its number in the set, as today (`NebulaFrameLightSet`'s comment); the
+  numbers keep their meaning (0 and 1 the actor's lights, 2 the alpha light, 3 the shine, 4 the point light).
+- The game half, kept to an identical replay: an actor tests the area it is in first and walks the areas only when
+  it has left it, and a still actor (the binder's still test, P-138) does not ask (P-152); an actor's shadow keeps its
+  drop when its position, direction and length are bit-equal to the step before and no collision part under it moved,
+  was added, removed or switched (a change count on the keeper) (P-140).
+
+**Groups.** As 2.7.3: the actors' lights (`loadActorLightInfo`); point lights; the player's light; the map's lights.
+
+**Proof.**
+
+- The gate's pictures of both paths on every stop and renderer equal (2.7.4); the step hash identical with and
+  without P-140's and P-152's changes over the tours and the play route, with a test run that computes both ways and
+  compares every step.
+- A test of the light rows: for the tours' lists, the rows the GPU path gives each light at t equal `light_rows_at`'s.
+- Counts before and after: light sets and light bytes per list, view multiplies per step (0 after), light-area volume
+  tests per step in HoneyBeeKingdom (P-152's scene), shadow drop searches per step.
+- `git grep -n "initLightRegisterAll\|MaterialAmbient" native`: 0 after the last landing.
+- The game step's and the walk's time on the PC and the tablet, before and after (file 08 7.4).
