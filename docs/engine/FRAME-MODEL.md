@@ -354,7 +354,7 @@ between the two paths are in 2.7:
 
 | Step | Written at cook | Ends in the engine |
 | --- | --- | --- |
-| 1 | per material form: which row glows, the map rows, the glow value, the alpha cutoff and mode | searching console register codes at load; with it, every pipeline made at load (P-010, N-1067) |
+| 1 | the section table (2.8); per material form: which row glows, the map rows, the glow value, the alpha cutoff and mode; the console's material fields apart (`GXMT`) | every pipeline made at load (P-010, N-1067). The search for console register codes at load that file 01 names here was the tracer's and went with it (E13a stage 4a, a778266de): no `NEBULA_ROW_` is read in `runtime/` (grep: no file), and no stage record is written. What is left of P-157 is the register-shaped record (`NebulaModelMaterial`, `nebula_model.h:246-264`), read per draw by `Material::fillRow` (`Material.cpp:296-424`): step 3 |
 | 2 | samplers in final form, each form's texture list | hashing a texture's address and decoding filter codes per draw; the per-frame table rebuilds (`draw_walker.cpp:878`, :920); the sampler heap's and arrays' waits (P-048, P-056, P-066) |
 | 3 | per form: a block of final constant rows, and the short list of rows that change, with their source | filling register rows at draw time |
 | 4 | prepared material records for the immediate-style draw sites and particles; fixed shapes as meshes registered once | vertices and indices built on the CPU each frame |
