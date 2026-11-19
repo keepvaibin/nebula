@@ -81,7 +81,7 @@ What the hits are, by search (each line read at a1f423dd8):
 | Text (`MessageHolder`, the `NMSG` reader, the host's `message_utf8`) | not counted | not read whole |
 | Layouts and fonts (`Game/Ui`, `Game/Screen`'s layout code, `Game/System` font holders) | `Game/Ui` 51, `Game/Screen` 289 | started: `Layout::Build`, `Material`'s record and draw (section 3) |
 | Input (the host's and the game's) | not counted | read for master report 6, not for this test |
-| The game's own files E14 did not reach | 921 at E14's last count | not read whole |
+| The game's own files E14 did not reach (Agent 3's hand-over, `docs/plan/HANDOVER-AGENT-3.md` on `app/work`: Player 99, Sound 76, Enemy 109, Boss 166, Ride 19, NPC 76, MapObj 314, LiveActor 62) | 921 | swept by pattern (below), every hit read; not read whole |
 
 What is read so far (at a1f423dd8):
 
@@ -109,6 +109,34 @@ What is read so far (at a1f423dd8):
   extensible format the buses go to speakers of their own (`audio_mixer.h:90-95`, `audio_device_wasapi.cpp:222`). Not
   yet read: `AudioLib` (58 files), `GameAudio`, `RhythmLib`, `Speaker`, the volume ramp over the first 4/5 of a tick
   (`audio_mixer.h`, `ramp_mix`).
+- Archives and file access. The game's archive names (`.arc`, `.szs` in 18 runtime, 6 game and 10 header lines) are
+  names only: the store drops the ending (`asset_store.h:118-119`, `asset_store.cpp:33`). The game reads the store
+  (`game.pak`, `cook/store.rs`) through `AssetFolder` and `GameAssets::load` (`FileUtil.cpp:88`); `ResourceHolder`
+  files a folder's entries into tables by the cooked kind (`ResourceHolder.hpp:22-29`, `NEBULA_ASSET_KIND_*`). No
+  archive or compression is read while the game runs. Class: modern; nothing of the console's file system is left in
+  this path. Not yet read: `SoundArchive`, `ParticleResourceHolder`, `ErrorMessageArchive`.
+- Input. The game takes one record per player per read, whatever the device (`nebula_game_api.h:287-322`,
+  `NebulaInputSample`): buttons by the game's own names, the stick and the pointer in -1..1 of the picture, tilt in g,
+  spins counted between reads. No report of the console's controller reaches the game. Class: modern. The timing of
+  the reads (once a step) is P-075, P-078 and P-163 (E6b). The host's drivers for real Wii Remotes read the remote's
+  own reports: a device, not the console.
+- The actor folders (the 921 files' folders: 285,511 lines with their headers). Swept by the scratch script
+  `actors.py` for six shapes, each hit read: the console CPU's intrinsics and cache and paired-single instructions
+  (`__cntlzw`, `__fsel`, `__frsqrte`, `psq_`, `__dcb*`, `OSRoundUp`...) 0; the console's addresses and memory sizes 0;
+  pointers kept as integers 1 (`ClippingActorHolder.cpp:16`, a hash of an address: host code); big-endian or packed
+  access 4 (a colour packed for a draw, a sound id's fields: the game's); data read through byte offsets 14 (cooked
+  records: the ghost file `NGST`, sequences, sound tables, `MarioConst`'s fields by name for mods); tables of a literal
+  size 138 (legs, joints, walls, curve tables, the sound driver's registers: the game's own shapes). No console item
+  found in them by these shapes; a whole read is not done.
+- Limits. Tables sized by a named constant (pass one, 26 lines): Windows' `MAX_PATH`, the game's rule of 999 carried
+  star pieces, the mods' loader tables (not in this order), host buffers: none the console's. Capacities given when a
+  holder is made (`init(n)`, `new XHolder(n)`, `new T[n]` with n of 10 or more: 37 lines in `native/petari/src`): the
+  six read grow when full (`MR::Vector` and `AssignableArray::grow`, `Array.hpp:104-120`, `:291-312`;
+  `SensorGroup::add`, `SensorHitChecker.cpp:65-72`; `NameObjHolder::add`, `NameObjHolder.cpp:22-30`;
+  `NameObjExecuteHolder::registerActor`, `NameObjExecuteHolder.cpp:200-204`); the others not yet read. Inline arrays of
+  16 or more outside the actor folders: the collision query's and the draw rows' are small-buffer rooms that move to the
+  heap past their size (`CollisionParts.cpp:299-317`, `TypedDraw.hpp`), the rest are the game's tables and text
+  buffers.
 - The 4:3 and 480-line hits (pass one, 111 lines), each read. The game's own: the 2D canvas of 456 lines and the
   layouts' 608 width (`NEBULA_AUTHORED_LINES`, `NebulaFrameClock.hpp:10-14`: units, "nothing renders at this size"),
   lines and points sized in lines of a 456-line picture (`FrameList.hpp:18`, `ParticleDraw.hpp:43`), gameplay numbers
