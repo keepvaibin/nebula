@@ -1297,3 +1297,161 @@ Read at cfc2e368e.
   tests per step in HoneyBeeKingdom (P-152's scene), shadow drop searches per step.
 - `git grep -n "initLightRegisterAll\|MaterialAmbient" native`: 0 after the last landing.
 - The game step's and the walk's time on the PC and the tablet, before and after (file 08 7.4).
+
+### 2.15 E4: the frame's passes, planned from what each reads and writes
+
+Read at 241395b49 (11-19). File 01's E4: the game states what each pass reads and writes, a planner builds the
+frame, the console's draw order goes; done when the full-size scene opens once per picture on the tablet in every
+tour stop when nothing reads it back, pictures unchanged, GPU time by pass recorded before and after.
+
+**Today.**
+
+1. The pass record. A pass is one of fourteen kinds (`nebula_frame_list.h:225-241`): draws, a clear, a copy of the
+   frame (`COPY_FRAME`), the frame handed to a texture with a new picture after it (`TAKE_FRAME`), the scene's begin,
+   opaque end and end, three bloom kinds, a probe, show, a mod's post program and a native call. The record
+   (`:270-290`) holds a target key, the clear, a size, the channels, an over-frame texture and depth for a target
+   pass that reads the frame, and the scene's camera and view. It names nothing it reads: what a draw pass samples is
+   found by the host through each item's texture table.
+2. The game makes passes in its draw order through `Frame::` (`FrameList.hpp:134-167`). A frame of play
+   (`GameScene.cpp:323-329`): the Mii faces into their targets, the mirror, `draw3D`, `draw2D`. The mirror draws its
+   view into the frame itself, has it copied at the capture's timing and clears the frame again
+   (`GameScene.cpp:487-504`): the console's way of making a reflection texture. `draw3D` (`:511-573`) opens the scene
+   and draws into it, in order, the fall-out field's target passes over the frame (`:534`; `FallOutFieldDraw.cpp:98`,
+   `:109`), the capture's copy (`:556`; one target at the frame's size, `CaptureScreenDirector.cpp:23`, copied at the
+   one timing the scene asks, `:27-38`), the image effects (`:561`: depth of field, `DepthOfFieldBlur.cpp:88`, `:144`;
+   the blurs, `ImageEffectLocalUtil.cpp:115`, `:152`, `:155`, `FullScreenBlur.cpp:40`; the bloom), the player's
+   indirect draws (`:568`; `MarioActorSpecialDraw.cpp:111`, `:436`), then ends it. Every target pass and frame copy of
+   the game (18 calls, `git grep -n -E 'Frame::(targetBegin|targetBeginPixels|targetBeginOverFrame|copyFrame|takeFrame)\(' 241395b49 -- native/petari/src`)
+   is one of these, or the shadow capture (`MarioShadow.cpp:404`), the galaxy map's capture
+   (`GalaxyMapController.cpp:626`), the water filter's take (`WaterCameraFilter.cpp:126`) and the mods' views
+   (`LumaDrawView.cpp:281`, `:319`, before the scene, `GameScene.cpp:520`).
+3. The walk (1.7 item 8) runs the passes in list order with three plans made once per list (`walk_plan.h`): a target
+   run that reads nothing written before it and is read by nothing before it is drawn first (`plan_early_targets`,
+   `:33-121`); a probe is asked at the scene's end or at the frame copy before it when nothing between changes the
+   depth (`plan_early_probes`, `:127-181`); a scene depth clear no later pass reads is left for the next pass to make
+   (`plan_late_depth_clears`, `:186-223`). `walk_plan_tests.cpp` (585cedcd6) tests the three on made-up lists.
+4. Each renderer turns a target pass into a trade of its scene set for the target's set and back
+   (`swap_target_set`, `renderer_d3d12.cpp:5554-5570`; `begin_target_pass` and `end_target_pass`, `:5572-5622`), with
+   its own barriers written by hand at each end; Vulkan, Metal and Direct3D 11 have their own copies of the same trade
+   (`renderer_vk_frame.cpp:725`, `renderer_mtl_scene.mm:723`, `renderer_d3d11_scene.cpp:418`). A target pass inside
+   the scene ends the scene's render pass and opens it again after (1.9). Vulkan opens every pass from a render pass
+   object picked from variants made ahead by load, clear and discard (`renderer_vk_frame.cpp:483-494`), with a
+   secondary-command-buffer form for parallel recording (`:510-511`); Direct3D 12 and 11 bind targets with
+   `OMSetRenderTargets` and have no pass object; Metal opens encoders from descriptors, with a parallel encoder for
+   recording on workers (`renderer_mtl_draw.mm:353`, `renderer_mtl_scene.mm:482`). No backend makes a target that
+   lives only in tile memory (`git grep -n -E 'MTLStorageModeMemoryless|LAZILY_ALLOCATED' 241395b49 -- runtime/src`:
+   0).
+
+**The game.**
+
+- Each pass states its reads and writes as keys: the frame's colour, its depth and stencil, a target, a copy.
+  `Frame::` knows them where it writes the pass: `targetBegin` writes its key, `targetBeginOverFrame` also reads the
+  frame keys it names, `copyFrame` reads the frame and writes its key, `takeFrame` writes its key and starts a new
+  frame picture, `post` and `native` read and write the frame. A draw pass's reads are the targets in its items'
+  texture lists: the writer adds a target key to the pass's read list when it writes an item whose list names one
+  (the list's builder sees each texture; RenderTexture's entry marks a target, `RenderTexture.cpp:192`), so the host
+  scans no table. A draw pass's
+  writes to the frame's depth and stencil follow its pipelines' state words, as `walk_plan.h:130` and `:193-195`
+  read them today; the writer records the union of the pass's items' write bits once.
+- The mirror draws into its own target (`targetBegin` with the mirror's key at its view's size), read by the mirror
+  materials by that key; the frame is no longer drawn, copied and cleared for it (`GameScene.cpp:487-504`). Today the
+  capture actor runs at both places, the mirror's (`:497`) and the scene's (`:556`), and at the default timing,
+  "Indirect" (`CaptureScreenDirector.cpp:15-19`, not asked for, so it copies at each), the one capture target holds
+  the mirror's picture for the mirror materials and then the scene's for refraction: two versions of one key, which
+  the planner keeps apart (below). A scene that sets another timing while a mirror shows is looked for in the
+  landing; the gate's mirror stops compare both paths.
+- What stays in the game's order: the passes inside the scene that read the frame at other pixels than their own
+  (the capture for refraction, the image effects' blurs, the depth of field, the fall-out field's mask and glow, the
+  frame ripple): each is a real break of the scene, kept, and planned (below).
+
+**The engine.** One planner in `runtime/src/render/core` (shared by the four renderers through F3's layer, P-022),
+pure and tested with no GPU, as `walk_plan.h` is today; it replaces the three plans.
+
+1. Versions. Each write of a key makes a new version; each read names the version current at its place in the list.
+   The list's order is the game's meaning; the planner may move a pass only where every read still sees its version.
+2. Culling. A pass whose versions nothing reads is dropped, unless it shows, probes, calls native code, or writes a
+   target read in a later frame. A target's last version of a real frame is kept for the next frame by name (5).
+   A frame copy that no visible draw reads is not made.
+3. Order. The list's order, as a stable topological sort with list position as its key; a pass that depends on
+   nothing the open scene has written moves before the scene opens (`plan_early_targets`'s rule, now for every pass
+   kind, so the Mii faces, the mods' views, the shadow capture and the mirror's own target never break the scene).
+4. Instances. Consecutive passes that draw into the same attachments with no read of those attachments between become
+   one render pass instance. A break stays only where a pass samples a version the open instance is writing. Each
+   instance's load and store come from the versions: clear where its first use clears, nothing loaded where no
+   earlier version is read, stored only where a later instance or frame reads it; depth and stencil not stored after
+   the scene unless a probe, `draw.post` or `draw.native` reads them. A multisampled attachment resolves once, at the
+   end of the last instance that writes it, only when its single-sample version is read; its multisampled contents
+   are not stored unless a later instance loads them. An attachment neither loaded nor stored is transient: on a
+   tiled GPU it lives in tile memory only (Metal's memoryless storage; Vulkan's transient attachment usage with
+   lazily allocated memory, where the device offers it).
+5. Names. Two pictures are asked for by name, not by what was shown last: the picture the player sees
+   (`display_pictures_.latest()`, an in-between picture included; the camera's cover copies it, P-021's decision) and
+   a target's version from the last real frame (an in-between walk writes its own versions under
+   `kGeneratedPicture`, `draw_walker.cpp:1416-1419`, and never replaces it). E6b 6.3's unseen walk at t = 1 goes with
+   the second name.
+6. Barriers. The planner lists each key's uses in plan order and emits a transition before the pass whose use
+   differs from the last: from attachment write to sampled, sampled to attachment, copy source and destination,
+   resolve. The shared layer turns them into Direct3D 12 resource barriers, Vulkan image barriers and Metal's encoder
+   boundaries; Direct3D 11 needs none. The trade of scene and target sets in each backend goes: a pass names its
+   attachments.
+7. Memory. Targets come from a pool keyed by size, format and samples. A size change makes the new target beside the
+   old and the old is freed when the frame slot that last used it has passed its fence; nothing waits for the whole
+   GPU inside a frame (P-028's form, for every renderer and for the upscalers' and frame generation's own targets).
+8. Pass objects. Vulkan opens instances with dynamic rendering (core in 1.3, `VK_KHR_dynamic_rendering` before),
+   load and store given per begin, so the variant tables of render pass objects go; where a device has neither, the
+   plan's load and store pick a render pass object made once per key and kept. Parallel recording keeps one instance:
+   the workers record secondary buffers executed inside it (Vulkan), a parallel encoder's children (Metal), or command
+   lists that continue the same bound targets (Direct3D 12).
+9. After the scene. Where no upscaler sits between, the bloom's composite, the 2-D layer and the conversion to the
+   output are one instance writing the swap chain's picture (on tiled GPUs this is the gain; elsewhere it costs
+   nothing). The bloom's chain keeps its taps; a phone setting for a shorter chain (the owner allowed it) is measured
+   for time and for the picture's difference before it is offered.
+10. Probes. A probe pass is placed by the planner after the last write of the depth it reads (`plan_early_probes`'s
+    rule, generalized); its answers are copied into the frame slot's readback at that place. When the game reads
+    them is N-1068's (rule 2).
+
+**Rows.**
+
+| Row | What E4 does | Landing |
+| --- | --- | --- |
+| P-006, P-055 | Vulkan's scene stores depth, stencil and the multisampled colour at every pass end: stored only where read later; transient attachments | 3 |
+| P-031 | Metal's the same | 3 |
+| P-053 | a resolve per consumer with nothing drawn since: one resolve at the last write that is read (Vulkan and Metal; Direct3D 12 and 11 already skip it) | 3 |
+| P-025 | with MSAA, bloom and the scene's anti-aliasing resolve and then copy: the resolved version is read where it lies | 3 |
+| P-063 | Direct3D 11's scene anti-aliasing copies the scene: it takes it, as Direct3D 12 and Vulkan do | 3 |
+| P-007 | parallel recording splits Vulkan's scene into several instances: one instance | 5 |
+| P-027 | the HDR 2-D layer's three full-size conversions: the merged after-scene instance | 6 |
+| P-021 | the cover's copy and the frame pass's draw folded into one | 6 |
+| P-026 | Direct3D 12's present views made every frame (built 11-18, 85eeb6d67): the planner's attachments keep their views | 4 |
+| P-028 (Vulkan), P-054, P-030, P-049, P-050, P-057 | size changes and the upscalers' and frame generation's contexts made beside the old, retired by the fence | 7 |
+| N-1068 | the probes' place in the plan; the game's read is the row's own | 2 |
+| N-1082 | a capture's readback answered by its frame later, through the planner's readback place | 2 |
+| P-044 (1) | the planner's test on recorded frame lists | 1 |
+| P-009, P-032 | the mods' post and native passes are passes every renderer is asked to run; HDR output is the show pass's format (2.6) | 2 |
+
+**Landings,** each with the old and new path side by side behind one switch (as 2.7.3; the groups here are the
+planner's parts: order and culling; instances, load and store; barriers; the after-scene instance), the gate comparing
+both paths' pictures in one run:
+
+1. The records: each pass's read and write keys written by `Frame::`; a test that, over the tours' recorded lists, the
+   stated sets equal what the host derives today through the tables and state words; P-044's recorded-list fixtures
+   (pass kinds, keys, item counts and state words only, no game content) and their expected plans.
+2. The planner (versions, culling, order, names, probes) in core, under its tests; the walker runs its order. The
+   game's mirror target. `walk_plan.h`'s three plans deleted in this landing's last part.
+3. Instances, load and store, resolves and transient attachments, per backend through F3's layer.
+4. Barriers from the plan; each backend's set trade and hand barriers deleted.
+5. One instance under parallel recording.
+6. The after-scene instance on tiled GPUs; the cover's single draw; the phone bloom setting, measured.
+7. Targets beside the old at a size change for every renderer and the upscalers' and frame generation's contexts.
+
+**Proof.**
+
+- Tests with no GPU: the planner over the recorded lists gives the stored plans; over random lists (any kinds, keys
+  and reads), every read in the plan sees the version list order gives it, every dropped pass writes nothing read,
+  the order is a topological order of the dependencies, and no key is stored that nothing reads.
+- The gate's pictures of both paths equal on every stop and renderer (2.7.4).
+- The measure E4 is done by: `--diagnostics gpu-passes` on the tablet in every tour stop counts the full-size scene's
+  openings per picture (one where nothing reads it back) and its loads and stores; GPU time by pass on the tablet
+  before and after; the targets' memory before and after.
+- After the last landing: `git grep -n -E "plan_early_targets|plan_late_depth_clears|swap_target_set|discard_color_passes" runtime`: 0.
+- The game step's and the walk's time on the PC and the tablet, before and after (file 08 7.4: never slower).
