@@ -83,6 +83,33 @@ What the hits are, by search (each line read at a1f423dd8):
 | Input (the host's and the game's) | not counted | read for master report 6, not for this test |
 | The game's own files E14 did not reach | 921 at E14's last count | not read whole |
 
+What is read so far (at a1f423dd8):
+
+- Tables. Reads by column name (`getCsvData*`, `getValue<T>(key)`, `findElement*`, `searchItemInfo`, `getColumnKind`):
+  241 lines in 56 files of `native/petari/src`. By the function each is in (the scratch script `tablecalls.py`, its
+  pattern recorded with the item): 15 sit in functions named like per-step code (`exe*`, `control`, `calc*`, `update*`,
+  `draw*`); read one by one, 9 are `ValueControl::getValue` or a sound note's field (not a table) and 6 are
+  `StageDataHolder::calcPlacementMtx` (`StageDataHolder.cpp:673-680`), which runs at placement. 99 lines are in free
+  functions (`MR::`) whose callers are not yet placed. So far no table read by name in a step; not closed.
+- Layouts. Cooked `NLYT` (section 1); the record's material: P-184.
+- Text. Cooked `NMSG` (`MessageHolder.hpp:8-32`): host-order counts and offsets, the text as `char16_t`, flow nodes
+  and branches as records. Fonts: cooked `NFNT` (`native_data.rs:244-257`): host order, sheets as distance fields
+  (`cook::distance`) or pictures, a glyph found through two 256-entry pages by the code's high and low byte. Both read
+  characters as 16-bit codes (`CharStrmReader.cpp:10-33`: UTF-8 of up to three bytes, UTF-16 units, CP1252), the
+  console's font code range: no character past U+FFFF can be shown. Not yet classed (the game's 14 languages are all
+  inside it; whether host text needs more is read with the host's `message_utf8`). A glyph's sheet is still found by
+  the address of its bytes (`ResFontBase.cpp:186-191`), as P-155's textures.
+- Sound. `Game/Sound` is a native engine over the host's mixer (`SoundEngine.cpp`, `SoundVoices.cpp`, 9,062 lines in
+  the folder): memory from the game's arena (`SoundMemory.cpp`), commands through a ring. The host mixer
+  (`runtime/include/galaxy/audio_mixer.h:1-12`, `:74-77`) mixes in float at the device's rate; 32 kHz is the rate the
+  sound data's filters and delays were made at (the content), carried to the output rate. The sound driver's own tick
+  (`SoundEngine.cpp:148`, `cTicksPerSecond`; sequences by tempo and timebase, `SeqTrack.cpp:644-646`) is the game's
+  sound step, as the 60 Hz step is its logic's: stays. The console's surround matrix (surround buses folded into left
+  and right, the inverted right) is used only when the device has two channels: with surround asked and an
+  extensible format the buses go to speakers of their own (`audio_mixer.h:90-95`, `audio_device_wasapi.cpp:222`). Not
+  yet read: `AudioLib` (58 files), `GameAudio`, `RhythmLib`, `Speaker`, the volume ramp over the first 4/5 of a tick
+  (`audio_mixer.h`, `ramp_mix`).
+
 File counts: `git ls-files native/petari/src native/petari/include` by folder at a1f423dd8: MapObj 633, Boss 333,
 Screen 289, System 260, Enemy 218, Player 179, Map 164, Util 158, Camera 158, NPC 155, LiveActor 122, Sound 74,
 AreaObj 72, Demo 63, AudioLib 58, Ui 51, Scene 44, Effect 43, Ride 38, Particle 35, Gravity 28, NameObj 25, Animation
