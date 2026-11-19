@@ -462,10 +462,17 @@ it. Pile A: the foundation does not touch its code; it comes after. Where this d
 | N-1081: the aspect latch's whole-queue wait (`host_main.cpp:3228`) | B | F5, E4 | the game holds for the render queue | rule 2 |
 | N-1082: a capture's readback inside a frame (`renderer_d3d12.cpp:6889`) | B | F5, E4 | a capture answered by its frame later | rule 1 |
 | N-1083: loads read from the mapped store on the game thread (`host_main.cpp:3144`) | B | F7 | read ahead by the loader | rule 3 |
+| P-194: actors that draw for themselves (100 files of `native/petari/src` define `draw() const`) | B | F4, E3 step 4 | each such actor is a site: its shape registered once at its start, its material a form made at its init, its changing rows per step (2.7.1) | the inventory's row (CONSOLE-FREE.md 3); each file is read in the whole read (file 08 5.H.1) to say what of it is the console's |
+| P-184: a layout material keeps the console's blend codes, packed alpha compares and coordinate generators | B | F4, E3 steps 1 and 3 | the cook writes the pass state and the compare in the renderer's terms (with P-157, step 1); the draw copies them (with P-151, step 3) | the ledger's "E3 step 3 (P-157)" named P-157's step wrong: it is step 1 here |
+| P-190: NormalMapBase remakes its normal maps and its lighting gradient on the CPU | B | F4, E3 step 2, its light in step 6 | the texture in final form at the cook; the light on the GPU from the step's light table | the inventory's row |
+| P-191: what the game runs follows the screen's shape (`ClippingJudge`) | C | after F7 (file 08 5.H.2) | every actor runs every step, or one run volume for every screen; behind the switch | the owner's decision of 11-18 18:18; changes the replay's reference once |
+| P-185, P-186, P-187, P-188, P-189, P-192: the bloom and blur's 1.333 on a wide screen, the sound sequences' byte order, 16-bit text codes, the 16-bit particle index, table fields by column hash, shared counts and id widths | A | after the foundation (file 08 E) | the inventory's lines say each one's form | P-192 is file 08 5.H.3 |
+| P-193: surround output by a written law | A | after the foundation (file 08 E, with the sound work) | the law before the code (file 08 5.H.5) | the inventory's section 4 holds what it starts from |
 
 Of the render path as read for this file (1.9), nothing falls outside P-022, E3, E4, E6b and the step's threading: the
-three new rows fall in E4 and F7. The areas 1.10 lists as not read whole may hold more; E14's read, paused, is where
-they would come from.
+three new rows fall in E4 and F7. The inventory (`CONSOLE-FREE.md`, 11-18) added P-184 to P-194: three in E3, P-191
+after F7 by the owner's decision, the rest after the foundation. The areas 1.10 lists as not read whole may
+hold more; the whole read (file 08 5.H.1) is where they would come from.
 
 ### 2.7 The data path: records, format 13 by step, and both paths side by side
 
