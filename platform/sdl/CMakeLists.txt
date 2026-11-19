@@ -135,6 +135,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/frame_pass.cpp
     ${rt}/render/post_process_settings.cpp
     ${rt}/render/render_core.cpp
+    ${rt}/render/frame_schedule.cpp
     ${rt}/render/affine.cpp
     ${rt}/render/core/compose.cpp
     ${rt}/render/core/draw_walker.cpp

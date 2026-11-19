@@ -457,6 +457,7 @@ it. Pile A: the foundation does not touch its code; it comes after. Where this d
 | N-1017 | A | after the foundation (E0) | the ending movie, the Mii picker and the full-screen switch have no harness test |  |
 | P-014 | A | after the foundation (E0) | the Windows release links a stored PGO profile with its staleness warnings off | a profile taken before the foundation is stale after it: retaken after F7 |
 | P-023 | A | after the foundation (E0) | release.yml builds from any v* tag and never starts what it built | the push workflow half is done (N-1045) |
+| N-1084: a slot before its frame's arrival shows the frame before early (`frame_schedule.cpp`) | C | F6, E6b | the picture shows its own moment | found by I-016's test |
 | N-1081: the aspect latch's whole-queue wait (`host_main.cpp:3236`) | B | F5, E4 | the game holds for the render queue | rule 2 |
 | N-1082: a capture's readback inside a frame (`renderer_d3d12.cpp:6904`) | B | F5, E4 | a capture answered by its frame later | rule 1 |
 | N-1083: loads read from the mapped store on the game thread (`host_main.cpp:3152`) | B | F7 | read ahead by the loader | rule 3 |

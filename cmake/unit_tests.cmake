@@ -150,6 +150,8 @@ galaxy_test(galaxy_discord_presence_tests SOURCES ${rt}/discord_presence_tests.c
 galaxy_test(galaxy_frame_interpolation_tests SOURCES ${render_src}/frame_interpolation_tests.cpp
     ${render_src}/frame_interpolation.cpp ${render_src}/affine.cpp)
 galaxy_test(galaxy_present_slots_tests SOURCES ${render_src}/present_slots_tests.cpp ${render_src}/present_slots.cpp)
+# When each picture between two game frames is shown, on simulated displays (I-016).
+galaxy_test(galaxy_frame_schedule_tests SOURCES ${render_src}/frame_schedule_tests.cpp ${render_src}/frame_schedule.cpp)
 # The temporal upscaler's hold on generated frames ends (header-only).
 galaxy_test(galaxy_temporal_hold_tests SOURCES ${render_src}/temporal_hold_tests.cpp)
 # The renderers' video memory read: at most every 100 ms, at once when the budget moved (P-011).

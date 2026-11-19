@@ -149,15 +149,6 @@ std::string generated_cap_text(unsigned cap) {
     return cap == kUnboundedGeneratedFrames ? std::string("unlimited") : std::to_string(cap);
 }
 
-// The vblanks per present slot for a rate on a display of `refresh` hertz: a whole number, the rate kept above 60.
-std::int64_t vblanks_per_slot(double refresh, double rate) {
-    std::int64_t slot = std::max<std::int64_t>(1, static_cast<std::int64_t>(std::ceil(refresh / rate - 0.02)));
-    if (refresh / static_cast<double>(slot) < kGameStepRate + 1.0) {
-        slot = std::max<std::int64_t>(1, static_cast<std::int64_t>(refresh / (kGameStepRate + 1.0)));
-    }
-    return slot;
-}
-
 // Adds its lifetime to the game thread's time blocked on the render thread (RenderCore::game_wait_qpc_).
 struct GameWaitTimer {
     std::atomic<std::uint64_t>& total;
@@ -746,6 +737,40 @@ SceneView RenderCore::scene_depth_view(const float terms[6], const ScaledViewpor
     return view;
 }
 
+ScheduleSettings RenderCore::ScheduleView::settings() const {
+    const RenderConfig cfg = get_render_config();
+    return {present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, core_.renderer_.display_refresh_hz()),
+            cfg.vsync_interval != 0u};
+}
+
+bool RenderCore::ScheduleView::vblank_grid(std::int64_t& vblank, std::int64_t& period) const {
+    return pictures_on_refreshes(core_.renderer_.swap_queue()) && core_.renderer_.vblank_grid(vblank, period);
+}
+
+double RenderCore::ScheduleView::generated_gpu_ms() const {
+    return core_.renderer_.interpolation_gpu_cost_ms();
+}
+
+bool RenderCore::ScheduleView::temporal_upscaling() const {
+    return core_.renderer_.temporal_interpolation();
+}
+
+void RenderCore::ScheduleView::suspend_temporal_upscaling(double generated_ms) {
+    core_.renderer_.suspend_temporal_interpolation(generated_ms);
+}
+
+void RenderCore::ScheduleView::reset_generated_gpu_ms() {
+    core_.renderer_.reset_generated_gpu_ema();
+}
+
+bool RenderCore::ScheduleView::benchmark() const {
+    return galaxy::bench::running();
+}
+
+bool RenderCore::ScheduleView::tracing() const {
+    return ::galaxy::diagnosing(::galaxy::kDiagnosePresentStats);
+}
+
 void RenderCore::run_pending_interp_start() {
     if (!interp_start_pending_) {
         return;
@@ -760,453 +785,29 @@ void RenderCore::run_pending_interp_start() {
 }
 
 void RenderCore::start_interp_sequence() {
-    static const std::int64_t frequency = galaxy::qpc_frequency();
-    const std::int64_t now = galaxy::qpc_now();
-    const RenderConfig cfg = get_render_config();
-    double rate = std::max(kGameStepRate + 1.0, present_frame_rate(
-        presented_max_fps(cfg), cfg.vsync_interval, renderer_.display_refresh_hz()));
-    // Pictures shown whole from a refresh on (VSync, or a swap chain that cannot tear) with the display's vblanks timed:
-    // every slot is a vblank (every n-th for a rate below the refresh, kept above 60), so each picture's moment is the
-    // one its vblank shows. A slot clock of its own would beat against the refreshes there: two pictures in one refresh
-    // (one never seen) and a refresh shown twice, over and over. The game's 60 Hz is not locked to the display, so
-    // content time follows the slots (no lead). An unlimited rate with VSync off keeps no slots.
-    std::int64_t vblank = 0;
-    std::int64_t vblank_period = 0;
-    const bool on_vblanks = pictures_on_refreshes(renderer_.swap_queue()) &&
-                            (cfg.vsync_interval != 0u || std::isfinite(rate)) && renderer_.vblank_grid(vblank, vblank_period);
-    std::int64_t vblanks_per_slot = 1;
-    const auto fit_rate_to_vblanks = [&] {
-        const double refresh = static_cast<double>(frequency) / static_cast<double>(vblank_period);
-        vblanks_per_slot = galaxy::render::vblanks_per_slot(refresh, rate);
-        rate = refresh / static_cast<double>(vblanks_per_slot);
-    };
-    if (on_vblanks) {
-        fit_rate_to_vblanks();
-    }
-    ++interp_sequence_serial_;
-    ++interp_started_;
-    // The frame's arrival: when the game asked for its present (the arrival clock below says why).
-    const std::int64_t asked = std::exchange(interp_present_asked_qpc_, 0);
-    const std::int64_t seen = asked != 0 && asked <= now ? asked : now;
-    note_game_frame_cadence(seen);
-    interp_sequence_.active = true;
-    interp_sequence_.flush_requested = false;
-    interp_sequence_.entry = interp_waiting_entry_;
-    interp_sequence_.generated = interp_gpu_governor(rate);
-    if (on_vblanks) {
-        fit_rate_to_vblanks();  // a rate the governors lowered
-    }
-    interp_sequence_.next = 0u;
-    // Present slots run on one clock at the present rate. A slot shows the
-    // game at t = (slot - arrival) * 60 + lead between the previous frame (0)
-    // and this one (1); the first slot with t >= 1 presents this frame
-    // itself. Integer multiples of 60 lock the clock to each arrival with
-    // lead 60 / rate: k generated frames at i / (k + 1), then the frame, on time.
-    // Other rates keep a free-running clock with lead 0: content time is
-    // then linear in present time (the next arrival ends the sequence at
-    // t -> 1), where a lead would show the frame up to one slot early and
-    // step the content unevenly around it. A clock left behind by a pause
-    // restarts.
-    // An unlimited rate (render_config.h kUnlimitedFrameRate) has no slot clock: each picture is drawn as soon as
-    // the one before is and shows the moment it is drawn for (advance_interp_sequence).
-    interp_slot_unbounded_ = !on_vblanks && !std::isfinite(rate);
-    interp_slot_period_qpc_ = on_vblanks ? vblanks_per_slot * vblank_period
-        : interp_slot_unbounded_ ? 0
-                                 : std::max<std::int64_t>(1, static_cast<std::int64_t>(static_cast<double>(frequency) / rate));
-    const bool locked = !on_vblanks && !interp_slot_unbounded_ &&
-                        std::abs(rate / kGameStepRate - std::round(rate / kGameStepRate)) < 0.02;
-    // The arrival clock: a frame arrives when the game asks for its present (present_asked_qpc, stamped on the game's
-    // thread as it queues it), never when this thread takes it: a take waits for the picture in progress, and at
-    // Unlimited for the sequence before to reach t = 1, so take times would only ever look late and the smoothed
-    // period would climb to its clamp, the takes then holding the game back. Arrivals are the game's frame cadence,
-    // smoothed: the prediction one or more frame periods on, pulled 1/8 toward the measured arrival, with the period
-    // tracking the game's rate. A miss by a third of a period or more (pause, hitch) restarts it at the measured time.
-    if (interp_frame_period_qpc_ == 0) {
-        interp_frame_period_qpc_ = frequency / kGameStepsPerSecond;
-    }
-    std::int64_t arrival = seen;
-    const std::int64_t moment = std::exchange(interp_step_moment_qpc_, 0);
-    interp_sequence_.step_qpc = moment > 0 && moment <= seen ? moment : 0;
-    if (moment > 0 && moment <= seen && seen - moment < interp_frame_period_qpc_) {
-        // A step clock's moment: the frame's own time, exact. Its pictures are shown a delay after it, the same for
-        // every frame, so the content's time runs on the wall clock's (t linear in the present's moment across frames,
-        // as the steps are). The delay covers the frames' usual lateness to this thread (the game's update and the
-        // list's making after the moment): the lateness's 97th percentile, tracked by a streaming estimate (up 0.97 of
-        // 0.1 ms after a later frame, down 0.03 of it after an earlier one), with a 0.2 ms guard. It moves by at most 2 %
-        // of a period a frame up and 1 % down, so the content's speed changes by that and no more. A rarer late frame
-        // holds its sequence at t = 1 until it comes and then shows its own moment: the content keeps to the wall clock
-        // across it, as a display holds a late frame and goes on, and adds no lasting delay.
-        const std::int64_t late = seen - moment;
-        const std::int64_t period = frequency / kGameStepsPerSecond;
-        const std::int64_t quantile_step = frequency / 10000;
-        interp_late_quantile_qpc_ = std::clamp<std::int64_t>(
-            interp_late_quantile_qpc_ + (late > interp_late_quantile_qpc_ ? quantile_step * 97 / 100 : -(quantile_step * 3 / 100)),
-            0, period / 2);
-        const std::int64_t wanted = std::min(interp_late_quantile_qpc_ + frequency / 5000, period / 2);
-        if (interp_delay_qpc_ < wanted) {
-            interp_delay_qpc_ = std::min(wanted, interp_delay_qpc_ + period / 50);
-        } else if (interp_delay_qpc_ > wanted) {
-            interp_delay_qpc_ = std::max(wanted, interp_delay_qpc_ - period / 100);
-        }
-        interp_delay_ms_max_ = std::max(interp_delay_ms_max_, static_cast<double>(interp_delay_qpc_) * 1000.0 /
-                                                                  static_cast<double>(frequency));
-        arrival = moment + interp_delay_qpc_;
-    } else if (interp_arrival_qpc_ != 0 && seen > interp_arrival_qpc_) {
-        const std::int64_t periods = std::max<std::int64_t>(1,
-            (seen - interp_arrival_qpc_ + interp_frame_period_qpc_ / 2) /
-                interp_frame_period_qpc_);
-        const std::int64_t predicted = interp_arrival_qpc_ + periods * interp_frame_period_qpc_;
-        const std::int64_t error = seen - predicted;
-        if (periods <= 4 && std::abs(error) < interp_frame_period_qpc_ / 3) {
-            arrival = predicted + error / 8;
-            interp_frame_period_qpc_ = std::clamp<std::int64_t>(
-                interp_frame_period_qpc_ + error / (64 * periods), frequency / (kGameStepsPerSecond + 2), frequency / (kGameStepsPerSecond - 2));
-        }
-    }
-    interp_arrival_qpc_ = arrival;
-    interp_sequence_.frame_qpc = arrival;
-    interp_sequence_.lead = locked ? kGameStepRate / rate : 0.0;
-    if (on_vblanks) {
-        // The next slot moves to the vblank nearest where it was due, so the clock follows the display without
-        // adding or dropping a slot; a clock not running starts at the vblank nearest now.
-        const std::int64_t due = interp_slot_due_qpc_ != 0 &&
-                std::llabs(interp_slot_due_qpc_ - now) <= interp_slot_period_qpc_
-            ? interp_slot_due_qpc_ : now;
-        interp_slot_due_qpc_ = vblank + std::llround(static_cast<double>(due - vblank) /
-                                                     static_cast<double>(vblank_period)) * vblank_period;
-    } else if (interp_slot_unbounded_) {
-        interp_slot_due_qpc_ = now;
-    } else if (locked || interp_slot_due_qpc_ == 0 ||
-        now - interp_slot_due_qpc_ > interp_slot_period_qpc_ ||
-        interp_slot_due_qpc_ - now > interp_slot_period_qpc_) {
-        // Locked rates start the slots at the (smoothed) arrival.
-        interp_slot_due_qpc_ = locked && arrival <= now + interp_slot_period_qpc_
-            ? arrival : now;
-    }
-    // With no generated pictures there is no interval to interpolate. A smoothed arrival slightly in the
-    // future must not hold the only picture back while a busy queue replaces it with another sequence.
-    if (interp_sequence_.generated == 0u) {
-        interp_slot_due_qpc_ = std::min(interp_slot_due_qpc_, now);
-    }
+    interp_entry_ = interp_waiting_entry_;
+    schedule_.start(galaxy::qpc_now(), std::exchange(interp_present_asked_qpc_, 0),
+                    std::exchange(interp_step_moment_qpc_, 0), game_wait_qpc_.load(std::memory_order_relaxed),
+                    interp_stopping_);
 }
 
-// As many generated frames per game frame as the GPU fits in nine tenths of a game step. A generated frame
-// walks the whole frame list, so a game frame costs about (k + 1) generated frame times. k drops at once
-// when over budget and rises after 2 s with current native scene timings (10 s for temporal reconstruction).
-// Only temporal reconstruction needs a generated-frame retry; native scene frames keep its cost estimate live.
-// A capped sequence runs the slot clock at 60 * (k + 1).
-unsigned RenderCore::interp_gpu_governor(double& rate) {
-    constexpr double budget_ms = 0.9 * 1000.0 / kGameStepRate;
-    const unsigned configured = interp_stopping_ ? 0u : interp_frames_;
-    if (configured == 0u) {
-        return configured;
-    }
-    const unsigned allowed = std::min(configured, interp_cadence_cap_);
-    // A benchmark shows as many generated frames as the GPU makes (render_config.h apply_benchmark_presenting): no
-    // budget.
-    if (galaxy::bench::running()) {
-        if (allowed >= configured) {
-            return configured;
-        }
-        ++interp_gpu_capped_;
-        rate = kGameStepRate * static_cast<double>(allowed + 1u);
-        return allowed;
-    }
-    const std::uint64_t serial = interp_sequence_serial_;
-    if (serial - interp_gpu_checked_ >= 30u && galaxy::qpc_now() >= interp_gpu_warm_until_qpc_) {
-        interp_gpu_checked_ = serial;
-        const double generated_ms = renderer_.interpolation_gpu_cost_ms();
-        if (generated_ms > 0.0) {
-            // With the temporal upscaler on generated frames the frame at t = 1
-            // is one too; when no generated frame fits beside it, the game frames take
-            // the upscaler instead (the same frames for less GPU time).
-            const bool upscaled = renderer_.temporal_interpolation();
-            const double fit = std::floor(budget_ms / generated_ms) - (upscaled ? 2.0 : 1.0);
-            if (upscaled && fit < 1.0) {
-                renderer_.suspend_temporal_interpolation(generated_ms);
-            }
-            const unsigned fits = fit < 1.0 ? 0u : static_cast<unsigned>(std::min(fit, static_cast<double>(configured)));
-            if (fits < interp_gpu_cap_) {
-                interp_gpu_cap_ = fits;
-                interp_gpu_cap_serial_ = serial;
-            } else if (fits > interp_gpu_cap_ && serial - interp_gpu_cap_serial_ >=
-                       (renderer_.temporal_interpolation() ? 600u : 120u)) {
-                interp_gpu_cap_ = std::min(fits, interp_step_up(interp_gpu_cap_));
-                interp_gpu_cap_serial_ = serial;
-            }
-        }
-        // Temporal reconstruction needs its own generated-frame measurement. Native replay has a fresh
-        // measurement from every completed scene frame, so never inject a known over-budget probe into play.
-        if (renderer_.temporal_interpolation() && interp_gpu_cap_ == 0u && serial - interp_gpu_cap_serial_ >= 1200u) {
-            interp_gpu_cap_ = 1u;  // measure one generated frame again
-            interp_gpu_cap_serial_ = serial;
-            renderer_.reset_generated_gpu_ema();
-        }
-    }
-    const unsigned generated = std::min(allowed, interp_gpu_cap_);
-    if (generated >= configured) {
-        return configured;
-    }
-    ++interp_gpu_capped_;
-    rate = kGameStepRate * static_cast<double>(generated + 1u);
-    return generated;
-}
-
-// Generated frames must never cost the game its own frames. Each game frame shown is timed against the frame period: an
-// interval above 1.5 periods missed VIs. A miss is the generated frames' when the interval would not have missed without
-// their render-thread time: the game waited on the render thread, and would have waited that much less (at most what
-// it waited). The rest are the game's own, as a scene's first frames, whose decoding, uploads and pipelines keep the
-// render thread far longer than generated frames do. Two or more of the generated frames' misses a second, and no fewer than the
-// game's own, take generated frames away to the next lower present rate (to half of them at eight). The game's own misses
-// three seconds in a row above their lowest rate are probed, for threads that share a CPU's cores: the next lower
-// rate for a second, kept only if the misses halve. A try of the next higher rate is undone at its first miss of the
-// generated frames'. Tries and probes follow a clean interval that doubles after each failed one (2 s to 64 s: a scene's
-// first frames back the render thread up for a second or two) and halves after a try that held.
-void RenderCore::restart_interp_governors() {
-    const std::int64_t now = galaxy::qpc_now();
-    const std::int64_t frequency = galaxy::qpc_frequency();
-    interp_gpu_cap_ = kUnboundedGeneratedFrames;
-    interp_gpu_cap_serial_ = interp_sequence_serial_;
-    interp_gpu_checked_ = interp_sequence_serial_;
-    interp_gpu_warm_until_qpc_ = now + frequency;  // one second of generated-frame times left out
-    renderer_.reset_generated_gpu_ema();
-    interp_cadence_cap_ = kUnboundedGeneratedFrames;
-    interp_cadence_interval_s_ = 2u;
-    interp_cadence_try_qpc_ = 0;
-    interp_cadence_change_qpc_ = now;
-    interp_cadence_last_qpc_ = 0;
-    interp_cadence_grace_until_qpc_ = now + frequency * 3 / 2;
-    interp_cadence_own_windows_ = 0u;
-    interp_cadence_probe_ = false;
-    interp_cadence_probe_after_qpc_ = now;
-}
-
-void RenderCore::note_game_frame_cadence(std::int64_t now_qpc) {
-    static const std::int64_t frequency = galaxy::qpc_frequency();
-    const bool trace = ::galaxy::diagnosing(::galaxy::kDiagnosePresentStats);
-    // The game frame period the arrivals follow (start_interp_sequence's smoothed estimate), else the game step.
-    const std::int64_t period = interp_frame_period_qpc_ != 0 ? interp_frame_period_qpc_ : frequency / galaxy::kGameStepsPerSecond;
-    // Since the frame before: the game's waits on the render thread, and the render thread's generated frame time.
-    const std::uint64_t waited_total = game_wait_qpc_.load(std::memory_order_relaxed);
-    const auto waited = static_cast<std::int64_t>(waited_total - interp_cadence_wait_seen_);
-    const auto generated_time = static_cast<std::int64_t>(interp_generated_qpc_ - interp_cadence_generated_seen_);
-    interp_cadence_wait_seen_ = waited_total;
-    interp_cadence_generated_seen_ = interp_generated_qpc_;
-    const auto restart_window = [&] {
-        interp_cadence_window_qpc_ = now_qpc;
-        interp_cadence_frames_ = 0u;
-        interp_cadence_misses_ = 0u;
-        interp_cadence_own_ = 0u;
-        interp_cadence_wait_qpc_ = 0u;
-        interp_cadence_presented_seen_ = interp_presented_total_;
-    };
-    if (interp_cadence_last_qpc_ == 0 || now_qpc - interp_cadence_last_qpc_ > 4 * frequency) {
-        // First frame, or a pause (menu, load): a new window.
-        interp_cadence_last_qpc_ = now_qpc;
-        restart_window();
-        return;
-    }
-    const std::int64_t interval = now_qpc - interp_cadence_last_qpc_;
-    interp_cadence_last_qpc_ = now_qpc;
-    if (now_qpc < interp_cadence_grace_until_qpc_) {
-        // Just after a rate or upscaler change: its one-time work is no measure.
-        restart_window();
-        return;
-    }
-    ++interp_cadence_frames_;
-    interp_cadence_wait_qpc_ += static_cast<std::uint64_t>(waited);
-    const auto missed_in = [period](std::int64_t span) {
-        return span > period * 3 / 2 ? static_cast<std::uint32_t>((span + period / 2) / period) - 1u : 0u;
-    };
-    const std::uint32_t missed = missed_in(interval);
-    const std::uint32_t own = missed_in(interval - std::min(waited, generated_time));
-    interp_cadence_misses_ += missed - own;
-    interp_cadence_own_ += own;
-    unsigned running = std::min({interp_frames_, interp_cadence_cap_, interp_gpu_cap_});
-    if (running == kUnboundedGeneratedFrames) {
-        // No bound (an unlimited rate): the generated frames a game frame showed in this window are the count running.
-        const std::uint64_t shown = (interp_presented_total_ - interp_cadence_presented_seen_) /
-                                    std::max<std::uint64_t>(interp_cadence_frames_, 1u);
-        running = static_cast<unsigned>(std::min<std::uint64_t>(shown, kUnboundedGeneratedFrames - 1u));
-    }
-    const bool trying = interp_cadence_try_qpc_ != 0 && now_qpc - interp_cadence_try_qpc_ < 4 * frequency;
-    const auto drop = [&](unsigned cap, const char* why) {
-        if (trace) {
-            std::cerr << "[interp-cadence] " << why << ' ' << running << "->" << cap << '\n';
-        }
-        if (trying) {
-            interp_cadence_interval_s_ = std::min(interp_cadence_interval_s_ * 2u, 64u);
-        }
-        // The walk at t = 1 alone costs the game its frames when it takes a
-        // quarter of a frame or more.
-        const double generated_ms = renderer_.interpolation_gpu_cost_ms();
-        if (cap == 0u && renderer_.temporal_interpolation() && generated_ms * 4.0 >= 1000.0 / kGameStepRate) {
-            renderer_.suspend_temporal_interpolation(generated_ms);
-        }
-        interp_cadence_cap_ = cap;
-        interp_cadence_change_qpc_ = now_qpc;
-        interp_cadence_try_qpc_ = 0;
-        ++interp_cadence_drops_;
-    };
-    if (trying && missed != own && running > 0u) {
-        drop(interp_step_down(running), "try undone");
-        return;
-    }
-    const std::int64_t elapsed = now_qpc - interp_cadence_window_qpc_;
-    if (elapsed < frequency) {
-        return;
-    }
-    const double seconds = static_cast<double>(elapsed) / static_cast<double>(frequency);
-    interp_cadence_fps_ = static_cast<double>(interp_cadence_frames_) / seconds;
-    const double theirs = static_cast<double>(interp_cadence_misses_) / seconds;
-    const double own_rate = static_cast<double>(interp_cadence_own_) / seconds;
-    if (trace && interp_cadence_misses_ + interp_cadence_own_ != 0u) {
-        std::cerr << "[interp-cadence] window generated-misses=" << interp_cadence_misses_
-                  << " own-misses=" << interp_cadence_own_ << " running=" << running << " game-wait-ms="
-                  << static_cast<double>(interp_cadence_wait_qpc_) * 1000.0 / static_cast<double>(frequency)
-                  << " seconds=" << seconds << '\n';
-    }
-    restart_window();
-    if (interp_cadence_probe_) {
-        // The probe's second: misses that halved with fewer generated frames were theirs, and the lower rate stays;
-        // otherwise they are the game's own at that level, and the generated frames come back.
-        interp_cadence_probe_ = false;
-        interp_cadence_own_windows_ = 0u;
-        if (own_rate <= interp_cadence_probe_misses_ * 0.5) {
-            interp_cadence_change_qpc_ = now_qpc;
-            ++interp_cadence_drops_;
-        } else {
-            if (trace) {
-                std::cerr << "[interp-cadence] probe undone " << interp_cadence_cap_ << "->"
-                          << interp_cadence_probe_restore_ << '\n';
-            }
-            interp_cadence_cap_ = interp_cadence_probe_restore_;
-            interp_cadence_own_misses_ = interp_cadence_probe_misses_;
-            interp_cadence_interval_s_ = std::min(interp_cadence_interval_s_ * 2u, 64u);
-        }
-        interp_cadence_probe_after_qpc_ = now_qpc + static_cast<std::int64_t>(interp_cadence_interval_s_) * frequency;
-        return;
-    }
-    const bool own_excess = running > 0u && own_rate - interp_cadence_own_misses_ >= 2.0;
-    interp_cadence_own_misses_ = std::min(interp_cadence_own_misses_, own_rate);
-    interp_cadence_own_windows_ = own_excess ? interp_cadence_own_windows_ + 1u : 0u;
-    if (running > 0u && theirs >= 2.0 && theirs >= own_rate) {
-        drop(theirs >= 8.0 ? std::min(interp_step_down(running), running / 2u) : interp_step_down(running), "drop");
-        return;
-    }
-    if (interp_cadence_own_windows_ >= 3u && now_qpc >= interp_cadence_probe_after_qpc_) {
-        if (trace) {
-            std::cerr << "[interp-cadence] probe " << running << "->" << interp_step_down(running) << '\n';
-        }
-        interp_cadence_probe_ = true;
-        interp_cadence_probe_restore_ = interp_cadence_cap_;
-        interp_cadence_probe_misses_ = own_rate;
-        interp_cadence_cap_ = interp_step_down(running);
-        interp_cadence_try_qpc_ = 0;
-        return;
-    }
-    if (interp_cadence_try_qpc_ != 0 && now_qpc - interp_cadence_try_qpc_ >= 4 * frequency) {
-        // The try held.
-        interp_cadence_interval_s_ = std::max(interp_cadence_interval_s_ / 2u, 2u);
-        interp_cadence_try_qpc_ = 0;
-    }
-    if (interp_cadence_cap_ >= interp_frames_) {
-        return;
-    }
-    if (now_qpc - interp_cadence_change_qpc_ >= static_cast<std::int64_t>(interp_cadence_interval_s_) * frequency) {
-        const unsigned up = interp_step_up(interp_cadence_cap_);
-        if (trace) {
-            std::cerr << "[interp-cadence] try " << interp_cadence_cap_ << "->" << up << '\n';
-        }
-        interp_cadence_cap_ = up;
-        interp_cadence_change_qpc_ = now_qpc;
-        interp_cadence_try_qpc_ = now_qpc;
-    }
-}
-
-// The present rate with `generated` generated frames per game frame (start_interp_sequence): with all of them the target,
-// else 60 a second for the frame and each generated frame; on timed vblanks (start_interp_sequence's on_vblanks), a whole
-// number of vblanks a slot.
-double RenderCore::interp_rate_with(unsigned generated) const {
-    static const std::int64_t frequency = galaxy::qpc_frequency();
-    if (generated == 0u) {
-        return kGameStepRate;
-    }
-    const RenderConfig cfg = get_render_config();
-    double rate = generated < interp_frames_
-        ? kGameStepRate * static_cast<double>(generated + 1u)
-        : std::max(kGameStepRate + 1.0, present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, renderer_.display_refresh_hz()));
-    std::int64_t vblank = 0;
-    std::int64_t vblank_period = 0;
-    if (pictures_on_refreshes(renderer_.swap_queue()) && (cfg.vsync_interval != 0u || std::isfinite(rate)) &&
-        renderer_.vblank_grid(vblank, vblank_period) && vblank_period > 0) {
-        const double refresh = static_cast<double>(frequency) / static_cast<double>(vblank_period);
-        rate = refresh / static_cast<double>(vblanks_per_slot(refresh, rate));
-    }
-    return rate;
-}
-
-// The most generated frames below `generated` that present at a lower rate (on a 240 Hz display two show 120 Hz, as one
-// does): 0 when none.
-unsigned RenderCore::interp_step_down(unsigned generated) const {
-    const unsigned from = std::min(generated, interp_frames_);
-    const double rate = interp_rate_with(from);
-    for (unsigned k = from; k > 0u; --k) {
-        if (interp_rate_with(k - 1u) < rate - 0.5) {
-            return k - 1u;
-        }
-    }
-    return 0u;
-}
-
-// The fewest generated frames above `generated` that present at a higher rate: all of them when none. With no bound (an
-// unlimited rate) all of them: as many as the device makes (the GPU budget still bounds play, interp_gpu_governor).
-unsigned RenderCore::interp_step_up(unsigned generated) const {
-    if (interp_frames_ == kUnboundedGeneratedFrames) {
-        return interp_frames_;
-    }
-    const double rate = interp_rate_with(std::min(generated, interp_frames_));
-    for (unsigned k = generated + 1u; k < interp_frames_; ++k) {
-        if (interp_rate_with(k) > rate + 0.5) {
-            return k;
-        }
-    }
-    return interp_frames_;
-}
-
-// The next frame's sequence replaces this one before its real frame (at
-// rates that are not multiples of 60 that is the normal end: the next
-// frame's generated frames continue from t = 0, its predecessor's image).
+// The next frame's sequence replaces this one before its real frame (at rates that are not multiples of 60 that is the
+// normal end: the next frame's generated frames continue from t = 0, its predecessor's image).
 void RenderCore::supersede_interp_sequence() {
-    if (!interp_sequence_.active) {
+    if (!schedule_.supersede()) {
         return;
     }
-    interp_sequence_.active = false;
-    ++interp_superseded_;
     // What it writes, later frames read: its own time is walked, unseen. The temporal history goes on through it: its
     // motion from the picture shown last, and the next sequence's (whose frame before is this one) from it.
-    ListEntry& entry = *interp_sequence_.entry;
+    ListEntry& entry = *interp_entry_;
     walk_frame(entry, interp_walk_time(entry, 1.0f, false), false);
     note_interp_walked(entry, 1.0f);
 }
 
-// t of the next slot in the playing sequence (see advance_interp_sequence).
-double RenderCore::interp_slot_t() const {
-    static const std::int64_t frequency = galaxy::qpc_frequency();
-    return static_cast<double>(interp_slot_due_qpc_ - interp_sequence_.frame_qpc) * kGameStepRate /
-               static_cast<double>(frequency) + interp_sequence_.lead;
-}
-
 bool RenderCore::overlay_idle_presents() const noexcept {
     static const std::int64_t frequency = galaxy::qpc_frequency();
-    return (native_settings_overlay_visible() || home_menu_visible()) && !interp_sequence_.active &&
-           (interp_slot_unbounded_ || (interp_slot_period_qpc_ > 0 && interp_slot_period_qpc_ * 61 < frequency));
-}
-
-std::int64_t RenderCore::interp_remaining_us() const {
-    const std::int64_t now = galaxy::qpc_now();
-    static const std::int64_t frequency = galaxy::qpc_frequency();
-    return (interp_slot_due_qpc_ - now) * 1'000'000 / frequency;
+    return (native_settings_overlay_visible() || home_menu_visible()) && !schedule_.sequence().active &&
+           (schedule_.unbounded() || (schedule_.slot_period() > 0 && schedule_.slot_period() * 61 < frequency));
 }
 
 // Render thread: the last part of the wait to a present slot (at most about 2 ms, after the coarse wait), ended on the
@@ -1227,89 +828,63 @@ std::int64_t content_moment_qpc(std::int64_t step_qpc, double t, std::int64_t as
 }  // namespace
 
 void RenderCore::advance_interp_sequence(bool flush) {
-    static const std::int64_t frequency = galaxy::qpc_frequency();
-    flush = flush || interp_sequence_.flush_requested;
-    while (interp_sequence_.active) {
-        const std::int64_t now = galaxy::qpc_now();
-        InterpSequence& sequence = interp_sequence_;
-        // Slots run on the QPC clock with VSync too: a Present that waits
-        // for the display would hold back the frame chunks behind it.
-        if (!flush && now < interp_slot_due_qpc_) {
-            return;
+    const std::int64_t now = galaxy::qpc_now();
+    const SchedulePicture picture = schedule_.next(now, flush);
+    if (picture.kind == SchedulePicture::Kind::None) {
+        return;
+    }
+    const std::int64_t slot = picture.slot;
+    const double t = picture.t;
+    const std::int64_t step_qpc = schedule_.sequence().step_qpc;
+    const auto content_moment = [&](double shown) {
+        if (interp_entry_ != nullptr && interp_entry_->data.list != nullptr) {
+            galaxy::timeline::record_at(galaxy::timeline::Event::ContentTime, static_cast<std::uint64_t>(slot),
+                                        interp_entry_->data.list->game_frame,
+                                        static_cast<std::uint64_t>(std::llround(std::min(shown, 1.0) * 1e6)));
         }
-        // With no slot clock (an unlimited rate) the picture shows the moment it is drawn for.
-        const std::int64_t slot = interp_slot_unbounded_ ? now : interp_slot_due_qpc_;
-        // A free-running slot due just before the arrival shows t = 0.
-        const double t = std::max(0.0, static_cast<double>(slot - sequence.frame_qpc) * kGameStepRate /
-                                           static_cast<double>(frequency) + sequence.lead);
-        if (!flush && interp_slot_unbounded_) {
-            interp_slot_due_qpc_ = now;
-        } else if (!flush) {
-            interp_slot_due_qpc_ = slot + interp_slot_period_qpc_;
-            // A stall skips the slots it missed instead of bunching them.
-            if (now >= interp_slot_due_qpc_) {
-                const std::int64_t missed = (now - interp_slot_due_qpc_) / interp_slot_period_qpc_ + 1;
-                interp_late_slots_ += static_cast<std::uint64_t>(missed);
-                interp_slot_due_qpc_ += missed * interp_slot_period_qpc_;
-            }
-        }
-        // Generated pictures until t reaches 1 (the frame itself) or the next game frame replaces the sequence: no
-        // count bounds them.
-        const auto content_moment = [&](double shown) {
-            if (sequence.entry != nullptr && sequence.entry->data.list != nullptr) {
-                galaxy::timeline::record_at(galaxy::timeline::Event::ContentTime, static_cast<std::uint64_t>(slot),
-                                            sequence.entry->data.list->game_frame,
-                                            static_cast<std::uint64_t>(std::llround(std::min(shown, 1.0) * 1e6)));
-            }
-        };
-        if (!flush && t < 1.0 - 1e-3 && sequence.generated != 0u) {
-            content_moment(t);
-            const auto start = std::chrono::steady_clock::now();
-            const std::int64_t generated_start = galaxy::qpc_now();
-            // The picture shows the slot's moment (a vblank where they are timed): presentation times show it there.
-            renderer_.set_present_moment(slot);
-            galaxy::pacing::describe(slot, content_moment_qpc(sequence.step_qpc, t, slot), sequence.step_qpc, true);
-            const bool presented = render_generated_frame(static_cast<float>(t));
-            renderer_.set_present_moment(0);
-            skip_slot_for_depth();
-            interp_generated_qpc_ += static_cast<std::uint64_t>(galaxy::qpc_now() - generated_start);
-            interp_cpu_ms_ += std::chrono::duration<double, std::milli>(
-                std::chrono::steady_clock::now() - start).count();
-            if (presented) {
-                ++interp_presented_;
-                ++interp_presented_total_;
-                note_present_vblank(slot);
-            } else {
-                ++interp_failed_;
-            }
-            ++sequence.next;
-            report_interp_stats();
-            return;
-        }
-        sequence.active = false;
-        if (!flush) content_moment(1.0);
-        interp_presenting_real_ = true;
-        renderer_.set_present_moment(flush ? 0 : slot);
-        {
-            const std::int64_t asked = flush ? now : slot;
-            galaxy::pacing::describe(asked, content_moment_qpc(sequence.step_qpc, 1.0, asked), sequence.step_qpc, false);
-        }
-        render_generated_frame(1.0f);
+    };
+    if (picture.kind == SchedulePicture::Kind::Generated) {
+        content_moment(t);
+        const auto start = std::chrono::steady_clock::now();
+        const std::int64_t generated_start = galaxy::qpc_now();
+        // The picture shows the slot's moment (a vblank where they are timed): presentation times show it there.
+        renderer_.set_present_moment(slot);
+        galaxy::pacing::describe(slot, content_moment_qpc(step_qpc, t, slot), step_qpc, true);
+        const bool presented = render_generated_frame(static_cast<float>(t));
         renderer_.set_present_moment(0);
-        note_present_vblank(slot);
-        interp_presenting_real_ = false;
-        ++interp_sequences_;
+        skip_slot_for_depth();
+        const auto spent = static_cast<std::uint64_t>(galaxy::qpc_now() - generated_start);
+        interp_cpu_ms_ += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+        if (presented) {
+            ++interp_presented_;
+            note_present_vblank(slot);
+        } else {
+            ++interp_failed_;
+        }
+        schedule_.generated_drawn(spent, presented);
         report_interp_stats();
         return;
     }
+    if (!flush) content_moment(1.0);
+    interp_presenting_real_ = true;
+    renderer_.set_present_moment(flush ? 0 : slot);
+    {
+        const std::int64_t asked = flush ? now : slot;
+        galaxy::pacing::describe(asked, content_moment_qpc(step_qpc, 1.0, asked), step_qpc, false);
+    }
+    render_generated_frame(1.0f);
+    renderer_.set_present_moment(0);
+    note_present_vblank(slot);
+    interp_presenting_real_ = false;
+    ++interp_sequences_;
+    report_interp_stats();
 }
 
 // The presentation times lower their depth by one picture fewer (PresentSlots::take_skip): the next slot is skipped,
-// so the picture after this one shows a vsync after it and a vsync sooner after its moment. Only within a sequence:
-// the next sequence starts its slots at the vblank nearest its frame (start_interp_sequence).
+// so the picture after this one shows a vsync after it and a vsync sooner after its moment.
 void RenderCore::skip_slot_for_depth() {
-    if (renderer_.take_present_skip() && interp_slot_period_qpc_ > 0) {
-        interp_slot_due_qpc_ += interp_slot_period_qpc_;
+    if (renderer_.take_present_skip()) {
+        schedule_.skip_slot();
     }
 }
 
@@ -1345,8 +920,7 @@ void RenderCore::note_present_vblank(std::int64_t slot) {
 
 // A game frame presented while interpolating, without generated frames: why.
 void RenderCore::note_interp_real_present() {
-    const std::int64_t now = galaxy::qpc_now();
-    note_game_frame_cadence(now);
+    schedule_.frame_alone(galaxy::qpc_now(), game_wait_qpc_.load(std::memory_order_relaxed));
     ++interp_real_only_[native_settings_overlay_visible() ? 0u : 1u];
     report_interp_stats();
 }
@@ -1370,34 +944,35 @@ void RenderCore::report_interp_stats() {
     std::uint64_t real_only = 0u;
     for (const std::uint64_t count : interp_real_only_) real_only += count;
     std::ostringstream message;
-    message << "[interp-stats] generated-per-frame=" << interp_frames_
+    const ScheduleCounts counts = schedule_.take_counts();
+    message << "[interp-stats] generated-per-frame=" << schedule_.configured()
             << " sequences=" << interp_sequences_
             << " presented-hz=" << presented / seconds
             << " dropped=" << interp_dropped_
-            << " late-slots=" << interp_late_slots_
+            << " late-slots=" << counts.late_slots
             << " vblank-steps=" << interp_vblank_steps_[0] << '/' << interp_vblank_steps_[1] << '/'
             << interp_vblank_steps_[2] << '/' << interp_vblank_steps_[3]
             << " slot-to-vblank-ms=" << interp_slot_to_vblank_min_ms_ << '/' << interp_slot_to_vblank_max_ms_
-            << " superseded=" << interp_superseded_
-            << " started=" << interp_started_
+            << " superseded=" << counts.superseded
+            << " started=" << counts.started
             << " lists-skipped=" << interp_lists_skipped_
             << " presents-during-sequence=" << interp_present_skipped_
             << " failed=" << interp_failed_
-            << " history-resets=" << interp_history_resets_
-            << " history-carried=" << interp_history_carried_
+            << " history-resets=" << counts.history_resets
+            << " history-carried=" << counts.history_carried
             << " real-only=" << real_only
             << " (overlay=" << interp_real_only_[0] << " other=" << interp_real_only_[1] << ")"
             << " motion(camera-cuts/game-cuts/teleports/flips)=" << pairing_.camera_cuts << '/' << pairing_.game_cuts << '/'
             << pairing_.teleports << '/' << pairing_.flips
             << " wall-ms-per-generated=" << (interp_presented_ != 0u ? interp_cpu_ms_ / presented : 0.0)
             << " gpu-ms-per-generated=" << (gpu_samples != 0u ? gpu_ms / static_cast<double>(gpu_samples) : 0.0)
-            << " gpu-generated-cap=" << generated_cap_text(interp_gpu_cap_)
-            << " cadence-generated-cap=" << generated_cap_text(interp_cadence_cap_)
-            << " cadence-drops=" << std::exchange(interp_cadence_drops_, 0u)
-            << " game-fps=" << interp_cadence_fps_
-            << " step-delay-ms(now/max)=" << static_cast<double>(interp_delay_qpc_) * 1000.0 / static_cast<double>(frequency)
-            << '/' << std::exchange(interp_delay_ms_max_, 0.0)
-            << " capped-sequences=" << std::exchange(interp_gpu_capped_, 0u)
+            << " gpu-generated-cap=" << generated_cap_text(schedule_.gpu_cap())
+            << " cadence-generated-cap=" << generated_cap_text(schedule_.cadence_cap())
+            << " cadence-drops=" << counts.cadence_drops
+            << " game-fps=" << schedule_.game_fps()
+            << " step-delay-ms(now/max)=" << static_cast<double>(schedule_.delay_qpc()) * 1000.0 / static_cast<double>(frequency)
+            << '/' << counts.delay_ms_max
+            << " capped-sequences=" << counts.gpu_capped
             << " generated-gpu-ema-ms=" << renderer_.generated_gpu_ema_ms()
             << " scene-gpu-ema-ms=" << renderer_.interpolation_gpu_cost_ms()
             << " items-culled=" << std::exchange(stat_items_culled_, 0u)
@@ -1426,16 +1001,11 @@ void RenderCore::report_interp_stats() {
     std::cerr << message.str();
     interp_presented_ = 0u;
     interp_dropped_ = 0u;
-    interp_late_slots_ = 0u;
     interp_vblank_steps_ = {};
     interp_slot_to_vblank_samples_ = 0u;
-    interp_superseded_ = 0u;
-    interp_started_ = 0u;
     interp_lists_skipped_ = 0u;
     interp_present_skipped_ = 0u;
     interp_failed_ = 0u;
-    interp_history_resets_ = 0u;
-    interp_history_carried_ = 0u;
     interp_sequences_ = 0u;
     interp_real_only_ = {};
     interp_cpu_ms_ = 0.0;
@@ -1444,39 +1014,25 @@ void RenderCore::report_interp_stats() {
 }
 
 bool RenderCore::render_generated_frame(float t) {
-    ListEntry& entry = *interp_sequence_.entry;
+    ListEntry& entry = *interp_entry_;
     walk_frame(entry, interp_walk_time(entry, t, true), true);
     note_interp_walked(entry, t);
     return true;
 }
 
 core::WalkTime RenderCore::interp_walk_time(const ListEntry& entry, float t, bool count) {
-    core::WalkTime time;
-    time.t = t;
-    time.t_prev = t;
-    time.generated = t < 1.0f;
-    // The picture walked before, on this pair's clock: motion to it is what the upscaler and the motion targets see.
-    // Anything else (a frame presented alone, a cut, skipped lists) starts the upscaler's history again.
     const bool cut = (entry.data.list->flags & NEBULA_FRAME_CAMERA_CUT) != 0u;
-    const bool walked_before = interp_shown_list_ != nullptr && interp_shown_list_ == entry.before && !cut;
-    if (interp_shown_list_ == &entry && interp_shown_serial_ == interp_sequence_serial_ && interp_shown_t_ < t) {
-        time.t_prev = interp_shown_t_;
-    } else if (interp_shown_t_ >= 1.0f && walked_before) {
-        time.t_prev = 0.0f;
-    } else if (walked_before && interp_shown_serial_ + 1u == interp_sequence_serial_) {
-        time.t_prev = interp_shown_t_ - 1.0f;
-        interp_history_carried_ += count ? 1u : 0u;
-    } else {
-        time.reset = true;
-        interp_history_resets_ += count ? 1u : 0u;
-    }
+    const ScheduleWalk walk = schedule_.walk_time(&entry, entry.before, cut, t, count);
+    core::WalkTime time;
+    time.t = walk.t;
+    time.t_prev = walk.t_prev;
+    time.generated = t < 1.0f;
+    time.reset = walk.reset;
     return time;
 }
 
 void RenderCore::note_interp_walked(const ListEntry& entry, float t) noexcept {
-    interp_shown_serial_ = interp_sequence_serial_;
-    interp_shown_t_ = t;
-    interp_shown_list_ = &entry;
+    schedule_.walked(&entry, t);
 }
 
 bool RenderCore::skip_for_present_rate() {
@@ -1626,11 +1182,11 @@ void RenderCore::drop_device_state() {
     freed_textures_.clear();
     retired_tables_.clear();
 
-    interp_sequence_ = {};
+    schedule_.forget();
+    interp_entry_ = nullptr;
     interp_list_waiting_ = false;
     interp_waiting_entry_ = nullptr;
     interp_start_pending_ = false;
-    interp_shown_list_ = nullptr;
     interp_presenting_real_ = false;
 
     walk_ = {};
@@ -1793,7 +1349,7 @@ void RenderCore::render_loop() {
         const bool background = window_background_.load(std::memory_order_relaxed);
         if (hidden || background) {
             try {
-                if (interp_sequence_.active) {
+                if (schedule_.sequence().active) {
                     supersede_interp_sequence();
                 }
                 const std::int64_t now = galaxy::qpc_now();
@@ -1822,19 +1378,19 @@ void RenderCore::render_loop() {
             if (!overlay_idle) {
                 overlay_idle_due_qpc_ = 0;
             } else if (overlay_idle_due_qpc_ == 0) {
-                overlay_idle_due_qpc_ = galaxy::qpc_now() + interp_slot_period_qpc_;
+                overlay_idle_due_qpc_ = galaxy::qpc_now() + schedule_.slot_period();
             }
-            if (interp_sequence_.active && frame_queue_.empty() && !stop_render_thread_) {
+            if (schedule_.sequence().active && frame_queue_.empty() && !stop_render_thread_) {
                 // Coarse and interruptible to about 1.5 ms before the slot
                 // (the condition variable wakes on the 1 ms scheduler tick),
                 // then a high-resolution timer for the rest.
-                const std::int64_t remaining_us = interp_remaining_us();
+                const std::int64_t remaining_us = schedule_.remaining_us(galaxy::qpc_now());
                 if (remaining_us > 2000) {
                     queue_cv_.wait_for(lock, std::chrono::microseconds(remaining_us - 1500), [this] {
                         return stop_render_thread_ || !frame_queue_.empty() || pictures_finish_asked_.load(std::memory_order_relaxed);
                     });
                 } else if (remaining_us > 0) {
-                    const std::int64_t due = interp_slot_due_qpc_;
+                    const std::int64_t due = schedule_.slot_due();
                     lock.unlock();
                     interp_wait_until(due);
                     lock.lock();
@@ -1869,17 +1425,17 @@ void RenderCore::render_loop() {
             // that would show the frame itself (t >= 1) while the next
             // frame's present is queued: that present starts its sequence.
             const auto due_slot_first = [this] {
-                if (interp_remaining_us() > 0) return false;
+                if (schedule_.remaining_us(galaxy::qpc_now()) > 0) return false;
                 // Skipping the real endpoint is valid only after this sequence has shown an intermediate
                 // picture. Otherwise a saturated GPU can render every endpoint unseen and starve presentation.
-                if (interp_sequence_.next == 0u) return true;
-                if (interp_slot_t() < 1.0 - 1e-3) return true;
+                if (schedule_.sequence().next == 0u) return true;
+                if (schedule_.slot_t() < 1.0 - 1e-3) return true;
                 for (const FrameChunk& queued : frame_queue_) {
                     if (queued.present_only || queued.present_swap_chain) return false;
                 }
                 return true;
             };
-            if (interp_sequence_.active && !stop_render_thread_ &&
+            if (schedule_.sequence().active && !stop_render_thread_ &&
                 (frame_queue_.empty() || due_slot_first())) {
                 // An interpolation step walks a list too (its draw.native calls among it): work the producer may
                 // run ahead of when it holds the thread.
@@ -1952,7 +1508,7 @@ void RenderCore::render_loop() {
                         interp_step_moment_qpc_ = chunk.step_moment_qpc;
                         start_interp_sequence();
                         advance_interp_sequence(false);
-                    } else if (!interp_sequence_.active) {
+                    } else if (!schedule_.sequence().active) {
                         cached_present_asked_qpc_ = chunk.present_asked_qpc;
                         cached_present_step_qpc_ = chunk.step_moment_qpc;
                         present_cached_display_on_thread(false);
@@ -1960,9 +1516,6 @@ void RenderCore::render_loop() {
                         ++interp_present_skipped_;
                     }
                 } else {
-                    if (interp_sequence_.active && interp_sequence_.flush_requested) {
-                        advance_interp_sequence(true);
-                    }
                     render_frame_on_thread(chunk);
                     run_pending_interp_start();
                 }
@@ -1970,20 +1523,20 @@ void RenderCore::render_loop() {
                 // A due slot presents again the picture last presented (never a newer one between the game's own
                 // presents) unless a present of the game's own landed in it.
                 const std::int64_t now = galaxy::qpc_now();
-                if (interp_slot_unbounded_) {
+                if (schedule_.unbounded()) {
                     // No slot clock (an unlimited rate): again as soon as the last present is done.
                     present_cached_display_on_thread(false, false,
                                                      last_presented_slot_.load(std::memory_order_relaxed));
                     overlay_idle_due_qpc_ = now;
                 } else if (now >= overlay_idle_due_qpc_) {
-                    if (renderer_.last_present_qpc() < overlay_idle_due_qpc_ - interp_slot_period_qpc_) {
+                    const std::int64_t period = schedule_.slot_period();
+                    if (renderer_.last_present_qpc() < overlay_idle_due_qpc_ - period) {
                         present_cached_display_on_thread(false, false,
                                                      last_presented_slot_.load(std::memory_order_relaxed));
                     }
-                    overlay_idle_due_qpc_ += interp_slot_period_qpc_;
+                    overlay_idle_due_qpc_ += period;
                     if (now >= overlay_idle_due_qpc_) {
-                        overlay_idle_due_qpc_ += ((now - overlay_idle_due_qpc_) / interp_slot_period_qpc_ + 1) *
-                                                 interp_slot_period_qpc_;
+                        overlay_idle_due_qpc_ += ((now - overlay_idle_due_qpc_) / period + 1) * period;
                     }
                 }
             }
@@ -2658,17 +2211,11 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         interp_on_ = renderer_.interpolation_mode();
         const unsigned frames = interp_on_ ? interpolated_frames_per_game_frame(rate) : 0u;
         g_in_between_on.store(frames != 0u, std::memory_order_relaxed);
-        if (frames != interp_frames_) {
-            interp_frames_ = frames;
-            restart_interp_governors();
-            if (frames == 0u) {
-                // No slot clock left for the overlay's idle presents (overlay_idle_presents): the game's own rate.
-                interp_slot_period_qpc_ = 0;
-                interp_slot_unbounded_ = false;
-            }
+        if (frames != schedule_.configured()) {
+            schedule_.configure(frames, galaxy::qpc_now());
         }
         if (!interp_on_) {
-            interp_shown_list_ = nullptr;
+            schedule_.forget_walked();
         }
     }
     ListEntry& entry = list_arrived(chunk);
@@ -2886,7 +2433,7 @@ void RenderCore::calibrate_first_start(bool scene, double walk_ms) {
     c.pixels.push_back(static_cast<double>(renderer_.frame_map().width) * static_cast<double>(renderer_.frame_map().height));
     c.ms.push_back(gpu_ms);
     // The CPU's part: the walk near the step, or the game thread late on its own (its list period, less its waits on the
-    // render thread, past 1.5 steps: note_game_frame_cadence's rule; the host's pacing sleep is in the period).
+    // render thread, past 1.5 steps: FrameSchedule's cadence rule; the host's pacing sleep is in the period).
     c.cpu_over += walk_ms > kFitFrameShare * frame_ms || game_ms > 1.5 * frame_ms ? 1.0 : 0.0;
     if (c.frames < kCalibrationSettle + kCalibrationSamples) {
         return;

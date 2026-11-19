@@ -22,6 +22,7 @@
 #include "galaxy/render/scene_view.h"
 #include "galaxy/render/texture_store.h"
 #include "galaxy/render/frame_interpolation.h"
+#include "galaxy/render/frame_schedule.h"
 #include "galaxy/render_api.h"
 #include "galaxy/frame_telemetry.h"
 #include "render/core/draw_record.h"
@@ -374,41 +375,37 @@ private:
     // Render thread: the chunk being rendered ended a game frame (a new picture).
     bool picture_made_in_chunk_ = false;
     std::atomic<bool> frame_end_presents_{true};  // set_frame_end_presents
-    unsigned interp_frames_ = 0;          // interpolated frames per game frame
     bool interp_on_ = false;       // this list is interpolated towards
-    struct InterpSequence {
-        bool active = false;
-        std::uint32_t picture_slot = 0;  // the game frame it ends on
-        unsigned generated = 0;
-        unsigned next = 0;
-        std::int64_t frame_qpc = 0;       // the frame's arrival (its present)
-        double lead = 0.0;                // t of a slot at the arrival (see start)
-        // Set inside a render chunk (no frame may be recorded there): the
-        // render loop presents the real frame before anything else.
-        bool flush_requested = false;
-        ListEntry* entry = nullptr;
-        std::int64_t step_qpc = 0;        // the moment its frame's step began (the step clock), 0 unknown
+    // The schedule's view of the settings, the display and the GPU (render_core.cpp).
+    class ScheduleView final : public ScheduleDisplay {
+    public:
+        explicit ScheduleView(RenderCore& core) noexcept : core_(core) {}
+        [[nodiscard]] ScheduleSettings settings() const override;
+        [[nodiscard]] bool vblank_grid(std::int64_t& vblank, std::int64_t& period) const override;
+        [[nodiscard]] double generated_gpu_ms() const override;
+        [[nodiscard]] bool temporal_upscaling() const override;
+        void suspend_temporal_upscaling(double generated_ms) override;
+        void reset_generated_gpu_ms() override;
+        [[nodiscard]] bool benchmark() const override;
+        [[nodiscard]] bool tracing() const override;
+
+    private:
+        RenderCore& core_;
     };
-    const ListEntry* interp_shown_list_ = nullptr;
-    std::uint64_t interp_shown_serial_ = 0;
-    float interp_shown_t_ = 0.0f;
+    ScheduleView schedule_view_{*this};
+    // When each picture between two game frames is shown (frame_schedule.h).
+    FrameSchedule schedule_{schedule_view_, galaxy::qpc_frequency()};
+    // The game frame the playing sequence ends on.
+    ListEntry* interp_entry_ = nullptr;
 
     // A ready frame's present arrived inside a render chunk: the render loop
     // finishes the playing sequence, then starts this one.
     bool interp_start_pending_ = false;
-    std::uint64_t interp_sequence_serial_ = 0;
     void run_pending_interp_start();
-    InterpSequence interp_sequence_{};
     // A recorded frame whose present arrives as a separate present.
     bool interp_list_waiting_ = false;
     ListEntry* interp_waiting_entry_ = nullptr;
     bool interp_stopping_ = false;        // render thread draining for a stop
-    // Present slot clock: next slot and slot length (with VSync, on the display's vblanks when they are timed).
-    std::int64_t interp_slot_due_qpc_ = 0;
-    std::int64_t interp_slot_period_qpc_ = 0;
-    // An unlimited present rate (render_config.h kUnlimitedFrameRate, no VSync): no slot clock (period 0); each picture
-    // is drawn once the one before is and shows the moment it is drawn for.
-    bool interp_slot_unbounded_ = false;
     // A native overlay (the HOME Menu, the settings) up while no interpolated frames run, at a present rate above
     // 60 Hz (the interpolation's slots, or none at an unlimited rate): the latest frame presents again at each slot
     // without a present of its own (overlay_idle_due_qpc_: the next; 0 outside).
@@ -423,54 +420,14 @@ private:
     std::uint64_t interp_slot_to_vblank_samples_ = 0;
     void note_present_vblank(std::int64_t slot);
     void skip_slot_for_depth();
-    // Smoothed game-frame arrival clock (start_interp_sequence), fed by the starting frame's present_asked_qpc.
-    std::int64_t interp_arrival_qpc_ = 0;
+    // The starting frame's present_asked_qpc and step moment (FrameChunk::step_moment_qpc), for start_interp_sequence.
     std::int64_t interp_present_asked_qpc_ = 0;
-    // The starting frame's step moment (FrameChunk::step_moment_qpc), the delay its pictures are shown after their
-    // step's moment (start_interp_sequence) and the 97th percentile of the frames' lateness to this thread it follows.
     std::int64_t interp_step_moment_qpc_ = 0;
-    std::int64_t interp_delay_qpc_ = 0;
-    std::int64_t interp_late_quantile_qpc_ = 0;
-    double interp_delay_ms_max_ = 0.0;  // the window's largest delay (present-stats)
-    std::int64_t interp_frame_period_qpc_ = 0;
-    std::uint64_t interp_late_slots_ = 0;   // slots a stall skipped
-    std::uint64_t interp_superseded_ = 0;   // frames replaced before their own slot
     void supersede_interp_sequence();
     void start_interp_sequence();
-    // Generated frames per game frame within the GPU budget.
-    unsigned interp_gpu_governor(double& rate);
-    unsigned interp_gpu_cap_ = kUnboundedGeneratedFrames;
-    std::uint64_t interp_gpu_cap_serial_ = 0;
-    std::uint64_t interp_gpu_checked_ = 0;
-    // After a rate or upscaler change, the time (QPC) before which GPU times are not used (pipeline,
-    // upscaler and target creation).
-    std::int64_t interp_gpu_warm_until_qpc_ = 0;
-    // A new generated frame configuration (interp_frames_ changed): both governors start over.
-    void restart_interp_governors();
-    std::uint64_t interp_gpu_capped_ = 0;   // sequences with fewer generated frames
-    // Game-frame cadence governor (note_game_frame_cadence).
-    void note_game_frame_cadence(std::int64_t now_qpc);
-    // The present rate a generated frame count gives, and the counts of the next lower and higher rates.
-    [[nodiscard]] double interp_rate_with(unsigned generated) const;
-    [[nodiscard]] unsigned interp_step_down(unsigned generated) const;
-    [[nodiscard]] unsigned interp_step_up(unsigned generated) const;
-    unsigned interp_cadence_cap_ = kUnboundedGeneratedFrames;
-    unsigned interp_cadence_interval_s_ = 2u;
-    std::int64_t interp_cadence_window_qpc_ = 0;
-    std::int64_t interp_cadence_last_qpc_ = 0;
-    std::uint32_t interp_cadence_misses_ = 0;   // in the window: the generated frames'
-    std::uint32_t interp_cadence_own_ = 0;      // in the window: the game's own
-    std::int64_t interp_cadence_change_qpc_ = 0;
-    std::int64_t interp_cadence_try_qpc_ = 0;
-    std::uint32_t interp_cadence_frames_ = 0;
-    std::int64_t interp_cadence_grace_until_qpc_ = 0;   // misses after a change are not counted
-    std::uint64_t interp_cadence_drops_ = 0;
-    double interp_cadence_fps_ = 0.0;
-    double interp_cadence_own_misses_ = 0.0;   // the game's own misses per second: their lowest recent rate
     // The game thread's time blocked on the render thread (queue space, drains, completions, scene target peeks), in QPC
     // ticks: the generated frames' share of it tells their misses from the game's own.
     std::atomic<std::uint64_t> game_wait_qpc_{0};
-    std::uint64_t interp_cadence_wait_seen_ = 0;
     // The first start's resolution calibration (render_core.cpp calibrate_first_start): the GPU's time at two internal
     // heights in the first 3D scene, fitted and turned into the height kept in config.ini.
     struct FirstStartCalibration {
@@ -494,27 +451,11 @@ private:
     FirstStartCalibration calibration_;
     void calibrate_first_start(bool scene, double walk_ms);
     void end_first_start_calibration(unsigned height, const char* why, bool performance = false);
-    std::uint64_t interp_cadence_wait_qpc_ = 0;   // in the window
-    // The render thread's time rendering generated frames (advance_interp_sequence), in QPC ticks.
-    std::uint64_t interp_generated_qpc_ = 0;
-    std::uint64_t interp_cadence_generated_seen_ = 0;
-    std::uint64_t interp_cadence_presented_seen_ = 0;   // interp_presented_total_ at the window's start
-    // A probe of the game's own misses: seconds of them in a row above the lowest rate, the cap a probe lowered and
-    // their rate before it, and the earliest next probe.
-    unsigned interp_cadence_own_windows_ = 0;
-    bool interp_cadence_probe_ = false;
-    unsigned interp_cadence_probe_restore_ = 0;
-    double interp_cadence_probe_misses_ = 0.0;
-    std::int64_t interp_cadence_probe_after_qpc_ = 0;
     std::uint64_t interp_presented_ = 0;        // since the last stats report
-    std::uint64_t interp_presented_total_ = 0;  // since the start: the cadence governor's count (never reset)
     std::uint64_t interp_dropped_ = 0;
     std::uint64_t interp_failed_ = 0;     // generated frames that could not be recorded
-    std::uint64_t interp_history_resets_ = 0;  // presented frames that start the temporal upscaler's history again
-    std::uint64_t interp_history_carried_ = 0; // first generated frames whose frame before ended the pair before
     double interp_cpu_ms_ = 0.0;          // wall time per generated frame, waits included
     std::uint64_t interp_sequences_ = 0;
-    std::uint64_t interp_started_ = 0;
     std::uint64_t interp_lists_skipped_ = 0;     // completed logs replaced before playing
     std::uint64_t interp_present_skipped_ = 0;  // presents while a sequence played
     // Game frames presented without generated frames: an overlay, anything else.
@@ -533,8 +474,6 @@ private:
     core::WalkTime interp_walk_time(const ListEntry& entry, float t, bool count);
     // `entry` walked at t (presented or not): the picture the temporal history now holds.
     void note_interp_walked(const ListEntry& entry, float t) noexcept;
-    [[nodiscard]] std::int64_t interp_remaining_us() const;  // to the next slot
-    [[nodiscard]] double interp_slot_t() const;
     // Render thread: until a present slot's moment (qpc_now() ticks), precisely (precise_wait.h).
     static void interp_wait_until(std::int64_t due_qpc);
     float scene_jitter_px_[2]{};
