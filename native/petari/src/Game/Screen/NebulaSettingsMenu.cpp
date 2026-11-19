@@ -12,6 +12,7 @@
 #include "Game/Screen/LayoutManager.hpp"
 #include "Game/Screen/NebulaIcons.hpp"
 #include "Game/Screen/NebulaPaneKit.hpp"
+#include "Game/Screen/NebulaRunParts.hpp"
 #include "Game/Screen/NebulaUi.hpp"
 #include "Game/System/NebulaCutsceneSkip.hpp"
 #include "Game/System/NebulaText.hpp"
@@ -5517,12 +5518,6 @@ namespace {
     const f32 cRunFollow = 0.2f;    // the bar moves this share of the way to the run's progress each frame
     const u32 cRunTrack = NEBULA_RGBA(0xCB, 0xD6, 0xEB, 0xFF);
     const u32 cRunFill = 0x6FA6EAFF;
-    // What a step measures (NEBULA_BENCHMARK_PART_*), as the host's texts name it.
-    const char* const cRunParts[] = {"YOUR SETTINGS", "EACH EFFECT ALONE", "FIRST STAGE AGAIN"};
-    const u32 cRunPartCount = sizeof(cRunParts) / sizeof(cRunParts[0]);
-    static_assert(sizeof(cRunParts) / sizeof(cRunParts[0]) == NEBULA_BENCHMARK_PART_AGAIN + 1,
-                  "one name for each NEBULA_BENCHMARK_PART_*");
-
     // `rText` cut with an ellipsis until `pBox` (at its size, drawn `squeeze` wide) is no wider than `room`.
     void fitLine(TextBox* pBox, MR::Text16& rText, f32 room, f32 squeeze, f32* pWidth) {
         f32 height = 0.0f;
@@ -5719,7 +5714,7 @@ private:
         f32 stepWidth = 0.0f;
         setText(mStep, text.c_str());
         measure(mStep, 4000.0f, &stepWidth, &height);
-        translateLine(text, cRunParts[rState.part < cRunPartCount ? rState.part : 0], false);
+        translateLine(text, NebulaRunParts::name(rState.part), false);
         const f32 partRoom = inner - stepWidth - cRunSideGap;
         f32 partWidth = 0.0f;
         fitLine(mPart, text, partRoom, cMinSqueeze, &partWidth);

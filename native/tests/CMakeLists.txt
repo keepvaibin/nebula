@@ -57,3 +57,5 @@ native_test(native_once_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/once_tests.cpp"
 native_test(native_frame_list_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/frame_list_tests.cpp" "${game_src}/Render/FrameList.cpp")
 # The cutscene skip's bound, in steps of play (header only).
 native_test(native_cutscene_skip_bound_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/cutscene_skip_bound_tests.cpp")
+# The benchmark run screen's part names (header only).
+native_test(native_run_parts_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/run_parts_tests.cpp")
