@@ -5519,6 +5519,9 @@ namespace {
     const u32 cRunFill = 0x6FA6EAFF;
     // What a step measures (NEBULA_BENCHMARK_PART_*), as the host's texts name it.
     const char* const cRunParts[] = {"YOUR SETTINGS", "EACH EFFECT ALONE", "FIRST STAGE AGAIN"};
+    const u32 cRunPartCount = sizeof(cRunParts) / sizeof(cRunParts[0]);
+    static_assert(sizeof(cRunParts) / sizeof(cRunParts[0]) == NEBULA_BENCHMARK_PART_AGAIN + 1,
+                  "one name for each NEBULA_BENCHMARK_PART_*");
 
     // `rText` cut with an ellipsis until `pBox` (at its size, drawn `squeeze` wide) is no wider than `room`.
     void fitLine(TextBox* pBox, MR::Text16& rText, f32 room, f32 squeeze, f32* pWidth) {
@@ -5716,7 +5719,7 @@ private:
         f32 stepWidth = 0.0f;
         setText(mStep, text.c_str());
         measure(mStep, 4000.0f, &stepWidth, &height);
-        translateLine(text, cRunParts[rState.part < 4 ? rState.part : 0], false);
+        translateLine(text, cRunParts[rState.part < cRunPartCount ? rState.part : 0], false);
         const f32 partRoom = inner - stepWidth - cRunSideGap;
         f32 partWidth = 0.0f;
         fitLine(mPart, text, partRoom, cMinSqueeze, &partWidth);
