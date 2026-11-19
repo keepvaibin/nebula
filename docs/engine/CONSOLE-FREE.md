@@ -220,7 +220,7 @@ Each: where; what of it is the console's; the modern form; row; state; proof.
 | A normal map remade on the CPU and lit through a gradient texture | `native/petari/src/Game/MapObj/NormalMapBase.cpp:114`, `:119`, `:483-523` (`createGradTexture`: an LA8 gradient built on the CPU), `:525` on (`swapColorGB`: each RGBA8 texel's normal decoded and written back as 0, g, b, r in a copy), its own draw settings (`drawMaterialSetting`, `setStageForObject`) | the console's way of lighting a normal map by a texture lookup (read from the code; the shader's side not read yet) | the normal map used as it is cooked, lit by the renderer's lighting in the shader; nothing remade on the CPU | P-190 | open (E3) | not yet |
 | What the game runs follows the screen's shape | `native/petari/src/Game/LiveActor/ClippingJudge.cpp:20-21`, `:33`, `:42` (`MR::getAspect()` in the volumes that decide which actors run); 42 lines of `native/petari/src` read an actor's clipped state (`isClipped`, `isInvalidClipping`, `isClippingInvalid`: `grep -rn ... --include=*.cpp`, 42 hits) | the console's culling of actors' runs by the one screen it had | (c) first: every actor of the loaded scene runs in every step, drawing culled by the real view; (b) if (c) misses a measure: one run volume the same on every screen | P-191 | open, after D.6 (file 08 5.H.2) | not yet |
 | Shared counts and widths that can cap what a mod adds | `MR::Vector`, holders, registries, groups (section 2, Limits); id and index widths: `Sound.hpp:26-27` (`SoundID`: section 8 bits, group 8 bits, wave 16 bits; `SoundVoices.cpp:70`), P-188's particle index; the 138 literal tables and the pools, each read | a width or a size chosen for the console's content | every shared holder grows and every id or index is 32 bits wide or more; an actor's own count stays its number | P-192 | open (E; the tables' classing in the whole read) | not yet |
-| Surround output by a written law | `runtime/include/galaxy/audio_mixer.h:90-95`, `runtime/src/audio_device_wasapi.cpp:222`, the game's sound code (not read for this yet) | none kept: the two-channel output stays as made (owner, 5.H.5); the surround law is new | a law from a sound's pan and surround amounts to each reported layout's speaker gains, written here before the code, each property asserted by a test, a render-to-file test through the real mixer | P-193 | open (E, with the sound work) | not yet |
+| Surround output by a written law | `runtime/src/audio_mixer.cpp:244-269`, `:704-729`; `runtime/src/native_audio.cpp:95-131`; `runtime/src/audio_device_wasapi.cpp:135-155`, `:207-230`; `platform/sdl/audio_device_sdl.cpp:33`; `native/petari/src/Game/Sound/SoundVoices.cpp:665-786` (section 4 says what each does) | none kept: the two-channel output stays as made (owner, 5.H.5); the surround law is new | a law from a sound's pan and surround amounts to each reported layout's speaker gains, written here before the code, each property asserted by a test, a render-to-file test through the real mixer | P-193 | open (E, with the sound work) | not yet |
 | Actors that draw for themselves | 100 files of `native/petari/src` define `draw() const` (`grep -rlE "void \w+::draw\(\) const" native/petari/src`), 55 of them name a draw helper (`Material`, `TDDraw`, `setStage`, `RenderTexture`, `NebulaPass`, `drawFillBox`, `GameTexture`) | not read yet; `FRAME-MODEL.md` does not name them | each read; those with the console's shape placed in E3 or E4's steps | P-194 | open (the whole read, 5.H.1) | not yet |
 | Texture headers in the console's form | `ResTIMG`, 137 lines in 59 files | the J3D texture header and its filter codes | a host id and a sampler resolved at load (E3 step 2) | P-155 | open (F4) | not yet |
 
@@ -250,3 +250,30 @@ replay identical? Yes: an item. No: listed with the reason, a question for the o
 
 The whole read of the 921 actor files comes after the code items of D and E or after the weekly reset (file 08
 5.H.1); the pattern sweep closes no area.
+
+What P-193 starts from (read at a1f423dd8 for 5.H.5; the law itself is written in this file when P-193 starts, before
+its code):
+
+- The game: the player's sound setting picks the sound engine's output mode, 0 mono, 1 stereo, 2 surround
+  (`AudSystem.cpp:333-345`). In mode 2 a note has a pan, an effect send and a rear amount (`dolby`), each the sum of
+  the sound's, the effect's and the note's (`SoundVoices.cpp:665-688`). A note in its surround form goes to the
+  panner with pan and rear (`:689-698`); any other note sets the volumes of up to six buses from pan, send and rear,
+  each by a quarter sine or by the matrix's rear curve `sin((x * 0.34776 + 0.32612) * pi / 2)` (`:704-786`, `:772`). The
+  buses include surround left and right and the inverted right (`SoundEngine.cpp:16-21`).
+- The panner (`audio_mixer.cpp:704-729`): front left, front right, rear left, rear right get
+  `cos(pi p / 2) cos(pi r / 2)`, `sin(pi p / 2) cos(pi r / 2)`, `cos(pi p / 2) sin(pi r / 2)`,
+  `sin(pi p / 2) sin(pi r / 2)` (`pan_gain`, `:47-49`): the squares sum to 1 at every pan p and rear r.
+- Two channels (kept as made): the surround buses, 2.5 ms late (one subframe, `:154-155`, `:248-249`), are
+  matrix-encoded into left and right, the right's part inverted, the center at -3 dB, the inverted right subtracted
+  (`:262-267`).
+- Speakers of their own (`set_discrete`, chosen when the device gives more than two channels, `native_audio.cpp:120-131`):
+  - the surround buses still come 2.5 ms after the front (`audio_mixer.cpp:248-260`): the fold's delay on real
+    speakers;
+  - the inverted right bus is still subtracted from the right speaker (`:255`): an inverted signal on a speaker;
+  - a sound's rear part is split equally over sides and backs when both exist (`native_audio.cpp:99`, `kHalfPower`),
+    whatever the speakers' angles; there is no low-frequency channel; a centre with no speaker goes to left and
+    right at -3 dB (`:98`).
+- The device: Windows takes the system mix format's channel mask when surround is asked and the mask has rear
+  speakers (`audio_device_wasapi.cpp:207-230`), its channels in the mask's order (`:135-155`); Android (SDL) always
+  opens two channels (`audio_device_sdl.cpp:33`), so a phone or tablet with more speakers, or a receiver behind it,
+  gets the two-channel matrix.
