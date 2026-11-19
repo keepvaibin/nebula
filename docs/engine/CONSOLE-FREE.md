@@ -6,7 +6,9 @@ else. Its test (that file, section 3): code, a data format, a limit or a timing 
 hardware or SDK, not because of what the game does. The game's own rules, the fixed 60 Hz game step, its content and
 the importer reading the disc once at setup stay.
 
-State: pass one run at a1f423dd8 (2026-11-18); pass two started. Not 100%.
+State (2026-11-18, the code of a1f423dd8): pass one run; pass two has read every area of `FRAME-MODEL.md` 1.10 for
+the console's shape, the 921 actor files by a pattern sweep with every hit read (a whole read is not done). Items
+open: the frame's rows (FRAME-MODEL 1.9), P-155, P-184, P-185, P-186, P-187. Not 100%.
 
 ## 1. Pass one: whole-tree searches
 
@@ -54,7 +56,8 @@ the game's projection terms read into the host's reversed depth, `draw_walker.cp
 (`NEBULA_SHADER_J2D_PICTURE`): names, not the console's code. So the SDK's and the middleware's names are gone from the
 game and the host; the console's shapes are not found by names, and pass two reads for them. Names the game kept from
 the console that do hold its shapes: `ResTIMG` (the J3D texture header: 137 lines in 59 files of native/petari and
-native/include, and 16 lines in 5 importer files; P-155), `Mtx44` (67 lines in 25 files, not yet classed).
+native/include, and 16 lines in 5 importer files; P-155), `Mtx44` (67 lines in 25 files: the game's 4 x 4 float matrix,
+`nebula_math.h:40`, its projection math; the game's).
 
 What the hits are, by search (each line read at a1f423dd8):
 
@@ -72,8 +75,10 @@ What the hits are, by search (each line read at a1f423dd8):
 - `THP` in `runtime` and `native/include`: the movie decoder adapted from the SDK's (`movie_video.cpp:2`,
   `movie_video.h:18`) and the YUV shader's coefficients: the game's own movies are cooked to `NMOV` with codec 0, the
   THP frames, decoded while the game runs by native SSE2 and FMA3 kernels (`movie_video_tests.cpp`). The frames are the
-  game's content; the SDK's IDCT column swap (`movie_video.cpp:104`) is P-118, which the owner decided stays. Not yet
-  classed: whether a cook to a current codec is the modern form is weighed in pass two (section 3).
+  game's content; the SDK's IDCT column swap (`movie_video.cpp:104`) is P-118, which the owner decided stays. Weighed:
+  the frames are intra-coded JPEG pictures; a cook to a current codec would encode lossy pictures a second time and
+  lose detail, while the native decoder already runs as SIMD kernels. Class: the game's content, decoded natively; not
+  an item.
 
 ## 2. Pass two: the areas read for the console's shape
 
@@ -104,8 +109,9 @@ What is read so far (at a1f423dd8):
   and branches as records. Fonts: cooked `NFNT` (`native_data.rs:244-257`): host order, sheets as distance fields
   (`cook::distance`) or pictures, a glyph found through two 256-entry pages by the code's high and low byte. Both read
   characters as 16-bit codes (`CharStrmReader.cpp:10-33`: UTF-8 of up to three bytes, UTF-16 units, CP1252), the
-  console's font code range: no character past U+FFFF can be shown. Not yet classed (the game's 14 languages are all
-  inside it; whether host text needs more is read with the host's `message_utf8`). A glyph's sheet is still found by
+  console's font code range: no character past U+FFFF can be shown, though the host's own reader of the same text
+  joins surrogate pairs (`host_main.cpp:2159-2172`, `message_utf8`). Nothing shown today is past U+FFFF (the 14
+  languages' texts and the host's are inside it); the limit is the console font format's: P-187. A glyph's sheet is still found by
   the address of its bytes (`ResFontBase.cpp:186-191`), as P-155's textures.
 - Sound. `Game/Sound` is a native engine over the host's mixer (`SoundEngine.cpp`, `SoundVoices.cpp`, 9,062 lines in
   the folder): memory from the game's arena (`SoundMemory.cpp`), commands through a ring. The host mixer
@@ -120,7 +126,8 @@ What is read so far (at a1f423dd8):
   tables of a literal size (two music players, mute nibbles, four effect lines: the game's). The remote speaker's
   sounds are mixed at 6 kHz (`SpeakerMixer.hpp:58-77`) because their waves are the disc's speaker waves
   (`native_data.rs:542-545`, `CSW`); the host resamples player 1's into the output (`host_main.cpp:4016-4025`,
-  `wiimote_speaker.h`): the game's content. Not read: the volume ramp over the first 4/5 of a tick (`ramp_mix`).
+  `wiimote_speaker.h`): the game's content. The volume ramp (`audio_mixer.cpp:669-680`, `make_ramp`) reaches its target
+  65 samples of 32 kHz into each tick, at any output rate: how the game's sounds change volume, as made; stays.
 - Archives and file access. The game's archive names (`.arc`, `.szs` in 18 runtime, 6 game and 10 header lines) are
   names only: the store drops the ending (`asset_store.h:118-119`, `asset_store.cpp:33`). The game reads the store
   (`game.pak`, `cook/store.rs`) through `AssetFolder` and `GameAssets::load` (`FileUtil.cpp:88`); `ResourceHolder`
@@ -203,5 +210,5 @@ Each: where; what of it is the console's; the modern form; row; state; proof.
 | A layout material's blend kept in the console's codes and turned into the renderer's at every draw | `native/petari/include/Game/Ui/UiData.hpp:163-182` (`mBlend`: type, factors, op as the console wrote them; `mAlphaCompare`: two compares packed in a byte; `mGenerators`: texture coordinate generators as type, source, matrix); `native/petari/src/Game/Ui/Material.cpp:702-714` (each draw maps the blend type, and the source factor's two destination-colour codes, to `NEBULA_BLEND_*`, `NEBULA_FACTOR_*`) | the console's blend and compare encodings in the cooked record | the cook writes the material's pass state word (`PassState`) and the compare in the renderer's terms; the draw copies it | P-184 | open | not yet |
 | Blur radii stretched for one wide shape only | `BloomEffectSimple.cpp:28`, `ImageEffectLocalUtil.cpp:146` (`isScreen16Per9() ? 1.333f : 1.0f`) | the console's two screen shapes, 4:3 and 16:9 | the vertical factor from the frame's aspect over 4:3, so the blur keeps its shape on every screen | P-185 | open | not yet |
 | Sound sequences' data kept in the console's byte order | `native/petari/src/Game/Sound/SeqTrack.cpp:29-37`, `:706-745`, `:1505-1525` | the sequence file's data section as the console stored it (big-endian), swapped at every read on the sound thread | the cook, which already decodes the operations, writes each table they read in host order and typed (envelope points, filter weights, 8-, 16-, 24-, 32-bit tables); the run time reads records | P-186 | open | not yet |
-| The game's movies decoded with the SDK's THP codec while the game runs | `runtime/src/movie_video.cpp`, `MovieStream.cpp` | the console's video codec; its IDCT order is P-118 (owner: stays) | not decided: pass two weighs a cook to a current codec against the decoder's cost | none yet | to read | not yet |
+| Characters as 16-bit codes | `native/petari/src/Game/Ui/CharStrmReader.cpp:10-33`, the font's two 256-entry pages (`native_data.rs:244-257`), `TagProcessorBase` (`u16 code`) | the console font format's code range (a character past U+FFFF cannot be drawn) | code points as 32-bit values through the readers, the tag processors and the cooked font (`NFNT` version 2: a code table by range) | P-187 | open | not yet |
 | Texture headers in the console's form | `ResTIMG`, 137 lines in 59 files | the J3D texture header and its filter codes | a host id and a sampler resolved at load (E3 step 2) | P-155 | open (F4) | not yet |
