@@ -608,12 +608,12 @@ Read at d4246a703. `nebula_model.h`, `native/petari/{src,include}/Game/Render`, 
 `crates/nebula-import` are the same at 5526e1cf0 (`git diff --stat d4246a703 5526e1cf0` on them: empty).
 
 **What 12 is.** One block in host order, used in place (`nebula_model.h:1-3`). A header of 28 words
-(`nebula_model.h:49-59`, written at `model_write.rs:854-886`): magic, version, size, flags, 11 counts, 12 offsets
-and the geometry's size. Records hold offsets from the block's start to their own parts (a mesh's streams, a
-material's forms and slots). `model_write::write` lays the block out in this order (`:436-853`): joints, steps, joint meshes, draw matrices,
-envelopes, mixes, inverse binds (16-aligned), important joints, meshes, materials with their parts (coordinates,
-slots, coordinate matrices, warps, forms with their rows, texture lists and inputs), textures, names, geometry
-(each stream 32-aligned), and last the texture images (32-aligned, the textures' `record_at`).
+(`nebula_model.h:49-59`, written at `model_write.rs:854-886`): magic, version, size, flags, 11 counts, 12 offsets and
+the geometry's size. Records hold offsets from the block's start to their own parts (a mesh's streams, a material's
+forms and slots). `model_write::write` lays the block out in this order (`:436-853`): joints, steps, joint meshes, draw
+matrices, envelopes, mixes, inverse binds (16-aligned), important joints, meshes, materials with their parts
+(coordinates, slots, coordinate matrices, warps, forms with their rows, texture lists and inputs), textures, names,
+geometry (each stream 32-aligned), and last the texture images (32-aligned, the textures' `record_at`).
 
 Two arrays have no count in 12's header; their readers assume one:
 
@@ -665,8 +665,8 @@ holds.
      `envelope_count` 3, `draw_matrix_count` 3, `mix_count` 2, `meshes_at` 2, and one each of `mixes_at`,
      `joints_at`, `inverse_binds_at`, `flags`, `envelopes_at`, `draw_matrices_at`). The inverse binds are taken by
      `IBND`'s count, not `joint_count`.
-   - The importer: `model_write::names` (`:899-926`); `gltf.rs` `GameModel::read` (`:955-978`) and `skeleton_gltf`
-     (`:986-992`), which read header words 4 and 15 by number.
+   - The importer: `model_write::names` (`model_write.rs:899-926`); `gltf.rs` `GameModel::read` (`:955-978`) and
+     `skeleton_gltf` (`:986-992`), which read header words 4 and 15 by number.
    - Tests that read the header: `gltf_tests.rs:75-86`, `:198`, `:1063-1064`.
    - Outside this repository (LumaKit, LumaLink): not checked.
    - A missing required section stops the load naming it, and a model of another version names its version
@@ -718,8 +718,8 @@ the channels' `material_source` and `ambient_source` (0 hits each); `blend_src`,
 the Mii head), none through a material. The cooker turned them into the state word (`model_write.rs:36-44`) and the
 programs. The mod calls read a material through `Material` (`NebulaModCalls.cpp:129`, `:138`), not the file.
 
-In the importer: `model_write::names` (`:923`, the names by `MATERIAL_BYTES`); the tests `gltf_tests.rs:198-206` and
-`:1241-1246` (the slots at `MATERIAL_BYTES - 16`). Outside this repository: not checked.
+In the importer: `model_write::names` (`model_write.rs:923`, the names by `MATERIAL_BYTES`); the tests
+`gltf_tests.rs:198-206` and `:1241-1246` (the slots at `MATERIAL_BYTES - 16`). Outside this repository: not checked.
 
 **The sections.** Records name their parts by index and count in a section, not by offset; names stay offsets of
 the block, as in every other record. Names starting `GX` hold the console's material, read until step 3's last
@@ -778,22 +778,23 @@ Read at c8222595e.
 **Today.**
 
 1. `TEXR` (`NebulaModelTexture`, `nebula_model.h:267-274`) keeps the console's sampler codes: wrap codes, the min and
-   mag filter codes (the console's min types 0 to 5), anisotropy, the lod range and bias. At load `ModelData.cpp:101-124`
-   copies each into a `ResTIMG` (`GameTexture.hpp:21-35`), the console's texture header.
+   mag filter codes (the console's min types 0 to 5), anisotropy, the lod range and bias. At load
+   `ModelData.cpp:101-124` copies each into a `ResTIMG` (`GameTexture.hpp:21-35`), the console's texture header.
 2. A form's list is made by `MaterialDraw::tableOf` (`Material.cpp:770-820`): for each map, the texture its slot shows,
    its host id found from the image's address (`RenderTexture::idOf`, `RenderTexture.cpp:175` on), and its sampler
-   decoded from the console's codes (`:789-797`). The same decode is written a second time for the draw sites
-   (`SiteTextures::toFrame`, `TypedDraw.cpp:78-84`). The list is registered by its hash (`Registries::texture_table`,
-   `registries.cpp:682-726`: a per-thread memo of 64 lists of up to 8 textures, else a map under the lock). A form keeps
-   its table while the material's textures and the model's texture data stand (`Material.cpp:774-777`); a draw that
-   swaps an image builds and registers its list at every draw (`:814-818`); the one caller is the player's model
-   (`PlayerModel.cpp:136`).
+   decoded from the console's codes (`Material.cpp:789-797`). The same decode is written a second time for the draw
+   sites (`SiteTextures::toFrame`, `TypedDraw.cpp:78-84`). The list is registered by its hash
+   (`Registries::texture_table`, `registries.cpp:682-726`: a per-thread memo of 64 lists of up to 8 textures, else a map
+   under the lock). A form keeps its table while the material's textures and the model's texture data stand
+   (`Material.cpp:774-777`); a draw that swaps an image builds and registers its list at every draw (`:814-818`); the
+   one caller is the player's model (`PlayerModel.cpp:136`).
 3. The render thread, for each table a draw names:
    - with descriptor indexing (`RenderCore::walk_tables`, `draw_walker.cpp:752-833`): each walk looks up every
      texture's handle and writes the table's pairs into that frame's list buffer again (`write_texture_list`; Direct3D
      12 `renderer_d3d12.cpp:2934` on, an upload ring per frame slot); the sampler slots are made again when the
-     textures, the sampler heap or a target changed (`:787-816`);
-   - without it (`walk_bound_tables`, `:838-933`): rebuilt when stale, per walk for a table holding a target.
+     textures, the sampler heap or a target changed (`draw_walker.cpp:787-816`);
+   - without it (`walk_bound_tables`, `draw_walker.cpp:838-930`): rebuilt when stale, per walk for a table holding a
+     target.
 4. A sampler's key holds the texture's levels, generated levels and a replacement's shift (`draw_walker.cpp:801-813`)
    and the render settings (`make_sampler_slot_key(key, cfg)`, `renderer_d3d12.cpp:2918-2920`). P-048, P-056 and P-066
    are the heaps' waits when they fill.
@@ -848,14 +849,13 @@ Read at cfc2e368e.
    billboard's matrix that reads the eye, multiplied by the step's view (`:313-324`, `ModelSys::mViewMtx`).
 3. `MaterialDraw::constantsOf` (`:713-768`): a form whose material nothing has touched since it was registered is one
    registered slot (`:730-741`; slots are content-addressed and kept for the registries' life, `registries.cpp:615-638`,
-   `:538`). Any other form
-   is filled whole into the frame's arena once a frame, or at every draw when the draw edits it (`:743-767`), and the
-   edits are copied over the filled rows (`applyEdits`, `:641-679`). One `touch()` (`Material.hpp:235-237`) moves a
-   material to the per-frame fill for good (P-173), and the getters touch even to read (`Material.hpp:180-183`,
-   `:195-218`): `NormalMapBase::drawMaterialSetting` only reads a material's colours (`NormalMapBase.cpp:359-385`) and
-   the mod call that lists a model's materials only reads their coordinates (`NebulaModCalls.cpp:129-131`), and each
-   moves those materials to the per-frame fill.
-   `Material::calc` copies every coordinate matrix before and after its calc and compares them (`Material.cpp:262-276`).
+   `:538`). Any other form is filled whole into the frame's arena once a frame, or at every draw when the draw edits it
+   (`Material.cpp:743-767`), and the edits are copied over the filled rows (`applyEdits`, `Material.cpp:641-679`). One
+   `touch()` (`Material.hpp:235-237`) moves a material to the per-frame fill for good (P-173), and the getters touch
+   even to read (`Material.hpp:180-183`, `:195-218`): `NormalMapBase::drawMaterialSetting` only reads a material's
+   colours (`NormalMapBase.cpp:359-385`) and the mod call that lists a model's materials only reads their coordinates
+   (`NebulaModCalls.cpp:129-131`), and each moves those materials to the per-frame fill. `Material::calc` copies every
+   coordinate matrix before and after its calc and compares them (`Material.cpp:262-276`).
 4. The ambient colours are a global pair (`MaterialAmbient`): set by each actor's light load
    (`LightFunction.cpp:189`), by a material with its own ambient when it is sent (`Material.cpp:481-488`), and to black
    by the 2-D layers (`Ui/Material.cpp:749-750`, `DrawUtil.cpp:32-33`). A form that reads them is filled again when the
@@ -1052,8 +1052,8 @@ Read at cfc2e368e.
    camera at t (`:219`); per block, its joints at t when it moved (`core::joints_at`, `:294`), then
    `core::compose_rows` (`:298`; `compose.cpp:170-228`): per draw matrix the view times the joint, an envelope's
    weighted sum of joints (`weighted_sum`, `:120-160`), the inverse transpose for a scaled one (`:43-67`), billboards
-   (`:78-116`), six rows each (`compose.h:13`), and the world rows again where a program reads them (`:313`). All of it
-   goes into the matrix ring each walk (`:252`) (P-156).
+   (`:78-116`), six rows each (`compose.h:13`), and the world rows again where a program reads them
+   (`draw_walker.cpp:313`). All of it goes into the matrix ring each walk (`draw_walker.cpp:252`) (P-156).
 3. Culling reads those rows: an item of one matrix is tested against the view's planes with its place from this
    walk's rows (`item_culled`, `draw_walker.cpp:933` on).
 4. A run of ring draws is joined by rewriting each joining draw's matrix numbers and indices in the upload memory
@@ -1107,29 +1107,30 @@ Read at cfc2e368e.
 
 1. The game loads lights into numbered places, the console's eight registers: all eight to white at every scene draw
    (`initLightRegisterAll`, `LightFunction.cpp:14-28`, from `GameScene.cpp:323`); an actor's two lights, its alpha light
-   and its ambient before each run of its draws (`loadActorLightInfo`, `:178-190`, from `ActorLightCtrl::loadLight`,
-   `ActorLightCtrl.cpp:30-38`, and `LightUtil.cpp:27-31`); the coin's shine (`:192-203`); one point light (`:205-216`);
-   eight white lights at the eye (`:218-230`, from `LightDirector.cpp:18` and the mods' `LumaDraw.cpp:1538`). A light
-   fixed in the world is multiplied by the step's view at each load (`:170`, `:209`); a light that follows the camera is
-   given in eye space and marked (`Frame::setLightFollows`).
+   and its ambient before each run of its draws (`loadActorLightInfo`, `LightFunction.cpp:178-190`, from
+   `ActorLightCtrl::loadLight`, `ActorLightCtrl.cpp:30-38`, and `LightUtil.cpp:27-31`); the coin's shine
+   (`LightFunction.cpp:192-203`); one point light (`LightFunction.cpp:205-216`); eight white lights at the eye
+   (`LightFunction.cpp:218-230`, from `LightDirector.cpp:18` and the mods' `LumaDraw.cpp:1538`). A light fixed in the
+   world is multiplied by the step's view at each load (`LightFunction.cpp:170`, `:209`); a light that follows the
+   camera is given in eye space and marked (`Frame::setLightFollows`).
 2. The frame list copies the places into a new set whenever one changed or the block's camera did
    (`currentLightSet`, `FrameList.cpp:713-744`; `setLight`, `:746-758`); a set is a run of lights in eye space with
    follow bits (`nebula_frame_list.h:38-56`); an item names its set.
 3. The render thread writes each set's rows at every walk, and between two steps mixes each light with its pair,
    taking a world light through the camera's motion (`draw_walker.cpp:317-343`, `light_rows_at`).
 4. The ambient is not in the set: it is `MaterialAmbient`'s global pair (2.11), set by the same `loadActorLightInfo`
-   (`:189`).
+   (`LightFunction.cpp:189`).
 5. In the game step: every visible actor looks for its light area through every light area (P-152:
    `ActorLightCtrl::update`, `ActorLightCtrl.cpp:23-28`), and every moving actor asks for its shadow's drop to be found
    again (P-140).
 
 **The engine.**
 
-- A light is a record in the world (or in the eye, for a light that follows the camera, named as such): colour,
-  terms, position, direction. The area lights' entries (player, strong, weak, planet: two lights, the alpha light and
-  the ambient each, `getAreaLightLightData`, `:85-92`) are records made when the light data loads; the coin's shine,
-  the point lights and the white eye lights likewise. A record changes only when its source does (a point light that
-  moves, an actor's blend between two area lights, once a step while it lasts).
+- A light is a record in the world (or in the eye, for a light that follows the camera, named as such): colour, terms,
+  position, direction. The area lights' entries (player, strong, weak, planet: two lights, the alpha light and the
+  ambient each, `getAreaLightLightData`, `LightFunction.cpp:85-92`) are records made when the light data loads; the
+  coin's shine, the point lights and the white eye lights likewise. A record changes only when its source does (a point
+  light that moves, an actor's blend between two area lights, once a step while it lasts).
 - A light set is a short list of light records and an ambient colour: one per area-light entry, one per blend in
   progress, one for the eye's white lights. An item names its set, as today; the set's lights are not copied into
   the list at each change of place, only named. The view is applied by the GPU with the picture's camera (in step 5's
