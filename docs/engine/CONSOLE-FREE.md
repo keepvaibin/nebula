@@ -109,6 +109,18 @@ What is read so far (at a1f423dd8):
   extensible format the buses go to speakers of their own (`audio_mixer.h:90-95`, `audio_device_wasapi.cpp:222`). Not
   yet read: `AudioLib` (58 files), `GameAudio`, `RhythmLib`, `Speaker`, the volume ramp over the first 4/5 of a tick
   (`audio_mixer.h`, `ramp_mix`).
+- The 4:3 and 480-line hits (pass one, 111 lines), each read. The game's own: the 2D canvas of 456 lines and the
+  layouts' 608 width (`NEBULA_AUTHORED_LINES`, `NebulaFrameClock.hpp:10-14`: units, "nothing renders at this size"),
+  lines and points sized in lines of a 456-line picture (`FrameList.hpp:18`, `ParticleDraw.hpp:43`), gameplay numbers
+  that happen to be 448, 456, 480, 608, 640 (class ids, steps, sizes, the Bezier surface's weights), text buffers of
+  640 bytes. The host's: the 480-line floor of the resolution fit and the PERFORMANCE preset (`resolution_fit.h:64-80`,
+  `render_config.h:395-398`), the window's first height (`render_config.h:143`): choices of this port, not the
+  console's. To read further (not classed): effect targets sized in a 640 x 456 grid of authored texels and then given
+  to the renderer as a share of the frame (`NebulaFrameClock.hpp:15-17`, `GameTexture.cpp:66-72`: whether every
+  renderer sizes them by the share and not by the 640 is not yet read); the 16:9 picture as the console's anamorphic
+  832 units over a 640-unit scene (`display_aspect.h:21`). The blur radii made 1.333 taller at 16:9
+  (`BloomEffectSimple.cpp:28`, `ImageEffectLocalUtil.cpp:146`) are read: the radius is a fraction of the frame, so
+  1.333 (16:9 over 4:3) keeps the console's shape on a 16:9 screen, but every wider shape gets 1.333 too: P-185.
 
 File counts: `git ls-files native/petari/src native/petari/include` by folder at a1f423dd8: MapObj 633, Boss 333,
 Screen 289, System 260, Enemy 218, Player 179, Map 164, Util 158, Camera 158, NPC 155, LiveActor 122, Sound 74,
@@ -123,6 +135,7 @@ Each: where; what of it is the console's; the modern form; row; state; proof.
 | --- | --- | --- | --- | --- | --- | --- |
 | The frame's rows | `FRAME-MODEL.md` 1.9 and 1.10 (pile B) | 1.9's parts | `FRAME-MODEL.md` part 2 | P-010, P-042 to P-181 as 1.10 and 2.6 place them; P-022 | open; P-022 parts 1-2 written on `rows/p022` | not yet |
 | A layout material's blend kept in the console's codes and turned into the renderer's at every draw | `native/petari/include/Game/Ui/UiData.hpp:163-182` (`mBlend`: type, factors, op as the console wrote them; `mAlphaCompare`: two compares packed in a byte; `mGenerators`: texture coordinate generators as type, source, matrix); `native/petari/src/Game/Ui/Material.cpp:702-714` (each draw maps the blend type, and the source factor's two destination-colour codes, to `NEBULA_BLEND_*`, `NEBULA_FACTOR_*`) | the console's blend and compare encodings in the cooked record | the cook writes the material's pass state word (`PassState`) and the compare in the renderer's terms; the draw copies it | P-184 | open | not yet |
+| Blur radii stretched for one wide shape only | `BloomEffectSimple.cpp:28`, `ImageEffectLocalUtil.cpp:146` (`isScreen16Per9() ? 1.333f : 1.0f`) | the console's two screen shapes, 4:3 and 16:9 | the vertical factor from the frame's aspect over 4:3, so the blur keeps its shape on every screen | P-185 | open | not yet |
 | Columns found by name at every read | `native/petari/src/Game/Util/Table.cpp:33-48` (`searchItemInfo`: the column's hash searched over the fields on each `getValue` by name) | the console's JMapInfo access, cheap only for its small tables | not decided: pass two reads how often the game reads by name in a step | none yet | to read | not yet |
 | The game's movies decoded with the SDK's THP codec while the game runs | `runtime/src/movie_video.cpp`, `MovieStream.cpp` | the console's video codec; its IDCT order is P-118 (owner: stays) | not decided: pass two weighs a cook to a current codec against the decoder's cost | none yet | to read | not yet |
 | Texture headers in the console's form | `ResTIMG`, 137 lines in 59 files | the J3D texture header and its filter codes | a host id and a sampler resolved at load (E3 step 2) | P-155 | open (F4) | not yet |
