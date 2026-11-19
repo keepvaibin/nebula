@@ -2559,11 +2559,21 @@ class NotRun(Exception):
     """The test cannot run here (its disc's game is not given): verdict `not-run`, which is not a pass."""
 
 
+def os_line():
+    """The system the run was on, for result.json. Not platform.platform(): on Windows it asks WMI for the processor,
+    which times out on a loaded machine, and Python then raises (KeyError) before result.json is written (P-326)."""
+    if sys.platform == "win32":
+        v = sys.getwindowsversion()
+        return "Windows-%d.%d.%d" % (v.major, v.minor, v.build)
+    u = platform.uname()
+    return "-".join(x for x in (u.system, u.release, u.version) if x)
+
+
 def report(run_folder, name, proves, renderer, verdict, reason, checks, args, extra):
     run_folder.mkdir(parents=True, exist_ok=True)
     log_lines = (run_folder / "run.log").read_text(encoding="utf-8", errors="replace").splitlines() if (run_folder / "run.log").exists() else []
     result = {"harness": HARNESS, "runner": RUNNER_VERSION, "test": name, "proves": proves, "renderer": renderer,
-              "platform": HOST["platform"], "os": platform.platform(), "gpu": gpu_line(log_lines),
+              "platform": HOST["platform"], "os": os_line(), "gpu": gpu_line(log_lines),
               "driver": next((l.split("=", 1)[1].strip() for l in log_lines if l.startswith("[gpu] driver=")), ""),
               "commit": args.commit, "module": args.module, "verdict": verdict, "reason": reason, "checks": checks}
     test_json = extra.pop("test_json", None)
