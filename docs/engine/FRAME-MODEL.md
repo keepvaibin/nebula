@@ -941,3 +941,98 @@ pictures at a step do not.
   HoneyBeeKingdom and SeaGalaxy); after the last landing, materials on a per-frame fill: 0.
 - `git grep -n "NEBULA_ROW_\|fillRow\|MaterialAmbient" native runtime platform`: 0 after step 6.
 - The walk's time and the game step's time on the PC and the tablet, before and after (file 08 7.4: never slower).
+
+### 2.12 Step 4: the site draws as records made once
+
+Read at cfc2e368e.
+
+**Today.** A site is game code that draws without a model's material: effects, shadows, debug and 2-D shapes,
+gauges, glows, particles, the mods' draw services. It draws through `TypedDraw` (`Render/TypedDraw.cpp`):
+
+1. A `SiteMaterial` (a written shader, its state, up to 256 floats inline, a texture list) is copied whole into the
+   frame's arena and listed as new constants at every `TypedDraw` made or `setMaterial` called (`:193-208`), and its
+   texture list is registered by hash at each (`:202-204`), each texture's sampler decoded from the console's codes and
+   its host id found by the image's address (`SiteTextures::toFrame`, `:73-87`).
+2. Each `vertices<T>(primitive, count)` takes room in the frame's vertex ring and opens an item (`begin`, `:410-455`);
+   quads, strips and fans get their triangle indices written on the CPU into the index ring at every draw
+   (`writeIndices`, `:369-400`). Lines and points are widened on the CPU: each becomes four copies of its vertex with
+   the other end and a corner code, and six indices (`widen`, `:457-513`).
+3. Each draw's matrix and a flag word are copied into the arena as a new block (`block`, `:291-319`); a draw under a
+   camera other than the scene's compares the matrix to find the camera's role (`:133`, `:140`).
+4. `SiteMeshData` (`:522-582`) is the registered form: written once, handed to the host, drawn by id. Three users:
+   `WaterRoad.cpp:182`, `MiiHead.cpp:33-37`, `FurShader.cpp:75`, `:132`.
+
+The sites (`git grep` of `vertices<` and `.vertices(` over `native/petari`, less `TypedDraw` itself and
+`MiiHead.cpp:41`, which reads a Mii shape): 109 in 47 files, 56 triangle strips, 36 quads, 8 fans, 4 triangle lists,
+1 line list, 1 line strip, and 3 whose primitive is chosen as they run (`MarioShadow.cpp:331`,
+`ParticleDraw.cpp:243`, `:245`). P-154's count of 11-17 was 109 in 47 with 35 quads; one quad site is new since.
+`Util/DirectDraw.cpp` holds 17 (lines, circles, fans, cylinders, sphere parts, boxes, textured quads, under the
+`TDDraw` namespace), used from 19 files, most by `MarioActorSpecialDraw.cpp` (30 calls); `System/LumaDraw.cpp` holds
+7, the mods' draw services.
+
+Particles (P-149, P-150): each particle's matrix is built in eye space by its shape, taken back to the world through
+the camera's inverse (`ParticleDraw.cpp:72-89`, `:131-134`) and written as three 3x4 matrices per instance (`:197-199`);
+the emitter's material copies the console's stage modes, alpha compares and indirect matrix into constants 48 to 93
+at every emitter draw, and the two colours carry over from the emitter drawn before (`ParticleResource.cpp:610-693`,
+`:620`).
+
+Shadows (P-143, P-181): a volume is drawn twice, front faces adding to the stencil and back faces taking
+(`ShadowVolumeDrawer.cpp:91-114`), with its shape written at each pass (`ShadowVolumeBox.cpp:135-177`,
+`ShadowVolumeLine.cpp:72-113`); the surface box writes three quads and the circle a fan with a sine and cosine per
+vertex at every draw (`ShadowSurfaceBox.cpp:72-89`, `ShadowSurfaceCircle.cpp:70-74`); the oval draws its model three
+times at scales 1, 0.9 and 0.81 (`ShadowSurfaceOval.cpp:59-65`). Every renderer's add and take saturate
+(`nebula_game_api.h:150-151`; `pipelines_d3d12.cpp:410`, `pipelines_d3d11.cpp:302`, `pipelines_vk.cpp:481`,
+`pipelines_mtl.mm:327`).
+
+**The engine.** Step 4 changes no model file (2.7.2); its records are the game's, made at load or at a site's start.
+
+- A site material is a record: registered once by its content (as `material_register` and `texture_table` already
+  de-duplicate), kept by the site while its values stay, and written again only when a value changes (2.11's rule:
+  sources, not rows). A disc texture's sampler is decoded at its cook and its host id held by `GameTexture` (2.10,
+  P-155); `toFrame` and the search by address go.
+- Indices of the fixed patterns (quads, strips, fans) are one index list per pattern, made once by the render thread
+  for the longest run asked and grown when a longer one comes (no cap). An item names the pattern and its count;
+  `writeIndices` goes.
+- Each site's shape is one of three kinds, decided per site in the first landing, which writes the table of the 109
+  sites (file, line, kind, group) into this file:
+  - a fixed shape under a matrix (a box, a unit circle, a quad of fixed size, the line volume's ends): a mesh
+    registered once, drawn with a matrix and its values, as `SiteMeshData` does today;
+  - a shape from a few numbers (`TDDraw`'s circles, cylinders and spheres by their segment count; a quad by its size):
+    one unit mesh per shape and count, and the numbers in the item's matrix or a value row;
+  - a shape from the game's state (ropes, ribbons, flags, water surfaces, beams along a path): written by the game
+    once a step into a buffer the site keeps, updated in place (a copy per frame in flight while it changes), not into
+    the ring at every list; whether a family's shape moves to a vertex program (points of a rope, a flag's cells) is
+    decided when that family is read whole.
+- Lines and points are widened in the vertex program from one instance per segment or point; `widen` goes.
+- A block is the site's: its matrix written when it moves, the camera named by role, not found by comparing matrices.
+- Particles: an instance holds the world position and the one before, size, rotation, the two colours, the texture
+  frame and the shape's kind; the vertex program builds each of the emitter's shapes (`ParticleResource.hpp:73-86`:
+  billboards turned or not, Y-billboards, directions, the D-billboard, rotation, point, line; stripes, `:66`) from the
+  camera of the picture. The CPU's eye-space matrices and the inverse go. An emitter's material is a record
+  made once per resource and shape at load; the carry-over of the colours goes (each instance already carries its own,
+  `ParticleDraw.cpp:201-202`).
+- Shadow volumes: one draw with no culling, front faces adding and back faces taking. Saturating operations make the
+  count depend on the order of faces within that draw (a take before its add stops at 0), so the volume's draw uses
+  two new operations that wrap, which commute; with an 8-bit stencil both forms give the same count wherever at most
+  255 volumes overlap a pixel, the test after it (`IF_SET`) is unchanged, and the saturating pair stays for other
+  users. Surface shadows draw unit meshes under a matrix. The oval's three stacked draws become one with the edge's
+  fade in the program; its pictures change, and are looked at and approved in that group's landing.
+- The mods' draw services (`LumaDraw.cpp`) write by the default path (2.7.3); the mod suites run at every landing.
+
+**Groups.** As 2.7.3: quads, then fans; strips; shadows (with P-143 and P-181); particles (P-149, P-150); widened lines
+and points; the three sites that choose their primitive as they run; 2-D gauges and glows. A group's landing moves
+its sites, by the table, to their kind.
+
+**Proof.**
+
+- The gate's pictures of both paths on every stop and renderer equal (2.7.4), the replay identical; the oval's are
+  approved by eye in its landing, named on the board.
+- A test of the index patterns: for each pattern and count, the list equals `writeIndices`' output.
+- A test of the widening program against `widen`'s corners, and of the particle program against today's matrices,
+  for every shape kind (resolved corner positions equal within the renderers' tolerance).
+- A test of the two-sided volume: random volumes over a pixel grid, wrapping one-draw count against saturating
+  two-pass count, equal up to 255.
+- Counts from a test run on the play route and the tours' particle and shadow stops, before and after: bytes of the
+  vertex and index rings per frame, arena bytes for site constants, `texture_table` calls; after the last landing
+  `git grep -n "writeIndices\|SiteTextures::toFrame\|void TypedDraw::widen" native`: 0.
+- The game step's and the walk's time on the PC and the tablet, before and after (file 08 7.4: never slower).
