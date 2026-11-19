@@ -86,11 +86,11 @@ What the hits are, by search (each line read at a1f423dd8):
 | Area | Files | Read |
 | --- | --- | --- |
 | The game's sound code (`Game/AudioLib`, `Game/GameAudio`, `Game/Sound`, `Game/Speaker`, `Game/RhythmLib`) | 170 | read whole by the readall harness at 0c98b11c2 (its Sound, AudioLib, GameAudio, Speaker and RhythmLib reports), every finding checked at 241395b49; P-186, P-192, P-193, P-221 to P-228 |
-| Archives and the game's file access (`Game/System` archive and resource holders, `Game/Util/FileUtil`, the store) | 11 | the load path read: modern |
+| Archives and the game's file access (`Game/System` archive and resource holders, `Game/Util/FileUtil`, the store) | 11 | the load path read: modern; `Game/System` read whole by the readall harness at 0c98b11c2 (199 files, 32,035 lines by its count), every finding checked at 241395b49; P-231 to P-236, lines to P-189, P-192, P-197, P-205 |
 | Text (`MessageHolder`, the `NMSG` reader, the host's `message_utf8`) | not counted | the record and readers read; 16-bit codes open |
-| Layouts and fonts (`Game/Ui`, `Game/System` font holders) | `Game/Ui` 51 | `Layout::Build`, `Material`, `ResFont` read; P-184 |
+| Layouts and fonts (`Game/Ui`, `Game/System` font holders) | `Game/Ui` 51 | read whole by the readall harness at 0c98b11c2, every finding checked at 241395b49; P-184, P-229, P-230, lines to P-146, P-151, P-197, P-209, P-218 |
 | The 2D screens, the image effects, the pointer, the movies (`Game/Screen`) | 289 (144 sources, 145 headers; 44,869 lines) | read whole at 6577392b5, and by the readall harness at 0c98b11c2 (checked at 241395b49); P-197 to P-220, P-184's 2D colours |
-| Input (the host's and the game's) | not counted | the game's record read: modern |
+| Input (the host's and the game's) | not counted | the game's record read: modern; the game's input files in `Game/System` read whole by the harness: P-234, P-236 |
 | The game's own files E14 did not reach (Agent 3's hand-over, `docs/plan/HANDOVER-AGENT-3.md` on `app/work`: Player 99, Sound 76, Enemy 109, Boss 166, Ride 19, NPC 76, MapObj 314, LiveActor 62) | 921 | swept by pattern (below), every hit read; not read whole |
 
 What is read so far (at a1f423dd8):
@@ -103,9 +103,14 @@ What is read so far (at a1f423dd8):
   functions (`MR::`) whose callers are not yet placed. A second pass names the enclosing function of every read by
   a definition match (340 lines with `ValueControl` and the message helpers): `init*`, constructors of the demo
   keepers, `load*`, `create*FromCSV`, placement getters, story-event and race-time lookups, the light tables
-  (`LightFunction.cpp:64-91`, read once for every light by `LightDataHolder.cpp:24` at load). No read by name was found in a step. The column search by
-  name (`Table.cpp:33-48`) is the game's own data access (its JMap design), paid at load: the game, not the console;
-  not an item.
+  (`LightFunction.cpp:64-91`, read once for every light by `LightDataHolder.cpp:24` at load). That pass missed the reads inside the
+  message and story helpers: the readall harness's System report (checked at 241395b49) shows reads by name in
+  steps. A message's index is found by a binary search on its name at each fetch
+  (`MessageData::findMessageIndex`, `MessageHolder.cpp:149-159`), and a story event's progress by a scan of the map
+  table by name at each ask (`GameDataHolder::isPassedStoryEvent`, `GameDataHolder.cpp:282-288`; from
+  `GameEventFlagChecker.cpp:43`, `EventUtil.cpp:157`, `:161`), a name not in the table reading as passed. The
+  column search (`Table.cpp:33-48`) is the game's own data access (its JMap design); the names are resolved to
+  ids at load in its modern form (P-189's 11-18 line).
 - Layouts. Cooked `NLYT` (section 1); the record's material: P-184, with the 2D material's colours in the console's
   signed register form (`Ui::Material::mRegisterColors`, `Game/Ui/Material.hpp:111-134`).
 - Screen (`Game/Screen`, every file read whole at 6577392b5, 11-18; the verdict of each file kept with the
@@ -309,6 +314,14 @@ Each: where; what of it is the console's; the modern form; row; state; proof.
 | A stream's end told by the device | `StreamPlayer.hpp:26-28`, `StreamSound.cpp:122-124`, `:263-266`, `AudBgm.hpp:76-82`, `SoundUtil.cpp:378-440` | sound and picture from one clock | the end known by the step clock; the audio follows | P-226 | open | not yet |
 | Sound handles taken over | `AudMePlayer.cpp:76-91`, `:186-194`, `:235-244`; `SpkSound.cpp:34-35`, `:74-90`, `:151-166` | none (a fault) | a handle and its sound detach as a pair | P-227 | open | not yet |
 | Music tables read with no bound | `AudStageBgmWrap.cpp:110-112`, `:137-139`; `AudBgmSetting.cpp:283-299`; `AudTrackController.cpp:78` | tables sized to the disc's music | each number checked; settings as records keyed by sound id | P-228 | open | not yet |
+| Layout images as TPL containers | `TexMap.cpp:43-64`, `Animation.cpp:150-158`; `Font.hpp:20`, `CharWriter.cpp:83-95` | the TPL's offsets and texel format codes, walked at run time | store textures by id; the sheet's kind in the renderer's terms | P-229 | open | not yet |
+| Cooked layouts trusted | `Animation.cpp:155-157`, `:232`, `:256`; `Layout.cpp:275`; `Group.cpp:10-12`; `TexMap.cpp:53-60`; `UiCommon.cpp:122-131` | none (a fault) | every index, count and offset checked at load | P-230 | open | not yet |
+| Story steps walked as an array | `StorySequenceExecutor.cpp:855-870`, `:958-965`, `:233-265`, `:368`, `:483` | none (a fault) | a built sequence's steps in one array, walked by its count | P-231 | open | not yet |
+| Hashes taken for names | `GameEventValueChecker.cpp:75-91`; `GameEventFlagTable.cpp:336-349`, `:586`; `ResourceHolderManager.cpp:144-154` | 16- and 15-bit name hashes as keys | names compared after a hash; flag ids checked unique at load | P-232 | open | not yet |
+| A resource's size by a tree walk | `AssetFolder.cpp:115-133`, `LayoutHolder.cpp:12-35` | the archive API's getResSize, kinds by four-byte tags | the handle carries size and kind | P-233 | open | not yet |
+| Pad connection and language in the console's shape | `PlayerInputs.cpp:61-87`, `Language.cpp:14-71` | the remote SDK's callbacks; the ten system-language slots | the device's state; the language named by the host | P-234 | open | not yet |
+| Fixed wall-time budgets and waits on the game thread | `NebulaCutsceneSkip.cpp:46-47`, `:384-399`; `SaveDataHandler.cpp:120-122` | none (the port's own; a 16.7 ms frame assumed) | a share of the measured frame interval; requests queued | P-235 | open | not yet |
+| Rumble through the motor-callback registry | `InputRumble.cpp:10`, `:81-88`, `:116-125`; `PlayerInput.cpp:37-38`; `InputInfoChecker.cpp:7`, `:29-39` | the motor callback's registry; the info request every 300 s | each pad steps the rumble in use once; the battery read when shown | P-236 | open | not yet |
 | Texture headers in the console's form | `ResTIMG`, 137 lines in 59 files | the J3D texture header and its filter codes | a host id and a sampler resolved at load (E3 step 2) | P-155 | open (F4) | not yet |
 
 ## 4. Section 3's test, and the owner's answers of 2026-11-18 18:18
