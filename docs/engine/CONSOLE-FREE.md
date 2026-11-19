@@ -438,3 +438,37 @@ its code):
   speakers (`audio_device_wasapi.cpp:207-230`), its channels in the mask's order (`:135-155`); Android (SDL) always
   opens two channels (`audio_device_sdl.cpp:33`), so a phone or tablet with more speakers, or a receiver behind it,
   gets the two-channel matrix.
+- Read again at 697535a86 (11-19), two more faults of the speakers-of-their-own path:
+  - the panner's rear effect sends are matrixed into effect lines 2 and 3 with the cross term (`kUnit * left -
+    kMatrix * right`, `audio_mixer.cpp:806-816`) whatever the output, so with rear speakers the rear echo still
+    comes matrix-encoded through the front lines;
+  - power: on two channels a sound on one surround bus reaches the speakers at `kFold^2 (kUnit^2 + kMatrix^2)` =
+    0.8602 of its power (-0.654 dB, `:16-19`, `:262-264`); on its own speaker it is at 1, so the same sound is 0.65 dB
+    louder with rear speakers than on two channels.
+
+The law (written 11-19, before P-193's code; each line a property its test asserts):
+
+1. Two channels: today's matrix, bit for bit (the owner: as made). The game's mono mode (0) is the game's own and
+   stays; what it does in the mixer was not checked here.
+2. More speakers: the layout is the device's report, never assumed: Windows the mix format's channel mask; Android
+   the output's channel mask where the system reports one (else two channels); Linux and Mac what their device
+   reports. Speakers the game has no content for (low frequency, height, front wide) stay silent.
+3. A note in surround form, and every note when the output has rear speakers, is placed by its pan p and rear r
+   with the panner's constant-power law (front left `cos(pi p/2) cos(pi r/2)`, and so on); the six-bus note path
+   with its matrix curve (`SoundVoices.cpp:704-786`) and the inverted right are the two-channel encoding and are not
+   used. Which sounds and effect lines send to the inverted right or the surround buses is read first; an effect
+   line's return to them becomes a rear return of the same power.
+4. Rear gain: a sound's power on rear speakers equals its power on two channels: rear amounts are scaled by
+   `kFold sqrt(kUnit^2 + kMatrix^2)` = 0.92747; with sides and backs both present each gets 0.92747 / sqrt 2 =
+   0.65582 of it. Front and centre at 1; a centre with no speaker of its own to left and right at 1 / sqrt 2.
+5. No delay, no inversion and no matrix on a speaker of its own: the surround buses' 2.5 ms and the rear effect sends'
+   matrix belong to the two-channel encoding only; with rear speakers the rear effect sends feed rear echo lines
+   unmatrixed.
+6. Left and right mirror: swapping p for 1 - p swaps every left speaker's gain with its right twin's, at every r.
+7. No jump: every gain is continuous in p and r over [0, 1]; a change of p, r or layout ramps as volumes do (10 ms).
+8. Channel order: the device's (the mask's bit order on Windows, the reported order elsewhere), each channel named
+   from its bit, never by position.
+9. Tests: the properties over p and r on a 101 by 101 grid for each layout (2.0, 3.0, 4.0, 5.1 side, 5.1 back, 7.1,
+   7.1.4); a render of known sounds through the real mixer to a file for each layout, each channel's energy and
+   phase checked against 1 to 8. Windows and Android in the gate; Linux and Mac built with it. The owner's listening
+   comes later and is not a gate.
