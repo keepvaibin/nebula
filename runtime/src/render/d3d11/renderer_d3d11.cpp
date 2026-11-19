@@ -44,12 +44,6 @@ UINT constants_in(std::uint64_t size, std::uint64_t offset) noexcept {
     return static_cast<UINT>(std::min<std::uint64_t>(D3D11_REQ_CONSTANT_BUFFER_ELEMENT_COUNT, left & ~std::uint64_t{15}));
 }
 
-// RendererD3D11::GpuPass by name: the settings page's, and present-stats' gpu-pass-ms (Direct3D 12's names).
-constexpr const char* kPassTimeNames[] = {"scene", "resolve", "frame read", "display copy", "bloom", "scene aa", "scene ao",
-                                          "present", "camera"};
-constexpr const char* kPassStatNames[] = {"scene", "resolve", "frame-read", "display-copy", "bloom", "scene-aa", "scene-ao",
-                                          "present", "camera"};
-
 }  // namespace
 
 // FSR 3 frame generation is not built on Direct3D 11 (its interface is Direct3D 12's and Vulkan's).
@@ -584,8 +578,8 @@ void RendererD3D11::begin_frame() {
                       SUCCEEDED(device->CreateQuery(&query, &frame.frame_time[1]));
     }
     // The passes' timestamps: for the settings page while it asks, or the diagnostics.
-    pass_timing_on_ = frame.timed && (gpu_timing_on() || ::galaxy::diagnosing(::galaxy::kDiagnoseGpuPasses));
-    if (pass_timing_on_ && frame.pass_queries.empty()) {
+    const bool pass_timing = frame.timed && (gpu_timing_on() || ::galaxy::diagnosing(::galaxy::kDiagnoseGpuPasses));
+    if (pass_timing && frame.pass_queries.empty()) {
         D3D11_QUERY_DESC query{D3D11_QUERY_TIMESTAMP, 0u};
         frame.pass_queries.resize(kGpuPassSlots);
         for (d3d11::ComPtr<ID3D11Query>& q : frame.pass_queries) {
@@ -595,11 +589,11 @@ void RendererD3D11::begin_frame() {
             }
         }
     }
-    pass_timing_on_ = pass_timing_on_ && !frame.pass_queries.empty();
+    pass_times_.begin_frame(pass_timing && !frame.pass_queries.empty());
     if (frame.timed) {
         context()->Begin(frame.disjoint.Get());
         context()->End(frame.frame_time[0].Get());
-        if (pass_timing_on_) {
+        if (pass_times_.timed()) {
             context()->End(frame.pass_queries[0].Get());
             frame.pass_marks[0] = GpuPass::Scene;
             frame.pass_mark_count = 1u;
@@ -792,12 +786,7 @@ void RendererD3D11::report_present_stats(double pace_wait_ms, double present_ms)
     }
     message << " gpu-samples=" << stats_.gpu_samples;
     if (::galaxy::diagnosing(::galaxy::kDiagnoseGpuPasses)) {
-        static_assert(std::size(kPassStatNames) == static_cast<std::size_t>(GpuPass::Count));
-        message << " gpu-pass-ms=";
-        for (std::size_t pass = 0u; pass < std::size(kPassStatNames); ++pass) {
-            message << (pass == 0u ? "" : ",") << kPassStatNames[pass] << ':' << telemetry_pass_ms_[pass] / presents;
-        }
-        telemetry_pass_ms_.fill(0.0);
+        message << pass_times_.take_window_field();  // each pass's ms a timed frame
     }
     message << " api=d3d11\n";
     std::cerr << message.str();
@@ -817,7 +806,7 @@ void RendererD3D11::gpu_pass(GpuPass pass) {
     }
     current_pass_ = pass;
     Frame& frame = frames_[frame_slot_];
-    if (!pass_timing_on_ || frame.pass_mark_count >= frame.pass_queries.size()) {
+    if (!pass_times_.timed() || frame.pass_mark_count >= frame.pass_queries.size()) {
         return;
     }
     flush_draws();
@@ -839,34 +828,12 @@ void RendererD3D11::read_pass_times(Frame& frame, UINT64 frequency, UINT64 frame
         }
     }
     ticks[marks] = frame_end;
-    std::array<double, static_cast<std::size_t>(GpuPass::Count)> frame_ms{};
-    for (unsigned i = 0u; i < marks; ++i) {
-        if (ticks[i + 1u] >= ticks[i]) {
-            const double ms = static_cast<double>(ticks[i + 1u] - ticks[i]) * 1000.0 / static_cast<double>(frequency);
-            frame_ms[static_cast<std::size_t>(frame.pass_marks[i])] += ms;
-        }
-    }
-    for (std::size_t pass = 0u; pass < frame_ms.size(); ++pass) {
-        telemetry_pass_ms_[pass] += frame_ms[pass];
-        if (frame_ms[pass] > 0.0) {
-            const float before = pass_ema_ms_[pass].load(std::memory_order_relaxed);
-            const float value = static_cast<float>(frame_ms[pass]);
-            pass_ema_ms_[pass].store(before == 0.0f ? value : before + (value - before) * 0.1f, std::memory_order_relaxed);
-        }
-    }
-    galaxy::bench::note_gpu_frame(kPassTimeNames, frame_ms.data(), std::min(std::size(kPassTimeNames), frame_ms.size()),
-                                  frame.scene_drawn && !frame.generated);
+    pass_times_.add_frame(gpu_pass_ms(ticks.data(), frame.pass_marks.data(), marks, 1000.0 / static_cast<double>(frequency)),
+                          frame.scene_drawn && !frame.generated);
 }
 
 std::size_t RendererD3D11::gpu_pass_times(GpuPassTime* out, std::size_t capacity) const noexcept {
-    static_assert(std::size(kPassTimeNames) == static_cast<std::size_t>(GpuPass::Count));
-    std::size_t count = 0u;
-    for (std::size_t pass = 0u; pass < std::size(kPassTimeNames) && count < capacity; ++pass) {
-        if (const float ms = pass_ema_ms_[pass].load(std::memory_order_relaxed); ms > 0.0f) {
-            out[count++] = {kPassTimeNames[pass], ms};
-        }
-    }
-    return count;
+    return pass_times_.page_times(out, capacity);
 }
 
 void RendererD3D11::sync_post_process() {

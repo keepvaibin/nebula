@@ -17,6 +17,7 @@
 #include "galaxy/platform_time.h"
 #include "galaxy/render/temporal_hold.h"
 #include "galaxy/render/frame_pass.h"
+#include "galaxy/render/gpu_pass_times.h"
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/display_modes.h"
 #include "galaxy/render/present_slots.h"
@@ -1219,10 +1220,7 @@ private:
     // --diagnostics gpu-passes: GPU time by pass for present-stats' gpu-pass-ms (RendererD3D12's). A mark starts a pass in
     // the frame's commands; the time to the next mark (or the frame's end) is that pass's. The curved surfaces' sort,
     // in the upload commands, takes the two queries after the frame's marks.
-    enum class GpuPass : std::uint8_t {
-        Scene, Resolve, FramePass, DisplayCopy, Bloom, SceneAa, SceneAo, Upscale, Present, Camera,
-        AoDistance, AoOcclusion, AoDenoise, AoUpsample, AoApply, Count
-    };
+    using GpuPass = ::galaxy::render::GpuPass;
     static constexpr unsigned kGpuPassSlots = 512;
     static constexpr unsigned kNoPassMark = ~0u;
     void gpu_pass(GpuPass pass);
@@ -1231,7 +1229,6 @@ private:
     void read_gpu_passes();
     void prepare_gpu_pass_queries();
     bool profile_frame_ = false;
-    unsigned profile_samples_ = 0;
     class GpuPassScope {
     public:
         GpuPassScope(RendererVk& renderer, GpuPass pass) : renderer_(renderer), outer_(renderer.current_pass_) {
@@ -1255,11 +1252,10 @@ private:
     std::array<unsigned, kFramesInFlight> pass_mark_count_{};
     GpuPass current_pass_ = GpuPass::Scene;
     bool pass_recording_ = false;  // between begin_frame and end_frame
-    std::array<double, static_cast<std::size_t>(GpuPass::Count)> pass_ms_{};
-    // The settings page's timing: asked for by gpu_timing_wanted_ (every frame is profiled while it is), and each pass's running
-    // average for the page.
+    // The settings page's timing: asked for by gpu_timing_wanted_ (every frame is profiled while it is); the page's
+    // averages and the logs' window (window_frames: the frames read, which gpu-stats is divided by too).
     std::atomic<bool> gpu_timing_wanted_{false};
-    std::array<std::atomic<float>, static_cast<std::size_t>(GpuPass::Count)> pass_ema_ms_{};
+    GpuPassTimes pass_times_;
 };
 
 using Renderer = RendererVk;

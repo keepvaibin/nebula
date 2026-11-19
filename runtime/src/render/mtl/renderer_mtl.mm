@@ -89,7 +89,7 @@ bool RendererMtl::initialize(int window_width, int window_height, const FrameMap
         }
         for (Frame& made : frames_) {
             made.gpu_time = std::make_shared<std::array<std::atomic<double>, 2>>();
-            made.pass_time = std::make_shared<std::array<std::atomic<double>, static_cast<std::size_t>(GpuPass::Count) + 1u>>();
+            made.pass_time = std::make_shared<std::array<std::atomic<double>, kGpuPassCount>>();
         }
         // The rings are Metal buffers with addresses in the renderer's own space; their sizes follow the other
         // renderers'. The vertex and row rings keep the last frame readable for motion.
@@ -533,11 +533,6 @@ namespace mtl {
 void pipeline_compile_stats(std::uint64_t out[5]) noexcept;  // pipelines_mtl.mm
 }
 
-namespace {
-constexpr const char* kPassTimeNames[] = {"scene", "resolve", "frame read", "display copy", "bloom", "scene aa", "scene ao",
-                                          "upscale", "present", "camera", "ao distance", "ao occlusion",
-                                          "ao denoise", "ao upsample", "ao apply", "uploads"};
-}  // namespace
 
 void RendererMtl::next_command_buffer(GpuPass pass) {
     @autoreleasepool {
@@ -548,7 +543,7 @@ void RendererMtl::next_command_buffer(GpuPass pass) {
         }
         list_pass_ = pass == GpuPass::Count ? GpuPass::Scene : pass;
         if (profile_frame_) {
-            made.label = @(kPassTimeNames[static_cast<std::size_t>(list_pass_)]);
+            made.label = @(kGpuPassPageNames[static_cast<std::size_t>(list_pass_)]);
             const auto times = frame_->pass_time;
             const std::size_t at = static_cast<std::size_t>(list_pass_);
             [made addCompletedHandler:^(id<MTLCommandBuffer> done) {
@@ -613,23 +608,12 @@ void RendererMtl::begin_frame() {
                 generated_gpu_ema_ms_ = generated_gpu_ema_ms_ == 0.0 ? gpu_ms : generated_gpu_ema_ms_ * 0.9 + gpu_ms * 0.1;
             }
             if (frame.pass_timed) {
-                // The slot's last frame by pass; the page's running average of each over the frames that ran it.
-                std::array<double, std::size(kPassTimeNames)> frame_ms{};
-                for (std::size_t pass = 0u; pass < frame.pass_time->size(); ++pass) {
-                    const double ms = (*frame.pass_time)[pass].exchange(0.0, std::memory_order_acq_rel) * 1000.0;
-                    if (pass < frame_ms.size()) frame_ms[pass] = ms;
-                    pass_window_ms_[pass] += ms;
-                    if (ms > 0.0 && pass < pass_ema_ms_.size()) {
-                        const float before = pass_ema_ms_[pass].load(std::memory_order_relaxed);
-                        const float value = static_cast<float>(ms);
-                        pass_ema_ms_[pass].store(before == 0.0f ? value : before + (value - before) * 0.1f,
-                                                 std::memory_order_relaxed);
-                    }
+                // The slot's last frame by pass (gpu_pass_times.h).
+                GpuPassMs frame_ms{};
+                for (std::size_t pass = 0u; pass < kGpuPassCount; ++pass) {
+                    frame_ms[pass] = (*frame.pass_time)[pass].exchange(0.0, std::memory_order_acq_rel) * 1000.0;
                 }
-                galaxy::bench::note_gpu_frame(kPassTimeNames, frame_ms.data(),
-                                              std::min(frame_ms.size(), frame.pass_time->size()),
-                                              frame_scene_drawn_[frame_slot_] && !frame_generated_[frame_slot_]);
-                ++pass_window_frames_;
+                pass_times_.add_frame(frame_ms, frame_scene_drawn_[frame_slot_] && !frame_generated_[frame_slot_]);
             }
             stats_.gpu_ms += gpu_ms;
             ++stats_.gpu_samples;
@@ -667,12 +651,8 @@ void RendererMtl::begin_frame() {
     }
     reset_sampler_frame();
     // Passes are timed only when asked for; with neither asked nothing is split or read.
-    const bool timed = ::galaxy::diagnosing(::galaxy::kDiagnoseGpuPasses) || gpu_timing_wanted_.load(std::memory_order_relaxed);
-    if (!timed && profile_frame_) {
-        for (std::atomic<float>& average : pass_ema_ms_) {
-            average.store(0.0f, std::memory_order_relaxed);
-        }
-    }
+    const bool timed = pass_times_.begin_frame(::galaxy::diagnosing(::galaxy::kDiagnoseGpuPasses) ||
+                                               gpu_timing_wanted_.load(std::memory_order_relaxed));
     profile_frame_ = timed;
     frame.pass_timed = timed;
     @autoreleasepool {
@@ -682,7 +662,8 @@ void RendererMtl::begin_frame() {
             const auto times = frame.pass_time;
             [uploads addCompletedHandler:^(id<MTLCommandBuffer> done) {
                 if (done.GPUEndTime > done.GPUStartTime && done.GPUStartTime > 0.0) {
-                    times->back().fetch_add(done.GPUEndTime - done.GPUStartTime, std::memory_order_relaxed);
+                    (*times)[static_cast<std::size_t>(GpuPass::Uploads)].fetch_add(done.GPUEndTime - done.GPUStartTime,
+                                                                                  std::memory_order_relaxed);
                 }
             }];
         }
@@ -887,14 +868,10 @@ std::uint64_t RendererMtl::end_frame(bool present_swap_chain, SubmissionCallback
             }
             line.write(stderr);
         }
-        if (pass_window_frames_ != 0u) {
+        if (pass_times_.window_frames() != 0u) {
             galaxy::whole_lines::Line line;
             line.add("[metal-gpu] passes, ms a frame:");
-            for (std::size_t pass = 0u; pass < pass_window_ms_.size(); ++pass) {
-                if (pass_window_ms_[pass] > 0.0) {
-                    line.add(" %s=%.3f", kPassTimeNames[pass], pass_window_ms_[pass] / pass_window_frames_);
-                }
-            }
+            line.add("%s", pass_times_.take_window_list().c_str());
             line.write(stderr);
         }
         {
@@ -905,8 +882,7 @@ std::uint64_t RendererMtl::end_frame(bool present_swap_chain, SubmissionCallback
                          static_cast<double>(compiled[1]) / 1e6, static_cast<unsigned long long>(compiled[2]),
                          static_cast<double>(compiled[3]) / 1e6);
         }
-        pass_window_ms_.fill(0.0);
-        pass_window_frames_ = 0u;
+        (void)pass_times_.take_window_list();
         gpu_window_ = GpuWindow{};
     }
     return fence;
@@ -988,13 +964,7 @@ void RendererMtl::gpu_pass(GpuPass pass) {
 }
 
 std::size_t RendererMtl::gpu_pass_times(GpuPassTime* out, std::size_t capacity) const noexcept {
-    std::size_t count = 0u;
-    for (std::size_t pass = 0u; pass < pass_ema_ms_.size() && count < capacity; ++pass) {
-        if (const float ms = pass_ema_ms_[pass].load(std::memory_order_relaxed); ms > 0.0f) {
-            out[count++] = {kPassTimeNames[pass], ms};
-        }
-    }
-    return count;
+    return pass_times_.page_times(out, capacity);
 }
 
 void RendererMtl::sync_post_process() {

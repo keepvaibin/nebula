@@ -24,6 +24,7 @@
 #include "galaxy/render/dxgi_memory.h"
 #include "galaxy/render/dynamic_resolution.h"
 #include "galaxy/render/frame_pass.h"
+#include "galaxy/render/gpu_pass_times.h"
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/gpu_upload_ring.h"
 #include "galaxy/render/host_window.h"
@@ -317,9 +318,7 @@ public:
     // and every recorded draw run (flush_draws, end_scene_pass); a part leaves its own state bound, and the renderer
     // binds its own again (encoder_.reset, bound_).
     [[nodiscard]] ID3D11DeviceContext1* context() const noexcept { return d3d11::Context::get().immediate(); }
-    enum class GpuPass : std::uint8_t {
-        Scene, Resolve, FramePass, DisplayCopy, Bloom, SceneAa, SceneAo, Present, Camera, Count
-    };
+    using GpuPass = ::galaxy::render::GpuPass;
     static constexpr unsigned kGpuPassSlots = 256u;
 
 private:
@@ -665,9 +664,7 @@ private:
     GpuPass current_pass_ = GpuPass::Scene;
     std::atomic<bool> gpu_timing_wanted_{false};
     std::atomic<float> frame_gpu_ema_ms_{0.0f};
-    bool pass_timing_on_ = false;  // this frame marks its passes
-    std::array<std::atomic<float>, static_cast<std::size_t>(GpuPass::Count)> pass_ema_ms_{};
-    std::array<double, static_cast<std::size_t>(GpuPass::Count)> telemetry_pass_ms_{};
+    GpuPassTimes pass_times_;  // timed(): this frame marks its passes
     void read_pass_times(Frame& frame, UINT64 frequency, UINT64 frame_end);
 
     // draw.post's stages by program (mod_post_d3d11.cpp), dropped when the program leaves (mod_post_epoch); a stage the

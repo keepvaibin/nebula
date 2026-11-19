@@ -36,6 +36,7 @@
 #include "galaxy/render/game_bloom.h"
 #include "galaxy/render/scene_view.h"
 #include "galaxy/render/gpu_placed_textures.h"
+#include "galaxy/render/gpu_pass_times.h"
 #include "galaxy/render/texture_sampler.h"
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/renderer_common.h"
@@ -860,10 +861,8 @@ private:
     std::array<bool, kFramesInFlight> timestamp_pending_{};
     std::uint64_t timestamp_frequency_ = 0;
     // --diagnostics gpu-passes: GPU time by pass for present-stats' gpu-pass-ms. A mark starts a pass on the open command
-    // list; the time to the next mark (or the list's end) is that pass's.
-    enum class GpuPass : std::uint8_t {
-        Scene, Resolve, FramePass, DisplayCopy, Bloom, SceneAa, SceneAo, Upscale, Present, Camera, Count
-    };
+    // list; the time to the next mark (or the list's end) is that pass's (gpu_pass_times.h).
+    using GpuPass = ::galaxy::render::GpuPass;
     static constexpr unsigned kGpuPassSlots = 512;
     void gpu_pass(GpuPass pass);
     class GpuPassScope {
@@ -884,13 +883,11 @@ private:
     std::array<unsigned, kFramesInFlight> pass_mark_count_{};
     GpuPass current_pass_ = GpuPass::Scene;
     bool pass_list_open_ = false;
-    std::array<double, static_cast<std::size_t>(GpuPass::Count)> telemetry_pass_ms_{};
     // The settings page's timing: asked for by gpu_timing_wanted_, on for the frames begun while it is (or the diagnostics
-    // record passes); each pass's running average for the page.
+    // record passes); the page's averages and the present statistics' window.
     std::atomic<bool> gpu_timing_wanted_{false};
     bool diagnostic_passes_ = false;
-    bool pass_timing_on_ = false;
-    std::array<std::atomic<float>, static_cast<std::size_t>(GpuPass::Count)> pass_ema_ms_{};
+    GpuPassTimes pass_times_;
     void ensure_pass_queries();
     // --diagnostics gpu-passes also counts each command list's pipeline statistics (shader invocations, primitives) for
     // present-stats' gpu-stats.

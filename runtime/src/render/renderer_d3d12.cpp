@@ -3677,19 +3677,8 @@ gpu::Address RendererD3D12::zero_stream(std::uint32_t bytes) {
     return zero_stream_.gpu;
 }
 
-namespace {
-constexpr const char* kPassTimeNames[] = {"scene", "resolve", "frame read", "display copy", "bloom", "scene aa", "scene ao",
-                                          "upscale", "present", "camera"};
-}  // namespace
-
 std::size_t RendererD3D12::gpu_pass_times(GpuPassTime* out, std::size_t capacity) const noexcept {
-    std::size_t count = 0u;
-    for (std::size_t pass = 0u; pass < std::size(kPassTimeNames) && count < capacity; ++pass) {
-        if (const float ms = pass_ema_ms_[pass].load(std::memory_order_relaxed); ms > 0.0f) {
-            out[count++] = {kPassTimeNames[pass], ms};
-        }
-    }
-    return count;
+    return pass_times_.page_times(out, capacity);
 }
 
 // The pass timestamps' query heap and readback, made when the settings page asks for them (the diagnostics make theirs at start).
@@ -3729,11 +3718,11 @@ void RendererD3D12::gpu_pass(GpuPass pass) {
     current_pass_ = pass;
     // The pass by name for PIX and RenderDoc.
     if (pass_list_open_ && pass != GpuPass::Count) {
-        const char* const name = kPassTimeNames[static_cast<std::size_t>(pass)];
+        const char* const name = kGpuPassPageNames[static_cast<std::size_t>(pass)];
         command_list_->SetMarker(1u, name, static_cast<UINT>(std::strlen(name) + 1u));
     }
     unsigned& marks = pass_mark_count_[frame_slot_];
-    if (!pass_timing_on_ || !pass_query_heap_ || !pass_list_open_ || marks + 1u >= kGpuPassSlots) {
+    if (!pass_times_.timed() || !pass_query_heap_ || !pass_list_open_ || marks + 1u >= kGpuPassSlots) {
         return;
     }
     command_list_->EndQuery(pass_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, frame_slot_ * kGpuPassSlots + marks);
@@ -3904,25 +3893,9 @@ void RendererD3D12::begin_frame() {
         void* mapped = nullptr;
         if (SUCCEEDED(pass_readback_->Map(0, &read_range, &mapped))) {
             const auto* ticks = reinterpret_cast<const std::uint64_t*>(static_cast<const std::byte*>(mapped) + offset);
-            std::array<double, static_cast<std::size_t>(GpuPass::Count)> frame_ms{};
-            for (unsigned i = 0; i + 1u < marks; ++i) {
-                if (ticks[i + 1u] >= ticks[i]) {
-                    const double ms = static_cast<double>(ticks[i + 1u] - ticks[i]) * 1000.0 /
-                                      static_cast<double>(timestamp_frequency_);
-                    telemetry_pass_ms_[static_cast<std::size_t>(pass_marks_[frame_slot_][i])] += ms;
-                    frame_ms[static_cast<std::size_t>(pass_marks_[frame_slot_][i])] += ms;
-                }
-            }
-            // The page's running average of each pass over the frames that ran it.
-            for (std::size_t pass = 0u; pass < frame_ms.size(); ++pass) {
-                if (frame_ms[pass] > 0.0) {
-                    const float before = pass_ema_ms_[pass].load(std::memory_order_relaxed);
-                    const float value = static_cast<float>(frame_ms[pass]);
-                    pass_ema_ms_[pass].store(before == 0.0f ? value : before + (value - before) * 0.1f, std::memory_order_relaxed);
-                }
-            }
-            galaxy::bench::note_gpu_frame(kPassTimeNames, frame_ms.data(), std::min(std::size(kPassTimeNames), frame_ms.size()),
-                                          frame_scene_drawn_[frame_slot_] && !frame_generated_[frame_slot_]);
+            pass_times_.add_frame(gpu_pass_ms(ticks, pass_marks_[frame_slot_].data(), marks - 1u,
+                                              1000.0 / static_cast<double>(timestamp_frequency_)),
+                                  frame_scene_drawn_[frame_slot_] && !frame_generated_[frame_slot_]);
             const D3D12_RANGE no_write{0, 0};
             pass_readback_->Unmap(0, &no_write);
         }
@@ -3977,12 +3950,7 @@ void RendererD3D12::begin_frame() {
         if (timing && !pass_query_heap_) {
             ensure_pass_queries();
         }
-        if (!timing && pass_timing_on_) {
-            for (std::atomic<float>& average : pass_ema_ms_) {
-                average.store(0.0f, std::memory_order_relaxed);
-            }
-        }
-        pass_timing_on_ = timing && pass_query_heap_;
+        pass_times_.begin_frame(timing && pass_query_heap_);
     }
     pass_list_open_ = true;
     if (stats_query_heap_) {
@@ -4606,16 +4574,9 @@ void RendererD3D12::present_to_swap_chain() {
                                 : 0.0);
             }
             if (pass_query_heap_) {
-                static constexpr const char* kPassNames[] = {"scene", "resolve", "frame-read", "display-copy", "bloom",
-                                                             "scene-aa", "scene-ao", "upscale", "present",
-                                                             "camera"};
-                static_assert(std::size(kPassNames) == static_cast<std::size_t>(GpuPass::Count));
-                message << " gpu-pass-ms=";
+                // Each pass's ms a timed frame (gpu_pass_times.h).
+                message << pass_times_.take_window_field();
                 const double presents = static_cast<double>(std::max<std::uint64_t>(telemetry_present_count_, 1u));
-                for (std::size_t pass = 0; pass < std::size(kPassNames); ++pass) {
-                    message << (pass == 0 ? "" : ",") << kPassNames[pass] << ':' << telemetry_pass_ms_[pass] / presents;
-                }
-                telemetry_pass_ms_.fill(0.0);
                 const D3D12_QUERY_DATA_PIPELINE_STATISTICS& st = telemetry_stats_;
                 message << " gpu-stats=vs:" << static_cast<double>(st.VSInvocations) / presents
                         << ",hs:" << static_cast<double>(st.HSInvocations) / presents

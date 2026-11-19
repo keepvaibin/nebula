@@ -20,6 +20,7 @@
 #include "galaxy/render/ambient_occlusion_objects.h"
 #include "galaxy/render/display_modes.h"
 #include "galaxy/render/frame_pass.h"
+#include "galaxy/render/gpu_pass_times.h"
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/gpu_upload_ring.h"
 #include "galaxy/render/host_window.h"
@@ -329,10 +330,7 @@ public:
 
     // For the renderer's own parts (post chain, bloom, occlusion, camera): the command buffer being recorded, with no
     // encoder open after end_scene_pass; and what to call after encoding with one of their own.
-    enum class GpuPass : std::uint8_t {
-        Scene, Resolve, FramePass, DisplayCopy, Bloom, SceneAa, SceneAo, Upscale, Present, Camera,
-        AoDistance, AoOcclusion, AoDenoise, AoUpsample, AoApply, Count
-    };
+    using GpuPass = ::galaxy::render::GpuPass;
 
 private:
     struct Frame {
@@ -353,8 +351,8 @@ private:
         // GPU start and end times of the frame's command buffers, written by their completion (seconds; 0: none).
         std::shared_ptr<std::array<std::atomic<double>, 2>> gpu_time;
         // With the passes timed (profile_frame_): the GPU's seconds on the frame's command buffers by the pass each was
-        // begun for, summed by their completions; the last entry is the frame's texture uploads.
-        std::shared_ptr<std::array<std::atomic<double>, static_cast<std::size_t>(GpuPass::Count) + 1u>> pass_time;
+        // begun for, summed by their completions; GpuPass::Uploads is the frame's texture uploads.
+        std::shared_ptr<std::array<std::atomic<double>, kGpuPassCount>> pass_time;
         bool pass_timed = false;
     };
     struct FramePassTarget {
@@ -859,10 +857,8 @@ private:
     // buffer being recorded counts as.
     bool profile_frame_ = false;
     GpuPass list_pass_ = GpuPass::Scene;
-    std::array<double, static_cast<std::size_t>(GpuPass::Count) + 1u> pass_window_ms_{};
-    unsigned pass_window_frames_ = 0;
     std::atomic<bool> gpu_timing_wanted_{false};
-    std::array<std::atomic<float>, static_cast<std::size_t>(GpuPass::Count)> pass_ema_ms_{};
+    GpuPassTimes pass_times_;  // the page's averages and the [metal-gpu] window
 };
 
 using Renderer = RendererMtl;
