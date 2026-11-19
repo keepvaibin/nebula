@@ -38,10 +38,10 @@
     },
     "ray-tracing": {
       "div_1": "RAY TRACING",
-      "heading_1": "Ray tracing",
-      "paragraph_1": "Ray tracing replaces the game’s lighting with ray-traced sunlight, shadows, reflections and water. Lamps, fire and Lumas light the scene around them.",
-      "paragraph_2": "It needs a GPU with hardware ray tracing. The SYSTEM page shows whether this computer has it.",
-      "paragraph_3": "Turn it on and choose the quality on the GRAPHICS page. Start at Low or Medium and raise it while the game stays smooth."
+      "heading_1": "Ray tracing (coming soon)",
+      "paragraph_1": "Ray-traced lighting is being worked on and will come in a very soon release. It is not in Nebula v2 yet.",
+      "paragraph_2": "When it arrives, it will need a GPU with hardware ray tracing.",
+      "paragraph_3": "Until then, the GRAPHICS page has enhanced lighting, ambient occlusion and HDR."
     },
     "smoothness": {
       "div_1": "FRAME RATE",
@@ -96,7 +96,6 @@
       "heading_1": "Performance",
       "item_1": "Lower the internal resolution before the display resolution.",
       "item_2": "Use DLSS, FSR 3 or XeSS in Quality or Balanced mode. DLSS needs an NVIDIA RTX GPU and a one-time download.",
-      "item_3": "Lower the ray tracing quality, or turn ray tracing off.",
       "item_4": "The Performance preset on the GRAPHICS page lowers resolution and turns off optional effects.",
       "item_5": "Choose a lower interpolation target, such as 120 instead of 240.",
       "item_6": "Turn off ambient occlusion or lower MSAA.",

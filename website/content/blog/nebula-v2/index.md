@@ -105,7 +105,7 @@ Setup is a lot simpler. It no longer compiles anything, so it just reads your di
 
 - **Upscaling:** DLSS, FSR 1, FSR 3, XeSS, SGSR 2 and MetalFX.
 - **Frame generation:** native interpolation for displays faster than 60 Hz, plus DLSS Frame Generation and FSR frame generation on supported GPUs, and NVIDIA Reflex.
-- **Ray Tracing:** a completely overhauled and rewritten lighting engine to work for real-time lighting and reflections.
+- **Ray Tracing:** coming in a very soon release, with a completely overhauled and rewritten lighting engine for real-time lighting and reflections.
 - **Anti-aliasing:** MSAA, SMAA, FXAA and DLAA.
 - **Ambient occlusion** (SSAO or GTAO), **HDR** output, and a lighting setting with the original per-vertex lighting, per-pixel, or enhanced.
 - **Bloom** from 0 to 200%, anisotropic filtering, and curved surfaces that round out the outlines of curved models.
