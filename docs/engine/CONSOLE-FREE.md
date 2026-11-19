@@ -88,7 +88,8 @@ What the hits are, by search (each line read at a1f423dd8):
 | The game's sound code (`Game/AudioLib`, `Game/GameAudio`, `Game/Sound`, `Game/Speaker`, `Game/RhythmLib`) | 170 | `Sound`'s engine and the host mixer read; all swept by pattern, every hit read; P-186 |
 | Archives and the game's file access (`Game/System` archive and resource holders, `Game/Util/FileUtil`, the store) | 11 | the load path read: modern |
 | Text (`MessageHolder`, the `NMSG` reader, the host's `message_utf8`) | not counted | the record and readers read; 16-bit codes open |
-| Layouts and fonts (`Game/Ui`, `Game/Screen`'s layout code, `Game/System` font holders) | `Game/Ui` 51, `Game/Screen` 289 | `Layout::Build`, `Material`, `ResFont` read; P-184 |
+| Layouts and fonts (`Game/Ui`, `Game/System` font holders) | `Game/Ui` 51 | `Layout::Build`, `Material`, `ResFont` read; P-184 |
+| The 2D screens, the image effects, the pointer, the movies (`Game/Screen`) | 289 (144 sources, 145 headers; 44,869 lines) | read whole at 6577392b5; P-197 to P-212, P-184's 2D colours |
 | Input (the host's and the game's) | not counted | the game's record read: modern |
 | The game's own files E14 did not reach (Agent 3's hand-over, `docs/plan/HANDOVER-AGENT-3.md` on `app/work`: Player 99, Sound 76, Enemy 109, Boss 166, Ride 19, NPC 76, MapObj 314, LiveActor 62) | 921 | swept by pattern (below), every hit read; not read whole |
 
@@ -105,7 +106,38 @@ What is read so far (at a1f423dd8):
   (`LightFunction.cpp:64-91`, read once for every light by `LightDataHolder.cpp:24` at load). No read by name was found in a step. The column search by
   name (`Table.cpp:33-48`) is the game's own data access (its JMap design), paid at load: the game, not the console;
   not an item.
-- Layouts. Cooked `NLYT` (section 1); the record's material: P-184.
+- Layouts. Cooked `NLYT` (section 1); the record's material: P-184, with the 2D material's colours in the console's
+  signed register form (`Ui::Material::mRegisterColors`, `Game/Ui/Material.hpp:111-134`).
+- Screen (`Game/Screen`, every file read whole at 6577392b5, 11-18; the verdict of each file kept with the
+  inventory's working notes). Timing: the screens count game steps (`GameSystem::frameLoop` runs `update()` once a
+  frame and the extra world steps of a mod's time rate do not, `GameSystem.cpp:182-205`; Nebula's own screens run
+  from `GameSystem::update`, `:258-290`), drawn between steps by the layouts' interpolation
+  (`LayoutActor.cpp:42`, `draw_walker` `:618-665`): the game's step, not the console's. Glides and edge scrolls of
+  the settings menu go by the host clock. The console's shape found:
+  - the layouts' anamorphic 16:9 canvas, a layout unit 4/3 wider than tall at 16:9 and flagged panes narrowed by
+    0.75 (`LayoutManager.cpp:200-211`, `Pane.cpp:185-187`), with Nebula's screens undoing it again
+    (`NebulaUi.cpp:568-578`, `NebulaAchievementToast.cpp:388`, `NebulaAchievementBoard.cpp:53`, `NebulaPaneKit.cpp:91-92`): P-197;
+  - the depth of field's 8-bit indirect depth lookup through a ramp texture (`DepthOfFieldBlur.cpp:99-141`): P-198;
+  - `IndDummy.tpl` found by its bytes' address in the archive (`LayoutManager.cpp:597-642`): P-199;
+  - message tags as in-text binary records, string arguments as 4-byte tokens, rewritten byte by byte
+    (`MessageTagSkipTagProcessor.cpp:5-77`, `ReplaceTagProcessor.cpp`; walked also by `NebulaUi.cpp:133-139`,
+    `StaffRoll.cpp:646-657`, `TitleSequenceProduct.cpp:76-93`): P-202, beside the 16-bit codes (P-187);
+  - movie subtitles and rumble started on equality with the shown frame (`MoviePlayingSequence.cpp:335-350`,
+    `DemoPadRumbler.cpp:23-30`): P-203; the staff roll timed by steps beside its music (`StaffRoll.cpp:387-395`): P-206;
+  - effect and sound names matched by 16-bit hashes (`MultiEmitter.cpp:243-245`, `AudSeKeeper.cpp:58`, `:81`): P-204;
+  - the save in the console's `GameData.bin` layout (`BinaryDataContentAccessor.cpp:13-20`, `:55-64` and the
+    storages): P-205;
+  - the underwater warp in screen texels, smaller as the resolution grows (`WaterCameraFilter.cpp:43-44`): P-207;
+  - the A button's pictures found by texture size and IA4 format (`NebulaIcons.cpp:2368-2390`): P-210.
+  Caps on what a mod adds (5.H.3): language panes in a `BitFlag<128>` (P-200), eight sound tags a message (P-201),
+  small fixed counts in the 2D screens (P-208), a mod's ABOUT picture over 1024 dropped (P-211). Faults found on the
+  way: the settings menu's UTF-8 decoder (P-209), a bound of 4 over a 3-entry array (P-212). The rest is the game's
+  own (its layouts, counters, menus and their step counts) or modern (the holders grow: `InlineArray::grow`,
+  `Array.hpp:217-232`; pools reuse with renewed draw identity; text buffers grow to the text). Not settled by reading
+  and kept with the E4 work of fed-back and camera-bound draws: the full-screen blur's feedback
+  (`FullScreenBlur.cpp:38-46`), the heat haze's board placed at the step's camera (`HeatHazeEffect.cpp:19-30`), the
+  lens flare; and two run checks: whether the picture font's sheet takes the icons' sharp copy (`NebulaIcons.cpp:1804-1813`),
+  and Nebula's screens stepping faster while a cutscene skip runs extra `update()` calls (`GameSystem.cpp:199-202`).
 - Text. Cooked `NMSG` (`MessageHolder.hpp:8-32`): host-order counts and offsets, the text as `char16_t`, flow nodes
   and branches as records. Fonts: cooked `NFNT` (`native_data.rs:244-257`): host order, sheets as distance fields
   (`cook::distance`) or pictures, a glyph found through two 256-entry pages by the code's high and low byte. Both read
@@ -222,6 +254,22 @@ Each: where; what of it is the console's; the modern form; row; state; proof.
 | Shared counts and widths that can cap what a mod adds | `MR::Vector`, holders, registries, groups (section 2, Limits); id and index widths: `Sound.hpp:26-27` (`SoundID`: section 8 bits, group 8 bits, wave 16 bits; `SoundVoices.cpp:70`), P-188's particle index; the 138 literal tables and the pools, each read | a width or a size chosen for the console's content | every shared holder grows and every id or index is 32 bits wide or more; an actor's own count stays its number | P-192 | open (E; the tables' classing in the whole read) | not yet |
 | Surround output by a written law | `runtime/src/audio_mixer.cpp:244-269`, `:704-729`; `runtime/src/native_audio.cpp:95-131`; `runtime/src/audio_device_wasapi.cpp:135-155`, `:207-230`; `platform/sdl/audio_device_sdl.cpp:33`; `native/petari/src/Game/Sound/SoundVoices.cpp:665-786` (section 4 says what each does) | none kept: the two-channel output stays as made (owner, 5.H.5); the surround law is new | a law from a sound's pan and surround amounts to each reported layout's speaker gains, written here before the code, each property asserted by a test, a render-to-file test through the real mixer | P-193 | open (E, with the sound work) | not yet |
 | Actors that draw for themselves | 100 files of `native/petari/src` define `draw() const` (`grep -rlE "void \w+::draw\(\) const" native/petari/src`), 55 of them name a draw helper (`Material`, `TDDraw`, `setStage`, `RenderTexture`, `NebulaPass`, `drawFillBox`, `GameTexture`) | not read yet; `FRAME-MODEL.md` does not name them | each read; those with the console's shape placed in E3 or E4's steps | P-194 | open (the whole read, 5.H.1) | not yet |
+| The layouts' anamorphic canvas | `LayoutManager.cpp:200-211`, `:477-482`; `Pane.cpp:69`, `:185-187`; `LayoutUtil.cpp:669-678`; `DrawUtil.cpp:113-126`; undone again in `NebulaUi.cpp:568-578`, `NebulaAchievementToast.cpp:388`, `NebulaAchievementBoard.cpp:53`, `WipeRing.cpp:209`; empty `isScreen16Per9` branches `StarPointerCommandStream.cpp:91-92`, `StarPointerLayout.cpp:708-710` | the console's 16:9 picture as a 4:3 canvas stretched (a layout unit 4/3 wide), flagged panes narrowed by 0.75 | square layout units: the canvas 608 * 4/3 wide at 16:9, unflagged panes given the 4/3 width, flagged panes nothing; the 0.75 code goes | P-197 | open | not yet |
+| The depth of field's 8-bit indirect lookup | `DepthOfFieldBlur.cpp:99-141`, `frame_depth.hlsl`, `dof_final.hlsl`, `ImageEffectLocalUtil.cpp:113-124` | the depth copied to 8 bits and moved through an indirect matrix into a 128x2 ramp texture | the final pass reads the depth at full precision and weighs the blur from the two distances | P-198 | open | not yet |
+| `IndDummy.tpl` found by address | `LayoutManager.cpp:597-642` | the archive as a blob of bytes, a resource known by where it lies | the layout's texture list names it; the swap goes by that entry | P-199 | open | not yet |
+| Language panes in 128 bits | `LayoutManager.cpp:34-130`, `:645-705` | a fixed `BitFlag<128>` for a layout's panes | marks sized to the pane's children | P-200 | open | not yet |
+| Eight sound tags a message | `CustomTagProcessor.cpp:483-499` | a u8 mask of played sound tags | a mask or list sized to the message's tags | P-201 | open | not yet |
+| Message tags as in-text records | `MessageTagSkipTagProcessor.cpp:5-77`; `ReplaceTagProcessor.cpp:49-72`, `:139-161`, `:239-321`; `NebulaUi.cpp:133-139`; `StaffRoll.cpp:646-657`; `TitleSequenceProduct.cpp:76-93`; `NebulaSettingsMenu.cpp:889-901` | the message editor's binary records (0x1A, a length byte, 16-bit parameters, 4-byte string tokens) inside the text | a message parsed once into text runs and typed tag records, each holding its own string | P-202 | open | not yet |
+| Movie cues on one frame | `MoviePlayingSequence.cpp:335-350`, `DemoPadRumbler.cpp:23-30`, `MovieStream.cpp:194-217`, `MoviePlayerSimple.cpp:72-74` | a cue fires only when the shown frame equals its start; a hitch passes it | a cue fires when the movie's place crosses its start, read from the movie's position | P-203 | open | not yet |
+| Names by 16-bit hashes | `PaneEffectKeeper.cpp:107-116`, `MultiEmitter.cpp:243-245`, `AudSeKeeper.cpp:58`, `:81` | names compared by the low 16 bits of a hash | by name, as `MultiSceneEffectKeeper.cpp:77-80` does | P-204 | open | not yet |
+| The save in `GameData.bin`'s layout | `BinaryDataContentAccessor.cpp:13-20`, `:55-64`; `GameDataGalaxyStorage.cpp:184`; `BinaryDataChunkHolder.cpp:46-49`; `SpinDriverPathStorage.cpp:55`; `GameEventValueChecker.cpp:48-53` | 16-bit name hashes and offsets, counts in a byte, 6-bit ids, u16 values | named, sized records with a version; an old file read once by the importer | P-205 | open | not yet |
+| The staff roll timed by steps | `StaffRoll.cpp:49-56`, `:178-187`, `:387-395`, `:552-554` | pictures and the end placed by counting steps beside the music | placed from the stream's play position | P-206 | open | not yet |
+| The underwater warp in pixels | `WaterCameraFilter.cpp:43-44`, `water_camera.hlsl` | a warp of 0.05 screen texels a step: about 6.4 pixels at any resolution | the warp as a share of the picture | P-207 | open | not yet |
+| Small fixed counts in the 2D screens | `PictureBookLayout.cpp:61-73`, `:425-443`; `PowerStarList.cpp:113-123`, `:573-579`; `StarPieceCounter.cpp:138-156`; `WipeHolderBase.cpp:7-10`, `:64-73`; `StaffRoll.cpp:27-28`, `:283-288` | counts fixed for the disc's content | probe to the first missing name, lists sized to the content, counters laid out from the number's width | P-208 | open | not yet |
+| The settings menu's UTF-8 decoder | `NebulaSettingsMenu.cpp:538-555` (callers `:776`, `:2386`, `:2483`, `:2575`, `:3229`) | none (a fault): 4-byte sequences and stray bytes mis-read | one decoder for the module (`NebulaAchievements.cpp:215-246`) | P-209 | open | not yet |
+| The A button's pictures by size and format | `NebulaIcons.cpp:2368-2390` | a picture known by its 48 or 40 texel IA4 texture | by the texture's name, the whole tree walked | P-210 | open | not yet |
+| A mod's ABOUT picture over 1024 | `NebulaSettingsMenu.cpp:321`, `:4996-5001` | none of the console's: a fixed copy size | the texture made at the picture's size, never dropped | P-211 | open | not yet |
+| A bound of 4 over 3 | `NebulaSettingsMenu.cpp:5521`, `:5719` | none (a fault) | bound by the array's size | P-212 | open | not yet |
 | Texture headers in the console's form | `ResTIMG`, 137 lines in 59 files | the J3D texture header and its filter codes | a host id and a sampler resolved at load (E3 step 2) | P-155 | open (F4) | not yet |
 
 ## 4. Section 3's test, and the owner's answers of 2026-11-18 18:18
