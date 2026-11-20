@@ -22,6 +22,7 @@
 #include <atomic>
 #include <bit>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <iostream>
 #include <stdexcept>
@@ -1247,6 +1248,46 @@ bool RendererD3D11::record_screen_probes(std::size_t slot, std::span<const Scree
     ctx->CopySubresourceRegion(out.readback.Get(), 0u, 0u, 0u, 0u, out.values.Get(), 0u, &box);
     out.count = count;
     out.fence = kProbesInFrame;  // fenced at end_frame
+    return true;
+}
+
+// P-242's hunt (probe-reads diagnostics): the scene's depth as the probes just asked read it, the scene's rectangle of
+// it, the top row first. Waits for the GPU: a diagnostic alone.
+bool RendererD3D11::read_probe_depth(std::vector<float>& depth, std::uint32_t& width, std::uint32_t& height) {
+    if (!scene_.depth || !scene_.depth->texture) {
+        return false;
+    }
+    D3D11_TEXTURE2D_DESC desc{};
+    scene_.depth->texture->GetDesc(&desc);
+    const std::uint32_t texel = desc.Format == DXGI_FORMAT_R32G8X24_TYPELESS ? 8u : desc.Format == DXGI_FORMAT_R32_TYPELESS ? 4u : 0u;
+    if (texel == 0u || desc.SampleDesc.Count != 1u) {
+        return false;
+    }
+    desc.Usage = D3D11_USAGE_STAGING;
+    desc.BindFlags = 0u;
+    desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    desc.MiscFlags = 0u;
+    d3d11::ComPtr<ID3D11Texture2D> staging;
+    if (FAILED(d3d11::Context::get().device()->CreateTexture2D(&desc, nullptr, &staging))) {
+        return false;
+    }
+    ID3D11DeviceContext1* const ctx = context();
+    ctx->CopyResource(staging.Get(), scene_.depth->texture.Get());
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    if (FAILED(ctx->Map(staging.Get(), 0u, D3D11_MAP_READ, 0u, &mapped))) {
+        return false;
+    }
+    width = std::min(scene_map_.width, desc.Width);
+    height = std::min(scene_map_.height, desc.Height);
+    depth.resize(static_cast<std::size_t>(width) * height);
+    for (std::uint32_t y = 0; y < height; ++y) {
+        const auto* line = static_cast<const std::uint8_t*>(mapped.pData) + static_cast<std::size_t>(y) * mapped.RowPitch;
+        for (std::uint32_t x = 0; x < width; ++x) {
+            std::memcpy(&depth[static_cast<std::size_t>(y) * width + x], line + static_cast<std::size_t>(x) * texel,
+                        sizeof(float));
+        }
+    }
+    ctx->Unmap(staging.Get(), 0u);
     return true;
 }
 
