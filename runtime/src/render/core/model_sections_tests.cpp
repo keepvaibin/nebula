@@ -64,7 +64,16 @@ Block model(std::uint32_t joints, std::uint32_t envelopes, std::uint32_t binds) 
     b.add(name("IBND"), binds, 48u);
     b.add(name("IMPT"), 1u, 4u);
     b.add(name("MESH"), 1u, 100u);
-    b.add(name("MT12"), 1u, 208u);
+    b.add(name("MATL"), 1u, 64u);
+    b.add(name("GXMT"), 1u, 120u);
+    b.add(name("FORM"), 1u, 56u);
+    b.add(name("SLOT"), 2u, 8u);
+    b.add(name("GXTG"), 1u, 8u);
+    b.add(name("GXTM"), 0u, 104u);
+    b.add(name("GXWP"), 0u, 24u);
+    b.add(name("FROW"), 3u, 4u);
+    b.add(name("FTEX"), 2u, 1u);
+    b.add(name("FINP"), 4u, 1u);
     b.add(name("TEXR"), 0u, 40u);
     b.add(name("NAME"), 16u, 1u);
     b.add(name("GEOM"), 64u, 1u);
@@ -90,13 +99,16 @@ void test_resolved() {
     check(view.step_count == 6u && view.envelope_count == 2u && view.mix_count == 4u, "the counts by their sections");
     check(view.inverse_bind_count == 3u && view.inverse_binds_at == b.table[6].at, "the inverse binds by IBND's count");
     check(view.mesh_count == 1u && view.material_count == 1u && view.texture_count == 0u, "meshes, materials, textures");
-    check(view.geometry_size == 64u && view.geometry_at == b.table[12].at, "the geometry by GEOM's span");
+    check(view.geometry_size == 64u && view.geometry_at == b.table[21].at, "the geometry by GEOM's span");
     check(view.names_size == 16u && view.images_size == 0u, "the names and the images by their spans");
     check(view.full_weight_count == 5u && view.source_vertex_count == 77u, "the scalars from MODL");
     const auto* header = reinterpret_cast<const NebulaModelHeader*>(bytes.data());
     const NebulaModelSection* geometry = nebula_model_section(header, name("GEOM"));
-    check(geometry != nullptr && geometry->at == b.table[12].at && geometry->size == 64u, "nebula_model_section finds GEOM");
-    check(nebula_model_section(header, name("FORM")) == nullptr, "a section the file does not have is null");
+    check(geometry != nullptr && geometry->at == b.table[21].at && geometry->size == 64u, "nebula_model_section finds GEOM");
+    check(nebula_model_section(header, name("CBLK")) == nullptr, "a section the file does not have is null");
+    check(view.form_count == 1u && view.slot_count == 2u && view.row_count == 3u && view.maps_size == 2u &&
+              view.inputs_size == 4u && view.gx_count == 1u && view.coord_count == 1u,
+          "the material sections by their counts");
 }
 
 void test_read_past() {
@@ -122,19 +134,19 @@ void test_faults() {
     }
     {
         Block b = model(1u, 0u, 0u);
-        b.table.erase(b.table.begin() + 9);  // MT12
+        b.table.erase(b.table.begin() + 9);  // MATL
         NebulaModelView view{};
         const NebulaModelCheck result = view_of(b.finish(), view);
         nebula_model_section_text(result.what, text);
-        check(result.fault == NEBULA_MODEL_MISSING_SECTION && std::strcmp(text, "MT12") == 0, "a missing section is named");
+        check(result.fault == NEBULA_MODEL_MISSING_SECTION && std::strcmp(text, "MATL") == 0, "a model without MATL is refused, naming it");
     }
     {
         Block b = model(1u, 0u, 0u);
-        b.add(name("FORM"), 1u, 16u);
+        b.add(name("CBLK"), 1u, 16u);
         NebulaModelView view{};
         const NebulaModelCheck result = view_of(b.finish(), view);
         nebula_model_section_text(result.what, text);
-        check(result.fault == NEBULA_MODEL_UNKNOWN_REQUIRED && std::strcmp(text, "FORM") == 0,
+        check(result.fault == NEBULA_MODEL_UNKNOWN_REQUIRED && std::strcmp(text, "CBLK") == 0,
               "a required section this reader does not know is named");
     }
     {
@@ -148,7 +160,7 @@ void test_faults() {
     }
     {
         Block b = model(1u, 0u, 0u);
-        b.table[12].size = 1u << 20u;  // GEOM past the end
+        b.table[21].size = 1u << 20u;  // GEOM past the end
         NebulaModelView view{};
         const NebulaModelCheck result = view_of(b.finish(), view);
         nebula_model_section_text(result.what, text);
