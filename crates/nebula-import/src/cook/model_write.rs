@@ -1089,7 +1089,7 @@ mod tests {
         let mut past = bytes.clone();
         past[16..20].copy_from_slice(&1000u32.to_le_bytes());
         assert!(sections(&past).is_err());
-        assert!(section(&table, b"FORM").is_err());
+        assert!(section(&table, b"NONE").is_err(), "a name the table lacks is refused");
     }
 
     #[test]
