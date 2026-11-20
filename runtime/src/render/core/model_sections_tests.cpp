@@ -32,6 +32,7 @@ struct Block {
     std::vector<NebulaModelSection> table;
 
     void add(std::uint32_t section, std::uint32_t count, std::uint32_t stride, std::uint32_t flags = NEBULA_MODEL_SECTION_REQUIRED) {
+        bytes.resize((bytes.size() + 7u) & ~std::size_t{7u});  // every place 8-aligned, as the cooker places them
         const auto at = static_cast<std::uint32_t>(bytes.size());
         bytes.resize(bytes.size() + static_cast<std::size_t>(count) * stride);
         table.push_back({section, flags, at, count * stride, count, stride});
@@ -78,8 +79,8 @@ Block model(std::uint32_t joints, std::uint32_t envelopes, std::uint32_t binds) 
     b.add(name("NAME"), 16u, 1u);
     b.add(name("GEOM"), 64u, 1u);
     b.add(name("TIMG"), 0u, 1u);
-    const auto scalars = static_cast<std::uint32_t>(b.bytes.size());
     b.add(name("MODL"), 1u, 8u);
+    const std::uint32_t scalars = b.table.back().at;
     const std::uint32_t values[2] = {5u, 77u};
     std::memcpy(b.bytes.data() + scalars, values, sizeof(values));
     return b;
