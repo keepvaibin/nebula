@@ -135,6 +135,19 @@ private:
     u32 mCount;
 };
 
+// A frame texture's sampler fields from a model's sampler (FRAME-MODEL 2.10).
+inline void setFrameSampler(NebulaFrameTexture& rOut, const NebulaModelSampler& rSampler) {
+    rOut.wrap_s = rSampler.wrap_s;
+    rOut.wrap_t = rSampler.wrap_t;
+    rOut.min_linear = rSampler.min_linear;
+    rOut.mag_linear = rSampler.mag_linear;
+    rOut.mip_filter = rSampler.mip_filter;
+    rOut.anisotropy = rSampler.anisotropy;
+    rOut.min_lod = rSampler.min_lod;
+    rOut.max_lod = rSampler.max_lod;
+    rOut.lod_bias = rSampler.lod_bias;
+}
+
 // A material: everything its draw reads, as plain values, starting as the file gave them. A model file's materials are
 // shared by its models; a model whose material moves (animation, a controller) draws its own copy (Model::ownMaterial).
 class Material {

@@ -299,8 +299,7 @@ int ItemBuffer::entryMatSort(MaterialEntry* pEntry) {
         Material* pMaterial = pEntry->getMaterial();
         const u32 texNo = pMaterial->getTextureIndex(0);
         if (texNo != NEBULA_NONE32) {
-            const ResTIMG* pTimg = pMaterial->getModelData()->getTexture(texNo);
-            const NebulaTexture* pRecord = nebula_texture_record(pTimg->image());
+            const NebulaTexture* pRecord = nebula_texture_record(pMaterial->getModelData()->getTexture(texNo)->mImage);
             image = pRecord != nullptr ? static_cast< u32 >(pRecord->image_id) : 0;
         }
         for (u32 i = 0; i < mEntryCount; i++) {

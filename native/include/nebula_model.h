@@ -102,11 +102,12 @@ typedef struct NebulaModelView {
     uint32_t rows_at, row_count;                      /* FROW, u32 NEBULA_ROW_* */
     uint32_t maps_at, maps_size;                      /* FTEX, u8 material map numbers */
     uint32_t inputs_at, inputs_size;                  /* FINP, u8 NEBULA_INPUT_* */
+    uint32_t samplers_at, sampler_count;              /* SAMP, NebulaModelSampler (FRAME-MODEL 2.10) */
     /* Each record section's stride as written: a reader steps by it, so a field added at a record's end is read past
        (FRAME-MODEL 2.7.2; nebula_model_entry). */
     uint32_t joint_stride, step_stride, draw_matrix_stride, envelope_stride, mix_stride, mesh_stride;
     uint32_t material_stride, gx_stride, form_stride, slot_stride, coord_stride, coord_matrix_stride, warp_stride;
-    uint32_t texture_stride;
+    uint32_t texture_stride, sampler_stride;
 } NebulaModelView;
 
 /* nebula_model_view's answer: NEBULA_MODEL_FINE, or what stops the load and the section (or version) it names. */
@@ -159,7 +160,8 @@ static const NebulaModelSectionUse kNebulaModelSections[] = {
     {NEBULA_MODEL_SECTION('F', 'R', 'O', 'W'), NEBULA_MODEL_VIEW_FIELD(rows_at), NEBULA_MODEL_VIEW_FIELD(row_count), NEBULA_MODEL_VIEW_NONE, NEBULA_MODEL_VIEW_NONE, 4u, 4u, 1u},
     {NEBULA_MODEL_SECTION('F', 'T', 'E', 'X'), NEBULA_MODEL_VIEW_FIELD(maps_at), NEBULA_MODEL_VIEW_NONE, NEBULA_MODEL_VIEW_FIELD(maps_size), NEBULA_MODEL_VIEW_NONE, 1u, 1u, 1u},
     {NEBULA_MODEL_SECTION('F', 'I', 'N', 'P'), NEBULA_MODEL_VIEW_FIELD(inputs_at), NEBULA_MODEL_VIEW_NONE, NEBULA_MODEL_VIEW_FIELD(inputs_size), NEBULA_MODEL_VIEW_NONE, 1u, 1u, 1u},
-    {NEBULA_MODEL_SECTION('T', 'E', 'X', 'R'), NEBULA_MODEL_VIEW_FIELD(textures_at), NEBULA_MODEL_VIEW_FIELD(texture_count), NEBULA_MODEL_VIEW_NONE, NEBULA_MODEL_VIEW_FIELD(texture_stride), 40u, 4u, 0u},
+    {NEBULA_MODEL_SECTION('T', 'E', 'X', 'R'), NEBULA_MODEL_VIEW_FIELD(textures_at), NEBULA_MODEL_VIEW_FIELD(texture_count), NEBULA_MODEL_VIEW_NONE, NEBULA_MODEL_VIEW_FIELD(texture_stride), 20u, 4u, 0u},
+    {NEBULA_MODEL_SECTION('S', 'A', 'M', 'P'), NEBULA_MODEL_VIEW_FIELD(samplers_at), NEBULA_MODEL_VIEW_FIELD(sampler_count), NEBULA_MODEL_VIEW_NONE, NEBULA_MODEL_VIEW_FIELD(sampler_stride), 20u, 4u, 0u},
     {NEBULA_MODEL_SECTION('N', 'A', 'M', 'E'), NEBULA_MODEL_VIEW_FIELD(names_at), NEBULA_MODEL_VIEW_NONE, NEBULA_MODEL_VIEW_FIELD(names_size), NEBULA_MODEL_VIEW_NONE, 1u, 1u, 1u},
     {NEBULA_MODEL_SECTION('G', 'E', 'O', 'M'), NEBULA_MODEL_VIEW_FIELD(geometry_at), NEBULA_MODEL_VIEW_NONE, NEBULA_MODEL_VIEW_FIELD(geometry_size), NEBULA_MODEL_VIEW_NONE, 1u, 1u, 1u},
     {NEBULA_MODEL_SECTION('T', 'I', 'M', 'G'), NEBULA_MODEL_VIEW_FIELD(images_at), NEBULA_MODEL_VIEW_NONE, NEBULA_MODEL_VIEW_FIELD(images_size), NEBULA_MODEL_VIEW_NONE, 1u, 1u, 1u},
@@ -479,8 +481,45 @@ typedef struct NebulaModelGx {
     uint32_t first_warp, warp_count;     /* in GXWP */
 } NebulaModelGx;
 
-/* Every material's, form's and GXMT entry's parts lie inside their sections (FRAME-MODEL 2.9), so a reader indexes
-   them without a check. A fault names the section a range leaves. */
+/* TEXR: a texture; its image is the record at record_at (TIMG). */
+typedef struct NebulaModelTexture {
+    uint32_t name_at, record_at;
+    uint32_t width, height;
+    uint32_t sampler; /* its SAMP entry */
+} NebulaModelTexture;
+
+/* SAMP: a sampler as the renderer takes it (NebulaFrameTexture's sampler fields), decoded at the cook
+   (FRAME-MODEL 2.10). */
+typedef struct NebulaModelSampler {
+    uint8_t wrap_s, wrap_t; /* 0 clamp, 1 repeat, 2 mirror */
+    uint8_t min_linear, mag_linear;
+    uint8_t mip_filter;     /* 0 the first level only, 1 the nearest level, 2 between levels */
+    uint8_t anisotropy, reserved[2];
+    float min_lod, max_lod, lod_bias;
+} NebulaModelSampler;
+
+/* A sampler from the console's codes, the rule the cook applies to a model's textures (model_write.rs
+   sampler_bytes). The game's own uses, a disc picture swapped into a model and the draw sites, go with E3 step 4
+   (P-155), when those pictures' samplers are decoded at their cook. */
+static inline NebulaModelSampler nebula_sampler_from_codes(uint8_t wrap_s, uint8_t wrap_t, uint8_t min_code, uint8_t mag_code,
+                                                           uint8_t anisotropy, float min_lod, float max_lod, float lod_bias) {
+    NebulaModelSampler s;
+    s.wrap_s = wrap_s;
+    s.wrap_t = wrap_t;
+    s.min_linear = (uint8_t)(min_code == 1u || min_code == 3u || min_code == 5u);
+    s.mag_linear = (uint8_t)(mag_code != 0u);
+    s.mip_filter = (uint8_t)(min_code < 2u ? 0u : min_code < 4u ? 1u : 2u);
+    s.anisotropy = anisotropy;
+    s.reserved[0] = 0u;
+    s.reserved[1] = 0u;
+    s.min_lod = min_lod;
+    s.max_lod = max_lod;
+    s.lod_bias = lod_bias;
+    return s;
+}
+
+/* Every material's, form's and GXMT entry's parts lie inside their sections (FRAME-MODEL 2.9), and every texture's
+   sampler in SAMP (2.10), so a reader indexes them without a check. A fault names the section a range leaves. */
 static inline int nebula_model_range_out(uint32_t first, uint32_t count, uint32_t total) {
     return (uint64_t)first + count > total;
 }
@@ -529,17 +568,16 @@ static inline NebulaModelCheck nebula_model_ranges(const void* block, const Nebu
             check.fault = NEBULA_MODEL_FINE;
         }
     }
+    for (uint32_t i = 0; i < view->texture_count && check.fault == NEBULA_MODEL_FINE; i++) {
+        const NebulaModelTexture* texture =
+            (const NebulaModelTexture*)nebula_model_entry(base, view->textures_at, view->texture_stride, i);
+        if (texture->sampler >= view->sampler_count) {
+            check.fault = NEBULA_MODEL_BAD_RANGE;
+            check.what = NEBULA_MODEL_SECTION('S', 'A', 'M', 'P');
+        }
+    }
     return check;
 }
-
-typedef struct NebulaModelTexture {
-    uint32_t name_at, record_at;
-    uint32_t width, height;
-    uint8_t format, wrap_s, wrap_t, mipmap;
-    uint8_t anisotropy, min_filter, mag_filter, reserved;
-    uint32_t levels;
-    float min_lod, max_lod, lod_bias;
-} NebulaModelTexture;
 
 #ifdef __cplusplus
 }
@@ -554,7 +592,8 @@ static_assert(sizeof(NebulaModelMesh) == 100);
 static_assert(sizeof(NebulaModelMatl) == 64);
 static_assert(sizeof(NebulaModelFormEntry) == 56);
 static_assert(sizeof(NebulaModelGx) == 120);
-static_assert(sizeof(NebulaModelTexture) == 40);
+static_assert(sizeof(NebulaModelTexture) == 20);
+static_assert(sizeof(NebulaModelSampler) == 20);
 static_assert(sizeof(NebulaModelCoordMatrix) == 104);
 static_assert(sizeof(NebulaModelWarp) == 24);
 static_assert(sizeof(NebulaModelFog) == 24);

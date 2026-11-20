@@ -73,17 +73,10 @@ void SiteMaterial::setTexture(u32 slot, const GameTexture* pTexture) {
 void SiteTextures::toFrame(const SiteTexture& rTexture, NebulaFrameTexture* pOut) {
     NebulaFrameTexture& rOut = *pOut;
     memset(&rOut, 0, sizeof(rOut));
-    const u8 minFilter = rTexture.mMinFilter;
     rOut.texture = RenderTexture::idOf(rTexture.mImage);
-    rOut.wrap_s = rTexture.mWrapS;
-    rOut.wrap_t = rTexture.mWrapT;
-    rOut.mag_linear = rTexture.mMagFilter != 0 ? 1 : 0;
-    rOut.min_linear = minFilter == 1 || minFilter == 3 || minFilter == 5 ? 1 : 0;
-    rOut.mip_filter = minFilter < 2 ? 0 : minFilter < 4 ? 1 : 2;
-    rOut.anisotropy = rTexture.mMaxAniso;
-    rOut.lod_bias = rTexture.mLodBias;
-    rOut.min_lod = rTexture.mMinLod;
-    rOut.max_lod = rTexture.mMaxLod;
+    // A disc picture's sampler from the console's codes until E3 step 4 cooks them (P-155).
+    setFrameSampler(rOut, nebula_sampler_from_codes(rTexture.mWrapS, rTexture.mWrapT, rTexture.mMinFilter, rTexture.mMagFilter,
+                                                    rTexture.mMaxAniso, rTexture.mMinLod, rTexture.mMaxLod, rTexture.mLodBias));
 }
 
 void SiteMaterial::setTexture(u32 slot, const SiteTexture& rTexture) {
