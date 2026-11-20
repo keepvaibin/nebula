@@ -42,7 +42,6 @@
 #include "galaxy/display_aspect.h"
 #include "galaxy/content_viewport.h"
 #include "galaxy/render/render_config.h"
-#include "galaxy/windows_paths.h"
 #include "galaxy/windows_power.h"
 #include "galaxy/frame_timeline.h"
 #include "galaxy/render/idle_clock.h"
@@ -63,13 +62,11 @@
 #include <mutex>
 #include <optional>
 #include <fstream>
-#include <iterator>
 #include <set>
 #include <tuple>
 #include <span>
 #include <stdexcept>
 #include <string>
-#include <system_error>
 #include <string_view>
 #include <thread>
 #include <unordered_set>
@@ -827,127 +824,6 @@ namespace {
 std::int64_t content_moment_qpc(std::int64_t step_qpc, double t, std::int64_t asked_qpc) {
     static const double period = static_cast<double>(galaxy::qpc_frequency()) / kGameStepRate;
     return step_qpc != 0 ? step_qpc + static_cast<std::int64_t>(std::llround(t * period)) : asked_qpc;
-}
-
-// P-242's hunt (probe-reads diagnostics): the folder NEBULA_PROBE_DEPTH_DIR names when NEBULA_PROBE_DEPTH_FRAMES
-// ("first-last/channel") takes in this flight of probes, else empty: the scene's depth as the flight read it and the
-// list's ring are written there.
-std::filesystem::path probe_dump_folder(std::uint32_t game_frame, std::uint32_t channel) {
-#if defined(_WIN32)
-    std::filesystem::path dir = ::galaxy::windows::environment_text(L"NEBULA_PROBE_DEPTH_DIR");
-    std::string frames;
-    for (const wchar_t c : ::galaxy::windows::environment_text(L"NEBULA_PROBE_DEPTH_FRAMES")) {
-        frames.push_back(c < 0x80 ? static_cast<char>(c) : '?');  // digits, '-' and '/'
-    }
-#else
-    const char* const dir_text = std::getenv("NEBULA_PROBE_DEPTH_DIR");
-    const char* const frames_text = std::getenv("NEBULA_PROBE_DEPTH_FRAMES");
-    std::filesystem::path dir = dir_text != nullptr ? dir_text : "";
-    const std::string frames = frames_text != nullptr ? frames_text : "";
-#endif
-    const char* at = frames.data();
-    const char* const end = at + frames.size();
-    const auto number = [&](unsigned& out) {
-        const auto read = std::from_chars(at, end, out);
-        at = read.ptr;
-        return read.ec == std::errc{};
-    };
-    const auto mark = [&](char c) {
-        const bool here = at != end && *at == c;
-        at += here ? 1 : 0;
-        return here;
-    };
-    unsigned first = 0u, last = 0u, only = 0u;
-    if (dir.empty() || !(number(first) && mark('-') && number(last) && mark('/') && number(only)) || game_frame < first ||
-        game_frame > last || channel != only) {
-        return {};
-    }
-    return dir;
-}
-
-// The scene's depth as a flight of probes read it, where the renderer can give it: written as a PFM into `dir` (when
-// not empty), and with `tiles` its 16 by 9 tiles' FNV-1a hashes logged ([probe-depth]), so two runs show the first frame
-// and the part of the picture where their depths part.
-template <class R>
-void dump_probe_depth(R& renderer, const std::filesystem::path& dir, bool tiles, std::uint32_t game_frame,
-                      std::uint32_t channel) {
-    if constexpr (requires(std::vector<float>& d, std::uint32_t& n) { renderer.read_probe_depth(d, n, n); }) {
-        std::vector<float> depth;
-        std::uint32_t width = 0u, height = 0u;
-        if (!renderer.read_probe_depth(depth, width, height) || width == 0u || height == 0u) {
-            std::fprintf(stderr, "[probe-depth] frame %u channel %u: not read\n", game_frame, channel);
-            return;
-        }
-        if (tiles) {
-            constexpr std::uint32_t kAcross = 16u, kDown = 9u;
-            std::uint32_t hashes[kAcross * kDown];
-            std::fill(std::begin(hashes), std::end(hashes), 0x811c9dc5u);
-            for (std::uint32_t y = 0; y < height; ++y) {
-                for (std::uint32_t x = 0; x < width; ++x) {
-                    std::uint32_t bits = 0u;
-                    std::memcpy(&bits, &depth[static_cast<std::size_t>(y) * width + x], sizeof(bits));
-                    std::uint32_t& h = hashes[(y * kDown / height) * kAcross + x * kAcross / width];
-                    for (int b = 0; b < 4; ++b) h = (h ^ ((bits >> (8 * b)) & 0xffu)) * 0x01000193u;
-                }
-            }
-            std::string text;
-            char word[10];
-            for (const std::uint32_t h : hashes) {
-                std::snprintf(word, sizeof(word), " %08x", h);
-                text += word;
-            }
-            std::fprintf(stderr, "[probe-depth] frame %u channel %u tiles%s\n", game_frame, channel, text.c_str());
-        }
-        if (!dir.empty()) {
-            const std::filesystem::path path =
-                dir / ("depth-" + std::to_string(game_frame) + "-channel-" + std::to_string(channel) + ".pfm");
-            std::ofstream file(path, std::ios::binary);
-            file << "Pf\n" << width << ' ' << height << "\n-1.0\n";
-            for (std::uint32_t y = height; y-- > 0u && file;) {  // the bottom row first
-                file.write(reinterpret_cast<const char*>(depth.data() + static_cast<std::size_t>(y) * width),
-                           static_cast<std::streamsize>(width * sizeof(float)));
-            }
-            if (!file) {
-                std::fprintf(stderr, "[probe-depth] not written: %s\n", path.string().c_str());
-            }
-        }
-    } else {
-        (void)renderer;
-        (void)dir;
-        (void)tiles;
-        std::fprintf(stderr, "[probe-depth] frame %u channel %u: this renderer gives no depth\n", game_frame, channel);
-    }
-}
-
-// The channel NEBULA_PROBE_DEPTH_TILES names: its flights' depth tiles are logged (dump_probe_depth).
-bool probe_tiles_asked(std::uint32_t channel) {
-#if defined(_WIN32)
-    const std::wstring text = ::galaxy::windows::environment_text(L"NEBULA_PROBE_DEPTH_TILES");
-    return !text.empty() && text == std::to_wstring(channel);
-#else
-    const char* const text = std::getenv("NEBULA_PROBE_DEPTH_TILES");
-    return text != nullptr && std::to_string(channel) == text;
-#endif
-}
-
-// The list's ring as it is drawn: its vertex bytes (ring-F.vertices) and its ring items, one line each (ring-F.items:
-// the item's number, pipeline, source hash, flags, first vertex byte, vertices, first index and count), so two runs'
-// rings can be compared draw by draw.
-void dump_probe_ring(const NebulaFrameList& list, const std::filesystem::path& dir, std::uint32_t game_frame) {
-    const std::string stem = "ring-" + std::to_string(game_frame);
-    std::ofstream vertices(dir / (stem + ".vertices"), std::ios::binary);
-    vertices.write(static_cast<const char*>(list.ring_vertices), static_cast<std::streamsize>(list.ring_vertex_bytes));
-    std::ofstream items(dir / (stem + ".items"));
-    for (std::uint32_t i = 0; i < list.item_count; ++i) {
-        const NebulaFrameItem& item = list.items[i];
-        if ((item.flags & NEBULA_ITEM_RING) != 0u) {
-            items << i << ' ' << item.pipeline << ' ' << item.source_hash << ' ' << item.flags << ' ' << item.ring_at << ' '
-                  << item.ring_count << ' ' << item.first << ' ' << item.count << '\n';
-        }
-    }
-    if (!vertices || !items) {
-        std::fprintf(stderr, "[probe-depth] ring not written: %s\n", (dir / stem).string().c_str());
-    }
 }
 
 }  // namespace
@@ -1844,16 +1720,6 @@ void RenderCore::record_screen_probes(std::uint32_t channel, const ScreenProbe* 
                      static_cast<unsigned long long>(walk_.serial));
     }
     if (renderer_.record_screen_probes(flight.slot, flight.probes, compared)) {
-        if (::galaxy::diagnosing(::galaxy::kDiagnoseProbeReads)) [[unlikely]] {
-            const std::filesystem::path dir = probe_dump_folder(flight.game_frame, channel);
-            const bool tiles = probe_tiles_asked(channel);
-            if (!dir.empty() || tiles) {
-                dump_probe_depth(renderer_, dir, tiles, flight.game_frame, channel);
-            }
-            if (!dir.empty()) {
-                dump_probe_ring(*walk_.now->list, dir, flight.game_frame);
-            }
-        }
         {
             const std::lock_guard guard(probe_answers_lock_);
             probe_book_.flight(flight.game_frame);

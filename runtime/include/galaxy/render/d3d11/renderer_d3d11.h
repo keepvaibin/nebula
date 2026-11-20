@@ -260,8 +260,6 @@ public:
     // frame's fence has passed. `compared` probes are answered by a depth test of each point (1 seen, 0 hidden).
     [[nodiscard]] bool record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes, bool compared);
     [[nodiscard]] const float* screen_probes_finished(std::size_t slot);
-    // P-242's hunt: the scene's depth as the last probes read it, the top row first; false when it cannot be read.
-    [[nodiscard]] bool read_probe_depth(std::vector<float>& depth, std::uint32_t& width, std::uint32_t& height);
 
     // Test captures: the presented picture as PPM files (paths from set_debug_capture_paths). Writes every capture
     // whose frame the GPU has finished.
