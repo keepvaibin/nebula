@@ -13,6 +13,7 @@
 #include "galaxy/render/renderer_common.h"
 #include "render/core/compose.h"
 #include "render/core/gpu_encoder.h"
+#include "render/core/texture_lists.h"
 #include "render/core/walk_plan.h"
 
 #include <nebula_frame_list.h>
@@ -108,6 +109,9 @@ struct TextureTable {
     std::vector<std::uint32_t> sampler_slots;
     gpu::Address lists = 0u;
     std::uint32_t list_first = 0u;
+    // Its list in core::TextureLists and the pairs written there: written again only when the pairs change.
+    TextureLists::Place list_place{};
+    std::vector<std::uint32_t> list_pairs;
     bool clamp_logged = false;  // a bound table drew fewer maps than the list names (told once)
     std::uint64_t key = 0u;
     gpu::Table textures{};
@@ -258,6 +262,12 @@ public:
         std::uint64_t retirements = 0u;  // retire_idle_tables's releases since the start
     };
     [[nodiscard]] TableCounts table_counts() const noexcept;
+    // The texture lists of tables dropped or retired since the last call (RenderCore gives them up to its
+    // core::TextureLists at the renderer's fence).
+    void take_released_lists(std::vector<TextureLists::Place>& out) {
+        out.swap(released_lists_);
+        released_lists_.clear();
+    }
 
     [[nodiscard]] const GpuMesh& mesh(std::uint32_t id) const noexcept { return meshes_[id]; }
     [[nodiscard]] const GpuModel& model(std::uint32_t id) const noexcept { return models_[id]; }
@@ -371,6 +381,7 @@ private:
     std::vector<std::unique_ptr<TextureTable>> tables_;
     TextureTable no_table_;
     std::uint64_t table_retirements_ = 0u;
+    std::vector<TextureLists::Place> released_lists_;
 
     std::uint32_t next_model_ = 1u, next_mesh_ = 1u, next_slot_ = 0u, next_table_ = 1u;
     // Every pipeline the game registered, with its inputs (the entries' copies, in registration order).

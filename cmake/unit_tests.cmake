@@ -172,6 +172,9 @@ target_include_directories(galaxy_walk_plan_tests PRIVATE "${galaxy_root}/runtim
 # Frame lists recorded from tours (--diagnostics frame-plans): their plans must not change unseen (P-044).
 target_compile_definitions(galaxy_walk_plan_tests PRIVATE WALK_PLAN_FIXTURES="${galaxy_root}/runtime/src/render/core/testdata/frame-plans")
 # A model's section table as the game and the host read it (nebula_model.h, header-only; FRAME-MODEL 2.8).
+# Texture lists that live as long as their table (texture_lists.h, header-only; FRAME-MODEL 2.10).
+galaxy_test(galaxy_texture_lists_tests SOURCES ${render_src}/core/texture_lists_tests.cpp)
+target_include_directories(galaxy_texture_lists_tests PRIVATE "${galaxy_root}/runtime/src")
 galaxy_test(galaxy_model_sections_tests SOURCES ${render_src}/core/model_sections_tests.cpp)
 target_include_directories(galaxy_model_sections_tests PRIVATE "${galaxy_root}/native/include")
 # A frame list let go of with release and taken back with acquire (nebula_frame_list.h, P-005): two threads, here so

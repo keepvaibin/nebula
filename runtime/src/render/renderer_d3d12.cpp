@@ -2945,38 +2945,31 @@ std::uint32_t RendererD3D12::sampler_slot(const SamplerKey& key) {
     return allocation.index;
 }
 
-void RendererD3D12::write_texture_list(const std::uint32_t* pairs, std::uint32_t count, gpu::Address& lists,
-                                       std::uint32_t& first) {
-    TextureListBuffer& buffer = texture_lists_[frame_slot_];
-    if (buffer.resource == nullptr || texture_lists_used_ + count > buffer.capacity) {
-        if (buffer.resource != nullptr) {
-            retired_texture_lists_.push_back({std::move(buffer.resource), next_fence_value_ + 1u});
-        }
-        const std::uint32_t capacity = std::max(4096u, 2u * std::max(buffer.capacity, count));
-        D3D12_HEAP_PROPERTIES heap{};
-        heap.Type = D3D12_HEAP_TYPE_UPLOAD;
-        D3D12_RESOURCE_DESC desc{};
-        desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-        desc.Width = UINT64{capacity} * 8u;
-        desc.Height = 1u;
-        desc.DepthOrArraySize = 1u;
-        desc.MipLevels = 1u;
-        desc.SampleDesc.Count = 1u;
-        desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        d3d_check(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_GENERIC_READ,
-                                                   nullptr, IID_PPV_ARGS(&buffer.resource)),
-                  "create texture lists");
-        const D3D12_RANGE none{0u, 0u};
-        void* mapped = nullptr;
-        d3d_check(buffer.resource->Map(0u, &none, &mapped), "map texture lists");
-        buffer.mapped = static_cast<std::uint32_t*>(mapped);
-        buffer.capacity = capacity;
-        texture_lists_used_ = 0u;
+bool RendererD3D12::make_texture_list_chunk(std::uint32_t pairs, std::uint32_t*& mapped, gpu::Address& address) {
+    D3D12_HEAP_PROPERTIES heap{};
+    heap.Type = D3D12_HEAP_TYPE_UPLOAD;
+    D3D12_RESOURCE_DESC desc{};
+    desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    desc.Width = UINT64{pairs} * 8u;
+    desc.Height = 1u;
+    desc.DepthOrArraySize = 1u;
+    desc.MipLevels = 1u;
+    desc.SampleDesc.Count = 1u;
+    desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    Microsoft::WRL::ComPtr<ID3D12Resource> resource;
+    if (FAILED(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                                IID_PPV_ARGS(&resource)))) {
+        return false;
     }
-    std::memcpy(buffer.mapped + std::size_t{texture_lists_used_} * 2u, pairs, std::size_t{count} * 8u);
-    lists = buffer.resource->GetGPUVirtualAddress();
-    first = texture_lists_used_;
-    texture_lists_used_ += count;
+    const D3D12_RANGE none{0u, 0u};
+    void* at = nullptr;
+    if (FAILED(resource->Map(0u, &none, &at))) {
+        return false;
+    }
+    mapped = static_cast<std::uint32_t*>(at);
+    address = resource->GetGPUVirtualAddress();
+    texture_list_chunks_.push_back(std::move(resource));
+    return true;
 }
 
 void RendererD3D12::free_target(std::uint32_t id, TextureStore& textures) {
@@ -3058,9 +3051,6 @@ void RendererD3D12::log_video_memory(const VideoMemoryOutside& outside) {
                     allocation_bytes(resource.Get());
             }
         }
-    }
-    for (const RetiredBuffer& retired : retired_texture_lists_) {
-        retired_buffers += allocation_bytes(retired.resource.Get());
     }
     std::uint64_t ring_local = 0u;
     std::uint64_t ring_host = 0u;
@@ -3247,10 +3237,7 @@ void RendererD3D12::shutdown() {
     for (auto& b : backbuffers_) b.Reset();
     rtv_heap_.Reset(); dsv_heap_.Reset(); sampler_heap_.Reset(); root_signature_.Reset();
     sampler_slots_.reset();
-    for (TextureListBuffer& lists : texture_lists_) {
-        lists = TextureListBuffer{};
-    }
-    retired_texture_lists_.clear();
+    texture_list_chunks_.clear();
     retired_heaps_.clear();
     mirrored_backend_ = nullptr;
     mirrored_store_ = nullptr;
@@ -3962,10 +3949,8 @@ void RendererD3D12::begin_frame() {
     index_ring_.begin_frame(frame_slot_);
     constant_ring_.begin_frame(frame_slot_);
     srv_ring_.begin_frame(frame_slot_);
-    texture_lists_used_ = 0u;
     {
         const std::uint64_t completed = completed_fence_value();
-        std::erase_if(retired_texture_lists_, [&](const RetiredBuffer& retired) { return retired.fence <= completed; });
         std::erase_if(retired_heaps_, [&](const RetiredHeap& retired) { return retired.fence <= completed; });
     }
     reset_sampler_frame();

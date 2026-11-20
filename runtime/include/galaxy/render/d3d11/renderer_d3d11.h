@@ -122,10 +122,7 @@ public:
     [[nodiscard]] bool bindless() const noexcept { return false; }
     [[nodiscard]] std::uint32_t texture_slot(const TextureHandle&) const noexcept { return 0u; }
     [[nodiscard]] std::uint32_t sampler_slot(const SamplerKey&) { return 0u; }
-    void write_texture_list(const std::uint32_t*, std::uint32_t, gpu::Address& lists, std::uint32_t& first) {
-        lists = 0u;
-        first = 0u;
-    }
+    bool make_texture_list_chunk(std::uint32_t, std::uint32_t*&, gpu::Address&) { return false; }
     void bind_draw_textures(gpu::Address) {}
     [[nodiscard]] std::uint32_t table_slots() const noexcept { return d3d11::kBoundTableSlots; }
     [[nodiscard]] gpu::Table texture_table_for(const TextureHandle* handles, unsigned count, const TextureStore& cache);

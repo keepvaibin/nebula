@@ -246,6 +246,10 @@ private:
     void begin_walk_frame(ListEntry& entry);
     std::vector<std::uint32_t> freed_textures_;
     std::vector<gpu::Table> retired_tables_;
+    // Every draw's texture list, for the life of its table (FRAME-MODEL 2.10); the chunks are the renderer's.
+    core::TextureLists texture_lists_;
+    std::vector<core::TextureLists::Place> released_lists_;
+    void give_up_released_lists();
     void walk_frame(ListEntry& entry, const core::WalkTime& time, bool present);
     void flush_waiting_list();
     void scan_list(core::ListData& now);

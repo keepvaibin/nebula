@@ -22,6 +22,7 @@
 #include <filesystem>
 #include <fstream>
 #include <mutex>
+#include <stdexcept>
 #include <set>
 #include <utility>
 
@@ -838,7 +839,27 @@ void RenderCore::walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_
         walk_pairs_[2u * i] = renderer_.texture_slot(walk_handles_[i]);
         walk_pairs_[2u * i + 1u] = table.sampler_slots[i];
     }
-    renderer_.write_texture_list(walk_pairs_.data(), count, table.lists, table.list_first);
+    // The list lives as long as the table (core::TextureLists): written again only when a pair changed. A table holding
+    // a target is written each walk, its picture's slot moving with the frame, until a target is read through its own
+    // slot (FRAME-MODEL 2.10, E3 step 2's last landing).
+    if (has_target || !table.list_place.valid() || table.list_pairs != walk_pairs_) {
+        texture_lists_.release(table.list_place, renderer_.submitted_fence_value() + 1u);
+        table.list_place = texture_lists_.write(walk_pairs_.data(), count, renderer_.completed_fence_value(),
+                                                [&](std::uint32_t pairs) {
+                                                    core::TextureLists::Chunk chunk;
+                                                    chunk.pairs = pairs;
+                                                    if (!renderer_.make_texture_list_chunk(pairs, chunk.mapped, chunk.address)) {
+                                                        chunk.mapped = nullptr;
+                                                    }
+                                                    return chunk;
+                                                });
+        if (!table.list_place.valid()) {
+            throw std::runtime_error("[textures] the texture lists could not be made");
+        }
+        table.list_pairs = walk_pairs_;
+    }
+    table.lists = texture_lists_.address(table.list_place);
+    table.list_first = table.list_place.first;
     table.has_target = has_target;
     table.pictures_moved = pictures_moved_;
     if (count > table.count && !table.clamp_logged) {

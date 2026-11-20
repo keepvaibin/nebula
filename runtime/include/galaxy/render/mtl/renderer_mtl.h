@@ -132,9 +132,9 @@ public:
     [[nodiscard]] bool bindless() const noexcept { return bindless_; }
     [[nodiscard]] std::uint32_t texture_slot(const TextureHandle& handle) const noexcept;
     [[nodiscard]] std::uint32_t sampler_slot(const SamplerKey& key);
-    // `count` pairs into this frame's texture lists: the buffer they went to and the first pair's place in it
-    // (DrawRoot::table).
-    void write_texture_list(const std::uint32_t* pairs, std::uint32_t count, gpu::Address& lists, std::uint32_t& first);
+    // A chunk of the texture lists (core::TextureLists, FRAME-MODEL 2.10): `pairs` pairs of mapped memory the programs
+    // read at `address`, kept until the renderer is taken down. False when it cannot be made.
+    bool make_texture_list_chunk(std::uint32_t pairs, std::uint32_t*& mapped, gpu::Address& address);
     // The arrays and the lists, for the draws that follow.
     void bind_draw_textures(gpu::Address lists);
     // Without arrays: a draw's own tables of up to table_slots() maps.
@@ -665,14 +665,8 @@ private:
     SamplerSlotCache sampler_slots_;
     bool sampler_slots_ready_ = false;
     TextureStore* mirrored_store_ = nullptr;
-    // The texture lists: a shared buffer per frame in flight, written from its start each frame; a full one is
-    // replaced by one twice its size, the old kept until the frame's fence passes.
-    struct TextureListBuffer {
-        std::shared_ptr<mtl::Buffer> buffer;
-        std::uint32_t capacity = 0u;  // pairs
-    };
-    std::array<TextureListBuffer, kFramesInFlight> texture_lists_{};
-    std::uint32_t texture_lists_used_ = 0u;
+    // The texture lists' chunks (core::TextureLists): shared buffers.
+    std::vector<std::shared_ptr<mtl::Buffer>> texture_list_chunks_;
     std::uint32_t zero_stream_bytes_ = 0u;
     gpu::Address zero_stream_address_ = 0u;
     gpu::BufferRef zero_vertices_;

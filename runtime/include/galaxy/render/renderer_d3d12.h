@@ -332,9 +332,9 @@ public:
     // A sampler's place in the sampler heap, made the first time it is asked for (until the heap starts again:
     // sampler_generation changes).
     [[nodiscard]] std::uint32_t sampler_slot(const SamplerKey& key);
-    // `count` pairs {texture slot, sampler slot} into this frame's texture lists: the buffer they went to and the first
-    // pair's place in it (DrawRoot::table).
-    void write_texture_list(const std::uint32_t* pairs, std::uint32_t count, gpu::Address& lists, std::uint32_t& first);
+    // A chunk of the texture lists (core::TextureLists, FRAME-MODEL 2.10): `pairs` pairs of mapped memory the programs
+    // read at `address`, kept until the renderer is taken down. False when it cannot be made.
+    bool make_texture_list_chunk(std::uint32_t pairs, std::uint32_t*& mapped, gpu::Address& address);
     // The texture cache records its uploads into this frame's command list.
     void attach_texture_uploads(TextureStore& cache);
     // The adapter's local video memory in use by this process and the OS's budget for it (DXGI QueryVideoMemoryInfo), read at
@@ -1212,20 +1212,8 @@ private:
     void texture_heap_replaced();
     const void* mirrored_backend_ = nullptr;
     TextureStore* mirrored_store_ = nullptr;
-    // The texture lists (t18): one upload buffer per frame in flight, written from the start each frame; a full one is
-    // replaced by one twice its size, the old kept until the GPU is past it.
-    struct TextureListBuffer {
-        Microsoft::WRL::ComPtr<ID3D12Resource> resource;
-        std::uint32_t* mapped = nullptr;
-        std::uint32_t capacity = 0u;  // pairs
-    };
-    std::array<TextureListBuffer, kFramesInFlight> texture_lists_{};
-    std::uint32_t texture_lists_used_ = 0u;
-    struct RetiredBuffer {
-        Microsoft::WRL::ComPtr<ID3D12Resource> resource;
-        std::uint64_t fence = 0u;
-    };
-    std::vector<RetiredBuffer> retired_texture_lists_;
+    // The texture lists' chunks (t18; core::TextureLists): upload buffers, mapped for their life.
+    std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> texture_list_chunks_;
     gpu::Encoder encoder_;
     gpu::UploadMemory zero_stream_{};
     std::uint32_t zero_stream_bytes_ = 0u;
