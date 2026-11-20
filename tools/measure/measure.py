@@ -221,6 +221,16 @@ def compare(line, earlier):
     return out
 
 
+def window_disturbed(run_folder):
+    """How the player's desktop reached a visible run's window (the harness's window-watch.txt, P-328), or None: a run
+    whose window was minimized, active or under the pointer is not compared."""
+    try:
+        text = (pathlib.Path(run_folder) / "window-watch.txt").read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return "; ".join(text.splitlines()) or None
+
+
 def run_folder_of(work, renderer):
     found = sorted(pathlib.Path(work).rglob("run.log"), key=lambda p: p.stat().st_mtime)
     found = [p.parent for p in found if p.parent.name == renderer]
@@ -371,6 +381,12 @@ def measure_runs(args, work, runner=subprocess.run, device=None, gate=None):
             failed = True
             continue
         device_name = "tablet" if tablet else ("pc-4cores" if cores else "pc")
+        disturbed = None if tablet else window_disturbed(found)
+        if disturbed:
+            # The player used the desktop over this run's window: its figures are not the game's alone (P-328).
+            print("%s (%s %s): not trusted, its window was reached: %s" % (name, device_name, renderer, disturbed))
+            said.append("%s not trusted (window: %s)" % (name, disturbed))
+            continue
         line = history_line(figures(found), args.commit[:9], device_name, renderer, "120", found)
         earlier = read_history(args.history)
         add_history(args.history, line)

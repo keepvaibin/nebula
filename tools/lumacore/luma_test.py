@@ -1783,7 +1783,14 @@ def run_one(test, renderer, args, run_folder, previous):
         if "timeline" in diagnostics:
             command += ["--timeline", str(run_folder / "timeline.bin")]
     hidden = {}
-    if test.get("visible"):
+    if test.get("visible") and platform.system() == "Windows":
+        # A visible run (the play route measure) shows without taking the focus: the player's keys stay where they were
+        # (P-328). Its window is watched (watch_window): a run the player's desktop reached is said so.
+        startup = subprocess.STARTUPINFO()
+        startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startup.wShowWindow = 4  # SW_SHOWNOACTIVATE
+        hidden["startupinfo"] = startup
+    elif test.get("visible"):
         pass
     elif platform.system() == "Windows":
         startup = subprocess.STARTUPINFO()
@@ -1802,7 +1809,18 @@ def run_one(test, renderer, args, run_folder, previous):
                 raise
             raise HarnessError("the game could not be started: %s" % error) from error
         with process:
-            code, starts, unwatched, steps = watch_run(process, run_folder, exe.name, test["limit"])
+            watched, watcher = None, None
+            if test.get("visible") and platform.system() == "Windows":
+                import threading
+                watched = threading.Event()
+                watcher = threading.Thread(target=watch_window, args=(run_folder, process.pid, watched), daemon=True)
+                watcher.start()
+            try:
+                code, starts, unwatched, steps = watch_run(process, run_folder, exe.name, test["limit"])
+            finally:
+                if watcher is not None:
+                    watched.set()
+                    watcher.join(5)
     seconds = time.time() - began
     return {"code": code, "seconds": seconds, "frozen": frozen, "mods": mod_ids, "exe": exe.name, "starts": starts,
             "unwatched": unwatched, **steps}
@@ -1911,6 +1929,69 @@ def hang_dump(run_folder, process=None):
     its own threads, when no frame came for 10 s in a test run on Windows (nebula-hang-*.dmp, host_main.cpp); this names what
     it wrote, and the verdict says so. Elsewhere the game writes none, and the verdict says that."""
     return sorted(p.name for p in pathlib.Path(run_folder).glob("nebula-hang-*.dmp"))
+
+
+def watch_window(run_folder, first_pid, done):
+    """A visible run's window, every quarter second until `done` is set (Windows): a line in run_folder/window-watch.txt
+    the first time, and a count, of each way the player's desktop reached it: "minimized", "active" (the foreground
+    window, so keys reach it) and "pointer" (the pointer over it). The run's processes: the one started and each one
+    the host started in its place (run_folder/restarted)."""
+    import ctypes
+    from ctypes import wintypes
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    user32.GetForegroundWindow.restype = wintypes.HWND
+    user32.WindowFromPoint.restype = wintypes.HWND
+    user32.WindowFromPoint.argtypes = [wintypes.POINT]
+    user32.GetAncestor.restype = wintypes.HWND
+    user32.GetAncestor.argtypes = [wintypes.HWND, wintypes.UINT]
+    user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+    user32.IsIconic.argtypes = [wintypes.HWND]
+    user32.IsWindowVisible.argtypes = [wintypes.HWND]
+    enum_proc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+    def pid_of(hwnd):
+        pid = wintypes.DWORD(0)
+        if hwnd:
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        return pid.value
+
+    def pids():
+        out = {first_pid}
+        try:
+            words = (run_folder / "restarted").read_text(encoding="utf-8").split()
+            if words and words[0].isdigit():
+                out.add(int(words[0]))
+        except OSError:
+            pass
+        return out
+
+    seen = {}
+    began = time.time()
+    while not done.wait(0.25):
+        ours = pids()
+        kinds = []
+        if pid_of(user32.GetForegroundWindow()) in ours:
+            kinds.append("active")
+        point = wintypes.POINT()
+        if user32.GetCursorPos(ctypes.byref(point)):
+            under = user32.WindowFromPoint(point)
+            if under and pid_of(user32.GetAncestor(under, 2)) in ours:  # GA_ROOT
+                kinds.append("pointer")
+        minimized = []
+
+        def visit(hwnd, _):
+            if pid_of(hwnd) in ours and user32.IsWindowVisible(hwnd) and user32.IsIconic(hwnd):
+                minimized.append(hwnd)
+            return True
+        user32.EnumWindows(enum_proc(visit), 0)
+        if minimized:
+            kinds.append("minimized")
+        for kind in kinds:
+            first, count = seen.get(kind, (time.time() - began, 0))
+            seen[kind] = (first, count + 1)
+    if seen:
+        lines = ["%s first at %.1f s, %d of the quarter seconds" % (k, first, n) for k, (first, n) in sorted(seen.items())]
+        (run_folder / "window-watch.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def watch_run(first, run_folder, exe_name, limit, clock=time.monotonic, hang_after=HANG_SECONDS, dump=hang_dump):
