@@ -102,7 +102,7 @@ void TalkPeekZ::setDrawSyncToken() {
     Frame::getViewportv(mViewport);
 
     // The depth at the balloon's point asked last; then the picture drawn so far, at its point now.
-    NebulaScreenProbe probe;
+    NebulaScreenProbe probe{};  // zeroed: with no answer back yet, the ask sends no unset field
     mDepth = 0.0f;
     if (Frame::screenProbeResults(cReadbackChannel, mAsker, &probe, 1) == 1 && probe.x >= 0.0f) {
         mDepth = probe.value;

@@ -156,7 +156,7 @@ void StarPointerPeekZ::setDrawSyncToken() {
     Frame::getProjectionv(mProjectionParameters);
     Frame::getViewportv(mViewportParameters);
     // The depth under each pointer: what was asked last, and the picture drawn so far at where they are now.
-    NebulaScreenProbe probes[2];
+    NebulaScreenProbe probes[2]{};  // zeroed: with no answer back yet, the ask sends no unset field
     const u32 count = StarPointerFunction::getNumStarPointer();
     const u32 done = Frame::screenProbeResults(cReadbackChannel, mAsker, probes, count);
     for (u32 channel = 0; channel < count; channel++) {
