@@ -1665,7 +1665,7 @@ void RendererD3D12::begin_scene_rectangle() {
         dynamic_resolution_.set_walk(dynamic_resolution_offered() &&
                                      ::galaxy::diagnosing(::galaxy::kDiagnoseResolutionSteps));
         scene_rectangle_ = dynamic_resolution_.update(cfg.dynamic_resolution && dynamic_resolution_offered(), scene_extent_,
-                                                      dynamic_resolution_floor(), native_scene_gpu_ema_ms_,
+                                                      dynamic_resolution_floor(), frame_gpu_.scene_ema_ms(),
                                                       resolution_budget_ms(rate, display_refresh_hz_));
         if (::galaxy::diagnosing(::galaxy::kDiagnoseResolutionSteps | ::galaxy::kDiagnosePresentStats) &&
             dynamic_resolution_.sixteenths() != before) {
@@ -3122,7 +3122,7 @@ RendererD3D12::Kept RendererD3D12::take_apart_lost_device() {
 }
 
 void RendererD3D12::shutdown() {
-    native_scene_gpu_ema_ms_ = 0.0;
+    frame_gpu_.reset_scene_ema();
     frame_scene_drawn_.fill(false);
     if (fsr_swap_chain_ && swap_chain_) {
         wait_for_gpu();
@@ -3769,32 +3769,27 @@ void RendererD3D12::begin_frame() {
     apply_dynamic_resolution();
     sync_post_process_settings();
     {
-        if (temporal_interp_hold_.held()) {
-            if (temporal_interp_key() != temporal_interp_key_) {
-                temporal_interp_hold_.settings_changed();  // the settings changed: decided again
-            } else if (temporal_interp_hold_.lift_if_due(galaxy::qpc_to_ns(galaxy::qpc_now()))) {
-                // Its wait passed: the governor measures generated frames again, not by the cost that held it.
-                reset_generated_gpu_ema();
-                std::cerr << "[interp] temporal upscaling of generated frames tried again\n";
-            }
+        // A hold of the temporal upscaler on generated frames: decided again when its settings changed, tried again
+        // when its wait passed (the governor then measures generated frames again, not by the cost that held it).
+        if (temporal_interp_hold_.lift_at_frame_start([this] { return temporal_interp_key() != temporal_interp_key_; },
+                                                      galaxy::qpc_to_ns(galaxy::qpc_now()))) {
+            frame_gpu_.reset_generated_ema();
+            std::cerr << "[interp] temporal upscaling of generated frames tried again\n";
         }
         // A ring whose frames took over half their budget (or spilled) grows before the next frame; one whose last 30 seconds
         // (and 600 frames) stayed under a quarter of it gives half of its memory back on a frame without the scene
         // (UploadRing::kQuietNs). Only that ring is made again. --diagnostics ring-stress makes them all again (at the size
         // each wants) every kRingStressFrames frames.
-        const bool ring_stress =
-            ::galaxy::diagnosing(::galaxy::kDiagnoseRingStress) && frame_index_ % ::galaxy::kRingStressFrames == 0u;
         // No wait for the GPU: a ring is made again as a new buffer, and the old one and its chunks go to the newest frame in
         // flight's retired list, released after that frame's fence, which is past every earlier frame's.
         const UploadRingSlot rings[] = {{&vertex_ring_, "vertex", kRingSegments, true},
                                         {&index_ring_, "index", kFramesInFlight, true},
                                         {&constant_ring_, "constant", kFramesInFlight, true},
                                         {&matrix_ring_, "matrix", kRingSegments, false}};
-        if (ring_stress || (!ring_growth_failed_ && std::any_of(std::begin(rings), std::end(rings),
-                                                                [](const UploadRingSlot& s) { return s.ring->wants_new_size(); }))) {
+        if (const RingRemake due = upload_rings_due(rings, frame_index_, ring_growth_failed_); due != RingRemake::None) {
             const galaxy::bench::RenderSpan span(galaxy::bench::RenderPart::RingResize);
             std::vector<gpu::BufferRef>& old = retired_targets_[(frame_index_ + kFramesInFlight - 1u) % kFramesInFlight];
-            if (remake_upload_rings(device_.Get(), rings, ring_stress, ring_growth_failed_, old)) {
+            if (remake_upload_rings(device_.Get(), rings, due == RingRemake::All, ring_growth_failed_, old)) {
                 // The vertex and matrix rings share one segment counter and one fence for each segment (history_segment_,
                 // history_segment_fence_). A ring made again is a new buffer, every segment of which is free; a ring that was not made
                 // again (the vertex ring, when only the matrix ring grew) keeps the segments the frames in flight write and read, so
@@ -3867,16 +3862,8 @@ void RendererD3D12::begin_frame() {
                     static_cast<double>(timestamps[1] - timestamps[0]) *
                     1000.0 / static_cast<double>(timestamp_frequency_);
                 telemetry_gpu_ms_ += gpu_ms;
-                if (frame_scene_drawn_[frame_slot_]) {
-                    native_scene_gpu_ema_ms_ = native_scene_gpu_ema_ms_ == 0.0 ? gpu_ms :
-                        native_scene_gpu_ema_ms_ + (gpu_ms - native_scene_gpu_ema_ms_) * 0.1;
-                }
+                frame_gpu_.add(gpu_ms, frame_scene_drawn_[frame_slot_], frame_generated_[frame_slot_]);
                 telemetry_gpu_by_place_[timestamp_list_place_[frame_slot_]] += gpu_ms;
-                if (frame_generated_[frame_slot_]) {
-                    generated_gpu_ms_ += gpu_ms;
-                    ++generated_gpu_samples_;
-                    generated_gpu_ema_ms_ = generated_gpu_ema_ms_ == 0.0 ? gpu_ms : generated_gpu_ema_ms_ + (gpu_ms - generated_gpu_ema_ms_) * 0.1;
-                }
                 ++telemetry_gpu_by_place_count_[timestamp_list_place_[frame_slot_]];
                 ++telemetry_gpu_samples_;
             }

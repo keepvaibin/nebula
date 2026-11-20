@@ -98,17 +98,17 @@ public:
     // The game's bloom (mtl::GameBloom): `kind` a NEBULA_PASS_BLOOM_*, `a` and `b` its values.
     [[nodiscard]] bool game_bloom_ready() const noexcept { return bloom_.ready(); }
     void game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t b);
-    void reset_generated_gpu_ema() noexcept { generated_gpu_ema_ms_ = 0.0; }
-    [[nodiscard]] double generated_gpu_ema_ms() const noexcept { return generated_gpu_ema_ms_; }
+    void reset_generated_gpu_ema() noexcept { frame_gpu_.reset_generated_ema(); }
+    [[nodiscard]] double generated_gpu_ema_ms() const noexcept { return frame_gpu_.generated_ema_ms(); }
     [[nodiscard]] double interpolation_gpu_cost_ms() const noexcept {
-        return temporal_interp_ ? generated_gpu_ema_ms_ : native_scene_gpu_ema_ms_;
+        return temporal_interp_ ? frame_gpu_.generated_ema_ms() : frame_gpu_.scene_ema_ms();
     }
     void suspend_temporal_interpolation(double ms_per_frame);
     [[nodiscard]] bool temporal_interpolation() const noexcept { return temporal_interp_; }
     [[nodiscard]] unsigned temporal_output_width() const noexcept { return temporal_output_w_; }
     [[nodiscard]] double gpu_ms_per_tick() const noexcept { return 0.0; }  // the tracer's measure: none yet
     // Smoothed GPU time of a frame that drew the scene (0 until measured): the tracer's build budget.
-    [[nodiscard]] double scene_gpu_ema_ms() const noexcept { return native_scene_gpu_ema_ms_; }
+    [[nodiscard]] double scene_gpu_ema_ms() const noexcept { return frame_gpu_.scene_ema_ms(); }
     void set_scene_view(const std::array<float, 12>* view) noexcept {
         scene_view_known_ = view != nullptr;
         if (view != nullptr) {
@@ -256,8 +256,7 @@ public:
     // A present rate above 60.
     [[nodiscard]] bool interpolation_mode() const;
     void take_generated_gpu_ms(double& total_ms, std::uint64_t& samples) noexcept {
-        total_ms = std::exchange(generated_gpu_ms_, 0.0);
-        samples = std::exchange(generated_gpu_samples_, 0u);
+        frame_gpu_.take_generated(total_ms, samples);
     }
     void set_scene_camera(float near_plane, float far_plane, float fov_y) noexcept {
         scene_lens_[0] = near_plane;
@@ -766,12 +765,9 @@ private:
     std::uint64_t window_size_refused_ms_ = 0;
     PresentPacer present_pacer_;
     std::array<bool, kFramesInFlight> frame_generated_{};
-    double generated_gpu_ema_ms_ = 0.0;
-    double native_scene_gpu_ema_ms_ = 0.0;
+    FrameGpuTime frame_gpu_;  // the frame's GPU time: the governor's and the interpolation's measures
     bool scene_drawn_ = false;
     std::array<bool, kFramesInFlight> frame_scene_drawn_{};
-    double generated_gpu_ms_ = 0.0;
-    std::uint64_t generated_gpu_samples_ = 0;
     // Every ten seconds ([metal-gpu]): the GPU's frame time, and how often the scene pass reopened (each reopening
     // loads and stores the whole scene target on a tile-based GPU) and the scene target was copied.
     galaxy::ClockInterval gpu_report_{10'000};  // the report every ten seconds

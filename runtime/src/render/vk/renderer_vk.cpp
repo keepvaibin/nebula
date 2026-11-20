@@ -1829,7 +1829,7 @@ void RendererVk::shutdown() {
         if (stats_queries_ != VK_NULL_HANDLE) vkDestroyQueryPool(device, stats_queries_, nullptr);
         stats_queries_ = VK_NULL_HANDLE;
         timestamp_pending_.fill(false);
-        native_scene_gpu_ema_ms_ = 0.0;
+        frame_gpu_.reset_scene_ema();
         frame_scene_drawn_.fill(false);
         pass_mark_count_.fill(0u);
         stats_pending_.fill(false);
@@ -1905,21 +1905,19 @@ void RendererVk::grow_rings() {
     // A ring whose frames took over half their budget (or spilled) grows; one whose last 30 seconds (and 600 frames) stayed
     // under a quarter of it gives half of its memory back on a frame without the scene (UploadRing::kQuietNs). Only that
     // ring is made again. --diagnostics ring-stress: all made again (at the size each wants) every kRingStressFrames frames.
-    const bool ring_stress =
-        ::galaxy::diagnosing(::galaxy::kDiagnoseRingStress) && frame_index_ % ::galaxy::kRingStressFrames == 0u;
     const UploadRingSlot rings[] = {{&vertex_ring_, "vertex", kRingSegments, true},
                                     {&index_ring_, "index", kFramesInFlight, true},
                                     {&constant_ring_, "constant", kFramesInFlight, true},
                                     {&matrix_ring_, "matrix", kRingSegments, false}};
-    if (!ring_stress && (ring_growth_failed_ || std::none_of(std::begin(rings), std::end(rings),
-                                                             [](const UploadRingSlot& s) { return s.ring->wants_new_size(); }))) {
+    const RingRemake due = upload_rings_due(rings, frame_index_, ring_growth_failed_);
+    if (due == RingRemake::None) {
         return;
     }
     const galaxy::bench::RenderSpan span(galaxy::bench::RenderPart::RingResize);
     // No wait for the GPU: a ring is made again as a new buffer. The old buffer and its chunks are released here, which
     // hands them to the context to destroy once the work submitted so far has completed.
     std::vector<gpu::BufferRef> old;
-    if (remake_upload_rings(vk::Context::get().device(), rings, ring_stress, ring_growth_failed_, old)) {
+    if (remake_upload_rings(vk::Context::get().device(), rings, due == RingRemake::All, ring_growth_failed_, old)) {
         // The vertex and matrix rings share one segment counter and one fence for each segment (history_segment_,
         // history_segment_fence_). A ring made again is a new buffer, every segment of which is free; a ring that was not made
         // again (the vertex ring, when only the matrix ring grew) keeps the segments the frames in flight write and read, so
@@ -1983,14 +1981,12 @@ void RendererVk::begin_frame() {
     apply_dynamic_resolution();
     // draw.post: a program reading motion registers only while a temporal upscaler makes it.
     set_mod_post_motion(temporal_ != nullptr && temporal_mode());
-    if (temporal_interp_hold_.held()) {
-        if (temporal_interp_key() != temporal_interp_key_) {
-            temporal_interp_hold_.settings_changed();  // the settings changed: decided again
-        } else if (temporal_interp_hold_.lift_if_due(galaxy::qpc_to_ns(galaxy::qpc_now()))) {
-            // Its wait passed: the governor measures generated frames again, not by the cost that held it.
-            reset_generated_gpu_ema();
-            std::cerr << "[interp] temporal upscaling of generated frames tried again\n";
-        }
+    // A hold of the temporal upscaler on generated frames: decided again when its settings changed, tried again
+    // when its wait passed (the governor then measures generated frames again, not by the cost that held it).
+    if (temporal_interp_hold_.lift_at_frame_start([this] { return temporal_interp_key() != temporal_interp_key_; },
+                                                  galaxy::qpc_to_ns(galaxy::qpc_now()))) {
+        frame_gpu_.reset_generated_ema();
+        std::cerr << "[interp] temporal upscaling of generated frames tried again\n";
     }
     sync_post_process();
     bloom_.poll_ready();
@@ -2019,15 +2015,7 @@ void RendererVk::begin_frame() {
                                   sizeof(std::uint64_t), VK_QUERY_RESULT_64_BIT) == VK_SUCCESS &&
             ticks[1] >= ticks[0]) {
             const double gpu_ms = static_cast<double>(ticks[1] - ticks[0]) * timestamp_period_ns_ / 1'000'000.0;
-            if (frame_scene_drawn_[frame_slot_]) {
-                native_scene_gpu_ema_ms_ = native_scene_gpu_ema_ms_ == 0.0 ? gpu_ms :
-                    native_scene_gpu_ema_ms_ + (gpu_ms - native_scene_gpu_ema_ms_) * 0.1;
-            }
-            if (frame_generated_[frame_slot_]) {
-                generated_gpu_ms_ += gpu_ms;
-                ++generated_gpu_samples_;
-                generated_gpu_ema_ms_ = generated_gpu_ema_ms_ == 0.0 ? gpu_ms : generated_gpu_ema_ms_ * 0.9 + gpu_ms * 0.1;
-            }
+            frame_gpu_.add(gpu_ms, frame_scene_drawn_[frame_slot_], frame_generated_[frame_slot_]);
             stats_.gpu_ms += gpu_ms;
             ++stats_.gpu_samples;
             gpu_window_.ms += gpu_ms;

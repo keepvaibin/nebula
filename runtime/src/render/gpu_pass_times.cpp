@@ -6,6 +6,7 @@
 #include "galaxy/render_api.h"
 
 #include <cstdio>
+#include <utility>
 
 namespace galaxy::render {
 
@@ -88,6 +89,23 @@ std::string GpuPassTimes::take_window_list() {
 
 std::string GpuPassTimes::take_window_field() {
     return take_window(true);
+}
+
+void FrameGpuTime::add(double gpu_ms, bool scene_drawn, bool generated) noexcept {
+    const auto smooth = [gpu_ms](double& ema) { ema = ema == 0.0 ? gpu_ms : ema + (gpu_ms - ema) * 0.1; };
+    if (scene_drawn) {
+        smooth(scene_ema_ms_);
+    }
+    if (generated) {
+        generated_ms_ += gpu_ms;
+        ++generated_samples_;
+        smooth(generated_ema_ms_);
+    }
+}
+
+void FrameGpuTime::take_generated(double& total_ms, std::uint64_t& samples) noexcept {
+    total_ms = std::exchange(generated_ms_, 0.0);
+    samples = std::exchange(generated_samples_, 0u);
 }
 
 }  // namespace galaxy::render

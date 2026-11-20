@@ -2,6 +2,8 @@
 // UploadRing, and gpu::create_upload_memory for D3D12.
 #include "galaxy/render/gpu_upload_ring.h"
 
+#include "galaxy/launch_args.h"
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -277,6 +279,15 @@ UploadRing::Miss UploadRing::take(std::size_t size, std::size_t alignment, Alloc
         nullptr
     };
     return Miss::None;
+}
+
+RingRemake upload_rings_due(std::span<const UploadRingSlot> rings, std::uint64_t frame_index, bool failed) noexcept {
+    if (::galaxy::diagnosing(::galaxy::kDiagnoseRingStress) && frame_index % ::galaxy::kRingStressFrames == 0u) {
+        return RingRemake::All;
+    }
+    const bool wanted = !failed && std::any_of(rings.begin(), rings.end(),
+                                               [](const UploadRingSlot& slot) { return slot.ring->wants_new_size(); });
+    return wanted ? RingRemake::Wanted : RingRemake::None;
 }
 
 bool remake_upload_rings(gpu::Device* device, std::span<const UploadRingSlot> rings, bool all, bool& failed,

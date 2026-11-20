@@ -126,6 +126,32 @@ void test_benchmark_hook() {
     galaxy::bench::g_gpu_frame_hook.store(nullptr, std::memory_order_release);
 }
 
+void test_frame_time() {
+    FrameGpuTime time;
+    check(time.scene_ema_ms() == 0.0 && time.generated_ema_ms() == 0.0, "no frame, no time");
+    time.add(10.0, true, false);
+    check(near(time.scene_ema_ms(), 10.0) && time.generated_ema_ms() == 0.0, "the first scene frame is taken as it is");
+    time.add(20.0, true, false);
+    check(near(time.scene_ema_ms(), 11.0), "a scene frame moves the scene's average a tenth of the way");
+    time.add(5.0, false, false);
+    check(near(time.scene_ema_ms(), 11.0), "a frame without the scene leaves the scene's average");
+    time.add(4.0, false, true);
+    time.add(8.0, true, true);
+    check(near(time.generated_ema_ms(), 4.4) && near(time.scene_ema_ms(), 10.7),
+          "a generated frame moves its own average, and the scene's when it drew the scene");
+    double total = 0.0;
+    std::uint64_t samples = 0u;
+    time.take_generated(total, samples);
+    check(near(total, 12.0) && samples == 2u, "the generated frames' total and count");
+    time.take_generated(total, samples);
+    check(total == 0.0 && samples == 0u, "taken, the total starts again");
+    time.reset_generated_ema();
+    time.add(6.0, false, true);
+    check(near(time.generated_ema_ms(), 6.0), "after a reset the next generated frame is taken as it is");
+    time.reset_scene_ema();
+    check(time.scene_ema_ms() == 0.0 && near(time.generated_ema_ms(), 6.0), "the scene's reset leaves the generated average");
+}
+
 }  // namespace
 
 int main() {
@@ -134,6 +160,7 @@ int main() {
     test_averages();
     test_window();
     test_benchmark_hook();
+    test_frame_time();
     if (failures != 0) {
         std::printf("%d failed\n", failures);
         return 1;
