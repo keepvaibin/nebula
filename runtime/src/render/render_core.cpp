@@ -1651,6 +1651,43 @@ void RenderCore::record_screen_probes(std::uint32_t channel, const ScreenProbe* 
     flight.slot = free_probe_slots_.empty() ? next_probe_slot_++ : free_probe_slots_.back();
     if (!free_probe_slots_.empty()) free_probe_slots_.pop_back();
     flight.probes.assign(probes, probes + count);
+    if (::galaxy::diagnosing(::galaxy::kDiagnoseProbeReads)) [[unlikely]] {
+        // What the walk asking these probes drew from (P-242): the points asked, the list's cameras, joints and
+        // constants (FNV-1a over their bytes), the walk's time and the scene's size, so two runs that read different
+        // answers for one frame show whether the game asked differently or the same list was drawn differently.
+        const auto fnv = [](std::uint64_t hash, const void* data, std::size_t bytes) {
+            const auto* p = static_cast<const std::uint8_t*>(data);
+            for (std::size_t i = 0; i < bytes; ++i) hash = (hash ^ p[i]) * 0x100000001b3ull;
+            return hash;
+        };
+        const NebulaFrameList& list = *walk_.now->list;
+        const std::uint64_t basis = 0xcbf29ce484222325ull;
+        std::uint64_t points = basis;
+        for (std::uint32_t i = 0; i < count; ++i) {
+            const float where[5] = {probes[i].x, probes[i].y, probes[i].user_x, probes[i].user_y, probes[i].user_z};
+            points = fnv(points, where, sizeof(where));
+        }
+        const std::uint64_t cameras = fnv(basis, list.cameras, list.camera_count * sizeof(NebulaFrameCamera));
+        std::uint64_t joints = basis;
+        for (std::uint32_t b = 0; b < list.block_count; ++b) {
+            const NebulaFrameBlock& block = list.blocks[b];
+            if (block.joints != nullptr) joints = fnv(joints, block.joints, block.joint_count * 3u * sizeof(float[4]));
+            joints = fnv(joints, block.base, sizeof(block.base));
+        }
+        std::uint64_t rows = basis;
+        for (std::uint32_t c = 0; c < list.constants_count; ++c) {
+            const NebulaFrameConstants& set = list.constants[c];
+            if (set.rows != nullptr) rows = fnv(rows, set.rows, (set.vertex_rows + set.pixel_rows) * sizeof(float[4]));
+        }
+        const auto scene = renderer_.scene_rectangle();
+        std::fprintf(stderr,
+                     "[probe-ask] frame %u channel %u count %u points %016llx cameras %016llx joints %016llx constants %016llx "
+                     "items %u blocks %u t %.4f between %d scene %ux%u\n",
+                     flight.game_frame, channel, count, static_cast<unsigned long long>(points),
+                     static_cast<unsigned long long>(cameras), static_cast<unsigned long long>(joints),
+                     static_cast<unsigned long long>(rows), list.item_count, list.block_count, walk_.time.t,
+                     walk_.between ? 1 : 0, scene.width, scene.height);
+    }
     if (renderer_.record_screen_probes(flight.slot, flight.probes, compared)) {
         {
             const std::lock_guard guard(probe_answers_lock_);
