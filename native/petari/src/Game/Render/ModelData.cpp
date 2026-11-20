@@ -72,6 +72,8 @@ static ModelData* loadFile(void* pFile) {
             NEBULA_PANIC("a model file needs section %s, which this build does not read", section);
         case NEBULA_MODEL_BAD_SECTION:
             NEBULA_PANIC("a model file whose section %s does not fit the file", section);
+        case NEBULA_MODEL_BAD_RANGE:
+            NEBULA_PANIC("a model file with a material part outside its section %s", section);
         default:
             NEBULA_PANIC("a model file the importer did not write");
         }
@@ -206,7 +208,7 @@ s32 ModelData::findJoint(const char* pName) const {
 }
 
 s32 ModelData::findMaterial(const char* pName) const {
-    return findByHash(at(mView.materials_at), mView.material_count, sizeof(NebulaModelMaterial), offsetof(NebulaModelMaterial, name_hash), pName);
+    return findByHash(at(mView.materials_at), mView.material_count, sizeof(NebulaModelMatl), offsetof(NebulaModelMatl, name_hash), pName);
 }
 
 s32 ModelData::findTexture(const char* pName) const {
