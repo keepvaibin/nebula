@@ -820,6 +820,17 @@ Read at c8222595e.
   when one of its textures' slots or its samplers' slots changes (the texture store's revision, the heap's generation).
   A target, whose picture changes every frame, is read by the program through the target's own slot, which the frame
   sets once; a table holding a target is not written again each walk. Its samplers are made when it is registered.
+- Corrected 11-19, while step 2's second landing was written (`f4/e3-2c`): the write is skipped, the look-up is not.
+  Each walk still looks up every texture a table names (`TextureStore::handle`), because the look-up is what marks the
+  texture in use for the video-memory budget and what gives a movie's texture its current frame; skipped when the
+  store's revision stands, the budget would shrink textures on screen and a movie would stop. Only the copy of the pairs
+  is skipped (`core::TextureLists`, `texture_lists.h`).
+- In between until the step's last landing: a table holding a target is still written each walk, until the program
+  reads a target through its own slot (a program change).
+- The game's own uses of a model's texture take the `ModelTexture` too (`f4/e3-2a`): Mario's eyelid pictures, the
+  normal-map objects and fur (`MR::getModelTexture`, a `GameTexture` made from a `ModelTexture`). A draw site keeps the
+  filter numbers (`SiteTexture`, `NEBULA_FILTER_*`) until step 4, so `SiteTextures::setSampler` writes a cooked sampler
+  into them; `toFrame`'s decode gives back the same sampler. Step 4 gives the sites the cooked sampler and removes both.
 - The sites' decode (`TypedDraw.cpp:78-84`) and `ResTIMG` for disc pictures, particles and targets are step 4's
   (P-155 with P-154): their files' samplers are decoded at their cook the same way.
 
