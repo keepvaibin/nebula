@@ -21,11 +21,6 @@ bool SceneCamera::initialize(ID3D11Device1* device) {
     if (device == nullptr) {
         return false;
     }
-    D3D11_BUFFER_DESC cb{};
-    cb.ByteWidth = 16u * ((sizeof(camera::Constants) + 15u) / 16u);
-    cb.Usage = D3D11_USAGE_DYNAMIC;
-    cb.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-    cb.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
     D3D11_RASTERIZER_DESC raster{};
     raster.FillMode = D3D11_FILL_SOLID;
     raster.CullMode = D3D11_CULL_NONE;
@@ -40,7 +35,6 @@ bool SceneCamera::initialize(ID3D11Device1* device) {
         FAILED(device->CreatePixelShader(g_camera_samples_ps, sizeof(g_camera_samples_ps), nullptr, &camera_samples_)) ||
         FAILED(device->CreatePixelShader(g_camera_resolve_ps, sizeof(g_camera_resolve_ps), nullptr, &camera_resolve_)) ||
         FAILED(device->CreatePixelShader(g_camera_widen_ps, sizeof(g_camera_widen_ps), nullptr, &widen_)) ||
-        FAILED(device->CreateBuffer(&cb, nullptr, &constants_)) ||
         FAILED(device->CreateRasterizerState(&raster, &raster_)) ||
         FAILED(device->CreateDepthStencilState(&depth, &no_depth_))) {
         std::cerr << "[scene-camera] Direct3D 11 shaders or states failed\n";
@@ -68,28 +62,18 @@ void SceneCamera::shutdown() noexcept {
     camera_samples_.Reset();
     camera_resolve_.Reset();
     widen_.Reset();
-    constants_.Reset();
     raster_.Reset();
     no_depth_.Reset();
     exposure_.reset();
 }
 
-void SceneCamera::set_constants(ID3D11DeviceContext1* context, const void* constants, unsigned bytes) {
-    D3D11_MAPPED_SUBRESOURCE mapped{};
-    if (SUCCEEDED(context->Map(constants_.Get(), 0u, D3D11_MAP_WRITE_DISCARD, 0u, &mapped))) {
-        std::memcpy(mapped.pData, constants, bytes);
-        context->Unmap(constants_.Get(), 0u);
-    }
-}
-
 // A full-screen triangle into `rtv` reading `picture` (t0) and the exposure (t1); the views let go after.
-void SceneCamera::draw(ID3D11DeviceContext1* context, ID3D11PixelShader* shader, ID3D11RenderTargetView* rtv,
-                       ID3D11ShaderResourceView* picture, unsigned width, unsigned height) {
+void SceneCamera::draw(ID3D11DeviceContext1* context, ID3D11PixelShader* shader, const Context::ConstantPlace& constants,
+                       ID3D11RenderTargetView* rtv, ID3D11ShaderResourceView* picture, unsigned width, unsigned height) {
     context->OMSetRenderTargets(1u, &rtv, nullptr);
     ID3D11ShaderResourceView* const inputs[2] = {picture, exposure_->view.Get()};
     context->PSSetShaderResources(0u, 2u, inputs);
-    context->VSSetConstantBuffers(0u, 1u, constants_.GetAddressOf());
-    context->PSSetConstantBuffers(0u, 1u, constants_.GetAddressOf());
+    bind_place(context, kVertexConstants | kPixelConstants, 0u, constants);
     context->IASetInputLayout(nullptr);
     context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     context->VSSetShader(vs_.Get(), nullptr, 0u);
@@ -117,8 +101,11 @@ bool SceneCamera::record(ID3D11DeviceContext1* context, const Inputs& in) {
     constants.width = static_cast<float>(in.width);
     constants.height = static_cast<float>(in.height);
     constants.seconds = exposure_ready_ ? in.seconds : -1.0f;
+    const Context::ConstantPlace place = Context::get().put_constants(&constants, sizeof(constants));
+    if (place.buffer == nullptr) {
+        return false;
+    }
     exposure_ready_ = true;
-    set_constants(context, &constants, sizeof(constants));
 
     // The meter: the resolved picture (t0) and the depth (t2) read, the exposure (u0) read and written. No target stays
     // bound over the pictures or the depth.
@@ -129,7 +116,7 @@ bool SceneCamera::record(ID3D11DeviceContext1* context, const Inputs& in) {
     context->CSSetUnorderedAccessViews(0u, 1u, &storage, nullptr);
     ID3D11ShaderResourceView* const meter_inputs[3] = {in.wide->view.Get(), nullptr, in.depth->view.Get()};
     context->CSSetShaderResources(0u, 3u, meter_inputs);
-    context->CSSetConstantBuffers(0u, 1u, constants_.GetAddressOf());
+    bind_place(context, kComputeConstants, 0u, place);
     context->CSSetShader(meter_.Get(), nullptr, 0u);
     context->Dispatch(1u, 1u, 1u);
     ID3D11UnorderedAccessView* const no_storage = nullptr;
@@ -137,7 +124,7 @@ bool SceneCamera::record(ID3D11DeviceContext1* context, const Inputs& in) {
     context->CSSetUnorderedAccessViews(0u, 1u, &no_storage, nullptr);
 
     // The camera: every pixel (every sample) under the exposure and the shoulder into the scene target.
-    draw(context, shader, in.rtv, (samples ? in.wide_ms : in.wide)->view.Get(), in.width, in.height);
+    draw(context, shader, place, in.rtv, (samples ? in.wide_ms : in.wide)->view.Get(), in.width, in.height);
     return true;
 }
 
@@ -146,7 +133,7 @@ bool SceneCamera::widen(ID3D11DeviceContext1* context, const WidenInputs& in) {
         in.height == 0u) {
         return false;
     }
-    draw(context, widen_.Get(), in.rtv, in.picture->view.Get(), in.width, in.height);
+    draw(context, widen_.Get(), Context::ConstantPlace{}, in.rtv, in.picture->view.Get(), in.width, in.height);
     return true;
 }
 

@@ -102,7 +102,6 @@ private:
                        const char* name);
     bool copy_frame(ID3D11DeviceContext1* context, const Inputs& in, Target& target, const char* name);
     [[nodiscard]] std::shared_ptr<Texture> take_image(Target& target, const Inputs& in);
-    void set_constants(ID3D11DeviceContext1* context, const Constants& c);
     void dispatch(ID3D11DeviceContext1* context, ID3D11ComputeShader* shader, const Constants& c,
                   const std::array<Texture*, 3>& srvs, const std::array<Texture*, 3>& uavs, unsigned width,
                   unsigned height);
@@ -117,7 +116,6 @@ private:
     ComPtr<ID3D11ComputeShader> blur_;
     ComPtr<ID3D11VertexShader> composite_vs_;
     ComPtr<ID3D11PixelShader> composite_ps_;
-    ComPtr<ID3D11Buffer> constants_;
     ComPtr<ID3D11SamplerState> linear_;
     ComPtr<ID3D11RasterizerState> raster_;
     ComPtr<ID3D11DepthStencilState> no_depth_;

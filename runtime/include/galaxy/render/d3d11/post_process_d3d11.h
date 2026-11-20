@@ -94,7 +94,6 @@ private:
     PostProcessStatus status_{};
     PostProcessSettings settings_{};
 
-    Microsoft::WRL::ComPtr<ID3D11Buffer> constants_;  // PostConstants at b0, rewritten for each pass
     Microsoft::WRL::ComPtr<ID3D11SamplerState> linear_;  // s0
     Microsoft::WRL::ComPtr<ID3D11SamplerState> point_;   // s1
     Microsoft::WRL::ComPtr<ID3D11RasterizerState> rasterizer_;

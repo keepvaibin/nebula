@@ -150,11 +150,6 @@ bool PostProcessor::initialize(ID3D11Device1* device, ID3D11DeviceContext1* cont
         return false;
     }
 
-    D3D11_BUFFER_DESC cb{};
-    cb.ByteWidth = sizeof(PostConstants);
-    cb.Usage = D3D11_USAGE_DYNAMIC;
-    cb.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-    cb.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
     D3D11_SAMPLER_DESC sd{};
     sd.AddressU = sd.AddressV = sd.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
     sd.ComparisonFunc = D3D11_COMPARISON_NEVER;
@@ -186,7 +181,6 @@ bool PostProcessor::initialize(ID3D11Device1* device, ID3D11DeviceContext1* cont
 
     // The scaling passes are required; each AA pass is optional and only reported when it cannot be built.
     const bool scaling =
-        SUCCEEDED(device_->CreateBuffer(&cb, nullptr, &constants_)) &&
         SUCCEEDED(device_->CreateSamplerState(&sd, &linear_)) &&
         SUCCEEDED(device_->CreateSamplerState(&point, &point_)) &&
         SUCCEEDED(device_->CreateRasterizerState(&rd, &rasterizer_)) &&
@@ -254,7 +248,6 @@ void PostProcessor::shutdown() noexcept {
     status_.initialized = false;
     status_.smaa_ok = false;
     status_.fxaa_ok = false;
-    constants_.Reset();
     linear_.Reset();
     point_.Reset();
     rasterizer_.Reset();
@@ -322,9 +315,6 @@ void PostProcessor::bind_passes(ID3D11DeviceContext1* context) {
     context->RSSetState(rasterizer_.Get());
     context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFFu);
     context->OMSetDepthStencilState(nullptr, 0u);
-    ID3D11Buffer* const buffers[1] = {constants_.Get()};
-    context->VSSetConstantBuffers(0, 1, buffers);
-    context->PSSetConstantBuffers(0, 1, buffers);
     ID3D11SamplerState* const samplers[2] = {linear_.Get(), point_.Get()};
     context->PSSetSamplers(0, 2, samplers);
 }
@@ -333,12 +323,11 @@ void PostProcessor::bind_passes(ID3D11DeviceContext1* context) {
 void PostProcessor::draw(ID3D11DeviceContext1* context, ID3D11VertexShader* vs, ID3D11PixelShader* ps,
                          std::initializer_list<ID3D11ShaderResourceView*> inputs, const D3D11_VIEWPORT& viewport,
                          const PostConstants& constants) {
-    D3D11_MAPPED_SUBRESOURCE mapped{};
-    if (FAILED(context->Map(constants_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+    const Context::ConstantPlace place = Context::get().put_constants(&constants, sizeof(constants));
+    if (place.buffer == nullptr) {
         return;
     }
-    std::memcpy(mapped.pData, &constants, sizeof(constants));
-    context->Unmap(constants_.Get(), 0);
+    bind_place(context, kVertexConstants | kPixelConstants, 0u, place);  // b0
     std::array<ID3D11ShaderResourceView*, 3> views{};
     std::copy(inputs.begin(), inputs.begin() + std::min<std::size_t>(inputs.size(), views.size()), views.begin());
     context->PSSetShaderResources(0, static_cast<UINT>(views.size()), views.data());

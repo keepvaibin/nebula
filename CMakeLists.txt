@@ -929,6 +929,9 @@ if(NEBULA_D3D11)
     # Both CPU levels like the other hosts (NebulaD11-x86-64-v2.exe from the baseline tree).
     nebula_host_cpu_entry(NebulaD11)
     nebula_host_delay_loads(NebulaD11)
+    # The constant ring on the machine's own device (P-242); the test compiles its own small shaders.
+    galaxy_test(galaxy_d3d11_constant_ring_tests SOURCES runtime/src/render/d3d11_constant_ring_tests.cpp
+        LIBS galaxy_render_d3d11 d3dcompiler)
 endif()
 
 # AV1 movies (a mod's movie, NMOV codec 1): dav1d 1.5.1 built in-tree (cmake/dav1d.cmake), for every renderer.

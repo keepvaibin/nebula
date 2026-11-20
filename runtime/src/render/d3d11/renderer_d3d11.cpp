@@ -176,16 +176,6 @@ bool RendererD3D11::create_states() {
     sampler.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
     check(device->CreateSamplerState(&sampler, &point_clamp_), "point sampler");
 
-    D3D11_BUFFER_DESC constants{};
-    constants.Usage = D3D11_USAGE_DYNAMIC;
-    constants.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-    constants.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-    constants.ByteWidth = kRootSlots * 256u;  // DrawRoots (program.hlsli cbuffer Draw), one a 256-byte slot
-    check(device->CreateBuffer(&constants, nullptr, &root_constants_), "draw constants");
-    root_next_ = kRootSlots;
-    constants.ByteWidth = 256u;
-    check(device->CreateBuffer(&constants, nullptr, &utility_constants_), "utility constants");
-
     check(device->CreateVertexShader(g_utility_BlitVs, sizeof(g_utility_BlitVs), nullptr, &full_screen_vs_), "full-screen vertex shader");
     const struct {
         Utility which;
@@ -412,8 +402,7 @@ void RendererD3D11::shutdown() {
         depth_uses_ = {};
         linear_clamp_.Reset();
         point_clamp_.Reset();
-        root_constants_.Reset();
-        utility_constants_.Reset();
+        root_buffer_.Reset();
         backbuffer_rtv_.Reset();
         if (frame_latency_waitable_ != nullptr) {
             CloseHandle(frame_latency_waitable_);
@@ -968,16 +957,16 @@ void RendererD3D11::flush_draws() {
     // The draws go to the scene target: a multisampled one's resolve is stale from here.
     scene_.color_dirty |= scene_.samples > 1u;
     ID3D11DeviceContext1* const ctx = context();
-    ID3D11Buffer* const root = root_constants_.Get();
-    const auto bind_root = [ctx, root](unsigned slot) {
-        const UINT first = slot * 16u, count = 16u;
+    const auto bind_root = [this, ctx](UINT first) {
+        ID3D11Buffer* const root = root_buffer_.Get();
+        const UINT count = 16u;  // a DrawRoot's 256 bytes (program.hlsli cbuffer Draw)
         ctx->VSSetConstantBuffers1(3u, 1u, &root, &first, &count);
         ctx->PSSetConstantBuffers1(3u, 1u, &root, &first, &count);
     };
-    // The pass starts with the last root bound (a draw before the pass's first Root keeps it), then each Root its slot.
-    root_slots_.assign(pass_ops_.size(), 0u);
+    // The pass starts with the last root bound (a draw before the pass's first Root keeps it), then each Root its own.
+    root_first_.assign(pass_ops_.size(), 0u);
     std::size_t written = write_roots(0u, true);
-    bind_root(root_carried_slot_);
+    bind_root(root_carried_first_);
     D3D11_PRIMITIVE_TOPOLOGY topology = D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED;
     for (std::size_t index = 0; index < pass_ops_.size(); ++index) {
         const gpu::DrawOp& op = pass_ops_[index];
@@ -1019,9 +1008,9 @@ void RendererD3D11::flush_draws() {
         }
         case gpu::DrawOp::Kind::Root:
             if (index >= written) {
-                written = write_roots(index, false);  // the ring ran out: the next run (DISCARD), after the draws before
+                written = write_roots(index, false);  // the piece ran out: the next, after the draws before
             }
-            bind_root(root_slots_[index]);
+            bind_root(root_first_[index]);
             break;
         case gpu::DrawOp::Kind::Tables: {
             const auto* textures = reinterpret_cast<const d3d11::BoundTable*>(static_cast<std::uintptr_t>(op.a[0]));
@@ -1087,39 +1076,36 @@ std::size_t RendererD3D11::write_roots(std::size_t from, bool carried) {
     if (roots == 0u) {
         return pass_ops_.size();
     }
-    // Appended where the device can map a constant buffer NO_OVERWRITE and the run fits; else the ring starts again
-    // (DISCARD: the driver keeps what the draws already recorded read).
-    const bool append = d3d11::Context::get().caps().no_overwrite_constants && root_next_ < kRootSlots &&
-                        roots <= kRootSlots - root_next_;
-    if (!append) {
-        root_next_ = 0u;
+    static_assert(sizeof(gpu::DrawRoot) <= 256u);
+    d3d11::Context& device = d3d11::Context::get();
+    roots = std::min(roots, d3d11::Context::kConstantRingBytes / 4u / 256u);
+    d3d11::Context::ConstantPlace place;
+    std::byte* const base = device.begin_constants(roots * 256u, place);
+    if (base == nullptr) {
+        root_buffer_.Reset();  // no roots this pass (the device is lost): its draws read none
+        return pass_ops_.size();
     }
-    ID3D11DeviceContext1* const ctx = context();
-    D3D11_MAPPED_SUBRESOURCE mapped{};
-    if (FAILED(ctx->Map(root_constants_.Get(), 0u, append ? D3D11_MAP_WRITE_NO_OVERWRITE : D3D11_MAP_WRITE_DISCARD, 0u,
-                        &mapped))) {
-        return pass_ops_.size();  // no roots this pass: its draws read what the slots held
-    }
-    auto* const base = static_cast<std::byte*>(mapped.pData);
+    root_buffer_ = place.buffer;
+    std::size_t put_count = 0u;
     const auto put = [&](const void* words) {
-        std::memcpy(base + static_cast<std::size_t>(root_next_) * 256u, words, sizeof(gpu::DrawRoot));
-        return static_cast<std::uint16_t>(root_next_++);
+        std::memcpy(base + put_count * 256u, words, sizeof(gpu::DrawRoot));
+        return place.first + static_cast<UINT>(put_count++) * 16u;
     };
     if (carried) {
-        root_carried_slot_ = put(&root_carried_);
+        root_carried_first_ = put(&root_carried_);
     }
     std::size_t i = from;
     for (; i < pass_ops_.size(); ++i) {
         if (pass_ops_[i].kind != gpu::DrawOp::Kind::Root) {
             continue;
         }
-        if (root_next_ == kRootSlots) {
+        if (put_count == roots) {
             break;
         }
-        root_slots_[i] = put(pass_ops_[i].w);
+        root_first_[i] = put(pass_ops_[i].w);
         std::memcpy(&root_carried_, pass_ops_[i].w, sizeof(gpu::DrawRoot));
     }
-    ctx->Unmap(root_constants_.Get(), 0u);
+    device.end_constants();
     return i;
 }
 
@@ -1134,13 +1120,8 @@ void RendererD3D11::utility_draw(Utility shader, ID3D11ShaderResourceView* sourc
     flush_draws();
     ID3D11DeviceContext1* const ctx = context();
     if (constants != nullptr && constant_bytes != 0u) {
-        D3D11_MAPPED_SUBRESOURCE mapped{};
-        if (SUCCEEDED(ctx->Map(utility_constants_.Get(), 0u, D3D11_MAP_WRITE_DISCARD, 0u, &mapped))) {
-            std::memcpy(mapped.pData, constants, std::min<std::size_t>(constant_bytes, 256u));
-            ctx->Unmap(utility_constants_.Get(), 0u);
-        }
-        ID3D11Buffer* const buffer = utility_constants_.Get();
-        ctx->PSSetConstantBuffers(0u, 1u, &buffer);
+        d3d11::bind_place(ctx, d3d11::kPixelConstants, 0u,
+                          d3d11::Context::get().put_constants(constants, std::min<std::size_t>(constant_bytes, 256u)));
     }
     ctx->IASetInputLayout(nullptr);
     ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);

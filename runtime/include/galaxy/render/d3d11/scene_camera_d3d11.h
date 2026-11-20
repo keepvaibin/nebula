@@ -43,9 +43,9 @@ public:
     bool widen(ID3D11DeviceContext1* context, const WidenInputs& in);
 
 private:
-    void set_constants(ID3D11DeviceContext1* context, const void* constants, unsigned bytes);
-    void draw(ID3D11DeviceContext1* context, ID3D11PixelShader* shader, ID3D11RenderTargetView* rtv,
-              ID3D11ShaderResourceView* picture, unsigned width, unsigned height);
+    // `constants` at b0 (none: the widen pass, whose shaders read none).
+    void draw(ID3D11DeviceContext1* context, ID3D11PixelShader* shader, const Context::ConstantPlace& constants,
+              ID3D11RenderTargetView* rtv, ID3D11ShaderResourceView* picture, unsigned width, unsigned height);
 
     ComPtr<ID3D11ComputeShader> meter_;
     ComPtr<ID3D11VertexShader> vs_;
@@ -53,7 +53,6 @@ private:
     ComPtr<ID3D11PixelShader> camera_samples_;  // every sample of a multisampled target
     ComPtr<ID3D11PixelShader> camera_resolve_;  // multisampled scene into a single-sample target
     ComPtr<ID3D11PixelShader> widen_;
-    ComPtr<ID3D11Buffer> constants_;
     ComPtr<ID3D11RasterizerState> raster_;
     ComPtr<ID3D11DepthStencilState> no_depth_;
     std::shared_ptr<Texture> exposure_;  // linear exposure and its display-space gain (R32F, 2 x 1)

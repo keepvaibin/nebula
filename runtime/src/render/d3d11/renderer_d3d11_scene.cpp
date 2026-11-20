@@ -1216,6 +1216,7 @@ bool RendererD3D11::record_screen_probes(std::size_t slot, std::span<const Scree
         out.capacity = count;
     }
     ID3D11DeviceContext1* const ctx = context();
+    // No command in flight reads the slot's buffers: its last answers were taken (fence 0) after their fence passed.
     D3D11_MAPPED_SUBRESOURCE mapped{};
     if (FAILED(ctx->Map(out.points.Get(), 0u, D3D11_MAP_WRITE_DISCARD, 0u, &mapped))) {
         return false;
@@ -1228,15 +1229,14 @@ bool RendererD3D11::record_screen_probes(std::size_t slot, std::span<const Scree
 
     end_scene_pass();
     resolve_scene_depth();  // depth alone
-    if (SUCCEEDED(ctx->Map(utility_constants_.Get(), 0u, D3D11_MAP_WRITE_DISCARD, 0u, &mapped))) {
-        std::memcpy(mapped.pData, &count, sizeof(count));
-        ctx->Unmap(utility_constants_.Get(), 0u);
+    const d3d11::Context::ConstantPlace constants = d3d11::Context::get().put_constants(&count, sizeof(count));
+    if (constants.buffer == nullptr) {
+        return false;
     }
-    ID3D11Buffer* const constants = utility_constants_.Get();
     ID3D11ShaderResourceView* const views[2] = {scene_.depth->view.Get(), out.points_view.Get()};
     ID3D11UnorderedAccessView* const values = out.values_view.Get();
     ctx->CSSetShader(probe_cs_.Get(), nullptr, 0u);
-    ctx->CSSetConstantBuffers(0u, 1u, &constants);
+    d3d11::bind_place(ctx, d3d11::kComputeConstants, 0u, constants);
     ctx->CSSetShaderResources(0u, 2u, views);
     ctx->CSSetUnorderedAccessViews(0u, 1u, &values, nullptr);
     ctx->Dispatch((count + kScreenProbeGroup - 1u) / kScreenProbeGroup, 1u, 1u);

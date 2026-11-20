@@ -46,22 +46,10 @@ const RendererD3D11::ModPostShaders* RendererD3D11::mod_post_stages(const ModPos
 // s1. Into the scene target's pass views (the multisampled colour with MSAA), every sample of a pixel the same value.
 void RendererD3D11::record_mod_post(const ModPostProgram& program, ModPostConstants constants, const gpu::TextureRef& picture,
                                     bool depth_known) {
-    if (!picture || !picture->view || !scene_.color || mod_post_failed_) {
+    if (!picture || !picture->view || !scene_.color) {
         return;
     }
     ID3D11DeviceContext1* const ctx = context();
-    if (!mod_post_constants_) {
-        D3D11_BUFFER_DESC desc{};
-        desc.Usage = D3D11_USAGE_DYNAMIC;
-        desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-        desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-        desc.ByteWidth = sizeof(ModPostConstants);
-        if (FAILED(d3d11::Context::get().device()->CreateBuffer(&desc, nullptr, &mod_post_constants_))) {
-            std::cerr << "[draw.post] constant buffer failed: post programs draw nothing\n";
-            mod_post_failed_ = true;
-            return;
-        }
-    }
     const ModPostShaders* const stages = mod_post_stages(program);
     if (stages == nullptr || !stages->vertex || !stages->pixel) {
         return;
@@ -110,17 +98,14 @@ void RendererD3D11::record_mod_post(const ModPostProgram& program, ModPostConsta
     if (depth != nullptr) {
         constants.flags |= kModPostHasDepth;
     }
-    D3D11_MAPPED_SUBRESOURCE mapped{};
-    if (FAILED(ctx->Map(mod_post_constants_.Get(), 0u, D3D11_MAP_WRITE_DISCARD, 0u, &mapped))) {
+    const d3d11::Context::ConstantPlace block = d3d11::Context::get().put_constants(&constants, sizeof(constants));
+    if (block.buffer == nullptr) {
         return;
     }
-    std::memcpy(mapped.pData, &constants, sizeof(constants));
-    ctx->Unmap(mod_post_constants_.Get(), 0u);
 
     ID3D11RenderTargetView* const rtv = scene_.rtv();
     ctx->OMSetRenderTargets(1u, &rtv, nullptr);
-    ID3D11Buffer* const block = mod_post_constants_.Get();
-    ctx->PSSetConstantBuffers(0u, 1u, &block);
+    d3d11::bind_place(ctx, d3d11::kPixelConstants, 0u, block);
     ID3D11ShaderResourceView* const views[3] = {picture->view.Get(), depth, nullptr};
     ctx->PSSetShaderResources(0u, 3u, views);
     ID3D11SamplerState* const samplers[2] = {linear_clamp_.Get(), point_clamp_.Get()};
@@ -200,8 +185,6 @@ void RendererD3D11::record_native_call(const NebulaCall& call, LumaDrawNativeFra
 void RendererD3D11::release_mod_post() {
     mod_post_shaders_.clear();
     mod_post_epoch_ = 0u;
-    mod_post_constants_.Reset();
-    mod_post_failed_ = false;
     native_state_.Reset();
     native_state_failed_ = false;
 }

@@ -36,11 +36,6 @@ bool AmbientOcclusion::initialize(ID3D11Device1* device) {
     if (device_ == nullptr) {
         return false;
     }
-    D3D11_BUFFER_DESC cb{};
-    cb.ByteWidth = 16u * ((sizeof(Constants) + 15u) / 16u);
-    cb.Usage = D3D11_USAGE_DYNAMIC;
-    cb.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-    cb.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
     // The multiply: the shader's output times the scene target's colour (RGB; the game's alpha stays).
     D3D11_BLEND_DESC blend{};
     D3D11_RENDER_TARGET_BLEND_DESC& target = blend.RenderTarget[0];
@@ -67,7 +62,6 @@ bool AmbientOcclusion::initialize(ID3D11Device1* device) {
         FAILED(device_->CreateComputeShader(g_ao_denoise_cs, sizeof(g_ao_denoise_cs), nullptr, &denoise_)) ||
         FAILED(device_->CreateVertexShader(g_ao_apply_vs, sizeof(g_ao_apply_vs), nullptr, &apply_vs_)) ||
         FAILED(device_->CreatePixelShader(g_ao_apply_ps, sizeof(g_ao_apply_ps), nullptr, &apply_ps_)) ||
-        FAILED(device_->CreateBuffer(&cb, nullptr, &constants_)) ||
         FAILED(device_->CreateBlendState(&blend, &multiply_)) ||
         FAILED(device_->CreateRasterizerState(&raster, &raster_)) ||
         FAILED(device_->CreateDepthStencilState(&depth, &no_depth_))) {
@@ -87,7 +81,6 @@ void AmbientOcclusion::shutdown() noexcept {
     denoise_.Reset();
     apply_vs_.Reset();
     apply_ps_.Reset();
-    constants_.Reset();
     multiply_.Reset();
     raster_.Reset();
     no_depth_.Reset();
@@ -119,7 +112,8 @@ void AmbientOcclusion::trim_idle() {
     }
 }
 
-// `count` elements of `stride` bytes (at least one element: an empty list still binds a buffer) into `rows`.
+// `count` elements of `stride` bytes (at least one element: an empty list still binds a buffer) into `rows`, copied in
+// after the commands recorded before (the last frame's passes read their own).
 bool AmbientOcclusion::upload(ID3D11DeviceContext1* context, Rows& rows, const void* data, std::uint32_t count,
                               std::uint32_t stride) {
     const std::uint32_t needed = std::max(count, 1u);
@@ -128,9 +122,8 @@ bool AmbientOcclusion::upload(ID3D11DeviceContext1* context, Rows& rows, const v
         const std::uint32_t capacity = std::bit_ceil(std::max(needed, 64u));
         D3D11_BUFFER_DESC desc{};
         desc.ByteWidth = capacity * stride;
-        desc.Usage = D3D11_USAGE_DYNAMIC;
+        desc.Usage = D3D11_USAGE_DEFAULT;
         desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-        desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
         desc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
         desc.StructureByteStride = stride;
         D3D11_SHADER_RESOURCE_VIEW_DESC view{};
@@ -145,16 +138,10 @@ bool AmbientOcclusion::upload(ID3D11DeviceContext1* context, Rows& rows, const v
         }
         rows.capacity = capacity;
     }
-    D3D11_MAPPED_SUBRESOURCE mapped{};
-    if (FAILED(context->Map(rows.buffer.Get(), 0u, D3D11_MAP_WRITE_DISCARD, 0u, &mapped))) {
-        return false;
-    }
-    if (count != 0u) {
-        std::memcpy(mapped.pData, data, static_cast<std::size_t>(count) * stride);
-    } else {
-        std::memset(mapped.pData, 0, stride);
-    }
-    context->Unmap(rows.buffer.Get(), 0u);
+    const std::uint32_t zero[4] = {};
+    const void* const source = count != 0u ? data : static_cast<const void*>(zero);
+    const D3D11_BOX box{0u, 0u, 0u, needed * stride, 1u, 1u};
+    context->UpdateSubresource(rows.buffer.Get(), 0u, &box, source, 0u, 0u);
     return true;
 }
 
@@ -199,16 +186,14 @@ bool AmbientOcclusion::record(ID3D11DeviceContext1* context, const Inputs& in) {
         !upload(context, tiles_, object_tiles_.data(), static_cast<std::uint32_t>(object_tiles_.size()), 4u)) {
         return false;
     }
-    D3D11_MAPPED_SUBRESOURCE mapped{};
-    if (FAILED(context->Map(constants_.Get(), 0u, D3D11_MAP_WRITE_DISCARD, 0u, &mapped))) {
+    const Context::ConstantPlace constants = Context::get().put_constants(&c, sizeof(c));
+    if (constants.buffer == nullptr) {
         return false;
     }
-    std::memcpy(mapped.pData, &c, sizeof(c));
-    context->Unmap(constants_.Get(), 0u);
 
     // No target stays bound over the depth (its depth-stencil view) while it is read.
     context->OMSetRenderTargets(0u, nullptr, nullptr);
-    context->CSSetConstantBuffers(0u, 1u, constants_.GetAddressOf());
+    bind_place(context, kComputeConstants, 0u, constants);
     ID3D11ShaderResourceView* const fixed[5] = {in.depth->view.Get(), nullptr, nullptr, objects_.view.Get(),
                                                 tiles_.view.Get()};
     context->CSSetShaderResources(0u, 5u, fixed);
@@ -229,8 +214,7 @@ bool AmbientOcclusion::record(ID3D11DeviceContext1* context, const Inputs& in) {
     context->OMSetRenderTargets(1u, &color, nullptr);
     ID3D11ShaderResourceView* const inputs[2] = {in.depth->view.Get(), denoised_->view.Get()};
     context->PSSetShaderResources(0u, 2u, inputs);
-    context->VSSetConstantBuffers(0u, 1u, constants_.GetAddressOf());
-    context->PSSetConstantBuffers(0u, 1u, constants_.GetAddressOf());
+    bind_place(context, kVertexConstants | kPixelConstants, 0u, constants);
     context->IASetInputLayout(nullptr);
     context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     context->VSSetShader(apply_vs_.Get(), nullptr, 0u);

@@ -437,7 +437,8 @@ private:
     void end_scene_pass(const char* caller = __builtin_FUNCTION());
     // The recorded draws run: the upload memory they read reaches the GPU, then the ops replay on the immediate context.
     void flush_draws();
-    // The roots of pass_ops_ from `from` on into the ring, one Map, as many as fit; returns the first op not written.
+    // The roots of pass_ops_ from `from` on into one piece of the constant ring, as many as a piece holds; returns the
+    // first op not written.
     std::size_t write_roots(std::size_t from, bool carried);
     void bind_constants(unsigned slot, gpu::Address address, bool vertex, bool pixel);
     void bind_rows(gpu::Address rows, gpu::Address instances);
@@ -498,15 +499,12 @@ private:
     d3d11::RenderLayout draw_layout_{};
     d3d11::ComPtr<ID3D11SamplerState> linear_clamp_;
     d3d11::ComPtr<ID3D11SamplerState> point_clamp_;
-    // b3: the draws' DrawRoots, a ring of kRootSlots slots of 256 bytes (dynamic), written ahead of the draws in runs of
-    // one Map each, each draw bound to its slot by offset (flush_draws, P-060).
-    static constexpr unsigned kRootSlots = 1024u;
-    d3d11::ComPtr<ID3D11Buffer> root_constants_;
-    unsigned root_next_ = kRootSlots;               // the ring's next free slot (kRootSlots: start again, DISCARD)
-    std::vector<std::uint16_t> root_slots_;         // per pass op: the slot its Root was written to
-    gpu::DrawRoot root_carried_{};                  // the last root written: the next pass starts with it bound
-    unsigned root_carried_slot_ = 0u;               // where this pass's copy of it lies
-    d3d11::ComPtr<ID3D11Buffer> utility_constants_;  // the renderer's own draws' b0 (dynamic)
+    // b3: the draws' DrawRoots in the constant ring (d3d11::Context::begin_constants), 256 bytes each, written ahead of
+    // the draws in runs of one piece each, each draw bound to its own by offset (flush_draws, P-060).
+    d3d11::ComPtr<ID3D11Buffer> root_buffer_;  // the ring the last run went to
+    std::vector<UINT> root_first_;             // per pass op: where its Root was written (in 16-byte constants)
+    gpu::DrawRoot root_carried_{};             // the last root written: the next pass starts with it bound
+    UINT root_carried_first_ = 0u;             // where this pass's copy of it lies
     std::array<d3d11::ComPtr<ID3D11PixelShader>, static_cast<std::size_t>(Utility::Count)> utility_ps_{};
     d3d11::ComPtr<ID3D11VertexShader> full_screen_vs_;
     d3d11::ComPtr<ID3D11ComputeShader> probe_cs_;
@@ -673,8 +671,6 @@ private:
     };
     std::vector<ModPostShaders> mod_post_shaders_;
     std::uint64_t mod_post_epoch_ = 0u;
-    d3d11::ComPtr<ID3D11Buffer> mod_post_constants_;  // b0, ModPostConstants (dynamic)
-    bool mod_post_failed_ = false;
     // draw.native's context state: a mod's function binds what it likes there, and the renderer's own state is swapped
     // back in after it (ID3D11DeviceContext1::SwapDeviceContextState).
     d3d11::ComPtr<ID3DDeviceContextState> native_state_;

@@ -50,11 +50,6 @@ bool GameBloom::initialize(ID3D11Device1* device) {
     if (device == nullptr) {
         return false;
     }
-    D3D11_BUFFER_DESC cb{};
-    cb.ByteWidth = sizeof(Constants);
-    cb.Usage = D3D11_USAGE_DYNAMIC;
-    cb.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-    cb.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
     D3D11_SAMPLER_DESC sampler{};
     sampler.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
     sampler.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
@@ -75,7 +70,6 @@ bool GameBloom::initialize(ID3D11Device1* device) {
         FAILED(device->CreateComputeShader(g_bloom_blur_cs, sizeof(g_bloom_blur_cs), nullptr, &blur_)) ||
         FAILED(device->CreateVertexShader(g_bloom_composite_vs, sizeof(g_bloom_composite_vs), nullptr, &composite_vs_)) ||
         FAILED(device->CreatePixelShader(g_bloom_composite_ps, sizeof(g_bloom_composite_ps), nullptr, &composite_ps_)) ||
-        FAILED(device->CreateBuffer(&cb, nullptr, &constants_)) ||
         FAILED(device->CreateSamplerState(&sampler, &linear_)) ||
         FAILED(device->CreateRasterizerState(&raster, &raster_)) ||
         FAILED(device->CreateDepthStencilState(&depth, &no_depth_))) {
@@ -96,7 +90,6 @@ void GameBloom::shutdown() noexcept {
     blur_.Reset();
     composite_vs_.Reset();
     composite_ps_.Reset();
-    constants_.Reset();
     linear_.Reset();
     raster_.Reset();
     no_depth_.Reset();
@@ -204,20 +197,12 @@ bool GameBloom::keep(ID3D11DeviceContext1* context, const Inputs& in) {
     return kept_;
 }
 
-void GameBloom::set_constants(ID3D11DeviceContext1* context, const Constants& c) {
-    D3D11_MAPPED_SUBRESOURCE mapped{};
-    if (SUCCEEDED(context->Map(constants_.Get(), 0u, D3D11_MAP_WRITE_DISCARD, 0u, &mapped))) {
-        std::memcpy(mapped.pData, &c, sizeof(c));
-        context->Unmap(constants_.Get(), 0u);
-    }
-}
-
 // One compute pass: t0-t2 read, u0-u2 written. The last pass's inputs are let go before its outputs are bound, and its
 // outputs before they are read (Direct3D 11 nulls a view bound for reading and writing at once).
 void GameBloom::dispatch(ID3D11DeviceContext1* context, ID3D11ComputeShader* shader, const Constants& c,
                          const std::array<Texture*, 3>& srvs, const std::array<Texture*, 3>& uavs, unsigned width,
                          unsigned height) {
-    set_constants(context, c);
+    bind_place(context, kComputeConstants, 0u, Context::get().put_constants(&c, sizeof(c)));
     ID3D11ShaderResourceView* const none[3] = {};
     context->CSSetShaderResources(0u, 3u, none);
     ID3D11UnorderedAccessView* const outputs[3] = {uav_of(uavs[0]), uav_of(uavs[1]), uav_of(uavs[2])};
@@ -279,7 +264,6 @@ bool GameBloom::apply(ID3D11DeviceContext1* context, const Inputs& in, const Par
     const bloom::Widths widths = bloom::widths_of(normal, s, in.frame_width, in.frame_height, p.ring_x, p.ring_y);
     // The scene target is read by the first pass: no render target stays bound over it.
     context->OMSetRenderTargets(0u, nullptr, nullptr);
-    context->CSSetConstantBuffers(0u, 1u, constants_.GetAddressOf());
     context->CSSetSamplers(0u, 1u, linear_.GetAddressOf());
     Texture* const work = work_.texture.get();
     Texture* const box_tmp = box_tmp_.texture.get();
@@ -395,12 +379,10 @@ bool GameBloom::restore(ID3D11DeviceContext1* context, const Inputs& in) {
 // views let go after.
 void GameBloom::draw_composite(ID3D11DeviceContext1* context, const Inputs& in, const Texture& scene,
                                const Texture& first, const Texture& second, const Constants& c) {
-    set_constants(context, c);
+    bind_place(context, kVertexConstants | kPixelConstants, 0u, Context::get().put_constants(&c, sizeof(c)));
     context->OMSetRenderTargets(1u, &in.rtv, nullptr);
     ID3D11ShaderResourceView* const inputs[3] = {scene.view.Get(), first.view.Get(), second.view.Get()};
     context->PSSetShaderResources(0u, 3u, inputs);
-    context->VSSetConstantBuffers(0u, 1u, constants_.GetAddressOf());
-    context->PSSetConstantBuffers(0u, 1u, constants_.GetAddressOf());
     context->PSSetSamplers(0u, 1u, linear_.GetAddressOf());
     context->IASetInputLayout(nullptr);
     context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
