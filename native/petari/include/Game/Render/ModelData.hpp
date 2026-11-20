@@ -168,13 +168,14 @@ public:
     s32 findMaterial(const char* pName) const;
     s32 findTexture(const char* pName) const;
     const char* getJointName(u32 index) const {
-        return name(reinterpret_cast< const NebulaModelJoint* >(at(mView.joints_at))[index].name_at);
+        return name(entry< NebulaModelJoint >(mView.joints_at, mView.joint_stride, index).name_at);
     }
     const char* getMaterialName(u32 index) const {
         return name(getMaterialFile(index)->name_at);
     }
     const char* getTextureName(u32 index) const {
-        return mTextureOwner->name(reinterpret_cast< const NebulaModelTexture* >(mTextureOwner->at(mTextureOwner->mView.textures_at))[index].name_at);
+        const ModelData* pOwner = mTextureOwner;
+        return pOwner->name(pOwner->entry< NebulaModelTexture >(pOwner->mView.textures_at, pOwner->mView.texture_stride, index).name_at);
     }
 
     // A texture's record and how it samples, as the game may change them.
@@ -187,7 +188,7 @@ public:
     }
 
     u32 getDrawMtxJoint(u32 index) const {
-        return reinterpret_cast< const NebulaModelDrawMatrix* >(at(mView.draw_matrices_at))[index].index;
+        return entry< NebulaModelDrawMatrix >(mView.draw_matrices_at, mView.draw_matrix_stride, index).index;
     }
     const f32 (*getInverseBinds() const)[4] {
         return reinterpret_cast< const f32 (*)[4] >(at(mView.inverse_binds_at));
@@ -230,27 +231,33 @@ public:
         return reinterpret_cast< const char* >(at(offset));
     }
 
+    // Entry `index` of a record section, by the stride the file wrote (FRAME-MODEL 2.7.2).
+    template < class T >
+    const T& entry(u32 offset, u32 stride, u32 index) const {
+        return *static_cast< const T* >(nebula_model_entry(mFile, offset, stride, index));
+    }
+
     // A material's parts (FRAME-MODEL 2.9), each by its index in its section; nebula_model_view checked every range.
     const NebulaModelMatl* getMaterialFile(u32 index) const {
-        return reinterpret_cast< const NebulaModelMatl* >(at(mView.materials_at)) + index;
+        return &entry< NebulaModelMatl >(mView.materials_at, mView.material_stride, index);
     }
     const NebulaModelGx* getGx(u32 index) const {
-        return reinterpret_cast< const NebulaModelGx* >(at(mView.gx_at)) + index;
+        return &entry< NebulaModelGx >(mView.gx_at, mView.gx_stride, index);
     }
-    const NebulaModelFormEntry* getForms(u32 first) const {
-        return reinterpret_cast< const NebulaModelFormEntry* >(at(mView.forms_at)) + first;
+    const NebulaModelFormEntry& getForm(u32 index) const {
+        return entry< NebulaModelFormEntry >(mView.forms_at, mView.form_stride, index);
     }
-    const NebulaModelSlot* getSlots(u32 first) const {
-        return reinterpret_cast< const NebulaModelSlot* >(at(mView.slots_at)) + first;
+    const NebulaModelSlot& getSlot(u32 index) const {
+        return entry< NebulaModelSlot >(mView.slots_at, mView.slot_stride, index);
     }
-    const NebulaModelCoord* getCoords(u32 first) const {
-        return reinterpret_cast< const NebulaModelCoord* >(at(mView.coords_at)) + first;
+    const NebulaModelCoord& getCoord(u32 index) const {
+        return entry< NebulaModelCoord >(mView.coords_at, mView.coord_stride, index);
     }
-    const NebulaModelCoordMatrix* getCoordMatrices(u32 first) const {
-        return reinterpret_cast< const NebulaModelCoordMatrix* >(at(mView.coord_matrices_at)) + first;
+    const NebulaModelCoordMatrix& getCoordMatrix(u32 index) const {
+        return entry< NebulaModelCoordMatrix >(mView.coord_matrices_at, mView.coord_matrix_stride, index);
     }
-    const NebulaModelWarp* getWarps(u32 first) const {
-        return reinterpret_cast< const NebulaModelWarp* >(at(mView.warps_at)) + first;
+    const NebulaModelWarp& getWarp(u32 index) const {
+        return entry< NebulaModelWarp >(mView.warps_at, mView.warp_stride, index);
     }
     // A form's rows (FROW, NEBULA_ROW_*), map numbers (FTEX) and inputs (FINP).
     const u32* getFormRows(u32 first) const {

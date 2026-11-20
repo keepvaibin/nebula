@@ -220,12 +220,12 @@ public:
     }
 
     bool usesMap(u32 map) const {
-        return map < mFile->slot_count && (fileSlots()[map].uses & NEBULA_SLOT_USES_MAP) != 0;
+        return map < mFile->slot_count && (fileSlot(map).uses & NEBULA_SLOT_USES_MAP) != 0;
     }
     bool usesCoord(u32 coord) const {
-        return coord < mFile->slot_count && (fileSlots()[coord].uses & NEBULA_SLOT_USES_COORD) != 0;
+        return coord < mFile->slot_count && (fileSlot(coord).uses & NEBULA_SLOT_USES_COORD) != 0;
     }
-    const NebulaModelSlot* fileSlots() const;
+    const NebulaModelSlot& fileSlot(u32 slot) const;
     bool usesLight(u32 channel, u32 light) const {
         return channel < 4 && (mFile->light_masks[channel] & (1u << light)) != 0;
     }

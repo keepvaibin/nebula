@@ -93,9 +93,8 @@ static ModelData* loadFile(void* pFile) {
 
     if (pData->mView.joint_count != 0) {
         pData->mJoints = new Joint[pData->mView.joint_count];
-        const NebulaModelJoint* pFiles = reinterpret_cast< const NebulaModelJoint* >(pData->at(pData->mView.joints_at));
         for (u32 i = 0; i < pData->mView.joint_count; i++) {
-            const NebulaModelJoint& rFile = pFiles[i];
+            const NebulaModelJoint& rFile = pData->entry< NebulaModelJoint >(pData->mView.joints_at, pData->mView.joint_stride, i);
             Joint& rJoint = pData->mJoints[i];
             memset(static_cast< void* >(&rJoint), 0, sizeof(rJoint));
             rJoint.mFile = &rFile;
@@ -119,9 +118,8 @@ static ModelData* loadFile(void* pFile) {
     pData->mTextureOwner = pData;
     if (pData->mView.texture_count != 0) {
         pData->mTextures = new ResTIMG[pData->mView.texture_count];
-        const NebulaModelTexture* pFiles = reinterpret_cast< const NebulaModelTexture* >(pData->at(pData->mView.textures_at));
         for (u32 i = 0; i < pData->mView.texture_count; i++) {
-            const NebulaModelTexture& rFile = pFiles[i];
+            const NebulaModelTexture& rFile = pData->entry< NebulaModelTexture >(pData->mView.textures_at, pData->mView.texture_stride, i);
             ResTIMG& rTexture = pData->mTextures[i];
             memset(&rTexture, 0, sizeof(rTexture));
             rTexture.mFormat = rFile.format;
@@ -147,23 +145,23 @@ static ModelData* loadFile(void* pFile) {
         }
     }
     if (pData->mView.mesh_count != 0) {
-        const NebulaModelMesh* pFiles = reinterpret_cast< const NebulaModelMesh* >(pData->at(pData->mView.meshes_at));
         for (u32 i = 0; i < pData->mView.mesh_count; i++) {
+            const NebulaModelMesh& rFile = pData->entry< NebulaModelMesh >(pData->mView.meshes_at, pData->mView.mesh_stride, i);
             Mesh& rMesh = pData->mMeshes[i];
-            rMesh.mFile = &pFiles[i];
+            rMesh.mFile = &rFile;
             rMesh.mIndex = i;
             rMesh.mFlags = 0;
-            rMesh.mMaterial = pFiles[i].material != NEBULA_MODEL_NONE ? &pData->mMaterials[pFiles[i].material] : nullptr;
+            rMesh.mMaterial = rFile.material != NEBULA_MODEL_NONE ? &pData->mMaterials[rFile.material] : nullptr;
         }
     }
     // Each joint's materials, chained in the order its entries take them.
     if (pData->mView.joint_count != 0) {
-        const NebulaModelJoint* pFiles = reinterpret_cast< const NebulaModelJoint* >(pData->at(pData->mView.joints_at));
         const u32* pList = reinterpret_cast< const u32* >(pData->at(pData->mView.joint_meshes_at));
         for (u32 i = 0; i < pData->mView.joint_count; i++) {
+            const NebulaModelJoint& rFile = pData->entry< NebulaModelJoint >(pData->mView.joints_at, pData->mView.joint_stride, i);
             Material* pLast = nullptr;
-            for (u32 k = 0; k < pFiles[i].mesh_count; k++) {
-                Material* pMaterial = &pData->mMaterials[pList[pFiles[i].first_mesh + k]];
+            for (u32 k = 0; k < rFile.mesh_count; k++) {
+                Material* pMaterial = &pData->mMaterials[pList[rFile.first_mesh + k]];
                 if (pLast != nullptr) {
                     pLast->mNext = pMaterial;
                 } else {
@@ -204,11 +202,11 @@ ModelData* ModelData::loadMaterials(void* pFile) {
 }
 
 s32 ModelData::findJoint(const char* pName) const {
-    return findByHash(at(mView.joints_at), mView.joint_count, sizeof(NebulaModelJoint), offsetof(NebulaModelJoint, name_hash), pName);
+    return findByHash(at(mView.joints_at), mView.joint_count, mView.joint_stride, offsetof(NebulaModelJoint, name_hash), pName);
 }
 
 s32 ModelData::findMaterial(const char* pName) const {
-    return findByHash(at(mView.materials_at), mView.material_count, sizeof(NebulaModelMatl), offsetof(NebulaModelMatl, name_hash), pName);
+    return findByHash(at(mView.materials_at), mView.material_count, mView.material_stride, offsetof(NebulaModelMatl, name_hash), pName);
 }
 
 s32 ModelData::findTexture(const char* pName) const {

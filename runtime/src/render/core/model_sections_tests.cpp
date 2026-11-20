@@ -32,7 +32,7 @@ struct Block {
     std::vector<NebulaModelSection> table;
 
     void add(std::uint32_t section, std::uint32_t count, std::uint32_t stride, std::uint32_t flags = NEBULA_MODEL_SECTION_REQUIRED) {
-        bytes.resize((bytes.size() + 7u) & ~std::size_t{7u});  // every place 8-aligned, as the cooker places them
+        bytes.resize((bytes.size() + 7u) & ~std::size_t{7u});  // every place 8-aligned, as the least alignment asks
         const auto at = static_cast<std::uint32_t>(bytes.size());
         bytes.resize(bytes.size() + static_cast<std::size_t>(count) * stride);
         table.push_back({section, flags, at, count * stride, count, stride});
@@ -119,8 +119,20 @@ void test_read_past() {
     b.table[0].size = 100u;
     b.add(name("SAMP"), 2u, 32u, 0u);
     NebulaModelView view{};
-    check(view_of(b.finish(), view).fault == NEBULA_MODEL_FINE && view.joint_count == 1u,
+    check(view_of(b.finish(), view).fault == NEBULA_MODEL_FINE && view.joint_count == 1u && view.joint_stride == 100u,
           "a longer entry and an unknown optional section are read past");
+    // A reader steps by the written stride: the second mesh's first field where a 104-byte stride puts it.
+    Block m = model(1u, 0u, 0u);
+    m.table.erase(m.table.begin() + 8);
+    m.add(name("MESH"), 2u, 104u);
+    const float second = 7.5f;
+    std::memcpy(m.bytes.data() + m.table.back().at + 104u, &second, 4u);
+    const std::vector<std::uint8_t> bytes = m.finish();
+    NebulaModelView mesh_view{};
+    check(view_of(bytes, mesh_view).fault == NEBULA_MODEL_FINE && mesh_view.mesh_stride == 104u && mesh_view.mesh_count == 2u,
+          "a mesh section of a longer stride reads");
+    const auto* mesh = static_cast<const NebulaModelMesh*>(nebula_model_entry(bytes.data(), mesh_view.meshes_at, mesh_view.mesh_stride, 1u));
+    check(mesh->min[0] == 7.5f, "the second entry by the written stride");
 }
 
 void test_faults() {
@@ -191,6 +203,25 @@ void test_faults() {
         return result.fault == NEBULA_MODEL_BAD_RANGE && std::strcmp(text, named) == 0;
     };
     check(range_fault(9u, 32u, 1u, "GXMT"), "a material naming a GXMT entry past the section");
+    {
+        Block b = model(1u, 0u, 0u);
+        b.table[16].stride = 8u;  // FROW: a list of rows, not a record
+        b.table[16].count = 1u;
+        NebulaModelView view{};
+        const NebulaModelCheck result = view_of(b.finish(), view);
+        nebula_model_section_text(result.what, text);
+        check(result.fault == NEBULA_MODEL_BAD_SECTION && std::strcmp(text, "FROW") == 0, "a list's entries are its stride exactly");
+    }
+    {
+        Block b = model(1u, 0u, 0u);
+        b.table[11].stride = 60u;  // FORM holds u64 hashes: 8-aligned entries
+        b.table[11].size = 60u;
+        b.bytes.resize(b.bytes.size() + 4u);
+        NebulaModelView view{};
+        const NebulaModelCheck result = view_of(b.finish(), view);
+        nebula_model_section_text(result.what, text);
+        check(result.fault == NEBULA_MODEL_BAD_SECTION && std::strcmp(text, "FORM") == 0, "a misaligned stride is refused");
+    }
     check(range_fault(9u, 36u, 1u, "SLOT") == false, "a material's slots inside SLOT");
     check(range_fault(9u, 36u, 5u, "SLOT"), "a material's slots past SLOT");
     check(range_fault(9u, 44u, 1u, "FORM") == false && range_fault(9u, 44u, 2u, "FORM"), "a material's forms past FORM");

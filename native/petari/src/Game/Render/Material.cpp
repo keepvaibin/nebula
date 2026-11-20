@@ -177,8 +177,8 @@ void MaterialSlots::grow(u32 count) {
     mCount = count;
 }
 
-const NebulaModelSlot* Material::fileSlots() const {
-    return mData->getSlots(mFile->first_slot);
+const NebulaModelSlot& Material::fileSlot(u32 slot) const {
+    return mData->getSlot(mFile->first_slot + slot);
 }
 
 void Material::setCoordMatrix(u32 index, const CoordMatrix& rMatrix) {
@@ -208,9 +208,8 @@ void Material::init(ModelData* pData, u32 index) {
     mFollowsView = false;
 
     mSlots.grow(pFile->slot_count);
-    const NebulaModelSlot* pFileSlots = fileSlots();
     for (u32 i = 0; i < pFile->slot_count; i++) {
-        mSlots.at(i).mTextureIndex = pFileSlots[i].texture;
+        mSlots.at(i).mTextureIndex = fileSlot(i).texture;
     }
     for (u32 i = 0; i < 2; i++) {
         memcpy(&mMaterialColor[i], pGx->material_color[i], 4);
@@ -230,16 +229,15 @@ void Material::init(ModelData* pData, u32 index) {
     mFog.mFarZ = pGx->fog.far_z;
     memcpy(&mFog.mColor, pGx->fog.color, 4);
 
-    const NebulaModelCoord* pCoords = pData->getCoords(pGx->first_coord);
     for (u32 i = 0; i < pGx->coord_count; i++) {
+        const NebulaModelCoord& rFile = pData->getCoord(pGx->first_coord + i);
         MaterialCoord& rCoord = mSlots.at(i).mCoord;
-        rCoord.mType = pCoords[i].type;
-        rCoord.mSource = pCoords[i].source;
-        rCoord.mMatrix = pCoords[i].matrix;
+        rCoord.mType = rFile.type;
+        rCoord.mSource = rFile.source;
+        rCoord.mMatrix = rFile.matrix;
     }
-    const NebulaModelCoordMatrix* pMatrices = pData->getCoordMatrices(pGx->first_matrix);
     for (u32 i = 0; i < pGx->matrix_count; i++) {
-        const NebulaModelCoordMatrix& rFile = pMatrices[i];
+        const NebulaModelCoordMatrix& rFile = pData->getCoordMatrix(pGx->first_matrix + i);
         MaterialSlot& rSlot = mSlots.at(rFile.slot);
         if (rSlot.mMatrix == nullptr) {
             rSlot.mMatrix = new CoordMatrix();
@@ -278,12 +276,11 @@ void Material::calc() {
 }
 
 s32 Material::findForm(const FormKey& rKey) const {
-    const NebulaModelFormEntry* pForms = mData->getForms(mFile->first_form);
     const u8 flags = static_cast< u8 >((rKey.mNormalCoord ? NEBULA_FORM_NORMAL_COORD : 0) | (rKey.mLit ? NEBULA_FORM_LIT : 0) |
                                        (rKey.mFogLinear ? NEBULA_FORM_FOG_LINEAR : 0));
     const u8 mask = NEBULA_FORM_NORMAL_COORD | NEBULA_FORM_LIT | NEBULA_FORM_FOG_LINEAR;
     for (u32 i = 0; i < mFile->form_count; i++) {
-        const NebulaModelFormEntry& rForm = pForms[i];
+        const NebulaModelFormEntry& rForm = mData->getForm(mFile->first_form + i);
         if (rForm.replace == rKey.mReplace && rForm.pass == rKey.mPass && (rForm.flags & mask) == flags) {
             return static_cast< s32 >(i);
         }
@@ -292,7 +289,7 @@ s32 Material::findForm(const FormKey& rKey) const {
 }
 
 const NebulaModelFormEntry* Material::getForm(s32 index) const {
-    return mData->getForms(mFile->first_form) + index;
+    return &mData->getForm(mFile->first_form + static_cast< u32 >(index));
 }
 
 void Material::fillRow(u32 row, f32* pOut) const {
@@ -343,7 +340,7 @@ void Material::fillRow(u32 row, f32* pOut) const {
             pOut[0] = pOut[1] = pOut[2] = 0.0f;
             return;
         }
-        const NebulaModelWarp& rWarp = mData->getWarps(mGx->first_warp)[warp];
+        const NebulaModelWarp& rWarp = mData->getWarp(mGx->first_warp + warp);
         for (u32 c = 0; c < 3; c++) {
             pOut[c] = rWarp.rows[r][c];
         }
@@ -362,7 +359,7 @@ void Material::fillRow(u32 row, f32* pOut) const {
             }
         };
         sizeOf(coord, pOut + 2);
-        const u32 map = coord < mFile->slot_count ? fileSlots()[coord].scale_map : NEBULA_SLOT_NO_MAP;
+        const u32 map = coord < mFile->slot_count ? fileSlot(coord).scale_map : NEBULA_SLOT_NO_MAP;
         if (map != NEBULA_SLOT_NO_MAP) {
             sizeOf(map, pOut);
         } else {
