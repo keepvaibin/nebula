@@ -197,9 +197,11 @@ fn twelve_texture_layers_cook_without_losing_slots_or_coordinates() {
     let word = |at| u32::from_le_bytes(block[at..at + 4].try_into().unwrap());
     assert_eq!(word(4), super::super::model_write::VERSION);
     let table = super::super::model_write::sections(&block).unwrap();
-    let at = super::super::model_write::section(&table, b"MT12").unwrap().at as usize;
-    assert_eq!(word(at + 36), 12);
-    let slots = word(at + super::super::model_write::MATERIAL_BYTES - 16) as usize;
+    let at = super::super::model_write::section(&table, b"MATL").unwrap().at as usize;
+    assert_eq!(word(at + 40), 12); // MATL slot_count
+    // MATL's first_slot (word 9) in SLOT.
+    let slots = super::super::model_write::section(&table, b"SLOT").unwrap().at as usize
+        + word(at + 36) as usize * super::super::model_write::SLOT_BYTES;
     for n in 0..12 {
         let slot = slots + n * super::super::model_write::SLOT_BYTES;
         assert_eq!(word(slot), n as u32);
@@ -1244,8 +1246,10 @@ fn a_normal_map_turns_the_lit_form_s_pixel_normal() {
     let block = super::super::model_write::write(&ir, "fixture", &super::super::programs::Written::unknown(), &mut Default::default()).unwrap();
     let word = |at: usize| u32::from_le_bytes(block[at..at + 4].try_into().unwrap());
     let table = super::super::model_write::sections(&block).unwrap();
-    let at = super::super::model_write::section(&table, b"MT12").unwrap().at as usize;
-    let slots = word(at + super::super::model_write::MATERIAL_BYTES - 16) as usize;
+    let at = super::super::model_write::section(&table, b"MATL").unwrap().at as usize;
+    // MATL's first_slot (word 9) in SLOT.
+    let slots = super::super::model_write::section(&table, b"SLOT").unwrap().at as usize
+        + word(at + 36) as usize * super::super::model_write::SLOT_BYTES;
     let slot = slots + 2 * super::super::model_write::SLOT_BYTES;
     assert_eq!(block[slot + 6], super::super::model_write::SLOT_USES_MAP | super::super::model_write::SLOT_USES_COORD);
 }
