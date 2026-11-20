@@ -839,12 +839,13 @@ fn a_hidden_model_keeps_every_joint_and_draws_nothing() {
     let (block, _, _) = to_files_for(&serde_json::to_vec(&arm(true, [0.0, 1.0], 0.5)).unwrap(), None, "Kuribo", None).unwrap();
     let read = GameModel::read(&game.path, &block).unwrap();
     assert_eq!(read.joints, game.joints);
-    // Hidden: the same joints in the same order, no meshes or materials (header words 4, 11, 12: nebula_model.h).
+    // Hidden: the same joints in the same order, no meshes or materials (the section table's counts: nebula_model.h).
     let skeleton = skeleton_gltf(&read, &block).unwrap();
     let (hidden, facts) = hidden_files_for(&skeleton, "Kuribo", &read).unwrap();
     assert_eq!(GameModel::read(&game.path, &hidden).unwrap().joints, game.joints);
-    let word = |at: usize| u32::from_le_bytes(hidden[at * 4..at * 4 + 4].try_into().unwrap());
-    assert_eq!((word(4), word(11), word(12)), (3, 0, 0));
+    let table = super::super::model_write::sections(&hidden).unwrap();
+    let count = |name: &[u8; 4]| super::super::model_write::section(&table, name).unwrap().count;
+    assert_eq!((count(b"JNTS"), count(b"MESH"), count(b"MT12")), (3, 0, 0));
     assert_eq!((facts.joints, facts.extra_joints, facts.meshes), (3, 0, 0));
     // An ordinary model with no triangles is still refused.
     let bare = to_files_for(&skeleton, None, "Kuribo", Some(&read)).err().unwrap();
