@@ -53,8 +53,9 @@ namespace MR {
     bool isUseTexMtx(Material*, u32);
     bool isExistEffectTexMtx(ModelData*);
     bool isExistEffectTexMtx(LiveActor*);
-    ResTIMG* getResTIMG(const LiveActor*, int);
-    ResTIMG* getResTIMG(const ModelData*, int);
+    // A model's texture: its image, size and sampler.
+    const ModelTexture* getModelTexture(const LiveActor*, int);
+    const ModelTexture* getModelTexture(const ModelData*, int);
     const char* getTextureName(const LiveActor*, int);
     void copyJointAnimation(Model*, Model*);
     void copyJointAnimation(LiveActor*, const LiveActor*);

@@ -765,7 +765,7 @@ namespace MR {
         return nullptr;
     }
 
-    ResTIMG* getTexFromModel(const char* pName, const LiveActor* pActor) {
+    const ModelTexture* getTexFromModel(const char* pName, const LiveActor* pActor) {
         s32 texIndex = getModelData(pActor)->findTexture(pName);
         return getModelData(pActor)->getTexture(texIndex);
     }

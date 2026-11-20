@@ -1,4 +1,5 @@
 #include "Game/Render/GameTexture.hpp"
+#include "Game/Render/ModelData.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/RenderTexture.hpp"
 #include "Game/Render/FrameList.hpp"
@@ -43,6 +44,13 @@ void GameTexture::set(const ResTIMG* pInfo) {
     SiteTextures::init(&mSite, mImage, pInfo->mWidth, pInfo->mHeight, pInfo->mWrapS, pInfo->mWrapT);
     SiteTextures::setFilter(&mSite, pInfo->mMinType, pInfo->mMagType, pInfo->mMinLod, pInfo->mMaxLod, pInfo->mLodBias, false,
                             pInfo->mMaxAnisotropy);
+}
+
+void GameTexture::set(const ModelTexture& rTexture) {
+    mInfo = nullptr;
+    mImage = const_cast< u8* >(rTexture.mImage);
+    SiteTextures::init(&mSite, mImage, rTexture.mWidth, rTexture.mHeight, rTexture.mSampler.wrap_s, rTexture.mSampler.wrap_t);
+    SiteTextures::setSampler(&mSite, rTexture.mSampler);
 }
 
 void GameTexture::copyFrame() {

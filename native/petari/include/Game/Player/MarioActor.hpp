@@ -21,6 +21,7 @@ class FireMarioBall;
 class Clip;
 class Model;
 class ModelData;
+struct ModelTexture;
 class PlayerModel;
 class SoundAudible;
 class GameTexture;
@@ -810,7 +811,7 @@ public:
     IceStep** mIceSteps;  // the ice form's steps, reused in turn
     u16 mIceStepIndex;  // the next ice step
     FireMarioBall* mFireBalls[3];  // the fire form's balls
-    ResTIMG** mSwapTextures;  // the model's textures (swapTextureInit)
+    const ModelTexture** mSwapTextures;  // the model's textures (swapTextureInit)
     u8 mEyeLidReset;  // the eyelid came from the eye resource: the blink restarts (updateBlink)
     u16 mEyeLidFrame;  // the eyelid texture's frame (swapTexture EyeLid_v)
     const void** mSwapImages;  // the swap textures' images by slot

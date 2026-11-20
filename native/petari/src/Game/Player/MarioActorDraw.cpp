@@ -592,11 +592,11 @@ static u32 findEyeLidTexture(ModelData* pModelData, u32 textureNum, u32 texNo) {
 void MarioActor::swapTextureInit() {
     ModelData* actorData = MR::getModelData(this);
     const u32 textureCount = actorData->getTextureCount();
-    mSwapTextures = new ResTIMG*[textureCount];
+    mSwapTextures = new const ModelTexture*[textureCount];
     mEyeLidFrame = 0;
 
     for (u32 i = 0; i < textureCount; i++) {
-        mSwapTextures[i] = MR::getResTIMG(this, i);
+        mSwapTextures[i] = MR::getModelTexture(this, i);
     }
 
     mSwapImages = new const void*[12]();
@@ -604,10 +604,10 @@ void MarioActor::swapTextureInit() {
     u32 texNo = findEyeLidTexture(actorData, textureCount, 0);
 
     mEyeLidTexBase = texNo;
-    mSwapImages[0] = mSwapTextures[texNo]->image();
-    mSwapImages[1] = mSwapTextures[texNo + 1]->image();
-    mSwapImages[2] = mSwapTextures[texNo + 2]->image();
-    mSwapImages[3] = mSwapTextures[texNo + 3]->image();
+    mSwapImages[0] = mSwapTextures[texNo]->mImage;
+    mSwapImages[1] = mSwapTextures[texNo + 1]->mImage;
+    mSwapImages[2] = mSwapTextures[texNo + 2]->mImage;
+    mSwapImages[3] = mSwapTextures[texNo + 3]->mImage;
 
     if (mBeeModel != nullptr) {
         ModelData* beeData = MR::getModelData(mBeeModel);
@@ -616,13 +616,13 @@ void MarioActor::swapTextureInit() {
         texNo = findEyeLidTexture(beeData, textureNum, texNo);
 
         for (u32 i = 0; i < textureNum; i++) {
-            mSwapTextures[i] = MR::getResTIMG(mBeeModel, i);
+            mSwapTextures[i] = MR::getModelTexture(mBeeModel, i);
         }
 
-        mSwapImages[4] = mSwapTextures[texNo]->image();
-        mSwapImages[5] = mSwapTextures[texNo + 1]->image();
-        mSwapImages[6] = mSwapTextures[texNo + 2]->image();
-        mSwapImages[7] = mSwapTextures[texNo + 3]->image();
+        mSwapImages[4] = mSwapTextures[texNo]->mImage;
+        mSwapImages[5] = mSwapTextures[texNo + 1]->mImage;
+        mSwapImages[6] = mSwapTextures[texNo + 2]->mImage;
+        mSwapImages[7] = mSwapTextures[texNo + 3]->mImage;
     }
 
     if (mHopperModel != nullptr) {
@@ -632,13 +632,13 @@ void MarioActor::swapTextureInit() {
         texNo = findEyeLidTexture(hopperData, textureNum, texNo);
 
         for (u32 i = 0; i < textureNum; i++) {
-            mSwapTextures[i] = MR::getResTIMG(mHopperModel, i);
+            mSwapTextures[i] = MR::getModelTexture(mHopperModel, i);
         }
 
-        mSwapImages[8] = mSwapTextures[texNo]->image();
-        mSwapImages[9] = mSwapTextures[texNo + 1]->image();
-        mSwapImages[10] = mSwapTextures[texNo + 2]->image();
-        mSwapImages[11] = mSwapTextures[texNo + 3]->image();
+        mSwapImages[8] = mSwapTextures[texNo]->mImage;
+        mSwapImages[9] = mSwapTextures[texNo + 1]->mImage;
+        mSwapImages[10] = mSwapTextures[texNo + 2]->mImage;
+        mSwapImages[11] = mSwapTextures[texNo + 3]->mImage;
     }
 
     initBlink();

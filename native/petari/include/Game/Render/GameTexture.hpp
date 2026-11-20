@@ -62,6 +62,8 @@ struct ResTIMG {
     }
 };
 
+struct ModelTexture;
+
 // A picture the game draws with: the renderer's texture for an image and how it is sampled. The image is a texture file's
 // (set), one the game writes (made with a size: its own pixels, black to start) or a share of the frame the game draws into
 // (a target: no pixels, its image is the key the frame passes name).
@@ -70,6 +72,10 @@ public:
     GameTexture() {}
     explicit GameTexture(const ResTIMG* pInfo) {
         set(pInfo);
+    }
+    // A model's texture (ModelData::getTexture), sampled as its cook decoded.
+    explicit GameTexture(const ModelTexture& rTexture) {
+        set(rTexture);
     }
     // An image the game writes: `layout` is how (NEBULA_TEXTURE_LINEAR_*).
     GameTexture(u32 width, u32 height, u8 layout = NEBULA_TEXTURE_LINEAR_L8);
@@ -83,6 +89,8 @@ public:
 
     // A file's image, sampled as the file says.
     void set(const ResTIMG* pInfo);
+    // A model's texture: no file record (info() is null).
+    void set(const ModelTexture& rTexture);
     void set(const CookedResTIMG* pSource) {
         mSourceInfo = ResTIMG::fromCooked(*pSource);
         set(&mSourceInfo);
@@ -109,6 +117,7 @@ public:
     const SiteTexture& site() const {
         return mSite;
     }
+    // The file record it was set from or made with (null for a model's texture).
     const ResTIMG* info() const {
         return mInfo;
     }

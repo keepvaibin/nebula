@@ -12,6 +12,7 @@
 #include <nebula_math.h>
 
 class ActorLightCtrl;
+struct ModelTexture;
 class BckCtrlData;
 class BrkCtrl;
 class BtkCtrl;
@@ -108,7 +109,7 @@ namespace MR {
 
     ResourceHolder* getResourceHolder(const LiveActor*);
     ResourceHolder* getModelResourceHolder(const LiveActor*);
-    ResTIMG* getTexFromModel(const char*, const LiveActor*);
+    const ModelTexture* getTexFromModel(const char*, const LiveActor*);
     ResTIMG* getTexFromArc(const char*, const LiveActor*);
     const char* getModelResName(const LiveActor*);
 

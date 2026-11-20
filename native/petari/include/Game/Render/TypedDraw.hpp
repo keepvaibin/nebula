@@ -310,11 +310,16 @@ struct VertexLayout< VertexCornerExtras > {
     }
 };
 
+struct NebulaModelSampler;
+
 namespace SiteTextures {
     void toFrame(const SiteTexture& rTexture, NebulaFrameTexture* pOut);
     // `pImage` at its size: linear filters, no levels.
     void init(SiteTexture* pTexture, const void* pImage, u32 width, u32 height, u8 wrapS = NEBULA_WRAP_CLAMP, u8 wrapT = NEBULA_WRAP_CLAMP);
     void setFilter(SiteTexture* pTexture, u8 minFilter, u8 magFilter, f32 minLod, f32 maxLod, f32 lodBias, bool edgeLod, u8 maxAniso);
+    // A sampler decoded at the cook (a model's texture). The site keeps the filter numbers (NEBULA_FILTER_*) until
+    // E3 step 4 (P-155); toFrame gives back this same sampler.
+    void setSampler(SiteTexture* pTexture, const NebulaModelSampler& rSampler);
 }  // namespace SiteTextures
 
 // Everything a site's draws take: a written shader, its constants and textures, its fixed state. A plain value the site

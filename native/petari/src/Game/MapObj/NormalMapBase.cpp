@@ -91,23 +91,20 @@ void NormalMapBase::setupTexture() {
     delete[] mTextures;
     mTextures = new GameTexture*[textureCount];
     for (u32 i = 0; i < textureCount; i++) {
-        const ResTIMG* pImage = MR::getResTIMG(this, i);
+        const ModelTexture* pOwn = MR::getModelTexture(this, i);
         const char* pName = MR::getTextureName(this, i);
         if (strstr(pName, "Nswap_")) {
             MR::FormattedName fileName("%s.bti", pName + 6);
             // The model's own picture stays when the archive lacks the swap file.
             const ResTIMG* pSwapImage = MR::getTexFromArc(fileName.c_str(), this);
-            if (pSwapImage != nullptr) {
-                pImage = pSwapImage;
-            }
-            mNormalTex = new GameTexture(pImage);
+            mNormalTex = pSwapImage != nullptr ? new GameTexture(pSwapImage) : new GameTexture(*pOwn);
             mTextures[i] = mNormalTex;
             mTextures[i]->setFilter(NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR);
         } else if (strstr(pName, "ormal") && !mNormalTex) {
-            mNormalTex = new GameTexture(pImage);
+            mNormalTex = new GameTexture(*pOwn);
             mTextures[i] = mNormalTex;
         } else {
-            mTextures[i] = new GameTexture(pImage);
+            mTextures[i] = new GameTexture(*pOwn);
         }
 
         if (strstr(pName, "Zormal")) {
@@ -312,7 +309,7 @@ void NormalMapBase::loadDiffuseGradTex(u32 slot) const {
 
 void NormalMapBase::loadNormalTex(const GameTexture* pTex, u32 slot) const {
     SiteTexture obj;
-    SiteTextures::init(&obj, pTex->image(), pTex->info()->mWidth, pTex->info()->mHeight, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
+    SiteTextures::init(&obj, pTex->image(), pTex->getWidth(), pTex->getHeight(), NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
     if ((mTexFlags & 2) != 0 && (mTexFlags & 0x4) != 0) {
         SiteTextures::setFilter(&obj, NEBULA_FILTER_NEAREST, NEBULA_FILTER_NEAREST, 0.0f, 0.0f, 0.0f, false, 0);
     } else if ((mTexFlags & 0x2) != 0) {
