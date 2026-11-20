@@ -146,6 +146,23 @@ failed, said = m.measure_runs(args, work / "measure2", lambda *a, **k: type("D",
 check(failed and said == ["vulkan no run (harness exit 1)"], "a run with no folder fails: %s" % said)
 check(m.processor_mask(0) is None, "no cores asked: the mask is left alone")
 
+
+def disturbed_runner(command, env=None, check=False):
+    folder = pathlib.Path(command[command.index("--work") + 1]) / "runs" / "measure-route" / "d3d12"
+    folder.mkdir(parents=True)
+    (folder / "run.log").write_text("harness: frame 0 is game frame 10\n" + pace % (0, 5000, 800) * 3, encoding="utf-8")
+    (folder / "window-watch.txt").write_text("active first at 12.0 s, 40 of the quarter seconds\n", encoding="utf-8")
+    return type("D", (), {"returncode": 0})()
+
+
+# P-328: a run whose window the player's desktop reached is not compared and adds no history line.
+args.runs = "d3d12"
+before = len(m.read_history(args.history))
+failed, said = m.measure_runs(args, work / "measure3", disturbed_runner)
+check(not failed and said == ["d3d12 not trusted (window: active first at 12.0 s, 40 of the quarter seconds)"] and
+      len(m.read_history(args.history)) == before, "a reached window: not trusted, no line: %s" % said)
+check(m.window_disturbed(work / "measure") is None, "no watch file: nothing reached")
+
 # The tablet's run stands alone (P-321): inside the device's lock, the test app prepared before the run and removed
 # after it, also when the run or the install fails; the steps take no lock of their own.
 class FakeTablet(FakeDevice):
