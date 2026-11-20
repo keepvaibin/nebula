@@ -152,12 +152,12 @@ namespace Skeleton {
         pBasic->init(rScale, rMtx);
         mCurrentMtxCalc = pBasic;
 
-        const NebulaModelStep* pSteps = reinterpret_cast< const NebulaModelStep* >(pData->at(pData->mView.steps_at));
         const u32 count = pData->mView.step_count;
         Saved* pTop = sStack;
         for (u32 i = 0; i < count; i++) {
-            Joint* pJoint = pData->getJointAt(pSteps[i].joint);
-            if (pSteps[i].op == NEBULA_STEP_ENTER) {
+            const NebulaModelStep& rStep = pData->entry< NebulaModelStep >(pData->mView.steps_at, pData->mView.step_stride, i);
+            Joint* pJoint = pData->getJointAt(rStep.joint);
+            if (rStep.op == NEBULA_STEP_ENTER) {
                 NebulaMtxCopy(mCurrentMtx, pTop->mMtx);
                 pTop->mS = mCurrentS;
                 pTop->mParentS = mParentS;

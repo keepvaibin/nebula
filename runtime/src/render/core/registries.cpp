@@ -349,24 +349,34 @@ bool same_pipeline(const PipelineEntry& entry, const NebulaPipelineDesc& desc, c
     return true;
 }
 
+// A record section's entries, by the stride the file wrote (FRAME-MODEL 2.7.2: a field added at a record's end is
+// read past).
+template <class T>
+const T& entry(const void* file, std::uint32_t offset, std::uint32_t stride, std::uint32_t index) noexcept {
+    return *static_cast<const T*>(nebula_model_entry(file, offset, stride, index));
+}
+template <class T>
+void entries(const void* file, std::uint32_t offset, std::uint32_t stride, std::uint32_t count, std::vector<T>& out) {
+    out.resize(count);
+    for (std::uint32_t i = 0; i < count; ++i) {
+        out[i] = entry<T>(file, offset, stride, i);
+    }
+}
+
 // What a model's file says, with no device involved.
 void read_model(const void* file, const NebulaModelView& view, GpuModel& model, std::vector<GpuMesh>& meshes) {
     const auto& header = *static_cast<const NebulaModelHeader*>(file);
     if (view.draw_matrix_count != 0u) {
-        const auto* draw = at<NebulaModelDrawMatrix>(file, view.draw_matrices_at);
-        model.draw_matrices.assign(draw, draw + view.draw_matrix_count);
+        entries(file, view.draw_matrices_at, view.draw_matrix_stride, view.draw_matrix_count, model.draw_matrices);
     }
     if (view.envelope_count != 0u) {
-        const auto* envelopes = at<NebulaModelEnvelope>(file, view.envelopes_at);
-        model.envelopes.assign(envelopes, envelopes + view.envelope_count);
+        entries(file, view.envelopes_at, view.envelope_stride, view.envelope_count, model.envelopes);
     }
     if (view.mix_count != 0u) {
-        const auto* mixes = at<NebulaModelMix>(file, view.mixes_at);
-        model.mixes.assign(mixes, mixes + view.mix_count);
+        entries(file, view.mixes_at, view.mix_stride, view.mix_count, model.mixes);
     }
     if (view.joint_count != 0u) {
-        const auto* joints = at<NebulaModelJoint>(file, view.joints_at);
-        model.joints.assign(joints, joints + view.joint_count);
+        entries(file, view.joints_at, view.joint_stride, view.joint_count, model.joints);
         if (view.envelope_count != 0u) {
             const auto* binds = at<float>(file, view.inverse_binds_at);
             model.inverse_binds.assign(binds, binds + 12u * view.inverse_bind_count);
@@ -380,9 +390,8 @@ void read_model(const void* file, const NebulaModelView& view, GpuModel& model, 
     model.mesh_count = view.mesh_count;
 
     meshes.resize(view.mesh_count);
-    const auto* file_meshes = at<NebulaModelMesh>(file, view.meshes_at);
     for (std::uint32_t m = 0; m < view.mesh_count; ++m) {
-        const NebulaModelMesh& mesh = file_meshes[m];
+        const auto& mesh = entry<NebulaModelMesh>(file, view.meshes_at, view.mesh_stride, m);
         GpuMesh& gpu_mesh = meshes[m];
         gpu_mesh.vertex_count = mesh.vertex_count;
         gpu_mesh.refined_vertex_count = mesh.refined_vertex_count;
@@ -403,7 +412,6 @@ void read_model(const void* file, const NebulaModelView& view, GpuModel& model, 
 
 void Registries::place_model(std::uint32_t id, const LiveModel& live, GpuModel model, std::vector<GpuMesh>& meshes, const Placed& placed) {
     const NebulaModelView& view = live.view;
-    const auto* file_meshes = at<NebulaModelMesh>(live.file, view.meshes_at);
     model.first_mesh = live.first_mesh;
     model.arena = placed.arena;
     model.arena_offset = placed.offset;
@@ -412,7 +420,7 @@ void Registries::place_model(std::uint32_t id, const LiveModel& live, GpuModel m
         return offset != 0u ? placed.gpu + (offset - view.geometry_at) : gpu::Address{0u};
     };
     for (std::uint32_t m = 0; m < view.mesh_count; ++m) {
-        const NebulaModelMesh& mesh = file_meshes[m];
+        const auto& mesh = entry<NebulaModelMesh>(live.file, view.meshes_at, view.mesh_stride, m);
         GpuMesh& gpu_mesh = meshes[m];
         gpu_mesh.positions = stream(mesh.positions_at);
         gpu_mesh.billboard = mesh.billboard;
