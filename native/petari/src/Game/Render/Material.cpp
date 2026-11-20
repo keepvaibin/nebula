@@ -192,7 +192,7 @@ void Material::setCoordMatrix(u32 index, const CoordMatrix& rMatrix) {
 }
 
 void Material::init(ModelData* pData, u32 index) {
-    const NebulaModelMaterial* pFile = reinterpret_cast< const NebulaModelMaterial* >(pData->at(pData->mFile->materials_at)) + index;
+    const NebulaModelMaterial* pFile = reinterpret_cast< const NebulaModelMaterial* >(pData->at(pData->mView.materials_at)) + index;
     mFile = pFile;
     mData = pData;
     mNext = nullptr;

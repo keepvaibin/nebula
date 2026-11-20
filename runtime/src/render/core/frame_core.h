@@ -325,6 +325,7 @@ private:
     struct LiveModel {
         const void* file = nullptr;  // valid until model_free
         std::uint32_t first_mesh = 0u;
+        NebulaModelView view{};  // its arrays' places and counts, from the section table at model_register
     };
     struct LiveMesh {
         std::unique_ptr<std::byte[]> bytes;

@@ -196,7 +196,8 @@ fn twelve_texture_layers_cook_without_losing_slots_or_coordinates() {
     let block = super::super::model_write::write(&ir, "fixture", &super::super::programs::Written::unknown(), &mut Default::default()).unwrap();
     let word = |at| u32::from_le_bytes(block[at..at + 4].try_into().unwrap());
     assert_eq!(word(4), super::super::model_write::VERSION);
-    let at = word(24 * 4) as usize;
+    let table = super::super::model_write::sections(&block).unwrap();
+    let at = super::super::model_write::section(&table, b"MT12").unwrap().at as usize;
     assert_eq!(word(at + 36), 12);
     let slots = word(at + super::super::model_write::MATERIAL_BYTES - 16) as usize;
     for n in 0..12 {
@@ -1061,7 +1062,8 @@ fn a_lit_material_keeps_every_factor_and_map() {
     let (model, _) = to_files(&serde_json::to_vec(&lit_document()).unwrap(), None, "Shell").unwrap();
     let word = |at: usize| u32::from_le_bytes(model[at..at + 4].try_into().unwrap());
     assert_eq!((word(0), word(4), word(8) as usize), (super::super::model_write::MAGIC, super::super::model_write::VERSION, model.len()));
-    assert!((15..super::super::model_write::HEADER_WORDS).all(|k| (word(k * 4) as usize) <= model.len()));
+    let table = super::super::model_write::sections(&model).unwrap();
+    assert!(table.iter().all(|s| (s.at + s.size) as usize <= model.len()));
 
     // A material with nothing said is glTF's default; a file with no material has no glTF materials.
     let (plain, _, _) = cook(&document_of(&triangle(1)), None).unwrap();
@@ -1240,7 +1242,8 @@ fn a_normal_map_turns_the_lit_form_s_pixel_normal() {
     // Its slot is marked as read, so its texture is bound.
     let block = super::super::model_write::write(&ir, "fixture", &super::super::programs::Written::unknown(), &mut Default::default()).unwrap();
     let word = |at: usize| u32::from_le_bytes(block[at..at + 4].try_into().unwrap());
-    let at = word(24 * 4) as usize;
+    let table = super::super::model_write::sections(&block).unwrap();
+    let at = super::super::model_write::section(&table, b"MT12").unwrap().at as usize;
     let slots = word(at + super::super::model_write::MATERIAL_BYTES - 16) as usize;
     let slot = slots + 2 * super::super::model_write::SLOT_BYTES;
     assert_eq!(block[slot + 6], super::super::model_write::SLOT_USES_MAP | super::super::model_write::SLOT_USES_COORD);

@@ -954,10 +954,9 @@ impl GameModel {
     /// The joints of a model block as the store keeps it (nebula_model.h): None when `block` is no model block.
     pub fn read(path: &str, block: &[u8]) -> Option<GameModel> {
         let word = |at: usize| Some(u32::from_le_bytes(block.get(at..at.checked_add(4)?)?.try_into().ok()?) as usize);
-        if word(0)? != super::model_write::MAGIC as usize {
-            return None;
-        }
-        let (count, joints_at) = (word(4 * 4)?, word(15 * 4)?);
+        let table = super::model_write::sections(block).ok()?;
+        let joints_section = super::model_write::section(&table, b"JNTS").ok()?;
+        let (count, joints_at) = (joints_section.count as usize, joints_section.at as usize);
         if count > block.len() / super::model_write::JOINT_BYTES {
             return None;
         }
@@ -984,12 +983,9 @@ impl GameModel {
 /// its animations and the code that names them still find them, and nothing is drawn. None when `block` is no model
 /// block.
 pub fn skeleton_gltf(game: &GameModel, block: &[u8]) -> Option<Vec<u8>> {
-    let word = |at: usize| Some(u32::from_le_bytes(block.get(at..at.checked_add(4)?)?.try_into().ok()?) as usize);
     let float = |at: usize| Some(f32::from_le_bytes(block.get(at..at.checked_add(4)?)?.try_into().ok()?));
-    if word(0)? != super::model_write::MAGIC as usize {
-        return None;
-    }
-    let joints_at = word(15 * 4)?;
+    let table = super::model_write::sections(block).ok()?;
+    let joints_at = super::model_write::section(&table, b"JNTS").ok()?.at as usize;
     let mut nodes = Vec::with_capacity(game.joints.len());
     for (j, name) in game.joints.iter().enumerate() {
         let at = joints_at.checked_add(j.checked_mul(super::model_write::JOINT_BYTES)?)?;

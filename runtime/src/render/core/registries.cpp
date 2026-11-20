@@ -9,6 +9,7 @@
 #include <bit>
 #include <cstring>
 #include <fstream>
+#include <iostream>
 #include <map>
 #include <memory>
 #include <iterator>
@@ -349,38 +350,38 @@ bool same_pipeline(const PipelineEntry& entry, const NebulaPipelineDesc& desc, c
 }
 
 // What a model's file says, with no device involved.
-void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes) {
+void read_model(const void* file, const NebulaModelView& view, GpuModel& model, std::vector<GpuMesh>& meshes) {
     const auto& header = *static_cast<const NebulaModelHeader*>(file);
-    if (header.draw_matrix_count != 0u) {
-        const auto* draw = at<NebulaModelDrawMatrix>(file, header.draw_matrices_at);
-        model.draw_matrices.assign(draw, draw + header.draw_matrix_count);
+    if (view.draw_matrix_count != 0u) {
+        const auto* draw = at<NebulaModelDrawMatrix>(file, view.draw_matrices_at);
+        model.draw_matrices.assign(draw, draw + view.draw_matrix_count);
     }
-    if (header.envelope_count != 0u) {
-        const auto* envelopes = at<NebulaModelEnvelope>(file, header.envelopes_at);
-        model.envelopes.assign(envelopes, envelopes + header.envelope_count);
+    if (view.envelope_count != 0u) {
+        const auto* envelopes = at<NebulaModelEnvelope>(file, view.envelopes_at);
+        model.envelopes.assign(envelopes, envelopes + view.envelope_count);
     }
-    if (header.mix_count != 0u) {
-        const auto* mixes = at<NebulaModelMix>(file, header.mixes_at);
-        model.mixes.assign(mixes, mixes + header.mix_count);
+    if (view.mix_count != 0u) {
+        const auto* mixes = at<NebulaModelMix>(file, view.mixes_at);
+        model.mixes.assign(mixes, mixes + view.mix_count);
     }
-    if (header.joint_count != 0u) {
-        const auto* joints = at<NebulaModelJoint>(file, header.joints_at);
-        model.joints.assign(joints, joints + header.joint_count);
-        if (header.envelope_count != 0u) {
-            const auto* binds = at<float>(file, header.inverse_binds_at);
-            model.inverse_binds.assign(binds, binds + 12u * header.joint_count);
+    if (view.joint_count != 0u) {
+        const auto* joints = at<NebulaModelJoint>(file, view.joints_at);
+        model.joints.assign(joints, joints + view.joint_count);
+        if (view.envelope_count != 0u) {
+            const auto* binds = at<float>(file, view.inverse_binds_at);
+            model.inverse_binds.assign(binds, binds + 12u * view.inverse_bind_count);
         }
     }
-    model.tables.draw_matrix_count = header.draw_matrix_count;
-    model.tables.joint_count = header.joint_count;
+    model.tables.draw_matrix_count = view.draw_matrix_count;
+    model.tables.joint_count = view.joint_count;
     model.tables.has_billboard = (header.flags & NEBULA_MODEL_HAS_BILLBOARD) != 0u;
     model.tables.has_weighted = std::any_of(model.draw_matrices.begin(), model.draw_matrices.end(),
                                             [](const NebulaModelDrawMatrix& matrix) { return matrix.weighted != 0u; });
-    model.mesh_count = header.mesh_count;
+    model.mesh_count = view.mesh_count;
 
-    meshes.resize(header.mesh_count);
-    const auto* file_meshes = at<NebulaModelMesh>(file, header.meshes_at);
-    for (std::uint32_t m = 0; m < header.mesh_count; ++m) {
+    meshes.resize(view.mesh_count);
+    const auto* file_meshes = at<NebulaModelMesh>(file, view.meshes_at);
+    for (std::uint32_t m = 0; m < view.mesh_count; ++m) {
         const NebulaModelMesh& mesh = file_meshes[m];
         GpuMesh& gpu_mesh = meshes[m];
         gpu_mesh.vertex_count = mesh.vertex_count;
@@ -401,16 +402,16 @@ void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes)
 }  // namespace
 
 void Registries::place_model(std::uint32_t id, const LiveModel& live, GpuModel model, std::vector<GpuMesh>& meshes, const Placed& placed) {
-    const auto& header = *static_cast<const NebulaModelHeader*>(live.file);
-    const auto* file_meshes = at<NebulaModelMesh>(live.file, header.meshes_at);
+    const NebulaModelView& view = live.view;
+    const auto* file_meshes = at<NebulaModelMesh>(live.file, view.meshes_at);
     model.first_mesh = live.first_mesh;
     model.arena = placed.arena;
     model.arena_offset = placed.offset;
     model.arena_size = placed.size;
     const auto stream = [&](std::uint32_t offset) -> gpu::Address {
-        return offset != 0u ? placed.gpu + (offset - header.geometry_at) : gpu::Address{0u};
+        return offset != 0u ? placed.gpu + (offset - view.geometry_at) : gpu::Address{0u};
     };
-    for (std::uint32_t m = 0; m < header.mesh_count; ++m) {
+    for (std::uint32_t m = 0; m < view.mesh_count; ++m) {
         const NebulaModelMesh& mesh = file_meshes[m];
         GpuMesh& gpu_mesh = meshes[m];
         gpu_mesh.positions = stream(mesh.positions_at);
@@ -430,30 +431,42 @@ void Registries::place_model(std::uint32_t id, const LiveModel& live, GpuModel m
 std::uint32_t Registries::model_register(const void* file, std::uint32_t* first_mesh) {
     return gate_->use([&] {
         const auto& header = *static_cast<const NebulaModelHeader*>(file);
+        NebulaModelView view{};
+        if (const NebulaModelCheck check = nebula_model_view(file, header.size, &view); check.fault != NEBULA_MODEL_FINE) {
+            // The game reads the same view first and stops a load it cannot read (ModelData.cpp): not reached by it.
+            char section[5];
+            nebula_model_section_text(check.what, section);
+            std::cerr << "[models] a model file the renderer cannot read (fault " << check.fault << ", " << section
+                      << "): not drawn\n";
+            if (first_mesh != nullptr) {
+                *first_mesh = 0u;
+            }
+            return std::uint32_t{0u};
+        }
         GpuModel model;
         std::vector<GpuMesh> meshes;
-        read_model(file, model, meshes);
+        read_model(file, view, model, meshes);
 
         Placed placed{};
         std::uint32_t id;
         {
             const std::lock_guard guard(lock_);
-            placed = header.geometry_size != 0u ? place(header.geometry_size) : Placed{};
+            placed = view.geometry_size != 0u ? place(view.geometry_size) : Placed{};
             if (!free_models_.empty()) {
                 id = free_models_.back();
                 free_models_.pop_back();
             } else {
                 id = next_model_++;
             }
-            const LiveModel live{file, take_mesh_ids(header.mesh_count)};
+            const LiveModel live{file, take_mesh_ids(view.mesh_count), view};
             live_models_[id] = live;
             place_model(id, live, std::move(model), meshes, placed);
             if (first_mesh != nullptr) {
                 *first_mesh = live.first_mesh;
             }
         }
-        if (header.geometry_size != 0u) {
-            fill(placed, at<std::byte>(file, header.geometry_at), header.geometry_size);
+        if (view.geometry_size != 0u) {
+            fill(placed, at<std::byte>(file, view.geometry_at), view.geometry_size);
         }
         return id;
     });
@@ -566,14 +579,14 @@ void Registries::restart(gpu::Device* device) {
     tables_.resize(1u);
 
     for (const auto& [id, live] : live_models_) {
-        const auto& header = *static_cast<const NebulaModelHeader*>(live.file);
+        const NebulaModelView& view = live.view;
         GpuModel model;
         std::vector<GpuMesh> meshes;
-        read_model(live.file, model, meshes);
-        const Placed placed = header.geometry_size != 0u ? place(header.geometry_size) : Placed{};
+        read_model(live.file, view, model, meshes);
+        const Placed placed = view.geometry_size != 0u ? place(view.geometry_size) : Placed{};
         place_model(id, live, std::move(model), meshes, placed);
-        if (header.geometry_size != 0u) {
-            fill(placed, at<std::byte>(live.file, header.geometry_at), header.geometry_size);
+        if (view.geometry_size != 0u) {
+            fill(placed, at<std::byte>(live.file, view.geometry_at), view.geometry_size);
         }
     }
     for (const auto& [id, live] : live_meshes_) {

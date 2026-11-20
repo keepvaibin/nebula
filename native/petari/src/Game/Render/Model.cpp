@@ -152,8 +152,8 @@ namespace Skeleton {
         pBasic->init(rScale, rMtx);
         mCurrentMtxCalc = pBasic;
 
-        const NebulaModelStep* pSteps = reinterpret_cast< const NebulaModelStep* >(pData->at(pData->mFile->steps_at));
-        const u32 count = pData->mFile->step_count;
+        const NebulaModelStep* pSteps = reinterpret_cast< const NebulaModelStep* >(pData->at(pData->mView.steps_at));
+        const u32 count = pData->mView.step_count;
         Saved* pTop = sStack;
         for (u32 i = 0; i < count; i++) {
             Joint* pJoint = pData->getJointAt(pSteps[i].joint);

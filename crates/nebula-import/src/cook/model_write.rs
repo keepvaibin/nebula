@@ -9,8 +9,12 @@ use anyhow::{bail, Context, Result};
 use std::collections::HashMap;
 
 pub const MAGIC: u32 = 0x4C44_4D4E;
-pub const VERSION: u32 = 12;
+pub const VERSION: u32 = 13;
+/// The header's room in words: magic, version, size, flags, the section count and the table's place, then zero.
 pub const HEADER_WORDS: usize = 28;
+/// NebulaModelSection.flags: a reader that does not know the section refuses the file.
+pub const SECTION_REQUIRED: u32 = 1;
+pub const SECTION_BYTES: usize = 24;
 pub const JOINT_BYTES: usize = 96;
 pub const MESH_BYTES: usize = 100;
 pub const MESH_COORD_BYTES: usize = 4;
@@ -731,6 +735,7 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written, pipelines: &mut pipeli
         b.fs(&[t.min_lod, t.max_lod, t.lod_bias]);
     }
     // Names.
+    let names_at = b.at();
     let mut placed: HashMap<String, u32> = HashMap::new();
     for (slot, text) in &strings {
         let at = match placed.get(text) {
@@ -745,6 +750,7 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written, pipelines: &mut pipeli
         };
         b.patch32(*slot, at);
     }
+    let names_size = b.at() - names_at;
     for (shape, streams) in ir.shapes.iter().zip(&meshes) {
         let Some(forms) = material_forms.get(shape.material as usize) else {
             continue;
@@ -826,6 +832,7 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written, pipelines: &mut pipeli
     }
     b.align(32);
     let geometry_size = b.at() - geometry_at;
+    let images_at = b.at();
     // Texture records.
     // Each named for the first texture of the model that shows it, `<model stem>/<texture>` (texture::name_record).
     let mut record_at = Vec::with_capacity(ir.records.len());
@@ -843,6 +850,40 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written, pipelines: &mut pipeli
         b.patch32(slot + 4, at);
     }
     b.align(32);
+    let images_size = b.at() - images_at;
+    // The model's scalars, then the section table, after 12's arrays (FRAME-MODEL 2.8): every array lies where 12
+    // put it.
+    let scalars_at = b.at();
+    b.u32(u32::from(ir.full_weight_count));
+    b.u32(ir.source_vertex_count);
+    let count = |n: usize| n as u32;
+    let table: [Section; 15] = [
+        Section::records(*b"MODL", scalars_at, 1, 8),
+        Section::records(*b"JNTS", joints_at, count(ir.joints.len()), JOINT_BYTES as u32),
+        Section::records(*b"STEP", steps_at, steps, 8),
+        Section::records(*b"JMSH", joint_meshes_at, first_mesh, 4),
+        Section::records(*b"DMTX", draw_matrices_at, count(ir.draw_matrices.len()), 8),
+        Section::records(*b"ENVL", envelopes_at, count(ir.envelopes.len()), 8),
+        Section::records(*b"MIXS", mixes_at, first_mix, 8),
+        Section::records(*b"IBND", inverse_binds_at, count(ir.inverse_binds.len()), 48),
+        Section::records(*b"IMPT", important_at, count(ir.important.len()), 4),
+        // A mesh's coordinate table and a material's parts lie inside their section's span.
+        Section::span(*b"MESH", meshes_at, materials_at - meshes_at, count(ir.shapes.len()), MESH_BYTES as u32),
+        Section::span(*b"MT12", materials_at, textures_at - materials_at, count(ir.materials.len()), MATERIAL_BYTES as u32),
+        Section::records(*b"TEXR", textures_at, count(ir.textures.len()), TEXTURE_BYTES as u32),
+        Section::bytes(*b"NAME", names_at, names_size),
+        Section::bytes(*b"GEOM", geometry_at, geometry_size),
+        Section::bytes(*b"TIMG", images_at, images_size),
+    ];
+    let sections_at = b.at();
+    for section in &table {
+        b.u32(u32::from_le_bytes(section.name));
+        b.u32(section.flags);
+        b.u32(section.at);
+        b.u32(section.size);
+        b.u32(section.count);
+        b.u32(section.stride);
+    }
     let size = b.at();
     let mut flags = u32::from(ir.scale_mode);
     if ir.has_billboard {
@@ -851,40 +892,76 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written, pipelines: &mut pipeli
     if ir.materials_only {
         flags |= 1 << 5;
     }
-    let header: [u32; HEADER_WORDS] = [
-        MAGIC,
-        VERSION,
-        size,
-        flags,
-        ir.joints.len() as u32,
-        steps,
-        first_mesh,
-        ir.draw_matrices.len() as u32,
-        u32::from(ir.full_weight_count),
-        ir.envelopes.len() as u32,
-        first_mix,
-        ir.shapes.len() as u32,
-        ir.materials.len() as u32,
-        ir.textures.len() as u32,
-        ir.source_vertex_count,
-        joints_at,
-        steps_at,
-        joint_meshes_at,
-        draw_matrices_at,
-        envelopes_at,
-        mixes_at,
-        inverse_binds_at,
-        important_at,
-        meshes_at,
-        materials_at,
-        textures_at,
-        geometry_at,
-        geometry_size,
-    ];
+    let mut header = [0u32; HEADER_WORDS];
+    header[..6].copy_from_slice(&[MAGIC, VERSION, size, flags, table.len() as u32, sections_at]);
     for (i, &v) in header.iter().enumerate() {
         b.patch32(i * 4, v);
     }
     Ok(b.0)
+}
+
+/// One entry of a model's section table (nebula_model.h NebulaModelSection).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Section {
+    pub name: [u8; 4],
+    pub flags: u32,
+    pub at: u32,
+    pub size: u32,
+    pub count: u32,
+    pub stride: u32,
+}
+
+impl Section {
+    fn records(name: [u8; 4], at: u32, count: u32, stride: u32) -> Section {
+        Section { name, flags: SECTION_REQUIRED, at, size: count * stride, count, stride }
+    }
+    fn span(name: [u8; 4], at: u32, size: u32, count: u32, stride: u32) -> Section {
+        Section { name, flags: SECTION_REQUIRED, at, size, count, stride }
+    }
+    fn bytes(name: [u8; 4], at: u32, size: u32) -> Section {
+        Section { name, flags: SECTION_REQUIRED, at, size, count: size, stride: 1 }
+    }
+}
+
+/// A cooked model's section table: this version's, each section inside the block. Errors name what is wrong.
+pub fn sections(bytes: &[u8]) -> Result<Vec<Section>> {
+    let word = |at: usize| -> Result<u32> {
+        let four = bytes.get(at..at + 4).context("a model's word past its end")?;
+        Ok(u32::from_le_bytes([four[0], four[1], four[2], four[3]]))
+    };
+    if word(0)? != MAGIC {
+        bail!("not a cooked model");
+    }
+    if word(4)? != VERSION {
+        bail!("a cooked model of version {}, not {VERSION}", word(4)?);
+    }
+    let size = (word(8)? as usize).min(bytes.len());
+    let (count, table) = (word(16)? as usize, word(20)? as usize);
+    if count > size.saturating_sub(table) / SECTION_BYTES {
+        bail!("a model's section table past its end");
+    }
+    (0..count)
+        .map(|i| {
+            let e = table + i * SECTION_BYTES;
+            let section = Section {
+                name: word(e)?.to_le_bytes(),
+                flags: word(e + 4)?,
+                at: word(e + 8)?,
+                size: word(e + 12)?,
+                count: word(e + 16)?,
+                stride: word(e + 20)?,
+            };
+            if section.at as usize > size || section.size as usize > size - section.at as usize {
+                bail!("a model's section {} past its end", String::from_utf8_lossy(&section.name));
+            }
+            Ok(section)
+        })
+        .collect()
+}
+
+/// The section named `name` in `list`.
+pub fn section<'a>(list: &'a [Section], name: &[u8; 4]) -> Result<&'a Section> {
+    list.iter().find(|s| &s.name == name).with_context(|| format!("a cooked model without its section {}", String::from_utf8_lossy(name)))
 }
 
 /// A cooked model's names, in its order: what a mod's model made like it, or in its place, is matched by.
@@ -901,12 +978,7 @@ pub fn names(bytes: &[u8]) -> Result<ModelNames> {
         let four = bytes.get(at..at + 4).context("a model's word past its end")?;
         Ok(u32::from_le_bytes([four[0], four[1], four[2], four[3]]))
     };
-    if word(0)? != MAGIC {
-        bail!("not a cooked model");
-    }
-    if word(4)? != VERSION {
-        bail!("a cooked model of version {}, not {VERSION}", word(4)?);
-    }
+    let table = sections(bytes)?;
     let list = |count: usize, at: usize, stride: usize, name_word: usize| -> Result<Vec<String>> {
         (0..count)
             .map(|i| {
@@ -917,11 +989,16 @@ pub fn names(bytes: &[u8]) -> Result<ModelNames> {
             })
             .collect()
     };
-    let header = |i: usize| -> Result<usize> { Ok(word(i * 4)? as usize) };
+    let place = |name: &[u8; 4]| -> Result<(usize, usize, usize)> {
+        let s = section(&table, name)?;
+        Ok((s.count as usize, s.at as usize, s.stride as usize))
+    };
+    let ((joints, joints_at, joint_stride), (materials, materials_at, material_stride), (textures, textures_at, texture_stride)) =
+        (place(b"JNTS")?, place(b"MT12")?, place(b"TEXR")?);
     Ok(ModelNames {
-        joints: list(header(4)?, header(15)?, JOINT_BYTES, JOINT_BYTES - 8)?,
-        materials: list(header(12)?, header(24)?, MATERIAL_BYTES, 0)?,
-        textures: list(header(13)?, header(25)?, TEXTURE_BYTES, 0)?,
+        joints: list(joints, joints_at, joint_stride, JOINT_BYTES - 8)?,
+        materials: list(materials, materials_at, material_stride, 0)?,
+        textures: list(textures, textures_at, texture_stride, 0)?,
     })
 }
 
@@ -946,6 +1023,47 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_section_table_names_every_array_where_12_put_it() {
+        let mut ir = ModelIr::default();
+        ir.arrays.positions = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
+        ir.source_vertex_count = 3;
+        ir.full_weight_count = 2;
+        let corners = (0..3).map(|n| Corner { position: n, normal: 0, tangent: 0, binormal: 0, color: [0; 2], coord: Vec::new(), matrix: 0, texture_matrix: Vec::new() }).collect();
+        ir.shapes.push(ShapeIr {
+            groups: vec![GroupIr { attributes: 0, coordinates: Vec::new(), corners, indices: vec![0, 1, 2], use_table: vec![0], places: 3 }],
+            material: NONE, matrix_type: 0, radius: 0.0, min: [0.0; 3], max: [0.0; 3],
+        });
+        let bytes = write(&ir, "sections", &Written::unknown(), &mut Default::default()).unwrap();
+        let word = |at: usize| u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap());
+        assert_eq!((word(0), word(4), word(8) as usize), (MAGIC, VERSION, bytes.len()));
+        assert!((6..HEADER_WORDS).all(|k| word(k * 4) == 0), "the header's room past the table's place is zero");
+        let table = sections(&bytes).unwrap();
+        let names: Vec<&[u8; 4]> = table.iter().map(|s| &s.name).collect();
+        assert_eq!(names, [b"MODL", b"JNTS", b"STEP", b"JMSH", b"DMTX", b"ENVL", b"MIXS", b"IBND", b"IMPT", b"MESH", b"MT12", b"TEXR", b"NAME", b"GEOM", b"TIMG"]);
+        assert!(table.iter().all(|s| s.flags == SECTION_REQUIRED && u64::from(s.count) * u64::from(s.stride) <= u64::from(s.size)));
+        // 12's arrays in 12's order, each after the one before, all past the header and before the scalars.
+        for pair in table[1..].windows(2) {
+            assert!(pair[0].at + pair[0].size <= pair[1].at, "{:?} then {:?}", pair[0], pair[1]);
+        }
+        assert!(table[1].at as usize >= HEADER_WORDS * 4);
+        let modl = section(&table, b"MODL").unwrap();
+        assert_eq!(modl.at, table[14].at + table[14].size);
+        assert_eq!((word(modl.at as usize), word(modl.at as usize + 4)), (2, 3));
+        assert_eq!(section(&table, b"MESH").unwrap().count, 1);
+        assert_eq!(section(&table, b"JNTS").unwrap().count, 0);
+        let geom = section(&table, b"GEOM").unwrap();
+        assert!(geom.size > 0 && geom.at % 32 == 0);
+        // A reader refuses another version and a table past the end.
+        let mut other = bytes.clone();
+        other[4..8].copy_from_slice(&12u32.to_le_bytes());
+        assert!(sections(&other).unwrap_err().to_string().contains("version 12"));
+        let mut past = bytes.clone();
+        past[16..20].copy_from_slice(&1000u32.to_le_bytes());
+        assert!(sections(&past).is_err());
+        assert!(section(&table, b"FORM").is_err());
+    }
+
+    #[test]
     fn mesh_index_width_changes_above_65535_and_wide_matrix_ids_survive() {
         for count in [65535usize, 65536] {
             let mut ir = ModelIr::default();
@@ -958,7 +1076,8 @@ mod tests {
             });
             let bytes = write(&ir, "wide", &Written::unknown(), &mut Default::default()).unwrap();
             let word = |at| u32::from_le_bytes(bytes[at..at+4].try_into().unwrap());
-            let mesh = word(23 * 4) as usize;
+            let table = sections(&bytes).unwrap();
+            let mesh = section(&table, b"MESH").unwrap().at as usize;
             assert_eq!(bytes[mesh + 72], if count > 65535 {4} else {2});
             assert_eq!(word(mesh + 64), 70000);
             let indices = word(mesh + 52) as usize;
