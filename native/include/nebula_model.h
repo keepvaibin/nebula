@@ -92,6 +92,16 @@ typedef struct NebulaModelView {
     uint32_t names_at, names_size;
     uint32_t geometry_at, geometry_size; /* every stream, for one copy to the GPU */
     uint32_t images_at, images_size;     /* the texture images (each texture's record_at lies inside) */
+    /* A material's parts (FRAME-MODEL 2.9): materials_at is MATL's place, material_count its count. */
+    uint32_t gx_at, gx_count;                         /* GXMT, NebulaModelGx */
+    uint32_t forms_at, form_count;                    /* FORM, NebulaModelFormEntry */
+    uint32_t slots_at, slot_count;                    /* SLOT, NebulaModelSlot */
+    uint32_t coords_at, coord_count;                  /* GXTG, NebulaModelCoord */
+    uint32_t coord_matrices_at, coord_matrix_count;   /* GXTM, NebulaModelCoordMatrix */
+    uint32_t warps_at, warp_count;                    /* GXWP, NebulaModelWarp */
+    uint32_t rows_at, row_count;                      /* FROW, u32 NEBULA_ROW_* */
+    uint32_t maps_at, maps_size;                      /* FTEX, u8 material map numbers */
+    uint32_t inputs_at, inputs_size;                  /* FINP, u8 NEBULA_INPUT_* */
 } NebulaModelView;
 
 /* nebula_model_view's answer: NEBULA_MODEL_FINE, or what stops the load and the section (or version) it names. */
@@ -124,7 +134,16 @@ static const NebulaModelSectionUse kNebulaModelSections[] = {
     {NEBULA_MODEL_SECTION('I', 'B', 'N', 'D'), NEBULA_MODEL_VIEW_FIELD(inverse_binds_at), NEBULA_MODEL_VIEW_FIELD(inverse_bind_count), NEBULA_MODEL_VIEW_NONE, 48u},
     {NEBULA_MODEL_SECTION('I', 'M', 'P', 'T'), NEBULA_MODEL_VIEW_FIELD(important_at), NEBULA_MODEL_VIEW_FIELD(important_count), NEBULA_MODEL_VIEW_NONE, 4u},
     {NEBULA_MODEL_SECTION('M', 'E', 'S', 'H'), NEBULA_MODEL_VIEW_FIELD(meshes_at), NEBULA_MODEL_VIEW_FIELD(mesh_count), NEBULA_MODEL_VIEW_NONE, 100u},
-    {NEBULA_MODEL_SECTION('M', 'T', '1', '2'), NEBULA_MODEL_VIEW_FIELD(materials_at), NEBULA_MODEL_VIEW_FIELD(material_count), NEBULA_MODEL_VIEW_NONE, 208u},
+    {NEBULA_MODEL_SECTION('M', 'A', 'T', 'L'), NEBULA_MODEL_VIEW_FIELD(materials_at), NEBULA_MODEL_VIEW_FIELD(material_count), NEBULA_MODEL_VIEW_NONE, 64u},
+    {NEBULA_MODEL_SECTION('G', 'X', 'M', 'T'), NEBULA_MODEL_VIEW_FIELD(gx_at), NEBULA_MODEL_VIEW_FIELD(gx_count), NEBULA_MODEL_VIEW_NONE, 120u},
+    {NEBULA_MODEL_SECTION('F', 'O', 'R', 'M'), NEBULA_MODEL_VIEW_FIELD(forms_at), NEBULA_MODEL_VIEW_FIELD(form_count), NEBULA_MODEL_VIEW_NONE, 56u},
+    {NEBULA_MODEL_SECTION('S', 'L', 'O', 'T'), NEBULA_MODEL_VIEW_FIELD(slots_at), NEBULA_MODEL_VIEW_FIELD(slot_count), NEBULA_MODEL_VIEW_NONE, 8u},
+    {NEBULA_MODEL_SECTION('G', 'X', 'T', 'G'), NEBULA_MODEL_VIEW_FIELD(coords_at), NEBULA_MODEL_VIEW_FIELD(coord_count), NEBULA_MODEL_VIEW_NONE, 8u},
+    {NEBULA_MODEL_SECTION('G', 'X', 'T', 'M'), NEBULA_MODEL_VIEW_FIELD(coord_matrices_at), NEBULA_MODEL_VIEW_FIELD(coord_matrix_count), NEBULA_MODEL_VIEW_NONE, 104u},
+    {NEBULA_MODEL_SECTION('G', 'X', 'W', 'P'), NEBULA_MODEL_VIEW_FIELD(warps_at), NEBULA_MODEL_VIEW_FIELD(warp_count), NEBULA_MODEL_VIEW_NONE, 24u},
+    {NEBULA_MODEL_SECTION('F', 'R', 'O', 'W'), NEBULA_MODEL_VIEW_FIELD(rows_at), NEBULA_MODEL_VIEW_FIELD(row_count), NEBULA_MODEL_VIEW_NONE, 4u},
+    {NEBULA_MODEL_SECTION('F', 'T', 'E', 'X'), NEBULA_MODEL_VIEW_FIELD(maps_at), NEBULA_MODEL_VIEW_NONE, NEBULA_MODEL_VIEW_FIELD(maps_size), 1u},
+    {NEBULA_MODEL_SECTION('F', 'I', 'N', 'P'), NEBULA_MODEL_VIEW_FIELD(inputs_at), NEBULA_MODEL_VIEW_NONE, NEBULA_MODEL_VIEW_FIELD(inputs_size), 1u},
     {NEBULA_MODEL_SECTION('T', 'E', 'X', 'R'), NEBULA_MODEL_VIEW_FIELD(textures_at), NEBULA_MODEL_VIEW_FIELD(texture_count), NEBULA_MODEL_VIEW_NONE, 40u},
     {NEBULA_MODEL_SECTION('N', 'A', 'M', 'E'), NEBULA_MODEL_VIEW_FIELD(names_at), NEBULA_MODEL_VIEW_NONE, NEBULA_MODEL_VIEW_FIELD(names_size), 1u},
     {NEBULA_MODEL_SECTION('G', 'E', 'O', 'M'), NEBULA_MODEL_VIEW_FIELD(geometry_at), NEBULA_MODEL_VIEW_NONE, NEBULA_MODEL_VIEW_FIELD(geometry_size), 1u},
