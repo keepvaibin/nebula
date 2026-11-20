@@ -430,6 +430,51 @@ typedef struct NebulaModelMaterial {
 } NebulaModelMaterial;
 
 
+/* MATL: a material apart from the console's fields (FRAME-MODEL 2.9). Its parts by index and count in their
+   sections; names are offsets of the block. */
+enum {
+    NEBULA_MATL_TRANSLUCENT = 1u << 0,  /* drawn in the translucent buffer (decided at the cook) */
+    NEBULA_MATL_NORMAL_SCALE = 1u << 1, /* its normals are scaled by normal_scale */
+    NEBULA_MATL_ON_BILLBOARD = 1u << 2, /* its joint turns to the eye; eye-space coordinates read world rows */
+};
+typedef struct NebulaModelMatl {
+    uint32_t name_at, name_hash;
+    uint32_t same_as; /* materials of a model with one value are the same in everything */
+    uint32_t mesh, joint;
+    uint32_t flags;          /* NEBULA_MATL_* */
+    uint32_t state;          /* its pipeline state, NEBULA_STATE_* */
+    uint8_t light_masks[4];  /* each light channel's lights; 0 for a channel that is off */
+    uint32_t gx;             /* its GXMT entry: the console's material, read until step 3's last landing */
+    uint32_t first_slot, slot_count; /* in SLOT */
+    uint32_t first_form, form_count; /* in FORM */
+    float normal_scale[3];
+} NebulaModelMatl;
+
+/* FORM: one program pair of a material, its rows, map numbers and inputs by range. */
+typedef struct NebulaModelFormEntry {
+    uint64_t vertex, pixel; /* the programs' hashes */
+    uint32_t material;
+    uint32_t first_vertex_row, vertex_row_count, first_pixel_row, pixel_row_count; /* in FROW */
+    uint32_t first_texture, texture_count; /* in FTEX: the material's map numbers */
+    uint32_t first_input, input_count;     /* in FINP: NEBULA_INPUT_* */
+    uint8_t replace, flags; /* replace: 0 the material's stages, else the replacing pass */
+    uint8_t pass, reserved;
+} NebulaModelFormEntry;
+
+/* GXMT: the console's material fields, apart (flags NEBULA_MATERIAL_HAS_AMBIENT, _HAS_STAGE_COLORS, _HAS_INDIRECT,
+   _HAS_FOG). Goes with step 3's last landing. */
+typedef struct NebulaModelGx {
+    uint32_t flags;
+    uint8_t material_color[2][4], ambient_color[2][4];
+    int16_t registers[4][4];
+    uint8_t constants[4][4];
+    uint8_t alpha_ref0, alpha_ref1, reserved[2];
+    NebulaModelFog fog;
+    uint32_t first_coord, coord_count;   /* in GXTG */
+    uint32_t first_matrix, matrix_count; /* in GXTM */
+    uint32_t first_warp, warp_count;     /* in GXWP */
+} NebulaModelGx;
+
 typedef struct NebulaModelTexture {
     uint32_t name_at, record_at;
     uint32_t width, height;
@@ -450,6 +495,9 @@ static_assert(sizeof(NebulaModelHeader) == 28 * 4);
 static_assert(sizeof(NebulaModelJoint) == 96);
 static_assert(sizeof(NebulaModelMesh) == 100);
 static_assert(sizeof(NebulaModelForm) == 64);
+static_assert(sizeof(NebulaModelMatl) == 64);
+static_assert(sizeof(NebulaModelFormEntry) == 56);
+static_assert(sizeof(NebulaModelGx) == 120);
 static_assert(sizeof(NebulaModelMaterial) == 208);
 static_assert(sizeof(NebulaModelTexture) == 40);
 static_assert(sizeof(NebulaModelCoordMatrix) == 104);
