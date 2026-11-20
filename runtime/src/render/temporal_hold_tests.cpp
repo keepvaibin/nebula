@@ -58,6 +58,28 @@ int main() {
     hold.hold(now);
     expect(hold.wait_ns() == 30 * kSecond, "the first hold after a settings change does not wait 30 s");
 
+    // At a frame's start: the settings are asked only while held; a change decides again, else it lifts when due.
+    TemporalInterpHold frame;
+    int asked = 0;
+    const auto same = [&asked] {
+        ++asked;
+        return false;
+    };
+    const auto changed = [&asked] {
+        ++asked;
+        return true;
+    };
+    expect(!frame.lift_at_frame_start(same, now) && asked == 0, "the settings asked with no hold");
+    frame.hold(now);
+    expect(!frame.lift_at_frame_start(same, now + 29 * kSecond) && frame.held() && asked == 1,
+           "lifted at a frame's start before its wait");
+    expect(frame.lift_at_frame_start(same, now + 30 * kSecond) && !frame.held(), "not lifted at a frame's start when due");
+    frame.hold(now);
+    expect(frame.wait_ns() == 60 * kSecond, "the second hold does not wait 60 s");
+    expect(!frame.lift_at_frame_start(changed, now) && !frame.held(), "a settings change at a frame's start kept the hold");
+    frame.hold(now);
+    expect(frame.wait_ns() == 30 * kSecond, "the hold after a change at a frame's start does not wait 30 s");
+
     if (failures != 0) {
         std::printf("%d failures\n", failures);
         return 1;

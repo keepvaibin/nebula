@@ -470,7 +470,7 @@ public:
         return timestamp_frequency_ != 0u ? 1000.0 / static_cast<double>(timestamp_frequency_) : 0.0;
     }
     // Smoothed GPU time of a frame that drew the scene (0 until measured).
-    [[nodiscard]] double scene_gpu_ema_ms() const noexcept { return native_scene_gpu_ema_ms_; }
+    [[nodiscard]] double scene_gpu_ema_ms() const noexcept { return frame_gpu_.scene_ema_ms(); }
     // After scene_temporal_begin, in a temporal scene: clears the motion target for the scene. False
     // otherwise or when it could not be created (no motion writers).
     [[nodiscard]] bool begin_motion_scene();
@@ -518,20 +518,17 @@ public:
         return measured_present_hz_.load(std::memory_order_relaxed);
     }
     // Smoothed GPU time of one generated frame (0 until measured), for the budget.
-    [[nodiscard]] double generated_gpu_ema_ms() const noexcept { return generated_gpu_ema_ms_; }
+    [[nodiscard]] double generated_gpu_ema_ms() const noexcept { return frame_gpu_.generated_ema_ms(); }
     [[nodiscard]] double interpolation_gpu_cost_ms() const noexcept {
-        return temporal_interpolation() ? generated_gpu_ema_ms_ : native_scene_gpu_ema_ms_;
+        return temporal_interpolation() ? frame_gpu_.generated_ema_ms() : frame_gpu_.scene_ema_ms();
     }
     // The GPU cannot afford a generated frame per presented frame: the game frames take
     // the temporal upscaler (60 presents) until the display or upscaler
     // settings change.
     void suspend_temporal_interpolation(double ms_per_frame);
-    void reset_generated_gpu_ema() noexcept { generated_gpu_ema_ms_ = 0.0; }
+    void reset_generated_gpu_ema() noexcept { frame_gpu_.reset_generated_ema(); }
     void take_generated_gpu_ms(double& total_ms, std::uint64_t& samples) noexcept {
-        total_ms = generated_gpu_ms_;
-        samples = generated_gpu_samples_;
-        generated_gpu_ms_ = 0.0;
-        generated_gpu_samples_ = 0u;
+        frame_gpu_.take_generated(total_ms, samples);
     }
 // The scene camera's clip planes and vertical field of view (radians).
     // Generated frame draws drawn with blended vertices since the last call.
@@ -1151,10 +1148,7 @@ private:
     [[nodiscard]] TemporalInterpKey temporal_interp_key() const;
     TemporalInterpHold temporal_interp_hold_;
     TemporalInterpKey temporal_interp_key_{};
-    double generated_gpu_ms_ = 0.0;
-    std::uint64_t generated_gpu_samples_ = 0;
-    double generated_gpu_ema_ms_ = 0.0;
-    double native_scene_gpu_ema_ms_ = 0.0;
+    FrameGpuTime frame_gpu_;  // the frame's GPU time: the governor's and the interpolation's measures
     bool scene_drawn_ = false;
     std::array<bool, kFramesInFlight> frame_scene_drawn_{};
     std::array<bool, kFramesInFlight> frame_generated_{};

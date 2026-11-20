@@ -164,10 +164,10 @@ public:
     // draw.native (luma_draw_native.h): `call` with the device and the command buffer between passes, the scene target
     // (with its depth at a scene point); the projection's y row turned for Vulkan's clip space.
     void record_native_call(const NebulaCall& call, LumaDrawNativeFrame& frame, bool scene_point);
-    void reset_generated_gpu_ema() noexcept { generated_gpu_ema_ms_ = 0.0; }
-    [[nodiscard]] double generated_gpu_ema_ms() const noexcept { return generated_gpu_ema_ms_; }
+    void reset_generated_gpu_ema() noexcept { frame_gpu_.reset_generated_ema(); }
+    [[nodiscard]] double generated_gpu_ema_ms() const noexcept { return frame_gpu_.generated_ema_ms(); }
     [[nodiscard]] double interpolation_gpu_cost_ms() const noexcept {
-        return temporal_interp_ ? generated_gpu_ema_ms_ : native_scene_gpu_ema_ms_;
+        return temporal_interp_ ? frame_gpu_.generated_ema_ms() : frame_gpu_.scene_ema_ms();
     }
     void suspend_temporal_interpolation(double ms_per_frame);
     [[nodiscard]] bool temporal_interpolation() const noexcept { return temporal_interp_; }
@@ -175,7 +175,7 @@ public:
     // Milliseconds a GPU timestamp tick (0: the device has no compute timestamps).
     [[nodiscard]] double gpu_ms_per_tick() const noexcept { return timestamp_period_ns_ / 1'000'000.0; }
     // Smoothed GPU time of a frame that drew the scene (0 until measured).
-    [[nodiscard]] double scene_gpu_ema_ms() const noexcept { return native_scene_gpu_ema_ms_; }
+    [[nodiscard]] double scene_gpu_ema_ms() const noexcept { return frame_gpu_.scene_ema_ms(); }
     void set_scene_view(const std::array<float, 12>* view) noexcept {
         scene_view_known_ = view != nullptr;
         if (view != nullptr) {
@@ -354,8 +354,7 @@ public:
     // A present rate above 60.
     [[nodiscard]] bool interpolation_mode() const;
     void take_generated_gpu_ms(double& total_ms, std::uint64_t& samples) noexcept {
-        total_ms = std::exchange(generated_gpu_ms_, 0.0);
-        samples = std::exchange(generated_gpu_samples_, 0u);
+        frame_gpu_.take_generated(total_ms, samples);
     }
     void set_scene_camera(float near_plane, float far_plane, float fov_y) noexcept {
         scene_lens_[0] = near_plane;
@@ -1126,12 +1125,9 @@ private:
     void destroy_scene_set(SceneSet& set);
     // The frame's GPU time (timestamps) of frames that presented a generated picture: the interpolation's GPU governor.
     std::array<bool, kFramesInFlight> frame_generated_{};
-    double generated_gpu_ema_ms_ = 0.0;
-    double native_scene_gpu_ema_ms_ = 0.0;
+    FrameGpuTime frame_gpu_;  // the frame's GPU time: the governor's and the interpolation's measures
     bool scene_drawn_ = false;
     std::array<bool, kFramesInFlight> frame_scene_drawn_{};
-    double generated_gpu_ms_ = 0.0;
-    std::uint64_t generated_gpu_samples_ = 0;
     // Presents the acquired image (swap_image_) after its submission.
     void present_swapchain_image();
     [[nodiscard]] vk::TemporalUpscaleInputs temporal_inputs(const vk::Texture& color, const vk::Texture& depth, const vk::Texture& motion,

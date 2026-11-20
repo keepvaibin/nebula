@@ -66,4 +66,28 @@ private:
     bool timed_ = false;
 };
 
+// A frame's whole GPU time, billed once its fence passed (render thread; ledger P-022, part 4: one copy for the four
+// renderers): the smoothed time of the frames that drew the scene (the dynamic resolution governor's measure) and of
+// the frames that presented a generated picture (the interpolation's budget), each moved a tenth of the way by a frame
+// (the first taken as it is), and the generated frames' total since take_generated (the benchmark's).
+class FrameGpuTime {
+public:
+    void add(double gpu_ms, bool scene_drawn, bool generated) noexcept;
+    [[nodiscard]] double scene_ema_ms() const noexcept { return scene_ema_ms_; }
+    [[nodiscard]] double generated_ema_ms() const noexcept { return generated_ema_ms_; }
+    // The scene's measure starts again (the renderer shut down: a new device is measured afresh).
+    void reset_scene_ema() noexcept { scene_ema_ms_ = 0.0; }
+    // The generated frames' measure starts again (a hold of the temporal upscaler lifted: they are measured again,
+    // not by the cost that held it).
+    void reset_generated_ema() noexcept { generated_ema_ms_ = 0.0; }
+    // The generated frames' milliseconds and count since the last call.
+    void take_generated(double& total_ms, std::uint64_t& samples) noexcept;
+
+private:
+    double scene_ema_ms_ = 0.0;
+    double generated_ema_ms_ = 0.0;
+    double generated_ms_ = 0.0;
+    std::uint64_t generated_samples_ = 0u;
+};
+
 }  // namespace galaxy::render

@@ -215,6 +215,13 @@ struct UploadRingSlot {
     bool chunks = false;
 };
 
+// What the frame starting at `frame_index` makes again (the four renderers' one choice): no ring when none wants a new
+// size or a growth failed before, else the rings that want one; every ring each kRingStressFrames frames under
+// --diagnostics ring-stress.
+enum class RingRemake : std::uint8_t { None, Wanted, All };
+[[nodiscard]] RingRemake upload_rings_due(std::span<const UploadRingSlot> rings, std::uint64_t frame_index,
+                                          bool failed) noexcept;
+
 // At a frame boundary, with no wait for the GPU: each ring that wants a new size (UploadRing::wants_new_size) made again
 // at it, the others untouched; every ring under `all` (--diagnostics ring-stress). The old buffers and chunks go to `old`
 // for the caller to release once the frames that read them are done. A growth that cannot be made keeps the size the ring

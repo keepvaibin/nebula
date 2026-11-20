@@ -40,6 +40,20 @@ public:
         held_ = false;
         holds_ = 0u;
     }
+    // At a frame's start (the four renderers' one check): while held, a change of the settings it was decided at
+    // decides again (settings_changed); else true when its wait passed (lift_if_due). `changed` is asked only while
+    // held.
+    template <class Changed>
+    [[nodiscard]] bool lift_at_frame_start(Changed&& changed, std::int64_t now_ns) {
+        if (!held_) {
+            return false;
+        }
+        if (changed()) {
+            settings_changed();
+            return false;
+        }
+        return lift_if_due(now_ns);
+    }
 
 private:
     bool held_ = false;

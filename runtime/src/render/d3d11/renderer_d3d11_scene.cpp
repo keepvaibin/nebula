@@ -690,7 +690,7 @@ void RendererD3D11::begin_scene_rectangle() {
                                      ::galaxy::diagnosing(::galaxy::kDiagnoseResolutionSteps));
         scene_rectangle_ = dynamic_resolution_.update(cfg.dynamic_resolution && dynamic_resolution_offered(), scene_extent_,
                                                       kResolutionSixteenths[kResolutionStepCount - 1u],
-                                                      native_scene_gpu_ema_ms_, resolution_budget_ms(rate, display_refresh_hz_));
+                                                      frame_gpu_.scene_ema_ms(), resolution_budget_ms(rate, display_refresh_hz_));
         if (::galaxy::diagnosing(::galaxy::kDiagnoseResolutionSteps | ::galaxy::kDiagnosePresentStats) &&
             dynamic_resolution_.sixteenths() != before) {
             // With the samplers made so far, so what a step adds shows.

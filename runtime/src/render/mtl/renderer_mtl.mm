@@ -466,19 +466,20 @@ void RendererMtl::shutdown() {
 void RendererMtl::grow_rings() {
     // A ring whose frames took over half their budget (or spilled) grows; one whose last 30 seconds (and 600 frames)
     // stayed under a quarter of it gives half of its memory back on a frame without the scene (UploadRing::kQuietNs).
-    // Only that ring is made again.
+    // Only that ring is made again; --diagnostics ring-stress makes them all again every kRingStressFrames frames.
     const UploadRingSlot rings[] = {{&vertex_ring_, "vertex", kRingSegments, true},
                                     {&index_ring_, "index", kFramesInFlight, true},
                                     {&constant_ring_, "constant", kFramesInFlight, true},
                                     {&matrix_ring_, "matrix", kRingSegments, false}};
-    if (ring_growth_failed_ || std::none_of(std::begin(rings), std::end(rings),
-                                            [](const UploadRingSlot& s) { return s.ring->wants_new_size(); })) {
+    const RingRemake due = upload_rings_due(rings, frame_index_, ring_growth_failed_);
+    if (due == RingRemake::None) {
         return;
     }
+    const galaxy::bench::RenderSpan span(galaxy::bench::RenderPart::RingResize);
     // No wait for the GPU: a ring is made again as a new buffer. The old buffer and its chunks are released here,
     // which hands them to the context to release once the work committed so far has completed.
     std::vector<gpu::BufferRef> old;
-    if (remake_upload_rings(device(), rings, false, ring_growth_failed_, old)) {
+    if (remake_upload_rings(device(), rings, due == RingRemake::All, ring_growth_failed_, old)) {
         history_segment_ = 0u;
         history_segment_fence_.fill(0u);
         history_used_ = true;
@@ -566,14 +567,12 @@ void RendererMtl::begin_frame() {
     grow_rings();
     prepare_temporal_upscaler();
     apply_dynamic_resolution();
-    if (temporal_interp_hold_.held()) {
-        if (temporal_interp_key() != temporal_interp_key_) {
-            temporal_interp_hold_.settings_changed();  // the settings changed: decided again
-        } else if (temporal_interp_hold_.lift_if_due(galaxy::qpc_to_ns(galaxy::qpc_now()))) {
-            // Its wait passed: the governor measures generated frames again, not by the cost that held it.
-            reset_generated_gpu_ema();
-            std::cerr << "[interp] temporal upscaling of generated frames tried again\n";
-        }
+    // A hold of the temporal upscaler on generated frames: decided again when its settings changed, tried again
+    // when its wait passed (the governor then measures generated frames again, not by the cost that held it).
+    if (temporal_interp_hold_.lift_at_frame_start([this] { return temporal_interp_key() != temporal_interp_key_; },
+                                                  galaxy::qpc_to_ns(galaxy::qpc_now()))) {
+        frame_gpu_.reset_generated_ema();
+        std::cerr << "[interp] temporal upscaling of generated frames tried again\n";
     }
     sync_post_process();
     bloom_.poll_ready();
@@ -598,15 +597,7 @@ void RendererMtl::begin_frame() {
         const double end = (*frame.gpu_time)[1].exchange(0.0, std::memory_order_acq_rel);
         if (start > 0.0 && end >= start) {
             const double gpu_ms = (end - start) * 1000.0;
-            if (frame_scene_drawn_[frame_slot_]) {
-                native_scene_gpu_ema_ms_ = native_scene_gpu_ema_ms_ == 0.0 ? gpu_ms
-                                           : native_scene_gpu_ema_ms_ + (gpu_ms - native_scene_gpu_ema_ms_) * 0.1;
-            }
-            if (frame_generated_[frame_slot_]) {
-                generated_gpu_ms_ += gpu_ms;
-                ++generated_gpu_samples_;
-                generated_gpu_ema_ms_ = generated_gpu_ema_ms_ == 0.0 ? gpu_ms : generated_gpu_ema_ms_ * 0.9 + gpu_ms * 0.1;
-            }
+            frame_gpu_.add(gpu_ms, frame_scene_drawn_[frame_slot_], frame_generated_[frame_slot_]);
             if (frame.pass_timed) {
                 // The slot's last frame by pass (gpu_pass_times.h).
                 GpuPassMs frame_ms{};

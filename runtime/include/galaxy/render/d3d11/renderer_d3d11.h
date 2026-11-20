@@ -93,15 +93,15 @@ public:
     void game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t b);
     // Interpolation re-walks the newest list for each picture between game steps (RenderCore); no frame generation or
     // temporal upscaler on Direct3D 11, so a generated picture costs what a scene picture costs.
-    void reset_generated_gpu_ema() noexcept { generated_gpu_ema_ms_ = 0.0; }
-    [[nodiscard]] double generated_gpu_ema_ms() const noexcept { return generated_gpu_ema_ms_; }
-    [[nodiscard]] double interpolation_gpu_cost_ms() const noexcept { return native_scene_gpu_ema_ms_; }
+    void reset_generated_gpu_ema() noexcept { frame_gpu_.reset_generated_ema(); }
+    [[nodiscard]] double generated_gpu_ema_ms() const noexcept { return frame_gpu_.generated_ema_ms(); }
+    [[nodiscard]] double interpolation_gpu_cost_ms() const noexcept { return frame_gpu_.scene_ema_ms(); }
     void suspend_temporal_interpolation(double) {}
     [[nodiscard]] bool temporal_interpolation() const noexcept { return false; }
     [[nodiscard]] unsigned temporal_output_width() const noexcept { return 0u; }
     [[nodiscard]] double gpu_ms_per_tick() const noexcept { return 0.0; }
     // Smoothed GPU time of a frame that drew the scene (0 until measured).
-    [[nodiscard]] double scene_gpu_ema_ms() const noexcept { return native_scene_gpu_ema_ms_; }
+    [[nodiscard]] double scene_gpu_ema_ms() const noexcept { return frame_gpu_.scene_ema_ms(); }
     void set_scene_view(const std::array<float, 12>* view) noexcept {
         scene_view_known_ = view != nullptr;
         if (view != nullptr) {
@@ -244,8 +244,7 @@ public:
     [[nodiscard]] bool interpolation_mode() const;
     // The generated pictures' GPU time since the last call (--diagnostics present-stats).
     void take_generated_gpu_ms(double& total_ms, std::uint64_t& samples) noexcept {
-        total_ms = std::exchange(generated_gpu_ms_, 0.0);
-        samples = std::exchange(generated_gpu_samples_, 0u);
+        frame_gpu_.take_generated(total_ms, samples);
     }
     void set_scene_camera(float near_plane, float far_plane, float fov_y) noexcept {
         scene_lens_[0] = near_plane;
@@ -649,10 +648,7 @@ private:
         double present_ms = 0.0, present_max_ms = 0.0, gpu_ms = 0.0;
     } stats_;
     PresentPacer present_pacer_;
-    double native_scene_gpu_ema_ms_ = 0.0;
-    double generated_gpu_ms_ = 0.0;  // the generated pictures' GPU time, taken by take_generated_gpu_ms
-    std::uint64_t generated_gpu_samples_ = 0u;
-    double generated_gpu_ema_ms_ = 0.0;
+    FrameGpuTime frame_gpu_;  // the frame's GPU time: the governor's and the interpolation's measures
     bool scene_drawn_ = false;
     GpuPass current_pass_ = GpuPass::Scene;
     std::atomic<bool> gpu_timing_wanted_{false};
