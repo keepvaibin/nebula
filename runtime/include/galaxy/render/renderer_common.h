@@ -224,6 +224,19 @@ private:
 void write_ppm_async(std::string path, std::vector<std::uint8_t> rgb, unsigned width, unsigned height);
 void wait_picture_files();
 
+// The forms a capture's rows come in.
+enum class CaptureForm : std::uint8_t {
+    Rgba8,   // RGBA8 rows
+    Bgra8,   // BGRA8 rows
+    TenBit,  // R10G10B10A2 words
+    Half,    // RGBA16F halves (the float scene's), read with the 10-bit range
+};
+
+// A finished capture's mapped rows, `pitch` bytes apart in `form`, as RGB rows written by write_ppm_async: the one
+// encoding of the four renderers' test pictures (ledger P-022, part 3).
+void write_capture_rows(std::string path, const std::uint8_t* rows, unsigned width, unsigned height, unsigned pitch,
+                        CaptureForm form);
+
 // Test pictures copied out of the GPU (ledger P-323). Each capture has its own readback (`Readback`: the renderer's
 // buffer or staging texture), fenced with the frame that recorded it, and is handed back for writing once that fence
 // is reached, oldest first. A capture asked while others are in flight takes another readback, never one in flight, so
@@ -231,12 +244,7 @@ void wait_picture_files();
 template <class Readback>
 class PictureCaptures {
 public:
-    enum class Form : std::uint8_t {
-        Rgba8,   // RGBA8 rows
-        Bgra8,   // BGRA8 rows
-        TenBit,  // R10G10B10A2 words
-        Half,    // RGBA16F halves (the float scene's), read with the 10-bit range
-    };
+    using Form = CaptureForm;
     struct Capture {
         Readback readback{};
         std::uint64_t fence = 0u;  // 0: recorded in the frame not yet submitted
