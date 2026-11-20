@@ -847,7 +847,7 @@ fn a_hidden_model_keeps_every_joint_and_draws_nothing() {
     assert_eq!(GameModel::read(&game.path, &hidden).unwrap().joints, game.joints);
     let table = super::super::model_write::sections(&hidden).unwrap();
     let count = |name: &[u8; 4]| super::super::model_write::section(&table, name).unwrap().count;
-    assert_eq!((count(b"JNTS"), count(b"MESH"), count(b"MT12")), (3, 0, 0));
+    assert_eq!((count(b"JNTS"), count(b"MESH"), count(b"MATL")), (3, 0, 0));
     assert_eq!((facts.joints, facts.extra_joints, facts.meshes), (3, 0, 0));
     // An ordinary model with no triangles is still refused.
     let bare = to_files_for(&skeleton, None, "Kuribo", Some(&read)).err().unwrap();
