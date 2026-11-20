@@ -51,6 +51,7 @@
 #include <bit>
 #include <chrono>
 #include <charconv>
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -1679,14 +1680,44 @@ void RenderCore::record_screen_probes(std::uint32_t channel, const ScreenProbe* 
             const NebulaFrameConstants& set = list.constants[c];
             if (set.rows != nullptr) rows = fnv(rows, set.rows, (set.vertex_rows + set.pixel_rows) * sizeof(float[4]));
         }
+        // The rest of the list (records of ids and numbers, no addresses): its items in the order the host left them,
+        // passes, views, lights, the ring's vertices and indices and the instances' rows.
+        const std::uint64_t items = fnv(basis, list.items, list.item_count * sizeof(NebulaFrameItem));
+        std::uint64_t layout = basis;
+        for (std::uint32_t p = 0; p < list.pass_count; ++p) {
+            // Field by field: the pass has padding after `load` and `reserved`.
+            const NebulaFramePass& pass = list.passes[p];
+            const std::uint32_t words[19] = {
+                std::uint32_t{pass.kind} | std::uint32_t{pass.layer} << 8 | std::uint32_t{pass.phase} << 16 |
+                    std::uint32_t{pass.clear_channels} << 24,
+                pass.target, pass.first_item, pass.item_count, pass.clear_rgba, pass.width, pass.height, pass.channels,
+                pass.arg0, pass.arg1, std::uint32_t{pass.pixels} | std::uint32_t{pass.load} << 8, pass.probe_channel,
+                pass.over_frame_texture, pass.over_frame_depth, pass.over_frame_channels, pass.first_probe,
+                pass.probe_count, pass.scene_camera, pass.scene_view};
+            layout = fnv(layout, words, sizeof(words));
+        }
+        for (std::uint32_t v = 0; v < list.view_count; ++v) {
+            const NebulaFrameView& view = list.views[v];  // its numbers and kind, not its reserved bytes
+            layout = fnv(layout, view.terms, offsetof(NebulaFrameView, orthographic) - offsetof(NebulaFrameView, terms) + 1u);
+        }
+        std::uint64_t lights = fnv(basis, list.light_sets, list.light_set_count * sizeof(NebulaFrameLightSet));
+        lights = fnv(lights, list.lights, list.light_count * sizeof(NebulaFrameLight));
+        lights = fnv(lights, list.light_follow, list.light_follow_count * sizeof(std::uint32_t));
+        std::uint64_t ring = fnv(basis, list.ring_vertices, static_cast<std::size_t>(list.ring_vertex_bytes));
+        ring = fnv(ring, list.ring_indices, list.ring_index_count * sizeof(std::uint32_t));
+        const std::uint64_t instances = fnv(basis, list.instance_rows, list.instance_row_count * sizeof(float[4]));
         const auto scene = renderer_.scene_rectangle();
         std::fprintf(stderr,
                      "[probe-ask] frame %u channel %u count %u points %016llx cameras %016llx joints %016llx constants %016llx "
-                     "items %u blocks %u t %.4f between %d scene %ux%u walk %llu\n",
+                     "items %u %016llx layout %016llx lights %016llx ring %016llx instances %016llx blocks %u t %.4f "
+                     "between %d scene %ux%u walk %llu\n",
                      flight.game_frame, channel, count, static_cast<unsigned long long>(points),
                      static_cast<unsigned long long>(cameras), static_cast<unsigned long long>(joints),
-                     static_cast<unsigned long long>(rows), list.item_count, list.block_count, walk_.time.t,
-                     walk_.between ? 1 : 0, scene.width, scene.height, static_cast<unsigned long long>(walk_.serial));
+                     static_cast<unsigned long long>(rows), list.item_count, static_cast<unsigned long long>(items),
+                     static_cast<unsigned long long>(layout), static_cast<unsigned long long>(lights),
+                     static_cast<unsigned long long>(ring), static_cast<unsigned long long>(instances), list.block_count,
+                     walk_.time.t, walk_.between ? 1 : 0, scene.width, scene.height,
+                     static_cast<unsigned long long>(walk_.serial));
     }
     if (renderer_.record_screen_probes(flight.slot, flight.probes, compared)) {
         {
