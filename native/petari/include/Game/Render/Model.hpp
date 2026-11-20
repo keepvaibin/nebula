@@ -226,7 +226,7 @@ struct ModelPose {
     u32 mBlockStamp;
     u32 mBlock;
     u32 mScaledBlock;
-    const NebulaModelMaterial* mScaledFor;
+    const NebulaModelMatl* mScaledFor;
     const f32 (*mListJoints)[4];
     const u32* mListFlags;
 };

@@ -112,10 +112,13 @@ enum {
     NEBULA_MODEL_MISSING_SECTION,    /* `what`: the section's name */
     NEBULA_MODEL_UNKNOWN_REQUIRED,   /* `what`: a required section this reader does not know */
     NEBULA_MODEL_BAD_SECTION,        /* `what`: a section past the block's end, or with entries shorter than this reader's */
+    NEBULA_MODEL_BAD_RANGE,          /* `what`: the section a material's, a form's or a GXMT entry's range leaves */
 };
 typedef struct NebulaModelCheck {
     uint32_t fault, what;
 } NebulaModelCheck;
+
+static inline NebulaModelCheck nebula_model_ranges(const void* block, const NebulaModelView* view);
 
 /* The sections of 13, in file order: the view's fields each fills, its least stride. */
 typedef struct NebulaModelSectionUse {
@@ -230,8 +233,9 @@ static inline NebulaModelCheck nebula_model_view(const void* block, uint32_t siz
     if (view->envelope_count != 0u && view->inverse_bind_count < view->joint_count) {
         check.fault = NEBULA_MODEL_BAD_SECTION;
         check.what = NEBULA_MODEL_SECTION('I', 'B', 'N', 'D');
+        return check;
     }
-    return check;
+    return nebula_model_ranges(block, view);
 }
 
 /* A section's name as text ("JNTS"), for a message. */
@@ -352,7 +356,7 @@ enum {
     NEBULA_INPUT_COORD0 = 16, /* + the mesh's coordinate number */
 };
 
-/* NebulaModelForm.flags */
+/* NebulaModelFormEntry.flags */
 enum {
     NEBULA_FORM_NORMAL_COORD = 1u << 0, /* coordinate 0 is the normal through the identity */
     NEBULA_FORM_LIT = 1u << 1,          /* lit at the pixel */
@@ -360,28 +364,13 @@ enum {
     NEBULA_FORM_FOG_LINEAR = 1u << 3,   /* linear fog over a material cooked without any */
 };
 
-/* NebulaModelForm.pass: an edit of the material the programs were written from. */
+/* NebulaModelFormEntry.pass: an edit of the material the programs were written from. */
 enum {
     NEBULA_FORM_PASS_PLAYER_LIGHT = 1,
     NEBULA_FORM_PASS_REFLECTION_ALPHA = 2,
     NEBULA_FORM_PASS_PLAYER_OPACITY = 16,
     NEBULA_FORM_PASS_FLEXIBLE_COORDINATES = 32,
 };
-
-/* One way a material can draw: two programs, named by their texts' hashes, and what their constants and textures are. */
-typedef struct NebulaModelForm {
-    uint64_t vertex, pixel;
-    uint32_t vertex_rows_at, pixel_rows_at; /* u32 rows, NEBULA_ROW_* */
-    uint32_t textures_at, inputs_at;        /* u8 material texture numbers; u8 NEBULA_INPUT_* */
-    uint32_t vertex_row_count, pixel_row_count;
-    uint32_t texture_count, input_count;
-    uint8_t replace, flags; /* replace: 0 the material's stages, else the replacing pass */
-    uint8_t pass, reserved[13];
-} NebulaModelForm;
-
-typedef struct NebulaModelChannel {
-    uint8_t enable, material_source, ambient_source, light_mask, diffuse, attenuation;
-} NebulaModelChannel;
 
 typedef struct NebulaModelCoord {
     uint8_t type, source, reserved[2];
@@ -408,13 +397,12 @@ typedef struct NebulaModelFog {
     uint8_t color[4];
 } NebulaModelFog;
 
-/* NebulaModelMaterial.flags */
+/* NebulaModelGx.flags */
 enum {
     NEBULA_MATERIAL_HAS_AMBIENT = 1u << 0,
     NEBULA_MATERIAL_HAS_STAGE_COLORS = 1u << 1,
     NEBULA_MATERIAL_HAS_INDIRECT = 1u << 2,
     NEBULA_MATERIAL_HAS_FOG = 1u << 3,
-    NEBULA_MATERIAL_ON_BILLBOARD = 1u << 4, /* its joint turns to the eye; eye-space coordinates read world rows */
 };
 
 /* NebulaModelSlot.uses: the stages read the map, the stages or warp orders read the coordinate. */
@@ -428,25 +416,6 @@ typedef struct NebulaModelSlot {
     uint8_t uses, reserved;
 } NebulaModelSlot;
 
-typedef struct NebulaModelMaterial {
-    uint32_t name_at, name_hash;
-    uint32_t same_as; /* materials of a model with one value are the same in everything */
-    uint32_t mesh, joint;
-    uint8_t mode, cull, flags, early_depth;
-    uint32_t channel_count, coord_count, warp_count, slot_count;
-    uint32_t matrix_count, form_count;
-    uint8_t material_color[2][4], ambient_color[2][4];
-    int16_t registers[4][4];
-    uint8_t constants[4][4];
-    NebulaModelChannel channels[4];
-    uint8_t alpha_comp0, alpha_op, alpha_comp1, alpha_ref0, alpha_ref1;
-    uint8_t blend_type, blend_src, blend_dst;
-    uint8_t depth_test, depth_func, depth_write, has_scale;
-    float normal_scale[3];
-    NebulaModelFog fog;
-    uint32_t state; /* its pipeline state, NEBULA_STATE_* */
-    uint32_t coords_at, slots_at, matrices_at, warps_at, forms_at;
-} NebulaModelMaterial;
 
 
 /* MATL: a material apart from the console's fields (FRAME-MODEL 2.9). Its parts by index and count in their
@@ -494,6 +463,59 @@ typedef struct NebulaModelGx {
     uint32_t first_warp, warp_count;     /* in GXWP */
 } NebulaModelGx;
 
+/* Every material's, form's and GXMT entry's parts lie inside their sections (FRAME-MODEL 2.9), so a reader indexes
+   them without a check. A fault names the section a range leaves. */
+static inline int nebula_model_range_out(uint32_t first, uint32_t count, uint32_t total) {
+    return (uint64_t)first + count > total;
+}
+static inline NebulaModelCheck nebula_model_ranges(const void* block, const NebulaModelView* view) {
+    NebulaModelCheck check = {NEBULA_MODEL_FINE, 0u};
+    const unsigned char* base = (const unsigned char*)block;
+    const NebulaModelMatl* matl = (const NebulaModelMatl*)(base + view->materials_at);
+    for (uint32_t i = 0; i < view->material_count && check.fault == NEBULA_MODEL_FINE; i++) {
+        check.fault = NEBULA_MODEL_BAD_RANGE;
+        if (matl[i].gx >= view->gx_count) {
+            check.what = NEBULA_MODEL_SECTION('G', 'X', 'M', 'T');
+        } else if (nebula_model_range_out(matl[i].first_slot, matl[i].slot_count, view->slot_count)) {
+            check.what = NEBULA_MODEL_SECTION('S', 'L', 'O', 'T');
+        } else if (nebula_model_range_out(matl[i].first_form, matl[i].form_count, view->form_count)) {
+            check.what = NEBULA_MODEL_SECTION('F', 'O', 'R', 'M');
+        } else {
+            check.fault = NEBULA_MODEL_FINE;
+        }
+    }
+    const NebulaModelGx* gx = (const NebulaModelGx*)(base + view->gx_at);
+    for (uint32_t i = 0; i < view->gx_count && check.fault == NEBULA_MODEL_FINE; i++) {
+        check.fault = NEBULA_MODEL_BAD_RANGE;
+        if (nebula_model_range_out(gx[i].first_coord, gx[i].coord_count, view->coord_count)) {
+            check.what = NEBULA_MODEL_SECTION('G', 'X', 'T', 'G');
+        } else if (nebula_model_range_out(gx[i].first_matrix, gx[i].matrix_count, view->coord_matrix_count)) {
+            check.what = NEBULA_MODEL_SECTION('G', 'X', 'T', 'M');
+        } else if (nebula_model_range_out(gx[i].first_warp, gx[i].warp_count, view->warp_count)) {
+            check.what = NEBULA_MODEL_SECTION('G', 'X', 'W', 'P');
+        } else {
+            check.fault = NEBULA_MODEL_FINE;
+        }
+    }
+    const NebulaModelFormEntry* form = (const NebulaModelFormEntry*)(base + view->forms_at);
+    for (uint32_t i = 0; i < view->form_count && check.fault == NEBULA_MODEL_FINE; i++) {
+        check.fault = NEBULA_MODEL_BAD_RANGE;
+        if (form[i].material >= view->material_count) {
+            check.what = NEBULA_MODEL_SECTION('M', 'A', 'T', 'L');
+        } else if (nebula_model_range_out(form[i].first_vertex_row, form[i].vertex_row_count, view->row_count) ||
+                   nebula_model_range_out(form[i].first_pixel_row, form[i].pixel_row_count, view->row_count)) {
+            check.what = NEBULA_MODEL_SECTION('F', 'R', 'O', 'W');
+        } else if (nebula_model_range_out(form[i].first_texture, form[i].texture_count, view->maps_size)) {
+            check.what = NEBULA_MODEL_SECTION('F', 'T', 'E', 'X');
+        } else if (nebula_model_range_out(form[i].first_input, form[i].input_count, view->inputs_size)) {
+            check.what = NEBULA_MODEL_SECTION('F', 'I', 'N', 'P');
+        } else {
+            check.fault = NEBULA_MODEL_FINE;
+        }
+    }
+    return check;
+}
+
 typedef struct NebulaModelTexture {
     uint32_t name_at, record_at;
     uint32_t width, height;
@@ -513,11 +535,9 @@ static_assert(sizeof(NebulaModelDrawMatrix) == 8);
 static_assert(sizeof(NebulaModelHeader) == 28 * 4);
 static_assert(sizeof(NebulaModelJoint) == 96);
 static_assert(sizeof(NebulaModelMesh) == 100);
-static_assert(sizeof(NebulaModelForm) == 64);
 static_assert(sizeof(NebulaModelMatl) == 64);
 static_assert(sizeof(NebulaModelFormEntry) == 56);
 static_assert(sizeof(NebulaModelGx) == 120);
-static_assert(sizeof(NebulaModelMaterial) == 208);
 static_assert(sizeof(NebulaModelTexture) == 40);
 static_assert(sizeof(NebulaModelCoordMatrix) == 104);
 static_assert(sizeof(NebulaModelWarp) == 24);

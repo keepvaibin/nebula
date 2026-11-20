@@ -171,7 +171,7 @@ public:
         return name(reinterpret_cast< const NebulaModelJoint* >(at(mView.joints_at))[index].name_at);
     }
     const char* getMaterialName(u32 index) const {
-        return name(reinterpret_cast< const NebulaModelMaterial* >(at(mView.materials_at))[index].name_at);
+        return name(getMaterialFile(index)->name_at);
     }
     const char* getTextureName(u32 index) const {
         return mTextureOwner->name(reinterpret_cast< const NebulaModelTexture* >(mTextureOwner->at(mTextureOwner->mView.textures_at))[index].name_at);
@@ -228,6 +228,39 @@ public:
     }
     const char* name(u32 offset) const {
         return reinterpret_cast< const char* >(at(offset));
+    }
+
+    // A material's parts (FRAME-MODEL 2.9), each by its index in its section; nebula_model_view checked every range.
+    const NebulaModelMatl* getMaterialFile(u32 index) const {
+        return reinterpret_cast< const NebulaModelMatl* >(at(mView.materials_at)) + index;
+    }
+    const NebulaModelGx* getGx(u32 index) const {
+        return reinterpret_cast< const NebulaModelGx* >(at(mView.gx_at)) + index;
+    }
+    const NebulaModelFormEntry* getForms(u32 first) const {
+        return reinterpret_cast< const NebulaModelFormEntry* >(at(mView.forms_at)) + first;
+    }
+    const NebulaModelSlot* getSlots(u32 first) const {
+        return reinterpret_cast< const NebulaModelSlot* >(at(mView.slots_at)) + first;
+    }
+    const NebulaModelCoord* getCoords(u32 first) const {
+        return reinterpret_cast< const NebulaModelCoord* >(at(mView.coords_at)) + first;
+    }
+    const NebulaModelCoordMatrix* getCoordMatrices(u32 first) const {
+        return reinterpret_cast< const NebulaModelCoordMatrix* >(at(mView.coord_matrices_at)) + first;
+    }
+    const NebulaModelWarp* getWarps(u32 first) const {
+        return reinterpret_cast< const NebulaModelWarp* >(at(mView.warps_at)) + first;
+    }
+    // A form's rows (FROW, NEBULA_ROW_*), map numbers (FTEX) and inputs (FINP).
+    const u32* getFormRows(u32 first) const {
+        return reinterpret_cast< const u32* >(at(mView.rows_at)) + first;
+    }
+    const u8* getFormMaps(u32 first) const {
+        return at(mView.maps_at) + first;
+    }
+    const u8* getFormInputs(u32 first) const {
+        return at(mView.inputs_at) + first;
     }
 };
 

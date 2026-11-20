@@ -180,6 +180,23 @@ void test_faults() {
         bytes[0] ^= 1u;
         check(view_of(bytes, view).fault == NEBULA_MODEL_NOT_A_MODEL, "no magic, no model");
     }
+    // A material's, a form's or a GXMT entry's range outside its section (FRAME-MODEL 2.9).
+    const auto range_fault = [&text](std::uint32_t section, std::uint32_t offset, std::uint32_t value, const char* named) {
+        Block b = model(1u, 0u, 0u);
+        std::memcpy(b.bytes.data() + b.table[section].at + offset, &value, 4u);
+        NebulaModelView view{};
+        const NebulaModelCheck result = view_of(b.finish(), view);
+        nebula_model_section_text(result.what, text);
+        return result.fault == NEBULA_MODEL_BAD_RANGE && std::strcmp(text, named) == 0;
+    };
+    check(range_fault(9u, 32u, 1u, "GXMT"), "a material naming a GXMT entry past the section");
+    check(range_fault(9u, 36u, 1u, "SLOT") == false, "a material's slots inside SLOT");
+    check(range_fault(9u, 36u, 5u, "SLOT"), "a material's slots past SLOT");
+    check(range_fault(9u, 44u, 1u, "FORM") == false && range_fault(9u, 44u, 2u, "FORM"), "a material's forms past FORM");
+    check(range_fault(10u, 96u, 1u, "GXTG") == false && range_fault(10u, 96u, 2u, "GXTG"), "a GXMT entry's coordinates past GXTG");
+    check(range_fault(11u, 16u, 1u, "MATL"), "a form of a material the model does not have");
+    check(range_fault(11u, 20u, 4u, "FROW"), "a form's rows past FROW");
+    check(range_fault(11u, 44u, 5u, "FINP"), "a form's inputs past FINP");
 }
 
 }  // namespace

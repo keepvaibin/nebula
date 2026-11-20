@@ -150,10 +150,9 @@ public:
     u32 getID() const {
         return mFile->same_as;
     }
-    // The model file's draw mode (model_ir.rs read_material; a made material is 4 when it blends, else 1): with neither
-    // of the low two bits it draws in the translucent buffer.
+    // Drawn in the translucent buffer, as the cook decided from the draw mode (model_ir.rs read_material).
     bool isTranslucent() const {
-        return (mFile->mode & 3) == 0;
+        return (mFile->flags & NEBULA_MATL_TRANSLUCENT) != 0;
     }
     Material* getNext() const {
         return mNext;
@@ -182,7 +181,7 @@ public:
         return &mSlots.at(index).mCoord;
     }
     u32 getCoordCount() const {
-        return mFile->coord_count;
+        return mGx->coord_count;
     }
     u32 getTextureIndex(u32 map) const {
         const MaterialSlot* pSlot = mSlots.find(map);
@@ -217,7 +216,7 @@ public:
         return &mFog;
     }
     bool hasAmbient() const {
-        return (mFile->flags & NEBULA_MATERIAL_HAS_AMBIENT) != 0;
+        return (mGx->flags & NEBULA_MATERIAL_HAS_AMBIENT) != 0;
     }
 
     bool usesMap(u32 map) const {
@@ -228,8 +227,7 @@ public:
     }
     const NebulaModelSlot* fileSlots() const;
     bool usesLight(u32 channel, u32 light) const {
-        const NebulaModelChannel& rChannel = mFile->channels[channel];
-        return rChannel.enable != 0 && (rChannel.light_mask & (1u << light)) != 0;
+        return channel < 4 && (mFile->light_masks[channel] & (1u << light)) != 0;
     }
 
     void touch() {
@@ -245,14 +243,15 @@ public:
         bool mLit;
     };
     s32 findForm(const FormKey& rKey) const;
-    const NebulaModelForm* getForm(s32 index) const;
+    const NebulaModelFormEntry* getForm(s32 index) const;
 
     // A form's rows as this material fills them: NEBULA_ROW_* in the form's order, vertex rows then pixel rows.
-    void fillRows(const NebulaModelForm& rForm, f32 (*pOut)[4]) const;
+    void fillRows(const NebulaModelFormEntry& rForm, f32 (*pOut)[4]) const;
     // One row by its number.
     void fillRow(u32 row, f32* pOut) const;
 
-    const NebulaModelMaterial* mFile;
+    const NebulaModelMatl* mFile;
+    const NebulaModelGx* mGx;  // the console's fields, until E3 step 3's last landing
     ModelData* mData;
     Material* mNext;
     Mesh* mMesh;
@@ -389,9 +388,9 @@ private:
     s32 resolveForm();
     void applyEdits(const u32* pRows, u32 count, f32 (*pOut)[4]) const;
     void drawFlat(Model* pModel, Mesh* pMesh);
-    u32 constantsOf(s32 formIndex, const NebulaModelForm& rForm);
-    u32 tableOf(s32 formIndex, const NebulaModelForm& rForm);
-    u32 pipelineOf(s32 formIndex, const NebulaModelForm& rForm, const Mesh* pMesh);
+    u32 constantsOf(s32 formIndex, const NebulaModelFormEntry& rForm);
+    u32 tableOf(s32 formIndex, const NebulaModelFormEntry& rForm);
+    u32 pipelineOf(s32 formIndex, const NebulaModelFormEntry& rForm, const Mesh* pMesh);
 
     Material* mMaterial;
     Material* mOwn;

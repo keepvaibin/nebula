@@ -602,7 +602,7 @@ u32 Model::poseBlock(ModelPose* pPose) {
 u32 Model::block(const Material* pMaterial) {
     ModelPose* pPose = mDrawPose;
     const u32 plain = poseBlock(pPose);
-    if (pMaterial->mFile->has_scale == 0) {
+    if ((pMaterial->mFile->flags & NEBULA_MATL_NORMAL_SCALE) == 0) {
         return plain;
     }
     if (ModelSys::mViewOverride != nullptr) {
