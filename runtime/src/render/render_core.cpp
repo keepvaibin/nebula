@@ -1682,11 +1682,11 @@ void RenderCore::record_screen_probes(std::uint32_t channel, const ScreenProbe* 
         const auto scene = renderer_.scene_rectangle();
         std::fprintf(stderr,
                      "[probe-ask] frame %u channel %u count %u points %016llx cameras %016llx joints %016llx constants %016llx "
-                     "items %u blocks %u t %.4f between %d scene %ux%u\n",
+                     "items %u blocks %u t %.4f between %d scene %ux%u walk %llu\n",
                      flight.game_frame, channel, count, static_cast<unsigned long long>(points),
                      static_cast<unsigned long long>(cameras), static_cast<unsigned long long>(joints),
                      static_cast<unsigned long long>(rows), list.item_count, list.block_count, walk_.time.t,
-                     walk_.between ? 1 : 0, scene.width, scene.height);
+                     walk_.between ? 1 : 0, scene.width, scene.height, static_cast<unsigned long long>(walk_.serial));
     }
     if (renderer_.record_screen_probes(flight.slot, flight.probes, compared)) {
         {
@@ -1708,6 +1708,18 @@ void RenderCore::poll_screen_probes() {
         }
         for (std::uint32_t i = 0; i < flight.count; ++i) {
             flight.probes[i].value = values[i];
+        }
+        if (::galaxy::diagnosing(::galaxy::kDiagnoseProbeReads)) [[unlikely]] {
+            // Each answer's bits (P-242): which of a flight's probes two runs answered differently.
+            std::string text;
+            char word[12];
+            for (std::uint32_t i = 0; i < flight.count; ++i) {
+                std::uint32_t bits = 0u;
+                std::memcpy(&bits, &values[i], sizeof(bits));
+                std::snprintf(word, sizeof(word), " %08x", bits);
+                text += word;
+            }
+            std::fprintf(stderr, "[probe-answer] frame %u channel %u%s\n", flight.game_frame, flight.channel, text.c_str());
         }
         {
             const std::lock_guard guard(probe_answers_lock_);
