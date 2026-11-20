@@ -27,6 +27,7 @@ Files go to the `diagnostics` folder in Nebula's data folder, named with the pro
 | `pointer-latency` | The time from the pointer selecting something to the picture that shows it. |
 | `present-stats` | Presented frames, new frames, and GPU and CPU times, each second. |
 | `probe-reads` | Each screen probe read of the game's step: its frame, its channel, the frame whose answers it got, and a hash of their values, so two runs of one replay are compared read by read. |
+| `frame-plans` | Every 60th frame list's shape (each pass's kind, target and what it reads, each run of like draws' pipeline state) and the plans the renderer made of it, in `frame-plans-<process>.txt`. No game content. A tour's file is a fixture of the walk plan test (`runtime/src/render/core/testdata/frame-plans`).
 | `programs-drawn` | Each pair of shader programs a draw asks for, once. A stage compiles only those. |
 | `profile` | The game thread and the render thread, each sampled each millisecond with its callers, until the run ends (10 minutes at most), in `game-profile-PROCESS-ID.txt` and `render-profile-PROCESS-ID.txt`. Each sample carries the timeline's clock. `tools/perf/game_profile.py` names the game module's functions from its link map; `--ranges` keeps the samples inside given stretches of the timeline. |
 | `ring-stress` | A test: the upload rings are made again every 5 frames, so a test run proves that old rings outlive every frame that reads them. |
