@@ -430,19 +430,19 @@ void RendererD3D11::shutdown() {
 void RendererD3D11::grow_rings() {
     // A ring whose frames took over half their budget (or spilled) grows; one whose last 30 seconds (and 600 frames)
     // stayed under a quarter of it gives half of its memory back on a frame without the scene (UploadRing::kQuietNs).
-    // Only that ring is made again.
+    // Only that ring is made again; --diagnostics ring-stress makes them all again every kRingStressFrames frames.
     const UploadRingSlot rings[] = {{&vertex_ring_, "vertex", kFramesInFlight, true},
                                     {&index_ring_, "index", kFramesInFlight, true},
                                     {&constant_ring_, "constant", kFramesInFlight, true},
                                     {&matrix_ring_, "matrix", kFramesInFlight, false}};
-    if (ring_growth_failed_ || std::none_of(std::begin(rings), std::end(rings),
-                                            [](const UploadRingSlot& s) { return s.ring->wants_new_size(); })) {
+    const RingRemake due = upload_rings_due(rings, frame_index_, ring_growth_failed_);
+    if (due == RingRemake::None) {
         return;
     }
     const galaxy::bench::RenderSpan span(galaxy::bench::RenderPart::RingResize);
     // A ring is made again as new upload memory; the old memory goes with the frames that may still read it.
     std::vector<gpu::BufferRef> old;
-    remake_upload_rings(device(), rings, false, ring_growth_failed_, old);
+    remake_upload_rings(device(), rings, due == RingRemake::All, ring_growth_failed_, old);
     for (gpu::BufferRef& buffer : old) {
         frame_->retired_buffers.push_back(std::move(buffer));
     }
@@ -533,16 +533,7 @@ void RendererD3D11::begin_frame() {
                 ctx->GetData(frame.frame_time[0].Get(), &start, sizeof(start), D3D11_ASYNC_GETDATA_DONOTFLUSH) == S_OK &&
                 ctx->GetData(frame.frame_time[1].Get(), &end, sizeof(end), D3D11_ASYNC_GETDATA_DONOTFLUSH) == S_OK && end >= start) {
                 const double gpu_ms = static_cast<double>(end - start) * 1000.0 / static_cast<double>(disjoint.Frequency);
-                if (frame.scene_drawn) {
-                    native_scene_gpu_ema_ms_ = native_scene_gpu_ema_ms_ == 0.0 ? gpu_ms
-                                               : native_scene_gpu_ema_ms_ + (gpu_ms - native_scene_gpu_ema_ms_) * 0.1;
-                }
-                if (frame.generated) {
-                    generated_gpu_ms_ += gpu_ms;
-                    ++generated_gpu_samples_;
-                    generated_gpu_ema_ms_ = generated_gpu_ema_ms_ == 0.0 ? gpu_ms
-                                            : generated_gpu_ema_ms_ + (gpu_ms - generated_gpu_ema_ms_) * 0.1;
-                }
+                frame_gpu_.add(gpu_ms, frame.scene_drawn, frame.generated);
                 const float before = frame_gpu_ema_ms_.load(std::memory_order_relaxed);
                 frame_gpu_ema_ms_.store(before == 0.0f ? static_cast<float>(gpu_ms)
                                                        : before + (static_cast<float>(gpu_ms) - before) * 0.1f,

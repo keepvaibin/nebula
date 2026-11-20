@@ -990,7 +990,7 @@ void RendererMtl::begin_scene_rectangle() {
         dynamic_resolution_.set_walk(dynamic_resolution_offered() &&
                                      ::galaxy::diagnosing(::galaxy::kDiagnoseResolutionSteps));
         scene_rectangle_ = dynamic_resolution_.update(cfg.dynamic_resolution && dynamic_resolution_offered(), scene_extent_,
-                                                      dynamic_resolution_floor(), native_scene_gpu_ema_ms_,
+                                                      dynamic_resolution_floor(), frame_gpu_.scene_ema_ms(),
                                                       resolution_budget_ms(rate, display_refresh_hz_));
         if (::galaxy::diagnosing(::galaxy::kDiagnoseResolutionSteps | ::galaxy::kDiagnosePresentStats) &&
             dynamic_resolution_.sixteenths() != before) {
