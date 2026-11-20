@@ -117,25 +117,14 @@ static ModelData* loadFile(void* pFile) {
     }
     pData->mTextureOwner = pData;
     if (pData->mView.texture_count != 0) {
-        pData->mTextures = new ResTIMG[pData->mView.texture_count];
+        pData->mTextures = new ModelTexture[pData->mView.texture_count];
         for (u32 i = 0; i < pData->mView.texture_count; i++) {
             const NebulaModelTexture& rFile = pData->entry< NebulaModelTexture >(pData->mView.textures_at, pData->mView.texture_stride, i);
-            ResTIMG& rTexture = pData->mTextures[i];
-            memset(&rTexture, 0, sizeof(rTexture));
-            rTexture.mFormat = rFile.format;
+            ModelTexture& rTexture = pData->mTextures[i];
+            rTexture.mImage = pData->at(rFile.record_at);
             rTexture.mWidth = rFile.width;
             rTexture.mHeight = rFile.height;
-            rTexture.mWrapS = rFile.wrap_s;
-            rTexture.mWrapT = rFile.wrap_t;
-            rTexture.mMipmap = rFile.mipmap;
-            rTexture.mMaxAnisotropy = rFile.anisotropy;
-            rTexture.mMinType = rFile.min_filter;
-            rTexture.mMagType = rFile.mag_filter;
-            rTexture.mMinLod = rFile.min_lod;
-            rTexture.mMaxLod = rFile.max_lod;
-            rTexture.mImageNum = rFile.levels;
-            rTexture.mLodBias = rFile.lod_bias;
-            rTexture.mImage = const_cast< u8* >(pData->at(rFile.record_at));
+            rTexture.mSampler = pData->entry< NebulaModelSampler >(pData->mView.samplers_at, pData->mView.sampler_stride, rFile.sampler);
         }
     }
     if (pData->mView.material_count != 0) {
@@ -219,9 +208,13 @@ s32 ModelData::findTexture(const char* pName) const {
 }
 
 void ModelData::setTexture(u32 index, const ResTIMG& rTexture) {
-    ResTIMG& rOwn = mTextureOwner->mTextures[index];
-    rOwn = rTexture;
+    // A disc picture: its sampler from the console's codes until E3 step 4 cooks them (P-155).
+    ModelTexture& rOwn = mTextureOwner->mTextures[index];
     rOwn.mImage = rTexture.image();
+    rOwn.mWidth = rTexture.mWidth;
+    rOwn.mHeight = rTexture.mHeight;
+    rOwn.mSampler = nebula_sampler_from_codes(rTexture.mWrapS, rTexture.mWrapT, rTexture.mMinType, rTexture.mMagType,
+                                              rTexture.mMaxAnisotropy, rTexture.mMinLod, rTexture.mMaxLod, rTexture.mLodBias);
     mTextureOwner->mTextureStamp++;
 }
 

@@ -75,10 +75,11 @@ Block model(std::uint32_t joints, std::uint32_t envelopes, std::uint32_t binds) 
     b.add(name("FROW"), 3u, 4u);
     b.add(name("FTEX"), 2u, 1u);
     b.add(name("FINP"), 4u, 1u);
-    b.add(name("TEXR"), 0u, 40u);
+    b.add(name("TEXR"), 1u, 20u);
     b.add(name("NAME"), 16u, 1u);
     b.add(name("GEOM"), 64u, 1u);
     b.add(name("TIMG"), 0u, 1u);
+    b.add(name("SAMP"), 1u, 20u);
     b.add(name("MODL"), 1u, 8u);
     const std::uint32_t scalars = b.table.back().at;
     const std::uint32_t values[2] = {5u, 77u};
@@ -99,7 +100,7 @@ void test_resolved() {
     check(view.joint_count == 3u && view.joints_at == b.table[0].at, "the joints by JNTS");
     check(view.step_count == 6u && view.envelope_count == 2u && view.mix_count == 4u, "the counts by their sections");
     check(view.inverse_bind_count == 3u && view.inverse_binds_at == b.table[6].at, "the inverse binds by IBND's count");
-    check(view.mesh_count == 1u && view.material_count == 1u && view.texture_count == 0u, "meshes, materials, textures");
+    check(view.mesh_count == 1u && view.material_count == 1u && view.texture_count == 1u && view.sampler_count == 1u, "meshes, materials, textures");
     check(view.geometry_size == 64u && view.geometry_at == b.table[21].at, "the geometry by GEOM's span");
     check(view.names_size == 16u && view.images_size == 0u, "the names and the images by their spans");
     check(view.full_weight_count == 5u && view.source_vertex_count == 77u, "the scalars from MODL");
@@ -229,6 +230,7 @@ void test_faults() {
     check(range_fault(11u, 16u, 1u, "MATL"), "a form of a material the model does not have");
     check(range_fault(11u, 20u, 4u, "FROW"), "a form's rows past FROW");
     check(range_fault(11u, 44u, 5u, "FINP"), "a form's inputs past FINP");
+    check(range_fault(19u, 16u, 1u, "SAMP"), "a texture naming a sampler past SAMP");
 }
 
 }  // namespace

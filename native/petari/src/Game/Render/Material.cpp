@@ -353,7 +353,7 @@ void Material::fillRow(u32 row, f32* pOut) const {
             if (number == NEBULA_NONE32) {
                 pSize[0] = pSize[1] = 1.0f;
             } else {
-                const ResTIMG* pTexture = mData->getTexture(number);
+                const ModelTexture* pTexture = mData->getTexture(number);
                 pSize[0] = pTexture->mWidth;
                 pSize[1] = pTexture->mHeight;
             }
@@ -783,17 +783,9 @@ u32 MaterialDraw::tableOf(s32 formIndex, const NebulaModelFormEntry& rForm) {
         memset(&rOut, 0, sizeof(rOut));
         const u32 number = pMaterial->getTextureIndex(map);
         if (number != NEBULA_NONE32) {
-            const ResTIMG* pTexture = pData->getTexture(number);
-            rOut.texture = RenderTexture::idOf(pTexture->image());
-            rOut.wrap_s = pTexture->mWrapS;
-            rOut.wrap_t = pTexture->mWrapT;
-            rOut.min_linear = pTexture->mMinType == 1 || pTexture->mMinType == 3 || pTexture->mMinType == 5;
-            rOut.mag_linear = pTexture->mMagType != 0;
-            rOut.mip_filter = pTexture->mMinType < 2 ? 0 : pTexture->mMinType < 4 ? 1 : 2;
-            rOut.anisotropy = pTexture->mMaxAnisotropy;
-            rOut.min_lod = pTexture->mMinLod;
-            rOut.max_lod = pTexture->mMaxLod;
-            rOut.lod_bias = pTexture->mLodBias;
+            const ModelTexture* pTexture = pData->getTexture(number);
+            rOut.texture = RenderTexture::idOf(pTexture->mImage);
+            setFrameSampler(rOut, pTexture->mSampler);
         }
         const ImageEdit* pImage = findImage(map);
         if (pImage != nullptr) {

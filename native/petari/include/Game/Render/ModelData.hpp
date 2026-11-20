@@ -114,6 +114,15 @@ public:
     u32 mIndex;
 };
 
+// A model's texture as its draws take it (FRAME-MODEL 2.10): its image (the texture record RenderTexture keys by),
+// its size and its sampler, decoded at the cook.
+struct ModelTexture {
+    const u8* mImage;
+    u32 mWidth;
+    u32 mHeight;
+    NebulaModelSampler mSampler;
+};
+
 // A loaded model file (nebula_model.h), used in place. One set of materials, joints and meshes; each Model draws from it.
 // It lives in the arena of the holder that loads it, which is its file's (ResourceHolderManager), so the arena destroys
 // it before the file goes; its joints, materials and meshes are that arena's memory.
@@ -178,8 +187,8 @@ public:
         return pOwner->name(pOwner->entry< NebulaModelTexture >(pOwner->mView.textures_at, pOwner->mView.texture_stride, index).name_at);
     }
 
-    // A texture's record and how it samples, as the game may change them.
-    ResTIMG* getTexture(u32 index) const {
+    // A texture's image, size and sampler, as the game may change them (setTexture).
+    const ModelTexture* getTexture(u32 index) const {
         return &mTextureOwner->mTextures[index];
     }
     void setTexture(u32 index, const ResTIMG& rTexture);
@@ -217,7 +226,7 @@ public:
     Joint* mJoints;
     Material* mMaterials;
     Mesh* mMeshes;
-    ResTIMG* mTextures;
+    ModelTexture* mTextures;
     ModelData* mTextureOwner;
     MtxCalc* mBasicMtxCalc;
     u32 mGpuModel;

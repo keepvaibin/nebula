@@ -22,7 +22,8 @@ pub const MATL_BYTES: usize = 64;
 pub const GX_BYTES: usize = 120;
 pub const SLOT_BYTES: usize = 8;
 pub const FORM_BYTES: usize = 56;
-pub const TEXTURE_BYTES: usize = 40;
+pub const TEXTURE_BYTES: usize = 20;
+pub const SAMPLER_BYTES: usize = 20;
 pub const COORD_MATRIX_BYTES: usize = 104;
 pub const WARP_BYTES: usize = 24;
 
@@ -36,6 +37,27 @@ pub const MESH_NO_COORD: u8 = 0xFF;
 pub const SLOT_USES_MAP: u8 = 1 << 0;
 pub const SLOT_USES_COORD: u8 = 1 << 1;
 pub const SLOT_NO_MAP: u16 = 0xFFFF;
+
+/// A texture's sampler as the renderer takes it (nebula_model.h NebulaModelSampler, FRAME-MODEL 2.10), decoded from
+/// the disc's codes: wrap codes as they are (0 clamp, 1 repeat, 2 mirror); minification codes 1, 3 and 5 linear;
+/// 0 and 1 the first level only, 2 and 3 the nearest level, 4 and 5 between levels; magnification linear but for 0.
+pub fn sampler_bytes(t: &TextureIr) -> [u8; SAMPLER_BYTES] {
+    let mut s = [0u8; SAMPLER_BYTES];
+    s[0] = t.wrap_s;
+    s[1] = t.wrap_t;
+    s[2] = u8::from(matches!(t.min_filter, 1 | 3 | 5));
+    s[3] = u8::from(t.mag_filter != 0);
+    s[4] = match t.min_filter {
+        0 | 1 => 0,
+        2 | 3 => 1,
+        _ => 2,
+    };
+    s[5] = t.anisotropy;
+    s[8..12].copy_from_slice(&t.min_lod.to_le_bytes());
+    s[12..16].copy_from_slice(&t.max_lod.to_le_bytes());
+    s[16..20].copy_from_slice(&t.lod_bias.to_le_bytes());
+    s
+}
 
 /// A pipeline's fixed state as one word (nebula_model.h NEBULA_STATE_*).
 pub fn pipeline_state(m: &MaterialIr) -> u32 {
@@ -747,17 +769,29 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written, pipelines: &mut pipeli
     ];
     b.align(4);
     let textures_at = b.at();
+    // Each texture names its sampler, one of the model's distinct samplers in SAMP (FRAME-MODEL 2.10).
+    let mut samplers: Vec<[u8; SAMPLER_BYTES]> = Vec::new();
     let mut texture_slots = Vec::with_capacity(ir.textures.len());
     for t in &ir.textures {
+        let sampler = sampler_bytes(t);
+        let index = match samplers.iter().position(|s| *s == sampler) {
+            Some(index) => index,
+            None => {
+                samplers.push(sampler);
+                samplers.len() - 1
+            }
+        };
         texture_slots.push(b.0.len());
         strings.push((b.0.len(), t.name.clone()));
         b.u32(0);
         b.u32(0);
         b.u32(t.width);
         b.u32(t.height);
-        b.0.extend_from_slice(&[t.format, t.wrap_s, t.wrap_t, t.mipmap, t.anisotropy, t.min_filter, t.mag_filter, 0]);
-        b.u32(t.levels);
-        b.fs(&[t.min_lod, t.max_lod, t.lod_bias]);
+        b.u32(index as u32);
+    }
+    let samplers_at = b.at();
+    for sampler in &samplers {
+        b.0.extend_from_slice(sampler);
     }
     // Names.
     let names_at = b.at();
@@ -900,6 +934,7 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written, pipelines: &mut pipeli
         Section::bytes(*b"TIMG", images_at, images_size),
     ];
     table.extend(material_sections);
+    table.push(Section::records(*b"SAMP", samplers_at, samplers.len() as u32, SAMPLER_BYTES as u32));
     let sections_at = b.at();
     for section in &table {
         b.u32(u32::from_le_bytes(section.name));
@@ -1048,6 +1083,26 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_sampler_is_the_decode_of_the_disc_codes() {
+        let mut t = TextureIr {
+            name: String::new(), format: 0, width: 1, height: 1, wrap_s: 2, wrap_t: 1, mipmap: 1, anisotropy: 2,
+            min_filter: 0, mag_filter: 0, min_lod: -1.5, max_lod: 10.0, levels: 1, lod_bias: 0.25, record: 0,
+        };
+        // (minification code, linear, mip mode) for the six codes, by Material.cpp's rule before 2.10.
+        for (code, linear, mip) in [(0u8, 0u8, 0u8), (1, 1, 0), (2, 0, 1), (3, 1, 1), (4, 0, 2), (5, 1, 2)] {
+            t.min_filter = code;
+            for mag in [0u8, 1] {
+                t.mag_filter = mag;
+                let s = sampler_bytes(&t);
+                assert_eq!(&s[..8], &[2, 1, linear, u8::from(mag != 0), mip, 2, 0, 0], "code {code}, mag {mag}");
+                assert_eq!(f32::from_le_bytes(s[8..12].try_into().unwrap()), -1.5);
+                assert_eq!(f32::from_le_bytes(s[12..16].try_into().unwrap()), 10.0);
+                assert_eq!(f32::from_le_bytes(s[16..20].try_into().unwrap()), 0.25);
+            }
+        }
+    }
+
+    #[test]
     fn the_section_table_names_every_array_where_12_put_it() {
         let mut ir = ModelIr::default();
         ir.arrays.positions = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
@@ -1065,7 +1120,7 @@ mod tests {
         let table = sections(&bytes).unwrap();
         let names: Vec<&[u8; 4]> = table.iter().map(|s| &s.name).collect();
         assert_eq!(names, [b"MODL", b"JNTS", b"STEP", b"JMSH", b"DMTX", b"ENVL", b"MIXS", b"IBND", b"IMPT", b"MESH", b"TEXR", b"NAME", b"GEOM", b"TIMG",
-            b"MATL", b"GXMT", b"FORM", b"SLOT", b"GXTG", b"GXTM", b"GXWP", b"FROW", b"FTEX", b"FINP"]);
+            b"MATL", b"GXMT", b"FORM", b"SLOT", b"GXTG", b"GXTM", b"GXWP", b"FROW", b"FTEX", b"FINP", b"SAMP"]);
         assert!(table.iter().all(|s| s.flags == SECTION_REQUIRED && u64::from(s.count) * u64::from(s.stride) <= u64::from(s.size)));
         // The arrays in file order, each after the one before, all past the header; the scalars after the images.
         let mut placed: Vec<Section> = table[1..].to_vec();
