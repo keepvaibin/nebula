@@ -18,9 +18,10 @@ pub const SECTION_BYTES: usize = 24;
 pub const JOINT_BYTES: usize = 96;
 pub const MESH_BYTES: usize = 100;
 pub const MESH_COORD_BYTES: usize = 4;
-pub const MATERIAL_BYTES: usize = 208;
+pub const MATL_BYTES: usize = 64;
+pub const GX_BYTES: usize = 120;
 pub const SLOT_BYTES: usize = 8;
-pub const FORM_BYTES: usize = 64;
+pub const FORM_BYTES: usize = 56;
 pub const TEXTURE_BYTES: usize = 40;
 pub const COORD_MATRIX_BYTES: usize = 104;
 pub const WARP_BYTES: usize = 24;
@@ -587,139 +588,163 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written, pipelines: &mut pipeli
             b.u16(offset as u16);
         }
     }
-    // Materials: fixed part, then their variable tables.
-    let materials_at = b.at();
-    let mut slots = Vec::with_capacity(ir.materials.len());
-    for m in &ir.materials {
-        slots.push(b.0.len());
-        strings.push((b.0.len(), m.name.clone()));
-        b.u32(0);
-        b.u32(name_hash(&m.name));
-        b.u32(u32::from(m.same_as));
-        b.u32(m.mesh);
-        b.u32(m.joint);
-        b.u8(m.mode);
-        b.u8(m.cull);
-        let flags = u8::from(m.on_billboard) << 4 | u8::from(m.has_ambient) | u8::from(m.has_stage_colors) << 1 | u8::from(m.has_indirect) << 2 | u8::from(m.has_fog) << 3;
-        b.u8(flags);
-        b.u8(m.early_depth);
-        b.u32(m.channel_count as u32);
-        b.u32(m.coords.len() as u32);
-        b.u32(m.warps.len() as u32);
-        b.u32(material_slots(m).len() as u32);
-        b.u32(m.matrices.len() as u32);
-        b.u32(0); // its forms' count
+    // Materials (FRAME-MODEL 2.9): each section's entries gathered, then the sections one after another. A record names
+    // its parts by index and count in their section; names stay offsets of the block.
+    let mut matl = Blob(Vec::new());
+    let mut gx = Blob(Vec::new());
+    let mut form_entries = Blob(Vec::new());
+    let mut slot_entries = Blob(Vec::new());
+    let mut coord_entries = Blob(Vec::new());
+    let mut matrix_entries = Blob(Vec::new());
+    let mut warp_entries = Blob(Vec::new());
+    let mut row_entries = Blob(Vec::new());
+    let mut map_entries = Blob(Vec::new());
+    let mut input_entries = Blob(Vec::new());
+    let mut matl_names = Vec::with_capacity(ir.materials.len());
+    let mut material_forms: Vec<Vec<(u64, u64, Vec<u8>)>> = vec![Vec::new(); ir.materials.len()];
+    let count = |blob: &Blob, stride: usize| (blob.0.len() / stride) as u32;
+    for (index, m) in ir.materials.iter().enumerate() {
+        // GXMT: the console's material, read until step 3's last landing.
+        let gx_index = count(&gx, GX_BYTES);
+        gx.u32(u32::from(m.has_ambient) | u32::from(m.has_stage_colors) << 1 | u32::from(m.has_indirect) << 2 | u32::from(m.has_fog) << 3);
         for c in m.material_color.iter().chain(m.ambient_color.iter()) {
-            b.0.extend_from_slice(c);
+            gx.0.extend_from_slice(c);
         }
         for r in &m.registers {
             for &v in r {
-                b.i16(v);
+                gx.i16(v);
             }
         }
         for c in &m.constants {
-            b.0.extend_from_slice(c);
+            gx.0.extend_from_slice(c);
         }
-        for c in &m.channels {
-            b.0.extend_from_slice(&[c.enable, c.material_source, c.ambient_source, c.light_mask, c.diffuse, c.attenuation]);
-        }
-        b.0.extend_from_slice(&[m.alpha_comp0, m.alpha_op, m.alpha_comp1, m.alpha_ref0, m.alpha_ref1, m.blend_type, m.blend_src, m.blend_dst, m.depth_test, m.depth_func, m.depth_write, m.has_scale]);
-        b.fs(&m.normal_scale);
+        gx.0.extend_from_slice(&[m.alpha_ref0, m.alpha_ref1, 0, 0]);
         let f = &m.fog;
-        b.0.extend_from_slice(&[f.kind, 0, 0, 0]);
-        b.fs(&[f.start, f.end, f.near, f.far]);
-        b.0.extend_from_slice(&f.color);
-        b.u32(pipeline_state(m));
-        for _ in 0..5 {
-            b.u32(0);
-        }
-    }
-    let mut material_forms: Vec<Vec<(u64, u64, Vec<u8>)>> = vec![Vec::new(); ir.materials.len()];
-    for (index, (m, &slot)) in ir.materials.iter().zip(&slots).enumerate() {
-        let tail = slot + MATERIAL_BYTES - 20;
-        b.align(4);
-        let coords_at = b.at();
+        gx.0.extend_from_slice(&[f.kind, 0, 0, 0]);
+        gx.fs(&[f.start, f.end, f.near, f.far]);
+        gx.0.extend_from_slice(&f.color);
+        gx.u32(count(&coord_entries, 8));
+        gx.u32(m.coords.len() as u32);
+        gx.u32(count(&matrix_entries, COORD_MATRIX_BYTES));
+        gx.u32(m.matrices.len() as u32);
+        gx.u32(count(&warp_entries, WARP_BYTES));
+        gx.u32(m.warps.len() as u32);
         for c in &m.coords {
-            b.0.extend_from_slice(&[c.kind, c.source, 0, 0]);
-            b.u32(c.matrix);
+            coord_entries.0.extend_from_slice(&[c.kind, c.source, 0, 0]);
+            coord_entries.u32(c.matrix);
         }
-        let slots_at = b.at();
-        for (texture, scale_map, uses) in material_slots(m) {
-            b.u32(texture);
-            b.u16(scale_map);
-            b.u8(uses);
-            b.u8(0);
-        }
-        let matrices_at = b.at();
         for t in &m.matrices {
-            b.u32(u32::from(t.slot));
-            b.0.extend_from_slice(&[t.projection, t.info, 0, 0]);
-            b.fs(&t.center);
-            b.fs(&t.scale);
-            b.f32(t.rotation);
-            b.fs(&t.translation);
+            matrix_entries.u32(u32::from(t.slot));
+            matrix_entries.0.extend_from_slice(&[t.projection, t.info, 0, 0]);
+            matrix_entries.fs(&t.center);
+            matrix_entries.fs(&t.scale);
+            matrix_entries.f32(t.rotation);
+            matrix_entries.fs(&t.translation);
             for row in &t.effect {
-                b.fs(row);
+                matrix_entries.fs(row);
             }
         }
-        let warps_at = b.at();
         for w in &m.warps {
-            b.fs(&w.rows[0]);
-            b.fs(&w.rows[1]);
+            warp_entries.fs(&w.rows[0]);
+            warp_entries.fs(&w.rows[1]);
         }
-        // Its forms: the records, then what they name.
+        let first_slot = count(&slot_entries, SLOT_BYTES);
+        let material_slot_list = material_slots(m);
+        for &(texture, scale_map, uses) in &material_slot_list {
+            slot_entries.u32(texture);
+            slot_entries.u16(scale_map);
+            slot_entries.u8(uses);
+            slot_entries.u8(0);
+        }
+        // Its forms: the programs, their rows, map numbers and inputs.
         let skinned = programs::mesh_skinned(ir, m);
         let registers = written.registers(m);
         let forms = programs::forms_of(stem, m, index)?;
-        // A form starts with its two u64 program hashes (NebulaModelForm): 8-aligned in the file, which the store
-        // places 32-aligned (cook ALIGN), so 8-aligned wherever the game reads it.
-        b.align(8);
-        let forms_at = b.at();
-        let form_start = b.0.len();
-        b.0.resize(form_start + forms.len() * FORM_BYTES, 0);
-        for (n, form) in forms.iter().enumerate() {
+        let first_form = count(&form_entries, FORM_BYTES);
+        for form in &forms {
             let mut t = programs::generate(m, *form, skinned, &registers)?;
             programs::finish_text(&m.name, *form, &mut t);
-            let vertex_rows_at = b.at();
-            for &r in &t.vertex_rows {
-                b.u32(r);
-            }
-            let pixel_rows_at = b.at();
-            for &r in &t.pixel_rows {
-                b.u32(r);
-            }
-            let textures_at = b.at();
-            b.0.extend_from_slice(&t.textures);
-            let inputs_at = b.at();
-            for input in &t.inputs {
-                b.0.push(programs::input_code(input));
-            }
-            b.align(4);
-            let at = form_start + n * FORM_BYTES;
             let (vertex, pixel) = (programs::text_hash(&t.vertex), programs::text_hash(&t.pixel));
             material_forms[index].push((vertex, pixel, t.inputs.iter().map(programs::input_code).collect()));
-            b.0[at..at + 8].copy_from_slice(&vertex.to_le_bytes());
-            b.0[at + 8..at + 16].copy_from_slice(&pixel.to_le_bytes());
-            b.patch32(at + 16, vertex_rows_at);
-            b.patch32(at + 20, pixel_rows_at);
-            b.patch32(at + 24, textures_at);
-            b.patch32(at + 28, inputs_at);
-            b.patch32(at + 32, t.vertex_rows.len() as u32);
-            b.patch32(at + 36, t.pixel_rows.len() as u32);
-            b.patch32(at + 40, t.textures.len() as u32);
-            b.patch32(at + 44, t.inputs.len() as u32);
+            form_entries.0.extend_from_slice(&vertex.to_le_bytes());
+            form_entries.0.extend_from_slice(&pixel.to_le_bytes());
+            form_entries.u32(index as u32);
+            form_entries.u32(count(&row_entries, 4));
+            form_entries.u32(t.vertex_rows.len() as u32);
+            form_entries.u32(count(&row_entries, 4) + t.vertex_rows.len() as u32);
+            form_entries.u32(t.pixel_rows.len() as u32);
+            for &r in t.vertex_rows.iter().chain(&t.pixel_rows) {
+                row_entries.u32(r);
+            }
+            form_entries.u32(map_entries.0.len() as u32);
+            form_entries.u32(t.textures.len() as u32);
+            map_entries.0.extend_from_slice(&t.textures);
+            form_entries.u32(input_entries.0.len() as u32);
+            form_entries.u32(t.inputs.len() as u32);
+            for input in &t.inputs {
+                input_entries.0.push(programs::input_code(input));
+            }
             let flags = u8::from(form.normal_coord) | u8::from(form.lit) << 1 | u8::from(t.alpha_test) << 2 | u8::from(form.fog_linear) << 3;
-            b.0[at + 48] = form.replace;
-            b.0[at + 49] = flags;
-            b.0[at + 50] = form.pass;
+            form_entries.0.extend_from_slice(&[form.replace, flags, form.pass, 0]);
         }
-        b.patch32(slot + 44, forms.len() as u32);
-        b.patch32(tail, coords_at);
-        b.patch32(tail + 4, slots_at);
-        b.patch32(tail + 8, matrices_at);
-        b.patch32(tail + 12, warps_at);
-        b.patch32(tail + 16, forms_at);
+        // MATL.
+        matl_names.push((matl.0.len(), m.name.clone()));
+        matl.u32(0);
+        matl.u32(name_hash(&m.name));
+        matl.u32(u32::from(m.same_as));
+        matl.u32(m.mesh);
+        matl.u32(m.joint);
+        matl.u32(u32::from(m.mode & 3 == 0) | u32::from(m.has_scale != 0) << 1 | u32::from(m.on_billboard) << 2);
+        matl.u32(pipeline_state(m));
+        let mut light_masks = [0u8; 4];
+        for (mask, c) in light_masks.iter_mut().zip(&m.channels) {
+            *mask = if c.enable != 0 { c.light_mask } else { 0 };
+        }
+        matl.0.extend_from_slice(&light_masks);
+        matl.u32(gx_index);
+        matl.u32(first_slot);
+        matl.u32(material_slot_list.len() as u32);
+        matl.u32(first_form);
+        matl.u32(forms.len() as u32);
+        matl.fs(&m.normal_scale);
     }
+    // FORM starts with two u64 program hashes: 8-aligned in the file, which the store places 32-aligned (cook ALIGN).
+    let materials_at = b.at();
+    b.0.extend_from_slice(&matl.0);
+    for (offset, name) in matl_names {
+        strings.push((materials_at as usize + offset, name));
+    }
+    let gx_at = b.at();
+    b.0.extend_from_slice(&gx.0);
+    b.align(8);
+    let forms_at = b.at();
+    b.0.extend_from_slice(&form_entries.0);
+    let slots_at = b.at();
+    b.0.extend_from_slice(&slot_entries.0);
+    let coords_at = b.at();
+    b.0.extend_from_slice(&coord_entries.0);
+    let coord_matrices_at = b.at();
+    b.0.extend_from_slice(&matrix_entries.0);
+    let warps_at = b.at();
+    b.0.extend_from_slice(&warp_entries.0);
+    let rows_at = b.at();
+    b.0.extend_from_slice(&row_entries.0);
+    let maps_at = b.at();
+    b.0.extend_from_slice(&map_entries.0);
+    let inputs_at = b.at();
+    b.0.extend_from_slice(&input_entries.0);
+    let material_sections = [
+        Section::records(*b"MATL", materials_at, count(&matl, MATL_BYTES), MATL_BYTES as u32),
+        Section::records(*b"GXMT", gx_at, count(&gx, GX_BYTES), GX_BYTES as u32),
+        Section::records(*b"FORM", forms_at, count(&form_entries, FORM_BYTES), FORM_BYTES as u32),
+        Section::records(*b"SLOT", slots_at, count(&slot_entries, SLOT_BYTES), SLOT_BYTES as u32),
+        Section::records(*b"GXTG", coords_at, count(&coord_entries, 8), 8),
+        Section::records(*b"GXTM", coord_matrices_at, count(&matrix_entries, COORD_MATRIX_BYTES), COORD_MATRIX_BYTES as u32),
+        Section::records(*b"GXWP", warps_at, count(&warp_entries, WARP_BYTES), WARP_BYTES as u32),
+        Section::records(*b"FROW", rows_at, count(&row_entries, 4), 4),
+        Section::bytes(*b"FTEX", maps_at, map_entries.0.len() as u32),
+        Section::bytes(*b"FINP", inputs_at, input_entries.0.len() as u32),
+    ];
     b.align(4);
     let textures_at = b.at();
     let mut texture_slots = Vec::with_capacity(ir.textures.len());
@@ -857,7 +882,7 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written, pipelines: &mut pipeli
     b.u32(u32::from(ir.full_weight_count));
     b.u32(ir.source_vertex_count);
     let count = |n: usize| n as u32;
-    let table: [Section; 15] = [
+    let mut table: Vec<Section> = vec![
         Section::records(*b"MODL", scalars_at, 1, 8),
         Section::records(*b"JNTS", joints_at, count(ir.joints.len()), JOINT_BYTES as u32),
         Section::records(*b"STEP", steps_at, steps, 8),
@@ -869,12 +894,12 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written, pipelines: &mut pipeli
         Section::records(*b"IMPT", important_at, count(ir.important.len()), 4),
         // A mesh's coordinate table and a material's parts lie inside their section's span.
         Section::span(*b"MESH", meshes_at, materials_at - meshes_at, count(ir.shapes.len()), MESH_BYTES as u32),
-        Section::span(*b"MT12", materials_at, textures_at - materials_at, count(ir.materials.len()), MATERIAL_BYTES as u32),
         Section::records(*b"TEXR", textures_at, count(ir.textures.len()), TEXTURE_BYTES as u32),
         Section::bytes(*b"NAME", names_at, names_size),
         Section::bytes(*b"GEOM", geometry_at, geometry_size),
         Section::bytes(*b"TIMG", images_at, images_size),
     ];
+    table.extend(material_sections);
     let sections_at = b.at();
     for section in &table {
         b.u32(u32::from_le_bytes(section.name));
@@ -994,7 +1019,7 @@ pub fn names(bytes: &[u8]) -> Result<ModelNames> {
         Ok((s.count as usize, s.at as usize, s.stride as usize))
     };
     let ((joints, joints_at, joint_stride), (materials, materials_at, material_stride), (textures, textures_at, texture_stride)) =
-        (place(b"JNTS")?, place(b"MT12")?, place(b"TEXR")?);
+        (place(b"JNTS")?, place(b"MATL")?, place(b"TEXR")?);
     Ok(ModelNames {
         joints: list(joints, joints_at, joint_stride, JOINT_BYTES - 8)?,
         materials: list(materials, materials_at, material_stride, 0)?,
@@ -1039,15 +1064,19 @@ mod tests {
         assert!((6..HEADER_WORDS).all(|k| word(k * 4) == 0), "the header's room past the table's place is zero");
         let table = sections(&bytes).unwrap();
         let names: Vec<&[u8; 4]> = table.iter().map(|s| &s.name).collect();
-        assert_eq!(names, [b"MODL", b"JNTS", b"STEP", b"JMSH", b"DMTX", b"ENVL", b"MIXS", b"IBND", b"IMPT", b"MESH", b"MT12", b"TEXR", b"NAME", b"GEOM", b"TIMG"]);
+        assert_eq!(names, [b"MODL", b"JNTS", b"STEP", b"JMSH", b"DMTX", b"ENVL", b"MIXS", b"IBND", b"IMPT", b"MESH", b"TEXR", b"NAME", b"GEOM", b"TIMG",
+            b"MATL", b"GXMT", b"FORM", b"SLOT", b"GXTG", b"GXTM", b"GXWP", b"FROW", b"FTEX", b"FINP"]);
         assert!(table.iter().all(|s| s.flags == SECTION_REQUIRED && u64::from(s.count) * u64::from(s.stride) <= u64::from(s.size)));
-        // 12's arrays in 12's order, each after the one before, all past the header and before the scalars.
-        for pair in table[1..].windows(2) {
+        // The arrays in file order, each after the one before, all past the header; the scalars after the images.
+        let mut placed: Vec<Section> = table[1..].to_vec();
+        placed.sort_by_key(|s| (s.at, s.size));
+        for pair in placed.windows(2) {
             assert!(pair[0].at + pair[0].size <= pair[1].at, "{:?} then {:?}", pair[0], pair[1]);
         }
         assert!(table[1].at as usize >= HEADER_WORDS * 4);
         let modl = section(&table, b"MODL").unwrap();
-        assert_eq!(modl.at, table[14].at + table[14].size);
+        let images = section(&table, b"TIMG").unwrap();
+        assert_eq!(modl.at, images.at + images.size);
         assert_eq!((word(modl.at as usize), word(modl.at as usize + 4)), (2, 3));
         assert_eq!(section(&table, b"MESH").unwrap().count, 1);
         assert_eq!(section(&table, b"JNTS").unwrap().count, 0);
