@@ -3578,32 +3578,8 @@ bool RendererVk::debug_copy_selected_display_to_readback(const DisplayTexture& s
 void RendererVk::debug_log_backbuffer_readback() {
     captures_.finished(completed_fence_value(), [](Captures::Capture& capture) {
         vk::Context::get().invalidate(*capture.readback);
-        const auto* pixels = reinterpret_cast<const std::uint8_t*>(capture.readback->mapped);
-        const unsigned width = capture.width;
-        const unsigned height = capture.height;
-        const std::size_t count = static_cast<std::size_t>(width) * height;
-        std::vector<std::uint8_t> rgba;
-        if (capture.form == Captures::Form::Half) {
-            // The halves as 10-bit words (the capture's range ends at 1, as the SDR view), then as RGBA8.
-            std::vector<std::uint8_t> words(count * 4u);
-            half4_to_ten_bit(pixels, words.data(), width, height, capture.pitch, width * 4u);
-            rgba.resize(count * 4u);
-            ten_bit_to_rgba8(words.data(), rgba.data(), width, height, width * 4u, width * 4u);
-            pixels = rgba.data();
-        } else if (capture.form == Captures::Form::TenBit) {
-            rgba.resize(count * 4u);
-            ten_bit_to_rgba8(pixels, rgba.data(), width, height, capture.pitch, width * 4u);
-            pixels = rgba.data();
-        }
-        const unsigned red = capture.form == Captures::Form::Bgra8 ? 2u : 0u;
-        const unsigned blue = capture.form == Captures::Form::Bgra8 ? 0u : 2u;
-        std::vector<std::uint8_t> rgb(count * 3u);
-        for (std::size_t i = 0; i < count; ++i) {
-            rgb[i * 3u] = pixels[i * 4u + red];
-            rgb[i * 3u + 1u] = pixels[i * 4u + 1u];
-            rgb[i * 3u + 2u] = pixels[i * 4u + blue];
-        }
-        write_ppm_async(std::move(capture.path), std::move(rgb), width, height);
+        write_capture_rows(std::move(capture.path), reinterpret_cast<const std::uint8_t*>(capture.readback->mapped),
+                           capture.width, capture.height, capture.pitch, capture.form);
     });
 }
 
