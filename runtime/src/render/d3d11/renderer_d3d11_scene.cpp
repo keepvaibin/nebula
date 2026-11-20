@@ -63,41 +63,6 @@ bool ensure_staging(d3d11::ComPtr<ID3D11Texture2D>& staging, unsigned width, uns
     return SUCCEEDED(d3d11::Context::get().device()->CreateTexture2D(&desc, nullptr, &staging));
 }
 
-// The staging copy's pixels as RGBA8 rows (a 10-bit picture converted), or empty when it cannot be read.
-std::vector<std::uint8_t> read_staging(ID3D11DeviceContext1* context, ID3D11Texture2D* staging, unsigned width, unsigned height) {
-    std::vector<std::uint8_t> rgba;
-    D3D11_TEXTURE2D_DESC desc{};
-    staging->GetDesc(&desc);
-    D3D11_MAPPED_SUBRESOURCE mapped{};
-    if (FAILED(context->Map(staging, 0u, D3D11_MAP_READ, 0u, &mapped))) {
-        return rgba;
-    }
-    rgba.resize(static_cast<std::size_t>(width) * height * 4u);
-    const auto* rows = static_cast<const std::uint8_t*>(mapped.pData);
-    if (desc.Format == DXGI_FORMAT_R10G10B10A2_UNORM) {
-        ten_bit_to_rgba8(rows, rgba.data(), width, height, mapped.RowPitch, width * 4u);
-    } else {
-        for (unsigned y = 0; y < height; ++y) {
-            std::memcpy(rgba.data() + static_cast<std::size_t>(y) * width * 4u, rows + static_cast<std::size_t>(y) * mapped.RowPitch,
-                        static_cast<std::size_t>(width) * 4u);
-        }
-    }
-    context->Unmap(staging, 0u);
-    return rgba;
-}
-
-// RGBA8 rows written as a binary PPM off the render thread, by the writer finish_pictures waits for
-// (renderer_common.h).
-void write_rgba_ppm_async(std::string path, const std::vector<std::uint8_t>& rgba, unsigned width, unsigned height) {
-    std::vector<std::uint8_t> rgb(static_cast<std::size_t>(width) * height * 3u);
-    for (std::size_t i = 0, n = rgb.size() / 3u; i < n; ++i) {
-        rgb[i * 3u] = rgba[i * 4u];
-        rgb[i * 3u + 1u] = rgba[i * 4u + 1u];
-        rgb[i * 3u + 2u] = rgba[i * 4u + 2u];
-    }
-    write_ppm_async(std::move(path), std::move(rgb), width, height);
-}
-
 }  // namespace
 
 // ---- scene target sets ----
@@ -1324,11 +1289,14 @@ bool RendererD3D11::debug_copy_selected_display_to_readback(const DisplayTexture
 
 void RendererD3D11::debug_log_backbuffer_readback() {
     captures_.finished(completed_fence_value(), [this](Captures::Capture& capture) {
-        // read_staging reads by the staging texture's own format (10-bit words to RGBA8).
-        const std::vector<std::uint8_t> rgba = read_staging(context(), capture.readback.Get(), capture.width, capture.height);
-        if (!rgba.empty()) {
-            write_rgba_ppm_async(std::move(capture.path), rgba, capture.width, capture.height);
+        D3D11_MAPPED_SUBRESOURCE mapped{};
+        if (FAILED(context()->Map(capture.readback.Get(), 0u, D3D11_MAP_READ, 0u, &mapped))) {
+            std::cerr << "[capture] the picture's copy could not be read: " << capture.path << '\n';
+            return;
         }
+        write_capture_rows(std::move(capture.path), static_cast<const std::uint8_t*>(mapped.pData), capture.width,
+                           capture.height, mapped.RowPitch, capture.form);
+        context()->Unmap(capture.readback.Get(), 0u);
     });
 }
 

@@ -643,16 +643,6 @@ void copy_texture_out(id<MTLCommandBuffer> commands, id<MTLTexture> texture, id<
     [blit endEncoding];
 }
 
-void write_rgb(std::string path, const std::uint8_t* rgba, unsigned width, unsigned height) {
-    std::vector<std::uint8_t> rgb(static_cast<std::size_t>(width) * height * 3u);
-    for (std::size_t i = 0, n = rgb.size() / 3u; i < n; ++i) {
-        rgb[i * 3u] = rgba[i * 4u];
-        rgb[i * 3u + 1u] = rgba[i * 4u + 1u];
-        rgb[i * 3u + 2u] = rgba[i * 4u + 2u];
-    }
-    write_ppm_async(std::move(path), std::move(rgb), width, height);
-}
-
 }  // namespace
 
 std::shared_ptr<mtl::Buffer> RendererMtl::capture_buffer(std::uint64_t bytes, const char* name) {
@@ -692,14 +682,8 @@ bool RendererMtl::debug_copy_selected_display_to_readback(const DisplayTexture& 
 
 void RendererMtl::debug_log_backbuffer_readback() {
     captures_.finished(completed_fence_value(), [](Captures::Capture& capture) {
-        const auto* pixels = reinterpret_cast<const std::uint8_t*>(capture.readback->mapped);
-        if (capture.form == Captures::Form::TenBit) {
-            std::vector<std::uint8_t> rgba(static_cast<std::size_t>(capture.width) * capture.height * 4u);
-            ten_bit_to_rgba8(pixels, rgba.data(), capture.width, capture.height, capture.pitch, capture.width * 4u);
-            write_rgb(std::move(capture.path), rgba.data(), capture.width, capture.height);
-        } else {
-            write_rgb(std::move(capture.path), pixels, capture.width, capture.height);
-        }
+        write_capture_rows(std::move(capture.path), reinterpret_cast<const std::uint8_t*>(capture.readback->mapped),
+                           capture.width, capture.height, capture.pitch, capture.form);
     });
 }
 

@@ -6976,34 +6976,13 @@ void RendererD3D12::debug_log_backbuffer_readback() {
         capture.readback.held.Reset();
         const unsigned width = capture.width;
         const unsigned height = capture.height;
-        const std::size_t count = static_cast<std::size_t>(width) * height;
         const D3D12_RANGE range{0, static_cast<SIZE_T>(capture.pitch) * height};
         void* mapped = nullptr;
         d3d_check(capture.readback.buffer->Map(0, &range, &mapped), "Map capture readback");
         const D3D12_RANGE no_write{0, 0};
         const ScopeExit unmap([&]() noexcept { capture.readback.buffer->Unmap(0, &no_write); });
-        const auto* rows = static_cast<const std::uint8_t*>(mapped);
-        std::vector<std::uint8_t> rgba(count * 4u);
-        if (capture.form == Captures::Form::Half) {
-            // The halves as the 10-bit format's words (the capture's range ends at 1, as the SDR view), then as RGBA8.
-            std::vector<std::uint8_t> words(count * 4u);
-            half4_to_ten_bit(rows, words.data(), width, height, capture.pitch, width * 4u);
-            ten_bit_to_rgba8(words.data(), rgba.data(), width, height, width * 4u, width * 4u);
-        } else if (capture.form == Captures::Form::TenBit) {
-            ten_bit_to_rgba8(rows, rgba.data(), width, height, capture.pitch, width * 4u);
-        } else {
-            for (unsigned y = 0u; y < height; ++y) {
-                std::memcpy(rgba.data() + static_cast<std::size_t>(y) * width * 4u,
-                            rows + static_cast<std::size_t>(y) * capture.pitch, static_cast<std::size_t>(width) * 4u);
-            }
-        }
-        std::vector<std::uint8_t> rgb(count * 3u);
-        for (std::size_t i = 0; i < count; ++i) {
-            rgb[i * 3u] = rgba[i * 4u];
-            rgb[i * 3u + 1u] = rgba[i * 4u + 1u];
-            rgb[i * 3u + 2u] = rgba[i * 4u + 2u];
-        }
-        write_ppm_async(std::move(capture.path), std::move(rgb), width, height);
+        write_capture_rows(std::move(capture.path), static_cast<const std::uint8_t*>(mapped), width, height,
+                           capture.pitch, capture.form);
     });
 }
 

@@ -2,6 +2,7 @@
 // What both renderers share (renderer_common.h).
 
 #include "galaxy/render/renderer_common.h"
+#include "galaxy/render/post_process_settings.h"
 #include "galaxy/platform_time.h"
 
 #if defined(_WIN32)
@@ -434,6 +435,40 @@ void write_ppm_async(std::string path, std::vector<std::uint8_t> rgb, unsigned w
         --g_picture_files_open;
         g_picture_files_done.notify_all();
     }).detach();
+}
+
+void write_capture_rows(std::string path, const std::uint8_t* rows, unsigned width, unsigned height, unsigned pitch,
+                        CaptureForm form) {
+    const std::size_t count = static_cast<std::size_t>(width) * height;
+    const unsigned packed = width * 4u;
+    std::vector<std::uint8_t> rgba;
+    if (form == CaptureForm::Half) {
+        // The halves as the 10-bit target's words (the capture's range ends at 1, as the SDR view), then as RGBA8.
+        std::vector<std::uint8_t> words(count * 4u);
+        half4_to_ten_bit(rows, words.data(), width, height, pitch, packed);
+        rgba.resize(count * 4u);
+        ten_bit_to_rgba8(words.data(), rgba.data(), width, height, packed, packed);
+    } else if (form == CaptureForm::TenBit) {
+        rgba.resize(count * 4u);
+        ten_bit_to_rgba8(rows, rgba.data(), width, height, pitch, packed);
+    }
+    if (!rgba.empty()) {
+        rows = rgba.data();
+        pitch = packed;
+    }
+    const unsigned red = form == CaptureForm::Bgra8 ? 2u : 0u;
+    const unsigned blue = 2u - red;
+    std::vector<std::uint8_t> rgb(count * 3u);
+    for (unsigned y = 0u; y < height; ++y) {
+        const std::uint8_t* in = rows + static_cast<std::size_t>(y) * pitch;
+        std::uint8_t* out = rgb.data() + static_cast<std::size_t>(y) * width * 3u;
+        for (unsigned x = 0u; x < width; ++x, in += 4, out += 3) {
+            out[0] = in[red];
+            out[1] = in[1];
+            out[2] = in[blue];
+        }
+    }
+    write_ppm_async(std::move(path), std::move(rgb), width, height);
 }
 
 void wait_picture_files() {
