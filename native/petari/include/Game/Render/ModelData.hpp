@@ -130,22 +130,22 @@ public:
     static ModelData* loadMaterials(void* pFile);
 
     u32 getJointCount() const {
-        return static_cast< u32 >(mFile->joint_count);
+        return static_cast< u32 >(mView.joint_count);
     }
     u32 getMaterialCount() const {
-        return static_cast< u32 >(mFile->material_count);
+        return static_cast< u32 >(mView.material_count);
     }
     u32 getMeshCount() const {
-        return static_cast< u32 >(mFile->mesh_count);
+        return static_cast< u32 >(mView.mesh_count);
     }
     u32 getTextureCount() const {
-        return static_cast< u32 >(mTextureOwner->mFile->texture_count);
+        return static_cast< u32 >(mTextureOwner->mView.texture_count);
     }
     void useTexturesOf(ModelData* pOwner) {
         mTextureOwner = pOwner->mTextureOwner;
     }
     u32 getFullWeightCount() const {
-        return static_cast< u32 >(mFile->full_weight_count);
+        return static_cast< u32 >(mView.full_weight_count);
     }
     u8 getScaleMode() const {
         return static_cast< u8 >(mFile->flags & 15);
@@ -155,7 +155,7 @@ public:
         return &mJoints[index];
     }
     Joint* getRootNode() const {
-        return mFile->joint_count != 0 ? &mJoints[0] : nullptr;
+        return mView.joint_count != 0 ? &mJoints[0] : nullptr;
     }
     Material* getMaterialAt(u32 index) const {
         return &mMaterials[index];
@@ -168,13 +168,13 @@ public:
     s32 findMaterial(const char* pName) const;
     s32 findTexture(const char* pName) const;
     const char* getJointName(u32 index) const {
-        return name(reinterpret_cast< const NebulaModelJoint* >(at(mFile->joints_at))[index].name_at);
+        return name(reinterpret_cast< const NebulaModelJoint* >(at(mView.joints_at))[index].name_at);
     }
     const char* getMaterialName(u32 index) const {
-        return name(reinterpret_cast< const NebulaModelMaterial* >(at(mFile->materials_at))[index].name_at);
+        return name(reinterpret_cast< const NebulaModelMaterial* >(at(mView.materials_at))[index].name_at);
     }
     const char* getTextureName(u32 index) const {
-        return mTextureOwner->name(reinterpret_cast< const NebulaModelTexture* >(mTextureOwner->at(mTextureOwner->mFile->textures_at))[index].name_at);
+        return mTextureOwner->name(reinterpret_cast< const NebulaModelTexture* >(mTextureOwner->at(mTextureOwner->mView.textures_at))[index].name_at);
     }
 
     // A texture's record and how it samples, as the game may change them.
@@ -187,10 +187,10 @@ public:
     }
 
     u32 getDrawMtxJoint(u32 index) const {
-        return reinterpret_cast< const NebulaModelDrawMatrix* >(at(mFile->draw_matrices_at))[index].index;
+        return reinterpret_cast< const NebulaModelDrawMatrix* >(at(mView.draw_matrices_at))[index].index;
     }
     const f32 (*getInverseBinds() const)[4] {
-        return reinterpret_cast< const f32 (*)[4] >(at(mFile->inverse_binds_at));
+        return reinterpret_cast< const f32 (*)[4] >(at(mView.inverse_binds_at));
     }
 
     // The first vertex of the first mesh: its place, and its normal when it has them.
@@ -212,6 +212,7 @@ public:
     void setResourceName(const char* pName);
 
     const NebulaModelHeader* mFile;
+    NebulaModelView mView;  // the arrays' places and counts, from the section table at load
     Joint* mJoints;
     Material* mMaterials;
     Mesh* mMeshes;

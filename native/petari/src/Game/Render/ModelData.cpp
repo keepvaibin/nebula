@@ -55,11 +55,27 @@ u32 nebula_name_hash(const char* pName) {
 
 static ModelData* loadFile(void* pFile) {
     const NebulaModelHeader* pHeader = static_cast< const NebulaModelHeader* >(pFile);
-    if (pHeader->magic != NEBULA_MODEL_MAGIC || pHeader->version != NEBULA_MODEL_VERSION) {
-        NEBULA_PANIC("a model file the importer did not write");
-    }
     ModelData* pData = new ModelData();
     pData->mFile = pHeader;
+    // Its arrays by name, once (FRAME-MODEL 2.8): a model this reader cannot read stops the load, naming why.
+    const NebulaModelCheck check =
+        nebula_model_view(pFile, pHeader->magic == NEBULA_MODEL_MAGIC ? pHeader->size : 0u, &pData->mView);
+    if (check.fault != NEBULA_MODEL_FINE) {
+        char section[5];
+        nebula_model_section_text(check.what, section);
+        switch (check.fault) {
+        case NEBULA_MODEL_OTHER_VERSION:
+            NEBULA_PANIC("a model file of version %u; this build reads version %u", check.what, NEBULA_MODEL_VERSION);
+        case NEBULA_MODEL_MISSING_SECTION:
+            NEBULA_PANIC("a model file without its section %s", section);
+        case NEBULA_MODEL_UNKNOWN_REQUIRED:
+            NEBULA_PANIC("a model file needs section %s, which this build does not read", section);
+        case NEBULA_MODEL_BAD_SECTION:
+            NEBULA_PANIC("a model file whose section %s does not fit the file", section);
+        default:
+            NEBULA_PANIC("a model file the importer did not write");
+        }
+    }
 
     switch (pHeader->flags & 15) {
     case NEBULA_SCALE_SOFTIMAGE:
@@ -73,10 +89,10 @@ static ModelData* loadFile(void* pFile) {
         break;
     }
 
-    if (pHeader->joint_count != 0) {
-        pData->mJoints = new Joint[pHeader->joint_count];
-        const NebulaModelJoint* pFiles = reinterpret_cast< const NebulaModelJoint* >(pData->at(pHeader->joints_at));
-        for (u32 i = 0; i < pHeader->joint_count; i++) {
+    if (pData->mView.joint_count != 0) {
+        pData->mJoints = new Joint[pData->mView.joint_count];
+        const NebulaModelJoint* pFiles = reinterpret_cast< const NebulaModelJoint* >(pData->at(pData->mView.joints_at));
+        for (u32 i = 0; i < pData->mView.joint_count; i++) {
             const NebulaModelJoint& rFile = pFiles[i];
             Joint& rJoint = pData->mJoints[i];
             memset(static_cast< void* >(&rJoint), 0, sizeof(rJoint));
@@ -95,14 +111,14 @@ static ModelData* loadFile(void* pFile) {
             rJoint.mTransformInfo.mTranslate.z = rFile.translation[2];
         }
     }
-    if (pHeader->mesh_count != 0) {
-        pData->mMeshes = new Mesh[pHeader->mesh_count];
+    if (pData->mView.mesh_count != 0) {
+        pData->mMeshes = new Mesh[pData->mView.mesh_count];
     }
     pData->mTextureOwner = pData;
-    if (pHeader->texture_count != 0) {
-        pData->mTextures = new ResTIMG[pHeader->texture_count];
-        const NebulaModelTexture* pFiles = reinterpret_cast< const NebulaModelTexture* >(pData->at(pHeader->textures_at));
-        for (u32 i = 0; i < pHeader->texture_count; i++) {
+    if (pData->mView.texture_count != 0) {
+        pData->mTextures = new ResTIMG[pData->mView.texture_count];
+        const NebulaModelTexture* pFiles = reinterpret_cast< const NebulaModelTexture* >(pData->at(pData->mView.textures_at));
+        for (u32 i = 0; i < pData->mView.texture_count; i++) {
             const NebulaModelTexture& rFile = pFiles[i];
             ResTIMG& rTexture = pData->mTextures[i];
             memset(&rTexture, 0, sizeof(rTexture));
@@ -122,15 +138,15 @@ static ModelData* loadFile(void* pFile) {
             rTexture.mImage = const_cast< u8* >(pData->at(rFile.record_at));
         }
     }
-    if (pHeader->material_count != 0) {
-        pData->mMaterials = new Material[pHeader->material_count];
-        for (u32 i = 0; i < pHeader->material_count; i++) {
+    if (pData->mView.material_count != 0) {
+        pData->mMaterials = new Material[pData->mView.material_count];
+        for (u32 i = 0; i < pData->mView.material_count; i++) {
             pData->mMaterials[i].init(pData, i);
         }
     }
-    if (pHeader->mesh_count != 0) {
-        const NebulaModelMesh* pFiles = reinterpret_cast< const NebulaModelMesh* >(pData->at(pHeader->meshes_at));
-        for (u32 i = 0; i < pHeader->mesh_count; i++) {
+    if (pData->mView.mesh_count != 0) {
+        const NebulaModelMesh* pFiles = reinterpret_cast< const NebulaModelMesh* >(pData->at(pData->mView.meshes_at));
+        for (u32 i = 0; i < pData->mView.mesh_count; i++) {
             Mesh& rMesh = pData->mMeshes[i];
             rMesh.mFile = &pFiles[i];
             rMesh.mIndex = i;
@@ -139,10 +155,10 @@ static ModelData* loadFile(void* pFile) {
         }
     }
     // Each joint's materials, chained in the order its entries take them.
-    if (pHeader->joint_count != 0) {
-        const NebulaModelJoint* pFiles = reinterpret_cast< const NebulaModelJoint* >(pData->at(pHeader->joints_at));
-        const u32* pList = reinterpret_cast< const u32* >(pData->at(pHeader->joint_meshes_at));
-        for (u32 i = 0; i < pHeader->joint_count; i++) {
+    if (pData->mView.joint_count != 0) {
+        const NebulaModelJoint* pFiles = reinterpret_cast< const NebulaModelJoint* >(pData->at(pData->mView.joints_at));
+        const u32* pList = reinterpret_cast< const u32* >(pData->at(pData->mView.joint_meshes_at));
+        for (u32 i = 0; i < pData->mView.joint_count; i++) {
             Material* pLast = nullptr;
             for (u32 k = 0; k < pFiles[i].mesh_count; k++) {
                 Material* pMaterial = &pData->mMaterials[pList[pFiles[i].first_mesh + k]];
@@ -159,7 +175,7 @@ static ModelData* loadFile(void* pFile) {
 }
 
 ModelData::ModelData()
-    : mFile(nullptr), mJoints(nullptr), mMaterials(nullptr), mMeshes(nullptr), mTextures(nullptr), mTextureOwner(nullptr),
+    : mFile(nullptr), mView{}, mJoints(nullptr), mMaterials(nullptr), mMeshes(nullptr), mTextures(nullptr), mTextureOwner(nullptr),
       mBasicMtxCalc(nullptr), mGpuModel(0), mTextureStamp(0), mResourceHash(0) {
 }
 
@@ -175,7 +191,7 @@ ModelData* ModelData::load(void* pFile) {
     const NebulaHostServices* pHost = nebula_host();
     u32 firstMesh = 0;
     pData->mGpuModel = pHost->model_register(pHost->user, pData->mFile, &firstMesh);
-    for (u32 i = 0; i < pData->mFile->mesh_count; i++) {
+    for (u32 i = 0; i < pData->mView.mesh_count; i++) {
         pData->mMeshes[i].mGpuMesh = firstMesh + i;
     }
     return pData;
@@ -186,11 +202,11 @@ ModelData* ModelData::loadMaterials(void* pFile) {
 }
 
 s32 ModelData::findJoint(const char* pName) const {
-    return findByHash(at(mFile->joints_at), mFile->joint_count, sizeof(NebulaModelJoint), offsetof(NebulaModelJoint, name_hash), pName);
+    return findByHash(at(mView.joints_at), mView.joint_count, sizeof(NebulaModelJoint), offsetof(NebulaModelJoint, name_hash), pName);
 }
 
 s32 ModelData::findMaterial(const char* pName) const {
-    return findByHash(at(mFile->materials_at), mFile->material_count, sizeof(NebulaModelMaterial), offsetof(NebulaModelMaterial, name_hash), pName);
+    return findByHash(at(mView.materials_at), mView.material_count, sizeof(NebulaModelMaterial), offsetof(NebulaModelMaterial, name_hash), pName);
 }
 
 s32 ModelData::findTexture(const char* pName) const {
@@ -210,13 +226,13 @@ void ModelData::setTexture(u32 index, const ResTIMG& rTexture) {
 }
 
 void ModelData::show() {
-    for (u32 i = 0; i < mFile->mesh_count; i++) {
+    for (u32 i = 0; i < mView.mesh_count; i++) {
         mMeshes[i].show();
     }
 }
 
 void ModelData::hide() {
-    for (u32 i = 0; i < mFile->mesh_count; i++) {
+    for (u32 i = 0; i < mView.mesh_count; i++) {
         mMeshes[i].hide();
     }
 }
@@ -229,7 +245,7 @@ void ModelData::setResourceName(const char* pName) {
         }
     }
     mResourceHash = hashName(hashName(2166136261u, pBase, true), "/", false);
-    for (u32 i = 0; i < mFile->material_count; i++) {
+    for (u32 i = 0; i < mView.material_count; i++) {
         mMaterials[i].mSourceHash = hashName(mResourceHash, getMaterialName(i), false);
     }
 }

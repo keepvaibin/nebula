@@ -3,6 +3,7 @@
    block's start. crates/nebula-import/src/cook/model_write.rs writes this layout. */
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
 #include "nebula_limits.h"
 
@@ -11,7 +12,7 @@ extern "C" {
 #endif
 
 #define NEBULA_MODEL_MAGIC 0x4C444D4Eu /* "NMDL" */
-#define NEBULA_MODEL_VERSION 12u /* 12: no hit records, paint lights, glow shapes or flat bits (the tracer's) */
+#define NEBULA_MODEL_VERSION 13u /* 13: the arrays found by name in a section table (12 had them at fixed header words) */
 #define NEBULA_MODEL_NONE NEBULA_NONE32
 
 enum { NEBULA_SCALE_BASIC = 0, NEBULA_SCALE_SOFTIMAGE = 1, NEBULA_SCALE_MAYA = 2 };
@@ -46,17 +47,182 @@ static inline int nebula_alpha_test_always(uint32_t compare0, uint32_t compare1,
     }
 }
 
+/* The block's start. Its arrays are found by name in the section table at `sections_at` (FRAME-MODEL 2.7.2, 2.8): a
+   reader finds each section it knows, reads the fields it knows of each entry (fields are only added at an entry's
+   end, so a section's stride may be larger than the reader's) and skips one it does not know, unless that one is
+   flagged required: then it refuses the file, naming the section. */
 typedef struct NebulaModelHeader {
     uint32_t magic, version, size, flags;
+    uint32_t section_count, sections_at;
+    uint32_t reserved[22]; /* zero: the header keeps 12's 112 bytes, so every array lies where 12 put it */
+} NebulaModelHeader;
+
+typedef struct NebulaModelSection {
+    uint32_t name; /* four characters, the first in the low byte: NEBULA_MODEL_SECTION('J', 'N', 'T', 'S') */
+    uint32_t flags; /* NEBULA_MODEL_SECTION_REQUIRED */
+    uint32_t at, size; /* bytes from the block's start */
+    uint32_t count, stride; /* entries and bytes an entry; a byte section has stride 1 and count its size */
+} NebulaModelSection;
+
+#define NEBULA_MODEL_SECTION(a, b, c, d) ((uint32_t)(a) | (uint32_t)(b) << 8 | (uint32_t)(c) << 16 | (uint32_t)(d) << 24)
+#define NEBULA_MODEL_SECTION_REQUIRED 1u
+
+/* The section named `name`, or null. */
+static inline const NebulaModelSection* nebula_model_section(const NebulaModelHeader* header, uint32_t name) {
+    const NebulaModelSection* sections =
+        (const NebulaModelSection*)((const unsigned char*)header + header->sections_at);
+    for (uint32_t i = 0; i < header->section_count; i++) {
+        if (sections[i].name == name) {
+            return &sections[i];
+        }
+    }
+    return 0;
+}
+
+/* What a reader of 13 uses, resolved once from the sections at load (nebula_model_view). */
+typedef struct NebulaModelView {
     uint32_t joint_count, step_count, joint_mesh_count;
     uint32_t draw_matrix_count, full_weight_count, envelope_count, mix_count;
+    uint32_t inverse_bind_count, important_count; /* inverse binds as written: none when the disc has none */
     uint32_t mesh_count, material_count, texture_count;
     uint32_t source_vertex_count; /* the shared positions the file had: a game that rewrites them writes this many */
     uint32_t joints_at, steps_at, joint_meshes_at;
     uint32_t draw_matrices_at, envelopes_at, mixes_at, inverse_binds_at, important_at;
     uint32_t meshes_at, materials_at, textures_at;
+    uint32_t names_at, names_size;
     uint32_t geometry_at, geometry_size; /* every stream, for one copy to the GPU */
-} NebulaModelHeader;
+    uint32_t images_at, images_size;     /* the texture images (each texture's record_at lies inside) */
+} NebulaModelView;
+
+/* nebula_model_view's answer: NEBULA_MODEL_FINE, or what stops the load and the section (or version) it names. */
+enum {
+    NEBULA_MODEL_FINE = 0,
+    NEBULA_MODEL_NOT_A_MODEL,        /* no magic, or a header or table past the block's end */
+    NEBULA_MODEL_OTHER_VERSION,      /* `what`: the version found */
+    NEBULA_MODEL_MISSING_SECTION,    /* `what`: the section's name */
+    NEBULA_MODEL_UNKNOWN_REQUIRED,   /* `what`: a required section this reader does not know */
+    NEBULA_MODEL_BAD_SECTION,        /* `what`: a section past the block's end, or with entries shorter than this reader's */
+};
+typedef struct NebulaModelCheck {
+    uint32_t fault, what;
+} NebulaModelCheck;
+
+/* The sections of 13, in file order: the view's fields each fills, its least stride. */
+typedef struct NebulaModelSectionUse {
+    uint32_t name, at_field, count_field, size_field, stride;
+} NebulaModelSectionUse;
+#define NEBULA_MODEL_VIEW_FIELD(field) ((uint32_t)(offsetof(NebulaModelView, field) / 4u))
+#define NEBULA_MODEL_VIEW_NONE 0xFFFFFFFFu
+static const NebulaModelSectionUse kNebulaModelSections[] = {
+    {NEBULA_MODEL_SECTION('M', 'O', 'D', 'L'), NEBULA_MODEL_VIEW_NONE, NEBULA_MODEL_VIEW_NONE, NEBULA_MODEL_VIEW_NONE, 8u},
+    {NEBULA_MODEL_SECTION('J', 'N', 'T', 'S'), NEBULA_MODEL_VIEW_FIELD(joints_at), NEBULA_MODEL_VIEW_FIELD(joint_count), NEBULA_MODEL_VIEW_NONE, 96u},
+    {NEBULA_MODEL_SECTION('S', 'T', 'E', 'P'), NEBULA_MODEL_VIEW_FIELD(steps_at), NEBULA_MODEL_VIEW_FIELD(step_count), NEBULA_MODEL_VIEW_NONE, 8u},
+    {NEBULA_MODEL_SECTION('J', 'M', 'S', 'H'), NEBULA_MODEL_VIEW_FIELD(joint_meshes_at), NEBULA_MODEL_VIEW_FIELD(joint_mesh_count), NEBULA_MODEL_VIEW_NONE, 4u},
+    {NEBULA_MODEL_SECTION('D', 'M', 'T', 'X'), NEBULA_MODEL_VIEW_FIELD(draw_matrices_at), NEBULA_MODEL_VIEW_FIELD(draw_matrix_count), NEBULA_MODEL_VIEW_NONE, 8u},
+    {NEBULA_MODEL_SECTION('E', 'N', 'V', 'L'), NEBULA_MODEL_VIEW_FIELD(envelopes_at), NEBULA_MODEL_VIEW_FIELD(envelope_count), NEBULA_MODEL_VIEW_NONE, 8u},
+    {NEBULA_MODEL_SECTION('M', 'I', 'X', 'S'), NEBULA_MODEL_VIEW_FIELD(mixes_at), NEBULA_MODEL_VIEW_FIELD(mix_count), NEBULA_MODEL_VIEW_NONE, 8u},
+    {NEBULA_MODEL_SECTION('I', 'B', 'N', 'D'), NEBULA_MODEL_VIEW_FIELD(inverse_binds_at), NEBULA_MODEL_VIEW_FIELD(inverse_bind_count), NEBULA_MODEL_VIEW_NONE, 48u},
+    {NEBULA_MODEL_SECTION('I', 'M', 'P', 'T'), NEBULA_MODEL_VIEW_FIELD(important_at), NEBULA_MODEL_VIEW_FIELD(important_count), NEBULA_MODEL_VIEW_NONE, 4u},
+    {NEBULA_MODEL_SECTION('M', 'E', 'S', 'H'), NEBULA_MODEL_VIEW_FIELD(meshes_at), NEBULA_MODEL_VIEW_FIELD(mesh_count), NEBULA_MODEL_VIEW_NONE, 100u},
+    {NEBULA_MODEL_SECTION('M', 'T', '1', '2'), NEBULA_MODEL_VIEW_FIELD(materials_at), NEBULA_MODEL_VIEW_FIELD(material_count), NEBULA_MODEL_VIEW_NONE, 208u},
+    {NEBULA_MODEL_SECTION('T', 'E', 'X', 'R'), NEBULA_MODEL_VIEW_FIELD(textures_at), NEBULA_MODEL_VIEW_FIELD(texture_count), NEBULA_MODEL_VIEW_NONE, 40u},
+    {NEBULA_MODEL_SECTION('N', 'A', 'M', 'E'), NEBULA_MODEL_VIEW_FIELD(names_at), NEBULA_MODEL_VIEW_NONE, NEBULA_MODEL_VIEW_FIELD(names_size), 1u},
+    {NEBULA_MODEL_SECTION('G', 'E', 'O', 'M'), NEBULA_MODEL_VIEW_FIELD(geometry_at), NEBULA_MODEL_VIEW_NONE, NEBULA_MODEL_VIEW_FIELD(geometry_size), 1u},
+    {NEBULA_MODEL_SECTION('T', 'I', 'M', 'G'), NEBULA_MODEL_VIEW_FIELD(images_at), NEBULA_MODEL_VIEW_NONE, NEBULA_MODEL_VIEW_FIELD(images_size), 1u},
+};
+#define NEBULA_MODEL_SECTION_COUNT (sizeof(kNebulaModelSections) / sizeof(kNebulaModelSections[0]))
+
+/* A model block of `size` bytes resolved into `view`: every section of 13 found and inside the block, each entry at
+   least as long as this reader reads, and no required section it does not know. On a fault `view` is partly filled
+   and must not be used. */
+static inline NebulaModelCheck nebula_model_view(const void* block, uint32_t size, NebulaModelView* view) {
+    NebulaModelCheck check = {NEBULA_MODEL_FINE, 0u};
+    const NebulaModelHeader* header = (const NebulaModelHeader*)block;
+    if (size < sizeof(NebulaModelHeader) || header->magic != NEBULA_MODEL_MAGIC) {
+        check.fault = NEBULA_MODEL_NOT_A_MODEL;
+        return check;
+    }
+    if (header->version != NEBULA_MODEL_VERSION) {
+        check.fault = NEBULA_MODEL_OTHER_VERSION;
+        check.what = header->version;
+        return check;
+    }
+    if (header->size > size || header->sections_at > header->size ||
+        header->section_count > (header->size - header->sections_at) / sizeof(NebulaModelSection) ||
+        header->sections_at % 4u != 0u) {
+        check.fault = NEBULA_MODEL_NOT_A_MODEL;
+        return check;
+    }
+    uint32_t* fields = (uint32_t*)view;
+    for (uint32_t i = 0; i < sizeof(NebulaModelView) / 4u; i++) {
+        fields[i] = 0u;
+    }
+    const NebulaModelSection* sections =
+        (const NebulaModelSection*)((const unsigned char*)block + header->sections_at);
+    for (uint32_t i = 0; i < header->section_count; i++) {
+        uint32_t known = 0u;
+        for (uint32_t k = 0; k < NEBULA_MODEL_SECTION_COUNT; k++) {
+            if (kNebulaModelSections[k].name == sections[i].name) {
+                known = 1u;
+            }
+        }
+        if (!known && (sections[i].flags & NEBULA_MODEL_SECTION_REQUIRED) != 0u) {
+            check.fault = NEBULA_MODEL_UNKNOWN_REQUIRED;
+            check.what = sections[i].name;
+            return check;
+        }
+    }
+    for (uint32_t k = 0; k < NEBULA_MODEL_SECTION_COUNT; k++) {
+        const NebulaModelSectionUse* use = &kNebulaModelSections[k];
+        const NebulaModelSection* section = nebula_model_section(header, use->name);
+        if (section == 0) {
+            check.fault = NEBULA_MODEL_MISSING_SECTION;
+            check.what = use->name;
+            return check;
+        }
+        const uint64_t entries = (uint64_t)section->count * section->stride;
+        if (section->at > header->size || section->size > header->size - section->at || section->stride < use->stride ||
+            entries > section->size) {
+            check.fault = NEBULA_MODEL_BAD_SECTION;
+            check.what = use->name;
+            return check;
+        }
+        if (use->at_field != NEBULA_MODEL_VIEW_NONE) {
+            fields[use->at_field] = section->at;
+        }
+        if (use->count_field != NEBULA_MODEL_VIEW_NONE) {
+            fields[use->count_field] = section->count;
+        }
+        if (use->size_field != NEBULA_MODEL_VIEW_NONE) {
+            fields[use->size_field] = section->size;
+        }
+        if (use->name == NEBULA_MODEL_SECTION('M', 'O', 'D', 'L')) {
+            if (section->count < 1u) {
+                check.fault = NEBULA_MODEL_BAD_SECTION;
+                check.what = use->name;
+                return check;
+            }
+            const uint32_t* scalars = (const uint32_t*)((const unsigned char*)block + section->at);
+            view->full_weight_count = scalars[0];
+            view->source_vertex_count = scalars[1];
+        }
+    }
+    /* Envelopes blend joints by their inverse binds: one a joint (12's readers assumed it and read past the array). */
+    if (view->envelope_count != 0u && view->inverse_bind_count < view->joint_count) {
+        check.fault = NEBULA_MODEL_BAD_SECTION;
+        check.what = NEBULA_MODEL_SECTION('I', 'B', 'N', 'D');
+    }
+    return check;
+}
+
+/* A section's name as text ("JNTS"), for a message. */
+static inline void nebula_model_section_text(uint32_t name, char out[5]) {
+    for (int i = 0; i < 4; i++) {
+        const char c = (char)(name >> (8 * i));
+        out[i] = c >= 0x20 && c < 0x7F ? c : '?';
+    }
+    out[4] = 0;
+}
 
 
 /* Joints by number, the number animation tracks and the game use. */
