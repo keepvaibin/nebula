@@ -115,9 +115,13 @@ public:
 };
 
 // A model's texture as its draws take it (FRAME-MODEL 2.10): its image (the texture record RenderTexture keys by),
-// its size and its sampler, decoded at the cook.
+// its host id, its size and its sampler, decoded at the cook. The id of a model's own image is taken at load: the
+// image is in the model file's read-only view, never rewritten, and its id is freed with that view's arena, which
+// also holds the model. A picture swapped in (setTexture) has id 0 and is looked up at use (RenderTexture::idOf),
+// so a rewrite of it is handed over again.
 struct ModelTexture {
     const u8* mImage;
+    u32 mId;
     u32 mWidth;
     u32 mHeight;
     NebulaModelSampler mSampler;
@@ -192,6 +196,8 @@ public:
         return &mTextureOwner->mTextures[index];
     }
     void setTexture(u32 index, const ResTIMG& rTexture);
+    // The host id of a texture: kept from load, or looked up for a picture swapped in.
+    u32 getTextureId(u32 index) const;
     u32 getTextureStamp() const {
         return mTextureOwner->mTextureStamp;
     }

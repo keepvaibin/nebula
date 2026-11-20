@@ -3,7 +3,6 @@
 #include "Game/Render/FrameList.hpp"
 #include "Game/Render/Model.hpp"
 #include "Game/Render/ModelData.hpp"
-#include "Game/Render/RenderTexture.hpp"
 #include "Game/Render/Transform.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include <nebula_format.h>
@@ -783,9 +782,8 @@ u32 MaterialDraw::tableOf(s32 formIndex, const NebulaModelFormEntry& rForm) {
         memset(&rOut, 0, sizeof(rOut));
         const u32 number = pMaterial->getTextureIndex(map);
         if (number != NEBULA_NONE32) {
-            const ModelTexture* pTexture = pData->getTexture(number);
-            rOut.texture = RenderTexture::idOf(pTexture->mImage);
-            setFrameSampler(rOut, pTexture->mSampler);
+            rOut.texture = pData->getTextureId(number);
+            setFrameSampler(rOut, pData->getTexture(number)->mSampler);
         }
         const ImageEdit* pImage = findImage(map);
         if (pImage != nullptr) {

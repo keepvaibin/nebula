@@ -122,6 +122,7 @@ static ModelData* loadFile(void* pFile) {
             const NebulaModelTexture& rFile = pData->entry< NebulaModelTexture >(pData->mView.textures_at, pData->mView.texture_stride, i);
             ModelTexture& rTexture = pData->mTextures[i];
             rTexture.mImage = pData->at(rFile.record_at);
+            rTexture.mId = RenderTexture::idOf(rTexture.mImage);
             rTexture.mWidth = rFile.width;
             rTexture.mHeight = rFile.height;
             rTexture.mSampler = pData->entry< NebulaModelSampler >(pData->mView.samplers_at, pData->mView.sampler_stride, rFile.sampler);
@@ -211,11 +212,17 @@ void ModelData::setTexture(u32 index, const ResTIMG& rTexture) {
     // A disc picture: its sampler from the console's codes until E3 step 4 cooks them (P-155).
     ModelTexture& rOwn = mTextureOwner->mTextures[index];
     rOwn.mImage = rTexture.image();
+    rOwn.mId = 0;
     rOwn.mWidth = rTexture.mWidth;
     rOwn.mHeight = rTexture.mHeight;
     rOwn.mSampler = nebula_sampler_from_codes(rTexture.mWrapS, rTexture.mWrapT, rTexture.mMinType, rTexture.mMagType,
                                               rTexture.mMaxAnisotropy, rTexture.mMinLod, rTexture.mMaxLod, rTexture.mLodBias);
     mTextureOwner->mTextureStamp++;
+}
+
+u32 ModelData::getTextureId(u32 index) const {
+    const ModelTexture& rTexture = mTextureOwner->mTextures[index];
+    return rTexture.mId != 0 ? rTexture.mId : RenderTexture::idOf(rTexture.mImage);
 }
 
 void ModelData::show() {
