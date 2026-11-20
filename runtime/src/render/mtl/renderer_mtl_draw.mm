@@ -136,27 +136,16 @@ std::uint32_t RendererMtl::sampler_slot(const SamplerKey& key) {
     return allocation.index;
 }
 
-void RendererMtl::write_texture_list(const std::uint32_t* pairs, std::uint32_t count, gpu::Address& lists,
-                                     std::uint32_t& first) {
-    TextureListBuffer& list = texture_lists_[frame_slot_];
-    if (!list.buffer || texture_lists_used_ + count > list.capacity) {
-        // The old buffer is read by the draws already recorded: it goes with this frame.
-        if (list.buffer) {
-            frame_->retired_buffers.push_back(std::move(list.buffer));
-        }
-        const std::uint32_t capacity = std::max(4096u, 2u * std::max(list.capacity, count));
-        list.buffer = mtl::Context::get().create_buffer(std::uint64_t{capacity} * 8u, mtl::Storage::Shared, "texture lists");
-        if (!list.buffer) {
-            list.capacity = 0u;
-            throw std::runtime_error("[textures] the texture lists could not be made");
-        }
-        list.capacity = capacity;
-        texture_lists_used_ = 0u;
+bool RendererMtl::make_texture_list_chunk(std::uint32_t pairs, std::uint32_t*& mapped, gpu::Address& address) {
+    std::shared_ptr<mtl::Buffer> buffer =
+        mtl::Context::get().create_buffer(std::uint64_t{pairs} * 8u, mtl::Storage::Shared, "texture lists");
+    if (!buffer) {
+        return false;
     }
-    std::memcpy(list.buffer->mapped + std::size_t{texture_lists_used_} * 8u, pairs, std::size_t{count} * 8u);
-    lists = list.buffer->address;
-    first = texture_lists_used_;
-    texture_lists_used_ += count;
+    mapped = reinterpret_cast<std::uint32_t*>(buffer->mapped);
+    address = buffer->address;
+    texture_list_chunks_.push_back(std::move(buffer));
+    return true;
 }
 
 gpu::TextureArrays RendererMtl::draw_texture_arrays(gpu::Address lists) {

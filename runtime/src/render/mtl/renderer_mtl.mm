@@ -435,9 +435,7 @@ void RendererMtl::shutdown() {
         persistent_tables_.clear();
         retired_tables_.clear();
         free_tables_.clear();
-        for (TextureListBuffer& list : texture_lists_) {
-            list = TextureListBuffer{};
-        }
+        texture_list_chunks_.clear();
         zero_vertices_.reset();
         zero_stream_bytes_ = 0u;
         zero_stream_address_ = 0u;
@@ -679,7 +677,6 @@ void RendererMtl::begin_frame() {
     history_begin_matrix_ = matrix_ring_.cursor();
     index_ring_.begin_frame(frame_slot_);
     constant_ring_.begin_frame(frame_slot_);
-    texture_lists_used_ = 0u;
     encoder_.attach(nullptr, 0u, 0u);
     reset_draw_bindings();
     scene_pass_open_ = false;

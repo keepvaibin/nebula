@@ -1774,8 +1774,7 @@ void RendererVk::shutdown() {
         mirrored_backend_ = nullptr;
         mirrored_store_ = nullptr;
         uploads_store_ = nullptr;
-        texture_lists_ = {};
-        texture_lists_used_ = 0u;
+        texture_list_chunks_.clear();
         set_mod_post_compiler(nullptr, true);
         release_mod_post();
         post_.shutdown();
@@ -2104,7 +2103,6 @@ void RendererVk::begin_frame() {
     index_ring_.begin_frame(frame_slot_);
     constant_ring_.begin_frame(frame_slot_);
     constants_sets_.clear();
-    texture_lists_used_ = 0u;
     encoder_.attach(frame.commands);
     reset_draw_bindings();
     scene_pass_open_ = false;

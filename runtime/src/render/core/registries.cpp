@@ -152,6 +152,7 @@ void Registries::initialize(gpu::Device* device, DeviceGate& gate) {
     models_.assign(1u, GpuModel{});
     tables_.clear();
     tables_.resize(1u);
+    released_lists_.clear();
     slot_page_ = {};
     slot_page_used_ = 0u;
     slot_page_capacity_ = 0u;
@@ -585,6 +586,7 @@ void Registries::restart(gpu::Device* device) {
     pipelines_.clear();
     tables_.clear();
     tables_.resize(1u);
+    released_lists_.clear();
 
     for (const auto& [id, live] : live_models_) {
         const NebulaModelView& view = live.view;
@@ -876,6 +878,9 @@ void Registries::forget_textures(std::span<const std::uint32_t> freed, std::vect
     }
     for (const std::uint32_t id : dropped) {
         if (id < tables_.size() && tables_[id] != nullptr) {
+            if (tables_[id]->list_place.valid()) {
+                released_lists_.push_back(tables_[id]->list_place);
+            }
             if (!tables_[id]->has_target && tables_[id]->textures.ptr != 0u) {
                 retired.push_back(tables_[id]->textures);
             }
@@ -896,6 +901,11 @@ void Registries::retire_idle_tables(std::uint64_t frame, std::vector<gpu::Table>
         }
         table->textures = {};
         table->samplers = {};
+        if (table->list_place.valid()) {
+            released_lists_.push_back(table->list_place);
+        }
+        table->list_place = {};
+        std::vector<std::uint32_t>().swap(table->list_pairs);
         table->lists = 0u;
         table->list_first = 0u;
         table->walk_stamp = ~0ull;

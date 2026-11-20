@@ -1223,6 +1223,15 @@ void RenderCore::drop_device_state() {
     movie_mods_generation_ = movie_mod_folders_generation() + 1u;
 }
 
+// The lists of tables dropped or retired: free again once the GPU has passed the work recorded so far.
+void RenderCore::give_up_released_lists() {
+    registries_.take_released_lists(released_lists_);
+    for (const core::TextureLists::Place& place : released_lists_) {
+        texture_lists_.release(place, renderer_.submitted_fence_value() + 1u);
+    }
+    released_lists_.clear();
+}
+
 bool RenderCore::restart_renderer(const FrameMap& frame, bool same_card) {
     Renderer::Kept kept = renderer_.take_apart_lost_device();
     std::destroy_at(&renderer_);
@@ -1270,6 +1279,7 @@ bool RenderCore::restart_device() {
         texture_store_.shutdown();
         lap(steps.textures);
         registries_.lose_device();
+        texture_lists_.clear();
         display_pictures_.shutdown();
         drop_device_state();
         lap(steps.rest);
@@ -2093,6 +2103,7 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
         }
         retired_tables_.clear();
         registries_.forget_textures(freed_textures_, retired_tables_);
+        give_up_released_lists();
 #if defined(NEBULA_GPU_VULKAN) || defined(NEBULA_GPU_METAL) || defined(NEBULA_GPU_D3D11)
         // Draws with texture lists keep no tables: their lists are written each walk.
         if (!renderer_.bindless()) {
@@ -2113,6 +2124,7 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
             table_sweep_at_ = game_frame + core::Registries::kTableSweepFrames;
             retired_tables_.clear();
             registries_.retire_idle_tables(game_frame, retired_tables_, core::Registries::kTableIdleFrames);
+            give_up_released_lists();
 #if defined(NEBULA_GPU_VULKAN) || defined(NEBULA_GPU_METAL) || defined(NEBULA_GPU_D3D11)
             if (!renderer_.bindless()) {
                 for (const gpu::Table table : retired_tables_) {
