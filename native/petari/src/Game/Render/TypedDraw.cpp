@@ -29,6 +29,18 @@ namespace SiteTextures {
         pTexture->mLodBias = lodBias;
         pTexture->mMaxAniso = maxAniso;
     }
+
+    void setSampler(SiteTexture* pTexture, const NebulaModelSampler& rSampler) {
+        pTexture->mWrapS = rSampler.wrap_s;
+        pTexture->mWrapT = rSampler.wrap_t;
+        // The first level only (NEBULA_FILTER_NEAREST, _LINEAR), the nearest level (2, 3) or between levels (4, 5).
+        pTexture->mMinFilter = static_cast< u8 >(rSampler.mip_filter * 2u + rSampler.min_linear);
+        pTexture->mMagFilter = rSampler.mag_linear;
+        pTexture->mMaxAniso = rSampler.anisotropy;
+        pTexture->mMinLod = rSampler.min_lod;
+        pTexture->mMaxLod = rSampler.max_lod;
+        pTexture->mLodBias = rSampler.lod_bias;
+    }
 }  // namespace SiteTextures
 
 void SiteMaterial::init(NebulaShaderId shader, Blend blend, u8 depthFunc, bool depthWrite, u8 cull) {

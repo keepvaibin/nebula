@@ -13,6 +13,7 @@ class FurBank;
 class FurDrawer;
 class LiveActor;
 struct ResTIMG;
+struct ModelTexture;
 
 class FurCtrl {
 public:
@@ -21,7 +22,7 @@ public:
     void calcLayerForm();
     void drawFur();
     void createFurMap();
-    void setupFur(Model* pModel, ResTIMG* pLength, ResTIMG* pBody, u32 shape, u32 numLayers);
+    void setupFur(Model* pModel, ResTIMG* pLength, const ModelTexture* pBody, u32 shape, u32 numLayers);
     void setupFurClone(Model* pModel, FurCtrl* pOther);
 
     LiveActor* mActor;

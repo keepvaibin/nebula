@@ -145,7 +145,7 @@ FurDrawManager::FurDrawManager(u32 capacity) : NameObj("ファー描画マネー
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_Fur);
 }
 
-void FurCtrl::setupFur(Model* pModel, ResTIMG* pLength, ResTIMG* pBody, u32 shape, u32 numLayers) {
+void FurCtrl::setupFur(Model* pModel, ResTIMG* pLength, const ModelTexture* pBody, u32 shape, u32 numLayers) {
     ModelData* pData = pModel->getModelData();
     mModel = pModel;
     mShapeIndex = shape;

@@ -44,7 +44,7 @@ FurMulti::FurMulti(LiveActor* pActor, u32 count) {
     mFurCtrls = new FurCtrl*[count];
 }
 
-void FurMulti::setLayerDirect(u32 layer, u32 shape, u32 numLayers, FurParam* pParam, ResTIMG* pBody, ResTIMG* pLength, ResTIMG* pDensity) {
+void FurMulti::setLayerDirect(u32 layer, u32 shape, u32 numLayers, FurParam* pParam, const ModelTexture* pBody, ResTIMG* pLength, ResTIMG* pDensity) {
     mFurCtrls[layer] = new FurCtrl(mActor, pParam, false, 1);
     ModelData* pModelData = mModel->getModelData();
     FurMulti* pClone = MR::getFurDrawManager()->getFurBank()->check(pModelData, layer);
@@ -138,12 +138,12 @@ namespace MR {
             if (MR::isEqualSubString(pModelData->getMaterialName(i), "Fur")) {
                 shape = pModelData->getMaterialAt(i)->getMesh()->getIndex();
                 MR::FormattedName name("%sBody", pModelData->getMaterialName(i));
-                ResTIMG* pBody;
+                const ModelTexture* pBody;
 
                 if (isExistTexture(pActor, name.c_str())) {
                     pBody = getTexFromModel(name.c_str(), pActor);
                 } else {
-                    pBody = getResTIMG(pActor, 0);
+                    pBody = getModelTexture(pActor, 0);
                 }
 
                 name.format("%sLength.bti", pModelData->getMaterialName(i));

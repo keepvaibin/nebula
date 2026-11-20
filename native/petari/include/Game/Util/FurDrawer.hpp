@@ -9,6 +9,7 @@ class FurParam;
 class GameTexture;
 struct SiteMaterial;
 struct ResTIMG;
+struct ModelTexture;
 
 class FurDrawer {
 public:
@@ -22,7 +23,7 @@ public:
         f32 mCurve;
     };
 
-    FurDrawer(u32 numLayers, ResTIMG* pBody);
+    FurDrawer(u32 numLayers, const ModelTexture* pBody);
 
     // The fur material of every shell: lights and fog from rParam (FurMulti gives every layer both).
     void setupMaterial(const DynamicFurParam& rParam) const;

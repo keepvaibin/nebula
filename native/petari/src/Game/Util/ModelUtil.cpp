@@ -222,11 +222,11 @@ namespace MR {
         return isExistEffectTexMtx(getModelData(pActor));
     }
 
-    ResTIMG* getResTIMG(const LiveActor* pActor, int idx) {
-        return getResTIMG(getModelData(pActor), idx);
+    const ModelTexture* getModelTexture(const LiveActor* pActor, int idx) {
+        return getModelTexture(getModelData(pActor), idx);
     }
 
-    ResTIMG* getResTIMG(const ModelData* pModelData, int idx) {
+    const ModelTexture* getModelTexture(const ModelData* pModelData, int idx) {
         return pModelData->getTexture(idx);
     }
 

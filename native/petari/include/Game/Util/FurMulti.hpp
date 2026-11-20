@@ -8,12 +8,13 @@ class Model;
 class ModelData;
 class LiveActor;
 struct ResTIMG;
+struct ModelTexture;
 
 class FurMulti {
 public:
     FurMulti(LiveActor*, u32);
 
-    void setLayerDirect(u32 layer, u32 shape, u32 numLayers, FurParam* pParam, ResTIMG* pBody, ResTIMG* pLength, ResTIMG* pDensity);
+    void setLayerDirect(u32 layer, u32 shape, u32 numLayers, FurParam* pParam, const ModelTexture* pBody, ResTIMG* pLength, ResTIMG* pDensity);
     void addToManager();
     void offDraw(u32);
     void onDraw(u32);

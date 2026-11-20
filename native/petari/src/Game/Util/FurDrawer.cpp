@@ -5,6 +5,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/GameTexture.hpp"
+#include "Game/Render/ModelData.hpp"
 #include <cmath>
 
 namespace {
@@ -22,8 +23,8 @@ namespace {
     }
 }  // namespace
 
-FurDrawer::FurDrawer(u32 numLayers, ResTIMG* pBody)
-    : mBodyTexture(new GameTexture(pBody)), mFurTexture(), mNumLayers(numLayers), mLength(), mShells(new f32[numLayers]), mBrightness(),
+FurDrawer::FurDrawer(u32 numLayers, const ModelTexture* pBody)
+    : mBodyTexture(new GameTexture(*pBody)), mFurTexture(), mNumLayers(numLayers), mLength(), mShells(new f32[numLayers]), mBrightness(),
       mAlpha(), mColorBlend(), mFurUVScale(1.0f), mBodyUVScale(1.0f), mColor() {
     for (u32 layer = 0; layer < numLayers; layer++) {
         mShells[layer] = 0.0f;
