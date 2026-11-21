@@ -3,6 +3,7 @@
     python -X utf8 -I tools/plan/plan.py next | status | page | rows [ID] | start ID | land ID | blocked ID "WHY"
                                          | claim PACKAGE [--take-stale] | tool "TEXT" | toolfault --last --could-not "TEXT"
     (next, start, land, blocked, claim, tool, toolfault and status take --agent 1|2; 1 is the default)
+    (--no-push, before the command, or NEBULA_PLAN_NO_PUSH=1 in the environment: the progress branch is not pushed)
 
 The plan is `docs/plan/native/`: `steps.tsv` (order, step, package, title, package_needs, card_file, state, commit),
 the step cards in the three card files, the package row tables, `rows/<package>.tsv`. The repository's copy is the
@@ -43,10 +44,16 @@ tool     Writes a tool fault into BLOCKED.md under "tools" and into tool-faults.
 toolfault --last --could-not "TEXT": the sentence on what the agent's last tool fault stopped it from doing.
 status   Writes STATUS.md and prints it: steps landed, started, blocked, claims, the last five landings, the next step.
          The agent runs it at every start and after every context compaction; it is the only memory it needs.
-page     Writes three files into the live folder (page.py), from steps.tsv, the live state, the tool faults and
-         the gate's flakes.tsv and set-aside.tsv (in the live folder): progress.html (static, rewritten only when the tool or the step list changes),
-         progress-data.json (only what changes) and progress-local.html (the data embedded, for opening from disk).
-         Publish the first two. land, start, blocked and toolfault do it too, so the page is never behind.
+page     Writes the progress files into the live folder (page.py), from steps.tsv, the live state, the tool faults and
+         the gate's flakes.tsv and set-aside.tsv (in the live folder): progress.html (the complete page, the data
+         inside it: the file a person opens, it works from disk), STATUS.md (the same data as short plain text, any
+         C:/Users/<name>/ written ~/), publish/index.html (the page for the web: it fetches progress-data.json from
+         beside it) and publish/progress-data.json. The old names progress-local.html and progress-data.json (at the top
+         level) are removed. Every command that changes the state (start, land, blocked, claim, tool, toolfault) makes
+         them again at its end; a failure there prints one warning line and changes nothing of the command's result.
+         Then, when STATUS.md changed, one commit that holds exactly STATUS.md goes to origin as `progress` (a branch
+         with no history in common with main; plumbing commands in the main repository, no work folder touched;
+         message `Progress: N of M steps landed`). A failed push is one warning line. Nothing else is ever pushed.
 rows     What a card's "Rows." line means (closes whole / advances), for one step or all of them.
 
 Exit codes: 0 done; 1 refused or failed; 2 the command was wrong; 3 the same failure three times; 4 a tool or
@@ -878,14 +885,26 @@ def status_text(tree, work_root=WORK_ROOT, at=None, live=None):
     return "\n".join(out) + "\n"
 
 
+class PagePaths:
+    """The files of the progress page in the live folder: `html` (complete, the data inside), `status` (STATUS.md),
+    `index` and `data` (the pair for the web, in `publish`), `url` (the address it is published at, written by hand) and
+    `old` (names an earlier tool wrote, removed now)."""
+
+    def __init__(self, live=None):
+        d = live_dir(live)
+        self.html, self.status, self.url = d / "progress.html", d / "STATUS.md", d / "progress-url.txt"
+        self.publish = d / "publish"
+        self.index, self.data = self.publish / "index.html", self.publish / "progress-data.json"
+        self.old = (d / "progress-local.html", d / "progress-data.json")
+
+
 def page_paths(live=None):
-    """(progress.html, progress-data.json, progress-url.txt, progress-local.html)."""
-    d = live_dir(live)
-    return d / "progress.html", d / "progress-data.json", d / "progress-url.txt", d / "progress-local.html"
+    return PagePaths(live)
 
 
 def page_data(tree, live=None, at=None):
-    """(static, data): what never changes with progress (the step list), and what does."""
+    """(static, data, landings, faults): what never changes with progress (the step list), what does, and the landings and
+    the tool-fault events as the live folder has them (STATUS.md lists the last of each)."""
     steps = read_steps(tree, live)
     reasons = blocked_reasons(tree)
     for s in steps:
@@ -894,32 +913,138 @@ def page_data(tree, live=None, at=None):
     d = live_dir(live)
     claims = lv.read_claims(d)
     at = at or now()
-    return page.make_static(steps), page.make_data(steps, lv.read_landings(d), lv.read_state(d), claims, stale_of(tree, claims, at),
-                                                   lv.fault_groups(lv.read_faults(d)), count_flakes(live), lv.stamp(at),
-                                                   read_set_aside(live))
+    landings, events = lv.read_landings(d), lv.read_faults(d)
+    return (page.make_static(steps),
+            page.make_data(steps, landings, lv.read_state(d), claims, stale_of(tree, claims, at), lv.fault_groups(events),
+                           count_flakes(live), lv.stamp(at), read_set_aside(live)),
+            landings, events)
+
+
+class Written:
+    """What write_page made: the PagePaths, the `data` (page.make_data), the STATUS.md `text` and the numbers in it."""
+
+    def __init__(self, paths, data, text, landed, total):
+        self.paths, self.data, self.text, self.landed, self.total = paths, data, text, landed, total
+
+
+def write_if_changed(path, text):
+    """True when the file was written (it was not there, or held other text)."""
+    path = pathlib.Path(path)
+    try:
+        if path.read_bytes().decode("utf-8") == text:
+            return False
+    except (OSError, UnicodeDecodeError):
+        pass
+    atomic_write(path, text)
+    return True
 
 
 def write_page(tree, live=None, at=None):
-    """Writes the three files into the live folder: progress-data.json and progress-local.html (the data embedded, for
-    opening from disk) each time, progress.html only when its text changed, which it does when this tool or the plan's
-    step list changes and never because progress changed. Returns (html path, json path, local path, data)."""
-    html_path, json_path, _, local_path = page_paths(live)
-    static, data = page_data(tree, live, at)
+    """Writes every progress file into the live folder: progress.html (complete, the data inside), STATUS.md, and in
+    `publish` the pair for the web (index.html, rewritten only when its text changed, which it does when this tool or the
+    plan's step list changes and never because progress changed; progress-data.json). Removes the names an earlier tool
+    wrote. Returns a Written."""
+    paths = page_paths(live)
+    static, data, landings, events = page_data(tree, live, at)
+    status, landed, total = page.make_status(static, data, landings, events, data["generated"])
     with lv.locked(live_dir(live)):
-        html = page.render(static)
-        if not html_path.exists() or html_path.read_text(encoding="utf-8") != html:
-            atomic_write(html_path, html)
-        atomic_write(json_path, page.data_json(data))
-        atomic_write(local_path, page.render(static, data))
-    return html_path, json_path, local_path, data
+        paths.publish.mkdir(parents=True, exist_ok=True)
+        write_if_changed(paths.index, page.render(static))
+        write_if_changed(paths.data, page.data_json(data))
+        write_if_changed(paths.html, page.render(static, data))
+        write_if_changed(paths.status, status)
+        for old in paths.old:
+            old.unlink(missing_ok=True)
+    return Written(paths, data, status, landed, total)
+
+
+# ---- the progress branch ---------------------------------------------------------------------------------------
+
+PROGRESS_BRANCH = "refs/heads/progress"
+PUSH_OFF = "NEBULA_PLAN_NO_PUSH"
+GIT_WAIT = 60
+
+
+def push_enabled(a):
+    """False with --no-push, or when NEBULA_PLAN_NO_PUSH is set (and not 0 or empty) in the environment."""
+    if getattr(a, "no_push", False):
+        return False
+    return os.environ.get(PUSH_OFF, "") in ("", "0")
+
+
+def main_repo(tree):
+    """The main repository of the plan tree: its folder, whether the tree is that or one of its work folders. None when the
+    tree is no git tree."""
+    r = git(tree, "rev-parse", "--git-common-dir")
+    if r.returncode != 0 or not r.stdout.strip():
+        return None
+    common = pathlib.Path(r.stdout.strip())
+    if not common.is_absolute():
+        common = pathlib.Path(tree) / common
+    common = common.resolve()
+    return common.parent if common.name == ".git" else common
+
+
+def progress_git(repo, *args, stdin=None):
+    """git in the main repository (plumbing and the one push); the text in (`stdin`) goes in as it is, with its line ends,
+    and the output comes back stripped. A failure raises RuntimeError with its message."""
+    exe = GIT if pathlib.Path(GIT).exists() else "git"
+    r = subprocess.run([exe, "-C", str(repo), *args], input=stdin.encode("utf-8") if stdin is not None else None,
+                       capture_output=True, timeout=GIT_WAIT)
+    out, err = r.stdout.decode("utf-8", "replace").strip(), r.stderr.decode("utf-8", "replace").strip()
+    if r.returncode != 0:
+        raise RuntimeError("git %s: %s" % (args[0], (err or out)[-200:] or "exit %d" % r.returncode))
+    return out
+
+
+def publish_progress(repo, text, landed, total, remote="origin"):
+    """Puts STATUS.md's `text` on the branch `progress` of `remote`, as one commit holding that one file, made with git's
+    plumbing commands in `repo` (no work tree, no index, no checkout is touched). The branch shares no history with main:
+    its first commit has no parent, a later one has the branch's previous tip. Text the tip already has: nothing is made
+    or pushed. Returns what was done, in words; raises RuntimeError when git fails (a push that is refused too)."""
+    listed = progress_git(repo, "ls-remote", "--heads", remote, PROGRESS_BRANCH)
+    tip = listed.split()[0] if listed else ""
+    blob = progress_git(repo, "hash-object", "-w", "--no-filters", "--stdin", stdin=text)
+    if tip:
+        have = subprocess.run([GIT if pathlib.Path(GIT).exists() else "git", "-C", str(repo), "cat-file", "-e", tip + "^{commit}"],
+                              capture_output=True, text=True, timeout=GIT_WAIT).returncode == 0
+        if not have:
+            progress_git(repo, "fetch", "--quiet", remote, PROGRESS_BRANCH)       # FETCH_HEAD only: no ref, no work tree
+        try:
+            if progress_git(repo, "rev-parse", "%s:STATUS.md" % tip) == blob:
+                return "STATUS.md is what %s has: nothing pushed" % PROGRESS_BRANCH
+        except RuntimeError:
+            pass                                                                # the tip has no STATUS.md: it is new
+    tree = progress_git(repo, "mktree", stdin="100644 blob %s\tSTATUS.md\n" % blob)
+    commit = progress_git(repo, "commit-tree", tree, *(["-p", tip] if tip else []), "-m",
+                          "Progress: %d of %d steps landed" % (landed, total))
+    progress_git(repo, "push", "--quiet", remote, "%s:%s" % (commit, PROGRESS_BRANCH))
+    return "%s %s on %s (%s)" % ("pushed" if tip else "pushed the first commit", commit[:9], PROGRESS_BRANCH, "after " + tip[:9] if tip else "no parent")
+
+
+def regenerate(a, say_result=False):
+    """After a change of state (and for `page`): every progress file is made again, then the progress branch is pushed when
+    STATUS.md changed. Never a reason to fail the command: a failure is one warning line (a failed push is its own line)."""
+    try:
+        written = write_page(a.tree, a.live)
+    except Exception as e:  # noqa: BLE001 - the files are a report; the command's own result stands without them
+        say("plan.py: warning: the progress files were not made again: %s: %s" % (type(e).__name__, " ".join(str(e).split())[:200]))
+        return None
+    if push_enabled(a):
+        try:
+            repo = main_repo(a.tree)
+            if repo is None:
+                raise RuntimeError("%s is no git tree" % a.tree)
+            result = publish_progress(repo, written.text, written.landed, written.total)
+            if say_result:
+                say("progress branch: " + result)
+        except Exception as e:  # noqa: BLE001
+            say("plan.py: warning: the progress branch was not pushed: %s: %s" % (type(e).__name__, " ".join(str(e).split())[:200]))
+    return written
 
 
 def refresh_page(a):
-    """After a change of state: the page's files are made again. Never a reason to fail the command."""
-    try:
-        write_page(a.tree, a.live)
-    except (OSError, ValueError, lv.Busy):
-        pass
+    regenerate(a)
 
 
 # ---- commands ------------------------------------------------------------------------------------------------
@@ -1233,7 +1358,7 @@ def cmd_land(a):
         say("LANDED %s as %s%s in %d s. Verdict by kind: %s." % (
             a.id, code_commit, (" (main has it as %s)" % verdict.commit) if verdict.commit else "", seconds,
             summary or "no check rows read"))
-        say("Publish the page again: progress.html with progress-data.json, to the address in %s." % page_paths(a.live)[2].as_posix())
+        say("The progress files are made again (the page to open: %s)." % page_paths(a.live).html.as_posix())
         return 0
     git(folder, "reset", "--hard", "HEAD~1")        # the state commit goes; the next try makes it again
     say("NOT LANDED: %s. Verdict by kind: %s." % (a.id, summary or "no check rows read"))
@@ -1306,23 +1431,35 @@ def cmd_status(a):
     text = status_text(a.tree, a.work_root, live=a.live)
     atomic_write(native(a.tree) / "STATUS.md", text)
     sys.stdout.write(text)
-    url = page_paths(a.live)[2]
+    url = page_paths(a.live).url
     if url.exists():
         say("\nProgress page: %s" % url.read_text(encoding="utf-8").strip())
     return 0
 
 
 def cmd_page(a):
-    html_path, json_path, local_path, data = write_page(a.tree, a.live)
+    written = write_page(a.tree, a.live)
+    p, data = written.paths, written.data
     steps = data["steps"]
     count = lambda state: sum(1 for e in steps.values() if e["state"] == state)
-    say("progress.html:        %s (%d bytes)  publish" % (html_path.as_posix(), html_path.stat().st_size))
-    say("progress-data.json:   %s (%d bytes)  publish" % (json_path.as_posix(), json_path.stat().st_size))
-    say("progress-local.html:  %s (%d bytes)  for opening from disk; do not publish" % (local_path.as_posix(), local_path.stat().st_size))
+    say("progress.html:           %s (%d bytes)  the page to open, the data inside, works from disk" % (p.html.as_posix(), p.html.stat().st_size))
+    say("STATUS.md:               %s (%d bytes)  the same data as plain text" % (p.status.as_posix(), p.status.stat().st_size))
+    say("publish/index.html:      %s (%d bytes)  for the web" % (p.index.as_posix(), p.index.stat().st_size))
+    say("publish/progress-data.json: %s (%d bytes)  for the web, beside index.html" % (p.data.as_posix(), p.data.stat().st_size))
     say("%d steps landed, %d started, %d blocked, %d tool fault kinds, %d flakes." % (
         count("landed"), count("started"), count("blocked"), len(data["tool_faults"]), data["flakes"]))
-    say("Publish progress.html with progress-data.json as its supporting file; after a landing publish again to the same address "
-        "(the address is kept in %s). progress.html changes only when the tool or the plan's step list changes." % page_paths(a.live)[2].as_posix())
+    say("Publish the two files of the publish folder together (the address is kept in %s); index.html changes only when the tool "
+        "or the plan's step list changes." % p.url.as_posix())
+    if push_enabled(a):
+        try:
+            repo = main_repo(a.tree)
+            if repo is None:
+                raise RuntimeError("%s is no git tree" % a.tree)
+            say("progress branch: " + publish_progress(repo, written.text, written.landed, written.total))
+        except Exception as e:  # noqa: BLE001 - a failed push is a warning, never the command's result
+            say("plan.py: warning: the progress branch was not pushed: %s: %s" % (type(e).__name__, " ".join(str(e).split())[:200]))
+    else:
+        say("progress branch: not pushed (--no-push or %s)." % PUSH_OFF)
     return 0
 
 
@@ -1332,6 +1469,7 @@ def parser():
     p.add_argument("--work-root", default=WORK_ROOT)
     p.add_argument("--live", default=LIVE, help="the live folder (claims, state, tool faults, the page)")
     p.add_argument("--failures", default=FAILURES, help="the three-failure store")
+    p.add_argument("--no-push", action="store_true", help="do not push STATUS.md to the progress branch (also: %s=1)" % PUSH_OFF)
     p.add_argument("--tablet", default=TABLET)
     p.add_argument("--tablet-wait", type=float, default=TABLET_WAIT)
     who = argparse.ArgumentParser(add_help=False)

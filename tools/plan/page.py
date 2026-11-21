@@ -1,25 +1,34 @@
-"""page.py: the native plan's progress page (package T13, item 6).
+"""page.py: the native plan's progress page and status text (package T13 item 6, T4b).
 
-Three files, so that each update is cheap for the agent that publishes it after every landing:
+What a person opens (D:/NebulaWork/plan/native):
 
-  progress.html        static: the layout, the script and what never changes with progress (the step ids, titles,
-                       packages and their order, embedded once from steps.tsv). Rewritten only when this tool or the
-                       plan's step list changes, never because progress changed.
-  progress-data.json   only what changes: per step its state, agent, commit and landing time (keyed by step id; a step
-                       still open is not in it), the blocked list with reasons, the claims, the tool-fault table, the
-                       flake count, a generated-at time. Compact JSON.
-  progress-local.html  the same page with the data embedded, for opening from disk (a page opened from disk cannot fetch
-                       the data file). Not published.
+  progress.html          the complete page, the data inside it: it works from disk (a page opened from disk cannot fetch
+                         a file). Made again each time progress changes.
+  STATUS.md              a short plain-text view of the same data (make_status).
 
-The published pair is progress.html plus progress-data.json. The page fetches `progress-data.json` from beside it; when
-that fails it draws the data embedded in the page, if there is any (progress-local.html), else it says so. One
-self-contained file each: no outside script, font or style, no address of any kind. Light and dark by
+What is published on the web (the `publish` folder beside them):
+
+  publish/index.html           the page with no data in it: layout, script and what never changes with progress (the
+                               step ids, titles, packages and their order, from steps.tsv). Rewritten only when this tool
+                               or the plan's step list changes, never because progress changed. It fetches
+                               `progress-data.json` from beside it; when that cannot be loaded, within three seconds it
+                               says so in place of "Loading...".
+  publish/progress-data.json   only what changes: per step its state, agent, commit and landing time (keyed by step id; a
+                               step still open is not in it), the blocked list with reasons, the claims, the tool-fault
+                               table, the flake count, a generated-at time. Compact JSON.
+
+One self-contained file each: no outside script, font or style, no address of any kind. Light and dark by
 prefers-color-scheme, colours as tokens on :root, system fonts, readable at phone width with no sideways scroll.
 """
 import json
+import re
 
 TITLE = "Nebula Native Progress"
 LAST_LANDINGS = 10
+LAST_FAULTS = 20
+# What the published page says in place of "Loading..." when its data cannot be loaded, and how long it waits at most.
+NO_DATA = "The progress data could not be loaded. On the PC, open progress.html in the folder above this one."
+WAIT_SECONDS = 3
 
 
 def make_static(steps):
@@ -139,14 +148,12 @@ h2 { font-size: 1.05rem; margin: 28px 0 10px; }
 .kv { display: grid; grid-template-columns: 7.5rem 1fr; gap: 2px 10px; font-size: 0.9rem; margin-top: 6px; }
 .kv dt { color: var(--muted); margin: 0; } .kv dd { margin: 0; }
 .err { font-family: ui-monospace, SFMono-Regular, Consolas, Menlo, monospace; font-size: 0.82rem; }
-.note { color: var(--warn); font-size: 0.875rem; margin: 8px 0; }
 </style>
 </head>
 <body>
 <main>
 <h1>Nebula Native Progress</h1>
 <div class="muted" id="when">Loading...</div>
-<div class="note" id="note" hidden></div>
 <div id="app"></div>
 </main>
 <script type="application/json" id="plan-static">__STATIC__</script>__LOCAL__
@@ -308,29 +315,32 @@ h2 { font-size: 1.05rem; margin: 28px 0 10px; }
     });
   }
 
+  /* The complete page (progress.html) has its data inside and draws it at once. The published page (index.html) fetches
+     progress-data.json from beside it; when that fails, or has not answered in __WAIT__ seconds, it says so in place of
+     "Loading...". Data that comes late is still drawn. */
+  var drawn = false;
+  function show(d) { drawn = true; draw(d); }
+  function failed() {
+    if (!drawn) document.getElementById("when").textContent = "__NODATA__";
+  }
   function embedded() {
     var e = document.getElementById("embedded-data");
     if (!e) return null;
     try { return JSON.parse(e.textContent); } catch (x) { return null; }
   }
-  function fallback() {
-    var d = embedded();
-    if (d) {
-      var note = document.getElementById("note");
-      note.hidden = false;
-      note.textContent = "Shown from the data written into this page; the data file beside it could not be read.";
-      draw(d);
-    } else {
-      document.getElementById("when").textContent = "No data: progress-data.json could not be read and none is embedded.";
+  var inside = embedded();
+  if (inside) {
+    show(inside);
+  } else {
+    setTimeout(failed, __WAIT__ * 1000);
+    try {
+      fetch("progress-data.json", { cache: "no-store" })
+        .then(function (r) { if (!r.ok) throw new Error("status " + r.status); return r.json(); })
+        .then(show)
+        .catch(failed);
+    } catch (e) {
+      failed();
     }
-  }
-  try {
-    fetch("progress-data.json", { cache: "no-store" })
-      .then(function (r) { if (!r.ok) throw new Error("status " + r.status); return r.json(); })
-      .then(draw)
-      .catch(fallback);
-  } catch (e) {
-    fallback();
   }
 })();
 </script>
@@ -340,10 +350,78 @@ h2 { font-size: 1.05rem; margin: 28px 0 10px; }
 
 
 def render(static, data=None):
-    """The page. With `data` (the local copy) the data is embedded as well; without, the page is the static one."""
+    """The page. With `data` the complete page (progress.html: the data inside, so it works from disk); without, the one
+    for publishing (index.html: it fetches progress-data.json from beside it)."""
     local = ""
     if data is not None:
         local = '\n<script type="application/json" id="embedded-data">%s</script>' % embed(data)
     head, _, rest = PAGE.partition("__STATIC__")      # one pass: no title or reason can be taken for a marker
     mid, _, tail = rest.partition("__LOCAL__")
+    tail = tail.replace("__WAIT__", str(WAIT_SECONDS)).replace("__NODATA__", NO_DATA)
     return head + embed(static) + mid + local + tail
+
+
+# STATUS.md ----------------------------------------------------------------------------------------------------------
+
+# A path that starts with the home folder of a person on this PC: C:/Users/<name>/ (either slash direction, any case).
+HOME = re.compile(r"C:[\\/]+Users[\\/]+[^\\/\s|]+[\\/]", re.I)
+
+
+def home_short(text):
+    """`text` with each C:/Users/<name>/ at the start of a path written as ~/ ."""
+    return HOME.sub("~/", text)
+
+
+def cell(value):
+    """One table cell: one line, no pipe."""
+    return " ".join(str(value if value is not None else "").replace("|", "/").split())
+
+
+def minute(stamp):
+    """'2026-11-20T10:05:33' as '2026-11-20 10:05'; a text that is not a time stays as it is."""
+    m = re.match(r"^(\d{4}-\d\d-\d\d)[T ](\d\d:\d\d)", stamp or "")
+    return "%s %s" % m.groups() if m else cell(stamp)
+
+
+def table(head, rows):
+    lines = ["| " + " | ".join(head) + " |", "|" + "|".join(" --- " for _ in head) + "|"]
+    lines += ["| " + " | ".join(cell(c) for c in row) + " |" for row in rows]
+    return lines
+
+
+def make_status(static, data, landings, faults, now):
+    """STATUS.md: the same facts as the page, as short plain text. `static`, `data`: make_static, make_data; `landings`:
+    live.read_landings (every one); `faults`: live.read_faults (every event, oldest first); `now`: the time (text).
+    Returns (text, landed, total). A path that starts with C:/Users/<name>/ is written with ~/ ."""
+    total = static["total"]
+    by = data["steps"]
+    state = lambda sid: by[sid]["state"] if sid in by else "open"
+    title = {s["id"]: s["title"] for s in static["steps"]}
+    landed = sum(1 for s in static["steps"] if state(s["id"]) == "landed")
+    started = [s for s in static["steps"] if state(s["id"]) == "started"]
+    out = ["# Nebula native plan: status", "", "Written %s." % minute(now), "",
+           "Steps landed: %d of %d (%d%%)." % (landed, total, round(100.0 * landed / total) if total else 0), ""]
+    if started:
+        out += ["In work now:"] + ["- %s %s (agent %s)" % (s["id"], s["title"], by[s["id"]].get("agent", "1")) for s in started]
+    else:
+        out.append("In work now: Nothing started.")
+    out += ["", "## Packages", ""]
+    rows = []
+    for p in static["packages"]:
+        done = sum(1 for s in static["steps"] if s["package"] == p["package"] and state(s["id"]) == "landed")
+        rows.append((p["package"], done, p["total"]))
+    out += table(["Package", "Landed", "Of"], rows)
+    last = list(landings)[-LAST_LANDINGS:][::-1]
+    out += ["", "## Last %d landings" % LAST_LANDINGS, ""]
+    out += table(["When", "Step", "Title", "Commit"], [(minute(r["finished"]), r["step"], title.get(r["step"], ""), r["commit"])
+                                                       for r in last]) if last else ["None yet."]
+    out += ["", "## Blocked", ""]
+    out += ["- %s %s: %s" % (b["step"], title.get(b["step"], ""), " ".join((b["reason"] or "(no reason written)").split()))
+            for b in data["blocked"]] or ["Nothing is blocked."]
+    out += ["", "## Tool faults", "", "%d tool fault%s recorded." % (len(faults), "" if len(faults) == 1 else "s")]
+    if faults:
+        out += ["", "The last %d:" % LAST_FAULTS, ""]
+        out += table(["When", "Step", "Test", "What happened", "What the agent could not do"],
+                     [(minute(f["time"]), f["step"] or "-", f["test"] or f["check"], f["first_error"], f["could_not"] or "-")
+                      for f in list(faults)[-LAST_FAULTS:][::-1]])
+    return home_short("\n".join(out) + "\n"), landed, total

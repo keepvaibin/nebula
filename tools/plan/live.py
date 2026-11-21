@@ -7,7 +7,7 @@ it a temporary folder), never in an untracked file inside one work folder:
     claims.tsv        package, agent, time, branch       who holds which package
     tool-faults.tsv   time, agent, step, kind, check, test, first_error, run_folder, could_not
     landings.tsv      step, commit, finished, seconds, agent
-    progress.html, progress-data.json, progress-url.txt  (page.py and plan.py page)
+    progress.html, STATUS.md, publish/index.html, publish/progress-data.json, progress-url.txt  (page.py and plan.py page)
 
 Every change is made under one lock folder (`lock`, made with mkdir, which is atomic) and written as a whole file
 replaced in one step, so a reader never sees half a file. A lock folder older than two minutes is taken as left by a

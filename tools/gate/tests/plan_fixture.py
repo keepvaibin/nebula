@@ -163,7 +163,8 @@ class Tree:
         self.work = self.dir / "work"
         self.store = self.dir / "failures.tsv"
         self.live = self.dir / "live"
-        self.env = mock.patch.dict(os.environ, git_env(TEMPLATE["config"]))
+        # plan.py pushes the progress branch after a change of state: the tests push nothing unless a test turns it on.
+        self.env = mock.patch.dict(os.environ, dict(git_env(TEMPLATE["config"]), **{plan.PUSH_OFF: "1"}))
         self.live_patch = mock.patch.object(plan, "LIVE", str(self.live))
 
     def __enter__(self):
@@ -212,9 +213,12 @@ def setup_module():
     SAFETY["live"] = pathlib.Path(tempfile.mkdtemp(prefix="plan-live-safety-"))
     SAFETY["patch"] = mock.patch.object(plan, "LIVE", str(SAFETY["live"]))
     SAFETY["patch"].start()
+    SAFETY["env"] = mock.patch.dict(os.environ, {plan.PUSH_OFF: "1"})    # a test of plan.py never pushes the real repository's branch
+    SAFETY["env"].start()
 
 
 def teardown_module():
+    SAFETY["env"].stop()
     SAFETY["patch"].stop()
     shutil.rmtree(SAFETY["live"], ignore_errors=True)
     tearDownModule()

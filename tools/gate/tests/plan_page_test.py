@@ -1,13 +1,18 @@
-"""plan_page_test.py: the progress page (package T13, item 6), three files: progress.html (static: layout, script and the
-step list, rewritten only when the tool or the step list changes), progress-data.json (only what changes) and
-progress-local.html (the data embedded, for opening from disk). The data matches steps.tsv, the live state, BLOCKED.md,
-tool-faults.tsv and the gate's flakes.tsv and set-aside.tsv (in the live folder); no file names an outside address; the page's script draws the data (run by node when
-node is installed). A temporary live folder each: no game, no build, no network, nothing of D:/NebulaWork.
+"""plan_page_test.py: the progress page and the status text (package T13 item 6, T4b). In the live folder: progress.html (the
+complete page, the data inside it, works from disk), STATUS.md (the same data as short plain text, any C:/Users/<name>/ written
+~/), and in `publish` the pair for the web (index.html: static, rewritten only when the tool or the step list changes; and
+progress-data.json: only what changes). The old names are removed. Every command that changes the state makes them again at
+its end, and a failure there is one warning line that changes nothing of the command's result. The progress branch (STATUS.md
+as the one file of one commit on `progress`) is pushed to a fake origin, a bare repository. The data matches steps.tsv, the live
+state, BLOCKED.md, tool-faults.tsv and the gate's flakes.tsv and set-aside.tsv (in the live folder); no file names an outside
+address; the page's script draws the data and says what to do when it cannot be loaded (run by node when node is installed). A
+temporary live folder each: no game, no build, no network, nothing of D:/NebulaWork.
 
     python -X utf8 -I tools/gate/tests/plan_page_test.py [--work <folder>]
 """
 import datetime
 import json
+import os
 import pathlib
 import re
 import shutil
@@ -24,7 +29,7 @@ sys.path.insert(0, str(TREE / "tools" / "plan"))
 import live as lv  # noqa: E402
 import page  # noqa: E402
 import plan  # noqa: E402
-from plan_fixture import Tree, plan_of, setup_module, step, teardown_module, write_steps  # noqa: E402
+from plan_fixture import Tree, ledger_row, plan_of, run, setup_module, step, teardown_module, write_steps  # noqa: E402
 
 NOW = datetime.datetime(2026, 11, 20, 12, 0, 0)
 
@@ -125,64 +130,94 @@ class PageFilesTest(unittest.TestCase):
         self.fixed = mock.patch.object(plan, "now", lambda: NOW)
         self.fixed.start()
         self.addCleanup(self.fixed.stop)
+        self.paths = plan.page_paths(self.t.live)
 
-    def files(self):
-        return [self.t.live / n for n in ("progress.html", "progress-data.json", "progress-local.html")]
+    def outputs(self):
+        p = self.paths
+        return [p.html, p.status, p.index, p.data]
 
     def page(self):
         code, text = self.t.run(["page"], expect=0)
-        html, data, local = self.files()
-        return json.loads(data.read_text(encoding="utf-8")), html.read_text(encoding="utf-8"), local.read_text(encoding="utf-8"), text
+        p = self.paths
+        return (json.loads(p.data.read_text(encoding="utf-8")), p.html.read_text(encoding="utf-8"),
+                p.index.read_text(encoding="utf-8"), text)
 
-    def test_page_writes_three_files_prints_their_paths_and_says_which_two_to_publish(self):
-        data, html, local, text = self.page()
-        self.assertEqual(sorted(p.name for p in self.t.live.iterdir()), ["progress-data.json", "progress-local.html", "progress.html"])
-        for p in self.files():
+    def test_page_writes_the_complete_page_the_status_and_the_published_pair(self):
+        data, html, index, text = self.page()
+        self.assertEqual(sorted(p.name for p in self.t.live.iterdir()), ["STATUS.md", "progress.html", "publish"])
+        self.assertEqual(sorted(p.name for p in self.paths.publish.iterdir()), ["index.html", "progress-data.json"])
+        for p in self.outputs():
             self.assertIn(p.as_posix(), text)
             self.assertIn("(%d bytes)" % p.stat().st_size, text)
-        self.assertRegex(text, r"progress\.html: .*publish\n")
-        self.assertRegex(text, r"progress-data\.json: .*publish\n")
-        self.assertRegex(text, r"progress-local\.html: .*do not publish")
-        self.assertIn("Publish progress.html with progress-data.json as its supporting file", text)
+        self.assertIn("the page to open, the data inside, works from disk", text)
+        self.assertIn("progress branch: not pushed", text)
 
-    def test_the_static_file_does_not_change_when_a_step_lands_and_the_data_does(self):
+    def test_the_old_names_are_removed_and_nothing_else_is(self):
+        self.t.live.mkdir(parents=True)
+        for name in ("progress-local.html", "progress-data.json"):
+            (self.t.live / name).write_text("old", encoding="utf-8")
+        (self.t.live / "progress-url.txt").write_text("https://example.invalid/p\n", encoding="utf-8")
+        (self.t.live / "flakes.tsv").write_text("", encoding="utf-8")
+        self.page()
+        self.assertEqual(sorted(p.name for p in self.t.live.iterdir()),
+                         ["STATUS.md", "flakes.tsv", "progress-url.txt", "progress.html", "publish"])
+        self.assertTrue(self.paths.data.is_file(), "the new progress-data.json is in publish")
+
+    def test_progress_html_holds_the_data_and_the_published_index_does_not(self):
+        data, html, index, _ = self.page()
+        self.assertEqual(embedded(html, "embedded-data"), data)
+        self.assertEqual(embedded(html, "plan-static"), embedded(index, "plan-static"))
+        self.assertIsNone(embedded(index, "embedded-data"))
+        self.assertNotIn("2026-11-20T12:00:00", index, "nothing of the current progress")
+
+    def test_the_status_file_is_the_same_data_as_text(self):
+        write_steps(self.t, [("A.1", "A", "", "landed"), ("A.2", "A", "", "open"), ("B.1", "B", "A", "open"), ("C.1", "C", "", "open"),
+                             ("D.1", "D", "everything", "open")])
+        plan.set_state(self.t.tree, "A.2", "started", agent=2)
+        lv.add_landing(self.t.live, "A.1", "abc", 60, 1, NOW)
+        self.page()
+        text = self.paths.status.read_text(encoding="utf-8")
+        self.assertIn("Steps landed: 1 of 5 (20%).", text)
+        self.assertIn("- A.2 Title of A.2 (agent 2)", text)
+        self.assertIn("| 2026-11-20 12:00 | A.1 | Title of A.1 | abc |", text)
+
+    def test_the_index_does_not_change_when_a_step_lands_and_the_data_does(self):
         write_steps(self.t, [("A.1", "A", "", "open"), ("A.2", "A", "", "open"), ("B.1", "B", "A", "open"), ("C.1", "C", "", "open"),
                              ("D.1", "D", "everything", "open")])
         self.page()
-        html_path, data_path, local_path = self.files()
-        html_bytes, html_time = html_path.read_bytes(), html_path.stat().st_mtime_ns
-        data_bytes, local_bytes = data_path.read_bytes(), local_path.read_bytes()
+        index_bytes, index_time = self.paths.index.read_bytes(), self.paths.index.stat().st_mtime_ns
+        before = {p.name: p.read_bytes() for p in (self.paths.data, self.paths.html, self.paths.status)}
         write_steps(self.t, [("A.1", "A", "", "landed"), ("A.2", "A", "", "open"), ("B.1", "B", "A", "open"), ("C.1", "C", "", "open"),
                              ("D.1", "D", "everything", "open")])
         lv.add_landing(self.t.live, "A.1", "abc", 60, 1, NOW)
         self.page()
-        self.assertEqual(html_path.read_bytes(), html_bytes)
-        self.assertEqual(html_path.stat().st_mtime_ns, html_time, "not even rewritten")
-        self.assertNotEqual(data_path.read_bytes(), data_bytes)
-        self.assertNotEqual(local_path.read_bytes(), local_bytes)
-        self.assertEqual(json.loads(data_path.read_text(encoding="utf-8"))["steps"]["A.1"],
+        self.assertEqual(self.paths.index.read_bytes(), index_bytes)
+        self.assertEqual(self.paths.index.stat().st_mtime_ns, index_time, "not even rewritten")
+        for p in (self.paths.data, self.paths.html, self.paths.status):
+            self.assertNotEqual(p.read_bytes(), before[p.name], p.name)
+        self.assertEqual(json.loads(self.paths.data.read_text(encoding="utf-8"))["steps"]["A.1"],
                          {"state": "landed", "commit": "abc", "time": "2026-11-20T12:00:00"})
 
-    def test_the_static_file_changes_when_the_step_list_changes(self):
+    def test_the_index_changes_when_the_step_list_changes(self):
         self.page()
-        before = self.files()[0].read_bytes()
+        before = self.paths.index.read_bytes()
         path = plan.native(self.t.tree) / "steps.tsv"
         path.write_text(path.read_text(encoding="utf-8").replace("Second step", "Second step, renamed"), encoding="utf-8")
         self.page()
-        after = self.files()[0].read_bytes()
+        after = self.paths.index.read_bytes()
         self.assertNotEqual(after, before)
         self.assertIn(b"Second step, renamed", after)
 
-    def test_the_static_file_does_not_change_with_blocked_claims_faults_or_flakes(self):
+    def test_the_index_does_not_change_with_blocked_claims_faults_or_flakes(self):
         self.page()
-        before = self.files()[0].read_bytes()
+        before = self.paths.index.read_bytes()
         self.t.run(["start", "A.1"], expect=0)
         self.t.run(["blocked", "A.1", "stuck"], expect=0)
         self.t.run(["tool", "the runner broke"], expect=0)
         self.t.live.mkdir(parents=True, exist_ok=True)
         (self.t.live / "flakes.tsv").write_text("date\ttest\n2026-11-19\tt1\n", encoding="utf-8")
         self.page()
-        self.assertEqual(self.files()[0].read_bytes(), before)
+        self.assertEqual(self.paths.index.read_bytes(), before)
 
     def test_the_flake_count_and_the_set_aside_tests_are_the_gates_files_in_the_live_folder(self):
         """T2 writes flakes.tsv (no header) and set-aside.tsv in D:/NebulaWork/plan/native, the live folder."""
@@ -190,7 +225,7 @@ class PageFilesTest(unittest.TestCase):
         (self.t.live / "flakes.tsv").write_text("2026-11-20T10:00:00\td3d11_depth\td3d11\tabc\tfirst message\n"
                                                 "2026-11-20T11:00:00\td3d11_depth\td3d11\tdef\tsecond\n", encoding="utf-8")
         (self.t.live / "set-aside.tsv").write_text("2026-11-20T12:00:00\td3d11_depth\td3d11\t3 flakes in 7 days\n", encoding="utf-8")
-        data, html, local, _ = self.page()
+        data, html, index, _ = self.page()
         self.assertEqual(data["flakes"], 2)
         self.assertEqual(data["set_aside"], [{"since": "2026-11-20T12:00:00", "test": "d3d11_depth", "renderer": "d3d11",
                                               "why": "3 flakes in 7 days"}])
@@ -209,9 +244,9 @@ class PageFilesTest(unittest.TestCase):
         self.t.live.mkdir(parents=True, exist_ok=True)
         (self.t.live / "flakes.tsv").write_text("date\ttest\trenderer\tcommit\tmessage\n2026-11-19\tt1\td3d11\tabc\tx\n"
                                                            "2026-11-20\tt2\tvk\tabc\ty\n", encoding="utf-8")
-        data, html, local, _ = self.page()
+        data, html, index, _ = self.page()
         base = plan.read_base(self.t.tree)
-        static = embedded(html, "plan-static")
+        static = embedded(index, "plan-static")
         self.assertEqual((static["total"], [s["id"] for s in static["steps"]]), (len(base), [s["step"] for s in base]), "steps.tsv's order")
         self.assertEqual([(s["id"], s["package"], s["title"]) for s in static["steps"]], [(s["step"], s["package"], s["title"]) for s in base])
         self.assertEqual([(p["package"], p["total"]) for p in static["packages"]], [("A", 2), ("B", 1), ("C", 1), ("D", 1)])
@@ -225,9 +260,9 @@ class PageFilesTest(unittest.TestCase):
         self.assertEqual(data["flakes"], 2)
         self.assertEqual(data["set_aside"], [], "no test is set aside")
         self.assertEqual(data["generated"], "2026-11-20T12:00:00")
-        self.assertEqual(embedded(local, "embedded-data"), data, "the local page embeds the same data")
-        self.assertEqual(embedded(local, "plan-static"), static)
-        self.assertIsNone(embedded(html, "embedded-data"), "the published page has no data in it")
+        self.assertEqual(embedded(html, "embedded-data"), data, "the complete page embeds the same data")
+        self.assertEqual(embedded(html, "plan-static"), static)
+        self.assertIsNone(embedded(index, "embedded-data"), "the published page has no data in it")
 
     def test_a_blocked_reason_falls_back_to_blocked_md(self):
         lv.set_state_entry(self.t.live, "C.1", "blocked", 1, "")
@@ -236,7 +271,7 @@ class PageFilesTest(unittest.TestCase):
         self.assertEqual(data["blocked"][0]["reason"], "the reason in the file | first failure line: x")
 
     def test_the_numbers_move_with_the_state_after_each_command(self):
-        read = lambda: json.loads((self.t.live / "progress-data.json").read_text(encoding="utf-8"))
+        read = lambda: json.loads(self.paths.data.read_text(encoding="utf-8"))
         self.t.run(["start", "A.1"], expect=0)
         self.assertEqual(read()["steps"], {"A.1": {"state": "started", "agent": "1"}})
         self.t.run(["blocked", "A.1", "stuck here"], expect=0)
@@ -247,16 +282,391 @@ class PageFilesTest(unittest.TestCase):
         self.t.run(["toolfault", "--last", "--could-not", "run the tour"], expect=0)
         self.assertEqual(read()["tool_faults"][0]["could_not"], "run the tour")
 
-    def test_the_data_and_local_files_are_made_again_each_time_and_the_data_is_the_same_when_nothing_changed(self):
+    def test_the_files_are_the_same_when_nothing_changed(self):
         self.page()
-        data_before = self.files()[1].read_bytes()
+        before = [p.read_bytes() for p in self.outputs()]
         self.page()
-        self.assertEqual(self.files()[1].read_bytes(), data_before)
+        self.assertEqual([p.read_bytes() for p in self.outputs()], before)
 
     def test_a_live_folder_that_is_not_there_is_made(self):
         shutil.rmtree(self.t.live, ignore_errors=True)
         self.page()
-        self.assertTrue(all(p.is_file() for p in self.files()))
+        self.assertTrue(all(p.is_file() for p in self.outputs()))
+
+
+class RegenerateTest(unittest.TestCase):
+    """Every command that changes the state makes the progress files again at its end, and a failure there is one warning
+    line that changes nothing of the command's result."""
+
+    def setUp(self):
+        self.t = Tree().__enter__()
+        self.addCleanup(self.t.__exit__)
+        self.paths = plan.page_paths(self.t.live)
+        self.outputs = [self.paths.html, self.paths.status, self.paths.index, self.paths.data]
+
+    def clear(self):
+        """The progress files are gone (the state in the live folder stays)."""
+        for p in self.outputs:
+            p.unlink(missing_ok=True)
+
+    def made(self):
+        return [p.is_file() for p in self.outputs]
+
+    def land_ready(self):
+        """A.1 started, its ledger ready and committed, the gate faked as one that passes."""
+        self.t.run(["start", "A.1"], expect=0)
+        self.t.write_ledger([ledger_row("P-001", "fixed", "tests/render/a_test 1-9 fails before"),
+                             ledger_row("P-002", note="advanced 11-20: half done"), ledger_row("P-003"), ledger_row("P-004")],
+                            tree=self.t.folder("A.1"))
+        self.t.commit("A.1", "A.1: the code", {"runtime/src/render/a.cpp": "a\nb\nc\nd\n"})
+        patcher = mock.patch.object(plan, "LAND", lambda *a: plan.Verdict(True, [("repo/code", "PASS", "ok")]))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_each_command_that_changes_the_state_makes_every_file_again(self):
+        self.t.run(["start", "A.1"], expect=0)
+        self.assertEqual(self.made(), [True] * 4, "start")
+        for name, args in (("claim", ["claim", "C"]), ("blocked", ["blocked", "A.1", "stuck"]), ("tool", ["tool", "the runner broke"]),
+                           ("toolfault", ["toolfault", "--last", "--could-not", "run the tour"])):
+            self.clear()
+            self.t.run(args, expect=0)
+            self.assertEqual(self.made(), [True] * 4, name)
+        self.assertIn("run the tour", self.paths.status.read_text(encoding="utf-8"), "the last command's state is in STATUS.md")
+
+    def test_a_landing_makes_every_file_again(self):
+        self.land_ready()
+        self.clear()
+        code, text = self.t.run(["land", "A.1"], expect=0)
+        self.assertEqual(self.made(), [True] * 4)
+        self.assertIn("Steps landed: 1 of 5", self.paths.status.read_text(encoding="utf-8"))
+
+    def test_a_command_that_changes_nothing_makes_nothing(self):
+        self.t.run(["next"], expect=0)
+        self.assertFalse(self.paths.html.exists())
+
+    def test_a_failure_while_regenerating_is_one_warning_line_and_the_result_is_the_same(self):
+        for args in (["claim", "C"], ["tool", "the runner broke"], ["start", "A.1"]):
+            with self.subTest(args=args):
+                with Tree() as ok:
+                    code, same = ok.run(args)
+                    same = same.replace(ok.dir.as_posix(), "T")
+                with Tree() as t:
+                    with mock.patch.object(plan, "write_page", side_effect=OSError("the disk is full")):
+                        code_failed, text = t.run(args)
+                    text = text.replace(t.dir.as_posix(), "T")
+                self.assertEqual(code_failed, code, "the command's exit code does not change")
+                warnings = [l for l in text.splitlines() if "warning" in l]
+                self.assertEqual(len(warnings), 1, text)
+                self.assertIn("the progress files were not made again", warnings[0])
+                self.assertIn("the disk is full", warnings[0])
+                self.assertEqual([l for l in text.splitlines() if "warning" not in l], same.splitlines(),
+                                 "the command says what it said")
+
+    def test_any_kind_of_failure_is_only_a_warning(self):
+        for error in (OSError("x"), ValueError("y"), KeyError("z"), RuntimeError("w"), lv.Busy("busy")):
+            with Tree() as t:
+                with mock.patch.object(plan, "write_page", side_effect=error):
+                    code, text = t.run(["tool", "the runner broke"])
+                self.assertEqual(code, 0, repr(error))
+                self.assertEqual(len([l for l in text.splitlines() if "warning" in l]), 1, repr(error))
+                self.assertEqual(lv.read_faults(t.live)[0]["first_error"], "the runner broke", "the command's own work is done")
+
+    def test_a_failing_landing_keeps_its_exit_code_when_the_files_fail_too(self):
+        self.land_ready()
+        failed = plan.Verdict(False, [], [("tour/d3d12", "FAIL", "replay step 0")])
+        failed.code, failed.gate_recorded = 1, True
+        with mock.patch.object(plan, "LAND", lambda *a: failed), mock.patch.object(plan, "write_page", side_effect=OSError("x")):
+            code, text = self.t.run(["land", "A.1"])
+        self.assertEqual(code, 1)
+        self.assertEqual(len([l for l in text.splitlines() if "warning" in l]), 1)
+
+    def test_a_failing_push_is_one_warning_line_and_the_result_is_the_same(self):
+        with mock.patch.dict(os.environ):
+            os.environ.pop(plan.PUSH_OFF, None)
+            with mock.patch.object(plan, "publish_progress", side_effect=RuntimeError("git push: refused")):
+                code, text = self.t.run(["tool", "the runner broke"])
+        self.assertEqual(code, 0)
+        warnings = [l for l in text.splitlines() if "warning" in l]
+        self.assertEqual(len(warnings), 1, text)
+        self.assertIn("the progress branch was not pushed", warnings[0])
+        self.assertTrue(all(self.made()), "the files are made all the same")
+
+
+class StatusTextTest(unittest.TestCase):
+    """STATUS.md from a fixed state, without a tree: page.make_status."""
+
+    def state(self, started=0, landed=3, landings=12, faults=25, blocked=True):
+        steps = plan_of(*[step("S%d.%d" % (i // 2, i % 2), "S%d" % (i // 2), title="Step number %d" % i,
+                               state="landed" if i < landed else "open") for i in range(8)])
+        for i in range(landed, landed + started):
+            steps[i]["state"], steps[i]["agent"] = "started", "2" if i % 2 else "1"
+        if blocked:
+            steps[7]["state"] = "blocked"
+        rows = [{"step": "S%d.%d" % (i // 2, i % 2), "commit": "c%02d" % i, "finished": "2026-11-20T10:%02d:09" % i, "seconds": "5", "agent": "1"}
+                for i in range(landings)]
+        events = [{"time": "2026-11-20T11:%02d:30" % i, "agent": "1", "step": "S0.%d" % (i % 2), "kind": "TOOL", "check": "harness/self",
+                   "test": "t%d" % i if i % 3 else "", "first_error": "error %d" % i, "run_folder": "", "could_not": "run it" if i % 2 else ""}
+                  for i in range(faults)]
+        data = page.make_data(steps, rows, {"S3.1": {"reason": "needs the owner | now"}}, [], set(), [], 0, "2026-11-20T12:00:00")
+        return page.make_static(steps), data, rows, events
+
+    def text(self, **kw):
+        static, data, rows, events = self.state(**kw)
+        return page.make_status(static, data, rows, events, "2026-11-20T12:00:00")
+
+    def test_every_line_the_plan_asks_for(self):
+        text, landed, total = self.text(started=2)
+        self.assertEqual((landed, total), (3, 8))
+        lines = text.splitlines()
+        self.assertEqual(lines[0], "# Nebula native plan: status")
+        self.assertIn("Written 2026-11-20 12:00.", lines)
+        self.assertIn("Steps landed: 3 of 8 (38%).", lines)
+        self.assertIn("In work now:", lines)
+        self.assertIn("- S1.1 Step number 3 (agent 2)", lines)
+        self.assertIn("- S2.0 Step number 4 (agent 1)", lines)
+        self.assertIn("| Package | Landed | Of |", lines)
+        self.assertIn("| S0 | 2 | 2 |", lines)
+        self.assertIn("| S1 | 1 | 2 |", lines)
+        self.assertIn("| S3 | 0 | 2 |", lines)
+        self.assertIn("- S3.1 Step number 7: needs the owner | now", lines, "blocked, with why")
+        self.assertIn("25 tool faults recorded.", lines)
+
+    def test_nothing_started(self):
+        text, _, _ = self.text(started=0)
+        self.assertIn("In work now: Nothing started.", text.splitlines())
+        text, _, _ = self.text(started=0, blocked=False, faults=0, landings=0)
+        self.assertIn("Nothing is blocked.", text)
+        self.assertIn("0 tool faults recorded.", text)
+        self.assertIn("None yet.", text)
+        self.assertNotIn("The last 20", text)
+
+    def test_the_last_ten_landings_newest_first(self):
+        text, _, _ = self.text(landings=12)
+        rows = [l for l in text.splitlines() if re.match(r"^\| 2026-11-20 10:", l)]
+        self.assertEqual(len(rows), 10)
+        self.assertTrue(rows[0].startswith("| 2026-11-20 10:11 |"), rows[0])
+        self.assertTrue(rows[-1].startswith("| 2026-11-20 10:02 |"), rows[-1])
+        self.assertIn("| 2026-11-20 10:05 | S2.1 | Step number 5 | c05 |", rows)
+        self.assertEqual(text.splitlines()[text.splitlines().index("| When | Step | Title | Commit |") - 2], "## Last 10 landings")
+
+    def test_the_last_twenty_tool_faults_newest_first_with_all_five_columns(self):
+        text, _, _ = self.text(faults=25)
+        rows = [l for l in text.splitlines() if re.match(r"^\| 2026-11-20 11:", l)]
+        self.assertEqual(len(rows), 20)
+        self.assertTrue(rows[0].startswith("| 2026-11-20 11:24 |"))
+        self.assertTrue(rows[-1].startswith("| 2026-11-20 11:05 |"))
+        self.assertIn("| 2026-11-20 11:23 | S0.1 | t23 | error 23 | run it |", rows, "step, test, what happened, what it could not do")
+        self.assertIn("| 2026-11-20 11:24 | S0.0 | harness/self | error 24 | - |", rows, "nothing to say it could not do: a dash")
+        self.assertIn("| When | Step | Test | What happened | What the agent could not do |", text.splitlines())
+        self.assertIn("| 2026-11-20 11:09 | S0.1 | harness/self | error 9 | run it |", rows, "no test named: the check is shown")
+
+    def test_a_golden_text_for_a_small_state(self):
+        text, _, _ = self.text(started=1, landed=2, landings=2, faults=2)
+        self.assertEqual(text, "\n".join([
+            "# Nebula native plan: status",
+            "",
+            "Written 2026-11-20 12:00.",
+            "",
+            "Steps landed: 2 of 8 (25%).",
+            "",
+            "In work now:",
+            "- S1.0 Step number 2 (agent 1)",
+            "",
+            "## Packages",
+            "",
+            "| Package | Landed | Of |",
+            "| --- | --- | --- |",
+            "| S0 | 2 | 2 |",
+            "| S1 | 0 | 2 |",
+            "| S2 | 0 | 2 |",
+            "| S3 | 0 | 2 |",
+            "",
+            "## Last 10 landings",
+            "",
+            "| When | Step | Title | Commit |",
+            "| --- | --- | --- | --- |",
+            "| 2026-11-20 10:01 | S0.1 | Step number 1 | c01 |",
+            "| 2026-11-20 10:00 | S0.0 | Step number 0 | c00 |",
+            "",
+            "## Blocked",
+            "",
+            "- S3.1 Step number 7: needs the owner | now",
+            "",
+            "## Tool faults",
+            "",
+            "2 tool faults recorded.",
+            "",
+            "The last 20:",
+            "",
+            "| When | Step | Test | What happened | What the agent could not do |",
+            "| --- | --- | --- | --- | --- |",
+            "| 2026-11-20 11:01 | S0.1 | t1 | error 1 | run it |",
+            "| 2026-11-20 11:00 | S0.0 | harness/self | error 0 | - |",
+            ""]))
+
+    def test_a_path_that_starts_with_the_home_folder_is_written_with_a_tilde(self):
+        for old, new in (("C:/Users/vaibh/Documents/Nebula/a.txt", "~/Documents/Nebula/a.txt"),
+                         ("C:\\Users\\vaibh\\AppData\\Local\\Temp\\x", "~/AppData\\Local\\Temp\\x"),
+                         ("C:\\Users/vaibh\\Documents/y", "~/Documents/y"),
+                         ("c:/USERS/vaibh/z", "~/z"),
+                         ("D:/NebulaWork/plan/native/x", "D:/NebulaWork/plan/native/x"),
+                         ("C:/Users/vaibh", "C:/Users/vaibh"),
+                         ("C:/Windows/Users/vaibh/x", "C:/Windows/Users/vaibh/x")):
+            self.assertEqual(page.home_short(old), new, old)
+        self.assertEqual(page.home_short("see C:/Users/vaibh/a and C:\\Users\\vaibh\\b"), "see ~/a and ~/b")
+
+    def test_the_rule_is_applied_to_the_whole_file(self):
+        static, data, rows, events = self.state(faults=2)
+        events[0]["first_error"] = "cannot open C:/Users/vaibh/Documents/MarioGalaxyRecomp/x.py"
+        events[1]["could_not"] = "read C:\\Users\\vaibh\\AppData\\Local\\Temp\\log.txt"
+        data["blocked"][0]["reason"] = "see C:/Users/vaibh/notes.txt"
+        text, _, _ = page.make_status(static, data, rows, events, "2026-11-20T12:00:00")
+        self.assertNotIn("Users", text)
+        self.assertIn("cannot open ~/Documents/MarioGalaxyRecomp/x.py", text)
+        self.assertIn("read ~/AppData\\Local\\Temp\\log.txt", text)
+        self.assertIn("see ~/notes.txt", text)
+
+    def test_the_numbers(self):
+        self.assertEqual(self.text(landed=0, blocked=False)[0].splitlines()[4], "Steps landed: 0 of 8 (0%).")
+        steps = plan_of(*[step("A.%d" % i, "A", state="landed") for i in range(138)])
+        text, landed, total = page.make_status(page.make_static(steps), page.make_data(steps, [], {}, [], set(), [], 0, "2026-11-20T12:00:00"),
+                                               [], [], "2026-11-20T12:00:00")
+        self.assertIn("Steps landed: 138 of 138 (100%).", text)
+        self.assertEqual((landed, total), (138, 138))
+
+
+def git(repo, *args, env=None):
+    exe = plan.GIT if pathlib.Path(plan.GIT).exists() else "git"
+    r = subprocess.run([exe, "-C", str(repo), *args], capture_output=True, text=True, encoding="utf-8", env=env)
+    return r.returncode, (r.stdout + r.stderr).strip()
+
+
+class PushTest(unittest.TestCase):
+    """The progress branch, with a bare repository as the fake origin (the fixture's own): nothing here reaches GitHub."""
+
+    def setUp(self):
+        self.t = Tree().__enter__()
+        self.addCleanup(self.t.__exit__)
+        self.fixed = mock.patch.object(plan, "now", lambda: NOW)
+        self.fixed.start()
+        self.addCleanup(self.fixed.stop)
+        env = mock.patch.dict(os.environ)
+        env.start()
+        self.addCleanup(env.stop)
+        os.environ.pop(plan.PUSH_OFF, None)               # the push is on in these tests, towards the fake origin
+        self.main_sha = self.t.git("rev-parse", "main", cwd=self.t.origin)
+
+    def tip(self):
+        code, out = git(self.t.origin, "rev-parse", "--verify", "--quiet", "refs/heads/progress")
+        return out if code == 0 else None
+
+    def refs(self):
+        return sorted(l.split()[1] for l in git(self.t.origin, "for-each-ref", "--format=%(objectname) %(refname)")[1].splitlines())
+
+    def parents(self, sha):
+        return git(self.t.origin, "rev-list", "--parents", "-n", "1", sha)[1].split()[1:]
+
+    def test_the_first_push_makes_the_branch_with_one_commit_of_one_file_and_no_parent(self):
+        code, text = self.t.run(["page"], expect=0)
+        tip = self.tip()
+        self.assertIsNotNone(tip, text)
+        self.assertIn("pushed the first commit %s on refs/heads/progress (no parent)" % tip[:9], text)
+        self.assertEqual(self.parents(tip), [], "no parent: it shares no history with main")
+        self.assertEqual(git(self.t.origin, "ls-tree", "-r", "--name-only", tip)[1], "STATUS.md")
+        self.assertEqual(git(self.t.origin, "log", "-1", "--format=%s", tip)[1], "Progress: 0 of 5 steps landed")
+        self.assertEqual(git(self.t.origin, "show", "%s:STATUS.md" % tip)[1].replace("\r\n", "\n") + "\n",
+                         self.t.live.joinpath("STATUS.md").read_bytes().decode("utf-8").replace("\r\n", "\n"))
+        self.assertEqual(git(self.t.origin, "merge-base", tip, "main")[0], 1, "no history in common with main")
+        self.assertEqual(self.refs(), ["refs/heads/main", "refs/heads/progress"], "nothing but the one branch")
+        self.assertEqual(self.t.git("rev-parse", "main", cwd=self.t.origin), self.main_sha, "main is not touched")
+
+    def test_a_second_push_adds_one_commit_on_top(self):
+        self.t.run(["page"], expect=0)
+        first = self.tip()
+        self.t.run(["tool", "the runner broke"], expect=0)           # a command that changes the state pushes by itself
+        second = self.tip()
+        self.assertNotEqual(first, second)
+        self.assertEqual(self.parents(second), [first], "the previous tip is the parent")
+        self.assertEqual(git(self.t.origin, "rev-list", "--count", second)[1], "2")
+        self.assertEqual(git(self.t.origin, "ls-tree", "-r", "--name-only", second)[1], "STATUS.md")
+        self.assertIn("the runner broke", git(self.t.origin, "show", "%s:STATUS.md" % second)[1])
+        self.assertEqual(git(self.t.origin, "diff", "--name-only", first, second)[1], "STATUS.md")
+
+    def test_the_message_counts_the_landed_steps(self):
+        write_steps(self.t, [("A.1", "A", "", "landed"), ("A.2", "A", "", "landed"), ("B.1", "B", "A", "open"), ("C.1", "C", "", "open"),
+                             ("D.1", "D", "everything", "open")])
+        self.t.run(["page"], expect=0)
+        self.assertEqual(git(self.t.origin, "log", "-1", "--format=%s", self.tip())[1], "Progress: 2 of 5 steps landed")
+
+    def test_the_same_content_pushes_nothing(self):
+        self.t.run(["page"], expect=0)
+        first = self.tip()
+        code, text = self.t.run(["page"], expect=0)
+        self.assertEqual(self.tip(), first)
+        self.assertIn("nothing pushed", text)
+        self.assertEqual(git(self.t.origin, "rev-list", "--count", first)[1], "1")
+        self.t.run(["tool", "the runner broke"], expect=0)
+        second = self.tip()
+        self.t.run(["page"], expect=0)
+        self.assertEqual(self.tip(), second, "unchanged again")
+
+    def test_a_push_that_fails_only_warns(self):
+        before = {p: p.read_bytes() for p in (self.t.live / "STATUS.md",) if p.exists()}
+        self.t.git("remote", "set-url", "origin", str(self.t.dir / "no-such-origin.git"))
+        for args in (["page"], ["tool", "the runner broke"]):
+            code, text = self.t.run(args)
+            self.assertEqual(code, 0, args)
+            warnings = [l for l in text.splitlines() if "warning" in l]
+            self.assertEqual(len(warnings), 1, text)
+            self.assertIn("the progress branch was not pushed", warnings[0])
+        self.assertTrue((self.t.live / "STATUS.md").is_file(), "STATUS.md stays local")
+        self.assertEqual(lv.read_faults(self.t.live)[0]["first_error"], "the runner broke")
+
+    def test_a_push_the_origin_refuses_only_warns(self):
+        hook = self.t.origin / "hooks" / "pre-receive"
+        hook.parent.mkdir(exist_ok=True)
+        hook.write_bytes(b"#!/bin/sh\necho refused here >&2\nexit 1\n")
+        code, text = self.t.run(["tool", "the runner broke"])
+        self.assertEqual(code, 0)
+        self.assertEqual(len([l for l in text.splitlines() if "warning" in l]), 1, text)
+        self.assertIsNone(self.tip())
+
+    def test_the_switch_and_the_environment_turn_the_push_off(self):
+        code, text = run(["--no-push", "tool", "x"], self.t.tree, self.t.work, self.t.store, 0, self.t.live)
+        self.assertIsNone(self.tip())
+        with mock.patch.dict(os.environ, {plan.PUSH_OFF: "1"}):
+            self.t.run(["tool", "y"], expect=0)
+        self.assertIsNone(self.tip())
+        with mock.patch.dict(os.environ, {plan.PUSH_OFF: "0"}):
+            self.t.run(["tool", "z"], expect=0)
+        self.assertIsNotNone(self.tip(), "0 does not turn it off")
+
+    def test_the_work_folder_is_not_touched(self):
+        """Plumbing commands only: no branch, no tag, no change of the index or of any file of the tree."""
+        refs_before = git(self.t.tree, "for-each-ref")[1]       # the push itself adds refs/remotes/origin/progress, as any push does
+        status_before = git(self.t.tree, "status", "--porcelain")[1]
+        head_before = git(self.t.tree, "rev-parse", "HEAD")[1]
+        self.t.run(["page"], expect=0)
+        self.assertIsNotNone(self.tip())
+        after = [l for l in git(self.t.tree, "for-each-ref")[1].splitlines() if not l.endswith("refs/remotes/origin/progress")]
+        self.assertEqual("\n".join(after), refs_before, "no branch, no tag, no other ref")
+        self.assertEqual(git(self.t.tree, "status", "--porcelain")[1], status_before)
+        self.assertEqual(git(self.t.tree, "rev-parse", "HEAD")[1], head_before)
+        self.assertEqual(git(self.t.tree, "rev-parse", "--abbrev-ref", "HEAD")[1], "main")
+
+    def test_the_main_repository_of_a_work_folder_is_its_common_one(self):
+        folder = self.t.dir / "a-work-folder"
+        self.t.git("worktree", "add", "-q", "-b", "side", str(folder))
+        self.assertEqual(plan.main_repo(folder), self.t.tree)
+        self.assertEqual(plan.main_repo(self.t.tree), self.t.tree)
+        self.assertIsNone(plan.main_repo(self.t.dir / "not-a-tree"))
+
+    def test_a_push_from_a_work_folders_plan_goes_through_the_main_repository(self):
+        folder = self.t.dir / "a-work-folder"
+        self.t.git("worktree", "add", "-q", "-b", "side", str(folder))
+        code, text = run(["page"], folder, self.t.work, self.t.store, 0, self.t.live)
+        self.assertIsNotNone(self.tip(), text)
+        self.assertEqual(git(folder, "status", "--porcelain")[1], "")
 
 
 class HtmlTest(unittest.TestCase):
@@ -265,24 +675,41 @@ class HtmlTest(unittest.TestCase):
         steps = plan_of(step("A.1", "A"))
         cls.static = page.make_static(steps)
         cls.data = page.make_data(steps, [], {}, [], set(), [], 0, "2026-11-20T12:00:00")
-        cls.html = page.render(cls.static)
-        cls.local = page.render(cls.static, cls.data)
+        cls.html = page.render(cls.static, cls.data)          # progress.html: the complete page
+        cls.index = page.render(cls.static)                    # publish/index.html
 
     def test_the_published_page_holds_the_layout_the_script_and_the_static_list_only(self):
-        self.assertEqual(re.findall(r"<script[^>]*>", self.html), ['<script type="application/json" id="plan-static">', "<script>"])
-        self.assertNotIn("embedded-data", self.html.replace('getElementById("embedded-data")', ""))
-        self.assertEqual(embedded(self.html, "plan-static"), self.static)
-        self.assertNotIn("2026-11-20T12:00:00", self.html, "nothing of the current progress")
+        self.assertEqual(re.findall(r"<script[^>]*>", self.index), ['<script type="application/json" id="plan-static">', "<script>"])
+        self.assertNotIn("embedded-data", self.index.replace('getElementById("embedded-data")', ""))
+        self.assertEqual(embedded(self.index, "plan-static"), self.static)
+        self.assertNotIn("2026-11-20T12:00:00", self.index, "nothing of the current progress")
 
-    def test_the_local_page_is_the_same_page_with_the_data_embedded(self):
-        self.assertEqual(re.findall(r"<script[^>]*>", self.local),
+    def test_the_complete_page_is_the_same_page_with_the_data_embedded(self):
+        self.assertEqual(re.findall(r"<script[^>]*>", self.html),
                          ['<script type="application/json" id="plan-static">', '<script type="application/json" id="embedded-data">', "<script>"])
-        self.assertEqual(embedded(self.local, "embedded-data"), self.data)
-        self.assertEqual(self.local.replace('\n<script type="application/json" id="embedded-data">%s</script>' % page.embed(self.data), ""),
-                         self.html)
+        self.assertEqual(embedded(self.html, "embedded-data"), self.data)
+        self.assertEqual(self.html.replace('\n<script type="application/json" id="embedded-data">%s</script>' % page.embed(self.data), ""),
+                         self.index)
+
+    def test_the_published_page_says_what_to_do_when_its_data_cannot_be_loaded(self):
+        """The text and the three seconds are in the page, and `Loading...` is replaced by that path (the script itself is run by
+        ScriptTest when node is installed)."""
+        for html in (self.html, self.index):
+            self.assertEqual(page.NO_DATA, "The progress data could not be loaded. On the PC, open progress.html in the folder above this one.")
+            self.assertIn('textContent = "%s"' % page.NO_DATA, html)
+            self.assertEqual(page.WAIT_SECONDS, 3)
+            self.assertIn("setTimeout(failed, 3 * 1000)", html)
+            self.assertNotIn("__WAIT__", html)
+            self.assertNotIn("__NODATA__", html)
+            self.assertEqual(html.count('id="when">Loading...<'), 1, "Loading... is only the starting text")
+            self.assertEqual(re.findall(r'getElementById\("when"\)\.textContent = ([^;]*);', html),
+                             ['"Written " + d.generated', '"%s"' % page.NO_DATA], "the two ways Loading... is replaced")
+            self.assertIn(".catch(failed)", html)
+            self.assertIn("failed();", html, "a fetch that throws at once is the same message")
+            self.assertIn("if (!drawn)", html, "data that came is never overwritten by the message")
 
     def test_no_file_names_an_outside_address_script_font_or_style(self):
-        for html in (self.html, self.local):
+        for html in (self.html, self.index):
             for bad in ("http:", "https:", "ftp:", "//", "<link", "@import", "url(", "@font-face", "src=", "href=", "<img", "<iframe",
                         "XMLHttpRequest", "import("):
                 self.assertNotIn(bad, html, bad)
@@ -325,7 +752,8 @@ class HtmlTest(unittest.TestCase):
 @unittest.skipUnless(shutil.which("node"), "node is not installed")
 class ScriptTest(unittest.TestCase):
     """The page's own script, run by node with a stand-in for the browser's document, over data from a 138-step plan: the
-    published pair (progress.html with the data fetched) and the local page (the data embedded) draw the same numbers."""
+    complete page (progress.html, the data inside), the published page with its data fetched, and the published page when
+    the data cannot be loaded (at once, or not within three seconds)."""
 
     DRIVER = r"""
 const fs = require('fs');
@@ -340,22 +768,32 @@ Object.defineProperty(Node.prototype, 'textContent', {
   set: function (v) { this._text = String(v); if (v === '') this.children = []; },
   get: function () { return this._text + this.children.map(function (c) { return c.textContent; }).join(' '); }
 });
-const ids = { app: new Node('div'), when: new Node('div'), note: new Node('div'), 'plan-static': { textContent: stat } };
-if (embm) ids['embedded-data'] = { textContent: mode === 'bad' ? 'not json' : embm[1] };
+const ids = { app: new Node('div'), when: new Node('div'), 'plan-static': { textContent: stat } };
+ids.when.textContent = 'Loading...';
+if (embm) ids['embedded-data'] = { textContent: embm[1] };
 global.document = { getElementById: function (id) { return ids[id]; }, createElement: function (t) { return new Node(t); },
                     createTextNode: function (t) { return { textContent: t }; } };
+const data = function () { return JSON.parse(fs.readFileSync(jsonPath, 'utf8')); };
+let fetched = 0;
 if (mode === 'fetch') {
-  global.fetch = function () { return Promise.resolve({ ok: true, json: function () { return Promise.resolve(JSON.parse(fs.readFileSync(jsonPath, 'utf8'))); } }); };
+  global.fetch = function () { fetched++; return Promise.resolve({ ok: true, json: function () { return Promise.resolve(data()); } }); };
 } else if (mode === 'throws') {
-  global.fetch = function () { throw new TypeError('no fetch from a file'); };
+  global.fetch = function () { fetched++; throw new TypeError('no fetch from a file'); };
+} else if (mode === 'missing') {
+  global.fetch = function () { fetched++; return Promise.resolve({ ok: false, status: 404, json: function () { return Promise.reject(new Error('no')); } }); };
+} else if (mode === 'never') {
+  global.fetch = function () { fetched++; return new Promise(function () {}); };
+} else if (mode === 'late') {
+  global.fetch = function () { fetched++; return new Promise(function (resolve) { setTimeout(function () {
+    resolve({ ok: true, json: function () { return Promise.resolve(data()); } }); }, 3300); }); };
 } else {
-  global.fetch = function () { return Promise.reject(new TypeError('Failed to fetch')); };
+  global.fetch = function () { fetched++; return Promise.reject(new TypeError('Failed to fetch')); };
 }
 try { (0, eval)(code); } catch (e) { console.log('SCRIPT ERROR ' + e); process.exit(1); }
-setTimeout(function () {
-  console.log(JSON.stringify({ when: ids.when.textContent, note: ids.note.textContent, noteHidden: ids.note.hidden, app: ids.app.textContent,
-                               sections: ids.app.children.length }));
-}, 100);
+const snap = function () { return { when: ids.when.textContent, app: ids.app.textContent, sections: ids.app.children.length, fetched: fetched }; };
+let early = null;
+setTimeout(function () { early = snap(); }, 2500);
+setTimeout(function () { console.log(JSON.stringify({ early: early, late: snap() })); }, mode === 'late' ? 3900 : (mode === 'never' ? 3500 : 2600));
 """
 
     def setUp(self):
@@ -375,7 +813,9 @@ setTimeout(function () {
         lv.set_state_entry(self.live, "S6.4", "started", 2, now=NOW)
         lv.set_state_entry(self.live, "S7.0", "blocked", 1, "the reason", NOW)
         with mock.patch.object(plan, "now", lambda: NOW):
-            self.html, self.json, self.local, self.data = plan.write_page(self.tree, self.live)
+            self.written = plan.write_page(self.tree, self.live)
+        self.html, self.index, self.json, self.data = (self.written.paths.html, self.written.paths.index, self.written.paths.data,
+                                                       self.written.data)
         (self.dir / "driver.js").write_text(self.DRIVER, encoding="utf-8")
 
     def node(self, html, mode):
@@ -395,10 +835,9 @@ setTimeout(function () {
         r = subprocess.run(["node", "--check", str(self.dir / "page.js")], capture_output=True, text=True, timeout=60)
         self.assertEqual(r.returncode, 0, r.stderr)
 
-    def test_the_static_page_with_the_fetched_data_draws_the_numbers(self):
-        out = self.node(self.html, "fetch")
+    def test_the_published_page_with_the_fetched_data_draws_the_numbers(self):
+        out = self.node(self.index, "fetch")["late"]
         self.assertEqual(out["when"], "Written 2026-11-20T12:00:00")
-        self.assertEqual(out["note"], "", "fetch worked: no note about the embedded copy")
         for words in ("40 of 138", "steps landed", "6/6", "4/6", "result.json is missing", "land S0.1", "agent 2", "S6.4", "the reason",
                       "Tool faults (1 kinds", "Title S6.4", "commit c39"):
             self.assertIn(words, out["app"])
@@ -407,20 +846,33 @@ setTimeout(function () {
         self.assertLess(landings.index("S6.3"), landings.index("S6.2"), "newest landing first")
         self.assertEqual(landings.count("commit c"), 10, "the last ten")
 
-    def test_the_local_page_draws_the_same_numbers_from_the_embedded_data(self):
-        fetched = self.node(self.html, "fetch")
-        for mode in ("rejects", "throws"):
-            local = self.node(self.local, mode)
-            self.assertFalse(local["noteHidden"], mode)
-            self.assertIn("Shown from the data written into this page", local["note"], mode)
-            self.assertEqual(local["app"], fetched["app"], mode)
-            self.assertEqual(local["when"], fetched["when"])
+    def test_the_complete_page_draws_the_same_numbers_from_the_data_inside_and_never_fetches(self):
+        fetched = self.node(self.index, "fetch")["late"]
+        for mode in ("fetch", "rejects", "throws", "never"):
+            out = self.node(self.html, mode)
+            for snap in (out["early"], out["late"]):
+                self.assertEqual(snap["fetched"], 0, mode)
+                self.assertEqual(snap["app"], fetched["app"], mode)
+                self.assertEqual(snap["when"], fetched["when"], mode)
 
-    def test_the_static_page_with_no_data_says_so_and_does_not_throw(self):
-        out = self.node(self.html, "rejects")
-        self.assertIn("No data", out["when"])
-        out = self.node(self.local, "bad")
-        self.assertIn("No data", out["when"])
+    def test_the_published_page_says_it_at_once_when_the_data_cannot_be_read(self):
+        for mode in ("rejects", "throws", "missing"):
+            out = self.node(self.index, mode)
+            self.assertEqual(out["early"]["when"], page.NO_DATA, mode)
+            self.assertEqual(out["late"]["when"], page.NO_DATA, mode)
+            self.assertNotIn("Loading", out["late"]["when"])
+            self.assertEqual(out["late"]["app"], "", "nothing drawn")
+
+    def test_the_published_page_says_it_when_the_data_has_not_come_in_three_seconds(self):
+        out = self.node(self.index, "never")
+        self.assertEqual(out["early"]["when"], "Loading...", "at 2.5 seconds it still waits")
+        self.assertEqual(out["late"]["when"], page.NO_DATA, "after 3 seconds it says so in place of Loading...")
+
+    def test_data_that_comes_after_the_message_is_drawn_all_the_same(self):
+        out = self.node(self.index, "late")
+        self.assertEqual(out["early"]["when"], "Loading...")
+        self.assertEqual(out["late"]["when"], "Written 2026-11-20T12:00:00")
+        self.assertIn("40 of 138", out["late"]["app"])
 
 
 def main():
