@@ -131,6 +131,7 @@ One candidate at a time. `gate.lock` is the queue.
 3. **Push** the candidate's branch, so GitHub starts on the same commit.
 4. **Main gate** on that commit. It takes `gate.lock`, or waits for it.
 5. **The gate moves main itself** when it passes: it checks that main is an ancestor of the candidate, fast-forwards main, pushes it, writes a `MAIN-MOVED` board line (commit, what it holds, the run's name) and frees the lock. No hand does this.
+   When the push does not reach GitHub (git's text is the network's, not a refusal), the gate looks at origin's main and tries again after 15, 30, 60, 120 and 240 seconds, six tries in all; when all fail nothing was judged: the run ends `not-judged` and the landing waits. When origin's main already holds the commit after a failed push, the push arrived and only its answer was lost, and that is a move (nobody has found why the push was reset on 2026-11-21). A run whose checks passed ends `fail` only when a job of GitHub is red; every other reason main did not move is `not-judged`.
 6. **If it fails,** the lock is freed and the result is handled before any other work (the 13:51 rule).
 
 Rules:

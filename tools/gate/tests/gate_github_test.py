@@ -196,6 +196,24 @@ class Rule(unittest.TestCase):
         self.assertFalse(any("measure" in l.lower() for l in lines), "and says nothing of one: %s" % lines)
         self.assertEqual(lines[-1], "VERDICT pass")
 
+    def test_not_moved_ends_not_judged_and_fail_only_for_a_red_job_of_github(self):
+        # Every check passed and main did not move: `fail` (exit 1) is the change's fault, so only a red job of GitHub; main that moved, the
+        # push, a lock, GitHub not finishing judged nothing: not-judged, exit 2. The landing reads the NOT-MOVED line, so its result is the same.
+        cases = (("main moved during the gate (now 123456789): rebase on it and gate again", "main-moved", 2, "not-judged"),
+                 ("the push of main failed: ! [rejected] main -> main", "other", 2, "not-judged"),
+                 ("GitHub could not be reached for the push of main (6 tries in 8 minutes): fatal: unable to access", "env", 2, "not-judged"),
+                 ("GitHub did not finish: Mac (no result after 120 minutes)", "env", 2, "not-judged"),
+                 ("the gate lock D:/x/move.lock is held: someone", "other", 2, "not-judged"),
+                 ("GitHub's jobs on gate/x: red: Mac failure on gate/x at 10:34", "github", 1, "fail"))
+        for why, kind, want_code, want_verdict in cases:
+            world = World(None)
+            code, lines, _ = drive(self, world, "repo", allow_github=False, move_why=why)
+            self.assertEqual((code, lines[-1]), (want_code, "VERDICT " + want_verdict), "%s\n%s" % (why, "\n".join(lines)))
+            self.assertIn("NOT-MOVED %s %s" % (kind, why), lines)
+            result = gate.parse_run_output([l + "\n" for l in lines], code)
+            self.assertEqual((result.verdict, result.moved, result.why_kind, result.why), ("pass", "", kind, why), "the landing's reading")
+            self.assertEqual(landing.failures_of_lines(kind_lines(lines)), [], "no failure of a check")
+
     def test_every_must_green_moves(self):
         world = World(runs_of(green()))
         code, lines, _ = drive(self, world)
