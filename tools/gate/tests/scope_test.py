@@ -66,6 +66,8 @@ class Rows(unittest.TestCase):
             (("tests/mods/anim/test.json",), ["repo"]),
             (("tools/test_driver/luma_test/luma_test.c",), ["repo", "tools", "build", "unit", "start", "engine1", "tour1", "android", "github"]),
             (("tools/lumacore/luma_test.py",), ["repo", "tools", "engine1", "tour1"]),
+            # The tablet's own runner: the Android build and the tablet's part, no PC tour and no GitHub part (it is no game code).
+            (("tools/lumacore/luma_test_android.py",), ["repo", "tools", "android", "tablet12"]),
         ]
         for paths, want in cases:
             p = plan(*paths)
@@ -234,6 +236,15 @@ class Groups(unittest.TestCase):
         tablet = scope.select(self.needs, ["tablet12"])
         self.assertTrue({"tablet/prepare", "build/android", "tour/tablet", "tablet/remove", "tour/tablet-pc", "build/windows",
                          "data/RMGE01"} <= tablet, "the tablet's part needs the data too")
+
+    def test_the_tablets_runner_runs_the_tablets_part_with_what_it_needs(self):
+        groups = plan("tools/lumacore/luma_test_android.py").groups
+        self.assertEqual(groups, ["repo", "tools", "android", "tablet12"])
+        chosen = scope.select(self.needs, groups)
+        self.assertTrue({"build/android", "tablet/prepare", "tour/tablet", "tablet/remove", "tour/tablet-pc", "build/windows",
+                         "data/RMGE01"} <= chosen, "the tablet's part with the builds and data it needs: %s" % sorted(chosen))
+        self.assertNotIn("tour/d3d12", chosen, "no PC tour of its own")
+        self.assertNotIn("engine/d3d12", chosen)
 
     def test_documents_only_selects_repo_and_no_build(self):
         chosen = scope.select(self.needs, plan("docs/a.md").groups)
