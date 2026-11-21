@@ -75,6 +75,9 @@ class Rows(unittest.TestCase):
         for paths, want in cases:
             p = plan(*paths)
             self.assertFalse(p.full, paths)
+            # The speed measure's groups are on no row: a plan with an engine or a tour group has measure_pc, and measure_tablet with the
+            # Android build too (scope.measure_groups; gate_line_test.py has the cases by name).
+            want = list(want) + scope.measure_groups(want)
             self.assertEqual(p.groups, [g for g in scope.GROUP_NAMES if g in want], paths)
 
     def test_github_group(self):
@@ -129,7 +132,7 @@ class Rows(unittest.TestCase):
         paths = ["docs/a.md", "crates/nebula-import/src/x.rs", "runtime/src/audio/a.cpp", "platform/android/app/a.kt"]
         a = plan(*paths)
         self.assertEqual(a.groups, [g for g in scope.GROUP_NAMES if g in (
-            "repo", "build", "unit", "start", "engine1", "tour1", "import", "android", "tablet12", "github")])
+            "repo", "build", "unit", "start", "engine1", "tour1", "import", "android", "tablet12", "github", "measure_pc", "measure_tablet")])
         self.assertEqual(plan(*reversed(paths)).groups, a.groups)
         self.assertEqual(plan("docs/a.md", "native/b.cpp").groups, plan("native/b.cpp").groups,
                          "a document beside code adds nothing of its own")

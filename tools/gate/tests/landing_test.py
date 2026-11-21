@@ -464,7 +464,7 @@ class Cases(unittest.TestCase):
         w.branch("feat/game", {"native/g2.cpp": "g"})
         w.branch("feat/render", {"runtime/src/render/r.cpp": "r"})
         land(w, ["feat/doc", "feat/game", "feat/render"])
-        self.assertEqual(w.checker.calls[0]["groups"], "repo,build,unit,start,engine1,engine3,tour1,tour3,validate,android,github")
+        self.assertEqual(w.checker.calls[0]["groups"], "repo,build,unit,start,engine1,engine3,tour1,tour3,validate,android,github,measure_pc,measure_tablet")
         w.branch("feat/odd", {"installer/x.ps1": "x"})
         land(w, ["feat/odd"])
         self.assertTrue(w.checker.calls[-1]["groups"].startswith("full"), "a file no row names")
@@ -531,7 +531,7 @@ class Cases(unittest.TestCase):
         L = w.landing()
         self.assertEqual(L.land(["feat/b"], also="tour/d3d11,unit/game"), 0)
         self.assertEqual(w.checker.calls[-1]["also"], "tour/d3d11,unit/game")
-        self.assertTrue(any("and also tour/d3d11,unit/game" in l for l in L.out), L.out)
+        self.assertTrue(any("and, asked for by name: tour/d3d11,unit/game" in l for l in L.out), L.out)
 
     def test_the_also_of_a_waiting_caller_reaches_the_run_of_the_caller_that_is_the_runner(self):
         w = self.w
@@ -717,12 +717,14 @@ class AlsoTest(unittest.TestCase):
         self.assertIn("tour/d3d12", text.split("are: ")[1].split(", "))
         self.assertIn("unit/game", text)
 
-    def test_a_check_only_the_long_run_has_is_said_so(self):
-        text = gate.also_problem(self.args(), ["soak"], self.known, self.planned)
-        self.assertEqual(text, "--also: soak only the long run (gate.py --long) has; a landing cannot run it")
-        both = gate.also_problem(self.args(), ["soak", "nothing/here"], self.known, self.planned)
-        self.assertIn("no check the gate knows: nothing/here", both)
-        self.assertIn("soak only the long run", both)
+    def test_a_part_of_the_nightly_run_is_asked_for_by_its_name_in_the_table(self):
+        # Package B8: the rule "a name only the long run has cannot be an --also" is gone. The nightly's parts that the table
+        # (gate.ALSO_PARTS) names are accepted, a part not built yet is refused as such, and any other name the gate does not
+        # know is unknown, whether or not the long run has a check of that name (gate_line_test.py has the table's cases).
+        self.assertEqual(gate.also_problem(self.args(), ["soak"], self.known, self.planned), "")
+        both = gate.also_problem(self.args(), ["coverage", "nothing/here"], self.known, self.planned)
+        self.assertIn("no check the gate knows: coverage, nothing/here", both)
+        self.assertNotIn("only the long run", both)
 
     def refused(self, argv):
         out, err = io.StringIO(), io.StringIO()

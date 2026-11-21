@@ -173,7 +173,10 @@ def main():
               "long: the coverage build's report runs: %s" % (long_needs.get("coverage"),))
         check(set(long_needs.get("measure/route", ())) == {"build/windows", "data/RMGE01"},
               "long: the play route measure runs: %s" % (long_needs.get("measure/route"),))
-        check((m | lg) <= f | {"pictures/tablet"} and "measure/full" in f, "final has main's and long's: %s" % sorted((m | lg) - f))
+        # The landing's speed measure (package B8) is a check of the main level alone: the long run has measure/route, so the final check has no measure/step/*.
+        step = {"measure/step/pc", "measure/step/tablet"}
+        check(step <= m and not step & (q | lg | f), "the speed measure's two checks are the main level's alone: %s" % sorted(step & (q | lg | f)))
+        check((m | lg) - step <= f | {"pictures/tablet"} and "measure/full" in f, "final has main's and long's: %s" % sorted((m | lg) - f))
         chosen = gate.select(main_needs, ["replays/vulkan"])
         check(chosen == {"replays/vulkan", "tour/vulkan", "tour/d3d12", "build/windows", "data/RMGE01"}, "--only and its needs: %s" % sorted(chosen))
         chosen = gate.select(main_needs, ["replays/tablet"])

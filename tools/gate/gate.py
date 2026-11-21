@@ -34,7 +34,9 @@ starts the game for a test goes through here.
          when the checks have passed and GitHub is green, the gate approves them before it moves main, as one commit on
          top of the tested one that touches only tests/pictures/approved.tsv (and removes PICTURES-CHANGE.txt), runs the
          picture checks again on the same runs (all must pass, else nothing moves: tool), and moves main to that commit.
-         After the move the long run starts if none started in the last 20 hours. No speed measure starts at a move: it is part of the nightly run.
+         After the move the long run starts if none started in the last 20 hours. No speed measure starts at a move: a landing that
+         plays the game has measured itself (measure/step/pc, measure/step/tablet; their trusted lines are kept in the history after
+         the move), and the nightly run measures too.
 --long   level 3, on main's newest commit, under the long lock, at below-normal priority: the tablet's 102 stops
          against the PC's, a sanitizer build's tour, the soak, every disc on every renderer.
 --final  level 4: the main and long levels on one commit. "Done" needs it passed with no check planned or known.
@@ -44,11 +46,13 @@ land BRANCH [BRANCH ...] | land --queue: the landing queue (tools/gate/landing.p
          folder, runs the checks of the groups the union of their changed files needs (tools/gate/scope.tsv) once, moves main, and
          halves the batch to find the branch at fault. Exit 0 landed, 1 fail, 2 not judged, 3 the same failure three times.
 --scope GROUPS|auto|full: with --main (--move too), only the checks of these groups; what `land` runs on the batch's tip.
---also NAMES: with --scope, and with `land` (a repair's check): more checks, by the names the gate gives them (comma-separated),
-         run in the landing besides what the groups need. They run as the main level runs them, every stop of a tour, as the
-         nightly run does (`--main --only NAME` is how one nightly check is run by hand), so a landing with --also runs its groups'
-         checks at that depth too. A name the gate does not know, or one only the long run has, refuses the landing before
-         anything runs (exit 2) and lists the names.
+--also NAMES: with --scope, and with `land` (a step's proof that asks for more): more checks, by name (comma-separated): the
+         nightly's parts in ALSO_PARTS (stress, sanitizer/tour, soak, soak/long, replays/software), or any check of the main level.
+         They run after the checks the groups need have passed (a failed landing runs none), before measure/step/pc, one after
+         another, as the nightly run runs them (every stop of a tour), so a landing with --also runs its groups' checks at that
+         depth too. `stress` asked so counts a stress result as a fail. A name of the table whose part is not on main yet is refused
+         with "--also NAME: this check is not built yet"; a name that is none of them is unknown; either refuses the landing before
+         anything runs (exit 2).
 --mods off|short|full: the mod suites and LumaLink's check; off in tools/gate/scope.tsv (they run in no landing and no nightly).
 data list | adopt | path DISC | make DISC | clean: the game data by key (tools/gate/gamedata.py).
 --serial: the parts that start the game one after another; by default they run side by side (section 7).
@@ -73,7 +77,9 @@ Every check and every test ends as one kind (tools/gate/kinds.py; docs/plan/04-G
   main   it failed again alone and fails the same way on main's kept build (<build>/base-bins/<commit>): main is at
          fault, not the change;
   new    a picture with no approved copy, or one the change declares (tools/gate/pictures.py): it never fails a run, the
-         landing approves it.
+         landing approves it;
+  worse  the speed measure of a landing (measure/step/pc, measure/step/tablet) found a figure past its band twice in a row: it
+         fails the run like fail, is never run again alone and never a flake.
 After every lane has ended, each test that is fail is run once more alone, then on main's build (settle).
 Each check's state: those kinds, and
   known    it failed only in tests tools/gate/known-failures.tsv lists for it (each with an open ledger row); a listed
@@ -298,9 +304,9 @@ def level_has(level, planned_level):
 
 
 # How a state reads in a row: the kinds that need a person's eye in capitals (tools/plan/plan.py reads these words).
-LABELS = {"fail": "FAIL", "tool": "TOOL", "env": "ENV", "flake": "FLAKE", "new": "NEW", "stress": "STRESS"}
-NOT_PASSED = ("fail", "tool", "env")
-STATES = ("pass", "known", "planned", "owed", "fail", "tool", "env", "flake", "main", "stress", "new")
+LABELS = {"fail": "FAIL", "worse": "WORSE", "tool": "TOOL", "env": "ENV", "flake": "FLAKE", "new": "NEW", "stress": "STRESS"}
+NOT_PASSED = ("fail", "worse", "tool", "env")
+STATES = ("pass", "known", "planned", "owed", "fail", "worse", "tool", "env", "flake", "main", "stress", "new")
 
 
 def default_records(state, detail):
@@ -364,6 +370,8 @@ class Gate:
         # the thread that reads what the game processes hold of the card.
         self.machine_notes = []
         self.layer_seen = {}          # the validate lane: {renderer: the layer error ids its first runs showed}
+        self.measure_pending = []     # the landing's measures' pending files (measure.py --pending): kept when main moves
+        self.measure_faulted = set()  # the checks that already left a line in tool-faults.tsv in this run
         self.card_shared = False
         self.slots = None
         self.sampler = None
@@ -434,7 +442,8 @@ class Gate:
     def check(self, name, fn, needs=()):
         """Runs one check. fn returns (passed, detail), or (passed, detail, tests) where tests is a kinds.Cases or
         {test: verdict}, or (passed, detail, tests, kind) where `kind` is what a failure of this check is (tool or env
-        where it is not the change's: the default is fail). An exception is the tool's: kind tool, with its text. True
+        where it is not the change's: the default is fail; `worse` the speed measure's; `owed` a part that cannot run now and
+        does not change the verdict). An exception is the tool's: kind tool, with its text. True
         unless it did not pass; None when --only leaves it out. A check whose tests failed is run again once every lane has
         ended (settle): its row is first printed `again`."""
         if not self.wanted(name, needs):
@@ -456,6 +465,8 @@ class Gate:
             if cases is not None:
                 records, state = kinds.judge_cases(cases, self.known.get(name, {}), self.aside, bool(passed))
                 detail = with_notes(detail, records) if detail else kinds.describe(cases, records)
+            elif fail_kind == "owed" and not passed:
+                state, records = "owed", default_records("owed", detail)
             else:
                 state = "pass" if passed else fail_kind
                 records = [] if passed else [kinds.record("-", fail_kind, detail)]
@@ -663,7 +674,7 @@ def append_history(path, out):
     c = out["counts"]
     cells = (out["started"], out["run"], out["mode"], out["commit"] + ("+" if out["dirty"] else ""),
              out["verdict"], "%.0f" % out["seconds"], c["pass"], c["known"], c["planned"],
-             c["owed"], c["fail"], out["only"] or "-",
+             c["owed"], c["fail"] + c["worse"], out["only"] or "-",
              " ".join((["github-form=" + out["github"]] if out.get("github") else []) +
                       ["%s=%s/%.0f" % (r["check"], r["state"], r.get("seconds", 0.0)) for r in out["checks"]]))
     with open(path, "a", encoding="utf-8") as f:
@@ -1279,14 +1290,15 @@ def harness(g, suite, renderer, label, device=None, bin_dir=None, env=None, judg
 ENV_EXIT = 3  # luma_test.py ENV_EXIT: the runner could not start because the machine was not fit
 
 
-def start_soak(g):
-    """The soak (tools/gate/soak.py, file 00 section 4.2): two hours of random input on each renderer, in processes of
-    its own, started so it runs beside the Android part. Returns the process and its log (soak-run.log: the check's own
-    log is soak.log, N-1065)."""
+def start_soak(g, minutes=None):
+    """The soak (tools/gate/soak.py, file 00 section 4.2): two hours of random input on each renderer (`minutes`: another length),
+    in processes of its own, started so it runs beside the Android part. Returns the process and its log (soak-run.log: the
+    check's own log is soak.log, N-1065)."""
     log = g.work / "soak-run.log"
     out = log.open("wb")
     process = subprocess.Popen([sys.executable, "-X", "utf8", "-I", str(HERE / "soak.py"), "run", "--bin", str(g.bin),
-                                "--pak", getattr(g, "pak", "") or g.args.pak, "--work", str(g.work / "soak"), "--minutes", str(g.args.soak_minutes),
+                                "--pak", getattr(g, "pak", "") or g.args.pak, "--work", str(g.work / "soak"), "--minutes",
+                                str(g.args.soak_minutes if minutes is None else minutes),
                                 "--who", "gate"], stdout=out, stderr=subprocess.STDOUT, cwd=g.args.build_root)
     out.close()
     return process, log
@@ -1295,18 +1307,29 @@ def start_soak(g):
 MEASURE = TREE / "tools" / "measure" / "measure.py"
 
 
-def measure_command(sha, bin_dir, android_bin, apk, work, args, pak=None, paks=None):
+def measure_command(sha, bin_dir, android_bin, apk, work, args, pak=None, paks=None, runs=None, pending=None, quiet=None,
+                    device_wait=None):
     """tools/measure/measure.py run: the play route on the PC's renderers, the PC held to four cores, and the tablet
     when the gate has one (N-1043, 07-BASE-FIRST stage 1 item 1). The tablet's run installs the test app `apk` with
-    the gate's pak and removes it after, inside the tablet's lock (P-321)."""
-    tablet = bool(args.tablet and android_bin and apk)
-    runs = "d3d12,vulkan,d3d11,d3d12-4cores" + (",tablet" if tablet else "")
+    the gate's pak and removes it after, inside the tablet's lock (P-321). `runs`: the run names to measure (the default is
+    every PC run and the tablet when the gate has one); `pending`: the file the trusted lines go to, not the history;
+    `quiet`: minutes to wait for a quiet machine; `device_wait`: minutes to wait for the tablet's lock."""
+    names = None if runs is None else runs.split(",")
+    tablet = bool(args.tablet and android_bin and apk) and (names is None or "tablet" in names)
+    if runs is None:
+        runs = "d3d12,vulkan,d3d11,d3d12-4cores" + (",tablet" if tablet else "")
     cmd = [sys.executable, "-X", "utf8", "-I", str(MEASURE), "run", "--bin", str(bin_dir), "--work", str(work),
            "--commit", sha, "--runs", runs, "--history", str(pathlib.Path(args.work) / "measure-history.tsv"),
            "--paks", args.paks if paks is None else paks, "--who", args.who]
     if tablet:
         cmd += ["--device", args.tablet, "--android-bin", str(android_bin), "--apk", str(apk), "--pak", pak or args.pak,
                 "--device-lock", args.tablet_lock]
+        if device_wait is not None:
+            cmd += ["--device-wait", "%g" % device_wait]
+    if pending is not None:
+        cmd += ["--pending", str(pending)]
+    if quiet is not None:
+        cmd += ["--quiet-minutes", str(quiet)]
     return cmd
 
 
@@ -1326,6 +1349,202 @@ def measure_route(g):
         said = next((l for l in reversed(text.splitlines()) if l.startswith("measure: ")), "measure: no summary")
         return code == 0, said[len("measure: "):]
     return fn
+
+
+# The speed measure of a landing (package B8, docs/plan/04-GATE-AND-MAIN.md): the play route once on Direct3D 12 (measure/step/pc,
+# last, with the machine alone) and once on the tablet (measure/step/tablet, in the Android lane after its build). The two run
+# names are the planner's to change.
+MEASURE_PC_RUN = "d3d12"
+MEASURE_TABLET_RUN = "tablet"
+MEASURE_PC_CHECK = "measure/step/pc"
+MEASURE_TABLET_CHECK = "measure/step/tablet"
+MEASURE_LEVELS = ("main", LAND_LEVEL)
+# The time a check may take: the long level's rule (measure_route), a route of three minutes measured at most twice, and for the
+# PC the five minutes of waiting for a quiet machine; each run's start and end take two minutes; the tablet's install and
+# removal five, and the wait for its lock is the landing's --tablet-wait.
+MEASURE_QUIET_MINUTES = 5
+MEASURE_ROUTE_MINUTES = 3
+MEASURE_RUN_MINUTES = 2
+MEASURE_TABLET_SET_MINUTES = 5
+# measure.py's exit code for each state of a run in result.json: a state and a code that differ are a fault of the reading.
+MEASURE_EXIT_OF = {"ok": 0, "better": 0, "no-baseline": 0, "left-out": 0, "worse": 1, "not-trusted": 3, "tool": 2}
+
+
+def measure_limit(tablet, wait_minutes=0.0):
+    """Seconds a measure/step check may run: the routes measured twice, and the PC's wait for a quiet machine or the tablet's wait
+    for its lock and its install."""
+    twice = 2 * (MEASURE_ROUTE_MINUTES + MEASURE_RUN_MINUTES)
+    return int(60 * (twice + (wait_minutes + MEASURE_TABLET_SET_MINUTES if tablet else MEASURE_QUIET_MINUTES)))
+
+
+def measure_figures_text(state, figures):
+    """What a passed measure says: its judged figures with value and median, `no baseline yet` where a figure has none, and what the
+    anchor says of a figure that is slower than at the start of the native work."""
+    judged = [(n, f) for n, f in figures.items() if f.get("judged")]
+    parts = []
+    for name, f in judged:
+        if f.get("value") is None:
+            parts.append("%s not measured" % name)
+        elif f.get("median") is None:
+            parts.append("%s %s (no baseline yet)" % (name, kinds.say_number(f["value"])))
+        else:
+            parts.append("%s %s (median %s)" % (name, kinds.say_number(f["value"]), kinds.say_number(f["median"])))
+    says = ["%s: %s" % (n, f["anchor"]["says"]) for n, f in judged if isinstance(f.get("anchor"), dict) and f["anchor"].get("says")]
+    head = {"ok": "holds", "better": "better", "no-baseline": "no baseline yet"}[state]
+    return "%s: %s" % (head, "; ".join(parts + says) if parts or says else "no judged figure")
+
+
+def measure_reading(work, run_name, code):
+    """What one run of measure.py says: (kind, text). From WORK/result.json, the run's entry; the exit code only as a cross-check.
+    kind `pass` (ok, better, no baseline yet: the text names the judged figures), `worse` (the text is kinds.worse_message),
+    `not-trusted`, `left-out` (the tablet was away), `stopped` (the gate ended the run), or `could-not` (the measure could not run:
+    its time limit, no readable result.json, a fault it reports, an exit code and a state that disagree)."""
+    if code == 124:
+        return "could-not", "its time limit"
+    if code == 125:
+        return "stopped", "the run was stopped"
+    try:
+        result = json.loads((pathlib.Path(work) / "result.json").read_text(encoding="utf-8"))
+        entry = result["runs"][run_name]
+        state = entry["state"]
+        figures = entry.get("figures") or {}
+        reason = kinds.first_line(entry.get("reason") or "")
+        said = result.get("exit")
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+        return "could-not", "no readable result.json for %s (exit %d): %s: %s" % (run_name, code, type(error).__name__,
+                                                                                kinds.first_line(error))
+    if state not in MEASURE_EXIT_OF:
+        return "could-not", "result.json names the state %r for %s" % (state, run_name)
+    if code != MEASURE_EXIT_OF[state] or (isinstance(said, int) and said != code):
+        return "could-not", "exit %d and state %s disagree" % (code, state)
+    try:
+        if state == "tool":
+            return "could-not", reason or "the measure reported a fault"
+        if state == "not-trusted":
+            return "not-trusted", reason or "no reason was given"
+        if state == "left-out":
+            return "left-out", reason or "the tablet was left out"
+        if state == "worse":
+            worse = [(n, f["value"], f["median"], f["band"]) for n, f in figures.items()
+                     if f.get("judged") and f.get("verdict") == "worse"]
+            if not worse:
+                return "could-not", "state worse and no judged figure is worse in result.json"
+            return "worse", kinds.worse_message(worse)
+        return "pass", measure_figures_text(state, figures)
+    except (KeyError, TypeError, AttributeError) as error:
+        return "could-not", "result.json for %s cannot be read: %s: %s" % (run_name, type(error).__name__, kinds.first_line(error))
+
+
+def measure_fault(g, check, kind, reason):
+    """One line in tool-faults.tsv for a measure that could not run or was not trusted (kind TOOL or ENV): the test named is the check,
+    the text the reason; at most one for each check in a landing. A record that cannot be written is said, never a fault of the run."""
+    if check in g.measure_faulted:
+        return
+    g.measure_faulted.add(check)
+    live = getattr(g.args, "live", "")
+    if not live:
+        return
+    try:
+        fault_writer(live)("gate", "", kind, check, check, reason, str(g.work))
+    except Exception as error:  # noqa: BLE001 - the record is a report; the landing stands without it
+        print("gate.py: %s: the tool-fault line was not written: %s: %s" % (check, type(error).__name__, error), flush=True)
+
+
+def measure_step(g, tablet):
+    """One of the landing's two speed measures (measure/step/pc or measure/step/tablet), as measure.py run with its own pending
+    file; the row from measure_reading (docs/plan/04-GATE-AND-MAIN.md section 5.2): pass, `worse` (main does not move), or owed with
+    one line in tool-faults.tsv (not trusted, could not run, its time limit). The tablet's form stands alone: its own device lock,
+    install and removal. The pending file is kept by keep_measures when main has moved."""
+    name = MEASURE_TABLET_CHECK if tablet else MEASURE_PC_CHECK
+    run_name = MEASURE_TABLET_RUN if tablet else MEASURE_PC_RUN
+
+    def fn(log):
+        folder = "measure-tablet" if tablet else "measure-pc"
+        work, pending = g.work / folder, g.work / (folder + ".tsv")
+        if tablet:
+            apk = test_apk(g.args)
+            cmd = measure_command(g.commit, g.bin, g.android_bin, apk if apk.is_file() else None, work, g.args, g.pak,
+                                  g.paks_text(), runs=run_name, pending=pending, device_wait=g.args.tablet_wait)
+            limit = measure_limit(True, g.args.tablet_wait)
+        else:
+            cmd = measure_command(g.commit, g.bin, None, None, work, g.args, g.pak, g.paks_text(), runs=run_name,
+                                  pending=pending, quiet=MEASURE_QUIET_MINUTES)
+            limit = measure_limit(False)
+        g.measure_pending.append(pending)
+        code = run(cmd, log, timeout=limit)
+        kind, text = measure_reading(work, run_name, code)
+        if kind == "pass":
+            return True, text
+        if kind == "worse":
+            return False, text, None, "worse"
+        if kind == "left-out":
+            return False, "the tablet was left out: " + text, None, "owed"
+        if kind == "stopped":
+            return False, "the measure could not run: " + text, None, "owed"
+        if kind == "not-trusted":
+            measure_fault(g, name, "ENV", "the measure was not trusted: " + text)
+            return False, "the measure was not trusted: " + text, None, "owed"
+        measure_fault(g, name, "TOOL", "the measure could not run: " + text)
+        return False, "the measure could not run: " + text, None, "owed"
+    return fn
+
+
+def landing_failed(g):
+    """Whether a check of the run did not pass: the landing has failed already, and what follows it only costs time."""
+    return any(not r["passed"] for r in g.results)
+
+
+def measure_tablet(g, device=None):
+    """measure/step/tablet, in the Android lane right after a build/android that passed and before the tablet's part (so the tablet is
+    rested). No tablet named, or one that does not answer adb: owed. No row when the Android build failed (its row says so)."""
+    needs = ("build/android",) + DATA
+    if g.level not in MEASURE_LEVELS or not g.wanted(MEASURE_TABLET_CHECK, needs):
+        return
+    if g.dry or not g.android_built:
+        return
+    if not g.args.tablet:
+        g.owe(MEASURE_TABLET_CHECK, "no tablet is named (--tablet): the measure on the tablet is owed")
+        return
+    if device is None:
+        machine.ensure_adb_server(android_module().Device("").adb_path)
+        device = android_module().Device(g.args.tablet)
+    if not device.answers():
+        g.owe(MEASURE_TABLET_CHECK, "%s does not answer adb: the measure on the tablet is owed" % g.args.tablet)
+        return
+    g.check(MEASURE_TABLET_CHECK, measure_step(g, True), needs)
+
+
+def measure_pc(g):
+    """measure/step/pc, last, where the long level has measure/route: every lane has ended, the tests that failed ran again alone,
+    the pictures and replays are checked, and nothing else of the landing runs. A landing that has failed already does not run it."""
+    if g.level not in MEASURE_LEVELS or not g.wanted(MEASURE_PC_CHECK, DATA):
+        return
+    if g.dry or landing_failed(g):
+        return
+    g.check(MEASURE_PC_CHECK, measure_step(g, False), DATA)
+
+
+def keep_measures(g, args):
+    """After main moved: `measure.py keep` for each pending file of the run that exists (the history holds main's commits only). A keep
+    that fails changes nothing about the landing: one line in tool-faults.tsv and one printed line. When main did not move the files stay
+    in the run folder, never kept."""
+    history = str(pathlib.Path(args.work) / "measure-history.tsv")
+    for path in g.measure_pending:
+        if not pathlib.Path(path).is_file():
+            continue
+        try:
+            done = subprocess.run([sys.executable, "-X", "utf8", "-I", str(MEASURE), "keep", str(path), "--history", history],
+                                  capture_output=True, text=True, timeout=300)
+            code, said = done.returncode, kinds.first_line((done.stdout or "") + (done.stderr or ""))
+        except (OSError, subprocess.TimeoutExpired) as error:
+            code, said = 2, "%s: %s" % (type(error).__name__, error)
+        if code == 0:
+            print("gate.py: " + said, flush=True)
+            continue
+        reason = "the measure's figures were not kept in the history (exit %d): %s" % (code, said)
+        print("gate.py: " + reason, flush=True)
+        g.measure_faulted.discard("measure/keep")
+        measure_fault(g, "measure/keep", "TOOL", reason)
 
 
 def soak_result(process, soak_log):
@@ -2376,7 +2595,8 @@ def lanes_asked(g):
     # The validate lane: one copy for each renderer (asking for it costs nothing where the layer is not installed).
     validate_copies = 0 if level == "quick" else len(RENDERERS)
     asked = renderers + regions + mods + tablet + validate_copies + (2 if level == "final" else 0)
-    return max(asked, stress.COPIES) if level == "final" else asked     # the final check's stress part follows its lanes
+    stress_after = level == "final" or (level in MEASURE_LEVELS and "stress" in landing.also_names(getattr(g.args, "also", "")))
+    return max(asked, stress.COPIES) if stress_after else asked     # the stress part follows the lanes (the final check's; a landing's --also)
 
 
 def renderers_of(level):
@@ -2824,6 +3044,7 @@ def android_lane(g, stops):
     """The Android build, then the tablet's part (its stops: the twelve quick ones at the main level, all after)."""
     def lane():
         g.android_built = g.args.no_build or g.check("build/android", build_android(g)) is not False
+        measure_tablet(g)
         tablet_part(g, stops)
     lane.part = "tablet"
     return lane
@@ -2946,6 +3167,53 @@ def locked_part(g, name, fn):
         free_gate_lock(g.args.gate_lock, holder, g.args.board, g.args.who, "part %s done" % name)
 
 
+# The parts of the nightly run that `--also` asks for by name (package B8): the name, the function that runs the part in the landing
+# tree, and the patterns of the check names it registers (what the landing's selection takes besides the plan's). `run` None: the part
+# is not on main yet and the name is refused at the start of the landing.
+SOAK_SHORT_MINUTES = 30
+
+
+def soak_part(g, name, minutes):
+    """The soak (tools/gate/soak.py: both soak plans, one process for each renderer, side by side) for `minutes`, after the other checks;
+    one check `name`."""
+    if not g.wanted(name, DATA) or g.dry:
+        return
+    process, log = start_soak(g, minutes)
+    g.check(name, soak_result(process, log), DATA)
+
+
+class AlsoPart:
+    def __init__(self, run, checks):
+        self.run, self.checks = run, checks
+
+
+ALSO_PARTS = {
+    "stress": AlsoPart(lambda g: stress_part(g), ("stress/*",)),
+    "sanitizer/tour": AlsoPart(lambda g: sanitizer_part(g), ("build/windows-asan", "tour-asan/*", "mods-asan/*")),
+    "soak": AlsoPart(lambda g: soak_part(g, "soak", SOAK_SHORT_MINUTES), ("soak",)),
+    "soak/long": AlsoPart(lambda g: soak_part(g, "soak/long", g.args.soak_minutes), ("soak/long",)),
+    # tools/gate/replays_software.py (T9) is not on main: the name is refused as not built.
+    "replays/software": AlsoPart(None, ("replays/software",)),
+}
+# Two lengths of one soak: they share a work folder and a log, so a landing asks for one.
+ALSO_ONE_OF = ("soak", "soak/long")
+
+
+def also_parts(g):
+    """The parts `--also` asked for, one after another, after the needed checks have passed (a landing that failed runs none) and
+    before measure/step/pc. Each runs under its usual rules of kind; the tests that failed are run again alone after each (a stress
+    result asked for so is a fail: stress_part reads the name)."""
+    for name in landing.also_names(getattr(g.args, "also", "")):
+        part = ALSO_PARTS.get(name)
+        if part is None or part.run is None:
+            continue
+        if not g.dry and landing_failed(g):
+            return
+        part.run(g)
+        if any(r.get("pending") for r in g.results):
+            g.settle()
+
+
 def run_checks(args, known=None, planned=None, selected=None, dry=False):
     """The level's checks. The build and the unit checks first, one after another; then the parts that start the game
     side by side (section 7), each renderer's engine tests and tours in a lane of their own, each other disc's tour,
@@ -3032,6 +3300,11 @@ def run_checks(args, known=None, planned=None, selected=None, dry=False):
         locked_part(g, "again", g.settle)
     picture_part(g)
     replay_part(g, renderers)
+    if level in MEASURE_LEVELS:
+        also_parts(g)
+        # Last, with the machine alone (the landing holds the gate lock, measure.py takes measure.lock): a landing that has failed
+        # already does not measure.
+        measure_pc(g)
     if level in ("long", "final"):
         # Last, with the machine alone: the gate lock keeps gates out, measure.py takes measure.lock.
         locked_part(g, "measure", lambda: g.check("measure/route", measure_route(g), DATA))
@@ -3069,22 +3342,20 @@ def level_needs(args, level, known, planned):
 
 
 def also_problem(args, also, known, planned):
-    """Why `--also` cannot be run ("" when it can): a name must be a check of the main level, which is how a landing runs it. A
-    name that only the long run has is said so; any other is unknown, and the known names are printed."""
+    """Why `--also` cannot be run ("" when it can): a name is one of the nightly's parts in ALSO_PARTS, or a check of the main level,
+    which is how a landing runs it. A part whose function is not on main is "not built yet"; the soak's two lengths are asked one at
+    a time; any other name is unknown and the known names are printed."""
     main_needs = level_needs(args, "main", known, planned)
-    unknown = [n for n in also if n not in main_needs]
-    if not unknown:
-        return ""
-    long_only = [n for n in unknown if n in level_needs(args, "long", known, planned)]
-    other = [n for n in unknown if n not in long_only]
     parts = []
-    if other:
+    unbuilt = [n for n in also if n in ALSO_PARTS and ALSO_PARTS[n].run is None]
+    parts += ["--also %s: this check is not built yet" % n for n in unbuilt]
+    if all(n in also for n in ALSO_ONE_OF):
+        parts.append("--also: %s are one soak at two lengths; ask for one" % " and ".join(ALSO_ONE_OF))
+    unknown = [n for n in also if n not in ALSO_PARTS and n not in main_needs]
+    if unknown:
         parts.append("--also names no check the gate knows: %s. The checks a landing can run are: %s" % (
-            ", ".join(other), ", ".join(sorted(main_needs))))
-    if long_only:
-        parts.append("--also: %s only the long run (gate.py --long) has; a landing cannot run %s" % (
-            ", ".join(long_only), "it" if len(long_only) == 1 else "them"))
-    return " ".join(parts)
+            ", ".join(unknown), ", ".join(sorted(set(main_needs) | set(ALSO_PARTS)))))
+    return "; ".join(parts)
 
 
 def landing_selection(args, plan, also, known, planned):
@@ -3095,7 +3366,8 @@ def landing_selection(args, plan, also, known, planned):
     shutil.rmtree(dry.work, ignore_errors=True)
     selected = scope.select(dry.needs, plan.groups)
     if also:
-        selected |= select(dry.needs, also)
+        patterns = [p for n in also for p in (ALSO_PARTS[n].checks if n in ALSO_PARTS else (n,))]
+        selected |= select(dry.needs, patterns)
     return selected
 
 
@@ -3268,8 +3540,8 @@ def main(argv=None):
         if not plan.full and not also:
             args.mode = LAND_LEVEL
         elif also and not plan.full:
-            print("gate.py: also: %s. The landing keeps the main level so that they run as the nightly run runs them (every stop of "
-                  "a tour)." % ", ".join(also), flush=True)
+            print("gate.py: and, asked for by name: %s. The landing keeps the main level so that they run as the nightly run runs "
+                  "them (every stop of a tour)." % ", ".join(also), flush=True)
     if args.move and (args.mode not in ("main", LAND_LEVEL) or patterns or args.no_build):
         return refuse("--move goes with --main alone: the whole main gate, built here")
     if plan is not None and not plan.full:
@@ -3485,6 +3757,7 @@ def main(argv=None):
                     args.who, g.name, commit[:9], why))
             else:
                 moved_line = "MOVED %s" % landed
+                keep_measures(g, args)
                 summary = "passed, %s, main moved to %s" % (
                     "GitHub's jobs are read after the move" if pending_after else
                     ("GitHub green (%s)" % detail) if rule is not None else "no GitHub part in the plan", landed[:9]) + (

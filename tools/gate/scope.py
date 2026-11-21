@@ -65,8 +65,18 @@ GROUPS = {
                []),
     "github-first": ("GitHub's jobs on the candidate, waited for before the move: files this machine cannot build",
                      []),
+    # Not rows of the table: plan_for adds them by measure_groups (a landing that plays the game is measured).
+    "measure_pc": ("the speed measure of the play route on Direct3D 12, last, with the machine alone (a figure slower than its "
+                   "band twice in a row stops the landing)",
+                   ["measure/step/pc"]),
+    "measure_tablet": ("the speed measure of the play route on the tablet, in the Android lane after its build (owed when the "
+                       "tablet does not answer)",
+                       ["measure/step/tablet"]),
 }
 GROUP_NAMES = tuple(GROUPS)
+# The speed measure's groups (package B8, tools/gate/gate.py measure/step/pc and measure/step/tablet): a plan that holds an engine or a
+# tour group gets measure_pc; one that holds the Android build besides gets measure_tablet. No row of the table names them.
+GAME_GROUPS = ("engine1", "engine3", "tour1", "tour3")
 # A pseudo-group a row may name: it makes the run full, as a file no row names does.
 FULL = "full"
 # A row may also name `-full`: for the files that row matches, a `full` that another row brought is taken away (a narrow row for
@@ -191,6 +201,14 @@ def path_matches(path, pattern):
     return bool(glob_regex(pattern).match(path))
 
 
+def measure_groups(groups):
+    """The speed measure's groups a plan of `groups` gets: measure_pc when it holds an engine or a tour group, and measure_tablet
+    too when it holds the Android build as well. None otherwise."""
+    if not any(g in groups for g in GAME_GROUPS):
+        return []
+    return ["measure_pc"] + (["measure_tablet"] if "android" in groups else [])
+
+
 def plan_for(paths, table):
     """The Plan for the changed paths: the union of the groups of every row each path matches, and ALWAYS (the repository
     checks run in every landing, whatever a row says); a path no row names makes the run full. No path at all is full too
@@ -209,6 +227,7 @@ def plan_for(paths, table):
             full = True
         wanted.update(g for g in brought if g not in (FULL, NOT_FULL))
         why[path] = brought
+    wanted.update(measure_groups(wanted))
     ordered = [g for g in GROUP_NAMES if g in wanted]
     return Plan(ordered, full, unmatched, why)
 

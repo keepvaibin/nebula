@@ -17,6 +17,10 @@ Every check and every test ends as one kind:
   stress failed in the stress lane (twelve copies of the game at once, T12), then passed run alone: it never fails a run, is
          not written to the flakes file and does not count toward setting a test aside; the lane keeps the run folder and
          opens a repair (tools/gate/stress.py). It failing alone too is a plain fail; asked for by `--also stress` it is a fail.
+  worse  the speed measure (tools/measure) found a figure past its band on the bad side twice in a row, in a landing's check
+         measure/step/pc or measure/step/tablet: it fails a run like fail, is never run again alone (the measure measured
+         twice itself), never written to the flakes file and never set aside. Its signature in the store of the same failure
+         three times is the check and the worse figures' names in sorted order, never their values (worse_names).
 
 Where each is decided:
   a test's pass, fail, tool or env   tools/lumacore/luma_test.py kind_of (written into result.json as "kind");
@@ -37,7 +41,7 @@ import subprocess
 
 # The order a check's kind is the worst of its tests' (known, the list of tests expected to fail, and new, a picture to
 # approve, sit just before pass: neither fails a run).
-ORDER = ("fail", "tool", "env", "flake", "main", "stress", "known", "new", "pass")
+ORDER = ("fail", "worse", "tool", "env", "flake", "main", "stress", "known", "new", "pass")
 RANK = {k: i for i, k in enumerate(ORDER)}
 # What result.json's "kind" may say.
 RESULT_KINDS = ("pass", "fail", "tool", "env")
@@ -77,6 +81,28 @@ def first_line(text, limit=240):
         if line.strip():
             return line.strip()[:limit]
     return ""
+
+
+def say_number(value):
+    return "-" if value is None else "%.6g" % value
+
+
+def worse_message(worse):
+    """The message of a `worse` result from [(figure, value, median, band)]: the figures' names first, in sorted order and joined
+    by +, then each figure with its value, median and band: `worse: render_ms+step_ms: render_ms 8.2 (median 7.1, band 0.4); ...`."""
+    ordered = sorted(worse)
+    return "worse: %s: %s" % ("+".join(f[0] for f in ordered), "; ".join(
+        "%s %s (median %s, band %s)" % (f[0], say_number(f[1]), say_number(f[2]), say_number(f[3])) for f in ordered))
+
+
+WORSE_HEAD = re.compile(r"^worse: ([^\s:]+): ")
+
+
+def worse_names(message):
+    """The figures' names of a `worse` message (`render_ms+step_ms`): what the same-failure store keeps of it, never the values.
+    The whole first line for a message that is not one."""
+    found = WORSE_HEAD.match(message.strip())
+    return found.group(1) if found else first_line(message)
 
 
 def record(test, kind, message="", counts=True, note="", final=False):
@@ -260,7 +286,7 @@ def verdict_of(records_by_check):
     but one that counts is tool or env; else pass. Records that do not count (known, set aside, flake, main, the owed
     tablet) never change it."""
     counting = [r["kind"] for records in records_by_check for r in records if r["counts"]]
-    if "fail" in counting:
+    if "fail" in counting or "worse" in counting:
         return "fail"
     if "tool" in counting or "env" in counting:
         return "not-judged"

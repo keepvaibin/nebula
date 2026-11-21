@@ -428,7 +428,7 @@ def not_failure(message):
 
 
 def failures_of_lines(lines):
-    """[(check, kind, message)] of the KIND lines that count as a failure of their kind: kind fail, tool or env, not the
+    """[(check, kind, message)] of the KIND lines that count as a failure of their kind: kind fail, worse, tool or env, not the
     ones a note marks as not counting (known, set aside, owed)."""
     out = []
     for line in lines:
@@ -436,7 +436,7 @@ def failures_of_lines(lines):
         if parsed is None:
             continue
         kind, check, test, message = parsed
-        if kind not in ("fail", "tool", "env"):
+        if kind not in ("fail", "worse", "tool", "env"):
             continue
         if not_failure(message):
             continue
@@ -632,7 +632,7 @@ class Landing:
         if first:
             plan = scope.with_group(plan, scope.GITHUB_FIRST)
         self.say("gate.py: run %d on %s: %s%s (%s)" % (self.runs, ", ".join(prep.order), plan.text(),
-                                                      " and also %s" % also if also else "", prep.tip[:9]) +
+                                                      " and, asked for by name: %s" % also if also else "", prep.tip[:9]) +
                  ("; GitHub first (asked for)" if first else ""))
         result = self.checker.run(tree, prep.tip, list(prep.order), plan.text(), **({"also": also} if also else {}))
         for b in prep.order:
@@ -672,9 +672,12 @@ class Landing:
 
     def fail(self, branch, result):
         """A branch named as at fault: its row, and its signature in the store of the same failure three times."""
-        counted = [(c, "FAIL", m) for c, k, m in (result.failures or failures_of_lines(result.lines)) if k in ("fail", "FAIL")]
+        # A `worse` result (the speed measure) counts as a fail; its signature is the check and the worse figures' names, never
+        # their values (kinds.worse_names), so the same figures worse three times are the same failure three times.
+        found = [(c, m) for c, k, m in (result.failures or failures_of_lines(result.lines)) if k in ("fail", "FAIL", "worse", "WORSE")]
+        counted = [(c, "FAIL", kinds.worse_names(m) if m.startswith("worse: ") else m) for c, m in found]
         first = counted[0] if counted else ("landing", "FAIL", result.why or "the checks failed")
-        note = "%s: %s" % (first[0], first[2])
+        note = "%s: %s" % ((found[0][0], found[0][1]) if found else (first[0], first[2]))
         self.queue.finish(branch, FAILED, run_folder=result.run_folder, note=note)
         outcome = self.store.record(branch, counted or [first])
         self.say("gate.py: %s failed: %s%s" % (branch, note, (" (the same failure %d times in a row)" % outcome.count) if outcome.counted else ""))
