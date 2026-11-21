@@ -3,6 +3,7 @@
 
 #include "galaxy/mii_formats.h"
 #include "galaxy/test_temp.h"
+#include "galaxy/test_wait.h"
 #include "galaxy/mii_import.h"
 
 #include <algorithm>
@@ -418,7 +419,9 @@ bool import_beside_the_game() {
     });
     entered.get_future().wait();
     std::future<unsigned> count = std::async(std::launch::async, [] { return galaxy::host::mii_library_count(); });
-    ok &= expect(count.wait_for(std::chrono::seconds(2)) == std::future_status::ready, "the game's count answers during an import");
+    // The count is held back by nothing but the import, which waits for `release` below: it answers or it never does,
+    // so its wait is the test's deadline, not a time.
+    ok &= expect(count.wait_for(galaxy::kTestWaitDeadline) == std::future_status::ready, "the game's count answers during an import");
     release.set_value();
     import.join();
     ok &= expect(count.get() == before, "the count before the import ends");

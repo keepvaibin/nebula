@@ -1,6 +1,7 @@
 // Stats: counting, names, keeping them across sessions, the background write (galaxy/stats.h).
 #include "galaxy/stats.h"
 #include "galaxy/test_temp.h"
+#include "galaxy/test_wait.h"
 
 #include <chrono>
 #include <cstdio>
@@ -44,11 +45,7 @@ int main() {
     expect(st::get("bad name") == 0u && st::get("spins") == 0u, "bad names and zero deltas leave nothing");
 
     // The writer saves it on its own a moment later.
-    bool written = false;
-    for (int i = 0; i < 100 && !written; ++i) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        written = read(path) == "coins=10\njumps=7\n";
-    }
+    const bool written = galaxy::test_wait([&] { return read(path) == "coins=10\njumps=7\n"; }, std::chrono::milliseconds(50));
     expect(written, "the background writer saves the counts");
 
     st::add("jumps", UINT64_MAX);

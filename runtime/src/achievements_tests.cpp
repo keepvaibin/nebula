@@ -2,6 +2,7 @@
 // (galaxy/achievements.h).
 #include "galaxy/achievements.h"
 #include "galaxy/test_temp.h"
+#include "galaxy/test_wait.h"
 
 #include <chrono>
 #include <cstdio>
@@ -56,14 +57,11 @@ int main() {
     expect(!ach::unlock("comets"), "still not new after a restart");
     expect(ach::unlock("lives") && ach::unlocked("lives"), "a second achievement");
 
-    // The writer saves an unlock by itself, a moment later. The test waits for the file, up to 30 s: on a loaded machine
-    // (a main gate's lanes beside it) the writer's moment can come seconds late, and 2 s failed there (11-18).
+    // The writer saves an unlock by itself, a moment later. The test waits for the file itself (on a loaded machine the
+    // writer's moment can come seconds late, and 2 s failed there, 11-18); the deadline only reports that it never came.
     expect(ach::unlock("bank"), "a third achievement");
-    bool written = false;
-    for (int i = 0; i < 1500 && !written; ++i) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
-        written = read_file(path).find("bank=") != std::string::npos;
-    }
+    const bool written = galaxy::test_wait([&] { return read_file(path).find("bank=") != std::string::npos; },
+                                           std::chrono::milliseconds(20));
     expect(written, "written in the background");
 
     // Every one at once (a save that meets them all), then a flush: all in the file.

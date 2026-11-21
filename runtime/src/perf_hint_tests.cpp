@@ -11,16 +11,35 @@
 #include <cstdio>
 #include <cstring>
 #include <thread>
+#include <time.h>
 
 namespace {
 
-// Spins on this thread's CPU for about ms milliseconds of wall time (the machine idle: about as much CPU time).
+#if !defined(_WIN32)
+// This thread's CPU time so far, in nanoseconds.
+std::int64_t thread_cpu_ns() {
+    timespec t{};
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &t);
+    return static_cast<std::int64_t>(t.tv_sec) * 1'000'000'000 + t.tv_nsec;
+}
+#endif
+
+// Spins on this thread's CPU for ms milliseconds of this thread's own CPU time. A machine with every processor busy
+// gives the thread less wall time, never less CPU time than asked, so the CPU times asked of the hints below hold at
+// any load (N-1073). Windows has no thread CPU clock here (its answer is empty): wall time.
 void burn(int ms) {
-    const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(ms);
     volatile unsigned sink = 0;
+#if !defined(_WIN32)
+    const std::int64_t until = thread_cpu_ns() + static_cast<std::int64_t>(ms) * 1'000'000;
+    while (thread_cpu_ns() < until) {
+        for (int i = 0; i < 1000; ++i) sink = sink + static_cast<unsigned>(i);
+    }
+#else
+    const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(ms);
     while (std::chrono::steady_clock::now() < until) {
         for (int i = 0; i < 1000; ++i) sink = sink + static_cast<unsigned>(i);
     }
+#endif
 }
 
 bool expect(bool ok, const char* what) {

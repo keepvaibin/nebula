@@ -1,4 +1,5 @@
 #include "galaxy/ui/settings_save_model.h"
+#include "galaxy/test_wait.h"
 
 #if defined(_WINDOWS_) || defined(_INC_WINDOWS)
 #error The shared save model must not include Windows.h
@@ -38,13 +39,9 @@ void look() {
     if (std::this_thread::get_id() == caller) looked_on_caller = true;
     ++looks;
 }
+// The watch's thread runs below the normal priority: its looks and saves are waited for, up to the test's deadline.
 template <class Done> bool wait_for(Done done) {
-    const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    while (!done()) {
-        if (std::chrono::steady_clock::now() > until) return false;
-        std::this_thread::sleep_for(std::chrono::milliseconds(2));
-    }
-    return true;
+    return galaxy::test_wait(done, std::chrono::milliseconds(2));
 }
 }
 

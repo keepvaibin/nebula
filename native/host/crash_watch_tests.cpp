@@ -42,7 +42,9 @@ int main(int argc, char** argv) {
     DWORD error = 0, snapshot = 0;
     // The watcher is ready once it has the game open: a small dump with a long wait.
     cw::Result result = cw::Result::kNoWatcher;
-    for (int i = 0; i < 200 && result == cw::Result::kNoWatcher; ++i) {
+    // Its start is waited for until the deadline, which only reports that it never came (N-1073).
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+    while (result == cw::Result::kNoWatcher && std::chrono::steady_clock::now() < deadline) {
         result = cw::write_dump(GetCurrentThreadId(), nullptr, MiniDumpNormal, path, 1024, &error, &snapshot, 30000, L"ready");
         if (result == cw::Result::kNoWatcher) std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }

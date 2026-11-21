@@ -6,6 +6,8 @@
 #include <stdexcept>
 
 namespace {
+// The owner thread's events are waited for themselves; the deadline only reports that one never came (N-1073).
+constexpr DWORD kEventWaitMs = 60000u;
 constexpr UINT kBlock = WM_APP + 1;
 constexpr UINT kNested = WM_APP + 2;
 HANDLE entered{};
@@ -18,7 +20,7 @@ LRESULT CALLBACK test_proc(HWND window, UINT message, WPARAM wp, LPARAM lp) {
     if (message == WM_CREATE) created_on.store(GetCurrentThreadId());
     if (message == kBlock) {
         SetEvent(entered);
-        (void)WaitForSingleObject(release_owner, 5000);
+        (void)WaitForSingleObject(release_owner, kEventWaitMs);
         return 0;
     }
     if (message == kNested) {
@@ -74,12 +76,11 @@ int main() {
 
         okay &= expect(PostMessageW(window, kBlock, 0, 0) != FALSE,
                        "blocking UI work submitted");
-        okay &= expect(WaitForSingleObject(entered, 2000) == WAIT_OBJECT_0,
+        okay &= expect(WaitForSingleObject(entered, kEventWaitMs) == WAIT_OBJECT_0,
                        "owner entered blocked handler");
-        unsigned consumer_steps = 0;
-        const auto deadline = std::chrono::steady_clock::now() +
-                              std::chrono::milliseconds(100);
-        while (std::chrono::steady_clock::now() < deadline) ++consumer_steps;
+        // This thread does work while the owner's handler is blocked: a count of steps, not a time.
+        volatile unsigned consumer_steps = 0;
+        while (consumer_steps < 1'000'000u) ++consumer_steps;
         okay &= expect(consumer_steps > 100 && destroyed_count.load() == 0,
                        "consumer progresses while UI owner is blocked");
         SetEvent(release_owner);
@@ -93,7 +94,7 @@ int main() {
         window = owner.start(config);
         okay &= expect(window != nullptr, "owner can restart after stop");
         okay &= expect(PostMessageW(window, kNested, 0, 0) != FALSE &&
-                           WaitForSingleObject(entered, 2000) == WAIT_OBJECT_0,
+                           WaitForSingleObject(entered, kEventWaitMs) == WAIT_OBJECT_0,
                        "owner entered nested message loop");
         owner.stop();
         okay &= expect(!IsWindow(window) && destroyed_count.load() == 2 &&

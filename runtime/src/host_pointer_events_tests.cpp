@@ -163,7 +163,9 @@ bool sequence_exhaustion_case_hard_fails(std::string_view category) {
     }
     int status = 0;
     pid_t waited = 0;
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    // The child ends by itself the moment its case fails hard; a loaded machine starts it late, so the wait is for the
+    // end, and the deadline only reports that it never came.
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
     while ((waited = waitpid(child, &status, WNOHANG)) == 0 && std::chrono::steady_clock::now() < deadline) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
@@ -207,7 +209,8 @@ bool sequence_exhaustion_case_hard_fails(std::string_view category) {
         return expect(false, "sequence exhaustion child process launches");
     }
 
-    const DWORD wait_result = WaitForSingleObject(process.hProcess, 5'000u);
+    // As above: the child's end is waited for; the deadline only reports that it never came.
+    const DWORD wait_result = WaitForSingleObject(process.hProcess, 60'000u);
     DWORD exit_code = STILL_ACTIVE;
     if (wait_result == WAIT_OBJECT_0) {
         GetExitCodeProcess(process.hProcess, &exit_code);

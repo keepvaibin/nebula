@@ -1,4 +1,5 @@
 #include "galaxy/texture_categories.h"
+#include "galaxy/test_wait.h"
 #include "galaxy/test_temp.h"
 // SPDX-License-Identifier: GPL-3.0-only
 // Texture packs: hashes, names, DDS layouts and decodes, PNG round trips, the index, loads, the budget and dumps, and
@@ -351,18 +352,17 @@ struct Gpu {
     }
 };
 
-// Pumps until `done` or about two seconds.
+// Pumps until `done`: the index and the loads come from threads below the normal priority, which a busy machine runs
+// seconds late, so the wait is for the event, up to galaxy::kTestWaitDeadline (N-1073).
 template <typename Done>
 bool pump_until(TexturePacks& packs, std::vector<std::pair<std::uint32_t, TexturePackPixels>>& uploads, Done done,
                 bool* changed = nullptr) {
-    for (int i = 0; i < 400; ++i) {
+    return galaxy::test_wait([&] {
         packs.begin_frame();
         const bool now = packs.pump(uploads);
         if (changed != nullptr) *changed = *changed || now;
-        if (done()) return true;
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
-    }
-    return false;
+        return done();
+    });
 }
 
 void test_packs(Gpu& gpu, const std::filesystem::path& root) {
@@ -471,10 +471,12 @@ void test_packs(Gpu& gpu, const std::filesystem::path& root) {
     packs.dump(name_hash("Coin"), 4u, 4u, pixels.data());
     packs.dump(name_hash("NotAName"), 4u, 4u, pixels.data());
     const std::filesystem::path file = settings.dumps / TexturePacks::kGameId / "Items" / "Coin.png";
-    for (int i = 0; i < 2000 && (packs.stats().dumped == 0u || packs.stats().unnamed_dumps == 0u); ++i) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
-    }
+    // Both counted, and the file read back whole (it can exist while the writer is still at it).
     TexturePackPixels back;
+    (void)galaxy::test_wait([&] {
+        return packs.stats().dumped != 0u && packs.stats().unnamed_dumps != 0u &&
+               load_texture_pack_image(file, false, back, nullptr);
+    });
     expect(packs.stats().dumped == 1u && packs.stats().unnamed_dumps == 1u &&
                load_texture_pack_image(file, false, back, nullptr) && back.width == 4u && back.levels[0] == pixels,
            "dumped PNG holds the texture once, under its category");
@@ -575,21 +577,20 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
     settings.dumps = root / "cache-dumps";
     settings.budget_bytes = 64ull << 20;
     cache.configure_texture_packs(settings);
-    for (int i = 0; i < 400 && cache.texture_pack_stats().names == 0u; ++i) {
+    (void)galaxy::test_wait([&] {
         next_frame();
-        if (cache.texture_pack_stats().names == 0u) std::this_thread::sleep_for(std::chrono::milliseconds(5));
-    }
+        return cache.texture_pack_stats().names != 0u;
+    });
     expect(cache.texture_pack_stats().names == 1u, "cache publishes the pack index");
     const TextureHandle original = cache.handle(id);
     expect(original.resource != nullptr && original.resource->GetDesc().Width == 32u && original.lod_shift == 0u,
            "the original shows while its replacement loads");
     TextureHandle replaced{};
-    for (int i = 0; i < 400; ++i) {
+    (void)galaxy::test_wait([&] {
         next_frame();
         replaced = cache.handle(id);
-        if (replaced.resource != nullptr && replaced.resource->GetDesc().Width == 96u) break;
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
-    }
+        return replaced.resource != nullptr && replaced.resource->GetDesc().Width == 96u;
+    });
     expect(replaced.resource != nullptr && replaced.resource->GetDesc().Width == 96u && replaced.width == 32u &&
                replaced.height == 32u && replaced.mip_levels == 7u && std::fabs(replaced.lod_shift - std::log2(3.0f)) < 1e-6f,
            "the replacement takes the original's place (source size kept, 3x shift)");
@@ -609,10 +610,9 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
     (void)cache.register_image(made);
     next_frame();
     const std::filesystem::path dumped = settings.dumps / TexturePacks::kGameId / "Objects" / "CacheTex.png";
-    for (int i = 0; i < 2000 && !std::filesystem::exists(dumped); ++i) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
-    }
+    // The file is waited for until it reads back whole: it can exist while the writer is still at it.
     TexturePackPixels pixels;
+    (void)galaxy::test_wait([&] { return load_texture_pack_image(dumped, false, pixels, nullptr); });
     expect(load_texture_pack_image(dumped, false, pixels, nullptr) && pixels.width == 32u && pixels.height == 32u,
            "dump writes the texture under its name");
     next_frame();

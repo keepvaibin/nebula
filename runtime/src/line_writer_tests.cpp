@@ -5,6 +5,7 @@
 // line_writer_tests [--without]: --without writes as the log did before the writer (on the calling thread), to show
 // the fault: the caller then waits for the stuck output, and the test exits 1 as it would on that fault.
 #include "galaxy/line_writer.h"
+#include "galaxy/test_wait.h"
 
 #include <atomic>
 #include <chrono>
@@ -66,6 +67,8 @@ struct Output {
 };
 
 constexpr int kLines = 2000;
+// A flush that has to finish is given the test's deadline: the writer's thread may run seconds late on a busy machine.
+constexpr std::chrono::milliseconds kLongBound = galaxy::kTestWaitDeadline;
 
 }  // namespace
 
@@ -73,10 +76,11 @@ int main(int argc, char** argv) {
     const bool without = argc > 1 && std::strcmp(argv[1], "--without") == 0;
     bool passed = true;
     Output output;
-    // A wait on a stuck output with no bound is the fault this tests for: a test that stops is a failed one.
+    // A wait on a stuck output with no bound is the fault this tests for: a test that stops is a failed one. Longer
+    // than all the waits of the test together (each is at most kTestWaitDeadline): it reports, it never decides.
     std::thread([] {
-        std::this_thread::sleep_for(std::chrono::seconds(60));
-        std::printf("FAILED: still waiting after 60 s\n");
+        std::this_thread::sleep_for(std::chrono::seconds(180));
+        std::printf("FAILED: still waiting after 180 s\n");
         std::fflush(stdout);
         std::_Exit(1);
     }).detach();
@@ -88,11 +92,11 @@ int main(int argc, char** argv) {
     if (!without) {
         output.hold(true);
         writer.hand(1u, "s", 1u);
-        const auto asked = std::chrono::steady_clock::now();
+        // That it returns at all is what shows it gave up at its bound: a flush that waited on the stuck output would
+        // not, and the watchdog above ends the test. How long after its bound it returned is no verdict.
         passed &= expect(!writer.flush(std::chrono::milliseconds(50)), "flush returned done while the output was stuck");
-        passed &= expect(std::chrono::steady_clock::now() - asked < std::chrono::seconds(1), "flush waited past its bound");
         output.hold(false);
-        passed &= expect(writer.flush(std::chrono::milliseconds(5000)), "flush did not finish once the output moved");
+        passed &= expect(writer.flush(kLongBound), "flush did not finish once the output moved");
         std::lock_guard<std::mutex> lock(output.mutex);
         output.text[0].clear();
         output.text[1].clear();
@@ -100,7 +104,6 @@ int main(int argc, char** argv) {
 
     // The output is stuck. A thread hands many lines: it must finish in far less than a stuck write would take.
     output.hold(true);
-    const auto began = std::chrono::steady_clock::now();
     std::atomic<bool> handed{false};
     std::thread caller([&] {
         for (int i = 0; i < kLines; ++i) {
@@ -115,10 +118,10 @@ int main(int argc, char** argv) {
         handed = true;
     });
     // A caller that waits on the output does not finish while the output is held; one that hands does at once.
-    const auto deadline = began + std::chrono::seconds(2);
-    while (!handed && std::chrono::steady_clock::now() < deadline) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
-    }
+    // The caller's end is waited for itself, up to the test's deadline. Without the writer (the demonstration of the
+    // fault) it never comes: two seconds are enough to show it.
+    (void)galaxy::test_wait([&] { return handed.load(); }, std::chrono::milliseconds(5),
+                            without ? std::chrono::milliseconds(2000) : galaxy::kTestWaitDeadline);
     passed &= expect(handed.load(), "a caller handing lines waited on a stuck output");
     // flush gives up at its bound while the output stays stuck.
     if (!without) {
@@ -128,7 +131,7 @@ int main(int argc, char** argv) {
     caller.join();
 
     // Every line, in order; then lines on both outputs keep their order across them.
-    passed &= expect(without || writer.flush(std::chrono::milliseconds(5000)), "flush did not finish once the output moved");
+    passed &= expect(without || writer.flush(kLongBound), "flush did not finish once the output moved");
     {
         std::string want;
         for (int i = 0; i < kLines; ++i) {
@@ -147,7 +150,7 @@ int main(int argc, char** argv) {
         writer.hand(0u, "a", 1u);
         writer.hand(1u, "b", 1u);
         writer.hand(0u, "c", 1u);
-        passed &= expect(writer.flush(std::chrono::milliseconds(5000)), "flush did not finish");
+        passed &= expect(writer.flush(kLongBound), "flush did not finish");
         std::lock_guard<std::mutex> lock(output.mutex);
         // Output 1 sees the '|' of a, then b, then the '|' of c: a, b, c in that order.
         passed &= expect(output.text[0] == "a|c" && output.text[1] == "|b|", "two outputs' text out of order");

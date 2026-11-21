@@ -27,6 +27,8 @@ endfunction()
 set(rt "${galaxy_rt}")
 set(render_src "${galaxy_rt}/render")
 
+# The unit tests' wait for another thread (galaxy/test_wait.h): the event itself, a deadline that only reports (N-1073).
+galaxy_test(galaxy_test_wait_tests SOURCES ${rt}/test_wait_tests.cpp)
 # The process's output: every line whole, whichever threads write.
 galaxy_test(galaxy_whole_lines_tests SOURCES ${rt}/whole_lines_tests.cpp ${rt}/whole_lines.cpp)
 # Its writer's thread: no caller waits on a stuck output; order kept; flush bounded.

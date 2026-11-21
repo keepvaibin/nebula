@@ -15,6 +15,10 @@
 namespace {
 
 constexpr DWORD kChildSleepMs = 120000u;
+// What each process waits for another or for a file it writes: the event itself, polled every 100 ms, with a deadline
+// that only reports that it never came (a busy machine starts a process seconds late: N-1073).
+constexpr unsigned kPolls = 600u;
+constexpr DWORD kEventWaitMs = 60000u;
 
 // "parent <how> <file>": starts a sleeping child, writes "<child id> <tied>" to <file>, then ends as <how> says.
 int run_parent(const wchar_t* how, const wchar_t* file) {
@@ -42,7 +46,7 @@ int run_parent(const wchar_t* how, const wchar_t* file) {
     }
     // The test holds the child before this one ends (it writes <file>.go then).
     const std::wstring go = std::wstring(file) + L".go";
-    for (unsigned waited = 0u; waited < 300u && GetFileAttributesW(go.c_str()) == INVALID_FILE_ATTRIBUTES; ++waited) {
+    for (unsigned waited = 0u; waited < kPolls && GetFileAttributesW(go.c_str()) == INVALID_FILE_ATTRIBUTES; ++waited) {
         Sleep(100u);
     }
     if (std::wcscmp(how, L"crash") == 0) {
@@ -109,7 +113,7 @@ bool run_case(const Case& test, unsigned number) {
     // The child's id, once the parent wrote it.
     DWORD child_id = 0u;
     int tied = -1;
-    for (unsigned waited = 0u; waited < 300u && child_id == 0u; ++waited) {
+    for (unsigned waited = 0u; waited < kPolls && child_id == 0u; ++waited) {
         std::ifstream in(file);
         if (!(in >> child_id >> tied)) {
             child_id = 0u;
@@ -142,14 +146,16 @@ bool run_case(const Case& test, unsigned number) {
         // Killed from outside, as a test harness ends a game at its limit.
         TerminateProcess(parent.hProcess, 1u);
     }
-    if (WaitForSingleObject(parent.hProcess, 30000u) != WAIT_OBJECT_0) {
+    if (WaitForSingleObject(parent.hProcess, kEventWaitMs) != WAIT_OBJECT_0) {
         std::printf("case %u: the parent did not end\n", number);
         TerminateProcess(parent.hProcess, 1u);
         passed = false;
     }
     CloseHandle(parent.hProcess);
     if (child != nullptr) {
-        const bool ended = WaitForSingleObject(child, 10000u) == WAIT_OBJECT_0;
+        // A child that must end is waited for until it does. One that must not (the control: a child started without
+        // start_child) is looked at after a short wait: its end would show at once, and no wait proves it never comes.
+        const bool ended = WaitForSingleObject(child, test.child_ends ? kEventWaitMs : 2000u) == WAIT_OBJECT_0;
         if (ended != test.child_ends) {
             std::printf("case %u: the child %s after the parent ended\n", number, ended ? "ended" : "is still running");
             passed = false;

@@ -4,6 +4,7 @@
 #include "galaxy/test_temp.h"
 
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cstring>
 #include <filesystem>
@@ -153,26 +154,37 @@ int main() {
     passed &= expect(!fs::exists(sameFolder / "Nebula.sav.v4") && !fs::exists(sameFolder / "GameData.bin.v5"),
                      "only a newer format of the same tag is kept aside");
 
-    // A save request's wait sleeps (P-080: the game's thread spun a whole core while a slow save was written).
+    // A save request's wait sleeps (P-080: the game's thread spun a whole core while a slow save was written). The waiter
+    // is given the wait to itself for 800 ms of wall time, long enough for a spinning wait to show in its CPU time. The
+    // waiter's thread may start later than the worker's result: then its wait ends at once without sleeping (`slept`
+    // false), and that attempt shows nothing about sleeping, so it is made again (a busy machine starts a thread seconds
+    // late: N-1073). A wait that never sleeps fails every attempt.
     {
         StatusBoard board;
         constexpr std::int32_t kPending = 1;
         std::int32_t done = kDone;
         passed &= expect(!board.wait(&done, kPending), "a request already done is not waited for");
-        std::int32_t status = kPending;
         bool slept = false;
-        std::int32_t seen = kPending;
+        bool ended_with_result = false;
         std::chrono::nanoseconds used{};
-        std::thread waiter([&] {
-            const std::chrono::nanoseconds before = thread_cpu_time();
-            slept = board.wait(&status, kPending);
-            seen = status;
-            used = thread_cpu_time() - before;
-        });
-        std::this_thread::sleep_for(std::chrono::milliseconds(800));
-        board.store(&status, kFailed);
-        waiter.join();
-        passed &= expect(slept && seen == kFailed, "the wait ends with the worker's result");
+        for (int attempt = 0; attempt < 10 && !slept; ++attempt) {
+            std::int32_t status = kPending;
+            std::int32_t seen = kPending;
+            std::atomic<bool> entering{false};
+            std::thread waiter([&] {
+                const std::chrono::nanoseconds before = thread_cpu_time();
+                entering.store(true);
+                slept = board.wait(&status, kPending);
+                seen = status;
+                used = thread_cpu_time() - before;
+            });
+            while (!entering.load()) std::this_thread::yield();
+            std::this_thread::sleep_for(std::chrono::milliseconds(800));
+            board.store(&status, kFailed);
+            waiter.join();
+            ended_with_result = seen == kFailed;
+        }
+        passed &= expect(slept && ended_with_result, "the wait ends with the worker's result");
         passed &= expect(used < std::chrono::milliseconds(80), "the waiting thread sleeps (under 10% of the 800 ms)");
     }
 

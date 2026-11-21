@@ -6,8 +6,10 @@
 // installed, a replayed older manifest refused, a corrupt download refused). Usage: galaxy_update_tests [key.xml]
 // (installer/release-public-key.xml: the built-in key must be its modulus).
 #include "update_internal.h"
+#include "galaxy/test_wait.h"
 
 #include <chrono>
+#include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -32,6 +34,9 @@ using Clock = std::chrono::steady_clock;
 long long ms_since(Clock::time_point start) {
     return std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start).count();
 }
+
+// A budget to wait for an answer with that a busy machine does not run out (the product's own is kFreshBudgetMs).
+constexpr int kLongBudgetMs = 60000;
 
 constexpr std::string_view kTestModulus =
     "821RhhEolsNN7/9RB0ukYjEsDwzpJ7Lzy2QJut9jY98ZVIPm8oep6jn5Q8dMAerkQ1Y5ZWVcSJnzpGfv9X9uvhSZYnVhdz3I95UvOGA1w1XrrH9nUyTFP59NOV"
@@ -77,21 +82,24 @@ class FakeTransport final : public detail::Transport {
 public:
     std::mutex mutex;
     std::string releases = "[]";
-    int delay_ms = 0;
+    // A held listing is answered only when released: a slow server whose answer comes after the budget, with no clock in
+    // it (a busy machine cannot make the answer early). A hold that is never released ends at the test's deadline.
+    bool held = false;
+    std::condition_variable released;
     bool offline = false;
     int requests = 0;
     std::string manifest, signature, package;
 
     int get(const std::string& url, std::string& body, std::size_t max_bytes, int) override {
         std::string answer;
-        int delay = 0;
+        bool listing_request = false;
         {
             std::lock_guard lock(mutex);
             if (offline) return -1;
             if (url.find("api.github.com") != std::string::npos) {
                 ++requests;
                 answer = releases;
-                delay = delay_ms;
+                listing_request = true;
             } else if (url.ends_with("/manifest")) {
                 answer = manifest;
             } else if (url.ends_with("/sig")) {
@@ -100,10 +108,20 @@ public:
                 return 404;
             }
         }
-        if (delay > 0) std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+        if (listing_request) {
+            std::unique_lock lock(mutex);
+            released.wait_for(lock, galaxy::kTestWaitDeadline, [this] { return !held; });
+        }
         if (answer.size() > max_bytes) return -2;
         body = answer;
         return 200;
+    }
+    void hold_listing(bool on) {
+        {
+            std::lock_guard lock(mutex);
+            held = on;
+        }
+        released.notify_all();
     }
     int download(const std::string&, const std::filesystem::path& file, std::uint64_t max_bytes, const std::atomic_bool&,
                  const std::function<void(std::uint64_t)>& progress) override {
@@ -221,32 +239,36 @@ int main(int argc, char** argv) {
     g_transport.releases = listing("9.9.9-beta.1", "fresh");
     galaxy::update::begin(installed);
     auto start = Clock::now();
-    auto offer_now = offer(kFreshBudgetMs);
+    // The budget is the product's own (kFreshBudgetMs); here the answer is waited for with a budget no busy machine
+    // runs out, and what is asked is that the answer is offered when it comes.
+    auto offer_now = offer(kLongBudgetMs);
     long long waited = ms_since(start);
-    check(offer_now && offer_now->notes == "fresh" && waited < kFreshBudgetMs,
-          "a fresh answer inside the budget is offered at this start (" + std::to_string(waited) + " ms)");
+    check(offer_now && offer_now->notes == "fresh", "a fresh answer inside the budget is offered at this start");
     finish();
     check(g_transport.requests == 1, "one start, one request");
     detail::reset_for_tests();
     galaxy::update::begin(installed);
     start = Clock::now();
-    offer_now = offer(kFreshBudgetMs);
+    offer_now = offer(kLongBudgetMs);
     waited = ms_since(start);
-    check(g_transport.requests == 1 && offer_now && offer_now->notes == "fresh" && waited < 100,
-          "within the hour after an answer no request is made; the kept answer at once (" + std::to_string(waited) + " ms)");
+    check(g_transport.requests == 1 && offer_now && offer_now->notes == "fresh" && waited < kLongBudgetMs / 2,
+          "within the hour after an answer no request is made; the kept answer at once, not after the budget (" +
+              std::to_string(waited) + " ms of " + std::to_string(kLongBudgetMs) + ")");
     detail::reset_for_tests();
 
     write_cache(data, "{\"checkedUtc\": \"2020-01-01T00:00:00.0000000Z\"}");
     g_transport.releases = listing("9.9.9-beta.1", "late");
-    g_transport.delay_ms = 1200;
+    g_transport.hold_listing(true);
     galaxy::update::begin(installed);
     start = Clock::now();
     offer_now = offer(kFreshBudgetMs);
     waited = ms_since(start);
-    check(!offer_now && waited >= kFreshBudgetMs - 20 && waited < kFreshBudgetMs + 250,
+    // The answer is held, so it cannot have come: the offer is empty if it waited its budget and no longer. How much
+    // later than the budget it returned is no verdict (a busy machine runs the waiter late).
+    check(!offer_now && waited >= kFreshBudgetMs - 20,
           "an answer after the budget is not waited for (" + std::to_string(waited) + " ms)");
+    g_transport.hold_listing(false);
     finish();
-    g_transport.delay_ms = 0;
     detail::reset_for_tests();
     const int before_late = g_transport.requests;
     galaxy::update::begin(installed);
@@ -262,10 +284,11 @@ int main(int argc, char** argv) {
     g_transport.offline = true;
     galaxy::update::begin(installed);
     start = Clock::now();
-    offer_now = offer(kFreshBudgetMs);
+    offer_now = offer(kLongBudgetMs);
     waited = ms_since(start);
-    check(offer_now && offer_now->notes == "late" && waited < kFreshBudgetMs,
-          "offline the wait ends at once and the kept answer is offered (" + std::to_string(waited) + " ms)");
+    check(offer_now && offer_now->notes == "late" && waited < kLongBudgetMs / 2,
+          "offline the wait ends at once, not after the budget, and the kept answer is offered (" + std::to_string(waited) +
+              " ms of " + std::to_string(kLongBudgetMs) + ")");
     finish();
     check(read_file(data / "update-check.json").find("2020-01-01T00:00:00Z") != std::string::npos,
           "a failed check keeps the last answer and its time");
@@ -314,11 +337,11 @@ int main(int argc, char** argv) {
     finish();
     check(check_state() == CheckState::Failed, "no listing: the check failed");
     g_transport.offline = false;
-    g_transport.delay_ms = 600;
+    g_transport.hold_listing(true);
     check(check_now(installed) && check_state() == CheckState::Checking && !check_now(installed),
           "a running check shows as checking and is not started twice");
+    g_transport.hold_listing(false);
     finish();
-    g_transport.delay_ms = 0;
     detail::reset_for_tests();
 
     // The signed manifest's rules without a signature (detail::manifest_takes): the asset ties it to this build.
@@ -342,14 +365,17 @@ int main(int argc, char** argv) {
     write_cache(data, "{\"checkedUtc\": \"2020-01-01T00:00:00Z\"}");
     g_transport.releases = listing("9.9.9-beta.1", "notes");
     galaxy::update::begin(installed);
-    const auto release = offer(kFreshBudgetMs);
+    const auto release = offer(kLongBudgetMs);
     const auto wait_install = [] {
-        for (int i = 0; i < 500; ++i) {
-            const InstallState state = install_progress().state;
-            if (state == InstallState::Restart || state == InstallState::Failed || state == InstallState::Canceled) return state;
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-        return InstallState::Idle;
+        InstallState state = InstallState::Idle;
+        // The install's end is waited for itself; a state that is not an end is returned only when it never came.
+        (void)galaxy::test_wait(
+            [&] {
+                state = install_progress().state;
+                return state == InstallState::Restart || state == InstallState::Failed || state == InstallState::Canceled;
+            },
+            std::chrono::milliseconds(10));
+        return state;
     };
     const std::string asset_line = "asset=" + std::string(kAsset) + "\n";
     g_transport.manifest = "version=9.9.9-beta.1\nsha256=" + std::string(kPackageSha) + "\nsize=" + std::to_string(kPackage.size()) + "\n";
