@@ -67,7 +67,7 @@ Everything that is deterministic and proves a change is right:
 | Bad files, two mods | The stored corpus of bad files, and the two-mod tests, when Agent 2's packages bring them |
 | Android | The APK build and the launcher's tests |
 | Tablet, short | Install the test package, start, the 12 quick stops, their step hashes against the PC at the tablet's screen size, the quick set of mod tests |
-| GitHub | The push workflow's Linux build, Linux unit tests, Mac build and Rust-on-Linux jobs on the same commit are green (section 8) |
+| GitHub | Every `must` job of the push workflow (tools/gate/github_jobs.tsv: Mac, Linux, Linux unit tests, both sanitizer jobs, Rust on both systems, both Android builds) is green for the commit, when the landing's plan has the group `github` (section 8) |
 
 The tablet's full tour and the mod tests in full on the tablet are in the long run.
 
@@ -184,9 +184,9 @@ gate over 30 minutes is a ledger row for Agent 1; the answer is more parts side 
 
 It is the only place Linux and Mac code is built, so it is part of the main gate.
 
-- At its end the main gate reads GitHub's jobs for the candidate's commit. **Linux, Linux unit tests, Mac and Rust on Linux must have ended green** (they take 5 to 35 minutes; the branch was pushed before the gate started; the gate waits up to 15 minutes more). A red one fails the gate.
-- The Windows and Android jobs there repeat what the local gate proves and take up to two hours today. They may still be running when main moves. If one ends red, main is red.
-- **Agent 1 brings the whole workflow under 20 minutes** (compiler caches kept between runs, the Android job's dependencies cached, no job waiting on another without need). From then on every job must be green before main moves.
+- Each job of `.github/workflows/check.yml` has a class in `tools/gate/github_jobs.tsv`: **must** (Mac, Linux, Linux unit tests, both sanitizer jobs, Rust on both systems, both Android builds), **nightly** (the two Windows jobs: this machine builds and tests Windows itself) or **advisory** (the Android start check). A job the table does not name counts as must and the run says so.
+- A landing or move whose plan has the group `github` (tools/gate/scope.tsv; a run with no plan has it) pushes the candidate branch, and **main does not move until every must job is green for the commit.** The gate waits for them after its own checks (up to 120 minutes, outside the lock). A job's state is read from every push run of that commit, under any branch name, and the newest run that has a result wins. A plan without `github` (documents, tools, test data, pictures) pushes nothing and waits for nothing.
+- A red must job refuses a run before it starts, and stops it while it runs (the job's log, its last 200 lines, is saved in the run folder as `github-<job>.log`). A job that ended cancelled or startup_failure is run again once; ending that way twice, or the time limit, is `env`: not judged, main does not move, the branch stays in the queue. A red advisory job is run again once and, red again, told in one line.
 
 ---
 
@@ -348,7 +348,7 @@ quick mod set) or `full` bring them back; `gate.py --mods short|full` does it fo
 under a lock folder beside it) and, when no queue runner is alive, becomes the runner; otherwise it waits for its own branches.
 The runner takes every waiting branch in queue order, replays each branch's own commits on a temporary branch at `origin/main` in
 `D:/NebulaWork/MarioGalaxyRecomp/Nebula-landing` (a branch that does not apply is `conflict`: not judged, the others go on), runs
-the union's checks once on the tip, and on a pass approves new pictures, reads GitHub as a move always did, and moves main. On a
+the union's checks once on the tip, and on a pass approves new pictures, reads GitHub (section 8) when its plan has the group `github`, and moves main. On a
 fail it halves the batch to find the branches at fault, lands the rest and names the ones it removed with their `KIND` lines. A
 tool or machine fault lands nothing: every branch waits again. `gate.py land --queue` runs what waits. Exit codes: 0 landed, 1 fail,
 2 not judged, 3 the same failure three times. The failure's signature (the first failing check and its first error line) is kept
