@@ -331,7 +331,7 @@ This section is what the tools do now. Where it differs from an older section ab
 
 **Checks by what changed.** `tools/gate/scope.tsv` maps path patterns to groups of checks (`tools/gate/scope.py` names the
 groups once: `repo`, `tools`, `build`, `unit`, `start`, `engine1`, `engine3`, `tour1`, `tour3`, `import`, `android`, `tablet12`).
-Every row a changed file matches adds its groups; a landing runs the union over all changed files (`git diff --name-only` from the
+The group `repo` (the cheap repository checks) is in every run, whatever the rows say. Every row a changed file matches adds its groups; a landing runs the union over all changed files (`git diff --name-only` from the
 merge base with `origin/main`). A change of documents only runs `repo`, with no build, so it lands in minutes. A change to the
 game runs the build, the unit tests, a start on each renderer and the 12-stop tour on Direct3D 12 with its pictures and replays.
 A change to the renderers runs the engine tests and the tour on all three. A file that no row names makes the run `full`:

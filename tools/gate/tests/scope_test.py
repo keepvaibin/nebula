@@ -4,6 +4,8 @@ graphics card or a tablet.
     python -X utf8 -I tools/gate/tests/scope_test.py [--work FOLDER]
 
   each_row                  every row of the tree's own table, read as the gate reads it: what a changed file of that row runs
+  repo_in_every_run         the repository checks are in every plan, whatever a row names (scope.ALWAYS)
+  repo_group_is_in_every_run  the repository checks are in every plan, whatever a row names (scope.ALWAYS)
   union_of_rows             a change of several files runs the union of every row each file matches, whatever the order
   outside_every_row_is_full a file no row names makes the run full (and so does a change with no file)
   mods_off_in_full          mods = off keeps the mod suites and LumaLink's check out of the full run (the main level) and out
@@ -52,7 +54,7 @@ class Rows(unittest.TestCase):
             (("runtime/src/audio/mixer.cpp",), ["repo", "build", "unit", "start", "engine1", "tour1"]),
             (("platform/sdl/host.cpp",), ["repo", "build", "unit", "start", "engine1", "tour1"]),
             (("crates/nebula-import/src/lib.rs",), ["repo", "import"]),
-            (("platform/android/app/build.gradle",), ["android", "tablet12"]),
+            (("platform/android/app/build.gradle",), ["repo", "android", "tablet12"]),   # repo: in every run (scope.ALWAYS)
             (("runtime/src/render/vk/renderer_vk.cpp",), ["repo", "build", "unit", "start", "engine1", "engine3", "tour1", "tour3",
                                                           "android", "tablet12"]),
             (("tests/engine/boot/test.json",), ["repo", "build", "engine3"]),
@@ -89,6 +91,22 @@ class Rows(unittest.TestCase):
         table = scope.parse("mods = off\npattern\tgroups\ndocs/**\trepo\n.github/**\tfull\n")
         self.assertTrue(scope.plan_for([".github/workflows/check.yml"], table).full)
         self.assertFalse(scope.plan_for(["docs/a.md"], table).full)
+
+    def test_repo_group_is_in_every_run(self):
+        """Whatever the table says, the cheap repository checks run: a row that names other groups, a row that names none
+        of repo, a file no row names (full), and a table whose rows never name repo at all."""
+        self.assertIn("repo", plan("platform/android/app/build.gradle").groups)
+        self.assertIn("repo", plan("platform/android/app/build.gradle", "tests/android/walk/test.json").groups)
+        table = scope.parse("mods = off\npattern\tgroups\nplatform/android/**\tandroid,tablet12\ndocs/**\ttools\n")
+        for path in ("platform/android/a.kt", "docs/a.md", "unknown/a.txt"):
+            self.assertIn("repo", scope.plan_for([path], table).groups, path)
+        self.assertEqual(scope.plan_for(["platform/android/a.kt"], table).groups, ["repo", "android", "tablet12"])
+        self.assertEqual(scope.plan_for(["docs/a.md"], table).groups, ["repo", "tools"])
+        for path in ("platform/android/x.kt", "tests/pictures/x.png", "tests/mods/a/test.json"):    # the tree's own table
+            self.assertIn("repo", scope.plan_for([path], TABLE).groups, path)
+        checks = scope.select({"repo/audit": [], "build/android": []}, scope.plan_for(["platform/android/a.kt"], TABLE).groups)
+        self.assertIn("repo/audit", checks, "the check the group stands for is selected")
+        self.assertIn("repo", scope.groups_from_text(scope.plan_for(["platform/android/a.kt"], TABLE).text())[0])
 
     def test_paths_with_backslashes_match(self):
         self.assertEqual(plan("docs\\plan\\a.md").groups, ["repo"])

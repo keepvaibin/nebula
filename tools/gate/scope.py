@@ -2,7 +2,8 @@
 
 A landing runs the checks of the changed files, not all of them. tools/gate/scope.tsv maps path patterns to groups of
 checks; the groups are named here, once, with the check names each one stands for. Every row a changed file matches adds
-its groups: the run is the union over all changed files. A file that no row names makes the run `full`: everything the
+its groups: the run is the union over all changed files, and always the group `repo` (the cheap repository checks), whatever
+the table says. A file that no row names makes the run `full`: everything the
 main gate runs today on the native game.
 
     python -X utf8 -I tools/gate/scope.py [--table scope.tsv] [--base REF] [PATH ...]   print the groups and checks
@@ -56,6 +57,8 @@ GROUPS = {
 GROUP_NAMES = tuple(GROUPS)
 # A pseudo-group a row may name: it makes the run full, as a file no row names does.
 FULL = "full"
+# The groups every run has, whatever the table says: the cheap repository checks (the audit, the code checks, the scripts).
+ALWAYS = ("repo",)
 # Checks that are taken with a group whose pictures they read; the checks they name as needs are not pulled in by them.
 SOFT = ("pictures/declared",)
 
@@ -170,10 +173,11 @@ def path_matches(path, pattern):
 
 
 def plan_for(paths, table):
-    """The Plan for the changed paths: the union of the groups of every row each path matches; a path no row names makes the
-    run full. No path at all is full too (nothing says what changed)."""
+    """The Plan for the changed paths: the union of the groups of every row each path matches, and ALWAYS (the repository
+    checks run in every landing, whatever a row says); a path no row names makes the run full. No path at all is full too
+    (nothing says what changed)."""
     paths = [p.replace("\\", "/") for p in paths if p and p.strip()]
-    wanted, why, unmatched, full = set(), {}, [], not paths
+    wanted, why, unmatched, full = set(ALWAYS), {}, [], not paths
     for path in paths:
         brought = []
         for pattern, groups, _ in table.rows:
