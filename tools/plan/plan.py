@@ -1,6 +1,6 @@
 """plan.py: the step tool of the native plan (package T13). The coding agent reads, codes and proves; this says what is next.
 
-    python -X utf8 -I tools/plan/plan.py next | status | page | rows [ID] | start ID | land ID | blocked ID "WHY"
+    python -X utf8 -I tools/plan/plan.py next | status | page | rows [ID] | start ID | land ID [--github-again] | blocked ID "WHY"
                                          | claim PACKAGE [--take-stale] | tool "TEXT" | toolfault --last --could-not "TEXT"
     (next, start, land, blocked, claim, tool, toolfault and status take --agent 1|2; 1 is the default)
     (--no-push, before the command, or NEBULA_PLAN_NO_PUSH=1 in the environment: the progress branch is not pushed)
@@ -763,7 +763,10 @@ LAND = land_with_gate            # tests put their own in here
 
 def gate_options(a, agent):
     """The options `gate.py land` gets from this tool: who asks, where the faults and the failures are kept."""
-    return ["--agent", agent, "--live", live_dir(a.live).as_posix(), "--failures", str(a.failures)]
+    options = ["--agent", agent, "--live", live_dir(a.live).as_posix(), "--failures", str(a.failures)]
+    if getattr(a, "github_again", False):
+        options.append("--github-again")      # a red GitHub job is run again once before the landing judges (gate.py --github-again)
+    return options
 
 
 # ---- BLOCKED.md, STATUS.md, landings.tsv ---------------------------------------------------------------------
@@ -1484,6 +1487,10 @@ def parser():
     for name, fn in (("start", cmd_start), ("land", cmd_land)):
         q = sub.add_parser(name, parents=[who])
         q.add_argument("id")
+        if name == "land":
+            q.add_argument("--github-again", action="store_true",
+                           help="a must job of GitHub that is red for the commit is run again once, then the landing judges by "
+                                "the new result (when the log shows a download or an install failing, not the game)")
         q.set_defaults(fn=fn)
     c = sub.add_parser("claim", parents=[who])
     c.add_argument("package")

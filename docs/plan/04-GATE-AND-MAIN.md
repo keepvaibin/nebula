@@ -67,7 +67,7 @@ Everything that is deterministic and proves a change is right:
 | Bad files, two mods | The stored corpus of bad files, and the two-mod tests, when Agent 2's packages bring them |
 | Android | The APK build and the launcher's tests |
 | Tablet, short | Install the test package, start, the 12 quick stops, their step hashes against the PC at the tablet's screen size, the quick set of mod tests |
-| GitHub | Every `must` job of the push workflow (tools/gate/github_jobs.tsv: Mac, Linux, Linux unit tests, both sanitizer jobs, Rust on both systems, both Android builds) is green for the commit, when the landing's plan has the group `github` (section 8) |
+| GitHub | Every `must` job of the push workflow (tools/gate/github_jobs.tsv: Mac, Linux, Linux unit tests, both sanitizer jobs, Rust on both systems) is green for the commit, when the landing's plan has the group `github` (section 8) |
 
 The tablet's full tour and the mod tests in full on the tablet are in the long run.
 
@@ -184,9 +184,9 @@ gate over 30 minutes is a ledger row for Agent 1; the answer is more parts side 
 
 It is the only place Linux and Mac code is built, so it is part of the main gate.
 
-- Each job of `.github/workflows/check.yml` has a class in `tools/gate/github_jobs.tsv`: **must** (Mac, Linux, Linux unit tests, both sanitizer jobs, Rust on both systems, both Android builds), **nightly** (the two Windows jobs: this machine builds and tests Windows itself) or **advisory** (the Android start check). A job the table does not name counts as must and the run says so.
+- Each job of `.github/workflows/check.yml` has a class in `tools/gate/github_jobs.tsv`: **must** (Mac, Linux, Linux unit tests, both sanitizer jobs, Rust on both systems), **nightly** (the two Windows jobs and the two Android builds, about 50 minutes each: this machine builds and tests them itself, and a plan with the group `android` runs the Android build here) or **advisory** (the Android start check). A job the table does not name counts as must and the run says so.
 - A landing or move whose plan has the group `github` (tools/gate/scope.tsv; a run with no plan has it) pushes the candidate branch, and **main does not move until every must job is green for the commit.** The gate waits for them after its own checks (up to 120 minutes, outside the lock). A job's state is read from every push run of that commit, under any branch name, and the newest run that has a result wins. A plan without `github` (documents, tools, test data, pictures) pushes nothing and waits for nothing.
-- A red must job refuses a run before it starts, and stops it while it runs (the job's log, its last 200 lines, is saved in the run folder as `github-<job>.log`). A job that ended cancelled or startup_failure is run again once; ending that way twice, or the time limit, is `env`: not judged, main does not move, the branch stays in the queue. A red advisory job is run again once and, red again, told in one line.
+- A red must job refuses a run before it starts, and stops it while it runs (the job's log, its last 200 lines, is saved in the run folder as `github-<job>.log`). A job that ended cancelled or startup_failure, or red at a set-up (`uses:`) step (checkout, a set-up action, a cache, an upload), is run again once; ending that way twice, or the time limit, is `env`: not judged, main does not move, the branch stays in the queue. A red advisory job is run again once and, red again, told in one line. When a `run:` step failed for a reason that is not the game (a download or an install), `--github-again` (on `gate.py land`, `--main --move` and `plan.py land`) runs every red must job again once before the start check, writes each to the tool-fault record as ENV, and judges by the new result. A main gate without `--move` waits for the same jobs up to the same limit.
 
 ---
 

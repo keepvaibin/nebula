@@ -21,6 +21,11 @@ Every reading of GitHub here is a fake: a function that returns the push runs of
   log_that_cannot_be_fetched         one line says so, no file is made, the verdict stays
   table_and_workflow_agree           github_jobs.tsv and the job names of check.yml (matrix legs written out) are the same set,
                                      and the names written out are those a real run of main showed (a fixture, below)
+  setup_step_is_rerun_not_red        a red job whose first failed step is a `uses:` step (checkout, a set-up action, a cache, an upload,
+                                     GitHub's own set-up) is run again once like a cancelled one; twice is env; a failed `run:` step, the
+                                     start-check action, a step the workflow does not name and a job with no steps listed stay red
+  step_kinds_from_the_workflow       the steps of each job of check.yml are told apart as the workflow writes them
+  github_again_reruns_a_red          rerun_red runs a red job again once; its old end, still shown, is not a red, a second red is
   table_errors                       a table with no header, an unknown class, a twice named job or a row with no class is refused
 Exit 0 when every case holds.
 """
@@ -185,6 +190,8 @@ class Rule(unittest.TestCase):
             self.assertEqual(pathlib.Path(path).name, "github-Linux-unit-tests.log")
             saved = pathlib.Path(path).read_text(encoding="utf-8").splitlines()
         self.assertEqual((saved[0], saved[-1], len(saved)), ("line 101", "line 300", 200), "the last 200 lines")
+        self.assertEqual(said[-1], "If github-Linux-unit-tests.log shows a download or an install failing, and not the game's own "
+                                   "build or tests: land again with --github-again.", "the message ends with the way out")
         shown = [l for l in said if l.startswith("  line")]
         self.assertEqual(shown, ["  " + l for l in saved[:20]], "the first 20 of them are printed")
         self.assertIn("Linux unit tests failure", said[0], "the line that names the job comes first")
@@ -281,15 +288,15 @@ class Rule(unittest.TestCase):
         self.assertEqual(kind, "pass")
 
     def test_time_limit_is_env(self):
-        jobs = [job(n) for n in CLASSES if n not in ("Mac", "Android (x86_64)")] + [running("Mac"), running("Android (x86_64)")]
+        jobs = [job(n) for n in CLASSES if n not in ("Mac", "Linux")] + [running("Mac"), running("Linux")]
         r, c = make(lambda sha: [run(1, "gate/x", jobs)])
         kind, detail, reading = r.wait(120, sleep=c.sleep)
         self.assertEqual(kind, "env")
         self.assertIn("Mac", detail)
-        self.assertIn("Android (x86_64)", detail)
+        self.assertIn("Linux", detail)
         self.assertIn("120 minutes", detail)
         self.assertGreaterEqual(c.now, 7200.0)
-        self.assertEqual(sorted(reading.pending), ["Android (x86_64)", "Mac"])
+        self.assertEqual(sorted(reading.pending), ["Linux", "Mac"])
         r, c = make(lambda sha: (_ for _ in ()).throw(RuntimeError("gh run list: timeout")))
         kind, detail, reading = r.wait(2, sleep=c.sleep)
         self.assertEqual(kind, "env")
@@ -319,9 +326,124 @@ class Rule(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertIsNone(rule.save_log(finding, tmp, broken, said.append))
             self.assertEqual(list(pathlib.Path(tmp).iterdir()), [])
-        self.assertEqual(len(said), 2)
+        self.assertEqual(len(said), 3)
         self.assertIn("could not be fetched", said[1])
+        self.assertEqual(said[2], rule.advice("Mac"), "the advice line is last")
         self.assertIsNone(finding.log)
+
+
+def step(name, number, conclusion="success"):
+    return {"name": name, "number": number, "conclusion": conclusion, "status": "completed"}
+
+
+def with_steps(j, *steps):
+    return dict(j, steps=list(steps))
+
+
+WORKFLOW_TEXT = rule.WORKFLOW_FILE.read_text(encoding="utf-8")
+
+
+class Steps(unittest.TestCase):
+    def rule_of(self, answers, rerunner=None, clock=None):
+        clock = clock or Clock()
+        r = rule.Rule("abc", CLASSES, answers, rerunner, (), clock=clock, say=lambda t: None,
+                      setup=rule.setup_classifier(WORKFLOW_TEXT))
+        return r, clock
+
+    def test_setup_step_is_rerun_not_red(self):
+        def red_at(*steps, name="Mac", jid=31):
+            return with_steps(job(name, conclusion="failure", jid=jid), *steps)
+        checkout = red_at(step("Set up job", 1), step("Run actions/checkout@v7", 2, "failure"), step("Build Nebula.app", 3, "skipped"))
+        runs = [run(4, "gate/x", rest("Mac") + [checkout])]
+        rerunner = Rerunner()
+        r, clock = self.rule_of(lambda sha: runs, rerunner)
+        self.assertIsNone(r.red_before(), "a failed checkout does not refuse the start")
+        reading = r.read()
+        self.assertEqual((reading.reds, reading.pending, rerunner.calls), ([], ["Mac"], [(4, 31)]), "run again once")
+        # Twice: the run again ends at the same set-up step.
+        again = red_at(step("Run actions/checkout@v7", 2, "failure"), jid=32)
+        r2, clock2 = self.rule_of(sequence([run(4, "gate/x", rest("Mac") + [checkout])], [run(4, "gate/x", rest("Mac") + [running("Mac")])],
+                                           [run(4, "gate/x", rest("Mac") + [again])]), Rerunner())
+        kind, detail, _ = r2.wait(120, sleep=clock2.sleep)
+        self.assertEqual(kind, "env")
+        self.assertIn("GitHub could not run Mac", detail)
+        self.assertIn("Run actions/checkout@v7", detail, "it names the set-up step")
+        # Every kind of `uses:` step of the workflow, and GitHub's own.
+        for name in ("Set up job", "Run ./.github/actions/compiler-cache", "Restore libc++", "Save libc++", "Save the compiler cache",
+                     "Post Run actions/checkout@v7"):
+            j = red_at(step(name, 5, "failure"))
+            r3, _ = self.rule_of(lambda sha, j=j: [run(4, "gate/x", rest("Mac") + [j])], Rerunner())
+            self.assertEqual(r3.read().reds, [], "%s is a set-up step" % name)
+        # A `run:` step stays red, and so does what the rule cannot tell.
+        for j in (red_at(step("Set up job", 1), step("Build Nebula.app", 2, "failure")),
+                  red_at(step("Start check (Metal)", 2, "failure")),
+                  red_at(step("A step the workflow never had", 2, "failure")),
+                  red_at(step("Run actions/checkout@v7", 2), step("Build tools", 3, "failure")),
+                  red_at(),
+                  job("Mac", conclusion="failure", jid=33)):
+            r4, _ = self.rule_of(lambda sha, j=j: [run(4, "gate/x", rest("Mac") + [j])], Rerunner())
+            self.assertEqual([f.job for f in r4.read().reds], ["Mac"], j.get("steps"))
+            self.assertIn("Mac failure", r4.red_before())
+        # The first failed step decides, whatever came after it (a `run:` step that always runs, after a set-up failure).
+        j = red_at(step("Run actions/checkout@v7", 2, "failure"), step("The compiler cache's hits and misses", 9, "failure"))
+        r5, _ = self.rule_of(lambda sha: [run(4, "gate/x", rest("Mac") + [j])], Rerunner())
+        self.assertEqual(r5.read().reds, [])
+        # The start-check action of the Windows job is the check itself, not a set-up.
+        windows = rule.setup_classifier(WORKFLOW_TEXT)(with_steps(job("Windows (three renderers, unit tests)", conclusion="failure"),
+                                                                   step("Start check (Direct3D 12, Vulkan and Direct3D 11)", 8, "failure")))
+        self.assertIsNone(windows)
+        # The same for an advisory job: run again once, red twice is told, never blocks.
+        start = ADVISORY[0]
+        adv = with_steps(job(start, conclusion="failure", jid=41), step("Run actions/download-artifact@v8", 2, "failure"))
+        rerunner = Rerunner()
+        r6, _ = self.rule_of(lambda sha: [run(4, "gate/x", rest(start) + [adv])], rerunner)
+        self.assertTrue(r6.read().done)
+        self.assertEqual(rerunner.calls, [(4, 41)])
+
+    def test_step_kinds_from_the_workflow(self):
+        steps = rule.workflow_steps(WORKFLOW_TEXT)
+        self.assertEqual(sorted(steps), sorted(REAL_RUN_NAMES))
+        mac = steps["Mac"]
+        self.assertEqual((mac["Run actions/checkout@v7"], mac["Build Nebula.app"], mac["Save libc++"], mac["Build tools"]),
+                         ("uses", "run", "uses", "run"))
+        self.assertEqual(steps["Android (x86_64)"]["Run actions/upload-artifact@v7"], "uses")
+        self.assertEqual(steps["Windows (three renderers, unit tests)"]["Start check (Direct3D 12, Vulkan and Direct3D 11)"], "run",
+                         "the start-check action is the check itself")
+        self.assertEqual(steps["Linux sanitizers (thread)"]["Unit tests"], "run")
+        self.assertEqual(rule.step_kind({}, "Post Save the compiler cache"), "uses")
+        self.assertEqual(rule.step_kind({}, "Anything"), "run")
+        small = ("jobs:\n  a:\n    name: A\n    steps:\n      - uses: actions/checkout@v7\n      - name: Say\n        run: |\n          echo x\n"
+                 "      - run: make\n      - id: c\n        uses: ./x\n")
+        self.assertEqual(rule.workflow_steps(small)["A"], {"Run actions/checkout@v7": "uses", "Say": "run", "Run make": "run", "Run ./x": "uses"})
+
+
+class Again(unittest.TestCase):
+    def test_github_again_reruns_a_red(self):
+        clock = Clock()
+        red = job("Mac", conclusion="failure", jid=51)
+        rerunner = Rerunner()
+        notes = []
+        r, _ = make(lambda sha: [run(4, "work/x", rest("Mac") + [red])], rerunner, clock=clock, notes=notes)
+        self.assertIn("Mac failure", r.red_before(), "without the switch it refuses")
+        st = r.last_reds[0]
+        ok, text = r.rerun_red(st)
+        self.assertTrue(ok)
+        self.assertEqual(rerunner.calls, [(4, 51)])
+        self.assertTrue(any("--github-again" in n for n in notes), notes)
+        self.assertIsNone(r.red_before(), "run again: its old end, still shown, is no red")
+        self.assertEqual(r.read().pending, ["Mac"])
+        self.assertEqual(r.read().reds, [])
+        clock.now += rule.RERUN_GRACE_SECONDS + 1
+        self.assertEqual([f.job for f in r.read().reds], ["Mac"], "red again after the grace: a red (once is all the switch gives)")
+        # A new attempt that is green wins; one that is red with a new job id is red at once.
+        r, _ = make(lambda sha: [run(4, "work/x", rest("Mac") + [job("Mac", conclusion="failure", jid=52)])], Rerunner(), clock=Clock())
+        r.reruns["Mac"] = (51, 0.0)
+        self.assertEqual([f.job for f in r.read().reds], ["Mac"])
+        refused = Rerunner(ok=False)
+        r, _ = make(lambda sha: [run(4, "work/x", rest("Mac") + [red])], refused)
+        r.red_before()
+        self.assertFalse(r.rerun_red(r.last_reds[0])[0])
+        self.assertIn("Mac failure", r.red_before(), "a re-run GitHub refuses leaves the red")
 
 
 class Table(unittest.TestCase):

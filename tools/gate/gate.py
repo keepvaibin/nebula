@@ -10,7 +10,8 @@ starts the game for a test goes through here.
          pictures and step hashes, the other discs, the mod tests on every renderer, the Android build, the tablet's
          short part (the 12 stops, their step hashes against the PC's at the tablet's screen size) and every `must` job of
          GitHub's Check run of the same commit (tools/gate/github_jobs.tsv: Mac, Linux, Linux unit tests, both sanitizer
-         jobs, Rust on both systems, both Android builds; a job the table does not name counts as must), planned.tsv's
+         jobs, Rust on both systems; a job the table does not name counts as must; the Android builds are nightly: a plan with
+         the group `android` builds the app here), planned.tsv's
          github/<job> lines aside.
          --move: main moves to this commit when it passes (section 5). It needs a whole quick gate of the commit
          passed, the branch pushed and main an ancestor of it; it takes the gate lock (or waits --wait minutes),
@@ -19,7 +20,8 @@ starts the game for a test goes through here.
          pushed first as gate/<run> (section 5): GitHub runs every job on it while the gate runs (a red `must` job stops the
          run), the gate frees gate.lock when its own checks pass, waits up to 120 minutes for every `must` job to be green
          for the commit (any push run of it; the newest result wins), then moves main and deletes gate/<run>. Main never
-         moves before they are green; a cancelled job is run again once, and the limit gives env (not judged). A plan
+         moves before they are green; a cancelled job, or one red at a set-up (`uses:`) step, is run again once, and the limit gives env
+         (not judged). --github-again: every red `must` job is run again once before the start check, each a tool-fault line (ENV). A plan
          with no `github` pushes no candidate, reads nothing from GitHub and moves main when its own checks pass
          (tools/gate/github_rule.py).
          A picture with no approved copy (kind new), or one the branch declares in PICTURES-CHANGE.txt, never fails a run:
@@ -128,10 +130,9 @@ QUICK_FIRST = ("build/windows", "unit/windows", "start/d3d12", "engine/d3d12")
 TABLET_CHECKS = ("tablet/prepare", "android/tablet", "tour/tablet", "tablet/remove", "tour/tablet-pc", "replays/tablet")
 # GitHub's push workflow (.github/workflows/check.yml). A move whose plan has the group `github` needs every `must` job
 # (tools/gate/github_jobs.tsv) green for the commit (section 8), waited for outside gate.lock for up to GITHUB_WAIT_MINUTES.
-# A main gate without --move and the final check read the same jobs, for up to GITHUB_CHECK_MINUTES.
+# A main gate without --move and the final check read the same jobs, for up to the same --github-wait.
 WORKFLOW = "check.yml"
 GITHUB_WAIT_MINUTES = 120
-GITHUB_CHECK_MINUTES = 15
 # What the readings of GitHub wait with and read the time from (tests put fakes in these).
 GITHUB_SLEEP = time.sleep
 GITHUB_CLOCK = time.time
@@ -670,6 +671,8 @@ def run(cmd, log, env=None, cwd=None, timeout=None):
                                    creationflags=flags)
         with CHILDREN_LOCK:
             CHILDREN.add(process)
+        if STOPPED.is_set():
+            end_tree(process)   # stopped between the check above and the program's start: stop_runs did not see it
         try:
             code = process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
@@ -1732,7 +1735,49 @@ class Notes:
 
 def make_rule(sha, classes, planned=(), notes=None):
     """The rule for a commit, reading GitHub through gh (the tests put fakes in commit_runs, gh_rerun and GITHUB_CLOCK)."""
-    return github_rule.Rule(sha, classes, commit_runs, gh_rerun, planned, clock=GITHUB_CLOCK, note=notes)
+    try:
+        setup = github_rule.setup_classifier(github_rule.WORKFLOW_FILE.read_text(encoding="utf-8"))
+    except OSError:
+        setup = None      # no workflow file to read the steps from: a red job stays red
+    return github_rule.Rule(sha, classes, commit_runs, gh_rerun, planned, clock=GITHUB_CLOCK, note=notes, setup=setup)
+
+
+def github_again(rule, args, commit, say=print, faults=None):
+    """--github-again (before the red-before-start check): every `must` job that is red for the commit is run again once on
+    GitHub; each is written to the tool-fault record as kind ENV with the job's name and the first line of its saved log
+    (<work>/github-again-<commit>/github-<job>.log), and to github.log. The run then goes on and judges by the new result.
+    Returns the names of the jobs run again."""
+    try:
+        runs = rule.runs_of(rule.sha)
+    except github_rule.ANSWER_ERRORS as e:
+        say("gate.py: --github-again: GitHub did not answer: %s" % e)
+        return []
+    states = [s for s in github_rule.judge(runs, rule.classes, rule.planned, rule.setup).values()
+              if s.klass == github_rule.MUST and s.state == "red"]
+    agent = getattr(args, "agent", None) or os.environ.get("NEBULA_AGENT", "1")
+    folder = pathlib.Path(args.work) / ("github-again-%s" % commit[:9])
+    done = []
+    for st in states:
+        ok, text = rule.rerun_red(st)
+        if not ok:
+            say("gate.py: --github-again: %s could not be run again: %s" % (st.name, text))
+            continue
+        folder.mkdir(parents=True, exist_ok=True)
+        finding = github_rule.Finding(st, st.said())
+        github_rule.save_log(finding, folder, gh_log, say=lambda line: None, advise=False)
+        first = ""
+        if finding.log is not None:
+            first = next((l.strip() for l in finding.log.read_text(encoding="utf-8").splitlines() if l.strip()), "")
+        message = "%s run again once on GitHub (--github-again); first line of its log: %s" % (st.said(False), first or "(no log)")
+        say("gate.py: --github-again: " + message)
+        rule.note(message)
+        if faults is not None:
+            try:
+                faults(agent, "", "ENV", "github/" + st.name, "", message, str(folder))
+            except Exception as e:  # noqa: BLE001 - the record is a report; the re-run is made, and github.log has the line
+                say("gate.py: the tool-fault record could not be written (%s: %s); the line is in github.log" % (type(e).__name__, e))
+        done.append(st.name)
+    return done
 
 
 def red_on_github(sha, planned=(), runs_of=None, classes=None):
@@ -1814,11 +1859,13 @@ def github_notes(g, rule):
             g.late("github/" + name, "pass", text, None, [kinds.record("-", "env", text, counts=False)])
 
 
-def github_part(g, wait_minutes=GITHUB_CHECK_MINUTES, rule=None, sleep=None):
+def github_part(g, wait_minutes=None, rule=None, sleep=None):
     """The commit's GitHub jobs as one of the gate's checks (a main gate without --move, the final check): every `must` job
-    green for HEAD, waited for up to wait_minutes."""
+    green for HEAD, waited for up to the same limit as a move's (--github-wait, 120 minutes unless given)."""
     if not g.wanted("github") or g.dry:
         return
+    if wait_minutes is None:
+        wait_minutes = g.args.github_wait
     try:
         classes = github_rule.read_table()
     except github_rule.TableError as e:
@@ -2464,6 +2511,14 @@ def parser(land=False):
                    help="--move: minutes to wait for GitHub's jobs. Longer only for the one candidate that brings a job "
                         "whose compiler cache is cold (Planner 11-18 03:49); --covers says why, and the board's LOCK "
                         "line shows the wait")
+    p.add_argument("--github-again", action="store_true",
+                   help="--move: before the start check, every `must` job that is red for the commit is run again once on "
+                        "GitHub (each written to the tool-fault record as ENV with the first line of its log), and the run "
+                        "judges by the new result. For a red whose log shows a download or an install failing, not the game")
+    if not land:
+        p.add_argument("--live", default=os.environ.get("NEBULA_LIVE", "D:/NebulaWork/plan/native"),
+                       help="the folder of tool-faults.tsv (the step tool's live folder)")
+        p.add_argument("--agent", default=os.environ.get("NEBULA_AGENT", "1"), help="who asks, for the fault record")
     p.add_argument("--only", default="", help="only these checks (shell patterns, comma-separated) and what they need")
     p.add_argument("--scope", default="",
                    help="--main: only the checks of the groups a change needs (tools/gate/scope.py): GROUP[,GROUP...], 'auto' "
@@ -2559,7 +2614,7 @@ def main(argv=None):
     if args.move and (args.mode not in ("main", LAND_LEVEL) or patterns or args.no_build):
         return refuse("--move goes with --main alone: the whole main gate, built here")
     if plan is not None and not plan.full:
-        needs_tablet = "tablet12" in plan.groups or "android" in plan.groups
+        needs_tablet = "tablet12" in plan.groups   # `android` alone is the build: it needs no tablet
     else:
         needs_tablet = args.mode != "quick"
     if needs_tablet and not args.tablet:
@@ -2604,10 +2659,19 @@ def main(argv=None):
                 return refuse("tools/gate/github_jobs.tsv is wrong:\n  " + "\n  ".join(error.problems))
             notes = Notes()
             rule = make_rule(commit, classes, planned_jobs(planned), notes)
+            if args.github_again:
+                github_again(rule, args, commit, faults=fault_writer(args.live))
             red = rule.red_before()
             if red:
                 board_line(args.board, "%s NOTICE: no main gate of %s: %s." % (args.who, commit[:9], red))
-                return refuse("main could not move to %s: %s" % (commit[:9], red))
+                # The red jobs' logs are saved where the run would have been, and the way out is the message's last line.
+                folder = pathlib.Path(args.work) / ("github-red-%s" % commit[:9])
+                folder.mkdir(parents=True, exist_ok=True)
+                for st in rule.last_reds:
+                    github_rule.save_log(github_rule.Finding(st, st.said()), folder, gh_log,
+                                         say=lambda line: print(line, file=sys.stderr), advise=False)
+                return refuse("main could not move to %s: %s%s%s" % (
+                    commit[:9], red, "\n", "\n".join(github_rule.advice(st.name) for st in rule.last_reds)))
         unheld = unheld_candidates(args.work, commit)
         if unheld:
             return refuse("candidates still wait for GitHub that this commit does not hold (%s): rebase on the newest "
@@ -2838,6 +2902,8 @@ class GateChecker:
             cmd += ["--tablet", a.tablet]
         if a.mods:
             cmd += ["--mods", a.mods]
+        if a.github_again:
+            cmd += ["--github-again", "--live", a.live, "--agent", a.agent]
         return cmd
 
     def run(self, tree, tip, names, groups_text):

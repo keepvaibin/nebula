@@ -17,7 +17,14 @@ lines), and what it would push, read, move or delete is recorded.
   advisory_red_never_blocks         an advisory job red twice is one line and blocks nothing
   time_limit_is_env_and_the_branch_stays  the limit: KIND env naming the jobs, not judged, no move, the queue keeps the branch
   no_job_finished_is_waited_for     no run yet, then one: waited for, not refused
-  github_check_without_move         a main gate without --move reads the same jobs as one of its checks (rows github/<job>)
+  setup_step_is_rerun_and_moves     a job red at its checkout is run again once, and main moves when the new run is green
+  red_must_refuses_with_the_way_out a red `must` job refuses the start; its log is saved; the message ends with the --github-again line
+  github_again_reruns_and_goes_on   --github-again: the red jobs are run again once, each is a tool-fault line of kind ENV with the
+                                    job's name and the first line of its log, the run is not refused and judges by the new result
+  github_again_refused_still_refuses  a re-run GitHub refuses leaves the red: the run is refused as without the switch
+  no_switch_no_rerun                without the switch nothing is run again, nothing is written
+  android_alone_needs_no_tablet     a plan with the group `android` and no `tablet12` does not ask for the tablet
+  github_check_without_move         a main gate without --move (the same limit as a move: 120 minutes unless --github-wait) reads the same jobs as one of its checks (rows github/<job>)
 Exit 0 when every case holds.
 """
 import contextlib
@@ -90,7 +97,7 @@ def drive(test, world, scope_text="repo,github", checks=None, extra=(), allow_gi
     """main() of `--main --move --scope scope_text` with the fakes: (exit code, the output's lines, the work folder)."""
     tmp = pathlib.Path(tempfile.mkdtemp())
     test.addCleanup(lambda: __import__("shutil").rmtree(tmp, ignore_errors=True))
-    names = ("git", "git_ok", "read_lists", "run_checks", "push_checks", "push_candidate", "delete_candidate", "commit_runs",
+    names = ("fault_writer", "git", "git_ok", "read_lists", "run_checks", "push_checks", "push_candidate", "delete_candidate", "commit_runs",
              "gh_rerun", "gh_log", "move_main", "approve_pictures", "start_measure", "start_long", "GITHUB_SLEEP", "GITHUB_CLOCK",
              "WATCH_SECONDS", "GithubWatch", "FLAKES", "SET_ASIDE", "BASE_BINS", "make_rule")
     saved = {n: getattr(gate, n) for n in names}
@@ -127,6 +134,7 @@ def drive(test, world, scope_text="repo,github", checks=None, extra=(), allow_gi
         raise AssertionError("GitHub was used by a plan without the group `github`")
 
     try:
+        gate.fault_writer = lambda live: (lambda *fault: getattr(world, "faults", []).append(fault))
         gate.git, gate.git_ok = fake_git, lambda *a: True
         gate.read_lists = lambda: ({}, {}, [])
         gate.run_checks, gate.push_checks = fake_run_checks, lambda sha: None
@@ -299,12 +307,12 @@ class Rule(unittest.TestCase):
         self.assertEqual(landing.failures_of_lines(kind_lines(lines)), [])
 
     def test_time_limit_is_env_and_the_branch_stays(self):
-        world = World(runs_of(green("Mac", "Android (x86_64)") + [job("Mac", "in_progress"), job("Android (x86_64)", "queued")]))
+        world = World(runs_of(green("Mac", "Linux") + [job("Mac", "in_progress"), job("Linux", "queued")]))
         code, lines, work = drive(self, world, extra=["--github-wait", "5"])
         self.assertEqual(code, 2, "\n".join(lines))
         self.assertEqual(world.moved, [])
         self.assertTrue(any(l.startswith("KIND env github/Mac - :: not finished after 5 minutes") for l in lines), kind_lines(lines))
-        self.assertTrue(any(l.startswith("KIND env github/Android (x86_64) - :: not finished after 5 minutes") for l in lines))
+        self.assertTrue(any(l.startswith("KIND env github/Linux - :: not finished after 5 minutes") for l in lines))
         self.assertEqual(lines[-1], "VERDICT not-judged")
         result = gate.parse_run_output([l + "\n" for l in lines], code)
         # gate.py land requeues a pass that did not move main unless a red job made it a failure of the batch.
@@ -332,6 +340,102 @@ class Rule(unittest.TestCase):
         code, lines, _ = drive(self, world)
         self.assertEqual(code, 0, "\n".join(lines))
         self.assertEqual((world.moved, world.moved_after), ([SHA], 3), "no run yet, then jobs queued: waited for, not refused")
+
+    def test_setup_step_is_rerun_and_moves(self):
+        def turn(world):
+            if world.slept == 1:
+                world.runs = runs_of(green())
+        bad = dict(job("Mac", conclusion="failure"), steps=[{"name": "Run actions/checkout@v7", "number": 2, "conclusion": "failure"}])
+        world = World(runs_of(green("Mac") + [bad]), hook=turn)
+        code, lines, _ = drive(self, world)
+        self.assertEqual(code, 0, "\n".join(lines))
+        self.assertEqual(world.reruns, [(100, bad["databaseId"])])
+        self.assertEqual(world.moved, [SHA])
+
+    def test_red_must_refuses_with_the_way_out(self):
+        world = World(runs_of(green("Mac") + [job("Mac", conclusion="failure")]))
+        code, lines, work = drive(self, world)
+        self.assertEqual(code, 2, "\n".join(lines))
+        self.assertEqual((world.pushed, world.moved, world.reruns), ([], [], []))
+        saved = list(work.glob("github-red-*/github-Mac.log"))
+        self.assertEqual(len(saved), 1, "the red job's log is saved")
+        way = "If github-Mac.log shows a download or an install failing, and not the game's own build or tests: land again with --github-again."
+        at = max(i for i, l in enumerate(lines) if "main could not move to" in l)
+        self.assertEqual(lines[at + 1], way, "the message ends with the way out")
+
+    def test_github_again_reruns_and_goes_on(self):
+        mac = job("Mac", conclusion="failure")
+        world = World(runs_of(green("Mac") + [mac]))
+        world.faults = []
+
+        def turn(w):
+            if w.slept == 1:
+                w.runs = runs_of(green())
+        world.hook = turn
+        code, lines, work = drive(self, world, extra=["--github-again"])
+        self.assertEqual(code, 0, "\n".join(lines))
+        self.assertEqual(world.reruns, [(100, mac["databaseId"])], "run again once")
+        self.assertEqual(world.moved, [SHA], "the landing judged by the new result")
+        self.assertEqual(len(world.faults), 1)
+        agent, step, kind, check, test, message, folder = world.faults[0]
+        self.assertEqual((kind, check), ("ENV", "github/Mac"))
+        self.assertIn("Mac", message)
+        self.assertIn("log line 101", message, "the first line of its saved log")
+        self.assertTrue((pathlib.Path(folder) / "github-Mac.log").is_file())
+        self.assertTrue(any("run again once, at the request of --github-again" in l for l in
+                            next(work.glob("*/github.log")).read_text(encoding="utf-8").splitlines()), "github.log has it")
+
+    def test_github_again_refused_still_refuses(self):
+        world = World(runs_of(green("Mac") + [job("Mac", conclusion="failure")]))
+        world.faults = []
+        world.rerun = lambda run_id, job_id: (False, "refused")
+        code, lines, _ = drive(self, world, extra=["--github-again"])
+        self.assertEqual(code, 2, "\n".join(lines))
+        self.assertEqual((world.faults, world.moved, world.pushed), ([], [], []))
+        self.assertTrue(any("could not be run again" in l for l in lines))
+
+    def test_no_switch_no_rerun(self):
+        world = World(runs_of(green("Mac") + [job("Mac", conclusion="failure")]))
+        world.faults = []
+        code, lines, _ = drive(self, world)
+        self.assertEqual((code, world.reruns, world.faults), (2, [], []))
+
+    def test_android_alone_needs_no_tablet(self):
+        # No --tablet is given by drive(): a plan with `android` and not `tablet12` must not be refused for it.
+        world = World(runs_of(green()))
+        code, lines, _ = drive(self, world, scope_text="repo,build,android,github")
+        self.assertEqual(code, 0, "\n".join(lines))
+        self.assertFalse(any("needs the tablet" in l for l in lines))
+        world = World(runs_of(green()))
+        code, lines, _ = drive(self, world, scope_text="repo,tablet12,github")
+        self.assertEqual(code, 2)
+        self.assertTrue(any("needs the tablet" in l for l in lines))
+
+    def test_github_check_uses_the_moves_limit(self):
+        self.assertEqual(gate.GITHUB_WAIT_MINUTES, 120)
+        self.assertFalse(hasattr(gate, "GITHUB_CHECK_MINUTES"), "no limit of its own any more")
+        tmp = pathlib.Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(tmp, ignore_errors=True))
+        saved = {n: getattr(gate, n) for n in ("git", "FLAKES", "SET_ASIDE")}
+        gate.git = lambda *a: SHA[:7] if "--short" in a else ("" if a[:1] == ("status",) else SHA)
+        gate.FLAKES, gate.SET_ASIDE = tmp / "f.tsv", tmp / "a.tsv"
+        try:
+            for given, minutes in ((None, 120), ("7", 7)):
+                argv = ["--main", "--tablet", "T", "--work", str(tmp / "w"), "--board", "", "--status", ""]
+                args = gate.parser().parse_args(argv + (["--github-wait", given] if given else []))
+                self.assertEqual(args.github_wait, minutes)
+                world = World(runs_of(green("Mac") + [job("Mac", "in_progress")]))
+                g = gate.Gate(args)
+                rule = github_rule.Rule(SHA, CLASSES, world.commit_runs, world.rerun, clock=lambda: world.now, say=lambda s: None)
+                start = world.now
+                with contextlib.redirect_stdout(io.StringIO()):
+                    gate.github_part(g, rule=rule, sleep=world.sleep)
+                self.assertGreaterEqual(world.now - start, 60.0 * minutes)
+                self.assertLess(world.now - start, 60.0 * minutes + 61)
+                self.assertIn("%d minutes" % minutes, g.results[0]["detail"] if g.results[0]["check"] == "github" else "%d minutes" % minutes)
+        finally:
+            for n, v in saved.items():
+                setattr(gate, n, v)
 
     def test_github_check_without_move(self):
         tmp = pathlib.Path(tempfile.mkdtemp())
