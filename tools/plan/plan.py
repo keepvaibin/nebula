@@ -1,10 +1,10 @@
 """plan.py: the step tool of the native plan (package T13). The coding agent reads, codes and proves; this says what is next.
 
     python -X utf8 -I tools/plan/plan.py next | status | page | card ID | rows [ID] | start ID | land ID [--github-again] | blocked ID "WHY"
-                                         | owed ID "TEXT"
+                                         | owed ID "TEXT" | commands | note "TEXT" | note --clear
                                          | claim PACKAGE [--take-stale] | tool "TEXT" | toolfault --last --could-not "TEXT"
                                          | repair add --source S --kind K --check C ... | repair list
-    (next, start, land, blocked, claim, tool, toolfault and status take --agent 1|2; 1 is the default; ID is a step, or for
+    (next, start, land, blocked, claim, tool, toolfault, status and commands take --agent 1|2; 1 is the default; ID is a step, or for
      start, land and blocked a repair such as R-003)
     (--no-push, before the command, or NEBULA_PLAN_NO_PUSH=1 in the environment: the progress branch is not pushed)
     Each agent runs the copy in its own work folder: `D:/NebulaWork/MarioGalaxyRecomp/Nebula-native/tools/plan/plan.py` for agent 1,
@@ -83,6 +83,14 @@ page     Writes the progress files into the live folder (page.py), from steps.ts
          Then, when STATUS.md changed, one commit that holds exactly STATUS.md goes to origin as `progress` (a branch
          with no history in common with main; plumbing commands in the main repository, no work folder touched;
          message `Progress: N of M steps landed`). A failed push is one warning line. Nothing else is ever pushed.
+commands The agent's five commands filled in for its folder (agent 1: Nebula-native, agent 2: Nebula-native-2) and its build folder
+         (D:/NebulaWork/build/<the folder's name>): build the game for Windows, run one unit-test program by name, run one engine
+         test by name on Direct3D 12, play the tour's 12 stops (tools/gate/agent_tour.py), record the replay references. Each is the
+         form the gate uses, with the game data, the hidden window and the quiet sound carried by the command. `start` prints the same
+         block after its own text.
+note     `note "TEXT"` writes the line `Now: TEXT` under the count of the progress page and of STATUS.md (note.txt in the live
+         folder: its first line, at most 200 characters, shown as text); a longer text is refused. `note --clear` empties it. With no
+         note nothing is printed.
 card     `card ID`: any step's card, its package's rows and the checks it needs (a repair's card); changes nothing, no --agent.
 owed     `owed ID "TEXT"`: what only a person or other hardware can check, appended to owed.tsv (live folder) and listed by
          status, STATUS.md and the page; it blocks nothing.
@@ -148,7 +156,7 @@ STATE_COMMIT = "Plan: step %s landed"    # the subject of the tool's own commit:
 
 # The extra checks a step's proof asks for (docs/plan/native/step-checks.tsv): the nightly's parts, which `gate.py land --also` takes.
 STEP_CHECKS_FILE = "step-checks.tsv"
-ALSO_CHECKS = ("stress", "sanitizer/tour", "soak", "replays/software")
+ALSO_CHECKS = ("stress", "sanitizer/tour", "soak", "soak/long", "replays/software")
 
 # A replay reference (tests/replays/*.tsv) changes only where the card says so (T14 item 5).
 REPLAY_DIR = "tests/replays/"
@@ -158,6 +166,28 @@ REPLAY_WORDS = "replay reference"
 # How a replay reference is recorded: step_hash.py's `record` takes the work folder of a luma_test.py run in which the tour played
 # every recorded stop with the hash on, and writes one tests/replays/<stop>.tsv for each. T10 proves this command by a real run.
 REPLAY_RECORD = "python -X utf8 -I tools/verify/step_hash.py record <work folder of the tour run> --out tests/replays"
+
+# The commands the coding agent runs in its work folder (brief T10 part B), each the form the gate itself uses: it never composes one.
+# `start` prints them filled in after its own text, `commands` prints them again at any time. The places: {folder} the agent's work
+# folder, {build} its build folder (BUILD_ROOT/<the folder's name>), {pak} the US game.pak (the game data by key), {name} a test's name,
+# which the agent writes in place of <name>. Every path a command names under {folder} is a file of the tree (a self-test reads them).
+BUILD_ROOT = "D:/NebulaWork/build"
+US_DISC = "RMGE01"
+AGENT_COMMANDS = (
+    ("build", "Build the game for Windows: the three programs and both game modules. Again after a change: only what changed is built.",
+     "powershell.exe -NoProfile -ExecutionPolicy Bypass -File {folder}/tools/gate/build_windows.ps1 -Tree {folder} -Root {build} "
+     "-Bin {build}/bins", ""),
+    ("unit", "Run one unit-test program by name (the programs are the galaxy_*_tests files in {build}/msvc).",
+     "powershell.exe -NoProfile -ExecutionPolicy Bypass -File {folder}/tools/gate/ctest.ps1 -Dir {build}/msvc -Name <name>", ""),
+    ("engine", "Run one engine test by name on Direct3D 12 (window hidden, no sound; the names are in tests/engine/suite.json).",
+     "python -X utf8 -I {folder}/tools/lumacore/luma_test.py run {folder}/tests/engine/suite.json --bin {build}/bins --pak {pak} "
+     "--work {build}/runs/engine --who agent --lock {build}/runs/engine.lock --renderer d3d12 --test <name>", ""),
+    ("tour", "Play the tour's 12 stops on Direct3D 12 with the step hash on (window hidden, no sound).",
+     "python -X utf8 -I {folder}/tools/gate/agent_tour.py --bin {build}/bins --pak {pak} --work {build}/runs/tour --renderer d3d12",
+     "For the next command play the 20 stops whose hashes are recorded: the same line with --stops recorded added."),
+    ("record", "Record the replay references from the tour run, only where the step's card says they may change.",
+     "python -X utf8 -I {folder}/tools/verify/step_hash.py record {build}/runs/tour --out {folder}/tests/replays", ""),
+)
 
 STEP_COLUMNS = ["order", "step", "package", "title", "package_needs", "card_file", "state", "commit"]
 STATES = ("open", "started", "blocked", "landed")
@@ -778,9 +808,12 @@ def also_lines(tree, step_id):
 
 # ---- the gate ------------------------------------------------------------------------------------------------
 
-GATE_ROW = re.compile(r"^(\S+)\s+(pass|known|planned|owed|FAIL|TOOL|ENV|FLAKE|NEW)\s+(\d+(?:\.\d+)?) s\s*(.*)$")
-KIND_OF = {"pass": "PASS", "known": "PASS", "planned": "PASS", "owed": "ENV", "FAIL": "FAIL", "TOOL": "TOOL", "ENV": "ENV",
-           "FLAKE": "FLAKE", "NEW": "NEW"}
+# The label a check's row carries in the gate's output (gate.py LABELS: the kinds that need a person's eye in capitals, the others as
+# they are) and what the step tool counts it as. Every state of tools/gate/kinds.py is here (a self-test reads them from there). A row
+# `again` is a check waiting for its second run: its final row comes later and is the one counted.
+KIND_OF = {"pass": "PASS", "known": "PASS", "planned": "PASS", "owed": "ENV", "FAIL": "FAIL", "WORSE": "WORSE", "TOOL": "TOOL",
+           "ENV": "ENV", "FLAKE": "FLAKE", "main": "MAIN", "STRESS": "STRESS", "NEW": "NEW"}
+GATE_ROW = re.compile(r"^(\S+)\s+(%s)\s+(\d+(?:\.\d+)?) s\s*(.*)$" % "|".join(re.escape(label) for label in KIND_OF))
 
 
 class Verdict:
@@ -944,6 +977,80 @@ def work_folder(work_root, agent=1):
     return pathlib.Path(work_root) / AGENT_FOLDERS[str(agent)]
 
 
+def game_pak(tree):
+    """The US game.pak `tree`'s build runs on, by key (tools/gate/gamedata.py: disc, store version, importer's tree hash), or None
+    when that data has not been made."""
+    import gamedata
+    try:
+        key = gamedata.key_of(US_DISC, gamedata.tree_store_version(tree), gamedata.importer_tree_hash(GIT, tree))
+        pak = gamedata.GameData().lookup(key)
+    except (OSError, ValueError, RuntimeError):
+        return None
+    return pak.as_posix() if pak else None
+
+
+PAK_OF = game_pak                        # tests put their own in here
+
+
+def commands_text(a, agent):
+    """The block of the agent's commands filled in for its folder (one text, the same for `start` and `commands`)."""
+    folder = work_folder(a.work_root, agent).as_posix()
+    build = "%s/%s" % (BUILD_ROOT, AGENT_FOLDERS[str(agent)])
+    pak = PAK_OF(a.tree)
+    if pak is None:
+        pak = ("<the US game.pak is not made: python -X utf8 -I %s/tools/gate/gamedata.py make %s --importer %s/bins/nebula-import.exe>"
+               % (folder, US_DISC, build))
+    out = ["=== YOUR COMMANDS (agent %s; folder %s; build folder %s) ===" % (agent, folder, build),
+           "Run exactly these; write the test's name in place of <name>. `plan.py commands` prints this block again."]
+    for number, (_, what, command, note) in enumerate(AGENT_COMMANDS, 1):
+        fill = lambda text: text.format(folder=folder, build=build, pak=pak)  # noqa: E731
+        out += ["%d. %s" % (number, fill(what)), "   " + fill(command)]
+        if note:
+            out.append("   " + fill(note))
+    return "\n".join(out)
+
+
+def cmd_commands(a):
+    say(commands_text(a, agent_of(a)))
+    return 0
+
+
+# The note under the count of the progress page and of STATUS.md (`Now: <the line>`): the first line of note.txt in the live folder.
+NOTE_FILE = "note.txt"
+NOTE_MAX = 200
+
+
+def read_note(live=None):
+    """The note: the first line with words in it of note.txt in the live folder, in one line of printable characters, at most NOTE_MAX
+    of them; "" when there is no file or it holds nothing. It is text, never markup: the page sets it as text."""
+    try:
+        text = (live_dir(live) / NOTE_FILE).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+    for line in text.splitlines():
+        line = " ".join("".join(c if c.isprintable() else " " for c in line).split())
+        if line:
+            return line[:NOTE_MAX]
+    return ""
+
+
+def cmd_note(a):
+    """`note "TEXT"` writes the note (one line, at most NOTE_MAX characters; a longer one is refused); `note --clear` empties the file."""
+    path = live_dir(a.live) / NOTE_FILE
+    if a.clear == (a.text is not None):
+        say("plan.py: give the text of the note, or --clear (not both)")
+        return 2
+    text = "" if a.clear else " ".join(a.text.split())
+    if len(text) > NOTE_MAX:
+        say("plan.py: the note is %d characters; %d at most. Nothing was written." % (len(text), NOTE_MAX))
+        return 1
+    path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write(path, text + "\n" if text else "")
+    refresh_page(a)
+    say("note cleared" if a.clear else "note: " + text)
+    return 0
+
+
 def count_flakes(live):
     """The number of lines in the gate's flakes.tsv, which it writes in the live folder (D:/NebulaWork/plan/native: time,
     test, renderer, commit, the first failure's message); 0 when there is no file."""
@@ -979,6 +1086,9 @@ def status_text(tree, work_root=WORK_ROOT, at=None, live=None, agent="1", queue_
         out += [landing_running_line(running, agent), ""]
     out += ["Written %s by plan.py status. Run it at every start and after every context compaction." % at.isoformat(timespec="minutes"),
             "", "Steps landed: %d of %d." % (len(by["landed"]), len(steps)), ""]
+    note = read_note(live)
+    if note:
+        out += ["Now: " + note, ""]
     repairs = lv.read_repairs(live_dir(live))
     state = lv.read_state(live_dir(live))
     working = [r for r in repairs if r["state"] == "started"]
@@ -1061,7 +1171,7 @@ def page_data(tree, live=None, at=None):
     return (page.make_static(steps),
             page.make_data(steps, landings, lv.read_state(d), claims, stale_of(tree, claims, at), lv.fault_groups(events),
                            count_flakes(live), lv.stamp(at), read_set_aside(live), lv.repair_order(lv.read_repairs(d)),
-                           lv.read_owed(d)),
+                           lv.read_owed(d), read_note(live)),
             landings, events)
 
 
@@ -1770,6 +1880,8 @@ def cmd_start(a):
         say("This step's card says its replay reference may change. Once the change is made and the tour has played every recorded "
             "stop, record the reference with: %s" % REPLAY_RECORD)
         say("A commit message of the landing must contain the words \"%s\"." % REPLAY_WORDS)
+    say()
+    say(commands_text(a, agent))
     return 0
 
 
@@ -1805,6 +1917,8 @@ def start_repair(a):
     lv.set_state_entry(live_dir(a.live), a.id, "started", agent)
     refresh_page(a)
     say("started %s: branch %s in %s" % (a.id, branch, work_folder(a.work_root, agent).as_posix()))
+    say()
+    say(commands_text(a, agent))
     return 0
 
 
@@ -2452,6 +2566,12 @@ def parser():
     r = sub.add_parser("rows")
     r.add_argument("id", nargs="?")
     r.set_defaults(fn=cmd_rows)
+    sub.add_parser("commands", parents=[who], help="the agent's commands for its folder: build, one unit test, one engine test, "
+                   "the tour, the replay references").set_defaults(fn=cmd_commands)
+    nt = sub.add_parser("note", help="the line `Now: ...` under the count of the progress page and STATUS.md")
+    nt.add_argument("text", nargs="?", help="the line (%d characters at most)" % NOTE_MAX)
+    nt.add_argument("--clear", action="store_true", help="empty the note")
+    nt.set_defaults(fn=cmd_note)
     for name, fn in (("start", cmd_start), ("land", cmd_land)):
         q = sub.add_parser(name, parents=[who])
         q.add_argument("id")

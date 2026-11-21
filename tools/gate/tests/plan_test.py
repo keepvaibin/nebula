@@ -1115,7 +1115,9 @@ class RepairWorkTest(unittest.TestCase):
     def test_start_makes_the_branch_for_the_repair_in_the_agents_folder(self):
         code, text = self.t.run(["start", "R-001"], expect=0)
         folder = self.t.folder()
-        self.assertEqual(text.strip(), "started R-001: branch native/repair-001 in %s" % folder.as_posix())
+        first, _, block = text.partition("\n\n")
+        self.assertEqual(first.strip(), "started R-001: branch native/repair-001 in %s" % folder.as_posix())
+        self.assertTrue(block.startswith("=== YOUR COMMANDS (agent 1; "), "the agent's commands follow (brief T10 part B): %r" % block[:60])
         self.assertEqual(self.t.git("rev-parse", "--abbrev-ref", "HEAD", cwd=folder), "native/repair-001")
         self.assertEqual(self.t.git("rev-parse", "HEAD", cwd=folder), self.t.git("rev-parse", "origin/main"))
         self.assertEqual(lv.read_repairs(self.t.live)[0]["state"], "started")
