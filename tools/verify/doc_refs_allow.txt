@@ -1,0 +1,6 @@
+# References that point outside the tree, for tools/verify/doc_refs.py (see its header for the forms).
+
+# The native plan's step cards name files that a step makes, files on branches that are not on main, and files by a
+# path under a source folder (`Game/Render/RenderPath.hpp`, `vk/renderer_vk_frame.cpp`). They are checked by the step
+# that touches them, not here.
+docs/plan/native/*.md :: *

@@ -1,0 +1,1520 @@
+# Nebula native plan: Lane R, the picture
+
+Step by step. The order and the reasons are in `docs/plan/native/02-NATIVE-OVERVIEW.md`. Each step is a card: what changes, where, the rows it closes, what it needs first, the old path, the proof, what a player gets, what to read first. "FM" is the design file `docs/engine/FRAME-MODEL.md` on main; "INV" is the inventory `docs/engine/CONSOLE-FREE.md` (branch `docs/console-free` until Stage 0 lands it). The full ledger text of each row is in `docs/plan/native/rows/<package>.tsv`.
+
+## Contents
+
+- **R1 Pipelines made ahead**
+  - R1.1 P-052: the renderers' own pipelines at start
+  - R1.2 P-010: a stage's pipelines made while it loads, a draw never compiles
+  - R1.3 N-1067: the present gate waits only on a load screen
+  - R1.4 P-065 (Metal): the renderer's own shader texts compiled at build
+- **R2 Textures and samplers, the rest of step 2**
+  - R2.1 A target is read through its own slot; the walk-level counting test
+  - R2.2 The sampler tables stop filling: P-048, P-056, P-066, P-061
+  - R2.3 P-059: the cook decides "authored levels" once
+  - R2.4 The player's swapped images
+  - R2.5 P-216 and P-255's first part
+- **R3 Material constants and shader forms written at the cook**
+  - R3.1 The cook writes `CBLK` and `CROW`; a load-time check proves them
+  - R3.2 The engine; group "plain unlit"; P-173
+  - R3.3 Group "plain lit"
+  - R3.4 Group "alpha-tested"
+  - R3.5 Group "blended"
+  - R3.6 Group "water and indirect"
+  - R3.7 Group "billboard materials"
+  - R3.8 The replacing passes (P-309)
+  - R3.9 Shader forms: the cooked programs (P-303, P-304)
+  - R3.10 Shader forms: the 19 hand-written programs (P-299)
+  - R3.11 Sources take the clips' floats as given
+  - R3.12 Direct3D 11: P-060 and P-064 measured again; P-297's first part
+  - R3.13 The last landing: the old path is deleted
+- **R4 Draw sites made once**
+  - R4.0 The frame
+  - R4.1 Quads, then fans
+  - R4.2 Strips
+  - R4.3 Shadows
+  - R4.4 Particles
+  - R4.5 Widened lines and points
+  - R4.6 2-D gauges and glows
+  - R4.7 The seven mod draw-service sites
+  - R4.8 Draw lists
+  - R4.9 The last landing
+- **R4v Views as records**
+  - R4v.1 A view is one record
+  - R4v.2 Translucent draws are ordered per view at the picture's camera (done in R7.2)
+- **R5 Poses and matrices on the graphics card**
+  - R5.1 The game writes a block's joints once a step; the list's joints uploaded once; the shared compute pass; group "one joint"
+  - R5.2 Many rigid joints
+  - R5.3 Weighted (skinned) blocks
+  - R5.4 Billboard and calc mode 1
+  - R5.5 Calc mode 2
+  - R5.6 Eye-space blocks; fog per view (P-239's fog part); the sky follows each view (P-156's sky line)
+  - R5.7 Culling by a bound over both steps; ring runs through an instance row (P-046); P-255's skeleton part
+  - R5.8 The last landing: the CPU compose is deleted
+- **R6 Lights as world records**
+  - R6.1 The actors' lights
+  - R6.2 Point lights
+  - R6.3 The player's light
+  - R6.4 The map's lights
+  - R6.5 The game half, replay identical: an actor tests its own area first (P-152); a shadow keeps its drop (P-140)
+  - R6.6 P-190: the normal map final at the cook, found once at load, lit per pixel from the light table
+  - R6.7 The last landing: the numbered places and `MaterialAmbient` are deleted
+- **R7 The frame planned from what each pass reads and writes**
+  - R7.1 Landing 1: each pass states its reads and writes; the recorded-list fixtures
+  - R7.2 Landing 2: the planner; the mirror's own target; the capture's late answer; translucent order per view
+  - R7.3 Landing 3: instances, loads and stores, resolves, transient attachments; clears as load actions; copies read through a swizzle
+  - R7.4 Landing 4: barriers from the plan; each backend's set trade deleted
+  - R7.5 Landing 5: one instance under parallel recording
+  - R7.6 Landing 6: the after-scene instance; the cover's single draw; the phone's bloom setting
+  - R7.7 Landing 7: targets beside the old at a size change; upscalers and frame generation made ahead; the game no longer waits for the queue at a window change
+  - R7.8 Renderer stability left after landings 1 to 7
+- **R8 Effects in real units**
+  - R8.1 P-300: passes read the depth target by name; masks in a target of their own
+  - R8.2 P-198: depth of field reads depth at full precision and weighs the blur from the two distances
+  - R8.3 P-213: image-effect constants as floats written once a step
+  - R8.4 P-185 and P-301: the blur's vertical factor from the frame's aspect; the Gaussian's taps capped
+  - R8.5 P-207: the underwater warp as a share of the picture
+  - R8.6 P-289: the glow draws into its own target and the composite only adds; HDR bloom from the real brightness
+- **R9 Texture and movie containers**
+  - R9.1 P-291: each texture cooked in the forms devices sample
+  - R9.2 P-292: the movie file gets a frame table in its header
+- **R10 Layouts and the 2D screens**
+  - R10.1 The layout file's next version, cooked beside the old
+  - R10.2 The readers move to the new version; the old version is deleted
+  - R10.3 P-199, P-200, P-210: the dummy image by name, language marks sized to the pane, the A button's pictures by name
+  - R10.4 P-197: square layout units; the 0.75 code and Nebula's own undoing of it go
+
+---
+
+## R1 Pipelines made ahead
+
+Every pipeline (the graphics card's compiled form of a draw) a stage needs is made while the stage loads, on worker threads, and a draw never compiles one on the render thread. A player gets no hitch the first time a material is seen, no picture held back by a Present waiting for a pipeline being made, and no hitch from the renderers' own pipelines (post-process, bloom, the Metal ones) the first time they are used.
+
+- **Design:** the rows' own notes (P-010, P-052, P-065, N-1067); FM 1.9 (the rows on `create_now`, utility pipelines, the present gate, Vulkan's and Metal's own pipelines); FM 2.1 rule 1 and FM 2.2 (a draw whose form is not ready waits for it at load, never in a frame); FM 2.9 (the cook already writes each model's pipelines to `NebulaData/Pipelines.bin`, `pipeline_list.rs`, registered at boot; what is left of P-010 needs nothing more from the file).
+- **Needs first:** S0.2 for R1.2 (skeleton: load-screen frames no longer change game state). R1.1, R1.3's gate wait and R1.4 name no earlier package.
+- **Rows:** 4 (N-1067, P-010, P-052, P-065)
+
+### R1.1 P-052: the renderers' own pipelines at start
+
+- **What changes.** The Direct3D 12 half is built: the renderer's 22 utility pipelines (post-process, bloom, present, conversion) load and store through the driver cache (`core::utility_pipeline`, a hash of every field), and each pass's `prepare_pipelines` makes them for every sample count at the start on threads of their own, with Vulkan's scene camera keyed by render pass. Confirm this is on main. Direct3D 11's are made at initialise already. Open here is Vulkan's side (FM 1.9): the bloom and post-process pipelines are built on the render thread in the first frame that needs them, and the post-process's self-test waits for the GPU there. They are built at start on workers, and the self-test's wait leaves the frame.
+- **Where.** `runtime/src/render/core/utility_pipeline_d3d12.h`, `core/pipelines_d3d12.cpp`, `renderer_d3d12.cpp`, `post_process_tests.cpp` (`utility_pipelines_on_warp`, line 725; `prepared_pipelines_on_warp`, line 758). Vulkan: `runtime/src/render/vk/renderer_vk.cpp` (1997 and 2821 as cited at 241395b49; `RendererVk::sync_post_process`, `create_utility_pipelines`), `vk/post_process_vk.cpp` (947 as cited; `PostProcessorVk::prepare_pipelines` at 713, `self_test` at 829). Commits: the row's 412007306 and eeebb5dbc exist in the repository but are not ancestors of main; main holds the same two changes as caa9ca1e7 ("Renderer pass pipelines through the driver caches (P-052, first half)") and e68b6cd6c ("... made at the start, not at first use (P-052, second half)"), both ancestors of 790626cb5.
+- **Rows.** P-052: the Direct3D 12 half is confirmed on main; the Vulkan half is built here. Closes with the main gate.
+- **Needs first.** nothing
+- **Old path.** First use on the render thread: Vulkan's is deleted in this step; Direct3D 12's already went with the second half. Metal's is R1.4.
+- **Proof.**
+  1. A cold and a warm start, Direct3D 12 timeline: no utility pipeline made on the render thread; the warm start loads every one from the library. The tests `utility_pipelines_on_warp` (a second `PostProcessor` loads, makes none) and `prepared_pipelines_on_warp` (a prepare makes 2 times the supported sample counts, a second makes none, `set_wide` adds the six chain pipelines and the float scene's pairs) pass; the MSAA 4x stage run logs every pass pipeline at the start and none after; the Direct3D 12 tour's pictures were 408 of 408 the same as b865c09e8's.
+  2. The same cold and warm start on Vulkan (the sources give no proof of their own for Vulkan; this is the nearest form).
+  3. The Vulkan self-test's result is still reported, but its wait is not inside a frame.
+- **For a player.** No hitch on Vulkan the first time bloom or anti-aliasing is switched on or first drawn.
+- **Read first.** At main part of Vulkan's side may already exist: `RendererVk` initialises the game's bloom for every scene pass (`bloom_.initialize`, `renderer_vk.cpp` about 229-244; its comment says "built at the first frame ... the game draws its own chains until it is ready"), starts the post-process on a worker (`post_.initialize`, about 249; "the plain blit presents until it is ready"), and `sync_post_process` calls `PostProcessorVk::prepare_pipelines` once the post-process is ready (2818). The FM 1.9 line numbers (1997, 2821, 947) are as cited at 241395b49. Read these paths whole to see what a frame still builds or waits for (the self-test's `context.wait` of 5 s is at `post_process_vk.cpp` 947); the sources do not say.
+
+### R1.2 P-010: a stage's pipelines made while it loads, a draw never compiles
+
+- **What changes.** Today a draw whose pipeline is not made yet compiles it on the render thread (`Pipelines::create_now`); only Vulkan with graphics pipeline libraries gets a quick link. New (row note): (1) pipelines are registered as the stage's materials register (`registries_`, on the game thread, during the load); the render thread queues the new ones each frame (`pipelines_queued_`) for low-priority workers. The game's load already ends at one gate, `GameSystemSceneController::isReadyToStartScene` (the load screen's nerve waits there for the scene's worker); it also asks the host that every pipeline registered so far is made (`Pipelines::pending()` for the set queued), the workers raised to normal priority while the game waits. The load screen keeps stepping as it does for the scene's own load. (2) A draw whose pipeline is still missing in play (a material registered after the load, a settings change) is skipped for that frame and its job moved to the front of the queue at normal priority, never built on the render thread; Vulkan with pipeline libraries keeps its quick link. A miss is a timeline event and counted ("made by draws first" stays 0 after a stage's first picture). `create_now` goes.
+- **Where.** `runtime/src/render/core/pipelines.cpp` (`create_now`, line 253) and `pipelines.h` (`create_now` 132, `pending` 70); `runtime/include/galaxy/render/render_core.h` (`pipelines_queued_` 341) and `runtime/src/render/render_core.cpp`; `runtime/src/render/core/registries.cpp`; `runtime/src/render/core/draw_walker.cpp` (the draw that finds a pipeline missing); `native/petari/src/Game/System/GameSystemSceneController.cpp` (`isReadyToStartScene`, 222), `GameSequenceFunction.cpp` (96), `GameSequenceProgress.cpp` (236-277, the callers). The host service or option by which the game asks "every pipeline is made" is not named in the sources (the sources give no further detail; read the row and the code first).
+- **Rows.** P-010: whole.
+- **Needs first.** S0.2 (skeleton)
+- **Old path.** `Pipelines::create_now` and the render thread's build of a missing pipeline: deleted in this step (the skeleton: "`create_now` goes").
+- **Proof.**
+  1. A tour on a cold cache (the cache files removed) on Direct3D 12, Vulkan and the tablet: no `create_now` build on the render thread after a stage's first picture; "made by draws first" is 0 after the first picture.
+  2. Frame times at first entry to three galaxies against today's.
+  3. Pictures the same; step-hash replays the same.
+  4. A miss in play shows as a counted timeline event and the draw returns on a later frame.
+- **For a player.** No hitch when a material is first seen in a stage; a stage's load may last a little longer on a cold cache.
+- **Read first.** Main's `Pipelines` already holds a start's set, `pending()`, and deferred jobs (`left_to_cache`: forms made after the first scene is shown "or by the draw that first needs it if that comes sooner", `pipelines.h` 60-81 and 167-168), and the title waits once for the pipeline list (`host_main.cpp` `NEBULA_OPTION_PREPARATION`, around 3363). Read `pipelines.h` and `pipelines.cpp` whole to see how a deferred form fits the rule "a draw never builds"; the sources do not say.
+
+### R1.3 N-1067: the present gate waits only on a load screen
+
+- **What changes.** Today on Direct3D 12 a Present waits for every pipeline creation in flight (`core/present_gate.h`, a guard against a driver trimming its pipeline cache inside Present), so one slow creation holds the picture: a gate run had no frame for 26 s at frame 596 with the machine loaded. With R1.2 no creation is in flight during play, so the gate waits only on a load screen. Its wait is a timeline event: at main `PresentGate::begin_present` records `GateWaitBegin` and `GateWaitEnd` when it waits (`--diagnostics timeline`; read at 790626cb5). The guard stays for every device (no device names).
+- **Where.** `runtime/src/render/core/present_gate.h` (`PresentGate`, `begin_present`, `gPresentGate`; also `CreationScope`, `PresentScope`), `core/pipelines_d3d12.cpp` (the `CreationScope` users, 477, 482, 493, 676, 711), `renderer_d3d12.cpp` (its present, `PresentScope` at 4345). `native/host/host_main.cpp` (3346-3354 as cited, `NEBULA_OPTION_PREPARATION`).
+- **Rows.** N-1067: whole, with R1.2's proof.
+- **Needs first.** R1.2
+- **Old path.** none: nothing draws differently. The wait outside a load screen goes with `create_now`.
+- **Proof.**
+  1. Closes with R1.2's cold-cache tour: no build on the render thread and no gate wait after a stage's first picture, on Direct3D 12, Vulkan and the tablet; the timeline shows no gate wait after the first picture of a stage.
+  2. For a player's run the wait outside a load screen does not occur; every wait that does occur names itself in the timeline.
+- **For a player.** No frame held for seconds by a pipeline being made.
+- **Read first.** In a test the title does not wait for the start's pipelines (a deterministic run would see frame counts differing by machine), so the first seconds of a test can still wait on the gate; the row says a player's title waits on a cold cache and only creations made in play (draws first, a later settings change) wait. The proof counts waits after a stage's first picture. The gate is a Direct3D 12 guard (its header); the skeleton lists Vulkan and the tablet for the tour, and the sources do not say what the gate does there.
+
+### R1.4 P-065 (Metal): the renderer's own shader texts compiled at build
+
+- **What changes.** Today the game's programs ship as bytecode (`platform/apple/tools/compile_metallib.py`), but the renderer's own shaders are texts made by C++ (`utility_msl`, `post_msl` by program and quality, Metal FX's `kDepthCopy`) and compiled with `newLibraryWithSource` at first use, on the render thread, in eight files. New: a build step runs a small host program that writes every such text (each variant by its parameters) to `utility_msl.bin`; `compile_metallib.py` compiles it into `utility.metallib` beside the programs' libraries, each text a function named by its hash. At run time the text is still made and hashed, and its function is taken from the bundle's library; `newLibraryWithSource` is used only when the library lacks it (a build without Xcode), and that is logged. Their pipeline states are then made on a worker at renderer start, as P-052 does for Direct3D 12.
+- **Where.** `platform/apple/tools/compile_metallib.py`, `platform/apple/metal.cmake`, `platform/apple/tools/utility_msl.cpp`, `runtime/include/galaxy/render/mtl/utility_msl.h`; the eight files in `runtime/src/render/mtl/`: `ambient_occlusion_mtl.mm`, `game_bloom_mtl.mm`, `metalfx_mtl.mm`, `pipelines_mtl.mm` (283), `post_process_mtl.mm`, `renderer_mtl_scene.mm`, `scene_camera_mtl.mm`, `sgsr2_mtl.mm`. `utility_msl.bin` and `utility.metallib` (not found at 790626cb5: new outputs). `programs_2_4.metallib` and `programs_3_0.metallib` as the row names them (not found at 790626cb5 as tracked files; build outputs of `compile_metallib.py`).
+- **Rows.** P-065: whole.
+- **Needs first.** nothing
+- **Old path.** `newLibraryWithSource` at first use in the eight files: deleted as a normal path; kept only as the logged fallback for a build without Xcode.
+- **Proof.**
+  1. Apple is compile-only for now: GitHub's macOS build job's log names 0 texts left to compile in a start check.
+  2. A test compares `utility_msl.bin`'s hashes with the texts the runtime makes.
+- **For a player.** No hitch on a Mac or an iPhone the first time bloom, post-process or ambient occlusion is used.
+- **Parts closed here** (plan decision 1; R1.4 is this package's last step).
+  - [ ] P-065's eight files: each compile in a frame is moved to the library or a worker (list them after reading each file; see Read first (b)).
+  - [ ] FM 1.9's Metal row also names the post-process's self-test waiting for the GPU in the first frame it is built (`mtl/post_process_mtl.mm:792`): it leaves the frame as Vulkan's does in R1.1 (the sources give no further detail; read the file first).
+  - [ ] P-052: Direct3D 12's half is confirmed in R1.1 and Direct3D 11's pipelines are made at initialise already (row note); Metal's are this step. N-1067 and P-010 close in R1.3 and R1.2.
+- **Read first.** (a) Main already has `platform/apple/tools/utility_msl.cpp` (a build tool that turns the utility SPIR-V into a header of MSL texts, run by `metal.cmake`); read it before adding the "small host program" the row describes, so one tool does it. (b) The row says every compile is on the render thread; FM 1.9's last row says the post-process's and bloom's compiles are on a worker and ambient occlusion's at the start, and also lists the post-process's self-test waiting for the GPU, which the skeleton's R1.4 does not name. Read each of the eight files to see which compile in a frame before writing the list.
+
+### Rows of this package
+
+| Row | Today | After | Closes at |
+| --- | --- | --- | --- |
+| P-010 | A draw whose pipeline is not made yet compiles it on the render thread; only Vulkan with graphics pipeline libraries gets a quick link. | A stage's pipelines are made while it loads, the load's gate waits for them; a missing one in play skips the draw, is built at the queue's front and counted; `create_now` goes. | R1.2 |
+| N-1067 | A Direct3D 12 Present waits for every pipeline creation in flight, so one slow creation holds the picture (26 s with the machine loaded). | No creation in flight during play: the gate waits only on a load screen, and each wait is a timeline event. | R1.3 |
+| P-052 | Utility pipelines are compiled on the render thread at first use, outside the pipeline cache. | Made at initialise on the pipeline workers through the driver cache (named entries, per sample count); Direct3D 12 on main, Vulkan's bloom and post-process here. | R1.1 |
+| P-065 | Metal's own shaders are compiled from MSL source on the render thread the first time each is used. | Compiled at build into `utility.metallib`, taken by hash at run time; their pipeline states made on a worker at start. | R1.4 |
+
+
+---
+
+## R2 Textures and samplers, the rest of step 2
+
+This package finishes render data path step 2 (FM 2.10) after the stack of S0.1 has landed: a texture list holding a target is written once, the four renderers' sampler tables stop filling and draining the whole graphics card, the cook decides once whether a texture's levels are authored, the player's swapped images are registered once, and two memory faults of the texture and icon code are fixed. A player gets fewer stalls while the picture's size changes or many texture settings are in use, a faster load, and icon sheets that no longer show the wrong picture after a device restart.
+
+- **Design:** FM 2.10 whole (the engine list, the proof, the player's swapped images); FM 1.9 (the sampler heap row); FM 2.1 rule 1 and FM 2.15 item 7 (a full heap or array is made beside the old and retired by the frame fence, never drained inside a frame); the row notes of P-059, P-155 (the line on generated levels), P-216, P-255; the handoff report, entries 11-19 17:48 and 17:58 (what is in-between). The ledger's text of P-048, P-056, P-061, P-066 and P-155's title is cut off at about 150 characters; audit file B's findings of the same ids (`docs/audit-2026-11-17/B-findings-port.md`) give the rest.
+- **Needs first:** S0.1.5 (the texture-list store and the load-time ids land there) for R2.1 and R2.4; the other steps name none.
+- **Rows:** 8 (P-048, P-056, P-059, P-061, P-066, P-155, P-216, P-255)
+
+### R2.1 A target is read through its own slot; the walk-level counting test
+
+- **What changes.** After S0.1.5 each list is kept in `core::TextureLists` for as long as its material's table lives and copied again only when one of its textures or samplers changes. What stays in between (report 11-19 17:58 and FM 2.10): a list that shows a target (a picture the game draws into, which changes every frame) is still copied each walk. Without descriptor indexing (`walk_bound_tables`) a table is rebuilt when stale, and per walk for a table holding a target (FM 2.10). New: a target's picture is read by the program through the target's own slot, which the frame sets once, so a table holding a target is written once and not again each walk; its samplers are made when it is registered. The per-frame look-up of each texture's handle stays (it feeds the video-memory budget and gives a movie its frame). A test with a renderer that counts: the same list walked twice writes each table once; a table with a target is not written again.
+- **Where.** `runtime/src/render/core/draw_walker.cpp` (`RenderCore::walk_tables` 771, `walk_bound_tables` 857; the report cites 771-855 and the FM 752-833 at their commits); `write_texture_list` in `renderer_d3d12.cpp` (2934), `vk/renderer_vk_frame.cpp` (2344), `mtl/renderer_mtl_draw.mm` (139) and `d3d11/renderer_d3d11.h` (124); `native/petari/src/Game/Render/RenderTexture.cpp` (an entry marks a target, line 192 as cited at c8222595e); `texture_lists.h` and `galaxy_texture_lists_tests` (not found at 790626cb5; S0.1.5 adds them). The programs that read the texture table are not named by the sources (the sources give no further detail; read the code first).
+- **Rows.** none of this package's rows: it is FM 2.10's last engine part. (P-155 closes at the later of R4.9 and R10.2.)
+- **Needs first.** S0.1.5
+- **Old path.** The copy each walk of a list holding a target; deleted here.
+- **Proof.**
+  1. The walk-level counting test (new): same list walked twice writes each table once; a table with a target is not written again.
+  2. `galaxy_texture_lists_tests` still passes.
+  3. The gate's pictures on every stop and renderer unchanged, the replay identical.
+  4. The walk's time per frame on the play route on the PC and the tablet, before and after: never slower (file 08 7.4).
+- **For a player.** Nothing visible: less copying each frame.
+- **Read first.** The report says reading a target through its own slot "needs a program change"; read which programs read the texture table and how a target's slot is addressed before writing the step.
+
+### R2.2 The sampler tables stop filling: P-048, P-056, P-066, P-061
+
+- **What changes.** Today each renderer fills a sampler table as keys arrive and starts it again when it is full (read at 790626cb5; audit file B, findings P-048, P-056, P-061, P-066 for the faults). Direct3D 12's `reset_sampler_frame` starts the heap again (`kSamplerHeapSlots` 2048; full when `used + 512 > 2048`) after `wait_for_gpu()`, and raises `sampler_generation_`, which makes every texture list be rewritten; the same wait runs when the render settings change (P-048). Vulkan's does the same with `wait_for_fence_value(last_submitted_)`, and where the device limit is 4000 samplers (the Android baselines, some desktop drivers) it also destroys every sampler once half the limit is made, then makes them again (P-056). Metal waits for the last submitted frame whenever its array nears full; where it has no sampler arrays (older Macs, iOS devices with fewer than 512 array slots) its `samplers_` and `sampler_tables_` are never cleared before shutdown, and a nil from `newSamplerStateWithDescriptor` throws (P-066). Direct3D 11's `samplers_` cache is made per new key, is not cleared by `reset_sampler_frame`, and the device allows 4096 sampler states at most, so `CreateSamplerState` can fail (P-061). Plan decision 8: the audit's first cause is already gone at main. The dynamic-resolution mip-line ratio and the upscaler's bias are out of the key (`sampler_frame_bias` and `core::ViewRows::map_bias`: the programs add them; `gpu_sampler_tests.cpp` tests it). What is left: samplers are made when a table is registered (skeleton; FM 2.10), so none is made in a frame, and a full heap or array, or one made again after a settings change, is replaced beside the old one and retired by the frame fence, never drained inside a frame (FM 2.15 item 7's form; the audit's other form is to reuse slots unused for `kFramesInFlight` + 1 frames). Vulkan's destroy-all path and the never-shrinking Metal and Direct3D 11 caches are bounded the same way: the sampler set is then bounded by the game's own states.
+- **Where.** `runtime/src/render/renderer_common.cpp` (`make_sampler_slot_key` 279) and `runtime/include/galaxy/render/renderer_common.h` (`SamplerSlotCache` 70-90, `kSamplerHeapSlots` 61, `sampler_config_key` 66) and `runtime/src/render/gpu_sampler_tests.cpp`; Direct3D 12: `runtime/src/render/renderer_d3d12.cpp` (`reset_sampler_frame` 1398, `get_or_allocate` 2920); Vulkan: `runtime/src/render/vk/renderer_vk_frame.cpp` (`reset_sampler_frame` 2680, 2334); Metal: `runtime/src/render/mtl/renderer_mtl_draw.mm` (`reset_sampler_frame` 248, 129); Direct3D 11: `runtime/src/render/d3d11/renderer_d3d11.cpp` (`sampler_for`, `sampler_table_for`, `reset_sampler_frame` 1267). FM 1.9 cites the old lines `renderer_d3d12.cpp:1410`, `vk/renderer_vk_frame.cpp:2710` and `:2729`, `mtl/renderer_mtl_draw.mm:261` (as cited at 241395b49).
+- **Rows.** P-048 (Direct3D 12): whole. P-056 (Vulkan): whole. P-066 (Metal): whole. P-061 (Direct3D 11): whole. The part of P-293 on more new samplers in one frame than the heap holds (`renderer_d3d12.cpp` 2918-2923 as cited at 241395b49) has the same fix (P-293's note: "samplers made at load"); P-293 stays with R7.8.
+- **Needs first.** nothing
+- **Old path.** `reset_sampler_frame`'s whole-GPU wait in each renderer, Vulkan's destroy-all path and the uncleared caches; deleted here. (The mip bias is already out of the key at main.)
+- **Proof.**
+  1. A heap or array filled on purpose does not stall the frame or wait for the whole graphics card (FM 2.1 rule 1; the sources name no test: write one with a renderer that counts waits).
+  2. `gpu_sampler_tests.cpp` still passes, with a test added for the replaced-beside rule.
+  3. The gate's pictures on every stop and renderer unchanged, the replay identical.
+  4. The audit's runs, each of which the audit says is needed because how often a table fills in play is suspected, not measured: Direct3D 12, `--diagnostics timeline` with dynamic resolution on (Good Egg, 10 minutes), and the existing log line `[samplers] ... starts again` never printed and no wait in the timeline (P-048); the tablet, dynamic resolution on, 10 minutes, the same line (P-056); Direct3D 11, dynamic resolution on, `--diagnose resolution-steps`, a long run through several galaxies, logging `samplers_.size()` at each step change, staying under 4096 (P-061); Metal: counting `reset_sampler_frame` waits over a galaxy tour on an Apple-silicon Mac, which needs a Mac (Apple is compile-only for now, R1.4) (P-066).
+- **For a player.** Fewer stalls while dynamic resolution or many texture settings are in use; no failure at the sampler limit on Direct3D 11.
+- **Read first.** What still reaches the key: the render settings (`sampler_config_key`: anisotropy and the texture LOD bias, `renderer_common.h` 66), so a settings change still makes new slots and, today, still waits. Read `reset_sampler_frame` in each renderer for the other waits (the settings-change wait is the same fault). The ledger's text of P-048, P-056, P-061 and P-066 is cut off; the audit has the full text.
+
+### R2.3 P-059: the cook decides "authored levels" once
+
+- **What changes.** Today `TextureStore::stage_image` runs `detail::authored_levels` (an RGBA expansion of the first level and four box-filter comparisons per texel) on the game thread for every record the cook did not flag `NEBULA_TEXTURE_GENERATED_LEVELS`, before the drop branch, so every budget restage (`drop > 0`) runs it again. The answer is a property of the record's bytes: the cook (`crates/nebula-import/src/cook/texture.rs`) decides it once and writes `NEBULA_TEXTURE_AUTHORED_LEVELS` (flags bit 1); the run time reads the bit. An image with no cook behind it (one handed at run time, such as added content's) is judged once when it is registered and the answer is kept in its entry. With it P-155's line on generated levels: for a texture whose levels the cook generated, the walk forces min and max level to 0 (`draw_walker.cpp` 823 and 925: "the cook's generated levels are not the game's"), so those levels are made and never sampled; the form at load says per material whether the first level alone is kept.
+- **Where.** `runtime/src/render/texture_store.cpp` (`stage_image` 455, the call at 476, restage at 623; `detail::authored_levels` 133), `runtime/include/galaxy/render/texture_store.h` (53, 70, 185); `crates/nebula-import/src/cook/texture.rs`; `native/include/nebula_cooked_texture.h` (`NEBULA_TEXTURE_GENERATED_LEVELS` at 45 and the flags byte at 85; `NEBULA_TEXTURE_AUTHORED_LEVELS` not found at 790626cb5); `runtime/src/render/texture_pack_tests.cpp` (`test_authored_levels`, 221); `runtime/src/render/core/draw_walker.cpp` (823, 925). The store form change adds the bit, so the store version goes up and the three discs' data are made again.
+- **Rows.** P-059: whole. P-155 (part): its line on generated levels (the row closes at the later of R4.9 and R10.2).
+- **Needs first.** nothing
+- **Old path.** The per-registration and per-restage run of `detail::authored_levels` for cooked records; deleted here. The runtime's judge stays for images with no cook behind them.
+- **Proof.**
+  1. The import check runs both judges (the cook's Rust and the runtime's C++) over every texture of the three discs and requires the same answer.
+  2. A counter in the texture-store test: a restage makes no judgement.
+  3. Pictures the same.
+- **For a player.** Faster stage loads, and no judging work when the video-memory budget shrinks textures.
+- **Read first.** The row says the bit comes "with the store form change E13a stage 4b already makes (store 37)"; at main the cooked-texture header lists only the generated-levels bit, so this step adds the bit and the store change. The generated levels are also named by N-1054 (S0.3); S0.3.2 leaves them to this step: this step decides what happens to them and their flag (plan decision).
+
+### R2.4 The player's swapped images
+
+- **What changes.** The player's model swaps an image into a map each draw (`PlayerModel.cpp`, `draw.swapImage(0, RenderTexture::idOf(...))`), and a draw that swaps an image builds and registers its list at every draw (`MaterialDraw::tableOf`, registered by hash through `Registries::texture_table`). New (FM 2.10): the list is registered once per distinct list and kept by the model, not at every draw. How it is kept is decided when the caller is read whole, in the step's code.
+- **Where.** `native/petari/src/Game/Player/PlayerModel.cpp` (the swap, around 136), `native/petari/src/Game/Render/Material.cpp` (`MaterialDraw::tableOf` 770, `swapImage` 538, the register call 813), `native/petari/src/Game/Render/RenderTexture.cpp` (`idOf` 175), `runtime/src/render/core/registries.cpp` (`texture_table`, the per-thread memo of 64 lists).
+- **Rows.** none of this package's rows (FM 2.10 only).
+- **Needs first.** S0.1.5
+- **Old path.** The per-draw build and register of a swapped list; deleted here.
+- **Proof.**
+  1. Walked twice, a model with a swapped image registers its list once (the sources name no test; read the code first).
+  2. The gate's pictures on every stop and renderer unchanged, the replay identical.
+  3. FM 2.10's search for `mMinType` and `RenderTexture::idOf` in `Material.cpp` can pass only after the draw sites move: it is R4.9's proof (plan decision; see R4.9, step 5).
+- **For a player.** Nothing visible: less work in Mario's draw.
+- **Read first.** `PlayerModel.cpp` whole, before the step is written (FM 2.10, the skeleton). At main `Material.cpp` still holds `RenderTexture::idOf` (788) and `mMinType` (791); R4.9 removes them (plan decision; S0.1.4's Read first has the same point). Pictures swapped in by `setTexture` (disc pictures, added content's textures) still need that look-up and decode until they are cooked with their sampler and held by `GameTexture`, which R4.0 does (P-155's site part), so the search can reach 0 only after the draw sites move: it is placed at R4.9 (plan decision). Pictures swapped in by `ModelData::setTexture` keep id 0 and the look-up so that a rewrite (`RenderTexture::rewritten`, from the settings menu's added picture and `LumaDraw.cpp`) still reaches the screen; the new form has to keep that.
+
+### R2.5 P-216 and P-255's first part
+
+- **What changes.** Plan decision 14: each fault is a bullet; a row closes when its last bullet is done.
+  - P-216, one record for every sheet. `NebulaIcons` paints the picture font's sharp sheets one after another into one record (`sHd.mRecord`) and hands each to the host. The API says the renderer takes a copy (`nebula_game_api.h` 1017-1019); the renderer stages one and also keeps the pointer (`built_ins_` in `texture_store.cpp`), and a device restart stages every kept record again from it, so every sheet then shows what the record holds last. Fix: one record per sheet kept while it is handed over, or the store keeps its own copy as the API says.
+  - P-216, the Joy-Con picture sets are freed 250 ms of wall clock after they stop being shown (`cJcRetireMs`), not when the frames drawing them are done. Fix: retired at the render side's frame fence.
+  - P-216, the `malloc` of the record is unchecked (`NebulaIcons.cpp` 1826-1827 and 2038 as cited at 241395b49). Fix: allocation failures checked.
+  - P-255's first part: `RenderTexture`'s table grows through `heap_alloc` and is cleared with no check (`grow`, 91-95), while the same file treats a null from `heap_alloc` as possible (290-299). Fix: a named panic on a failed allocation, or the table sized at load. Replay identical.
+- **Where.** `native/petari/src/Game/Screen/NebulaIcons.cpp` (`sHd.mRecord` 1736, 1824-1831, `cJcRetireMs` and its uses, 2078 and 2490 as cited at 241395b49); `native/include/nebula_game_api.h` (`texture_hd`, "the renderer takes a copy", 1017-1019); `runtime/src/render/texture_store.cpp` (`built_ins_`, the restart that stages them again, 326-338 and 588-596); `native/petari/src/Game/Render/RenderTexture.cpp` (`grow`, 91-95; the null-tolerant allocation, 290-299).
+- **Rows.** P-216: whole. P-255: the render texture table's allocation (its site-mesh part is R4.0, its skeleton part R5.7).
+- **Needs first.** nothing
+- **Old path.** none: nothing draws differently except that a device restart shows each sheet's own picture.
+- **Proof.**
+  1. A device restart shows every icon sheet's own picture (the row's fault: every sheet then shows what the record holds last); the sources name no test.
+  2. A failed allocation of the render texture table stops with a named panic, not a null write.
+  3. Replay identical.
+- **For a player.** After a device restart (a driver reset, for example) the picture font's icons show their own pictures; Joy-Con pictures no longer vanish while a frame still draws them.
+- **Parts closed here** (plan decision 1; R2.5 is this package's last step). P-155 closes at the later of R4.9 and R10.2 (plan decision); its parts are placed as follows.
+  - [ ] The line on generated levels (the walk forces level 0 for cook-generated levels): R2.3.
+  - [ ] A site texture named by the address of its image bytes, with its sampler fields given with it (`SiteTexture`, `NebulaGpuTypes.h` 10-22), and the interface that names an image by its bytes' address and its format by the image file's number (`NebulaTextureImage`, `nebula_game_api.h` 173-181; the cooked record behind the disc's header, `nebula_cooked_texture.h` 5-8; wrap and filter codes in the header's order, 107-117; `NebulaFrameTexture` 105-113): R4.0 (plan decision 3).
+  - [ ] The Mii head's textures (face textures keyed by the address of its own `mFaceKeys` members, `MiiHead.cpp` 182; part textures by the address of their bytes in the parts file, 53-55): R4.6.
+  - [ ] Ride textures loaded by `.bti` name into `GameTexture` (`Creeper.cpp` 171, `PlantStalk.cpp` 207, `SpaceCocoon.cpp` 182, `SwingRope.cpp` 740, `Trapeze.cpp` 734): R4.2, with their sites.
+  - [ ] The screen copy handed to an actor as a `ResTIMG` (`WhirlPool.cpp` 138, `MR::getScreenResTIMG`, which other files call too): R4.0, where it becomes a target's id (plan decision).
+  - [ ] A glyph sheet found by the address of its bytes (`ResFontBase.cpp` 186-191; INV, the text line "as P-155's textures"): R10.1, with P-229, which names the font's files (plan decision).
+- **Read first.** The row leaves one thing unsettled: whether a retired Joy-Con set's images are released to the store before its block is freed (the store also keeps game images by pointer for a restart, `texture_store.cpp` 514 and 326-333). Decide it in this step.
+
+### Rows of this package
+
+| Row | Today | After | Closes at |
+| --- | --- | --- | --- |
+| P-048 | The Direct3D 12 sampler heap (2048 slots) is drained with a full GPU wait when it fills and every texture list is rewritten; its keys held the dynamic-resolution line ratio and the upscaler's bias (audit file B, finding P-048; out of the key at main). | Samplers made when a table is registered; a full heap replaced beside the old one and retired by the frame fence, never drained inside a frame. | R2.2 |
+| P-056 | When Vulkan's sampler array fills, the reset waits for the last submitted frame; on drivers with a 4000-sampler limit it also destroys every sampler once half the limit is made, then makes them again (audit file B, finding P-056). | The same: made at registration, a full array replaced beside the old one and retired by the fence; no destroy-all in play. | R2.2 |
+| P-059 | Every texture record with authored-looking levels is analysed on the game thread when registered, and again on every budget restage. | The cook decides once and writes `NEBULA_TEXTURE_AUTHORED_LEVELS`; the runtime reads the bit; an image with no cook is judged once. | R2.3 |
+| P-061 | The Direct3D 11 sampler cache is never trimmed and a device allows at most 4096 sampler states, so a new key can fail; dynamic resolution added keys through the bias (audit file B, finding P-061). | Samplers made when a table is registered; the cache bounded by the game's own states; no `CreateSamplerState` in a frame. | R2.2 |
+| P-066 | Metal waits for the last submitted frame whenever its sampler array nears full, and without arrays (older Macs, iOS devices below 512 slots) its sampler caches never shrink; a nil sampler state throws (audit file B, finding P-066). | The same form as the others: no wait inside a frame, a full array replaced beside the old one, caches bounded. | R2.2 |
+| P-155 | A texture is known by the address of its bytes and described by the console's texture header, so every textured draw hashes an address and the console's filter codes are decoded at every draw (audit file B, finding P-155); for cook-generated levels the walk forces level 0 so those levels are never sampled. | Here: the form at load says per material whether the first level is kept (with P-059). The sites, rides, Miis and interface parts close in R4. | the later of R4.9 and R10.2 (generated-levels line at R2.3) |
+| P-216 | Icon sheets painted into one record the store also keeps by pointer, so a device restart shows the last sheet everywhere; Joy-Con sets freed by wall clock, not the frame fence. | One record per sheet kept while handed over (or a store copy); Joy-Con sets retired at the frame fence; allocations checked. | R2.5 |
+| P-255 | `RenderTexture`'s table grows with an unchecked `heap_alloc`; the site mesh's append and the skeleton's stack room are also unchecked. | A named panic on a failed allocation or a table sized at load (this step); the site-mesh part is R4.0, the skeleton part R5.7. | R5.7 (table part at R2.5) |
+
+
+---
+
+## R3 Material constants and shader forms written at the cook
+
+Today the game rebuilds a material's constant rows from the console's register form every time it fills a form, and the cooked shader programs still compute the way the console's colour combiner did (8-bit steps, wraps, byte compares). This package makes the cook write each form's constant rows as final floats and name each row's source. The game then keeps only the sources and the GPU keeps one block per material, written again only when a source changed. The shader programs become one float expression per named form. A player gets lower CPU work per frame on phones. Pictures stay the same except where R3.8 to R3.11 change a look on purpose and a picture is approved.
+
+Words used here: a "form" is one way a material is drawn (its programs, state, inputs, texture list). `FORM`, `CBLK` and `CROW` are sections of the model file (format 13, FM 2.7.2): `FORM` holds the form, `CBLK` its constant rows in final floats, `CROW` each row's source. A "source" is a value the game, a clip or added content writes (a register colour, a coordinate matrix, the ambient colour). "Fill" is the work of turning the console's rows into floats at a draw.
+
+- **Design:** FM 2.11 (whole: today, the file, the engine, groups, proof), FM 2.7.3 (the switch and the groups) and 2.7.4 (the gate's compare of both paths), FM 2.9 (`FROW`, `GXMT`, `GXTG`, `GXTM`, `GXWP` and `FORM`'s added fields), FM 2.3 and 2.4 (step 3's row). The report of 11-19, entry "E3 step 3 (FRAME-MODEL 2.11): where to start". INV section 3's lines for P-299, P-303, P-304 (the console's combiner, "the pictures per form group") and P-309. The notes of P-151, P-157, P-173, P-297, P-299, P-303, P-304, P-309; audit file B's findings P-060, P-064, P-151 and P-157 (`docs/audit-2026-11-17/B-findings-port.md`), because the ledger's titles of those four are cut off.
+- **Needs first:** the skeleton names no earlier package for R3. FM 2.7.2 and 2.10 put `CBLK` and `CROW` in the section table and use the cooked texture sizes that S0.1.3 to S0.1.5 land (the section table, `FTEX`, `SAMP`), so S0.1 is first (read from the sources, not stated by the skeleton). R3.2 to R3.8 and R3.13 do not need S0.2.
+- **Rows:** 10 (P-151, P-173, P-157, P-060, P-064, P-297, P-299, P-303, P-304, P-309)
+
+### R3.1 The cook writes `CBLK` and `CROW`; a load-time check proves them
+
+- **What changes.** Today a form names its constant rows by the console's registers (`NEBULA_ROW_*`, kept as `FROW`), and `Material::fillRow` turns each into four floats at every fill: register values divided by 255, the alpha reference divided by 255, a scale row read from the map's current texture header, a coordinate's rows from its matrix. The cook now also writes, per form, `CBLK` (every row as final floats) and `CROW` (per row, its source and how it is written: a coordinate matrix n, three rows or two for a warp; register n; constant n; material colour n; ambient n; fog; fog colour; the replacing pass's values; map n's size; or none). Every row names a source, because game code and added content write any register of any material, so the cook cannot know which rows change. The `PLAYER_OPACITY` form's alpha reference is written 0 (the pass's edit). A coordinate that reads the eye under a billboard is marked in `CROW`. The report of 11-19 sorts the rows. The cook can give as final floats: registers and constant colours (all ones when the material has no stage colours), material colours, the alpha reference, fog and fog colour (zeros when the material has no fog), the warp rows (identity rows when there is no indirect stage, zeros past the warp count), the replacing pass's row (zeros), and a scale row (the map's texture size and its scale map's size; 1 when no texture). It can only name as a source: the ambient pair (global, set at run time) and a coordinate's three matrix rows (they come from the matrix after its calc; on a billboard a matrix that reads the eye is turned by the step's view, which only a picture can apply). The game does not read `CBLK` in this step. The store version goes up by one (plan decision: store +1).
+- **Where.** `crates/nebula-import/src/cook/model_write.rs` (the model writer; FM 2.9 cites the material part at `:587-718` as read at c8222595e); `crates/nebula-import/src/cook/programs.rs` (the register-file block layout, `:15-27` as cited at 241395b49); `native/petari/src/Game/Render/Material.cpp` (`fillRow`, `:296-424` as cited at cfc2e368e; the report of 11-19 cites `:294-422` at 3f01cd7ae); `native/include/nebula_model.h` (`NEBULA_ROW_*`, `:138-155` as cited at cfc2e368e); `native/petari/src/Game/Render/ModelData.cpp` (where the game resolves a model's sections). The new sections `CBLK` and `CROW` and the load-time check do not exist at 790626cb5 (the section table lands in S0.1.3).
+- **Rows.** P-151 advanced (the cook half of its model); P-157 advanced (the final-float form beside the register form).
+- **Needs first.** S0.1.3.
+- **Old path.** The check is a verify switch in a test build, not a path that draws. `FROW` and `GXMT` stay and the game still fills from them until R3.13 deletes them.
+- **Proof.**
+  1. A test in `crates/nebula-import`: for every form of every model of the US disc, `CBLK` equals the rows `fillRow` gives the cooked material (the rule restated in Rust from `Material.cpp:296-424`, checked against a dump of the game's own fill for the tour's models), and each `CROW` entry names the source that rule reads.
+  2. A check at load (a test build's verify switch): every form's `CBLK` row equals `fillRow`'s for the rows the cook gives as floats, on every model of the three discs, before the game reads `CBLK` at all.
+  3. The gate's pictures on every stop and renderer are unchanged and the replay identical (nothing drawn changes).
+- **For a player.** Nothing visible: it is how the code is built.
+- **Read first.** The two sources cite `fillRow` at different lines (`:296-424` in FM, `:294-422` in the report): read the function whole in the cook's restatement. The sources name no tool for "the dump of the game's own fill"; read the row and the existing inventory scripts (`D:/NebulaWork/plan/a1/inv`) first.
+
+### R3.2 The engine; group "plain unlit"; P-173
+
+- **What changes.** The game holds, per material it draws, the values of the sources (a few float4s) and no rows. A clip, a game call or added content writes a source, and the write marks it changed for the step. The game's setters take floats. The colour getters that hand out a writable pointer and touch the material to read it go; `Material::calc`'s before-and-after copy and compare of every coordinate matrix goes, and a matrix's calc reports whether it changed. At load the game registers each form's `CBLK` once (`material_register`, as the plain path does today) and its `CROW` with it. A material written since its load (its own copy, `Model::ownMaterial`) has an instance: one record of its sources' values on the render thread, made at the first write. Per step the frame list carries only the sources written that step: `(instance, source, value)`. A draw's own values (the player model's registers, colours, fog and opacity, the search light's, the electric rail's, the flexible sphere's) ride on the item as its sources, as `MaterialDraw`'s edits do today, with no whole block in the arena. The render thread keeps each instance's block in GPU memory, built from `CBLK` and `CROW` with the instance's sources, and writes it again only in a frame where one of its sources changed (a block per frame in flight while it changes, then one). Between two steps it mixes only the changed sources, a coordinate matrix as a matrix. This is the first group, so the switch (FM 2.7.3) is built here (plan decision 2: the table is made by this first step that needs a switch and reused by R4, R5 and R6): one table in the game module with a default per step and group, a flag bit per step on the item or block that says which path wrote it, and a test-run plan line (`old`, `new`, or `paths both`) that writes the step's list twice from the same state and walks both.
+- **Where.** `native/petari/include/Game/Render/Material.hpp` (`touch()` at `:235-237`, getters `:180-183`, `:195-218`, as cited at cfc2e368e); `native/petari/src/Game/Render/Material.cpp` (`MaterialDraw::constantsOf` `:713-768`, `applyEdits` `:641-679`, `calc` `:262-276`); `native/petari/include/Game/Render/Model.hpp` (`ownMaterial`); `native/petari/src/Game/Animation/BrkPlayer.cpp`, `BpkPlayer.cpp`, `BtkPlayer.cpp`, `BtpPlayer.cpp` and `native/petari/src/Game/Render/Clip.cpp` (the clips that write sources); `native/petari/src/Game/LiveActor/MaterialCtrl.cpp` (`:71`, `:143`, `:198`, `:256`); `native/petari/src/Game/MapObj/NormalMapBase.cpp` (`drawMaterialSetting`, `:359-385`) and `native/petari/src/Game/System/NebulaModCalls.cpp` (`:129-131`), the two readers that now move materials to the per-frame fill; `native/petari/src/Game/Render/FrameList.cpp`; `native/include/nebula_frame_list.h` (`material_register`); `runtime/src/render/core/draw_walker.cpp` (`:588-612`, `:620-664`, `tex_matrix_at` at `:659`); `runtime/src/render/render_core.cpp` (the ring's size, `:1906-1910`); `runtime/src/render/core/registries.cpp` (slots content-addressed, `:615-638`, `:538`). `Game/Render/RenderPath.hpp`, the switch's table, is not found at 790626cb5 (FM 2.7.3 names it; this step makes it, because R3.2 is the first step that needs a switch (plan decision 2), and R4, R5 and R6 reuse it).
+- **Rows.** P-173 whole (a form's slot holds its constant block for good; the changed rows ride in the list; no material falls to a per-frame fill); P-151 advanced (the engine and the first group).
+- **Needs first.** R3.1.
+- **Old path.** The switch: default "old" until this group's proof holds, then "new" for group "plain unlit". Step 3's last landing (R3.13) deletes the old path, its flag bit and the groups in the table.
+- **Proof.**
+  1. A C test of the render thread's block: a form's block from `CBLK` and `CROW` with a set of sources equals the rows of today's fill and edit for the same values; between two steps the mixed block equals today's mix.
+  2. The gate's pictures of both paths (`paths both`: `<name>.old.png` and `<name>.new.png`) equal on every stop and renderer; a difference fails the landing and names the stop, picture, renderer and group. The step hash (`tools/verify/step_hash.py`) after a picture frame is the same with `paths both` as without. The replay is identical.
+  3. A count from a test run, before and after, on the play route and in the tours' animated stops: the bytes of constants the list carries per frame and the blocks the render thread writes (P-151 asked for a fill count in HoneyBeeKingdom and SeaGalaxy).
+  4. The walk's time and the game step's time on the PC and the tablet, before and after (never slower).
+- **For a player.** Nothing visible in pictures; less CPU work per frame for animated materials.
+- **Read first.** FM 2.7.3 names the groups by `FORM`'s kind and pass, and FM 2.9 says `FORM`'s kind (opaque, alpha-tested, blended, water) is added by the landing that brings its first reader. The group choice is such a reader: decide here whether the kind is added now (it is needed by every group landing R3.2 to R3.8) and record it in FM. Also read where `paths both` is built (the sources say what it does, not which landing builds it).
+
+### R3.3 Group "plain lit"
+
+- **What changes.** The group of forms that have lit channels moves to the new path. Their constant rows come from `CBLK` and `CROW`; the ambient colours (the global pair `MaterialAmbient`, set by each actor's light load, by a material that has its own ambient when it is sent, and to black by the 2-D layers) become a source of the list, written when the global pair changes. An item names the entry in effect at its draw, as a light set is named today, so a draw that reads another material's ambient gets what it gets today. R6 moves the ambient into the item's light set and removes `MaterialAmbient`; it stays until then. A material's light masks are in `MATL` (`light_masks[4]`), so the game counts a material's lights without `GXMT`.
+- **Where.** `native/petari/include/Game/Render/Material.hpp` (the ambient, `:220`; `usesLight`, `:230-233`); `native/petari/src/Game/Render/Material.cpp` (`:481-488` ambient set by a material; `:746-750` the refill rule when the pair's generation changes, and at every draw in a module with hook points); `native/petari/src/Game/Map/LightFunction.cpp` (`:189`); `native/petari/src/Game/Ui/Material.cpp` (`:749-750`) and `native/petari/src/Game/Util/DrawUtil.cpp` (`:32-33`) (the black writes of the 2-D layers); `native/petari/src/Game/Util/ModelUtil.cpp` (`:274-294`, the count of a material's lights). All line numbers as cited at cfc2e368e.
+- **Rows.** P-151 advanced (the lit forms and the ambient source).
+- **Needs first.** R3.2.
+- **Old path.** The switch's group "plain lit"; deleted at R3.13.
+- **Proof.** As R3.2, items 1 to 4, for this group. The pictures of both paths must also be equal for a draw that reads the ambient another material set.
+- **For a player.** Nothing visible.
+- **Read first.** The sources do not say whether the ambient as a list source is built at R3.2 or here. Read plain unlit's forms first: if none reads the ambient, build it here.
+
+### R3.4 Group "alpha-tested"
+
+- **What changes.** The forms whose kind is alpha-tested move to the new path. Their alpha reference is a float row in `CBLK` (today `alpha_ref0` and `alpha_ref1` are divided by 255 at every fill). The `PLAYER_OPACITY` form keeps its alpha reference written 0 and its edit at draw (R3.8 moves that pass). The compare codes and the float cutoff are not changed here: they are R3.9's.
+- **Where.** `native/petari/src/Game/Render/Material.cpp` (`:377-378`, `:551-553`, as cited at cfc2e368e); `crates/nebula-import/src/cook/programs.rs` (`alpha_test_lines`, `:806-830` as cited at 241395b49).
+- **Rows.** P-151 advanced.
+- **Needs first.** R3.2.
+- **Old path.** The switch's group "alpha-tested"; deleted at R3.13.
+- **Proof.** As R3.2, items 1 to 4, for this group.
+- **For a player.** Nothing visible.
+
+### R3.5 Group "blended"
+
+- **What changes.** The forms of kind blended (translucent: neither of `mode`'s low two bits, now the `MATL` flag "translucent") move to the new path. The sources give no further detail for this group beyond the group's name and the shared engine of R3.2 (read the row and the code first).
+- **Where.** `native/petari/include/Game/Render/Material.hpp` (`isTranslucent`, `:155-157`, as cited at c8222595e); `native/petari/src/Game/System/DrawBuffer.cpp` (`:257`).
+- **Rows.** P-151 advanced.
+- **Needs first.** R3.2.
+- **Old path.** The switch's group "blended"; deleted at R3.13.
+- **Proof.** As R3.2, items 1 to 4, for this group.
+- **For a player.** Nothing visible.
+
+### R3.6 Group "water and indirect"
+
+- **What changes.** The forms of kind water and the forms with an indirect stage move to the new path. An indirect stage has warp rows, which are two rows in `CROW` (identity rows when the material has no indirect stage); the warp's source is the material's warp. The warp map's own change to a texture in UV units is R3.9's, not this step's.
+- **Where.** `native/petari/src/Game/Render/Material.cpp` (the warp rows `:334-344`, as cited at cfc2e368e); the model file's `GXWP` (readers go at R3.13).
+- **Rows.** P-151 advanced.
+- **Needs first.** R3.2.
+- **Old path.** The switch's group "water and indirect"; deleted at R3.13.
+- **Proof.** As R3.2, items 1 to 4, for this group.
+- **For a player.** Nothing visible.
+
+### R3.7 Group "billboard materials"
+
+- **What changes.** A billboard's coordinate matrix that reads the eye is today multiplied by the step's view (`ModelSys::mViewMtx`) in the game at fill. The cook marks such a coordinate in `CROW`; the render thread applies the view of the picture to it. So the pictures at a step do not change, and the in-between pictures do (they now use the eye of that picture, not the step's).
+- **Where.** `native/petari/src/Game/Render/Material.cpp` (`:313-324`, as cited at cfc2e368e); `native/petari/include/Game/Render/Model.hpp` (the `ModelSys` namespace, `mViewMtx`); `runtime/src/render/core/draw_walker.cpp` (the walk's constants copy, `:620-664`).
+- **Rows.** P-151 advanced (the billboard's view).
+- **Needs first.** R3.2.
+- **Old path.** The switch's group "billboard materials"; deleted at R3.13.
+- **Proof.** As R3.2, items 1 to 4, for this group. The pictures at a step are equal. The in-between pictures of this group change by design and are looked at and approved.
+- **For a player.** A billboard (a sprite that faces the camera) in an in-between picture is placed with that picture's eye, not the step's.
+- **Read first.** The sources do not name a test for the in-between pictures: read the row and decide how they are compared (FM 2.7.4's fixed-t picture is written for step 5).
+
+### R3.8 The replacing passes (P-309)
+
+- **What changes.** Four passes draw a model with their own values in place of its material: the player light, the reflection alpha, the player's opacity, the flexible coordinates. Today the cook makes their forms only for a list of 29 model names (`REPLACED_MODELS`) and 3 flexible ones (`FLEXIBLE_MODELS`), so an added content's player model, or any other model drawn under those passes, has no form for them. Each replacing pass becomes a form that the content or the draw site declares, cooked for every model that can be drawn under it. The pass's values are in `CROW` (source "the replacing pass's values"); they ride on the item as its sources (R3.2). What the draw does when a form is missing is to be read with the fix.
+- **Where.** `crates/nebula-import/src/cook/programs.rs` (`REPLACED_MODELS`, `FLEXIBLE_MODELS`, `:1769-1778`; the pass loop near `:1797`); `native/petari/src/Game/Player/PlayerModel.cpp` (`:107-145`, `:237-292`); `native/petari/src/Game/Player/MarioSearchLight.cpp` (`:268-326`); `native/petari/src/Game/MapObj/ElectricRailMoving.cpp` (`:85-86`); `native/petari/src/Game/MapObj/FlexibleSphere.cpp` (`:42-45`). Lines as cited at cfc2e368e and 241395b49.
+- **Rows.** P-309 whole; P-151 advanced (the replacing passes' values).
+- **Needs first.** R3.2 to R3.7.
+- **Old path.** The switch's four groups (player light, reflection alpha, player opacity, flexible coordinates), one landing for the four; deleted at R3.13.
+- **Proof.**
+  1. As R3.2, items 1 to 4, for each of the four groups.
+  2. The replay is identical (the row says so).
+  3. The sources name no test for the new part (a model that was not in the lists, drawn under each pass; read the row and the code first).
+- **For a player.** Nothing visible for the game's own models. Added content's models can be drawn under these passes.
+- **Read first.** What the draw does today when a model has no form for a pass, and how a content or a draw site declares a pass: the sources give no further detail.
+
+### R3.9 Shader forms: the cooked programs (P-303, P-304)
+
+- **What changes.** Today the cook writes each material as the console's colour combiner, stage for stage, and writes each coordinate as the console's matrix rows. Plan decision 14: each fault is a bullet; P-303 and P-304 close when their last bullet is done.
+  - P-303 (pixel stages), five faults. (1) The combiner is written stage for stage: registers prev, r0 to r2, ras and k; `d + lerp(a, b, c)` with bias, scale and clamp codes and a `NATIVE_STAGE` per stage. (2) A register read as an operand takes its low 8 bits, wrapping (`low8`), where the cook cannot show it stays in 0 to 1. (3) Compares test values rounded to 255 steps and rebuild 16- and 24-bit values from 8-bit channels. (4) The alpha test rounds alpha to 0 to 255 and joins two 8-bit references by the console's logic op (and, or, xor, xnor). (5) Fog is written per material, with its range and colour in the form's rows. Also seen with it: terms that are constant and not folded (a lerp of zeros) and one texture sampled again at the same coordinate for each stage that reads it.
+  - P-304 (coordinates), four faults. (1) The indirect stage reads its offset map as 8-bit integers less 128, multiplies by two matrix rows and adds the result in texels (`uv * size`), then divides back; the dynamic form works as `texel * s / 256`. (2) Coordinate generators are the console's matrix rows applied in the vertex program to an eye-space normal or position made for one camera. (3) A projective generator at q = 0 halves and clamps s and t to -1 to 1, the hardware's rule. (4) Each 3-row coordinate is divided per pixel behind a `z != 0` guard.
+  - After. The cook writes one float expression per named form (base map, lit or vertex colour, tint, glow), constants folded and dead terms dropped, each texture sampled once. `FORM` gets its descriptions with this first reader: the alpha mode and one float cutoff, each coordinate's source and kind (a UV transform, an environment from the view normal, a projection on world position), the base map's slot, the glow row. The warp map is cooked as a signed two-channel texture in UV units, and the matrix and size ratios are folded into one `float2x2` per form, the offset added once in float. The wrap and the 8-bit compares are folded into the constant only where a picture shows a form needs them, else written in float. Only true projections are marked projective; the q = 0 clamp is not copied. Fog is written per view, not per draw. Plan decision 5: this step writes each coordinate's source and kind only; "the view resolved per view on the graphics card" is R5.6's, and the fog's per-view record is R5.6's (with P-239's fog part).
+- **Where.** `crates/nebula-import/src/cook/programs.rs` (`stage_lines` `:627` on and `:775`; the `low8` uses `:436-441`, `:786-789`; compares `:491-493`, `:514-521`; `alpha_test_lines` `:806-830`; `fog_lines` `:539`; indirect `:682`, `:715`; projective `:1469`; unlit and lit returns `:1594-1596`; lines as cited at 241395b49). The cook's output is in `runtime/src/render/programs/` (for example `p00269da374ac39e7.hlsl`, `p074b625ddddd4d8a.hlsl`, `v00fa2c22a19f4f21.hlsl`, `v0169190bf2ee2be5.hlsl`) and is built by `tools/dev/build_programs.py`. `runtime/src/render/materials/program.hlsli` (`low8`, `:206-210`; `program_fog_curve`, `:266`).
+- **Rows.** P-303: whole (the fog's per-view resolve is R5.6's, with P-239's fog part). P-304: the cook's half (the warp map, the folded `float2x2`, each coordinate's source and kind, no q = 0 clamp); P-304 closes at R5.6 with its per-view resolve (plan decision 5).
+- **Needs first.** R3.8. (P-304's per-view resolve is R5.6's and is not needed to land this step.)
+- **Old path.** The sources name no switch for shader forms; P-299 asks each changed program to be checked by picture against the current one, so the old program must be kept for that compare (read first: how).
+- **Proof.**
+  1. Pictures approved per form group (FM 2.7.4: the gate compares new with old picture, largest and mean difference of any channel and pixels past a tolerance of 1; a difference by design is looked at and approved) on every stop and renderer.
+  2. The replay is identical (drawing only).
+  3. Settled on reading: a test whose references pass every value alpha can take stays out of the raster forms and stays under `NATIVE_SAMPLE` on purpose (`programs.rs:812-817`, program `p07e44699`); the float4 given to `program_fog_curve` is read by no form today. Whether the unlit clamp (`saturate(prev)`) is needed for a look to be shown is checked with the fix.
+  4. Also seen and fixed with it: terms that are constant and not folded (a lerp of zeros, `p0c5b5ae9`), and one texture sampled again at the same coordinate for each stage that reads it (`p0264e6cf`).
+- **For a player.** Same pictures, or pictures approved where a form's look was only an 8-bit step artifact. The programs are simpler.
+- **Read first.** The per-view records come with R4v and R5 (R5.4 to R5.6, the fog record in R5.6). At this step the cook names each coordinate's source and kind in `FORM` and writes fog so it can be resolved per view; the resolve itself lands in R5 (plan decision 5: P-304 closes in R5.6). The sources give no further detail for the warp map's texture format.
+
+### R3.10 Shader forms: the 19 hand-written programs (P-299)
+
+- **What changes.** The programs written for the game's own draw sites keep the console's pixel stages. Plan decision 14: each fault is a bullet; P-299 closes when the last is done.
+  - Alpha is rounded to 0 to 255 and tested by the compare codes, equal and not-equal among them (`color_tex_alpha.hlsl` 8-9 and 30-32, and 18 more programs).
+  - Indirect warps are read as 8-bit offsets less 128 (`ocean_bowl.hlsl` 34-35 and seven more programs).
+  - Combiner stages are chained with a clamp after each, with stage scales, sums in 0 to 255 units, bands where red equals a level, and swap tables (`fur`, `mii_face`, the two ocean bloom programs, `water_road`, `whirlpool`).
+  - The 8-bit register wrap is emulated (`low8`, `program.hlsli` 206-210; `ocean_sphere.hlsl` 26-28).
+  - Luminance is the console's intensity copy (`image_effect.hlsl` 45) and a threshold on red at 8 bits (38).
+  - The same changes as R3.9 are made: the cook writes each form's alpha mode and a float cutoff (a mask or band where a test picks texels by value); warp maps become signed two-channel textures with a float scale; each look is one float expression that says what it is, a clamp kept only where pictures show it matters, swizzles resolved when the texture is made; luminance by the renderer's weights. The 19 programs are `color_tex_alpha`, `dd_texture`, `dd_texture_color`, `fur`, `mii_face`, `mii_texture`, `ocean_bowl`, `ocean_bowl_bloom`, `ocean_ring`, `ocean_ring_bloom`, `spider_thread`, `spin_driver_path`, `tex_modulate`, `vertex_color`, `water_camera`, `water_plant`, `water_road`, `whirlpool`, `whirlpool_accelerator`. The particle's tests are P-150, the layout picture's P-184 and the normal map's P-190 (not here).
+- **Where.** `runtime/src/render/materials/` (the 19 `.hlsl` files above, all found at 790626cb5; `color_tex_alpha.hlsl:8-9`, `:30-32`; `ocean_bowl.hlsl:34-35`; `program.hlsli:206-210`); the row also names `ocean_sphere.hlsl:26-28` (the register wrap) and `image_effect.hlsl:45`, `:38` (luminance and the red threshold), both found; lines as cited at 241395b49.
+- **Rows.** P-299 whole.
+- **Needs first.** R3.9 (the same form fields and the same pictures process).
+- **Old path.** As R3.9: none named; each changed program is checked by picture against the current one.
+- **Proof.**
+  1. Each changed program checked by picture against the current one, on every stop and renderer, and approved where it changes.
+  2. The replay is identical (drawing only).
+- **For a player.** Same pictures, or pictures approved where a look was only an 8-bit artifact (ocean, water, fur, the Mii face).
+- **Read first.** The row names `ocean_sphere.hlsl` and `image_effect.hlsl`, which are not among the 19: read both with this step. `fur.hlsl` is also touched by R4.2 (P-239's fur part: float shell values, strands at linear texels): read that part of the row before changing fur here.
+
+### R3.11 Sources take the clips' floats as given
+
+- **What changes.** Today the clips round colour values to the console's 11-bit and byte forms, and the call that lets added content set a model's value rounds a float to steps of 1/255 and clamps it to the console's register ranges. R3.2 kept both so its pictures stayed unchanged. This landing gives the sources the clips' floats and the call's floats as given, with the console's rounding dropped. Its pictures are looked at and approved, and the call's text is updated (`content.model.set_param`).
+- **Where.** `native/petari/src/Game/Render/Clip.cpp` (`:124-133`, `:169-184`); `native/petari/src/Game/Animation/BrkPlayer.cpp` (`:11-25`, `:16`, `:23`); `native/petari/src/Game/Animation/BpkPlayer.cpp` (`:15`); `native/petari/src/Game/Animation/BtkPlayer.cpp` (`:18-24`); `native/petari/src/Game/System/LumaContentModel.cpp` (`:760-793`, the rounding at `:775-778`). Lines as cited at cfc2e368e and 241395b49.
+- **Rows.** P-151 advanced (the rounding part of its note).
+- **Needs first.** R3.2 and the group landings R3.3 to R3.8.
+- **Old path.** None: the rounding was kept by R3.2 on purpose and is dropped here.
+- **Proof.**
+  1. The gate's pictures on every stop and renderer, where the clips' colours change by a step, looked at and approved.
+  2. The mod suites run (FM 2.7.3 says they run on every landing); the call's documented text is updated.
+- **For a player.** An animated colour can differ from today's by up to one step of 255; each such picture is looked at and approved.
+
+### R3.12 Direct3D 11: P-060 and P-064 measured again; P-297's first part
+
+- **What changes.** After the groups have landed the constant ring carries only changed blocks. Read at 790626cb5 against the audit's findings (audit file B, findings P-060 and P-064; the ledger's titles are cut off):
+  - P-060, a per-draw `Map(WRITE_DISCARD)` of the root constant buffer. At main the roots go through the one append-only constant ring (`write_roots`, `renderer_d3d11.cpp` 1071 on; P-242's landing 13143d2e7: every constant block in one fenced ring, never discarded; in the constants path `WRITE_DISCARD` is left only on a new ring's first map, `d3d11_context.cpp` 658). The measure decides whether anything of the row is left.
+  - P-064, `upload_written` (`d3d11_context.cpp` 509-559): its 32 KB page list is a member now (`written_pages_`) and a buffer with no video-memory copy is skipped; still there: one `GetWriteWatch` call per upload buffer on every flush (it runs at every scene-pass end, clear, `bind_scene` and part), and each written page is copied into every video-memory copy of the buffer, so a ring carrying both draw constants and vertex data uploads a page two or three times. The audit's fix: track "written since the last upload" per buffer so unwritten buffers skip the system call, and give each use its own ring (Direct3D 11 cannot combine a constant-buffer bind with other bind flags) so a page uploads once.
+  - P-297, three parts (plan decision 14). (1) An upload buffer's first bind for a use creates a whole-size video-memory buffer filled from its system copy on the render thread, and a failure is handed back as null (`Buffer::bound`): the per-use buffers are made with the upload memory on its own thread. This step. (2) The bloom's work targets are made when their size changes or after a trim (`GameBloom::ensure_target`), and SMAA's targets and shaders (`post_process_d3d11.cpp`, read with the fix): made beside the old and retired by the fence, R7.7. (3) R8 and RG8 levels are widened texel by texel to RGBA8 at every upload on the render thread (`texture_backend_d3d11.cpp` 126-143): filled on the worker and read through the swizzle, P-296 in R7.3.
+  P-060 and P-064 are measured again (pages written per frame on Direct3D 11 on the play route) and closed or rewritten by what that shows.
+- **Where.** `runtime/src/render/d3d11/renderer_d3d11.cpp` (`write_roots`, `:1087` on); `runtime/src/render/d3d11/d3d11_context.cpp` (`upload_written` `:509-559`; `Buffer::bound` `:450-469`); `runtime/src/render/d3d11/game_bloom_d3d11.cpp` (`ensure_target`, `:110-119`); `runtime/src/render/d3d11/post_process_d3d11.cpp` (`:116-136`, `:289-306`); `runtime/src/render/d3d11/texture_backend_d3d11.cpp` (`:126-143`). Lines as cited at cfc2e368e and 241395b49.
+- **Rows.** P-060 whole (closed or rewritten by the measure); P-064 whole (the same); P-297 first part (per-use buffers made off the frame).
+- **Needs first.** R3.2 to R3.8 (the ring must already carry only changed blocks).
+- **Old path.** None named.
+- **Proof.**
+  1. Pages written per frame on Direct3D 11 on the play route, before and after the groups; each row closed or rewritten by what that shows.
+  2. For P-297's first part: replay identical, pictures unchanged (the row says "Replay identical").
+- **For a player.** Direct3D 11 only: less upload work in a frame, if the measure shows it.
+- **Read first.** The ledger's title for P-060 says every recorded draw renames the buffer with `WRITE_DISCARD`; at main that is already gone (see above), and FM 2.11 says `write_roots` appends with `NO_OVERWRITE` and discards only when the run does not fit: the measure decides. P-297's third part is read through the swizzle by P-296 (R7.3); the skeleton places no step for it here: confirm at R7.3 that it is covered.
+
+### R3.13 The last landing: the old path is deleted
+
+- **What changes.** Every group has moved. The old path, its flag bit and its groups in the switch's table go. `FROW`, `GXMT`, `GXTG`, `GXTM` and `GXWP` go from the file, `Material::fillRow` and `applyEdits` go, and the cook keeps the console's codes only as its input. `GXTM`'s replacement names the record that takes the game's matrix values (the mode by name, not the info byte packed into the console's slot, which the texture-matrix player sets today). The store version goes up. After this landing no material is on a per-frame fill. `MaterialAmbient` stays until R6.
+- **Where.** `native/petari/src/Game/Render/Material.cpp` (`fillRow`, `applyEdits`); `native/include/nebula_model.h` (the `NEBULA_ROW_*` codes and the register-shaped `NebulaModelMaterial`, `:246-264` as cited at cfc2e368e, if still present); `crates/nebula-import/src/cook/model_write.rs` (`:606-628` the register layout, `pipeline_state` `:35-43`); `crates/nebula-import/src/cook/clip.rs` (the register clips `TRK1`, `:212-233`); `native/math/include/nebula_color.h` (`NebulaColor16`, `:4-5`, `:17-19`); `runtime/src/render/mtl/pipelines_mtl.mm` (`:459-467`). Lines as cited at 241395b49.
+- **Rows.** P-151 whole; P-157 whole.
+- **Needs first.** R3.1 to R3.12.
+- **Old path.** This step deletes it (the old path of R3.2 to R3.8).
+- **Proof.**
+  1. `git grep -n "NEBULA_ROW_\|fillRow" native runtime platform`: 0 (FM 2.11 states the search with `MaterialAmbient`, which reaches 0 only after R6).
+  2. Materials on a per-frame fill after the last landing: 0 (a count from a test run).
+  3. The gate's pictures of both paths and the replay as in R3.2; the walk's time and the game step's time on the PC and the tablet, before and after (never slower).
+- **For a player.** Nothing visible: it is how the code is built. Lower CPU work per frame on phones.
+- **Parts closed here** (plan decision 1; R3.13 is this package's last step). P-151 and P-157 list sites that no earlier step places. Each is closed here, or is named with the step that has it; the row closes when every item is checked. Where the sources do not say how, read the file named first.
+  - [ ] P-151, the clips' and added content's rounding to the console's steps: R3.11.
+  - [ ] P-151, the layout material draw's black write into the two global ambient registers (`native/petari/src/Game/Ui/Material.cpp` 747-750): R6.7.
+  - [ ] P-151, the manta's projection-map texture matrix set at init and fed each step (`native/petari/src/Game/Ride/SurfRay.cpp` 110-112, 433): moves onto the source form.
+  - [ ] P-151, the material animation players write into the model's own copy of the console's slots: register colours below slot 3 and constant colours (`BrkPlayer.cpp` 11-25), and a texture matrix made when absent, its coordinate bound to it and its mode packed into bit 7 of the info byte (`BtkPlayer.cpp` 18-24): they write sources through R3.2's setters; the packed info byte goes with `GXTM`.
+  - [ ] P-151, the Mii head's style in the console channel's codes (`native/petari/include/ModelFileNumbers.h` 12-26: attenuation, diffuse, light mask; set at `MiiFaceTexture.cpp` 284-286 and `native/petari/src/Game/NPC/MiiFacePartsHolder.cpp` 117-119) and its parts' cull in the console's cull codes (`MiiHead.cpp` 118-119, 140), turned into the renderer's terms at every draw (209-219).
+  - [ ] P-151, a vertex program lights a channel per vertex by the channel record's codes (`v0116b837`, 29-32), and the cook lays a form's constant block out as the register file (`programs.rs` 15-27).
+  - [ ] P-151 (audit file B, finding P-151), `drawFlat` allocates a fresh one-row constant block from the frame arena for every flat draw (`MaterialDraw::drawFlat`, `Material.cpp`; 1033-1052 in the audit, 1026 at main): its colour goes in the item.
+  - [ ] P-157, the register-shaped record `NebulaModelMaterial` read per draw by `fillRow`: confirm it is gone before this step (FM 2.9 deletes it with `MT12`).
+  - [ ] P-157, the shared colour type keeps the combiner's signed 16-bit register form (`NebulaColor16`, `native/math/include/nebula_color.h` 4-5, 17-19).
+  - [ ] P-157, Metal rewrites DST_ALPHA to one and INV_DST_ALPHA to zero at build, "no destination alpha in the scene", though the scene's formats have alpha (`pipelines_mtl.mm` 459-467): the console frame buffer's rule kept per renderer.
+  - [ ] P-157, the pipeline state word packs the disc's blend, compare and cull numbers as they are (`pipeline_state`, `model_write.rs` 35-43), and the register clips (`TRK1`) address registers and constant colours by the disc's register number (`clip.rs` 212-233).
+  The sources give no further detail on how each of these is changed (read the row, the audit's finding and the file first).
+
+### Rows of this package
+
+| Row | Today | After | Closes at |
+| --- | --- | --- | --- |
+| P-151 | The material path keeps the console's per-draw register model: forms filled whole from registers by `fillRow`, edits copied over them, texture matrices rebuilt and compared each calc, two global ambient registers, colours rounded to bytes and 11 bits, a one-row block per flat draw (audit file B, finding P-151). | The game holds sources; the cook writes `CBLK` and `CROW`; the list carries only sources written that step; the GPU keeps one block per material; `fillRow` and the per-frame fill go. | R3.13 |
+| P-173 | One touch moves a material to the per-frame fill for good, and its getters touch even to read (`NormalMapBase`, the call that lists a model's materials). | A form's slot holds its constant block for good; changed rows ride in the list; getters take no touch. | R3.2 |
+| P-157 | The imported material still stores the console's register layout (signed 16-bit colour registers, constant and material colours, alpha-compare codes and reference bytes, generators by type and source, rows by register code) and the engine searched those codes at load (audit file B, finding P-157; the search went with the tracer). | Final-float rows by form; the console field records deleted at the last landing; the cook keeps the codes as its input only. | R3.13 |
+| P-060 | Direct3D 11 renamed the root constant buffer with `Map(WRITE_DISCARD)` for every recorded draw (audit file B, finding P-060); at main the roots go through the fenced constant ring (P-242). | With the ring carrying only changed blocks, pages written per frame are measured again on the play route; the row is closed or rewritten by what that shows. | R3.12 |
+| P-064 | Direct3D 11 `upload_written` makes one `GetWriteWatch` call per upload buffer on every flush and copies each written page into every video-memory copy of the buffer (audit file B, finding P-064; the 32 KB list is a member at main). | The same measure after the groups; the row closed or rewritten by what it shows; unwritten buffers skipped, each use its own ring if the measure asks for it. | R3.12 |
+| P-297 | Direct3D 11 makes GPU objects inside a frame: a per-use buffer's first bind on the render thread, the bloom's targets at a size change, R8 and RG8 levels widened texel by texel at each upload. | Per-use buffers made with the upload memory on its own thread (R3.12); targets made beside the old and retired by the fence (R7.7); R8 and RG8 read through a swizzle (P-296). Replay identical. | R7.7 |
+| P-299 | The 19 hand-written programs keep the console's pixel stages: alpha rounded to 0 to 255 and tested by compare codes, 8-bit warp offsets less 128, clamped stage chains, 8-bit wraps, byte-level bands and swap tables. | The cook writes each form's alpha mode and a float cutoff; warp maps as signed two-channel textures; each look one float expression; luminance by the renderer's weights. Each program checked by picture. | R3.10 |
+| P-303 | The cook writes each material as the console's combiner stage by stage, with 8-bit wraps, byte compares, a two-reference alpha test and fog written per material. | One float expression per named form, constants folded, each texture sampled once; alpha mode and float cutoff from `FORM`; fog per view; pictures approved per form group. | R3.9 |
+| P-304 | The cook's coordinates: indirect offsets as 8-bit integers less 128 worked in texels; the console's generator rows applied in the vertex program for one camera; the hardware's q = 0 clamp. | Warp map as a signed two-channel UV texture, one float2x2 per form; each coordinate's source and kind named in `FORM`, resolved per view on the GPU; the q = 0 clamp not copied. | R5.6 (the cook's half at R3.9; plan decision 5) |
+| P-309 | The replacing passes (player light, reflection alpha, player opacity, flexible coordinates) are cooked only for a hand list of 29 model names and 3 flexible ones, so added content's models have no form for them. | Each replacing pass is a form the content or the draw site declares, cooked for every model drawn under it. Replay identical. | R3.8 |
+
+
+---
+
+## R4 Draw sites made once
+
+Today a "site" (an effect, a shadow, a gauge, a glow, a particle, a drawing call of added content) still draws as the console's immediate mode did: at every draw it copies its material into the frame, writes its vertices into the vertex ring, writes its triangle indices on the CPU, and turns lines and points into quads on the CPU. This package makes each site's material, shape and indices records made once, with the changing values written only when they change, and deletes the old per-draw code. A player gets no new picture except where the rows say so (the snow floor's layers, the oval shadow, far water that now moves); the gain is less CPU work per frame, most on phones.
+
+- **Design:** FM 2.7.1 (records), 2.7.3 (the switch: step 4's groups), 2.7.4 (the gate's `paths both` run), 2.12 and 2.12.1 (the 109 sites). INV section 3: the lines for P-194 ("Actors that draw for themselves"), P-155 ("Texture headers in the console's form"), P-239 ("Render values made on the CPU in the console's units") and P-188 ("Particle indices of 16 bits"). The rows' own notes.
+- **Needs first:** R3 on main (lane order R1, R2, R3, R4 in the skeleton; the skeleton names no other dependency). The switch table `Game/Render/RenderPath.hpp` (FM 2.7.3) is made by R3.2, the first step that needs a switch, and is reused here (plan decision). Inside the package: R4.0 first; R4.1 to R4.7 each need R4.0; R4.8 and R4.9 come last, R4.9 needs R4.1 to R4.8. Later work that waits on this package: G3.5 (after R4.4), G5's landing 3, R5.7 (a ring run's vertices written once by their site), and P-254's merge in R4v and R7.2 (R4.8).
+- **Rows:** 18 (P-154, P-149, P-150, P-143, P-181, P-145, P-038, P-127, P-128, P-194, P-195, P-196, P-239, P-248, P-262, P-263, P-310, P-188). P-155 (R2's file) also advances here by its site, interface, ride and Mii parts and the screen copy given to an actor (R4.0, R4.2, R4.6; the rest in R4.9); it closes at the later of R4.9 and R10.2 (its glyph-sheet part is R10.1) (plan decision); it is named in the step lines but is not in the table below. Only P-248's punch box part is here; its other parts are choices made for one camera and go to G5.3, where the row closes (plan decision). P-254's merge part is R4.8.
+
+Common to every group step R4.1 to R4.7 (stated once; the cards say only what differs):
+
+- Paths below are under `native/petari/src/Game/` unless stated. All 47 site files were checked to exist at main (790626cb5). Lines are "as cited at cfc2e368e" (FM 2.12.1's reading commit); the group counts below were recounted from the table and match FM: quads 15, fans 4, strips 41, shadows 19, particles 2, lines 2, points 1, 2-D 18, mods 7; total 109. By kind: 22 fixed, 51 numbers, 36 state.
+- FM 2.12's three shape kinds, and the words used for them below: **kind 1, fixed** (a mesh registered once, drawn with a matrix and its values, as `SiteMesh` does today); **kind 2, numbers** (one unit mesh per shape and segment count; the few numbers go in the item's matrix or a value row); **kind 3, state** (written by the game once a step into a buffer the site keeps, updated in place, a copy per frame in flight while it changes; not written into the ring at each list). The table's "Kind" column (fixed, numbers, state) maps to kind 1, 2, 3 in that order.
+- Each group's landing moves its sites, by the table, to their kind, under the group's default in the switch table; the item carries a flag bit saying which path made it (FM 2.7.3). The old path stays beside it until R4.9.
+- Proof shared by every group landing (FM 2.12, 2.7.4): (a) the gate's pictures of both paths (`paths both`, `<name>.old.png` and `<name>.new.png`, compared by `tools/verify/compare_snapshots.py`, tolerance 1) equal on every tour stop and every renderer (Direct3D 12, Direct3D 11, Vulkan, as the gate runs them); (b) the replay identical, and the step hash (`tools/verify/step_hash.py`) after a picture frame the same with `paths both` as without; (c) counts from a test run on the play route and the tours' particle and shadow stops, before and after: bytes of the vertex and index rings per frame, arena bytes for site constants, `texture_table` calls (the audit of 2026-11-17, file B, finding P-154, counts them in a frame-list capture in HoneyBeeKingdom and the Comet Observatory); (d) the game step's and the walk's time on the PC and the tablet, before and after, never slower (file 08 7.4, as FM cites it); (e) the mod suites run (FM 2.7.3: they run on every landing). A group whose sources add a proof lists it on its card.
+
+### R4.0 The frame
+
+- **What changes.** The base every group uses is made first, with no site moved. (1) FM 2.12.1's table is checked against the code at main: each of the 109 rows (file, line, primitive, kind, group) is read at its line, and the table is corrected in FM where main differs. (2) A site material (`SiteMaterial`, today copied whole into the frame's arena and listed as new constants at every `TypedDraw` made or `setMaterial` called, with its texture list registered by hash each time) becomes a record registered once by its content, as `material_register` and `texture_table` already de-duplicate; the site keeps it while its values stay and writes only a changed value (the rule of FM 2.11: sources, not rows). (3) The index patterns of quads, strips and fans become one index list per pattern, made once by the render thread for the longest run asked and grown when a longer one comes (no cap); an item names the pattern and its count. (4) A block (a draw's matrix and flag word, today copied into the arena as a new block each draw) is the site's: its matrix is written when it moves, and it names its camera by role, not by comparing matrices. (5) P-155's site part, its interface part and the screen copy handed to an actor (plan decision). Today a site texture is named by the address of its image bytes, with its size, wrap, filter, anisotropy and level-of-detail range given with it (`SiteTexture`, `NebulaGpuTypes.h:10-22`), and the interface names an image by the game's address of its bytes and its format by the image file's number (`NebulaTextureImage`, `nebula_game_api.h:173-181`; the cooked record sits behind the disc's header, whose image offset points at it, `nebula_cooked_texture.h:5-8`; wrap and filter codes keep the header's order, the mip mode folded into the minifying filter, `:107-117`; each texture of a draw's table carries its sampler, `NebulaFrameTexture`, `nebula_frame_list.h:105-113`). After: a disc picture's sampler is decided at its cook and its host id is held by `GameTexture`; the interface takes a host id and the decided sampler, not an address and the console's codes; `SiteTextures::toFrame` and the search by address stop being used by group sites as each lands. The screen copy handed to an actor as a console texture header (`MapObj/WhirlPool.cpp:138`, `MR::getScreenResTIMG`; `FrameList.cpp:1062-1072`, given out as a `ResTIMG`, `ScreenUtil.cpp:122-124`) becomes a target's id: the actor names the copy by host id, not by a header (plan decision; if the copy's own pass is R7's, this step closes the actor's part only). (6) The effect cook's file (`luma_content_fx.h`) gets the same section table as the model file (FM 2.7.2: the material entry takes `FORM`, `FTEX`, `CBLK`, `CROW`). (7) P-255's site-mesh part: `SiteMeshData::stripData` appends vertices and indices with no check against the room `initData` made (`TypedDraw.cpp:534-540`, `:552-562`); the build checks its room (the row: replay identical). (8) The 22 "band along points" sites are read whole here, before any group lands (plan decision): points kept by the site and widened in the vertex program, or not; the decision is written into FM 2.12 at this step (see "Read first"). (9) The switch table gets step 4's groups with the old path as each default.
+- **Where.** `native/petari/src/Game/Render/TypedDraw.cpp` (as cited at cfc2e368e: `SiteTextures::toFrame` :73-87, `block` :291-319, the camera-role comparison :133 and :140, `writeIndices` :369-400, `begin` :410-455, `widen` :457-513, `SiteMeshData` :522-582, `SiteMaterial` handling :193-208); `native/petari/include/Game/Render/TypedDraw.hpp` (`SiteMesh<T>` :622-645, `SiteMeshData` declared at :597); `Render/GameTexture.cpp` and `native/petari/include/Game/Render/GameTexture.hpp` (they hold `SiteTexture mSite`); `native/petari/include/NebulaGpuTypes.h` (`SiteTexture`, :10-22 as cited at 241395b49); `native/include/luma_content_fx.h` and `crates/nebula-import/src/cook/effects.rs`; `runtime/src/render/core/draw_walker.cpp`, `registries.cpp`; the switch table `Game/Render/RenderPath.hpp` (not found at 790626cb5; made in R3.2 and reused here: plan decision; this step adds step 4's groups to it). The nine `SiteMesh` files (FM 2.12): `Map/OceanRingDrawer.cpp`, `Map/OceanRingPipeInside.cpp`, `Map/OceanRingPipeOutside.cpp`, `Map/OceanSphere.cpp`, `Map/WaterRoad.cpp`, `MapObj/ElectricRail.cpp`, `MapObj/ElectricRailMoving.cpp`, `Mii/MiiHead.cpp` (:33-37), `Util/FurShader.cpp` (:75, :132). The 47 site files are those named in the group lists below.
+- **Rows.** P-154 advanced (the table checked; the frame's records; the camera named by role, not by comparing matrices; the CPU indices; the material copy). P-155's site part and interface part (whole: disc pictures' samplers at the cook, ids in `GameTexture`, the interface by id; the ride part is R4.2, the Mii part R4.6, the glyph-sheet part R10.1, the rest R4.9). P-155 (part): the screen copy handed to an actor as a console texture header becomes a target's id (`WhirlPool.cpp:138`; plan decision). P-255's site-mesh part (R2's row; room checked; the row closes at R5.7).
+- **Needs first.** R3; nothing in this package.
+- **Old path.** Nothing draws differently yet: the switch defaults to the old path for every group. The old per-draw material copy, `writeIndices`, `block`'s matrix compare, `widen` and `toFrame` are deleted at R4.9.
+- **Proof.** (1) The recount: `git grep` of `vertices<` and `.vertices(` over `native/petari`, less `TypedDraw` itself and `MiiHead.cpp:41` (a Mii shape), gives the table's 109 sites in 47 files; 56 strips, 36 quads, 8 fans, 4 lists, 1 line list, 1 line strip, 3 chosen as they run. (2) A test of the index patterns: for each pattern (quads, strips, fans) and count, the made list equals `writeIndices`' output (FM 2.12 proof). (3) With the switch at the old defaults, the gate's `paths both` run gives equal pictures and the same step hash as without. (4) The "before" counts of shared proof (c) and (d) taken here on the PC and the tablet, so later steps compare to them. (5) P-255's part: replay identical (the row says so); the row names no test (the sources give no further detail; read the row and the code first).
+- **For a player.** Nothing visible: it is how the code is built.
+- **Read first.** (1) The 22 band sites: sites 1-4, 23, 25, 37-39, 43, 54-55, 59-65, 67 and 75-76 of FM 2.12.1 (20 strips and 2 trail quads; 4 are in shadows, 2 in quads, 2 in 2-D, the rest in strips). Read each with the file's code that makes its points (`RingBeam.cpp`, `WaterPlant.cpp`, `WhirlPoolAccelerator.cpp`, `SpiderThreadPart.cpp`, `WhirlPool.cpp`, `MarioFoo.cpp`, `Creeper.cpp`, `PlantStalk.cpp`, `SpaceCocoon.cpp`, `SwingRope.cpp`, `StarPointerBlur.cpp`), decide for the family whether the site keeps its points and the vertex program widens the band, or not, and write the decision and its reason into FM 2.12 before R4.1 lands. FM 2.3 says nothing in a record is computed for one camera on the CPU; P-154's note names nine files that turn a tube or band to the camera on the CPU (see R4.2), so the reading also names, per file, where that turn is made. (2) The three sites that choose their primitive as they run (`Player/MarioShadow.cpp:331`, `Particle/ParticleDraw.cpp:243` and `:245`) are a group of their own in FM 2.7.3's list for step 4, but the table's "Group" column puts them in shadows and particles; the skeleton does too (R4.3, R4.4). This package follows the skeleton and the table.
+
+### R4.1 Quads, then fans
+
+- **What changes.** The quad and fan sites stop writing their triangle indices at every draw and their shape into the ring. They name the fixed index pattern of R4.0 and take the shape kind the table gives them (see "Where"). Quads go first, then fans. P-196 lands here: `SnowFloorTile` draws each of its 12 layers as 16 identical full-tile quads, blended by alpha with depth written (`sStripCount` is 16), 192 quads a tile; the new path draws one quad a layer with the program's alpha `1 - (1 - a)^16` (`color_tex_alpha`'s alpha is the texture's), which gives the same colour by a closed form and differs only by the target's rounding between the 16 passes. P-194's `BigBubbleGoalArea` draws two 16-segment fans facing the step's camera at every draw (`AreaObj/BigBubbleGoalArea.cpp:64-78`, calling `TDDraw::drawFillFan`, the function of site 92, with the camera's z and y directions as its normal and up); they go to the new path as that site's kind (numbers). `WarpCube` draws its marker through `TDDraw::drawSphere` (`AreaObj/WarpCube.cpp:82-104`), which at main is a camera-facing circle (`drawFillCircle` by a normal, site 91, `Util/DirectDraw.cpp:211-215`): it goes with site 91. WarpPod's tube (plan decision): the tube's cross is turned to the camera's z on the CPU (`calcTubeCross`, `MapObj/WarpPod.cpp:61-78`, called at :569 and :598), so site 42 cannot be a fixed shape under a matrix by itself; the turn moves to the vertex program (FM 2.3: nothing in a record is computed for one camera on the CPU), and the path's points stay made once (:501-517). Sites 54 and 55 (`MarioFoo.cpp:737`, `:745`) are two of the 22 band sites read in R4.0: they land as that reading decided.
+- **Where.** Quads (15 sites; kind 1 fixed 7, kind 2 numbers 5, kind 3 state 3):
+  - `MapObj/SnowFloor.cpp:663 (quad, state)`: footprint trail, one quad per segment (kind 3, a buffer the site keeps).
+  - `MapObj/SnowFloorTile.cpp:469 (quad, numbers)`: the tile quad (P-196; kind 2, one quad a layer).
+  - `MapObj/WarpPod.cpp:606 (quad, fixed)`: two crossed quads per segment of a path made once (:501-517); kind 1.
+  - `Player/MarioFoo.cpp:658 (quad, numbers)`, `:668 (quad, numbers)`, `:737 (quad, state)`, `:745 (quad, state)`: beam and trail points; kind 2 for 658 and 668, kind 3 for 737 and 745. Sites 737 and 745 are two of the 22 "band along points" sites (read whole in R4.0).
+  - `Util/DirectDraw.cpp:258 (quad, numbers)`, `:266 (quad, numbers)`, `:296 (quad, fixed)`, `:302 (quad, fixed)`, `:308 (quad, fixed)`, `:314 (quad, fixed)`, `:320 (quad, fixed)`, `:326 (quad, fixed)`: `TDDraw::drawTexture3D` (258), `drawFillBox` 3-D (266), and the six faces of `drawFillBox3D` (296 to 326: a unit cube face under the matrix). Kind 2 for 258 and 266, kind 1 for the six faces.
+  Fans (4 sites; kind 1 fixed 1, kind 2 numbers 3):
+  - `Player/MarioActorSpecialDraw.cpp:411 (fan, fixed)`: 16-segment circle under a matrix (position, normal, radius); kind 1.
+  - `Util/DirectDraw.cpp:86 (fan, numbers)`, `:108 (fan, numbers)`, `:128 (fan, numbers)`: `TDDraw::drawFillCircle` 2-D (segments), `drawFillCircle` by a normal, `drawFillFan` (angles); kind 2, a unit mesh per segment count, the numbers in the matrix or value row (the sources give no further detail on how the angles of 128 are carried).
+  Other files: `Util/DirectDraw.cpp` (`TDDraw`, used from 19 files), `native/petari/src/Game/AreaObj/BigBubbleGoalArea.cpp`; `Map/` and `MapObj/` as listed.
+- **Rows.** P-196 (whole). P-154 advanced (quads and fans; the part on WarpPod's tube turned to the camera: closed here). P-194 advanced (`BigBubbleGoalArea`'s fans, `WarpCube`'s marker).
+- **Needs first.** R4.0.
+- **Old path.** The switch's quads and fans defaults; the old path stays beside until R4.9.
+- **Proof.** The shared proof, and: (1) pictures at a snow tile stop compared by the gate, then looked at and approved by eye (the row: the picture differs only by the target's rounding between the 16 passes); (2) quads per tile 192 to 12, counted on the play route; (3) the index-pattern test of R4.0 passes for quads and fans at the counts these sites use.
+- **For a player.** The snow floor looks the same except possibly in the last bit of colour; nothing else visible.
+- **Read first.** FM 2.12.1 lists site 42 as a fixed shape from a path made once, and P-154's note names the tube's turn to the camera on the CPU; the plan decision puts the turn in the vertex program. Read `WarpPod.cpp:501-517` and `:560-606` before landing site 42 for how the vertex program gets each segment's direction (the sources give no further detail).
+
+### R4.2 Strips
+
+- **What changes.** The 41 strip sites (40 triangle strips and one triangle list) stop writing their indices and their points into the ring at every draw. The 22 "band along points" sites (a band along a list of points with an offset to each side: 20 strips and 2 trail quads, sites 1-4, 23, 25, 37-39, 43, 54-55, 59-65, 67, 75-76) were read whole in R4.0, and the decision (the family's points kept by the site and the band widened in the vertex program, or not) is written in FM 2.12 before this step starts (plan decision); the sites of this group follow it. The rest of the group takes the kind the table gives (see "Where"). The faults of the rows this step carries, each its own item (a row closes when its last item is done):
+  - P-195, the five sites that switch between a kept mesh and writing the same shape into the ring at each draw (the ocean sphere, the ocean ring, the water road's demo, the two electric rails): the water family is read whole with them (does the ocean points feed anything but the draw; do the waves move to a vertex program at every distance, so the still far mesh goes, a picture change approved by eye, or do they stay a game-step source). The demo's cut of a water road and the rails' narrowing become values over the kept mesh.
+  - P-239's fur part, two faults: the fur's shell brightness and alphas become floats (today cut to bytes, a value past 255 wrapping, `FurDrawer.cpp:85-87`); its strands are placed at linear texels with the same random sequence (today in the console's 4 x 4 tile order, `:148-152`).
+  - P-154's part on nine files that turn a tube or band to the camera on the CPU (`AstroDomeOrbit`, `BigBubbleDrawer`, `ElectricRail`, `ElectricRailMoving`, `GCaptureRibbon`, `SpiderThreadPart`, `SpinDriverPathDrawer`, `TrampleStar`, `WhirlPool`). By FM 2.3 a turn to one camera is not made on the CPU in a record, so each file's turn moves to the vertex program with its site, as R4.0's reading names for the file (the sources give no further detail on how).
+  - P-154's part on `Map/Flag.cpp:388-389`, which indexes its colour and coordinate by `u8`, wrapping past 255 entries: a wide index replaces it with this site's landing.
+  - P-194's rides that draw for themselves through a site: each takes its material from R4.0's record and names its camera by role. `Ride/BigBubble.cpp:215-221` draws its surface through `BigBubbleDrawer::material()` with `MR::getCameraViewMtx()` (its sites are the `BezierSurface` sites 86 and 87); `Ride/Plant.cpp:690-697` draws its leaves under the same view matrix through `MaterialDraw` (a draw through the material path, no site of the table).
+  - P-155's ride part: ride pictures loaded by .bti name into `GameTexture` take the sampler and host id of R4.0.
+- **Where.** Strips (41 sites; kind 1 fixed 1, kind 2 numbers 18, kind 3 state 22):
+  - `Map/Flag.cpp:394 (strip, state)`, `:417 (strip, numbers)`
+  - `Map/OceanBowl.cpp:328 (strip, state)`
+  - `Map/OceanBowlBloomDrawer.cpp:30 (strip, state)`
+  - `Map/OceanRingDrawer.cpp:152 (strip, state)`, `:162 (strip, state)`
+  - `Map/OceanSphere.cpp:696 (strip, state)`, `:700 (strip, state)`
+  - `Map/WaterPlant.cpp:284 (strip, state)`
+  - `Map/WaterRoad.cpp:285 (strip, numbers)`
+  - `Map/WhirlPoolAccelerator.cpp:136 (strip, state)`
+  - `MapObj/AstroDomeOrbit.cpp:133 (strip, numbers)`, `:164 (strip, numbers)`
+  - `MapObj/ElectricRail.cpp:462 (strip, numbers)`
+  - `MapObj/ElectricRailMoving.cpp:269 (strip, numbers)`
+  - `MapObj/GCaptureRibbon.cpp:17 (strip, numbers)`
+  - `MapObj/SpiderThreadPart.cpp:517 (strip, numbers)`, `:524 (strip, numbers)`, `:531 (strip, numbers)`, `:545 (strip, state)`, `:561 (strip, state)`, `:576 (strip, state)`
+  - `MapObj/SpinDriverPathDrawer.cpp:312 (strip, fixed)`
+  - `MapObj/TrampleStar.cpp:617 (list, state)`
+  - `MapObj/WhirlPool.cpp:112 (strip, state)`
+  - `Ride/Creeper.cpp:492 (strip, state)`, `:498 (strip, state)`, `:504 (strip, state)`
+  - `Ride/PlantStalk.cpp:164 (strip, state)`, `:177 (strip, state)`, `:190 (strip, state)`
+  - `Ride/SpaceCocoon.cpp:819 (strip, state)`
+  - `Ride/SwingRope.cpp:678 (strip, numbers)`, `:688 (strip, state)`
+  - `Ride/Trapeze.cpp:679 (strip, numbers)`, `:693 (strip, numbers)`, `:707 (strip, numbers)`
+  - `Util/BezierSurface.cpp:716 (strip, numbers)`, `:746 (strip, numbers)`
+  - `Util/DirectDraw.cpp:160 (strip, numbers)`, `:191 (strip, numbers)`: `TDDraw::drawCylinder` and `drawSpherePart`.
+  Which of FM 2.12's kinds: kind 3 for the 22 state sites (a buffer the site keeps; whether a family's points move to a vertex program is decided at the reading above); kind 2 for the 18 numbers sites (a unit mesh and values, or a buffer where the points come from the file's own tables, as 2.12.1's notes say per site); kind 1 for `SpinDriverPathDrawer.cpp:312` (path made once, `initPositionList` at :132; coord, mask, fade are values). P-195's five switching places and the table sites that write them: `Map/OceanSphere.cpp:412-416` with sites 696 and 700 (the kept twin `mMeshFace` drawn beyond 10000 from the player); `Map/OceanRingDrawer.cpp:124-130` with sites 152 and 162 (the second near the camera only); `Map/WaterRoad.cpp:706-711` with site 285 (the kept `mMeshHigh`, :241-260, cut at the rail coordinate in its demo); `MapObj/ElectricRail.cpp:282-287` with site 462 and `MapObj/ElectricRailMoving.cpp:89-93` with site 269 (the vanishing rails). Fur: `Util/FurDrawer.cpp:85-87`, `:148-152` and `Util/FurShader.cpp:75`, `:132`. P-194's rides that draw for themselves through a site and the one view matrix: `Ride/Creeper.cpp:482-488` (a `SiteMaterial` made at every draw, :511-515), `Ride/PlantStalk.cpp:77-79`, `Ride/SpaceCocoon.cpp:776-778` (material at every draw, :834-838), `Ride/SwingRope.cpp:126-132`, `Ride/Trapeze.cpp:118-123`; each takes its material from R4.0's record and names its camera by role.
+- **Rows.** P-195 (whole). P-239's fur part (whole; its fog part is R5.6, its stencil-clear part R7.3). P-154 advanced (strips; the nine files' turn and the `Flag.cpp` index closed here). P-194 advanced (the rides' draws). P-155's ride part (whole): the ride pictures (`Creeper.cpp:171`, `PlantStalk.cpp:207`, `SpaceCocoon.cpp:182`, `SwingRope.cpp:740`, `Trapeze.cpp:734`) take the sampler and id of R4.0.
+- **Needs first.** R4.0 (R4.1 is not required, but its index patterns are the same ones).
+- **Old path.** The switch's strips default.
+- **Proof.** The shared proof, and: (1) P-195's: the replay identical; pictures at the tours' water and rail stops equal, or approved by eye where far water now moves; (2) the decision for the 22 band sites is in FM 2.12 (written in R4.0) and each of this group's band sites follows it; (3) fur: the replay identical (no step reads the fur values), the gate's fur stop equal or a difference looked at and approved (the row names no picture test; the sources give no further detail); (4) the index-pattern test passes for strips.
+- **For a player.** The water, ropes, vines, rails and flags look the same; far ocean water may now move where it stood still beyond 10000 units (to be approved by eye).
+- **Read first.** (1) The family of 22 band sites is spread over four groups: sites 1-4 are in shadows (R4.3), 23, 25, 37-39, 43, 59-65 and 67 are here, 54-55 are quads (R4.1) and 75-76 are 2-D (R4.6). The reading is R4.0's; the skeleton's own wording put it here (R4.2), and the plan decision moved it before R4.1 so that sites 54-55 and the others land once. (2) `MapObj/BigBubbleDrawer.cpp` is named by P-154 but has no site in 2.12.1's table; read it with the family. (3) The water family: read the whole family named above, and the five sites of P-195, before any water site moves.
+
+### R4.3 Shadows
+
+- **What changes.** Shadow shapes are no longer rebuilt every draw. A shadow volume (`ShadowVolumeDrawer`) is drawn twice, front faces adding to the stencil then back faces taking, with its shape written at each pass (the box writes 30 vertices a pass, the line two quads and a strip a pass; audit file B, findings P-143 and P-181); it becomes one draw with no culling, front faces adding and back faces taking, using two new stencil operations that wrap (P-143). Every renderer's present add and take saturate, which would make the count depend on the order of faces within one draw (a take before its add stops at 0); wrapping operations commute, and with an 8-bit stencil both forms give the same count wherever at most 255 volumes overlap a pixel; the test after it (`IF_SET`) is unchanged and the saturating pair stays for other users. Surface shadows draw unit meshes under a matrix: the box's three quads and the circle's fan (a sine and cosine per vertex at every draw) become kind 1 meshes (P-181). The oval surface shadow draws its model three times at scales 1, 0.9 and 0.81; it becomes one draw with the edge's fade in the program, and its pictures change. P-248, the part that is a shadow: `PunchBox` recomputes its shadow once every 128 steps (work spread for the console's CPU); it recomputes on change instead (the level-of-detail control stays a step rule, per the row; the row's other parts are G5.3's: plan decision). The site that picks its primitive at run time (`Player/MarioShadow.cpp:331`, 3 or 4 corners of a collision polygon) is moved here.
+- **Where.** Shadows (19 sites; kind 1 fixed 7, kind 2 numbers 6, kind 3 state 6). Kinds: the volume box and line (numbers) and the ring beam, polygons and edges (state) take their table kind; the surface box and circle, the ellipse and the two screen quads are fixed.
+  - `Enemy/RingBeam.cpp:80 (strip, state)`, `:92 (strip, state)`, `:111 (strip, state)`, `:126 (strip, state)`: `RingBeamShadowDrawer`; 32 point matrices along the beam's ring (band top, band 500 down, -x wall, +x wall). Sites 1-4 are in the band-along-points family of R4.2.
+  - `LiveActor/ShadowSurfaceBox.cpp:72 (quad, fixed)`, `:78 (quad, fixed)`, `:84 (quad, fixed)`: unit box face, one of 8 arrangements by `setPart`; the matrix carries size.
+  - `LiveActor/ShadowSurfaceCircle.cpp:70 (fan, fixed)`: unit circle, `cSegments`; radius in the matrix.
+  - `LiveActor/ShadowVolumeBox.cpp:136 (strip, numbers)`, `:154 (fan, numbers)`, `:166 (fan, numbers)`: 14 corners from the box and its drop (`mPoints`), and the two caps.
+  - `LiveActor/ShadowVolumeLine.cpp:90 (quad, numbers)`, `:96 (quad, numbers)`, `:102 (strip, numbers)`: two ends, widths, drops (8 points).
+  - `Player/MarioShadow.cpp:331 (chosen, state)`: collision polygons under the player (3 or 4 corners); `:441 (fan, fixed)`: 16-segment ellipse in the shadow target's alpha; `:520 (list, state)`: edge polygons.
+  - `Util/DrawUtil.cpp:158 (strip, fixed)`: the screen quad clearing the stencil; `:220 (strip, fixed)`: screen quad, half black where the stencil is set.
+  Other files: `LiveActor/ShadowVolumeDrawer.cpp` (:91-114), `LiveActor/ShadowSurfaceOval.cpp` (:59-65), `MapObj/PunchBox.cpp` (:115-128), the stencil operations `native/include/nebula_game_api.h:150-151`, `runtime/src/render/core/pipelines_d3d12.cpp:410`, `pipelines_d3d11.cpp:302`, `pipelines_vk.cpp:481`, `runtime/src/render/mtl/pipelines_mtl.mm:327`. The group's sites become kinds 1, 2 and 3 as listed above (kind 2 for the volume's box and line shapes, whose points come from numbers each draw).
+- **Rows.** P-143 (whole). P-181 (whole). P-248's punch box part only (the shadow recomputed on change; the row closes at G5.3). P-154 advanced (shadows).
+- **Needs first.** R4.0.
+- **Old path.** The switch's shadows default; the saturating stencil pair stays after R4.9 for other users.
+- **Proof.** The shared proof, and: (1) the test of the two-sided volume (FM 2.12): random volumes over a pixel grid, the wrapping one-draw count against the saturating two-pass count, equal up to 255; (2) the oval's pictures (the one place the picture changes) looked at and approved by eye in this landing, named on the board; (3) the shadow stops of the tours equal everywhere else; (4) the replay identical for P-248 (the row: replay identical); (5) P-181's measure (audit file B): frame time at the Gateway Galaxy start, many surface shadows on the water, shapes as meshes against as now.
+- **For a player.** The oval shadow under a character looks a little different (one smooth edge in place of three stacked ones); other shadows look the same.
+- **Read first.** (1) P-248's other parts are choices made for one camera inside the step; they are not done here but go to G5.3, drawing decided per picture (plan decision): a boss part hidden by a frustum test in the step (`Boss/TripodBossFixPartsBase.cpp:102-106`), the shark's flat shadows switched by the camera's direction in `calcAnim` (`Boss/SkeletalFishBoss.cpp:255-271`), the bubble's subdivision from its projected radius (`Ride/BigBubble.cpp:188-208`). The level-of-detail control stays a step rule (per the row). This step keeps only the punch box's shadow. The audit's picture of the line volume is a mesh registered once with a matrix per end (file B, finding P-181), while FM 2.12.1 lists its sites 12 to 14 as kind 2 (numbers): the table is the later source and is followed. (2) `DrawUtil.cpp:158` is the quad `MR::clearStencil` draws (`:141-163`); P-239's replacement of it by the pass's load operation is R7.3, not here: here it only moves to the new path as a fixed screen quad. (3) How `MarioShadow.cpp:331`'s choice of 3 or 4 corners is carried (two index patterns, or one) is not in the sources; decide it when the file is read, and write it into FM 2.12.1.
+
+### R4.4 Particles
+
+- **What changes.** Each fault below is its own item; a row closes when its last item is done. The group's two sites that choose their primitive as they run (the corner batches, sites 45 and 46) are moved here.
+  - P-149, the eye-space matrices: today each particle's matrix is built in eye space on the CPU by its shape, taken back to the world through the camera's inverse (`setParticleMtx` concatenates `sEyeToWorld`, one camera inverse per emitter draw) and written as three 3x4 matrices per instance. The new instance holds the world position and the one before, size, rotation, the two colours, the texture frame and the shape's kind (about a third of the bytes, audit file B, finding P-149); the vertex program builds each shape of the emitter (billboards turned or not, Y-billboards, directions, the D-billboard, rotation, point, line, cross; stripes) from the camera of the picture, and the CPU's eye-space matrices and inverse go.
+  - P-149, the rebuilt rotation: each emitter draw rebuilds the emitter's rotation from degrees and its direction (`calcWorkData_d`), again for every picture; it is built once, and its owner is held as a typed pointer on the instance record, not an integer (`uintptr_t mpUserWork`).
+  - P-150, the material copy: the particle material copies the console's alpha-compare, combiner-stage and indirect-matrix settings into constants 48 to 93 at every emitter draw (the stage colour and alpha modes, the two alpha compares, the alpha op, the alpha references, the indirect matrix scaled by 2^exponent). The values are fixed per resource and shape, so an emitter's material is a record made once per resource and shape at load, taking the effect cook's `FORM`, `FTEX`, `CBLK`, `CROW` fields.
+  - P-150, the carry-over: the primary and environment colours carry over from the emitter drawn before, like the console's global registers (`sPrm`, `sEnv`; the code's own comment says no shader reads them from the material); it goes, each instance already carries its own colours.
+  - P-262, the axis rebuilt in the draw: the direction draws rebuild and store the particle's base axis, which the particle's step reads; the axis is rebuilt in the particle's step (calc, once a step) and the draw only reads it.
+  - P-263, three faults in the cook: an unknown field type leaves a null field called through; the texture-index animations read past their table at key counts 0 (Normal, Repeat, Merge, Random) and 1 (Reverse); the colour Reverse animation uses the raw tick when its last frame is 0. The cook refuses an unknown field type and normalises key counts 0 and 1, and the load skips what it cannot make, with a message.
+  - P-310, three unchecked reads in the importer: a particle file's texture block shorter than its header is sliced unchecked; the host-order pass reads a base-shape block's flag bytes with only a size of 8 checked and turns the colour-key tables at offsets the block names without checking them against the block; the player opacity pass sets one pixel stage, so a material with a texture and no stage makes `stages()` slice past its list. Each becomes a checked read with a named refusal; each offset and size is checked against its block; the pass is refused or given a stage of its own.
+  - P-188, the 16-bit index: a particle's resource index is 32 bits from the name table to the emitter, written wide from the start, none an explicit value (today `ParticleResourceHolder` names rows only below 0xFFFF and answers 0xFFFF for none, `SingleEmitter` keeps `u16 mResourceId`, `EffectSystemUtil` and `MultiEmitter` pass `u16`; the cook allows rows up to 65,536 so the last row's index is today's none; the overlay checks only its first new row number against 16 bits).
+- **Where.** Particles (2 sites; kind 3 state in the table; they become instances, not a written mesh):
+  - `Particle/ParticleDraw.cpp:243 (chosen, state)`: corner batch; `:245 (chosen, state)`: corner batch with extras.
+  Other files: `Particle/ParticleDraw.cpp` (:72-89, :131-134, :197-199, :201-202, :433-437 draw, `sFresh` at :41, :147; the axis rebuilds :586-593, :637-638, :839-840, :924-925, :976-977), `Particle/ParticleResource.cpp` (:610-693, :620, `calcWorkData_d` :942-947), `native/petari/include/Game/Particle/ParticleResource.hpp` (shape kinds :73-86, stripes :66), `native/petari/include/Game/Particle/EmitterCore.hpp` (`mpUserWork` :197-202, :250), `Particle/ParticleCore.cpp` (:179, :240-242, :252-254, :289-291), `Map/GravityDust.cpp` (:25, :55; the row cites `GravityDust.cpp`), `Particle/ParticleField.cpp` and `native/petari/include/Game/Particle/ParticleField.hpp` (:185-190), `Particle/ParticleShape.cpp` (:161-179, :284-348), `Effect/ParticleResourceHolder.cpp` (:24, :45-47), `native/petari/include/Game/Effect/SingleEmitter.hpp` (`u16 mResourceId` :32), `native/petari/include/Game/Effect/EffectSystemUtil.hpp` (:30, :54), `Effect/MultiEmitter.cpp` (:379-391); in the cook (`crates/nebula-import/src/cook/`): `effects.rs` (:196-201), `overlay.rs` (:826-833), `formats.rs` (:195-198), `native_data.rs` (:105-130), `programs.rs` (:79-80, :337-338, :1799); the run-time cook `crates/nebula-import/src/cook_c.rs` (:80-90, named by P-310, not re-read by the harness).
+- **Rows.** P-149, P-150 (whole). P-262 (whole). P-263 (whole). P-310 (whole). P-188 (whole). P-154 advanced (particles).
+- **Needs first.** R4.0 (the effect cook's section table).
+- **Old path.** The switch's particles default; the CPU eye-space matrices and the inverse are deleted at R4.9.
+- **Proof.** The shared proof, and: (1) a test of the particle program against today's matrices for every shape kind: resolved corner positions equal within the renderers' tolerance (FM 2.12); (2) the particle stops of the tours, equal pictures; (3) P-262: with several draws in one step, with none (extra world steps, `GameSystem.cpp:193-197`; a skipped cutscene's, :199-202) and a frame drawn twice, the axis is the same (the row's replay line: the console's, at one draw a step, now on every rate); (4) P-263: a field of unknown type and key counts of 0 and 1 are refused or normalised by the cook, and a load skips content it cannot make with a message; replay identical for the disc's content; (5) P-310: each of the three reads (a texture block shorter than its header, a colour-key table whose offset the block does not hold, the opacity pass on a material with no pixel stage) gives a named refusal, not a panic; replay identical; (6) P-188: a test that names a particle past row 65,535 (the cook's last row, index 0xFFFF, is today's none, `effects.rs:196-201`; the overlay checks only the first new row number against 16 bits, `overlay.rs:826-833`). (7) P-149 and P-150's measure (audit file B): the frame-list capture in HoneyBeeKingdom and SeaGalaxy, particle bytes per frame in the list, before and after (the audit also counted `fillRow` calls; `fillRow` is gone after R3.13).
+- **For a player.** Particles look the same; very large sets of added effects keep their names past 65,535 rows; a bad particle file in added content is skipped with a message instead of ending the game.
+- **Read first.** P-263's and P-310's lines name the run-time cook (`cook_c.rs:80-90`) as not re-read; read it here. The cook's change to the effect file bumps the store version (FM 2.7.2: the store is cooked again).
+
+### R4.5 Widened lines and points
+
+- **What changes.** Today each line or point becomes four copies of its vertex with the other end and a corner code and six indices, written on the CPU (`TypedDraw::widen`). Instead the line or point is one instance (one per segment or point) and the vertex program widens it. The marine snow's one camera-facing quad per flake becomes an instance per point.
+- **Where.** Lines (2 sites; kind 2 numbers) and points (1 site; kind 3 state):
+  - `Util/DirectDraw.cpp:50 (line list, numbers)`: `TDDraw::drawLine`; `:75 (line strip, numbers)`: `TDDraw::drawCircle` outline, segments. Kind 2: the segment's two ends and its width are the instance's values.
+  - `Player/MarineSnow.cpp:174 (quad, state)`: one camera-facing quad per flake, an instance per point; kind 3, the flakes' state kept by the site.
+  Other file: `Render/TypedDraw.cpp` (`widen` :457-513, deleted at R4.9).
+- **Rows.** P-154 advanced (lines and points).
+- **Needs first.** R4.0.
+- **Old path.** The switch's widened lines and points default; `TypedDraw::widen` is deleted at R4.9.
+- **Proof.** The shared proof, and: a test of the widening program against `widen`'s corners (FM 2.12): resolved corner positions equal within the renderers' tolerance.
+- **For a player.** Nothing visible: it is how the code is built.
+
+### R4.6 2-D gauges and glows
+
+- **What changes.** The 2-D sites (screen quads and strips, gauges, glows, the layout pane quad, the movie's quad, the water filter's quad, the pointer's trail) take the kind the table gives each: screen and unit quads of fixed shape become a registered mesh under a matrix (kind 1); the quads made from a position and size become a unit mesh with the numbers in the matrix or a value row (kind 2); the two pointer-trail strips (`StarPointerBlur`) keep their points in a buffer the site keeps (kind 3). Two more items, each closed here: `WaterCameraFilter` passes the screen's size through `u16` for its quad (the console's 16-bit screen positions, a line of P-154; `Screen/WaterCameraFilter.cpp:145-150`): it passes the size as a float on the new path. P-155's Mii part (plan decision): a Mii head's face textures are targets keyed by the address of its own `mFaceKeys` members (`Mii/MiiHead.cpp:182`) and its part textures by the address of their bytes in the parts file (`:53-55`); they take a host id and a sampler decided at the cook, like the other disc pictures (R4.0).
+- **Where.** 2-D (18 sites; kind 1 fixed 6, kind 2 numbers 10, kind 3 state 2):
+  - `MapObj/ClipFieldFillDraw.cpp:54 (strip, fixed)`: screen quad in eye space, screen size in the matrix; stencil fill.
+  - `Mii/MiiFaceTexture.cpp:179 (quad, fixed)`: unit quad under an eye matrix, into the face texture.
+  - `Player/MarioActorSpecialDraw.cpp:144 (quad, numbers)`, `:446 (strip, fixed)`, `:689 (quad, numbers)`.
+  - `Screen/DepthOfFieldBlur.cpp:109 (strip, numbers)`: ramp of 4 stops from two distances.
+  - `Screen/ImageEffectLocalUtil.cpp:132 (strip, fixed)`.
+  - `Screen/MovieDraw.cpp:46 (quad, numbers)`.
+  - `Screen/ScreenBlurEffect.cpp:81 (strip, numbers)`.
+  - `Screen/StarPointerBlur.cpp:157 (strip, state)`, `:178 (strip, state)`: pointer trail points; these two are in the band-along-points family of R4.2.
+  - `Screen/WaterCameraFilter.cpp:141 (strip, numbers)` (the `u16` size at :145-150).
+  - `Ui/UiCommon.cpp:51 (quad, numbers)`: layout pane quad: base, size, colours, coords.
+  - `Util/DirectDraw.cpp:227 (quad, numbers)`, `:276 (quad, numbers)`: `TDDraw::drawTexture`, `drawFillBox` 2-D.
+  - `Util/DrawUtil.cpp:80 (quad, fixed)`, `:99 (quad, fixed)`, `:179 (quad, numbers)`: screen colour quad, screen picture quad, `fillScreenArea`.
+- **Rows.** P-154 advanced (2-D; the water filter's `u16` closed here). P-194 advanced (the 2-D sites; the Mii icon's own pass is placed in R4.9's list of parts). P-155's Mii part (whole).
+- **Needs first.** R4.0.
+- **Old path.** The switch's 2-D default.
+- **Proof.** The shared proof, and the pictures of every 2-D site on the gate's stops; the sources give no separate test for 2-D sites (read the gate's stops first for which cover them).
+- **For a player.** Nothing visible: gauges, glows and the screen's overlays look the same.
+- **Read first.** `Mii/MiiFaceTexture.cpp:241-300` (`makeIcon` opens its own target pass, saves and restores scissor and viewport, sets its own projection, draws a stack-made head with its face's colour and alpha in two passes with different factors, :291-295) is named by P-194; the sources give no step for the pass structure (it belongs to the frame's passes, E4): it is on R4.9's list of parts; read the file and the row first.
+
+### R4.7 The seven mod draw-service sites
+
+- **What changes.** The mods' draw services (`draw.mesh`, `draw.inst`, `draw.native`, post programs; `System/LumaDraw.cpp`) write by the default path (FM 2.7.3). Their seven sites are carried over to the new path as they are, so the old path can be deleted; this adds no mod feature (plan decision). All seven are kind 2 (shapes from a few values at each draw), so they take a unit mesh and values, or whatever shape the draw's numbers need; the sources give no further detail.
+- **Where.** Mods (7 sites, all `System/LumaDraw.cpp`; kind 2 numbers 7):
+  - `System/LumaDraw.cpp:353 (quad, numbers)`: 2-D rect.
+  - `System/LumaDraw.cpp:745 (quad, numbers)`: 2-D thick line.
+  - `System/LumaDraw.cpp:780 (list, numbers)`: 2-D triangle.
+  - `System/LumaDraw.cpp:837 (quad, numbers)`: 2-D image.
+  - `System/LumaDraw.cpp:1372 (quad, numbers)`: 3-D line, thickness.
+  - `System/LumaDraw.cpp:1398 (list, numbers)`: 3-D triangle.
+  - `System/LumaDraw.cpp:1621 (quad, numbers)`: 3-D camera-facing image.
+- **Rows.** P-154 advanced (mods). No other row.
+- **Needs first.** R4.0; the group steps whose paths these sites share (R4.1 and R4.6 for the shapes of the quads).
+- **Old path.** The switch default for these sites (they follow the others'); gone at R4.9.
+- **Proof.** The shared proof, and: the mod suites pass at the landing (FM 2.7.3 and 2.12; the sources name no suite, read the repository's mod suites first).
+- **For a player.** Nothing visible: it is how the code is built.
+
+### R4.8 Draw lists
+
+- **What changes.** Four ledger rows of the draw lists, each placed in step 4 by FM 2.6 (pile B). Their full findings are in the audit of 2026-11-17 (file B, the finding of each id); each is its own item.
+  - P-145: the scenario-select and mod mesh draw buffers merge same-material entries by scanning every entry already in the buffer (`ItemBuffer::entryMatSort`, `Render/Model.cpp:292-315`, the loop at `:306-311`), so entry is quadratic in draws per buffer. It is used where `ModelSys::mDrawBuffer` is set (`Scene/ScenarioSelectScene.cpp:105-117`, `System/LumaDraw.cpp:1527-1542`); `Model::entry` is called only from `Scene/MultiSceneActor.cpp:77` and `LumaDraw.cpp:1534`, so the main game's draw path does not use it. After: a small hash map from (image, material id) to entry index gives the same merge in constant time; the draw order comes from the stable sort keys, unchanged. P-254's merge part (R4v, the same loop) uses the same map.
+  - P-038: draw-buffer packet insertion, removal and light re-sort are linear per call (`DrawBuffer.cpp` at main: `DrawBufferShapeDrawer::add` :65 finds the light run by a linear walk, `findLightSortIndex` :114, then shifts every later packet up; `remove` :87 searches then shifts down; `resetLightSort` :103 searches, then removes and adds; `DrawBuffer::add` and `remove` do this once per material of the model). Connect and disconnect run on every clip-in and clip-out (`LiveActor.cpp`), and `ActorLightCtrl.cpp` re-sorts on an area-light change and at a blend's end, so clipping churn costs about k x materials x n moves when k of n instances of a model clip in one step. The ordered array exists because packets of one light share one light load (a "light run"). After: each light run is its own list, the packet holds its run and position; add appends to its run's list, remove swap-removes inside the run, a draw walks the runs in order; each operation is constant time and every run still loads its light once.
+  - P-127: `GameScene::draw` does work every game frame that the shipping build never uses. The audit named three parts; at 790626cb5 the water-depth query the audit named is gone (N-1053's stage 4a, S0.3), and what the code still does each draw is: the settings' galaxy-select names polled (`galaxySelectNamesWanted`, `Scene/GameScene.cpp:300`), the galaxy travel polled (`galaxyTravel`, :316), and `isDrawMirror` looking up "MirrorArea" by name through `MR::isPlayerInAreaObj` (`:701-710`). The audit's fix for the last is a cached area list made once at scene start. The two polls are asked each draw (the game runs one draw per game frame, so 60 a second, more in a cutscene skip, `GameSystem.cpp:182-206`); S0.2.1 c takes the settings menu's galaxy and star requests at the step's start, so read S0.2's result first and do only what is left.
+  - P-128: each `CategoryList` call fetches the list executor through two pointer hops (`SingletonHolder<GameSystem>::get()->mSceneController->getNameObjListExecutor()`, `Scene/SceneFunction.cpp:67-74` at main and in each `CategoryList` call below it) and sets `Frame::category` before and after, and `draw3D` walks about 25 passes, most of them empty in a given galaxy, with repeated `MR::loadViewMtx` and `MR::loadProjectionMtx` (`Scene/GameScene.cpp:527-528`, `:562-566` at main). After: a frame-built list of non-empty passes skips a pass whose list is empty before the category marks and matrix loads; behaviour is unchanged when only empty passes are skipped.
+- **Where.** `native/petari/src/Game/Render/Model.cpp` (`entryMatSort` :292, the same-material loop :306-311; `entryZSort` :317, which is R7.2's) and `native/petari/include/Game/Render/Model.hpp`; `native/petari/src/Game/Scene/ScenarioSelectScene.cpp` (:105-117), `System/LumaDraw.cpp` (:1527-1542), `Scene/MultiSceneActor.cpp` (:77); `System/DrawBuffer.cpp` (`DrawBufferShapeDrawer::add` :65, `remove` :87, `resetLightSort` :103, `findLightSortIndex` :114, `DrawBuffer::add` :162, `remove` :172, `resetLightSort` :181), `System/DrawBufferGroup.cpp` and its header `native/petari/include/Game/System/DrawBuffer.hpp`; the callers `LiveActor/LiveActor.cpp` (connect and disconnect on clip) and `LiveActor/ActorLightCtrl.cpp`; `Scene/GameScene.cpp` (`GameScene::draw` :287 at main; `isDrawMirror` :701; `drawMirror` :487; `draw3D` :511), `Scene/SceneFunction.cpp` (the `CategoryList` calls), `native/petari/include/Game/NameObj/NameObjCategoryList.hpp` and `NameObjListExecutor.hpp`. Audit lines for the other rows are as read on 2026-11-17 and have moved at main.
+- **Rows.** P-145, P-038, P-127, P-128 (each whole). P-254's merge part (R4v's row; P-254 closes at R7.2).
+- **Needs first.** R4.0.
+- **Old path.** None named by the sources (the changes are in the game's own lists, not behind the switch).
+- **Proof.** (1) The replay identical; (2) pictures of the scenario-select and the tours equal; (3) the game step's and the walk's time on the PC and tablet before and after, never slower (file 08 7.4). The audit's checks: P-038, a frame-list hash of the draw list unchanged (draw order kept), and `resetLightSort` calls per step counted first (Gusty Garden or Good Egg while turning the camera across coin and star-bit fields, the timeline's `calcViewAndEntry` and movement spans); P-128, non-empty `DrawType` lists per frame counted in five galaxies; P-145, the same frame-list hash. No search is named for the four rows.
+- **For a player.** Nothing visible: it is how the code is built (a little less CPU time with many objects).
+- **Read first.** P-038: its full text says the cost share is suspected and needs a run: count `resetLightSort` calls per step first. P-127: confirm at the code what is left of the audit's three parts (the water part is gone) before writing the card's changes into code.
+
+### R4.9 The last landing
+
+- **What changes.** The old per-draw path of step 4 is deleted: `writeIndices`, `SiteTextures::toFrame` and `TypedDraw::widen`; the old path, its flag bit and step 4's groups in the switch table go (FM 2.7.3). With them the per-draw copy of a site material into the arena, the compare of matrices to find the camera's role, and the CPU eye-space particle matrices have no caller. P-154 closes when its table of 109 sites is all on the new path; P-155 when its site, interface, ride and Mii parts, the screen copy and the parts below are on a host id and a decided sampler (it closes at the later of this step and R10.2, which holds its glyph-sheet part); P-194 advances here by its site parts and closes with the last of the rows it names (plan decision). The parts of these rows that no other step places are closed here: the list below (plan decision).
+- **Parts closed here.** Each is read in its file first (the sources give no further detail on the form of each, except where stated):
+  - [ ] P-154: the two kept meshes that still draw through functions named `drawGD`, the console's display lists (`Map/WaterRoad.cpp:250-260`, `Map/OceanRingDrawer.cpp:263`): renamed with step 4 (the row's own words). Their files are open in R4.2.
+  - [x] P-155: the screen copy handed to an actor as a `ResTIMG` (`MapObj/WhirlPool.cpp:138`): placed in R4.0 (plan decision); here only check that no actor still takes a header for it.
+  - [ ] P-155: the other users of the texture header `ResTIMG` (INV: 137 lines in 59 files; a host id and a sampler resolved at load). The site, interface, ride and Mii parts are in R4.0, R4.2, R4.6; count what is left with a search first and close each, or name the step that does.
+  - [ ] P-194: the Mii icon's own target pass (`Mii/MiiFaceTexture.cpp:241-300`: it opens its own pass, saves and restores scissor and viewport, sets its own projection, draws a stack-made head with its face's colour and alpha in two passes with different factors, `:291-295`). It belongs to the frame's passes (E4, R7); read the file and move it to the pass list, or name the R7 step that does.
+  - [ ] P-194: the draws of its 100 files outside this package's sites. INV classes them and names the row that holds each: 16 whole-frame works (the frame's copies are E4's target passes with P-155; depth of field and the fall-out field P-198 at R8.2; bloom P-185 and P-213 at R8.3 and R8.4; blurs P-213 at R8.3), 17 layouts (P-197 at R10.4), 8 models through the material path (instanced by the walk, FM 1.7 item 7). Check that each row has its step and that this list is true at the code of that day.
+- **Where.** `Render/TypedDraw.cpp` (`writeIndices` :369-400, `SiteTextures::toFrame` :73-87, `widen` :457-513), `Render/TypedDraw.hpp`, `Render/GameTexture.cpp`; `Game/Render/RenderPath.hpp` (made in R3.2; not found at 790626cb5); the rows' files listed in R4.0 to R4.8.
+- **Rows.** P-154 (closes). P-155 (part: its site, interface, ride and Mii parts, the screen copy, and the list above; the row closes at the later of this step and R10.2). P-194 (the site parts).
+- **Needs first.** R4.1 to R4.8.
+- **Old path.** Deleted here: all of it.
+- **Proof.** (1) `git grep -n "writeIndices\|SiteTextures::toFrame\|void TypedDraw::widen" native` returns 0 (FM 2.12). (2) The counts of shared proof (c) and (d), before (R4.0's) against after, for the whole package. (3) The gate's last `paths both` run with every group on the new path, then the groups' pictures against the references. (4) P-154's count: all 109 sites of 2.12.1 are on the new path (a search for `vertices<` and `.vertices(` finds only the new calls). (5) FM 2.10's search (moved here from R2.4: it can pass only after the draw sites move; plan decision): `git grep -n "mMinType" native/petari/src/Game/Render/Material.cpp` and a search for `RenderTexture::idOf` in the same file return 0.
+- **For a player.** Nothing visible beyond what each group's card says.
+- **Read first.** (1) P-194's row says it "closes with the rows it names": it closes with the last of P-154, P-195, P-143, P-181, P-155, P-185, P-197, P-198, P-213 (R8 or R10), not here (plan decision). (2) The filter codes of the interface (`nebula_cooked_texture.h:107-117`) keep the header's order with the mip mode folded into the minifying filter: R4.0 decides the form of the interface; this step only checks it is the only form left.
+
+### Rows of this package
+
+| Row | Today | After | Closes at |
+| --- | --- | --- | --- |
+| P-154 | The 109 site draws work as the console's immediate mode: material copied, vertices and indices written, lines and points widened on the CPU, at every draw; kept meshes mixed with per-draw writes; a `u8` index in the flag, a `u16` screen size, tubes turned to the camera on the CPU. | Each site's material, shape and indices are records made once, by the table's kind; the turns to the camera in the vertex program; the old per-draw code deleted (parts: R4.0 to R4.8, the `drawGD` names at R4.9). | R4.9 |
+| P-149 | Each particle is built as a matrix in eye space on the CPU, multiplied back to world space, written as three matrices; the emitter's rotation rebuilt at every draw and every picture. | One instance per particle; the vertex program builds each shape from the picture's camera; the owner is a typed pointer. | R4.4 |
+| P-150 | The particle material copies the console's alpha-compare, stage and indirect-matrix settings into a constant array at every emitter draw; colours carry over from the emitter before. | An emitter's material is a record made once per resource and shape at load; the carry-over goes. | R4.4 |
+| P-143 | Each shadow volume is drawn twice, front faces then back faces, with its shape rebuilt each pass. | One two-sided draw with two wrapping stencil operations; the count equals the saturating form up to 255 overlapping volumes. | R4.3 |
+| P-181 | Shadow shapes are rebuilt on the CPU at every draw; the oval surface shadow draws its model three times. | Unit meshes under a matrix; the oval is one draw with the fade in the program, its pictures approved by eye. | R4.3 |
+| P-145 | The scenario-select and mod mesh draw buffers merge same-material entries by scanning every entry in the buffer. | Same-material entries merged through a map (shared with P-254's merge). | R4.8 |
+| P-038 | Draw-buffer packet insertion, removal and light re-sort are linear per call; clipping churn costs O(n) per changed actor for each of its materials. | Each light run its own list; add appends, remove swaps inside the run, a draw walks the runs in order; each operation constant time, every run still loads its light once. | R4.8 |
+| P-127 | `GameScene::draw` does work every game frame that the shipping build never uses (the audit's water query is already gone; the galaxy-select and travel polls and the mirror area's lookup by name remain). | Only what is left after S0.2 and N-1053: a cached area list for the mirror test, no per-draw polls (read the code first). | R4.8 |
+| P-128 | Each `CategoryList` call fetches the list executor through two pointer hops; the draw pass walks about 25 category lists per frame, most empty in a given galaxy. | A frame-built list of the non-empty passes; empty passes skipped before the category marks and matrix loads; behaviour unchanged. | R4.8 |
+| P-194 | Actors that draw for themselves (100 files) were not named by the design; each is read and its console shape held by other rows. | Every draw is placed in a step (R4.1, R4.2, R4.6, R4.9's list, R8, R10); the row closes with the last of the rows that hold the draws. | with the last of P-154, P-195, P-143, P-181, P-155, P-185, P-197, P-198, P-213 (R8 or R10) |
+| P-195 | Five sites switch between a kept mesh and writing the same shape into the ring each draw (ocean sphere, ocean ring, water road demo, electric rails). | The kept mesh with the cut, the waves and the narrowing as values; far water moves if it goes to a vertex program; pictures equal or approved. | R4.2 |
+| P-196 | `SnowFloorTile` draws each of 12 layers as 16 identical full-tile quads: 192 quads a tile. | One quad a layer with the program's alpha `1 - (1 - a)^16`; 12 quads a tile, picture approved by eye. | R4.1 |
+| P-239 | The stencil is cleared by a full-screen quad; fog range from the one global view on the CPU; fur values cut to bytes and strands in the 4 x 4 tile order. | Stencil clear as the pass's load operation (R7.3); a fog record (a world anchor and a strength) with the range per view on the GPU (R5.6); float shell values and strands at linear texels (R4.2). | R7.3 (fur part R4.2, fog part R5.6) |
+| P-248 | `PunchBox` recomputes its shadow once every 128 steps, work spread for the console's CPU; also a boss part hidden by a frustum test, the shark's flat shadows by the camera's direction, the bubble's subdivision from its projected radius. | The punch box's shadow recomputed on change (R4.3); the level-of-detail cubes stay a step rule; the three other parts are decided per picture (G5.3); replay identical. | G5.3 (punch box part R4.3) |
+| P-262 | The direction draws rebuild and store the particle's base axis, which the step reads; steps without a draw skip it; a frame drawn twice rounds twice. | The axis rebuilt in the particle's step, once a step; the draw only reads it. | R4.4 |
+| P-263 | An unknown particle field type leaves a null field called through; texture-index animations read past their table at key counts 0 or 1; the colour Reverse animation reads a raw tick. | The cook refuses an unknown field type and normalises key counts 0 and 1; the load skips what it cannot make, with a message. | R4.4 |
+| P-310 | The importer's particle reads are unchecked: a short texture block, colour-key tables at offsets the block names, an opacity pass on a material with no stage. | Checked reads with named refusals; each offset and size checked against its block; the pass refused or given a stage. | R4.4 |
+| P-188 | A particle's resource index is 16 bits from the name table to the emitter; rows past 65,534 lose names; the last row's index is today's "none". | A 32-bit index from the name table to the emitter, none an explicit value; a test names a particle past row 65,535. | R4.4 |
+
+
+---
+
+## R4v Views as records
+
+Today the frame's views are made from state the game sets and reads back in the console's call shapes (a projection as a type and six terms, a viewport, a depth scale and offset, a scissor), and the walk recovers a camera's near plane, far plane and field of view by the console's algebra. This package makes a view one whole record that a pass names by id when it begins, with nothing latched or read back. A player sees nothing change: it is the base that per-picture work in R5 and the frame planner in R7 need.
+
+- **Design:** P-254's note (the ledger row; every cited line below is as cited at 241395b49) and INV section 3's line "The views and draw order in the GX calls' shapes". FM 2.3 (nothing in a record is computed for one camera on the CPU; billboards, particles and eye-reading coordinates are resolved per view on the GPU) and FM 2.13 (per picture the CPU writes the cameras at t and t) say what the records must allow. The row says "views as records, before R5".
+- **Needs first:** the skeleton names none; it must be on main before R5.
+- **Rows:** 1 (P-254). Also P-219 (part): the console's projection and viewport forms other than the pointer's, placed in R4v.1 (plan decision); the row is in G6's file.
+
+### R4v.1 A view is one record
+
+- **What changes.** The faults of P-254's views half, each its own item (the row closes when its last item is done, at R7.2):
+  - Latched state: a view is built from latched state set and read back in the console's call shapes: `setProjectionv` and `getProjectionv` (a type, then six terms), `getViewportv`, `setZScaleOffset`, `getScissor` (`FrameList.hpp:84-90`). After: each view is one record (camera, projection, viewport, scissor) named by id when a pass begins; nothing is latched or read back by the game.
+  - Six terms: the frame list carries a view's projection as six terms of a perspective or orthographic matrix with an orthographic flag (`NebulaFrameView`, `nebula_frame_list.h:28-36`), and the walk rebuilds each view from them for each walk. After: the list carries the whole projection in the host's depth terms.
+  - Recovered planes: the walk recovers a camera's near plane, far plane and field of view by the console's algebra (`n = F/(E-1)`, `f = F/E`, `draw_walker.cpp:1323-1326`; the comment at `:1681-1686` names the console's E and F). After: it stops recovering them.
+  - The console's clip depth: the projections the game builds keep z/w in [-1, 0] with near at -1 (`NebulaMtxPerspective` and `NebulaMtxOrtho`, `nebula_math.c:179-221`, depth rows `:193-194` and `:215-216`; `Proj3f::makePerspective`, `nebula_geometry.hpp:2571-2596`); 24 calls in the game set them per pass: the camera's at `CameraContext.cpp:77` and `ScreenBlurEffect.cpp:72`, the rest 2-D and image passes (`DrawUtil.cpp`, `BloomEffect.cpp`, `MiiFaceTexture.cpp` and others). After: the record is in the host's depth terms (see "Read first").
+  - The texgen form: `NebulaMtxLightPerspective` and `NebulaMtxLightOrtho` build the console texgen's projection form (`nebula_math.c:145-177`), used for the 2-D particle pass (`ParticleDrawExecutor.cpp:48`). Read first (3).
+  - A site's camera: found by comparing the caller's matrix bytes with the one global view (`TypedDraw.cpp:131-141`). Closed in R4.0 (the block names its camera by role).
+  - P-219 (part) (plan decision): the console's projection and viewport forms other than the pointer's, for example `TDDraw::project2D`, which reads the viewport back from the draw state (`DirectDraw.cpp:387`, `Frame::getViewportv`; callers include `MarioActorSpecialDraw.cpp` and `MarioSearchLight.cpp`), and `TDDraw::invProject` where another caller than the pointer and the balloon uses it (`DirectDraw.cpp:353-381`, depth as a 24-bit integer). They take the record's projection and viewport in the host's terms. The pointer's own unprojection stays in S0.2.3 (P-219's pointer half).
+  Replay identical (the row says so).
+- **Where.** `native/petari/include/Game/Render/FrameList.hpp` (`:84-90`) and `native/petari/src/Game/Render/FrameList.cpp`; `native/include/nebula_frame_list.h` (`NebulaFrameView`); `runtime/src/render/core/draw_walker.cpp` (`:1323-1326`, `:1681-1686`); `native/math/src/nebula_math.c` (`:145-221`); `native/math/include/nebula_geometry.hpp` (`:2571-2596`); `native/petari/src/Game/Camera/CameraContext.cpp`; `native/petari/src/Game/Screen/ScreenBlurEffect.cpp`; `native/petari/src/Game/Util/DrawUtil.cpp`; `native/petari/src/Game/Screen/BloomEffect.cpp`; `native/petari/src/Game/Mii/MiiFaceTexture.cpp`; `native/petari/src/Game/Effect/ParticleDrawExecutor.cpp`; the readers of the latched state, such as `native/petari/src/Game/Util/DirectDraw.cpp` (`project2D`, `invProject`), `native/petari/src/Game/NPC/TalkDirector.cpp` and `native/petari/src/Game/Screen/StarPointerDirector.cpp` (those two read `getProjectionv`; S0.2.3 and S0.2.4 move them), `native/petari/src/Game/System/LumaDrawView.cpp` and `native/petari/src/Game/System/LumaDraw.cpp` (the draw services for added content also call `setProjectionv`; R4.7 carries them over, so they follow this change). All found at 790626cb5. `NebulaMtxLightPerspective` and `NebulaMtxLightOrtho` are at the cited `nebula_math.c` lines.
+- **Rows.** P-254 advanced (the views half: the latched state, the six terms, the recovered near, far and field of view, the console's clip depth, the texgen form if it moves here). P-219 (part): the console's projection and viewport forms other than the pointer's (the closing step of the row's pointer half is S0.2.3; its movie half G6.6).
+- **Needs first.** Nothing (it must land before R5).
+- **Old path.** The sources name no switch for this step (the skeleton gives none; read the row and the code first).
+- **Proof.**
+  1. The replay is identical (the row says so).
+  2. The sources give no further test for this step (the sources give no further detail; read the row and the code first).
+- **For a player.** Nothing visible: it is how the code is built.
+- **Read first.** (1) "The host's depth terms" is the skeleton's wording: read what depth range the host's renderers take before writing the record, and decide whether the game's builders (the 24 calls and the two math builders) produce it or the list converts. The sources give no further detail. (2) P-254's site-draw part (a camera found by comparing matrix bytes, `TypedDraw.cpp:131-141`) is R4.0's: its item 4, "a block names its camera by role", covers it; it is not done here. (3) `NebulaMtxLightPerspective` and `NebulaMtxLightOrtho` (the texgen's form, used for the 2-D particle pass) are named by the row with the console's clip depth: decide with the particle pass's owner (R4.4, R4.6) whether they move here.
+
+### R4v.2 Translucent draws are ordered per view at the picture's camera (done in R7.2)
+
+- **What changes.** Nothing in this package. Today translucent model draws are keyed by depth under the one global view (`ItemBuffer::entryZSort`, `Model.cpp:317-331`, `ModelSys::mViewMtx`), so the step's camera fixes their order for every picture drawn from it. The bubble also keeps a sort depth from the step's camera (`mDrawZ`, `BigBubble.cpp:211-212`). After: each model enters its meshes once and the planner sorts translucent draws per view at the picture's camera (E4, R7.2). Material entries are merged through a map keyed by image and material, not by scanning every entry already in the buffer (`Model.cpp:306-311`, quadratic per fill): that part is R4.8 (P-145 and P-254's merge).
+- **Where.** `native/petari/src/Game/Render/Model.cpp` (`:306-311`, `:317-331`); `native/petari/include/Game/Render/Model.hpp` (`entryZSort`, `ModelSys`); `native/petari/src/Game/Ride/BigBubble.cpp` (`:211-212`). All found at 790626cb5.
+- **Rows.** P-254 closes at R7.2 (the order per view); its merge part is placed at R4.8.
+- **Parts closed here.** The last step of this package names every part of P-254 and the step that does it, so none is lost (plan decision); the row closes when the last is done:
+  - views as records, nothing latched or read back, the whole projection in the host's depth terms, no recovered planes: R4v.1.
+  - a site's camera by role, not by comparing matrix bytes: R4.0.
+  - material entries merged through a map keyed by image and material: R4.8 (`Model.cpp:306-311`).
+  - translucent draws sorted per view at the picture's camera: R7.2 (`ItemBuffer::entryZSort`, `Model.cpp:317-331`).
+  - the bubble's sort depth from the step's camera (`mDrawZ`, `BigBubble.cpp:211-212`, set in `calcAnim`, read through `getDrawZ` by `MapObj/BigBubbleHolder.cpp:114`, which sorts the drawn bubbles by it): no step places it. Closed here by reading it at R7.2: the sort moves to the picture's camera there, so the holder's sort by the step's depth goes or is made per picture (the sources give no further detail on how; read the holder first).
+- **Needs first.** R4v.1 and R7.2 (the planner).
+- **Old path.** None here (R7.2 owns it).
+- **Proof.** Given with R7.2 (the sources give none here). The replay is identical (the row says so).
+- **For a player.** Nothing visible at a game step. Each picture orders its translucent draws from that picture's camera.
+- **Read first.** The bubble's sort depth is named by the row's later note and by no step of the skeleton: it is in the list above and is read when R7.2 lands.
+
+### Rows of this package
+
+| Row | Today | After | Closes at |
+| --- | --- | --- | --- |
+| P-254 | Views built from latched state in the GX calls' shapes; translucent draws ordered by the one global view; entries merged by scanning all entries; a site's camera found by comparing matrix bytes; near, far and field of view recovered by the console's algebra. | Each view a whole record (camera, projection, viewport, scissor) named by id when a pass begins, nothing latched or read back; the planner sorts translucent draws per view at the picture's camera; entries merged through a map. Replay identical. | R7.2 |
+
+
+---
+
+## R5 Poses and matrices on the graphics card
+
+Today every presented picture recomputes, on the CPU, every draw's matrices (the view times the joint, weighted sums for skinned models, inverse transposes, billboards, six rows each), and the game copies each animated model's joints twice a step. This package has the game write each block's joints once a step, upload them once, and make every picture's matrices in one GPU compute pass, the same program on the four renderers (Direct3D 12, Direct3D 11, Vulkan, Metal). A player gets less CPU work per picture, which matters most at unlimited frame rates and on phones. The picture is the same within the tolerance Vulkan is already held to against Direct3D 12.
+
+Words used here: a "block" is a model's joints in the frame list (in the world, with the view inside them for "calc mode 1", or a camera's base for "calc mode 2"). A "pose" is a model's joint matrices. An in-between picture is one drawn between two game steps.
+
+- **Design:** FM 2.13 (whole), FM 2.7.3 (group table: "one joint; many rigid joints; weighted (skinned); billboard and calc mode 1; calc mode 2; eye-space blocks") and 2.7.4 (step 5's compare), FM 2.3 (nothing in a record computed for one camera on the CPU). I-003's note (a design: draw passes recorded once per list and replayed with only the rows changed; placed in E6b landing 8, here G2.8). INV section 3's line for P-239 (fog from the one global view). The notes of P-156, P-144, P-046 and I-003. FM 2.12 for the run's vertices written once by their site (R4).
+- **Needs first:** R4v (views as records; the skeleton says "before R5"); R3.2 (it makes the switch table `Game/Render/RenderPath.hpp`, reused here: plan decision). R5.7's ring runs also depend on the sites writing their vertices once (R4, FM 2.13).
+- **Rows:** 4 (P-156, P-144, P-046, I-003)
+
+### R5.1 The game writes a block's joints once a step; the list's joints uploaded once; the shared compute pass; group "one joint"
+
+- **What changes.** Today `Model::viewCalc` copies the skeleton's matrices into the model's pose (`capturePose`, a copy of every joint), and `addPoseBlock` copies the pose into the frame's arena once a frame and pose stamp: two copies a step of every animated model's joints (P-144). The pose copy exists so a view or mirror pass can draw a pose captured earlier; the frame copy exists because the host keeps the list after the game moves on (audit file B, finding P-144). After: the game writes a block's joints once a step, into the list, straight from the skeleton's evaluation, which removes one copy of the joint count times 48 bytes per model per frame, same values; the model's pose for game reads stays the game's. The render thread uploads each list's joints, flags, envelopes' indices and weights (the model's, registered once) and calc-mode bases once, when the list arrives; the list before is already on the GPU. Per picture the CPU writes the cameras at t and t. One compute pass, the same on the four renderers and written once in the shader source the renderers share, makes every block's rows for that picture into the rows buffer the recorded passes read (I-003): the joints at t (each pair mixed as `joints_at` mixes them today, the same rule), the envelopes' sums, the view, the inverse transpose, the billboards, the world rows where wanted. This landing builds the pass and the switch group "one joint" (a block of one joint). The other kinds keep the CPU path.
+- **Where.** `native/petari/src/Game/Render/Model.cpp` (`capturePose` `:532-535`, `addPoseBlock` `:619-660`, the copy `:624-631`, as cited at cfc2e368e) and `native/petari/include/Game/Render/Model.hpp`; `native/petari/src/Game/Render/FrameList.cpp` (the list's blocks); `native/include/nebula_frame_list.h` (the block records); `runtime/src/render/core/draw_walker.cpp` (the walk, `:195-316`; each camera at t `:219`; the matrix ring `:252`; as cited at cfc2e368e); `runtime/src/render/core/compose.cpp` and `compose.h` (the CPU compose the pass must equal; six rows each, `compose.h:13`); `runtime/src/render/core/pairing.cpp` (`joints_at`, `:354`; declared at `frame_core.h:443`); `runtime/src/render/core/draw_record.h` and `gpu_encoder.h` (`set_rows`: the rows base the recorded passes read, from I-003); the four renderers' encoders (`runtime/src/render/renderer_d3d12.cpp`, `runtime/src/render/d3d11/renderer_d3d11.cpp`, and the Vulkan and Metal renderers under `runtime/src/render/vk` and `runtime/src/render/mtl`). The sources do not name where the shared compute shader lives (read first). The switch's table (`Game/Render/RenderPath.hpp`) is made in R3.2 and is not found at 790626cb5.
+- **Rows.** P-144 advanced (one copy a step: its single fault, closed by this step's landing and recorded as whole at R5.8 when the old path goes); P-156 advanced (the first block kind and the pass); I-003 advanced (the rows buffer the recorded passes read).
+- **Needs first.** R4v.1; R3.2 (the switch table).
+- **Old path.** The switch's group "one joint": default old (the CPU compose in `compose.cpp`) until the proof holds. The CPU compose stays as the old path of FM 2.7.4 until R5.8, which deletes it, the flag bit and the groups.
+- **Proof.**
+  1. FM 2.7.4's step-5 compare: one list walked twice by the render thread, once with the CPU's matrices and once with the pass; pictures equal within the tolerance Vulkan is held to against Direct3D 12, at a step and at a fixed t between two steps, on every stop and renderer. (`tools/verify/compare_snapshots.py` is the compare.)
+  2. A test of the pass against `compose_rows` for this block kind of the tours' models: rows equal within the same tolerance.
+  3. The CPU's time per picture (from the walk's start to the end of its rows) and the GPU pass's time, before and after, at an unlimited picture rate in HoneyBeeKingdom (P-156's scene) on the PC and the tablet; the game step's time unchanged or lower (never slower). The audit measures the CPU time as the host's timing of the walk alone, from walk start to the end of the row fill, against the game step's 0.8 to 1.4 ms (file B, finding P-156).
+  4. The mod suites run at every landing of the step (FM 2.7.3).
+- **For a player.** Nothing visible; less CPU work per picture.
+- **Read first.** The sources do not say where the shared compute shader and its four renderer encoders live, nor how Metal and Direct3D 11 dispatch it: read how the existing GPU passes are written in the shared shader source and add this one the same way (the sources give no further detail).
+
+### R5.2 Many rigid joints
+
+- **What changes.** Blocks with many joints, each draw taking one joint rigidly, move to the pass. Today `compose_rows` makes, per draw matrix, the view times the joint, and an inverse transpose for a scaled one. The pass does the same sum for each of the block's joints at t.
+- **Where.** `runtime/src/render/core/compose.cpp` (the inverse transpose, `:43-67`, and `compose_rows`, `:170-228`, as cited at cfc2e368e); the pass of R5.1.
+- **Rows.** P-156 advanced.
+- **Needs first.** R5.1.
+- **Old path.** Switch group "many rigid joints"; deleted at R5.8.
+- **Proof.** As R5.1, items 1 to 3, for this block kind (the test names this kind among the tours' models).
+- **For a player.** Nothing visible.
+
+### R5.3 Weighted (skinned) blocks
+
+- **What changes.** A draw that is an envelope (each vertex a weighted sum of joints) takes its matrix from `weighted_sum` today. The pass makes the envelopes' sums from the uploaded indices and weights, then the inverse transpose, in the same rule.
+- **Where.** `runtime/src/render/core/compose.cpp` (`weighted_sum`, `:120-160`; the inverse transpose `:43-67`, as cited at cfc2e368e).
+- **Rows.** P-156 advanced.
+- **Needs first.** R5.2.
+- **Old path.** Switch group "weighted (skinned)"; deleted at R5.8.
+- **Proof.** As R5.1, items 1 to 3, for this block kind.
+- **For a player.** Nothing visible.
+
+### R5.4 Billboard and calc mode 1
+
+- **What changes.** A calc-mode-1 block has the view inside its joints (the console's billboards and camera-bound models); the walk makes billboards in `compose_rows` (`:78-116`). After: the game's joints carry the view of their step, so the pass applies the view of the picture to `inverse(view of the step) x joint`, made once per list.
+- **Where.** `runtime/src/render/core/compose.cpp` (billboards, `:78-116`); `runtime/src/render/core/draw_walker.cpp` (`:309-313`); `native/petari/src/Game/Render/Model.cpp` (`addPoseBlock`, the block's calc mode, `:646-654` for mode 2 as cited at cfc2e368e).
+- **Rows.** P-156 advanced.
+- **Needs first.** R5.3; R4v.1 (a view named by id).
+- **Old path.** Switch group "billboard and calc mode 1"; deleted at R5.8.
+- **Proof.** As R5.1, items 1 to 3, for this block kind. The fixed-t picture between two steps is the check for the view's undo.
+- **For a player.** Nothing visible. A billboard in an in-between picture uses that picture's view.
+
+### R5.5 Calc mode 2
+
+- **What changes.** A calc-mode-2 block is a camera's base. After: the base is mixed in the pass.
+- **Where.** `native/petari/src/Game/Render/Model.cpp` (`addPoseBlock`, the mode-2 case `:646-654`, as cited at cfc2e368e); `runtime/src/render/core/pairing.cpp` (`joints_at`'s camera argument, `:354`).
+- **Rows.** P-156 advanced.
+- **Needs first.** R5.4.
+- **Old path.** Switch group "calc mode 2"; deleted at R5.8.
+- **Proof.** As R5.1, items 1 to 3, for this block kind.
+- **For a player.** Nothing visible.
+
+### R5.6 Eye-space blocks; fog per view (P-239's fog part); the sky follows each view (P-156's sky line)
+
+- **What changes.** Today eye-space rows are made on the CPU for one camera, and the world rows again where a program reads them. The pass makes them per picture. P-239's fog part: the fog's range is computed on the CPU from the one global view (`calcFogStartEnd`, `ModelUtil.cpp:163-183`, `ModelSys::mViewMtx` at :165); it becomes a fog record with a world anchor and a strength, whose range is applied per view on the GPU (the row's words). P-156's sky line: the sky moves to the camera's position each `calcAnim`, so its mirror copy is centred on the main camera and not the mirror's; after, the sky follows each view.
+  - The heat haze's board (plan decision; INV section 2, "Screen" bullet): `HeatHazeEffect.cpp:19-30` places its board at the step's camera. It is placed per view, at each picture's camera.
+- **Where.** `runtime/src/render/core/draw_walker.cpp` (eye-space rows `:225-316`, the world rows `:313`, as cited at cfc2e368e); `native/petari/src/Game/Util/ModelUtil.cpp` (`:163-183`); `native/petari/src/Game/Map/Sky.cpp` (`calcAnim`, `:76-79`); `native/petari/src/Game/Screen/HeatHazeEffect.cpp` (`:19-30`). Lines as cited at 241395b49 for the last three.
+- **Rows.** P-156 advanced (eye-space blocks and the sky line); P-239's fog part advanced (the row itself closes in R4). The heat haze's board placed per view (INV; no row; plan decision).
+- **Needs first.** R5.5; R4v.1 (fog and the sky need each view as a record).
+- **Old path.** Switch group "eye-space blocks"; deleted at R5.8.
+- **Proof.** As R5.1, items 1 to 3, for this block kind. For the sky and the fog in a mirror or second view the sources name no picture check (read the row and the code first); a picture that differs from today's by design is looked at and approved.
+- **For a player.** The sky and the fog in a mirror or second view match that view. Nothing else visible.
+- **Read first.** P-239's row gives the fog record's form only as "a world anchor and a strength, the range per view on the GPU"; FM 2.13 and the skeleton add nothing (the sources give no further detail; read INV's line and `ModelUtil.cpp` first). R3.9 already writes fog per view in the cooked constants (skeleton: "fog per view"): read its card before the record's fields are fixed.
+
+### R5.7 Culling by a bound over both steps; ring runs through an instance row (P-046); P-255's skeleton part
+
+- **What changes.** Today culling reads the CPU's rows: an item of one matrix is tested against the view's planes with its place from this walk's rows (`item_culled`). After: per list, once, each item of one matrix gets a bound covering the steps between: a sphere around its joint's translations at both steps, reaching as far as the mesh's sphere does from the joint (its centre's offset plus its radius, by the larger of the two steps' largest stretch). The mix moves the translation on a line, turns on the sphere and mixes the stretch on a line (`affine_motion_at`), so for t from 0 to 1 the mesh stays inside. Per picture the CPU tests that bound against the picture's planes. On a still object it is today's sphere; on a moving one it keeps more, never less. Ring runs (P-046): a run of ring draws is joined today by rewriting each joining draw's matrix numbers and indices in write-combined upload memory (`merge_ring_run`: 4-byte matrix fields written at vertex stride into the ring, one 4-byte index per index into the index ring), the scattered partial-cache-line writes the walker avoids everywhere else; it runs for every run of joinable ring draws in every walk, generated pictures included (audit file B, finding P-046). After, each joining draw's first matrix is named through an instance row, and the run's vertices are written once by their site (R4). P-255's skeleton part: the skeleton's stack room is raised before `heap_realloc`, whose result is not checked, so a failure leaves a null stack that claims room and loses the old block; the room is raised only after the realloc succeeds. Replay identical (P-255's note).
+- **Where.** `runtime/src/render/core/draw_walker.cpp` (`item_culled` `:933` on; `merge_ring_run` `:695` on, as cited at cfc2e368e); `runtime/src/render/affine.cpp` (`affine_motion_at`, `:256-298` as cited at cfc2e368e) with `runtime/include/galaxy/render/affine.h`; `native/petari/src/Game/Render/Model.cpp` (skeleton stack room, `:145-149`, as cited at 241395b49).
+- **Rows.** P-046 advanced (ring runs through an instance row; closes at R5.8); P-156 advanced (culling without the rows); P-255's skeleton part (the row closes elsewhere: R2.5 and R4.0 hold the others).
+- **Needs first.** R5.6; the sites' writes (R4, FM 2.13) for the run's vertices.
+- **Old path.** The CPU compose and the cull test on the CPU's rows stay as the old path until R5.8.
+- **Proof.**
+  1. The cull bound: no item culled by the new test that today's test keeps, on the play route's lists (a test, FM 2.13).
+  2. FM 2.7.4's step-5 compare as R5.1, item 1, for lists with ring runs.
+  3. The CPU's time per picture and the pass's time, before and after, at an unlimited picture rate in HoneyBeeKingdom on the PC and the tablet; the game step's time unchanged or lower.
+  4. For P-255's part: replay identical (the row says so); the sources name no test (read the row and the code first).
+  5. For P-046 (audit file B): the render thread's record time in a galaxy dense with ring draws (Gusty Garden grass; the audit names `--diagnostics timeline` for it), before and after.
+- **For a player.** Nothing visible. A moving object that is near the screen's edge may be drawn when it would not be drawn today, never the other way round.
+
+### R5.8 The last landing: the CPU compose is deleted
+
+- **What changes.** `compose_rows` and `compose_world_rows` (`compose.cpp`) and `joints_at` (the pairing code) are deleted; the walk writes no matrix row; the old path, its flag bit and its groups go from the switch's table.
+- **Where.** `runtime/src/render/core/compose.cpp`, `compose.h`, `pairing.cpp` (`joints_at`), `frame_core.h` (`:443`), `draw_walker.cpp` (`:313`, `:317`), and the tests that call them: `runtime/src/render/render_core_host_tests.cpp` (`compose_rows`, `joints_at`) and `runtime/src/render/core/pairing_tests.cpp` (`:18`). FM names `joints_at` as in `compose.cpp`; at 790626cb5 it is defined in `pairing.cpp`.
+- **Rows.** P-156, P-144, P-046 whole; I-003 advanced (closes at G2.8, E6b landing 8: the recorded in-between replay).
+- **Parts closed here.** P-156 has four faults in its row, and each must be done before it closes (plan decision; each is a bullet, the row closes at the last):
+  - the CPU makes the eye-space position and normal matrix of every draw matrix of every model, including skinned envelopes (the CPU compose): R5.1 to R5.5 move it, this step deletes it.
+  - the walk's culling reads those rows: R5.7.
+  - the walk re-blends every non-registered material row between the two game steps at every picture (`walk_material_rows`, `draw_walker.cpp:627` at main; audit file B, finding P-156: blend in the shader from the two steps' constant blocks, or keep the blend only for the few animated rows): no step of R5 places it. R3's step 3 moves material rows to sources written per step (P-151); after R3.13, confirm with the code whether the per-picture blend is gone. If it is not, it is closed here by that rule (the sources give no further detail; read `walk_material_rows` first).
+  - the sky centred on the main camera in a mirror copy: R5.6.
+- **Needs first.** R5.1 to R5.7.
+- **Old path.** This step deletes it.
+- **Proof.**
+  1. A search for the functions by name returns nothing: `compose_rows`, `compose_world_rows` and `joints_at(` (with the bracket) in `runtime/src/render/core` (plan decision: the bare word `joints_at` also names a header field of the model file, so a search for the word alone is wrong); and the tests that called them (`runtime/src/render/render_core_host_tests.cpp`, `runtime/src/render/core/pairing_tests.cpp`) no longer call them. The walk writes no matrix row.
+  2. The gate's pictures and the CPU and pass times as R5.1.
+- **For a player.** Nothing visible: it is how the code is built.
+- **Read first.** At 790626cb5 the word `joints_at` is also a field of the model file's header (`runtime/src/render/core/registries.cpp:367` reads `header.joints_at`; `native/include/nebula_model.h:55` declares it). FM 2.13's search for the bare word `joints_at` in `runtime` would never return 0 while that field exists; the plan decision is to search for the function, as in Proof 1.
+
+### Rows of this package
+
+| Row | Today | After | Closes at |
+| --- | --- | --- | --- |
+| P-156 | Every presented picture recomputes on the CPU the eye-space matrices and normals of every draw (view times joint, weighted sums, inverse transpose, billboards); every unregistered material row is re-blended between the two steps at each picture; the sky is centred on the main camera in a mirror copy. | One GPU pass makes each picture's rows from joints uploaded once; culling by a bound over both steps; the sky follows each view. | R5.8 |
+| P-144 | Each animated model's joint matrices are copied twice per frame after the skeleton is evaluated: into the model's pose, then into the frame's arena. | The game writes a block's joints once a step into the list; the model's pose for game reads stays the game's. | R5.8 |
+| P-046 | Ring-run merging patches matrix numbers and indices in place in write-combined upload memory, scattered partial writes the walker avoids elsewhere, in every walk. | A ring run names each joining draw's first matrix through an instance row; the run's vertices are written once by their site. | R5.8 |
+| I-003 | Each in-between picture is a full CPU walk and a full GPU frame. | Recorded passes replayed with a new rows slice (E6b); this package supplies the rows buffer the passes read. The GPU work stays a full frame. | G2.8 |
+
+
+---
+
+## R6 Lights as world records
+
+Today the game loads lights into the console's eight numbered places before each object's draws, the frame list copies them into a new set whenever a place or the camera changes, each light is multiplied by the view on the CPU, and the ambient colour is a global pair. This package makes lights records in the world, a draw names its light set, and the GPU applies each picture's view. It also removes two searches from the game step (an actor's light area, a shadow's drop) and makes the normal-mapped objects use the shared lighting. A player sees the same lighting, with one visible change: where two disc actors ask for a point light at once, both now light the scene.
+
+Words used here: a "light set" is a short list of light records plus an ambient colour, which an item names. An "area light" is a stage's light data for a region (entries: player, strong, weak, planet).
+
+- **Design:** FM 2.14 (whole: today, the engine, groups, proof), FM 2.7.1 (the light record row), 2.7.3 (the groups) and 2.7.4 (the gate's both-paths compare), FM 2.11 (the ambient pair: "step 6 moves it into the item's light set and removes `MaterialAmbient`"). INV section 3's line for P-190 (the normal map). The notes of P-142, P-140, P-152 and P-190.
+- **Needs first:** R5.1 (the pass in which the view is applied to lights, a plan decision of the skeleton) and R3.3 (the ambient as a list source, so the set can take it); R3.2 makes the switch table `Game/Render/RenderPath.hpp`, reused here (plan decision). R6.5 (the game half) needs none of these.
+- **Rows:** 4 (P-142, P-140, P-152, P-190)
+
+### R6.1 The actors' lights
+
+- **What changes.** Each fault of P-142 this step carries is its own item; the row closes at R6.7 when the last of all its items is done.
+  - Eight numbered places: `loadActorLightInfo` loads an actor's two lights, its alpha light and its ambient before each run of its draws; `initLightRegisterAll` sets all eight places to white at every scene draw. After: a light is a record in the world (colour, terms, position, direction), or in the eye for a light that follows the camera, named as such. The area lights' entries (player, strong, weak, planet: two lights, an alpha light and the ambient each, `getAreaLightLightData`) are records made when the light data loads. A light set is one per area-light entry, one per blend in progress and one for the eye's white lights; an item names its set; the set's lights are not copied into the list at each change of place. A record changes only when its source does (an actor's blend between two area lights, once a step while it lasts). The set carries its ambient colour, so a form that read `MaterialAmbient` reads the set's. A material names a light by its number in the set as today; the numbers keep their meaning (0 and 1 the actor's lights, 2 the alpha light, 3 the shine, 4 the point light).
+  - The view on the CPU: a world light is multiplied by the step's view at each load; a light that follows the camera is given in eye space and marked (`Frame::setLightFollows`). The frame list copies the places into a new set whenever one changed or the block's camera did (`currentLightSet`, `setLight`); the render thread writes each set's rows at every walk and between two steps mixes each light with its pair, taking a world light through the camera's motion (`light_rows_at`). After: the GPU applies the view with the picture's camera, in R5's pass (plan decision), so no light is multiplied by the view on the CPU and none is mixed through the camera's motion; a world light does not move between two steps unless its record did.
+- **Where.** `native/petari/src/Game/Map/LightFunction.cpp` (`initLightRegisterAll` `:14-28`; `getAreaLightLightData` `:85-92`; the view multiply `:170`, `:209`; `loadActorLightInfo` `:178-190`, with the ambient set at `:189`), `native/petari/include/Game/Map/LightFunction.hpp`; `native/petari/src/Game/LiveActor/ActorLightCtrl.cpp` (`loadLight`, `:30-38`); `native/petari/src/Game/Util/LightUtil.cpp` (`:27-31`); `native/petari/src/Game/Scene/GameScene.cpp` (the call, `:323`); `native/petari/src/Game/Render/FrameList.cpp` (`currentLightSet` `:713-744`; `setLight` `:746-758`) and `FrameList.hpp` (`setLightFollows`); `native/include/nebula_frame_list.h` (`NebulaFrameLightSet`, `:38-56`); `runtime/src/render/core/draw_walker.cpp` (`light_rows_at`; the sets' rows `:317-343`). Lines as cited at cfc2e368e. `Game/Render/RenderPath.hpp` (R3.2) is not found at 790626cb5.
+- **Rows.** P-142 advanced (the first two items above: the actors' lights group, the view on the CPU, and the set's ambient).
+- **Needs first.** R5.1; R3.3.
+- **Old path.** The switch's group "the actors' lights"; the old path (places, CPU multiply, mix through the camera's motion) is deleted at R6.7.
+- **Proof.**
+  1. The gate's pictures of both paths equal (FM 2.7.4) on every stop and renderer; a difference fails the landing and names the stop, picture, renderer and group.
+  2. A test of the light rows: for the tours' lists, the rows the GPU path gives each light at t equal `light_rows_at`'s.
+  3. Counts before and after: light sets and light bytes per list, view multiplies per step (0 after).
+  4. The game step's and the walk's time on the PC and the tablet, before and after (never slower).
+  5. The mod suites run at every landing of the step (FM 2.7.3).
+- **For a player.** Nothing visible.
+- **Read first.** FM 2.14 lists four groups (the actors' lights, point lights, the player's light, the map's lights), but P-142's note and FM name three more light users: the coin's shine (`LightFunction.cpp:192-203`), eight white lights at the eye (`LightFunction.cpp:218-230`, called from `LightDirector.cpp:18` and the added-content draw service `LumaDraw.cpp:1538`), and the Mii icon's light, moved into view space on the CPU and set into slot 0 (`MiiFaceTexture.cpp:272-279`). FM 2.14's engine says the coin's shine, the point lights and the white eye lights are records too, but no group moves them: they are on the list of parts closed at R6.7 (plan decision), which must move them before the numbered places go.
+
+### R6.2 Point lights
+
+- **What changes.** Today one point light lights the scene: of those asking since the last choice the nearest takes slot 4 and the rest are dropped; its falloff is the console's STEEP curve with its brightness clamped to 0.95 to 0.999999 (`requestPointLightBy`). An added light (the mods' draw service) competes for the one slot. After: every requested light is lit from the step's list, as a record in the set. Where two disc actors ask at once, the picture differs from today's nearest-only; no step reads it, so the replay is identical.
+- **Where.** `native/petari/src/Game/Map/LightPointCtrl.cpp` (`requestPointLightBy`, `:54-65`; falloff and clamp `:60-62`) and `native/petari/include/Game/Map/LightPointCtrl.hpp`; `native/petari/src/Game/Map/LightFunction.cpp` (`loadPointLightInfo`, `:205-216`); `native/petari/src/Game/System/LumaDrawLight.cpp` (a caller of `requestPointLightBy`, the added-content light). Lines as cited at cfc2e368e and 241395b49.
+- **Rows.** P-142 advanced (the point light and its single slot).
+- **Needs first.** R6.1.
+- **Old path.** The switch's group "point lights"; deleted at R6.7.
+- **Proof.**
+  1. As R6.1, items 1 to 4, for this group, with the one difference described: the pictures of both paths equal except where two lights are asked at once, which is looked at and approved.
+  2. The replay is identical (the row says so).
+- **For a player.** Where two lit objects ask for a point light at once, both now light the scene.
+- **Read first.** Whether the STEEP falloff and the brightness clamp stay: the sources say only "every requested light lit from the step's list" (the sources give no further detail).
+
+### R6.3 The player's light
+
+- **What changes.** The player's light (the player entry of the area lights, `mPlayerLight` in `LightDataHolder.hpp`, loaded by `LightDirector::loadLightPlayer`, `LightDirector.cpp:32`, which also loads the one point light) becomes a light record in the set, with the view applied by the GPU. The sources give no further detail on this group (read the row and the code first): the point light itself is R6.2's.
+- **Where.** `native/petari/src/Game/Map/LightFunction.cpp` (the area light entries, `:85-92`) and `native/petari/src/Game/LiveActor/ActorLightCtrl.cpp`. The replacing pass that draws the player's light over a model is R3.8, not this step.
+- **Rows.** P-142 advanced (the player's light group).
+- **Needs first.** R6.1.
+- **Old path.** The switch's group "the player's light"; deleted at R6.7.
+- **Proof.** As R6.1, items 1 to 4, for this group.
+- **For a player.** Nothing visible.
+
+### R6.4 The map's lights
+
+- **What changes.** The map's lights (the stage's light tables, read by the game) become light records and sets, with the view applied by the GPU. If the cook of those tables changes, it is in their own file, not the model (FM 2.7.2). The sources give no further detail on this group (read the row and the code first).
+- **Where.** `native/petari/include/Game/Map/LightDataHolder.hpp` and `LightZoneDataHolder.hpp` (included by `LightFunction.hpp`); `native/petari/src/Game/Map/LightDataHolder.cpp`; `native/petari/src/Game/Map/LightFunction.cpp` (`getAreaLightLightData`).
+- **Rows.** P-142 advanced (the map's lights group).
+- **Needs first.** R6.1.
+- **Old path.** The switch's group "the map's lights"; deleted at R6.7.
+- **Proof.** As R6.1, items 1 to 4, for this group.
+- **For a player.** Nothing visible.
+
+### R6.5 The game half, replay identical: an actor tests its own area first (P-152); a shadow keeps its drop (P-140)
+
+- **What changes.** Two rows, each its own item; both close here.
+  - P-152: every visible actor scans every light area every step to find which one it stands in. `ActorLightCtrl::update` calls `tryFindNewAreaLight` for each actor whose model is not hidden, which goes `LightFunction::tryFindNewAreaLightID` (`LightFunction.cpp:111-113`) to `LightAreaHolder::tryFindLightID` (`AreaObj/LightAreaHolder.cpp:19-41`) to `AreaObjMgr::find_in`, a linear walk over all light areas from the last, each an `isInVolume` test; a result that matches the current light returns early, but only after the walk. Every area kind is found the same way, and `MR::getAreaObj(name, pos)` hashes the name a prefix at a time on every query. It is the original's design (Petari does the same walk); Nebula added only the leave delay (`mChangeSteps`, `cLeaveSteps`). After: an actor tests the area it is in first and walks the areas only when it has left it, and a still actor does not ask (the still test is the one on main, see "Read first").
+  - P-140: every moving actor asks for its shadow's drop to be found again each step (`LiveActor.cpp:168`, `MR::requestCalcActorShadow` at the end of every movement), a gravity search plus a map line query (`ShadowController::updateDirection`, `updateProjection`, the line query `MR::getFirstPolyOnLineToMap`). After: a shadow keeps its drop when its position, direction and length are bit-equal to the step before and the projected part has not moved (`mStillCount > 0`) and no collision part under it was moved, added, removed or switched (a change count on the keeper). The risk the audit names: a missed change source leaves a stale shadow, which the compare-both-ways run catches.
+- **Where.** `native/petari/src/Game/LiveActor/ActorLightCtrl.cpp` (`update`, `:23-28`, as cited at cfc2e368e); `native/petari/src/Game/Map/LightFunction.cpp` (`tryFindNewAreaLightID`); `native/petari/src/Game/AreaObj/LightAreaHolder.cpp` (`tryFindLightID`); `native/petari/src/Game/AreaObj/AreaObj.cpp` (`find_in`, `:119-129`); `native/petari/src/Game/AreaObj/AreaObjContainer.cpp` (`:405-431`), the last two as cited at 241395b49. For P-140 (audit file B, finding P-140; lines as read then, found at 790626cb5): `native/petari/src/Game/LiveActor/ShadowController.cpp` (the request list `:43-50`, `update` `:101-108`, `updateDirection` :110, `updateProjection` :125, the line query :139), `LiveActor/LiveActor.cpp` (:168), `Map/CollisionParts.cpp` (`mStillCount`) and `Map/CollisionCategorizedKeeper.cpp` (the keeper that gets the change count).
+- **Rows.** P-152 whole; P-140 whole.
+- **Needs first.** Nothing (the game half).
+- **Old path.** The test run that computes both ways (below); no path to delete. The change count on the keeper is the new field.
+- **Proof.**
+  1. The step hash identical with and without P-140's and P-152's changes over the tours and the play route, with a test run that computes both ways and compares every step (for P-140, the audit compares projection position, normal and sensor).
+  2. Counts before and after: light-area volume tests (`isInVolume` calls) per step in HoneyBeeKingdom (P-152's scene); shadow drop searches per step.
+  3. The game step's time on the PC and the tablet, before and after (never slower).
+- **For a player.** Nothing visible; less work in the game step.
+- **Read first.** The still-actor clause: FM 2.14 and the audit name "the binder's still test (P-138)", and the skeleton places P-138's own fix in G4.1, after R6. The plan decision: this step uses the still test as it stands on main and does not wait for P-138; P-138's own fix (skip the binder's second query for a zero movement, `Binder::findBindedPos`, `Binder.cpp:198-236`) stays in G4.1. At 790626cb5 a search of `Binder.cpp` and `Binder.hpp` finds no flag named for a still actor (`CollisionParts::mStillCount` is the part's count, not the actor's): read the actor's own test (a zero movement) first, and use it as it is.
+
+### R6.6 P-190: the normal map final at the cook, found once at load, lit per pixel from the light table
+
+- **What changes.** Today `NormalMapBase` remakes its normal maps on the CPU (`swapColorGB`: each RGBA8 texel's normal decoded and written back as 0, g, b, r in a copy) and builds a 256 by 256 two-channel gradient texture (`createGradTexture`, an LA8 ramp: intensity by column, alpha by row, with the console's tile conversion's scramble in rows 0 to 3, which are never sampled by the shader's arithmetic). It makes a matrix from the two light directions each draw (`updateLightMtx`), finds the normal-mapped materials by name each draw (`strstr` in `isNormalMapMaterial`, over meshes, joints and materials, `shapeAnalyzeDraw`), and parses the disc's `.nrm.txt` as text at every actor's setup (`loadData`). The shader (`normal_map.hlsl`) restates the console's stages: light channels per vertex in 0 to 255 units, the indirect stage's normal as 8 bits less 128, four stages each clamped, the last doubled, the alpha the console's unselected constant. After: the normal map is final at the cook (the swap done there) and used as it is; the materials are found once at load; the ramp is evaluated per pixel from the normal and the two lights, its levels, curve and colours the material's constants, with no texture made on the CPU (the unreachable scramble goes with it); the lights come from the step's light table (R6.1 to R6.4); one material program in the shared draw path, its stages written as what they compute.
+- **Where.** `native/petari/src/Game/MapObj/NormalMapBase.cpp` (`:81-85`, `:114`, `:119`, `:151-215`, `:217-223`, `:237-292`, `:359-385`, `:483-523`, `:525` on, `:538`, `:555-566`) and `native/petari/include/Game/MapObj/NormalMapBase.hpp`; `runtime/src/render/materials/normal_map.hlsl` (`:48-59`, `:75`, `:109`; `:48` is also where the 24-light limit rides in float constants). Lines as cited at 5526e1cf0 (INV) and 241395b49 (the row).
+- **Rows.** P-190 whole.
+- **Needs first.** R6.1 to R6.4 (the step's light table); R3.2 (the skeleton: a material's getters stop touching to read); the shared draw path's forms (R3.9). The skeleton names the light table; the other two are read from the rows.
+- **Old path.** None named: the old shader and the CPU remake go in this landing.
+- **Proof.** The gate's pictures of the levels with normal-mapped objects, replay identical (the row).
+- **For a player.** The same pictures; no per-draw CPU work for normal-mapped objects.
+- **Read first.** P-190's placement note says "the texture half in R2" and FM 2.6 puts the cooked texture in E3 step 2, its light in step 6; the skeleton puts "the normal map final at the cook" in this step (R6.6), and R2's cards R2.1 to R2.5 have no P-190 step. So the cook's swap is made here; if R2's work turns out to have done it, this step only checks it (plan: follow the skeleton).
+
+### R6.7 The last landing: the numbered places and `MaterialAmbient` are deleted
+
+- **What changes.** `initLightRegisterAll` and the numbered places go. `MaterialAmbient` goes: its readers read the set's ambient. The layout draw's ambient write goes with it (the 2-D layers set the pair to black today). The old path, its flag bit and its groups go from the switch's table. First, the parts of P-142 below that no group of R6.1 to R6.4 moves are moved (plan decision), because the numbered places cannot go while a light user still loads them.
+- **Where.** `native/petari/src/Game/Map/LightFunction.cpp` and `LightFunction.hpp`; `native/petari/src/Game/Scene/GameScene.cpp` (`:323`); `native/petari/include/Game/Render/Material.hpp` and `native/petari/src/Game/Render/Material.cpp` (`:481-488`, `:746-750`); `native/petari/src/Game/Ui/Material.cpp` (`:749-750`); `native/petari/src/Game/Util/DrawUtil.cpp` (`:32-33`); `native/petari/src/Game/Map/OceanRingPipeOutside.cpp` (one more reader of `MaterialAmbient` at 790626cb5). Lines as cited at cfc2e368e.
+- **Rows.** P-142 whole (all its items: the places, the view on the CPU, the one point light, the ambient, and the parts below).
+- **Parts closed here.** Parts of P-142's note that no group places; each is read in its file first and recorded in FM 2.14 (plan decision). Tick each when done:
+  - [ ] The coin's shine (`LightFunction.cpp:192-203`, `LightDirector::loadLightCoin`): a light record in the set, number 3.
+  - [ ] The eight white lights at the eye (`LightFunction.cpp:218-230`, called from `LightDirector.cpp:18` and the added-content draw service `LumaDraw.cpp:1538`): the set "for the eye's white lights".
+  - [ ] The Mii icon's light, moved into view space on the CPU and set into slot 0 (`MiiFaceTexture.cpp:272-279`): a light record, the view applied by the GPU.
+  - [ ] A model channel's light mask is a byte with diffuse and attenuation as function codes, so at most eight lights reach a material (`native/include/nebula_model.h:197-198`). The sources give no modern form beyond "every requested light lit from the step's list"; R3.9 and R3.10 write the cooked forms, so read what they left of the channel record.
+  - [ ] The lit programs read at most 24 lights because the masks ride in float constants (`runtime/src/render/materials/fur.hlsl:38-39`, `mii_face.hlsl:33`, `normal_map.hlsl:48`), and a light past the 24th lights nothing without a word. The sources give no modern form; a cap that drops a light must go, or be reported (the row's "without a word").
+  - [ ] The cooked pixel programs light a channel as the console does: material colour times `saturate((ambient * 255 + light_term(set, 2u, 3u, 2u, eye, N)) / 255)`, the lights picked by slot from the draw's set with the diffuse and attenuation codes (`runtime/src/render/programs/p004fd6ccde4b47de.hlsl:22-29`; `channel_lines` and `light_list`, `crates/nebula-import/src/cook/programs.rs:1042-1055`), the eye position and a no-interpolation set index from the vertex program (`v00fa2c22a19f4f21.hlsl:15-17`, `:29-32`). R3.9 and R3.10 rewrite these programs; if the lighting of a channel is still in the console's form after them, it is closed here.
+- **Needs first.** R6.1 to R6.4.
+- **Old path.** This step deletes it.
+- **Proof.**
+  1. `git grep -n "initLightRegisterAll\|MaterialAmbient" native`: 0 (FM 2.14); and FM 2.11's `git grep -n "NEBULA_ROW_\|fillRow\|MaterialAmbient" native runtime platform`: 0.
+  2. The gate's pictures of both paths and the light-row test as in R6.1, and the counts of R6.1; the game step's and the walk's time on the PC and the tablet, before and after.
+- **For a player.** Nothing visible: it is how the code is built.
+- **Read first.** The list of parts above comes from P-142's note and FM 2.14's engine text, which FM 2.14's four groups do not place. Where R3.9 and R3.10 may have already changed a program or a record (the last three items), read their result first and close only what is left.
+
+### Rows of this package
+
+| Row | Today | After | Closes at |
+| --- | --- | --- | --- |
+| P-142 | Lights are loaded per object draw in the console's eight registers, each world light multiplied by the view on the CPU; one point light, one slot; at most 8 lights reach a material, 24 a lit program; the ambient is a global pair. | Lights are world records in sets that items name; the GPU applies each picture's view; every requested point light is lit; the ambient is the set's; places and `MaterialAmbient` deleted. | R6.7 |
+| P-140 | Every moving actor asks for its shadow's drop to be found again every step: a gravity search plus a map line query, even when nothing under the actor moved. | A shadow keeps its drop while its position, direction and length are bit-equal, the projected part has not moved and no collision part under it changed (a change count on the keeper). Replay identical. | R6.5 |
+| P-152 | Every visible actor scans every light area every step to find the one it stands in; area lookups hash the name by prefix on every query. | An actor tests its own area first and walks the areas only when it has left it; a still actor does not ask. Replay identical. | R6.5 |
+| P-190 | `NormalMapBase` remakes its normal maps and a lighting gradient on the CPU, finds its materials by name each draw, parses text at each actor's setup; its shader restates the console's stages. | Normal map final at the cook, materials found once at load, ramp evaluated per pixel from the step's light table, one program in the shared path. | R6.6 |
+
+
+---
+
+## R7 The frame planned from what each pass reads and writes
+
+Today the game draws the frame in the console's order and each renderer decides by hand what to store, resolve, copy and wait for: the scene's depth, stencil and multisampled colour are stored at every pass end, a render-to-texture pass breaks the scene's pass and trades its target set in and out, size changes and upscaler changes drain the whole GPU inside a frame, and the frame's clears and copies keep the console's copy forms. This package has each pass state what it reads and writes, puts one planner in the shared render core to order and cull the passes and choose loads, stores and barriers, and then makes every size or mode change build the new object beside the old one. It also fixes the render-stability faults that sit beside this code. A player gets the frame at the same picture with less GPU time and memory (most on a tablet), no hitch at a window or setting change, and fewer ways for a lost device to hang the game.
+
+- **Design:** FM 1.4 (the waits inside a frame), 1.8 (post-process, upscalers and frame generation), 1.9 (the rows it gives to N-1081, N-1082 and E4), 2.5 (the pass list) and 2.15 (E4, landings 1 to 7, the rows table and the proof); FM 2.1 rules 1 and 2, FM 2.7.3 and 2.7.4 (the switch and the two-path pictures). The rows' own notes (the Vulkan, Direct3D 11 and Metal reports of 11-18, the one-retire design of P-028/P-030/P-049/P-050/P-057, and the fixes of P-290, P-293, P-295, P-296, P-298, P-305) and the audit of 2026-11-17 (file B) for the rows whose ledger text is cut short. INV section 3's line for P-290 and P-296.
+- **Needs first:** S0.2 (the planner has no part for depth questions, so S0.2.6 is on main first; plan decision), S0.1.1 (P-022, the shared layer the planner is "shared through"), R4v.1 before R7.2 (R4v.2 is R7.2's translucent order). R7.8's sampler and probe faults also depend on R2.2 and S0.2.6 (from the rows' own text).
+- **Rows:** 26 (P-006, P-007, P-021, P-025, P-026, P-027, P-028, P-030, P-031, P-049, P-050, P-053, P-054, P-055, P-057, P-058, P-063, P-290, P-293, P-295, P-296, P-298, P-305, P-319, N-1081, N-1082)
+
+### R7.1 Landing 1: each pass states its reads and writes; the recorded-list fixtures
+
+- **What changes.** Today a pass is one of fourteen kinds with a record that holds a target key, the clear, a size, the channels, an over-frame texture and depth, and the scene's camera and view. It names nothing it reads; the host finds what a draw pass samples through each item's texture table. New: `Frame::` writes each pass's reads and writes as keys (the frame's colour, its depth and stencil, a target, a copy) where it writes the pass. `targetBegin` writes its key, `targetBeginOverFrame` also reads the frame keys it names, `copyFrame` reads the frame and writes its key, `takeFrame` writes its key and starts a new frame picture, and `post` and `native` read and write the frame. A draw pass's reads are the target keys in its items' texture lists: the writer adds one when it writes an item whose list names a target (RenderTexture's entry marks a target), so the host scans no table. A draw pass's writes to depth and stencil follow its pipelines' state words; the writer records the union of the items' write bits once. The list carries these sets; the host still derives its own as today.
+  - The scene's camera (FM 1.9; plan decision): today the scene's camera is found at the scene's opaque end, because the game loads its projection after the scene begins (`draw_walker.cpp:1356`; `GameScene::draw3D` states its passes). With the pass records, the scene's camera is named when the scene begins.
+- **Where.** `native/include/nebula_frame_list.h` (the pass kinds `:225-241`, the record `:270-290`, as cited at 241395b49); `native/petari/include/Game/Render/FrameList.hpp` (`Frame::`, `:134-167`); `native/petari/src/Game/Render/RenderTexture.cpp` (`:192`); `native/petari/src/Game/Scene/GameScene.cpp` (`:323-329`, `:511-573`); the game's other target-pass and frame-copy calls (18 in all, FM 2.15 item 2): `FallOutFieldDraw.cpp` (`:98`, `:109`), `CaptureScreenDirector.cpp` (`:23`, `:27-38`), `DepthOfFieldBlur.cpp` (`:88`, `:144`), `ImageEffectLocalUtil.cpp` (`:115`, `:152`, `:155`), `FullScreenBlur.cpp` (`:40`), `MarioActorSpecialDraw.cpp` (`:111`, `:436`), `MarioShadow.cpp` (`:404`), `GalaxyMapController.cpp` (`:626`), `WaterCameraFilter.cpp` (`:126`) and `LumaDrawView.cpp` (`:281`, `:319`; the added content's views); `runtime/src/render/core/walk_plan.h` (`:130`, `:193-195`); `runtime/src/render/core/walk_plan_tests.cpp`; `runtime/src/render/core/walk_plan_shape.h`; `--diagnostics frame-plans` (`runtime/include/galaxy/launch_args.h`, `kDiagnoseFramePlans`). All lines as cited at 241395b49 (FM 2.15).
+- **Rows.** none of this package's rows (the scene's camera named at the scene's begin is FM 1.9's, with no row). It advances P-044's planner test (outside this package): the recorded-list fixtures landed on main (8ce5cd7da, 215 lists from eight tour stops, `walk_plan_tests`); this landing adds the keys and the expected plans to them.
+- **Needs first.** S0.2.6, S0.1.1.
+- **Old path.** none: nothing draws differently; the host's own derivation stays until landing 2 reads the stated sets.
+- **Proof.**
+  1. Over the tours' recorded lists, the stated read and write sets equal what the host derives today through the tables and state words (FM 2.15 landing 1).
+  2. The recorded-list fixtures hold pass kinds, keys, item counts and state words only (no game content), each with its expected plan.
+  3. The gate's pictures are equal on every stop and renderer (nothing draws differently).
+  4. The game step's and the walk's time on the PC and the tablet before and after (file 08 7.4: never slower).
+- **For a player.** Nothing visible: it is how the code is built.
+- **Read first.** (1) The sources do not give the field layout the record gains (new arrays or fixed sets) or how the version of the list format changes; read `nebula_frame_list.h` and the host's list reader first. FM names the 18 target-pass and frame-copy calls in the game; its command is `git grep -n -E 'Frame::(targetBegin|targetBeginPixels|targetBeginOverFrame|copyFrame|takeFrame)\(' -- native/petari/src`. (2) FM 1.9 gives E4 one more part, the scene's camera named at the scene's begin: FM 2.15's landings do not name it; it is placed here (plan decision; read `draw3D` and the walk's camera search first).
+
+### R7.2 Landing 2: the planner; the mirror's own target; the capture's late answer; translucent order per view
+
+- **What changes.** One planner in `runtime/src/render/core`, pure and tested with no GPU (as `walk_plan.h` is today), shared by the four renderers through F3's layer, replaces the walk's plans. (1) Versions: each write of a key makes a new version and each read names the version current at its place in the list; the planner moves a pass only where every read still sees its version. (2) Culling: a pass whose versions nothing reads is dropped unless it shows, calls native code, or writes a target read in a later frame (a target's last version of a real frame is kept for the next frame by name, see (4)); a frame copy no visible draw reads is not made. FM 2.15 also lists probes in this rule: that part is void, S0.2 deleted the probe pass (plan decision). (3) Order: the list's order as a stable topological sort with list position as the key; a pass that depends on nothing the open scene has written moves before the scene opens (`plan_early_targets`'s rule, now for every pass kind, so the Mii faces, the added content's views, the shadow capture and the mirror's own target never break the scene). (4) Names: two pictures are asked for by name: the one the player sees (`display_pictures_.latest()`, an in-between picture included, which the camera's cover copies) and a target's version from the last real frame (an in-between walk writes its own versions under `kGeneratedPicture`). The mirror draws into its own target (`targetBegin` with the mirror's key at its view's size), read by the mirror materials by that key; the frame is no longer drawn, copied and cleared for it. Today the capture actor runs at the mirror's place and the scene's, and at the default timing "Indirect" the one capture target holds the mirror's picture and then the scene's: two versions of one key, which the planner keeps apart. N-1082: a capture's readback is answered by its frame later, through the planner's readback place; read the code first and, if the fault is gone at main, close the row with the commit that removed it (plan decision). P-254 (R4v.2): translucent draws are sorted per view at the picture's camera. The last part of the landing deletes what is left of `walk_plan.h`'s plans (`plan_early_targets` and `plan_late_depth_clears`; `plan_early_probes` went with S0.2.6).
+  - The full-screen blur's feedback (plan decision; INV section 2, "Screen" bullet): `FullScreenBlur.cpp:38-46` draws the last frame's picture into itself. It is a target whose last real frame's version is kept by name, as (4) names a target's version from the last real frame.
+- **Where.** `runtime/src/render/core/` (the new planner file is not named by the sources); `walk_plan.h`, `walk_plan_tests.cpp`, `draw_walker.cpp` (the walker runs the planner's order; `:1416-1419` the generated picture's name, as cited at 241395b49); `Game/Render/RenderPath.hpp` (the switch table of FM 2.7.3; not found at 790626cb5: made by R3.2, the first step that needs a switch, and reused here; plan decision); `native/petari/src/Game/Scene/GameScene.cpp` (`:487-504` the mirror, `:497` and `:556` the capture, as cited at 241395b49); `native/petari/src/Game/Screen/CaptureScreenDirector.cpp` (`:15-19`, `:23`, `:27-38`); `native/petari/src/Game/Screen/FullScreenBlur.cpp` (`:38-46`); `runtime/src/render/renderer_d3d12.cpp` (the capture's readback; see "Read first"); `native/petari/src/Game/Render/Model.cpp` (`ItemBuffer::entryZSort`, `:317-331`, from P-254's row). `runtime/include/galaxy/render/render_core.h` (`display_pictures_`).
+- **Rows.** N-1082 whole. It also closes P-254 (R4v's row, outside this package) at its second part, per the skeleton.
+- **Needs first.** R7.1; R4v.1; S0.2.6.
+- **Old path.** The switch of FM 2.7.3 with a group "order and culling": the walk's plans on one side, the planner's order on the other, both walked in one run by `paths both` (plan line, FM 2.7.4). The table `Game/Render/RenderPath.hpp` is made by R3.2 and reused here (plan decision). The old plans are deleted in this landing's last part.
+- **Proof.**
+  1. The planner over the recorded lists gives the stored plans.
+  2. Over random lists (any kinds, keys and reads): every read in the plan sees the version list order gives it, every dropped pass writes nothing read, the order is a topological order of the dependencies, and no key is stored that nothing reads.
+  3. The gate's pictures of both paths are equal on every stop and renderer, with the gate's mirror stops in particular (`<name>.old.png` and `<name>.new.png`, `tools/verify/compare_snapshots.py`, tolerance of 1).
+  4. The step hash after a picture frame is the same with `paths both` as without (`tools/verify/step_hash.py`).
+  5. The game step's and the walk's time on the PC and the tablet before and after.
+- **For a player.** Nothing visible: it is how the code is built. The mirror shows the same picture.
+- **Read first.** (1) FM 2.15's rule 10 and its table row for N-1068 place probes in this landing: they are void, S0.2 deleted them (plan decision). (2) FM's table also gives P-009 and P-032 (the mods' post and native passes; HDR as the show pass's format) to landing 2. The planner treats a post pass and a native pass as passes every renderer is asked to run; the rows P-009 and P-032 themselves are set aside and are not closed by this plan (plan decision). (3) A scene that sets a capture timing other than "Indirect" while a mirror shows is looked for in this landing. (4) N-1082 cites `renderer_d3d12.cpp:6904` and `:6907`; at main those lines are the end of the capture and the start of `capture_readback`, and the comment on `debug_copy_selected_display_to_readback` says "nothing waits here". Read the code first to see which readback still waits (the finish-of-run path `finish_pictures` waits for the GPU at `:6730`, outside a frame); if the fault is gone, close the row with the commit that removed it. (5) FM 2.15 item 5 says E6b's unseen walk at t = 1 goes with the second name, and FM 2.16 (items 2 and 8) keeps a pass from the real frame when none of its read versions changes with `t`: both are G2's use of this landing's names and versions (outside this package); the planner's record must let G2 ask that.
+
+### R7.3 Landing 3: instances, loads and stores, resolves, transient attachments; clears as load actions; copies read through a swizzle
+
+- **What changes.** Consecutive passes that draw into the same attachments with no read of them between become one render pass instance. Each instance's load and store come from the versions: clear where its first use clears, nothing loaded where no earlier version is read, stored only where a later instance or frame reads it; depth and stencil are not stored after the scene unless `draw.post` or `draw.native` reads them. A multisampled attachment resolves once, at the end of the last instance that writes it, only when its single-sample version is read, and its multisampled contents are not stored unless a later instance loads them. An attachment neither loaded nor stored is transient: in tile memory only (Metal's memoryless storage; Vulkan's transient usage with lazily allocated memory where the device offers it). Vulkan opens instances with dynamic rendering (core in 1.3, the extension before), so the variant tables of render pass objects go; a device with neither picks a render pass object made once per key. Each row's faults:
+  - P-006 and P-055 (Vulkan; one finding given twice; audit file B, findings P-006 and P-055): every scene pass stores depth, stencil and the multisampled colour at its end and no pass variant discards (the variants differ only in load operations); no attachment is transient (`Context::create_texture` in `vk/vk_context.cpp` always asks for device memory with no lazily allocated memory and no transient usage, and the multisampled colour has attachment usage only, `renderer_vk_frame.cpp:90-91`). Fix: stored only where a later instance or frame reads it; the multisampled colour and depth resolved in the pass and not stored; transient and lazily allocated where the device offers it.
+  - P-031 (Metal; audit file B, finding P-031): the scene pass stores depth and stencil and, with MSAA, stores the multisampled colour as well as resolving it; no target is memoryless (`caps.memoryless` is computed in `mtl/mtl_context.mm` and nothing reads it). Fix: no store after the last reader; the multisampled colour and depth memoryless on Apple GPUs.
+  - P-053 (Vulkan and Metal): the colour is resolved through the scene pass's resolve attachment at every pass end, and Vulkan reopens a pass without a draw (`end_layer_2d`, `record_scene_aa`), so a pass closed with no draw resolves again. Direct3D 12 and 11 already skip a resolve when nothing was drawn since the last one (`color_dirty`, `depth_dirty`). Fix: a reopen asks for the pass and the first draw opens it; a pass closed with no draw recorded is not begun; one resolve at the last write that is read.
+  - P-025 (Direct3D 12 with MSAA; audit file B, finding P-025): the bloom's start and the scene anti-aliasing resolve the scene into `scene_color_` and then copy the resolved picture again (bloom HOLD through `game_bloom_.keep`, bloom SIMPLE into `source_`, the anti-aliasing into `antialiased_` because the trade is refused with MSAA), although the composite writes the multisampled target and nothing writes the copy's source in between: 66 MB of traffic a copy a frame at 4K with RGBA16F. Fix: the resolved version is read where it lies (bloom SIMPLE and the anti-aliasing read `scene_color_`; HOLD resolves straight into `keep_`). The audit finds the same pattern with MSAA on Vulkan, Direct3D 11 and Metal; the rule "read where it lies" covers them.
+  - P-063 (Direct3D 11; audit file B, finding P-063): scene anti-aliasing calls `record_scene_aa` without the trade, so each SMAA or FXAA picture copies the scene into `antialiased_`; Direct3D 12 and Vulkan trade the image. Direct3D 11 already has `can_take_scene` and `swap_scene_color`, and its post processor has the traded path. Fix: pass `swap_scene_color` when `can_take_scene()` is true.
+  - P-290 (all four renderers; the console's copy-with-clear form): the pass carries colour and alpha enables and a rectangle; the clear is scoped to the copy's source rectangle; separate colour and alpha enables need a drawn clear; alpha is forced on unless a flag passed as the pixel format is 1. Fix: each pass states its load action once in the renderer's terms; whether alpha exists is the target's format, known at load, so the enables, the rectangle and the pixel-format flag leave `clear_scene` (Direct3D 12, 11 and Metal) and Vulkan's per-call choice between a cleared pass, masked quads and `vkCmdClearAttachments`.
+  - P-296 (copy formats): a target pass's picture keeps the console copy's channel forms (RGBA, ALPHA, RED, RGB; `target_channel_swizzle`); Direct3D 11, Vulkan and Metal remake each copy by a conversion draw with a copy format and source steps (Vulkan makes a copy the game reads in the scene's 8-bit format). Fix: each copy target holds a native format stated at load and is read through a swizzle in the material form, with no conversion draw or second copy (the values `copy_format` takes are read with the fix).
+  - P-239's stencil part: the stencil clear is the pass's load operation, not `MR::clearStencil`'s full-screen quad. P-297's R8 and RG8 part (Direct3D 11 widens the levels to RGBA8 at every upload on the render thread) rides with P-296: filled on the worker and read through the swizzle.
+- **Where.** Vulkan: `runtime/src/render/vk/renderer_vk_frame.cpp` (`:483-494` the render pass variants, `:510-511` the secondary-buffer form, `:606-613` the clear, `:1779` `end_layer_2d`, `:1814`, `:1983`, `:2068`, `:2845-2851` and `:3244-3247` the copies, `:90-91` the multisampled colour's usage), `renderer_vk.h` (`:668-669`), `vk/vk_context.cpp` (`create_texture`), `discard_color_passes`. Direct3D 12: `renderer_d3d12.cpp` (`:998-1012` the resolve skip, `:6436-6475` the clear), `renderer_d3d12.h` (`:547-556` `clear_scene`), `game_bloom.cpp` (`keep`, `copy_frame`), `post_process.cpp`. Direct3D 11: `d3d11/renderer_d3d11_scene.cpp` (`:171-196`, `:334-337`, `:747-760` the depth copy's key and texture; `record_scene_aa`, `swap_scene_color`, `can_take_scene`), `d3d11/post_process_d3d11.cpp`, `d3d11/renderer_d3d11.h` (`:186-187`, `:426-430` `record_conversion_blit` and `conversion_draw`), `d3d11/texture_backend_d3d11.cpp` (`:126-143`). Metal: `mtl/renderer_mtl_scene.mm` (`:592-600`, `:1196-1200` `draw_frame_pass`), `mtl/renderer_mtl.h` (`:487-488`), `mtl/mtl_context.mm` (`caps.memoryless`). Shared: `renderer_common.cpp` (`make_scene_clear_values`, `:228-235`), `runtime/include/galaxy/render/renderer_common.h` (`target_channel_swizzle`, `:41-47`), `core/draw_walker.cpp` (`:1452`, `:1567-1568`), `native/petari/src/Game/Util/DrawUtil.cpp` (`clearStencil`, `:141-163`). Lines as cited at 241395b49.
+- **Rows.** P-006, P-055, P-031, P-053, P-025, P-063, P-290, P-296 whole; P-239 (its stencil-clear part; fog in R6, fur in R4.2) and P-297 (its R8 and RG8 part; its target part is R7.7) advance, outside this package's rows.
+- **Needs first.** R7.2; S0.2.6 (the planner has no probe pass; plan decision).
+- **Old path.** The switch of FM 2.7.3 with a group "instances, load and store". The sources do not say which landing deletes each old piece; FM's final search (see R7.7) covers `discard_color_passes`, and landing 2 and 4 delete the plans and the set trade.
+- **Proof.**
+  1. The planner's tests of R7.2 extended: no key is stored that nothing reads; every instance's load and store follow the versions.
+  2. The gate's pictures of both paths are equal on every stop and renderer.
+  3. `--diagnostics gpu-passes` on the tablet in every tour stop counts the full-size scene's openings per picture (one where nothing reads it back) and its loads and stores; for P-053 with MSAA 4x on a tour stop, resolves a frame before and after.
+  4. GPU time by pass and the targets' memory on the tablet before and after; for P-006 and P-055 also the external memory writes a frame from the GPU vendor's tool, before and after (audit file B, finding P-055); for P-031 the store bandwidth per pass in Xcode's Metal System Trace or a GPU frame capture on an Apple-silicon Mac (audit file B, finding P-031).
+  5. P-025: pictures at MSAA 4x with SMAA and bloom, before and after, compared byte for byte (audit file B, finding P-025). P-063: SMAA High on Direct3D 11, a scene capture before and after, compared (audit file B, finding P-063).
+  6. P-290 and P-296: replays identical.
+  7. The game step's and the walk's time on the PC and the tablet before and after.
+- **For a player.** The same picture with less GPU time and memory, most on a tablet or phone.
+- **Read first.** The sources give P-296's copy formats only as "to be read with the fix". P-297's R8 and RG8 part is named by neither R3.12 nor R7.7 in the skeleton: the row's note ties it to P-296, so it is placed here (the planner confirms; the sources give no further detail; read the row and the code first).
+
+### R7.4 Landing 4: barriers from the plan; each backend's set trade deleted
+
+- **What changes.** The planner lists each key's uses in plan order and emits a transition before the pass whose use differs from the last: from attachment write to sampled, sampled to attachment, copy source and destination, resolve. The shared layer turns them into Direct3D 12 resource barriers, Vulkan image barriers and Metal's encoder boundaries; Direct3D 11 needs none. A pass names its attachments, so the trade of the scene's set for a target's set and back, and its hand-written barriers, go in every backend. P-026 (audit file B, finding P-026): Direct3D 12's present pass created its shader views every frame, and the post-process and bloom helpers built every descriptor table fresh: `PostProcessor::draw` wrote 3 views a draw (the null ones too) and `GameBloom::table` 6 a dispatch, so normal bloom made 10 tables, 60 view-creation calls a frame (the audit's estimate: tens of microseconds). Built 11-18: `DescriptorRing::write_view` makes each view once in a CPU-only cache keyed by its resource and description and copies it; on main it is d5b2a0bb6 (the ledger names 85eeb6d67, which is not on main; plan decision). The planner's attachments keep their views, so a pass's table is a copy of the handles its attachments already have. Vulkan and Metal bind images per pass without a view creation (checked when built).
+- **Where.** `renderer_d3d12.cpp` (`swap_target_set` `:5554-5570`, `begin_target_pass` and `end_target_pass` `:5572-5622`, as cited at 241395b49); `vk/renderer_vk_frame.cpp` (`:725`); `mtl/renderer_mtl_scene.mm` (`:723`); `d3d11/renderer_d3d11_scene.cpp` (`:418`); `runtime/include/galaxy/render/renderer_d3d12.h` (`DescriptorRing`, `write_view`, `views_made`); `runtime/src/render/post_process_tests.cpp` (`view_cache_on_warp`); `game_bloom.cpp` (`GameBloom::table`) and `post_process.cpp` (`PostProcessor::draw`).
+- **Rows.** P-026 whole.
+- **Needs first.** R7.3.
+- **Old path.** The switch of FM 2.7.3 with a group "barriers". Each backend's trade and hand barriers are deleted in this landing; FM's final search after R7.7 checks `swap_target_set`.
+- **Proof.**
+  1. The gate's pictures of both paths are equal on every stop and renderer.
+  2. For P-026: the gate's pictures the same on Direct3D 12 and a CPU timing of `present()` and `game_bloom()` before and after (timeline or PIX, idle PC); the row notes these two as still owed.
+  3. `post_process_tests` `view_cache_on_warp` still passes (made once, a new format is a new view, null and UAV views, the reference held, the drop, growth).
+  4. The game step's and the walk's time on the PC and the tablet before and after.
+- **For a player.** Nothing visible: it is how the code is built (less processor time per frame on Direct3D 12).
+- **Read first.** The sources do not say how the planner's attachments hold their views beyond the row's design (a staging view made when the target is made; the ring copies it). Read the row and `write_view` first.
+
+### R7.5 Landing 5: one instance under parallel recording
+
+- **What changes.** Vulkan's parallel recording splits the scene pass into several render pass instances (P-007; audit file B, finding P-007): a draw pass of 1,500 or more items on a machine with 6 or more logical cores is recorded on 2 to 8 workers (`recording_workers` in `draw_walker.cpp`), and `parallel_record_end` ends the scene pass, executes each run of chunks with the same auxiliary state, and ends and reopens the pass again; `parallel_record_begin` has no tiled-GPU check. Each break stores and reloads the whole colour and depth on a tiled GPU (the walk's own comment gives about 100 MB at 2960 by 1848). New: one instance; the workers record secondary command buffers executed inside it (Vulkan, with the secondary-buffer contents flag for the whole pass or dynamic rendering's secondary-buffer, suspend and resume flags), the children of a parallel encoder (Metal), or command lists that continue the same bound targets (Direct3D 12). The audit's alternative, parallel recording off on a tiled GPU, is not the planner's choice.
+- **Where.** `vk/renderer_vk_frame.cpp` (`:510-511` the secondary-buffer form; `parallel_record_begin` and `parallel_record_end`, as cited at 241395b49 for the first and found by name for the others); `core/draw_walker.cpp` (`recording_workers`); `mtl/renderer_mtl_draw.mm` (`:353`) and `mtl/renderer_mtl_scene.mm` (`:482`).
+- **Rows.** P-007 whole.
+- **Needs first.** R7.3.
+- **Old path.** The sources name no group for this landing (the switch's groups are order and culling, instances with load and store, barriers, the after-scene instance); read FM 2.7.3 and the table when the landing starts.
+- **Proof.**
+  1. `--diagnostics gpu-passes` on the tablet in every tour stop, and in a busy galaxy where a list reaches 1,500 items (the audit names Good Egg's start): one scene instance per picture with parallel recording on, and no "parallel recording" pass begin beside it (audit file B, finding P-007; FM 2.15's done line).
+  2. The gate's pictures of both paths are equal on every stop and renderer.
+  3. The game step's and the walk's time on the PC and the tablet before and after.
+- **For a player.** The same picture with less GPU time on a tablet or phone.
+- **Read first.** The sources give no group of FM 2.7.3 to this landing and no test for P-007 beyond the measure above. The audit says whether a real list reaches 1,500 items in one pass on the tablet is not yet known: the first measure answers it.
+
+### R7.6 Landing 6: the after-scene instance; the cover's single draw; the phone's bloom setting
+
+- **What changes.** Where no upscaler sits between, the bloom's composite, the 2-D layer and the conversion to the output are one instance writing the swap chain's picture; on tiled GPUs this is the gain, elsewhere it costs nothing. P-027 (audit file B, finding P-027): on Direct3D 12 HDR output, `begin_layer_2d` resolves and then calls `record_layer_draw` twice with the same source, once into `layer2d_set_` (the samples) and once into `layer2d_base_` (one sample), and `end_layer_2d` resolves the layer and draws the merge: three full-size passes and up to two resolves a frame while the HUD is drawn. The finding's own fix: without MSAA both start draws have the same sample count and format, so they are one draw into two targets (`NumRenderTargets = 2`); with MSAA the two draws stay. The merged instance replaces the three draws (FM 2.15 gives the row to landing 6). DLSS-G's HUD-less copy and draws are an expected cost and not part of this row. P-021 (decided, kept as the right picture): a frame copy asked before the frame's first draw is the camera's cover, taken to freeze the screen for a transition; it copies the latest shown picture (`display_pictures_.latest()`), and its copy and the frame pass's draw fold into one draw. Vulkan copies the shown picture back into a scene target to serve it (`draw_shown_frame_pass`). P-319: the bloom was a quarter of the tablet's GPU time at its low clock in the heaviest tour stop (scene 9.3 ms, bloom 3.1 ms, final picture 1.1 ms, of 13.5 ms); the bloom's chain keeps its taps, and a phone setting for a shorter chain (the owner allowed it) is measured for time and for the picture's difference before it is offered.
+- **Where.** `renderer_d3d12.cpp` (`begin_layer_2d`, `end_layer_2d`, `record_layer_draw`, `layer2d_set_`, `layer2d_base_`; the conversion views, `conv_table`); `vk/renderer_vk_frame.cpp` (`draw_shown_frame_pass`, `:3276-3290`); `draw_walker.cpp` (`:1583`, the copy before the list writes the frame; the walk's call of `end_layer_2d` when it reaches 2-D draws); `game_bloom.cpp` and its backends' bloom files. Lines as cited at 241395b49.
+- **Rows.** P-027, P-021 and P-319 whole (P-319 closes when the measure is recorded and the setting is offered or refused).
+- **Needs first.** R7.4.
+- **Old path.** The switch of FM 2.7.3 with a group "the after-scene instance"; the old three-conversion path and the cover's two steps are deleted when the groups' defaults move.
+- **Proof.**
+  1. The gate's pictures of both paths are equal on every stop and renderer.
+  2. `--diagnostics gpu-passes` on the tablet: GPU time by pass before and after; for P-027, with HDR output on, the "frame read" pass time before and after (audit file B, finding P-027); for P-319, time and the picture's difference of the shorter chain against the full chain, written down before the setting is offered.
+  3. A transition's cover freezes the picture the player sees (P-021's decision).
+  4. The game step's and the walk's time on the PC and the tablet before and after.
+- **For a player.** Less GPU time and heat on a tablet or phone, and on Direct3D 12 HDR output no extra full-screen passes when the HUD opens or closes. A phone may be offered a shorter bloom if the measure allows.
+- **Read first.** P-319 is a measure and a choice: the sources give no thresholds for "offered". Record the numbers and the picture difference before the setting is offered (the sources give no further detail; read the row and FM 2.16's note on the owner's answer first).
+
+### R7.7 Landing 7: targets beside the old at a size change; upscalers and frame generation made ahead; the game no longer waits for the queue at a window change
+
+- **What changes.** A size or mode change makes the new target, upscaler or frame-generation context beside the old one, and the old one is freed when the frame slot that last used it passes its fence. Each renderer keeps, per frame slot, a list of owned objects (resources as `retired_targets_` does today in Direct3D 12, and upscaler and generation contexts as type-erased owners), emptied when that slot's fence is next waited for. Targets come from a pool keyed by size, format and samples. Nothing waits for the whole GPU inside a frame. Rows:
+  - P-028 (Vulkan, Direct3D 11 and Metal; the Direct3D 12 half is on main: 56af7958f retires a target made again at another size, 2b3a75b80 is the test hook `NEBULA_EXT_REMAKE_TARGETS` (set by `GALAXY_TEST_REMAKE_TARGETS` in the test extension), 447e5f210 logs a drain inside a frame; the ledger's 7c933d305 and 63264dd1e are not on main under those hashes; plan decision). Direct3D 11 waits for GPU idle at a change of internal resolution or MSAA and clears every frame's retire lists and frame-pass targets; Metal does the same; Vulkan waits for idle before every swap-chain remake and at a resolution or HDR change.
+  - P-054 (audit file B, finding P-054): Vulkan makes a scene-sized set in `create_scene_set` (from `begin_target_pass`, for every new or resized target-pass key), `ensure_output_set`, `ensure_motion_targets` and `ensure_wide_set`, and `sweep_target_slots` drops a key idle for `kIdleSteps` steps, so a key the game uses now and then is made again, with its wait, each time it returns (a mirror, a picture-in-picture, the star-bit counter's captures hitch); Direct3D 12 makes the same sets with no wait, the frame's own list recording the transition. New: Vulkan's new scene-sized target set puts its UNDEFINED-to-attachment barriers on a pending list that the frame's command buffer drains first, so `run_one_time`'s own submit and its wait (up to ten seconds, on the render thread) leave the frame path (`run_one_time` stays for start-up and device restore). The replaced set is retired to the frame slot.
+  - P-030: the mid-frame `vkDeviceWaitIdle` calls (FSR 3 generation `:1427`, the DLSS-G HUD-less copies `:1454`, `:1494`, `:1547`, the upscaler `:952`) and Metal's `renderer_mtl_draw.mm` `:736` and `:757` take the same retire; the waits in `apply_window_size`, shutdown and `finish_pictures` stay.
+  - P-049 (audit file B, finding P-049: creating a DLSS feature takes tens to hundreds of milliseconds, so every quality, mode or render-size change while DLSS is chosen freezes the picture for that long): DLSS (Direct3D 12 with Streamline) gets its own viewport handle per context (a counter, not 0), so old and new live side by side; the new one is made ahead on a worker with `slAllocateResources` into its own allocator and list, executed on the direct queue with a fence, and taken by `prepare_temporal_upscaler` when the fence passed (as FSR 3 and XeSS are); until then the scene renders without the upscale. The old one is retired.
+  - P-050: the FSR 3 generation context is matched in `begin_frame` beside `prepare_temporal_upscaler`, made on a worker when its size changes, with frame generation off until taken; the old is retired except where its destroy must release the FSR 3 swap chain's hold (that happens only with the swap-chain change, already a drain between frames).
+  - P-057: Vulkan creates DLSS in `create_dlss_upscaler` after `wait_for_gpu_idle`, while FSR 3 and XeSS go through `std::async` (audit file B, finding P-057). New: Vulkan's DLSS follows P-049 (own viewport, `slAllocateResources` on a worker's command buffer with a timeline value); SGSR 2 joins the worker path (its two pipelines and three images need no command buffer; the first layout change is recorded at first use); the wait at `:952` becomes the retire.
+  - N-1081: the output's shape is latched by the frame it belongs to (FM 2.1 rule 2); the game thread's `wait_for_render_idle` in `svc_frame_begun` goes.
+  - P-305 (Vulkan stability), placed here by the row; each fault is its own item and the row closes when the last is done:
+    - a change of upscaler size drops a creation still running on `std::async` by assigning an empty future, which joins it on the render thread with no bound (`renderer_vk_frame.cpp:956-957`, `:925`, made at `:985`; `renderer_vk.h:898`). Fix: the old creation handed to a worker to finish and be dropped.
+    - the render thread throws out of the frame on more new samplers in one frame than the array holds (`:2335-2336`), on a texture-list buffer, scene colour or probe buffer it cannot make (`:2355-2357`, `:3123-3124`, `:3352`), and on a failed pool or set when the image array grows mid-frame (`grow_texture_array`, `install_texture_array`, `:2270-2279`, `:2215`, `:2228`). Fix: samplers and lists sized at load, an overflow reported once and the draw skipped, the array grown before the frame from the load's count. (The probe buffer at `:3352` goes with S0.2.6 if the Vulkan probe buffer is deleted there; check.)
+    - a failed post-process build destroys the pipeline layout and still sets `built_` (`post_process_vk.cpp:446-450`, `:412`), so a later present-pass or size change builds pipelines on a null layout (`:165-171`, `:377-379`). Fix: a failed build leaves `built_` false and nothing is rebuilt until a full build succeeds.
+    - the scene anti-aliasing draws a pipeline that can be null (`finish_scene_aa`, `:705-709`; `scene_pass_pipeline`, `:727-744`; bound unchecked at `:590`). Fix: a null pipeline skips the pass.
+    - present takes `host_window::surface_use` with no bound into a member (`renderer_vk.cpp:3171`) and a throw at the acquire's check leaves it held (`:3207`). Fix: a scoped timed lock released on every path.
+    - the seven further places the report named are "Parts closed here" in R7.8.
+  - P-297's target part (Direct3D 11): targets made when settings or the output size change, beside the old, retired by the fence: the bloom's work targets (`GameBloom::ensure_target`) and SMAA's targets and shaders (`post_process_d3d11.cpp`) to be read with the fix.
+- **Where.** `renderer_d3d12.cpp` (`prepare_temporal_upscaler` `:5019`, `:5052`; `record_temporal_upscale` `:5214`; `reset_sampler_frame`; `retired_targets_`; as cited at 241395b49); `renderer_d3d12.h`; `streamline_bridge.cpp`; `vk/renderer_vk_frame.cpp` (`make_scene_set`, `:127`, named by P-054 (not found at 790626cb5; `create_scene_set` is at `:63` at main); `:274-292`, `:925`, `:952`, `:956-957`, `:985`, `:1107`, `:1427`, `:1454`, `:1494`, `:1547`, `:2215`, `:2228`, `:2270-2279`, `:2335-2336`, `:2355-2357`, `:3123-3124`, `:3352`, `:425-431`); `vk/renderer_vk.cpp` (`:3071-3073`, `:3171`, `:3207`); `vk/renderer_vk.h` (`:898`); `vk/post_process_vk.cpp` (`:165-171`, `:377-379`, `:412`, `:446-450`, `:590`, `:705-709`, `:727-744`); `vk/temporal_upscaler_vk.cpp`; `vk/fsr_frame_generation_vk.cpp`; `fsr_frame_generation.cpp`; `d3d11/renderer_d3d11_scene.cpp` (`:246-251`); `d3d11/game_bloom_d3d11.cpp` (`:110-119`); `d3d11/post_process_d3d11.cpp` (`:116-136`, `:289-306`); `mtl/renderer_mtl_scene.mm` (`:353-362`); `mtl/renderer_mtl_draw.mm` (`:730-738`); `mtl/renderer_mtl.mm` (`:572`); `native/host/host_main.cpp` (`svc_frame_begun` `:3173`, the latch `:3224-3232`, the wait `:3228`; the row cites `:3236`); `runtime/src/render/render_core.cpp` (`wait_for_render_idle`). Lines as cited at 241395b49 unless noted.
+- **Rows.** P-028's Vulkan, Direct3D 11 and Metal parts (its Direct3D 12 part is on main), P-054, P-030, P-049, P-050, P-057, N-1081 and P-305 whole; P-297's target part (P-297 closes here, its first part being R3.12 and its R8 and RG8 part R7.3).
+- **Needs first.** R7.4 (barriers, for the retired targets' uses); R7.3.
+- **Old path.** The sources give no switch for this landing; each replaced wait is deleted as its renderer's retire lands. FM's final search closes the package: `git grep -n -E "plan_early_targets|plan_late_depth_clears|swap_target_set|discard_color_passes" runtime` returns nothing.
+- **Proof.**
+  1. A test hook that changes a target pass's size every step for 600 steps (`NEBULA_EXT_REMAKE_TARGETS`, on main for Direct3D 12; Vulkan's and the other renderers' use is the row's plan) with `--diagnostics timeline`: no frame waits on the queue's fence, no `SlotWait` outside a frame slot's own, pictures the same; before, one wait a resize. For P-054 the same on Vulkan, in a galaxy where a mirror or target pass comes and goes (the audit names Good Egg's first planet and Gateway's telescope).
+  2. A test hook that changes the upscaler or frame-generation mode every 120 steps for 1200 steps with `--diagnostics timeline`: no queue drain inside a frame, no frame over twice the median, pictures the same at the steps between changes. For P-049, on a PC with DLSS, a DLSS quality change in the settings with the timeline running: the longest frame (audit file B, finding P-049).
+  3. `git grep -n -E "plan_early_targets|plan_late_depth_clears|swap_target_set|discard_color_passes" runtime` returns nothing.
+  4. The gate's pictures equal on every stop and renderer.
+  5. E4's done measure (FM 2.15): `--diagnostics gpu-passes` on the tablet in every tour stop shows the full-size scene opened once per picture where nothing reads it back, pictures unchanged, GPU time by pass recorded before and after (R7.3's measure).
+  6. The game step's and the walk's time on the PC and the tablet before and after.
+  7. N-1081: the sources give no measure beyond the row's design (read the timeline of a window or aspect change for the game thread's wait).
+- **For a player.** No hitch when the window is resized, the aspect changes, or a graphics mode (resolution scale, upscaler, frame generation) is changed; the game keeps stepping while the new setting is made ready.
+- **Read first.** (1) P-305's seven further places are listed under "Parts closed here" in R7.8. The row says the report's second throw place, `:2451`, falls after the lock is released and is not a fault. (2) P-028's row lists Vulkan's wait before every swap-chain remake (`renderer_vk.cpp:3071-3073`) and its idle wait at a resolution or HDR change (`renderer_vk_frame.cpp:425-431`); FM 1.4 and P-030's row allow waits between frames (a swap chain's re-creation, a window size change, shutdown, `finish_pictures`). Read which of these run inside a frame before changing them. (3) The Direct3D 12 half of P-028 is on main under other hashes (56af7958f, 2b3a75b80, 447e5f210); confirm it on main before relying on it.
+
+### R7.8 Renderer stability left after landings 1 to 7
+
+- **What changes.** Four rows hold several faults each. Each fault is listed; "removed by S0.2" means step S0.2.6 deletes it (the probe machinery: `ProbeBook`, `screen_probes_finished`). Each is read whole in the code before it is changed. Fixes are the rows' own. Replay identical for all.
+  - P-293 (render stability):
+    1. A service waits for a lost device with no bound unless the gate gives up (`device_gate.h:41-46`). Fix: the wait bounded with the give-up path.
+    2. The heap diagnostic locks every process heap on the present thread and divides by an entry size that can be 0 (`render_core.cpp:406-427`). Fix: the heap walk off the present thread and size 0 skipped.
+    3. A picture-file thread that cannot start leaves `wait_picture_files` waiting for ever (`renderer_common.cpp:422-442`). Fix: the count raised only once the thread is made.
+    4. `screen_probes_finished` indexes its slots with no check (`renderer_d3d12.cpp:6793-6794`). Removed by S0.2 (the function is deleted in S0.2.6).
+    5. More new samplers in one frame than the heap holds throws out of the frame (`renderer_d3d12.cpp:2918-2923`). Fix: samplers made at load (P-048 in R2.2, P-155 closing in R4.9); check that it is gone.
+    6. The upload ring makes a GPU buffer inside a frame and prints to `std::cout` (`gpu_upload_ring.cpp:176-186`). Fix: the ring sized at start from the measured peak.
+    7. The DLSS stub takes seven parameters against the declaration's six (`streamline_bridge.cpp:576-578`; `streamline_bridge.h:103-105`). Fix: the signature matched.
+  - P-295 (render core stability):
+    1. `ProbeBook::answered` keeps a pointer into its deque and then pops the front past `kKept`, so an old answer is written through a freed element (`probe_book.h:56-72`, `:29`). Removed by S0.2 (`ProbeBook` is deleted).
+    2. The registry accessors index with the list's ids and no check (`frame_core.h:262-265`). Fix: ids checked against the tables in debug and refused at the list's check in release.
+    3. Direct3D 12's motion forms add a second target without independent blend, so target 1 takes target 0's blend (`pipelines_d3d12.cpp:426-435`). Fix: `IndependentBlendEnable` with target 1 written plain, as Vulkan does (`pipelines_vk.cpp:521-524`).
+    4. The dev program table trusts the file's counts (`program_table.cpp:91-96`, `--diagnostics` only). Fix: the counts checked against the file's size.
+    5. A target pass that cannot begin prints one warning a run and records no loss (`draw_walker.cpp:1439-1448`). Fix: the failed pass counted in the loss report.
+  - P-298 (Direct3D 11 stability):
+    1. The `ID3D11Fence` wait is INFINITE (`d3d11_context.cpp:202-203`, `:313-319`). Fix: a timed wait that reads `GetDeviceRemovedReason` on expiry.
+    2. The wait event's creation is not checked (same lines). Fix: a checked event.
+    3. The query path spins on `SwitchToThread` (`:321-333`). Fix: a timed sleep.
+    4. A failed `ResizeBuffers` logs and returns false without reading the HRESULT, leaving the swap dirty, so every frame retries, `Present` is never called and a removed device is never reported (`renderer_d3d11.cpp:345-348`, `:1407-1409`). Fix: the HRESULT read and device loss sent to `restart_device`, retries bounded and the log throttled.
+    5. Present takes `host_window::surface_use` with no timeout (`renderer_d3d11.cpp:1406`). Fix: the surface lock taken with the hand-over's timeout.
+  - P-058 (maintainability; audit file B, finding P-058): VMA was told Vulkan 1.1 even when the device and instance are 1.2 or 1.3 without ray tracing (it was raised to 1.2 only with ray tracing), so VMA leaves 1.3's memory-requirement queries unused; no wrong behaviour. Fix: the lower of the instance's and the device's version. At main it is done: 7f4a07281 ("Vulkan: VMA is told the version in use (P-058)") adds `allocator_api_version` (`runtime/src/render/vk/device_quirks_vk.cpp:185`, used at `vk/vk_context.cpp:1285`) and the test `the_allocator_gets_the_version_in_use` in `vk/driver_key_tests.cpp`. The step confirms the fault is gone by that test and closes the ledger row (plan decision).
+- **Parts closed here (plan decision).** Parts of the rows' notes that no earlier step places, closed in this last step of the package; each is read in the code and either fixed or recorded as not a fault:
+  - [ ] P-305's seven further places: AA targets made in recording (`post_process_vk.cpp:494-556`); the constants sets' linear search (`renderer_vk_frame.cpp:2757-2762`); a vector per upload (`texture_backend_vk.cpp:55-58`); the driver marker's removal on the render thread (`renderer_vk.cpp:2454-2460`); the compile journal's 64 slots (`compile_journal.cpp:91-94`); the FSR 3 chain swapped half-way (`fsr_frame_generation_vk.cpp:93-103`); the bloom's unused-slot image (`game_bloom_vk.cpp:617-621`).
+  - [ ] P-293's fault 5 (the sampler overflow): the samplers are made at load in R2.2 (P-048) and R4.9 (P-155 closes); here only the check that the throw is gone.
+  - [ ] P-293's fault 4 and P-295's fault 1: gone with S0.2.6; confirmed here.
+  - Parts of other packages' rows placed in this package: P-254's translucent order (R7.2); P-239's stencil-clear part and P-297's R8 and RG8 part (R7.3); P-297's target part (R7.7). P-239's fog part is in R5.6 and its fur part in R4.2.
+- **Where.** `runtime/include/galaxy/render/device_gate.h`; `runtime/src/render/render_core.cpp`; `runtime/src/render/renderer_common.cpp`; `runtime/src/render/renderer_d3d12.cpp`; `runtime/src/render/gpu_upload_ring.cpp`; `runtime/src/render/streamline_bridge.cpp` and `runtime/include/galaxy/render/streamline_bridge.h`; `runtime/src/render/core/probe_book.h`, `frame_core.h`, `pipelines_d3d12.cpp`, `pipelines_vk.cpp`, `program_table.cpp`, `draw_walker.cpp`; `runtime/src/render/d3d11/d3d11_context.cpp` and `renderer_d3d11.cpp`; `runtime/src/render/vk/vk_context.cpp` and `device_quirks_vk.cpp`. Lines as cited at 241395b49.
+- **Rows.** P-293 (faults 1, 2, 3, 5, 6 and 7 here; fault 4 in S0.2.6, closing at this step), P-295 (faults 2 to 5 here; fault 1 in S0.2.6), P-298 whole, P-058 whole.
+- **Needs first.** S0.2.6 (P-293's fault 4 and P-295's fault 1 are gone); R2.2 (P-293's sampler fault); R7.7 (the skeleton puts this step after landings 1 to 7).
+- **Old path.** none: nothing draws differently.
+- **Proof.**
+  1. Replays identical for every fix (the rows).
+  2. A search for `screen_probes_finished` and `ProbeBook` in `runtime` finds nothing (S0.2's proof; here it confirms the two removed faults).
+  3. Each of the 18 faults above is checked in the code before the fix: any already gone is recorded as gone, as P-058's (its test `the_allocator_gets_the_version_in_use` passes).
+  4. The sources give no test for the new bounds (the sources give no further detail; read each row and the code first).
+- **For a player.** Fewer hangs and no endless frame loop after a lost graphics device, and a failed resize on Direct3D 11 recovers instead of stalling.
+- **Read first.** The rows' line numbers are as cited at 241395b49, not at main. Read each row whole and the code at main; P-058's fix is already there (7f4a07281, with its proof in a12c87579).
+
+### Rows of this package
+
+| Row | Today | After | Closes at |
+| --- | --- | --- | --- |
+| N-1081 | The game thread waits for the whole render queue when the output's shape changes (`svc_frame_begun`, `wait_for_render_idle`): a window or aspect change holds the step for every queued frame. | The shape is latched by the frame it belongs to (FM 2.1 rule 2); the game thread no longer waits. | R7.7 |
+| N-1082 | A capture's readback waits for the GPU inside a frame on Direct3D 12. | A capture is answered by its frame later, through the planner's readback place. | R7.2 |
+| P-006 | Every Vulkan scene pass stores depth, stencil and the multisampled colour at its end; no pass variant discards and no attachment is transient (no lazily allocated memory). | Stored only where a later instance or frame reads it; the multisampled colour resolved in the pass; transient attachments in tile memory where the device offers it. | R7.3 |
+| P-007 | Vulkan parallel recording (a draw pass of 1,500 or more items on 6 or more cores) ends and reopens the scene pass for each run of chunks, storing and reloading colour and depth on a tiled GPU. | One instance; workers record secondary buffers inside it (Metal and Direct3D 12 the same in their forms). | R7.5 |
+| P-021 | A frame copy asked before the frame's first draw returns the previous shown picture (decided: kept as the right picture). | The cover's copy and the frame pass's draw fold into one draw; the copy is of the latest shown picture, asked by name. | R7.6 |
+| P-025 | With MSAA on Direct3D 12, bloom and scene anti-aliasing resolve the scene and then copy the resolved picture again: a second full-frame write and read (66 MB a copy at 4K with RGBA16F). | The resolved version is read where it lies: no copy. | R7.3 |
+| P-026 | Direct3D 12's present pass recreates its shader views every frame, and the post-process and bloom helpers build every descriptor table fresh (60 view-creation calls a frame with normal bloom). | Each target gets its views once; a pass's table copies them (on main as d5b2a0bb6); the planner's attachments keep their views; timing owed. | R7.4 |
+| P-027 | On Direct3D 12 HDR output, opening the 2-D layer takes two full-size conversion draws from the same source and closing it takes a third, every frame the HUD is drawn. | The merged after-scene instance writes the swap chain's picture once; the finding's own fix without MSAA is one draw into two targets. | R7.6 |
+| P-028 | Several size changes drain the whole GPU in the middle of a frame; the Direct3D 12 half is built, Vulkan, Direct3D 11 and Metal still wait. | A resized set is made beside the old and retired by the fence, on every renderer. | R7.7 |
+| P-030 | The frame-generation and FSR 3 paths call `vkDeviceWaitIdle` from the render thread in the middle of a frame; Metal's upscaler replacement waits too. | The same per-slot retire; the waits in window size, shutdown and `finish_pictures` stay. | R7.7 |
+| P-031 | The Metal scene pass always stores depth and stencil, MSAA stores the multisampled colour as well as resolving it, and no target is memoryless (`caps.memoryless` is computed and unused). | Stored only where read later; memoryless attachments where nothing is kept. | R7.3 |
+| P-049 | DLSS is created on the render thread inside `begin_frame`, after a full GPU wait, while FSR 3 and XeSS are created on a worker. | Own viewport per context; made on a worker beside the old one and taken when its fence passed; the old retired. | R7.7 |
+| P-050 | The FSR 3 frame-generation context is recreated mid-frame, with the command list open, after a full GPU wait. | Matched in `begin_frame`, made on a worker, frame generation off until taken; the old retired. | R7.7 |
+| P-053 | A resolve is recorded for each consumer even when nothing was drawn since the last resolve (Vulkan and Metal). | One resolve at the last write that is read; a pass closed with no draw is not begun. | R7.3 |
+| P-054 | Vulkan waits for the GPU in the middle of a frame whenever it makes a scene-sized target set (one barrier in its own submit, up to ten seconds), also for a key made again after it went idle. | The first layouts go on a pending list the frame's buffer drains first; the replaced set is retired to the frame slot. | R7.7 |
+| P-055 | Same finding as P-006, with exact lines: every Vulkan scene pass stores colour, depth and stencil; no variant drops what nothing reads; no attachment is transient. | As P-006. | R7.3 |
+| P-057 | Vulkan creates DLSS synchronously on the render thread; SGSR 2 is made there too. | DLSS as P-049 on a worker; SGSR 2 joins the worker path; the wait becomes the retire. | R7.7 |
+| P-058 | VMA is told Vulkan 1.1 even when the device and instance are 1.2 or 1.3 without ray tracing; no wrong behaviour, newer paths unused. | The lower of the instance's and the device's version; `allocator_api_version` and its test are already at main (7f4a07281): confirm and close. | R7.8 |
+| P-063 | Direct3D 11 scene anti-aliasing calls `record_scene_aa` with no trade and always copies the scene; Direct3D 12 and Vulkan trade the image. AA is off by default. | Direct3D 11 takes the scene as they do (`swap_scene_color` when `can_take_scene()`). | R7.3 |
+| P-290 | The frame's clears keep the console's copy-with-clear form: colour and alpha enables, a rectangle, alpha forced on unless a pixel-format flag is 1. | Each pass states its load action once in the renderer's terms; whether alpha exists is the target's format, known at load. | R7.3 |
+| P-293 | Seven render stability faults: an unbounded lost-device wait, the heap diagnostic, a picture-file thread that cannot start, an unchecked probe slot, a sampler overflow throw, the upload ring, the DLSS stub's signature. | Each fixed as listed in R7.8; the probe slot goes in S0.2.6 and the samplers with R2.2. | R7.8 |
+| P-295 | Five render core faults: `ProbeBook::answered` through a freed element, unchecked registry ids, Direct3D 12's blend on target 1, the dev program table's counts, a target pass that cannot begin leaves no loss. | Each fixed as listed in R7.8; `ProbeBook` goes in S0.2.6. | R7.8 |
+| P-296 | A target pass's picture keeps the console copy's channel forms; Direct3D 11, Vulkan and Metal remake each copy by a conversion draw. | Each copy target holds a native format stated at load, read through a swizzle in the material form; no conversion draw. | R7.3 |
+| P-298 | Direct3D 11: an infinite fence wait with an unchecked event, a spinning query path, a failed `ResizeBuffers` that retries for ever without reporting a lost device, an untimed surface lock. | Timed waits, a checked event, the HRESULT read and device loss sent to `restart_device`, bounded retries, the lock with the hand-over's timeout. | R7.8 |
+| P-305 | Vulkan stability: an unbounded join of a dropped upscaler creation, throws out of the frame on samplers, buffers and image-array growth, a failed post-process build left marked built, an untimed surface lock held after a throw. | The creation finished on a worker; sizes set at load with overflow reported and the draw skipped; a failed build left not ready; a null pipeline skips its pass; the lock scoped and timed. | R7.7 |
+| P-319 | The bloom is a quarter of the tablet's GPU time in the heaviest tour stop (scene 9.3 ms, bloom 3.1 ms, final picture 1.1 ms, of 13.5 ms). | The after-scene instance and a shorter phone bloom chain, measured for time and picture difference before it is offered. | R7.6 |
+
+
+---
+
+## R8 Effects in real units
+
+The game's screen effects still work in the console's numbers: depth is copied into an 8-bit colour picture and read back through an indirect lookup, masks ride in colour copies, settings are cut to bytes at every update, the blur is stretched for one wide shape only, the underwater warp is a fixed few texels at any resolution, the bloom copies the whole frame out and writes it back, and one blur grows with the cube of the screen's size. This package gives each effect its real inputs: depth read at full precision by name, masks in targets of their own, constants as floats written once a step, blur and warp sized from the picture, the blur's taps capped, and the bloom drawn into its own target so the composite only adds. A player sees smoother bloom fades, a blur and underwater warp that look the same at every shape and resolution, a cheaper blur at high resolution, and on HDR output a bloom that follows the real brightness.
+
+- **Design:** INV section 3's lines for P-185, P-198, P-207, P-213, P-289 (with the owner's answer of 11-19) and P-300 (P-301 has no line there; its row is its design), and INV section 2's "Screen" bullet (the console's shape found there); FM 2.5 (the pass list). No FM section covers R8: the rows' notes are the design.
+- **Needs first:** R7.3 (the planner's named depth and its loads and stores; the skeleton says R8 is after R7.3). P-300's row says it needs the planner's named depth (R7 landing 2).
+- **Rows:** 7 (P-300, P-198, P-213, P-185, P-301, P-207, P-289)
+
+### R8.1 P-300: passes read the depth target by name; masks in a target of their own
+
+- **What changes.** P-300's four faults, each its own item; the row closes when the last is done:
+  - Depth is copied into a half-size colour target and read back as 8-bit channels (`frame_depth.hlsl`). New: each pass reads the scene's depth target by name (FM 2.5, the planner's named versions).
+  - Depth of field reads that copy as alpha, blue and green less 128 through an indirect matrix and a ramp's alpha (`dof_final.hlsl`). New: it reads the depth target by name and its blur amount is a float from the focus curve (the ramp and the 8-bit copy themselves go with P-198 in R8.2).
+  - The screen blur compares an 8-bit depth capture with an 8-bit threshold (`screen_blur.hlsl`). New: the threshold is turned into the host's depth encoding once and compared in float.
+  - The fall-out field's mask is recovered from the same depth copy and the clip fill is masked by the screen's alpha rounded to 8 bits (`clip_fill.hlsl`). New: masks are written by their own draws into a one-channel target or the stencil and read by name.
+- **Where.** `runtime/src/render/materials/frame_depth.hlsl` (`:24-33`, `:26-29`), `dof_final.hlsl` (`:18-23`), `screen_blur.hlsl` (`:17-20`), `clip_fill.hlsl` (`:18-25`); on the game side `native/petari/src/Game/Screen/ImageEffectLocalUtil.cpp` (`:113-124`), `ScreenBlurEffect.cpp` (`:97`), `native/petari/src/Game/MapObj/FallOutFieldDraw.cpp` (`:100`). Lines as cited at 241395b49.
+- **Rows.** P-300 whole.
+- **Needs first.** R7.3.
+- **Old path.** none named by the sources: the old pass is replaced in the step. The gate compares the new pictures with the references; a change is approved at 16:9.
+- **Proof.**
+  1. Pictures compared at 16:9 and approved where they change; checked at 4:3, 21:9 and two resolutions (the skeleton's line for R8).
+  2. Replays identical (the row): no step reads these passes.
+  3. The depth of field, screen blur, fall-out field and clip fill pictures are compared on every renderer; the sources give no tolerance for them (read the gate's rule first).
+- **For a player.** Depth-based blur and fades edge more cleanly; no change in what is blurred.
+- **Read first.** ScreenBlurEffect's depth key of 240/255 (`ScreenBlurEffect.cpp:25`) reads this 8-bit copy; P-213's row says so. Move its comparison here, in float, and leave P-213's other parts to R8.3.
+
+### R8.2 P-198: depth of field reads depth at full precision and weighs the blur from the two distances
+
+- **What changes.** Today depth is averaged into a half-size RGBA8 target, read back as 8 bits less 128 and moved through an indirect matrix `diag(0.5*2^exp)` into a 128 by 2 ramp texture that is drawn each frame from the area's distances in bytes of the window depth. New: the final pass reads the depth buffer at full precision and computes the blur weight from the two distances (converted once from the disc's byte units); no ramp target and no 8-bit depth copy. The blur itself (quarter-size box) is modern already and stays.
+- **Where.** `native/petari/src/Game/Screen/DepthOfFieldBlur.cpp` (`:99-141`; also `:88` and `:144` as cited by FM 2.15), `ImageEffectLocalUtil.cpp` (`:113-124`), `runtime/src/render/materials/frame_depth.hlsl`, `dof_final.hlsl`. Lines as cited at 241395b49 or 6577392b5.
+- **Rows.** P-198 whole.
+- **Needs first.** R8.1 (the screen blur and fall-out field already moved off `frame_depth`).
+- **Old path.** none named by the sources: the ramp and the 8-bit copy are deleted in the step.
+- **Proof.**
+  1. Pictures compared at 16:9 and approved where they change; checked at 4:3, 21:9 and two resolutions.
+  2. `frame_depth.hlsl` is gone, and a whole-word search `git grep -n -w frame_depth -- runtime native tools` returns nothing (derived from the row's "no 8-bit depth copy" and its note that the screen blur and fall-out field share the copy; the whole-word form is needed because `over_frame_depth`, a field of the frame list, contains the same letters; its entry in the program list of `tools/dev/compile_programs.py` goes with the file).
+  3. `DepthOfFieldBlur.cpp` no longer draws the 128 by 2 ramp (derived from the row; read `:99-141` first).
+- **For a player.** The same depth-of-field look, free of the 8-bit steps in the blur's edge.
+- **Read first.** The sources give no focus-curve formula beyond "weighs the blur from the two distances"; read `DepthOfFieldBlur.cpp:99-141` first.
+
+### R8.3 P-213: image-effect constants as floats written once a step
+
+- **What changes.** P-213's faults, each its own item; the row closes when the last is done:
+  - The bloom's eased settings are floats and are cut to bytes at every update, two of them divided by 255 again (`ImageEffectState.cpp:103-113`). New: the passes take float constants written once a step.
+  - The bloom packs threshold, two tap weights and intensity times fade into one word of four bytes that every renderer unpacks (`BloomEffect.cpp:61-65`, `BloomEffectSimple.cpp:26-35`; for example `renderer_d3d11_scene.cpp:992`, `:1025`). New: float constants (threshold, weights, intensity); the packing and every renderer's unpack are deleted.
+  - The screen blur's alpha is a byte (`ScreenBlurEffect.cpp:75`). New: a float. (Its depth key of 240/255, `ScreenBlurEffect.cpp:25`, reads the 8-bit depth copy and moves in R8.1.)
+  - The bloom's selection compares in the console's intensity encoding (BT.601 16-235 with the 255/256 factor rounded to 8 bits, `kLargestIntensity` 235; `game_bloom.hlsl:130-134`, `game_bloom_shape.h:147-160`). New: the threshold turned once into the linear-luminance boundary that selects the same pixels.
+  A fade in or out of the bloom moved in 1/255 steps; it now moves smoothly. The authored byte targets of the area data stay as content.
+- **Where.** `native/petari/src/Game/Screen/ImageEffectState.cpp` (`:103-113`), `BloomEffect.cpp` (`:61-65`), `BloomEffectSimple.cpp` (`:26-35`), `ScreenBlurEffect.cpp` (`:75`, `:25`); the unpackers in each renderer (for example `runtime/src/render/d3d11/renderer_d3d11_scene.cpp:992`, `:1025`); `runtime/src/render/game_bloom.hlsl` (`:130-134`) and `runtime/include/galaxy/render/game_bloom_shape.h` (`:147-160`). Lines as cited at 241395b49.
+- **Rows.** P-213 whole (its blur depth key moved in R8.1).
+- **Needs first.** R8.1.
+- **Old path.** none named by the sources: the packed word and the byte cuts are deleted in the step; the unpack code is deleted in every renderer.
+- **Proof.**
+  1. Replays identical (the row: no step reads these constants).
+  2. Pictures compared at 16:9 and approved where they change (a fade now moves smoothly); checked at 4:3, 21:9 and two resolutions.
+  3. The bloom selects the same pixels as before at the threshold (the row's "selects the same pixels").
+  4. The four-byte pack at `BloomEffect.cpp:61-65` and `BloomEffectSimple.cpp:26-35` and each renderer's unpack are gone (the sources name no search term; read those sites).
+- **For a player.** Smooth bloom fades in and out instead of visible steps.
+- **Read first.** The sources do not give the new constant block's layout; read each renderer's unpack site before changing it.
+
+### R8.4 P-185 and P-301: the blur's vertical factor from the frame's aspect; the Gaussian's taps capped
+
+- **What changes.** P-185: the bloom's ring and the image effects' blur stretch their vertical radius by 1.333 when the screen is wide and 1.0 otherwise (`isScreen16Per9() ? 1.333f : 1.0f`), so the 16:9 shape is kept only at 16:9: at 21:9 and other wide shapes it is squashed and below 4:3 it is stretched. New: the factor is the frame's aspect over 4:3 (1.333 at 16:9 as now), read from the display aspect the camera and the layouts use. P-301: the Gaussian blur's sigma is its width as a fraction of the picture over one texel, so its taps per pixel, `ceil(3 sigma)`, grow with the target's size with no cap (the pass grows with the cube of the scale). New: a downsampled chain, or a fixed-tap kernel at a resolution chosen from the width, so the taps are bounded on every screen; the blur's shape as a fraction of the frame is kept.
+- **Where.** `native/petari/src/Game/Screen/BloomEffectSimple.cpp` (`:28`), `ImageEffectLocalUtil.cpp` (`:146`); `runtime/include/galaxy/display_aspect.h`; `runtime/src/render/materials/gaussian_blur.hlsl` (`:18-34`). Lines as cited at 241395b49.
+- **Rows.** P-185 whole; P-301 whole.
+- **Needs first.** nothing (R8 is after R7.3).
+- **Old path.** none named by the sources.
+- **Proof.**
+  1. P-185: tests at 4:3, 16:9 and 21:9 (the row); the picture at 16:9 equal to the old one.
+  2. P-301: replays identical; the blur's shape the same as a fraction of the frame at two resolutions; the taps per pixel bounded (the sources give no number; read the row first).
+- **For a player.** The bloom and blur keep their shape on every screen shape, and the blur no longer costs more as the screen gets larger.
+- **Read first.** The row says the aspect is "read from the display aspect the camera and layouts use"; read which value that is in the code (the sources do not name it) before writing the factor. The sources give no GPU-time measure for P-301, only that the taps are bounded.
+
+### R8.5 P-207: the underwater warp as a share of the picture
+
+- **What changes.** Today the underwater camera filter warps the picture by 0.05 screen texels per indirect step (the shader reads a step as `texel * 255 - 128`), at most about 6.4 pixels at any resolution: 1% of the console's 640, 0.17% at 3840, so the warp shrinks as the resolution grows and moves with dynamic resolution. New: the warp is a share of the picture (0.05 per step over the authored width), the same look at every size.
+- **Where.** `native/petari/src/Game/Screen/WaterCameraFilter.cpp` (`:43-44`); `runtime/src/render/materials/water_camera.hlsl`. Lines as cited at 6577392b5.
+- **Rows.** P-207 whole.
+- **Needs first.** nothing (R8 is after R7.3).
+- **Old path.** none named by the sources.
+- **Proof.**
+  1. Pictures compared at 16:9 and approved where they change; checked at 4:3, 21:9 and two resolutions: the warp is the same share of the picture at each.
+  2. The picture at the console's resolution equals the old one.
+- **For a player.** The underwater ripple looks the same on every screen and does not shrink at high resolution or when the resolution scale moves.
+- **Read first.** The sources give "the authored width" without a number here; read `WaterCameraFilter.cpp:43-44` and the layout width constant (`NebulaFrameClock.cpp`) first.
+
+### R8.6 P-289: the glow draws into its own target and the composite only adds; HDR bloom from the real brightness
+
+- **What changes.** P-289's parts, each its own item; the row closes when the last is done:
+  - The normal bloom copies the frame out of the scene target (`GameBloom::keep`, `copy_frame`), the game draws its glowing models over black into the same target, and the composite writes the kept scene back with the bloom added, or alone (`restore`): the console's frame copy and write-back around the glow pass. New: the glow models draw into a target of their own as a stated pass (FM 2.5), the scene stays in place, and the composite only adds.
+  - Every scene texel is clamped to 1 before the bloom, the HDR scene's too ("as the 8-bit scene target keeps it"). The owner's answer of 11-19: on HDR output the bloom comes from the real brightness (the unclamped energy), so HDR pictures change in look; the SDR look stays as made.
+  - Direct3D 11 does the same (`GameBloom::keep` copies the scene out before the glow pass). New: as above.
+  - Metal trades the scene colour for the bloom texture but ends and reopens the scene pass where the game's stream puts the bloom (a store and a load on a tiled GPU). New: the scene pass stays open.
+  - Vulkan ends the scene pass for the bloom. New: the scene pass stays open.
+- **Where.** `runtime/src/render/game_bloom.cpp` (`keep` `:345-351`, `copy_frame` `:207-233`, `restore` `:564-579`, `:560`), `game_bloom.hlsl` (`:5-6`, `:64-71`), `d3d11/game_bloom_d3d11.cpp` (`:201-205`), `mtl/renderer_mtl_fx.mm` (`RendererMtl::game_bloom` `:72-84`), `vk/renderer_vk_frame.cpp` (`:2087-2091`), `runtime/include/galaxy/render/frame_pass.h` (`:36`). Lines as cited at 241395b49. The row's "GameBloom::keep" in the Direct3D 12 file is `game_bloom.cpp`.
+- **Rows.** P-289 whole (the owner's question is answered: bloom from the real brightness on HDR output).
+- **Needs first.** R7.3 (the planner's instances).
+- **Old path.** none named by the sources: the frame copy and the write-back are deleted on every renderer in this step.
+- **Proof.**
+  1. Replays identical (the row).
+  2. Pictures compared at 16:9 and approved where they change: SDR the same as before; HDR output changes, with the new bloom from the unclamped energy approved.
+  3. On Metal and Vulkan the scene pass no longer ends for the bloom: `--diagnostics gpu-passes` on the tablet shows no extra store and load of the scene (derived from the row's note).
+  4. Checked at 4:3, 21:9 and two resolutions.
+- **For a player.** Glowing objects look the same on SDR displays; on HDR displays the glow follows the real brightness; on a tablet the bloom costs less.
+- **Read first.** The row's note for Vulkan: the bloom's scale (the frame's height over `kAuthoredLines`) is a division by a double, not an integer division. No change needed there.
+
+### Rows of this package
+
+| Row | Today | After | Closes at |
+| --- | --- | --- | --- |
+| P-300 | Depth is copied into a half-size colour target and read back as 8-bit channels; depth of field, the screen blur, the fall-out field and the clip fill read depth and masks through 8-bit colour copies. | The passes read the scene's depth target by name; blur amounts and thresholds in float; masks in a one-channel target or stencil, read by name. | R8.1 |
+| P-198 | Depth of field keeps the console's indirect lookup: depth averaged to 8 bits, moved through an indirect matrix into a 128 by 2 ramp drawn each frame. | The final pass reads the depth buffer at full precision and weighs the blur from the two distances, converted once from the disc's byte units. | R8.2 |
+| P-213 | Image-effect constants are cut to bytes at every update, the bloom packs four into one word every renderer unpacks, the blur's alpha is a byte, and a fade moves in 1/255 steps. | Float constants written once a step; the threshold as a linear-luminance boundary selecting the same pixels; authored byte targets stay as content. | R8.3 |
+| P-185 | The bloom's ring and the blur stretch their vertical radius by 1.333 on wide screens and 1.0 otherwise, so only 16:9 keeps the shape. | The vertical factor is the frame's aspect over 4:3 (1.333 at 16:9), read from the display aspect the camera and layouts use. | R8.4 |
+| P-301 | The Gaussian blur's taps per pixel, `ceil(3 sigma)`, grow with the target's size with no cap: the pass grows with the cube of the scale. | A downsampled chain or a fixed-tap kernel at a resolution chosen from the width; taps bounded on every screen; the shape as a fraction of the frame kept. | R8.4 |
+| P-207 | The underwater warp is 0.05 screen texels per step, about 6.4 pixels at any resolution, so it shrinks as the resolution grows. | The warp as a share of the picture (0.05 per step over the authored width), the same look at every size. | R8.5 |
+| P-289 | The normal bloom copies the frame out of the scene target and writes it back with the bloom added; every scene texel is clamped to 1 first, the HDR scene's too. | The glow draws into its own target as a stated pass, the composite only adds, on every renderer; HDR bloom from the real brightness (owner, 11-19). | R8.6 |
+
+
+---
+
+## R9 Texture and movie containers
+
+The game's cooked compressed textures keep the console's block form with its own colour mixes, and a GPU without BC1 support has every block converted at upload with approximate weights. The cooked movie file keeps the console's chain of frame headers, which is walked when a movie opens. This package makes the cook write each texture once in the forms devices sample, and gives the movie file a frame table in its header. A player sees the same pictures and movies; uploads and movie opens do less work, and a texture on a phone matches the disc's colours exactly instead of within a few 255ths.
+
+- **Design:** INV section 3's line "The console's texture compression and movie container" (P-291, P-292), and the rows' notes. No FM section covers R9.
+- **Needs first:** nothing stated in the skeleton.
+- **Rows:** 2 (P-291, P-292)
+
+### R9.1 P-291: each texture cooked in the forms devices sample
+
+- **What changes.** P-291's two faults, each its own item; the row closes when the last is done:
+  - The cooked `BLOCK4` blocks are BC1's layout with the console CMPR's 5/8 plus 3/8 mixes (`block4_astc.h:4-10`; `block4_interpolated_channel`, `texture_pack.h:44-47`). A GPU without BC1 gets every block transcoded to ASTC 4 by 4 at upload with weights 25/64 and 39/64, which come within 4.61 of a 255th (at main the upload calls `block4_astc::from_block4`, `texture_store.cpp:439`). New: the cook writes ASTC for phones, so the upload copies blocks and transcodes nothing.
+  - A BC1 GPU's own 2/3 plus 1/3 mix is not the record's. New: the cook writes BC1 with endpoints refit to give the console's colours.
+  Each texture is written once in the forms devices sample.
+- **Where.** `runtime/include/galaxy/render/block4_astc.h` (`:4-10`); `runtime/include/galaxy/render/texture_pack.h` (`block4_interpolated_channel`, `:44-47`); `runtime/src/render/texture_store.cpp` (the upload); `runtime/src/render/texture_pack.cpp`, `texture_pack_codecs.cpp`, `texture_pack_tests.cpp`; `runtime/include/galaxy/render/d3d11/texture_backend_d3d11.h`; the cook: `crates/nebula-import/src/cook/texture.rs`, `pack_texture.rs` and `native/include/nebula_cooked_texture.h` (found by a search for `BLOCK4`; the sources name the cook, not the files). Lines as cited at 241395b49.
+- **Rows.** P-291 whole.
+- **Needs first.** nothing.
+- **Old path.** none named by the sources: the old block form and the upload-time transcode are deleted when the cook writes the new forms and the three discs' game data is made again.
+- **Proof.**
+  1. Replays identical (the row).
+  2. Pictures compared on every renderer and approved where they change (a texture on a GPU without BC1 matches the console's colours more closely than within 4.61 of a 255th).
+  3. No call of `block4_astc::from_block4` remains in the upload (`texture_store.cpp:439` at main); `block4_astc::to_block4` (`:980`, which gives the record's blocks back for the picture dump) is read and goes or is rewritten for the new form (derived from the row; the weights 25/64 and 39/64 appear only in a comment, so a search for them proves nothing).
+  4. The game data for the three discs made again by the importer and the importer's tests pass (the sources give no test names for this step; `texture_pack_tests.cpp` exists, found by search).
+- **For a player.** The same pictures, with exact console colours on phones and GPUs without BC1; faster texture loads.
+- **Read first.** The row leaves two things to be read with the fix: which path a BC1 GPU takes, and on which thread the transcode runs today. The sources do not say how the endpoint refit's error is measured, nor whether a new store version is needed; read the row and the cook first.
+
+### R9.2 P-292: the movie file gets a frame table in its header
+
+- **What changes.** `NMOV` keeps the THP file's frame chain: each frame has a 16-byte header naming the next frame's size (the last names the first's), and playback walks the chain when a movie opens (`index_cooked_movie`), the form made for the console's streaming reads. New: the cook writes a frame table (offset and size per frame, and the audio rate too, which P-271 reads) in the header, and playback maps it. The frames stay the disc's (the owner's rule 5.H.4: movies are the disc's frames, unchanged).
+- **Where.** `runtime/src/render/movie_playback.cpp` (`index_cooked_movie`, `:737-782`; used at `:1270`); `runtime/src/render/movie_playback_tests.cpp`; `native/petari/src/Game/Screen/MovieStream.cpp` (`:58`, the `NMOV` magic check); the cook: `crates/nebula-import/src/cook/thp.rs` (`:167-174`, the chain's writer), `movie_cook.rs`, `movie_cook_tests.rs` (the last two found by listing; the sources name `thp.rs`). Lines as cited at 241395b49.
+- **Rows.** P-292 whole.
+- **Needs first.** nothing. G6.6 (P-271's audio rate) reads the field this step writes.
+- **Old path.** none named by the sources: the chain walk at open is deleted when playback maps the table and the cook writes it.
+- **Proof.**
+  1. Replays identical (the row).
+  2. The same frames play in the same order as before: the table's offsets and sizes equal what the chain walk gives for every movie of the three discs (derived from the row's "the frames stay the disc's").
+  3. `movie_playback_tests` and `movie_cook_tests` pass (existing files, found by search).
+  4. `index_cooked_movie`'s walk of the frame chain (`movie_playback.cpp:737-782`) is gone (derived from the row).
+- **For a player.** Nothing visible: movies open a little faster and play the same frames.
+- **Read first.** The sources give no field layout for the table beyond "offset and size per frame, the audio rate too"; read `thp.rs:167-174` and `index_cooked_movie` first. `tools/verify/moviecheck.py` exists (found by listing, not named by the sources): read whether it applies to the proof.
+
+### Rows of this package
+
+| Row | Today | After | Closes at |
+| --- | --- | --- | --- |
+| P-291 | The cooked `BLOCK4` blocks are BC1's layout with the console CMPR's 5/8 and 3/8 mixes; a GPU without BC1 gets every block transcoded to ASTC at upload with weights within 4.61 of a 255th. | The cook writes each texture once in the forms devices sample: BC1 with refit endpoints, and ASTC for phones; the upload copies blocks. | R9.1 |
+| P-292 | `NMOV` keeps the THP frame chain: each frame header names the next frame's size, and playback walks the chain at open. | The cook writes a frame table (offset and size per frame, the audio rate too) in the header and playback maps it; the frames stay the disc's. | R9.2 |
+
+
+---
+
+## R10 Layouts and the 2D screens
+
+The cooked layout file (`NLYT`, with its animations `NLAN`) keeps the console layout's field widths and codes: 16-bit pane links, 16-character names, 8-byte user data, the material's blend and compare in the console's packed codes, images found by walking the disc's TPL container by byte offsets, and no check on any index or count. The layouts are also drawn on the console's anamorphic 16:9 canvas, where one unit is 4/3 wider than tall and flagged panes are narrowed by 0.75 (which Nebula's own screens then undo). This package writes the layout file's next version, moves the readers to it, deletes the old version, fixes four more places that find things by memory address, texture size or a fixed bit count, and moves the layouts to square units. A player sees the same screens; a layout can have more panes, longer names and more language panes than the console's limits, and a damaged or added layout is refused with a message instead of hanging or writing past an array.
+
+- **Design:** INV section 2's bullet "Layouts" and the "Screen" bullet's first item (the layouts' anamorphic canvas), INV section 3's lines for P-184, P-197, P-199, P-200, P-210, P-218, P-229, P-230; the rows' notes (the harness's reports of 11-18). No FM section covers R10. The owner's rule 5.H.3: nothing shared may cap what added content adds.
+- **Needs first:** nothing stated in the skeleton. P-184's row ties its layout half to R3 (the cook's pass state word and the draw's use of it, P-157 and P-151) and P-229's to the store texture ids (P-155, R4.9); see "Read first" of R10.1.
+- **Rows:** 8 (P-218, P-229, P-230, P-184, P-199, P-200, P-210, P-197). Also P-155 (part): the glyph sheet found by its bytes' address, in R10.1 (plan decision); the row is in R2's file and closes at the later of R4.9 and R10.2.
+
+### R10.1 The layout file's next version, cooked beside the old
+
+- **What changes.** The cook writes a new layout version beside the old, and a test proves every layout of the three discs reads the same from both. The new version holds, by row (each row's faults are their own items; a row closes when the last is done):
+  - P-218 (limits): panes link by 32-bit indices (today `UiPaneData` uses 16-bit indices with `cUiNone16` as "none", so a layout holds at most 65,535 panes); a pane's name is kept whole and resolved to an id at load (today in 16 characters, found by its first 16, so two names alike in their first 16 are one); user data is length-prefixed (today 8 bytes). The row also names the material's name in 20 characters (`Material.hpp:139`), the group's in 16 (`Group.hpp:37`), the animations' counts and frame size cut to 16 bits (`Animation.cpp:184-186`, `:201`), a layout animation's frame end returned as `s16` (`LayoutUtil.hpp:207-209`) and the layout's alpha set as a byte (`LayoutUtil.cpp:141-149`).
+  - P-229 (textures in the 2D path), three faults. `TexMap::ReplaceImage` walks the cooked TPL container at run time by byte offsets (the disc's version 2142000, an image count, a descriptor table, 16-bit sizes and the console's texel format code; the cook only put it in host order): each TPL image becomes a store texture with a host format and an id (P-155's step), swapped by id. A texture-pattern animation swaps raw TPL pointers (`Animation.cpp:150-158`): it swaps by id. The font sheets keep the console's texel format codes (I4 to RGBA8) and the glyph writer decides intensity, coverage or colour by a switch on that code at every glyph: the cook writes the sheet's kind in the renderer's terms and the font's material form is fixed at load.
+  - P-155 (part) (plan decision): a glyph sheet found by the address of its bytes (`ResFontBase.cpp:186-191`; INV, the text line "as P-155's textures"). It is named by a host id and a sampler decided at load, with P-229, which names the font's files (the sources give no further form; read the file first).
+  - P-184 (the layout material): the cook writes the material's pass state word (`PassState`) and the alpha compare in the renderer's terms, and the coordinate generators in a form the draw copies; today `UiMaterialData` keeps the console's blend codes (type, factors, op), the alpha compare packed as two compares in a byte and the generators as type, source and matrix, and `Material::Setup` turns the blend into the renderer's codes at every draw. The 2D material's colours (`Ui::Material::mRegisterColors`, the console's signed register form `NebulaColor16`, -1024 to 1023 for -4 to 4) become floats in the renderer's terms, as P-157 does for the 3D material; they are written by `NebulaUi::paint` and read by the achievement toast and the tag processor.
+  - P-230 (cooked layouts trusted): the cook checks every index, count and offset and refuses a bad record with a message. Its faults, each a check: a texture-pattern key indexes the TPL list unchecked (`Animation.cpp:155-157`); the bind loops count a 32-bit content count with a 16-bit variable (`:232`, `:256`), so 65,536 or more never ends, and the frame size and content count are cut to 16 bits in silence (`:184-186`, `:201`); a pane's parent and a group's members index the pane table unchecked (`Layout.cpp:275`, `Group.cpp:10-12`); a TPL with no image divides by zero and no offset is checked against the file (`TexMap.cpp:53-60`); `TexCoordAry::Copy` writes past its room (`UiCommon.cpp:122-131`); a negative LOD bias is kept in a 16-bit field and read back unsigned, -1.0 as 255.0 (`TexMap.hpp:74-76`, `:90-92`): it is kept as a float (P-229's sampler at load).
+- **Where.** Format and records: `native/petari/include/Game/Ui/UiData.hpp` (`:9` the magic, `:10` `cUiNone16`, `:46-51` `UiPaneData`, `:59` user data, `:163-182` `UiMaterialData`), `Pane.hpp` (`:154` `NameText<17>`, `:155`), `Material.hpp` (Ui: `:111-134` the register colours, `:139` the name), `Group.hpp` (`:37`), `TexMap.hpp` (`:74-76`, `:90-92`), `Font.hpp` (`:20`), `FontResourceFormat.hpp` (`:45`), `native/petari/include/ModelFileNumbers.h` (`:28-47` the codes the material record keeps), `native/petari/include/Game/Screen/LayoutManager.hpp` (`:79-81`), `Game/Util/LayoutUtil.hpp` (`:207-209`). Readers: `native/petari/src/Game/Ui/Layout.cpp` (`:249-257` `Layout::Build` refuses another magic or version; `:275`), `Material.cpp` (`:141`, `:535` `Setup`, `:569-570`, `:614-638`, `:702-714`), `Animation.cpp` (`:150-158`, `:184-186`, `:201`, `:232`, `:256`), `Group.cpp` (`:10-12`), `TexMap.cpp` (`:43-64`), `UiCommon.cpp` (`:73`, `:122-131`), `CharWriter.cpp` (`:83-95`), `native/petari/src/Game/Screen/LayoutCoreUtil.cpp` (`:16-20`), `Game/Util/LayoutUtil.cpp` (`:141-149`), `Game/Screen/NebulaUi.cpp` (`:30-54`), `NebulaAchievementToast.cpp` (`:197`), `CustomTagProcessor.cpp` (`:28`, `:298-299`). The cook: `crates/nebula-import/src/cook/ui_layout.rs` (the `NLYT` and `NLAN` magics), `layout_anim.rs`, `layout_patch.rs`, `layout_json.rs`; its tests `ui_layout_tests.rs`, `layout_json_tests.rs` (found by a search for `NLYT`; the sources name the cook, not the files). Lines as cited at 241395b49.
+- **Rows.** P-218, P-229, P-184 and P-230: their cook and format parts (each closes at R10.2, when the readers use them). P-155 (part): the glyph sheet found by its bytes' address (the row closes at the later of R4.9 and R10.2).
+- **Needs first.** nothing stated in the skeleton.
+- **Old path.** The old version is cooked and read beside the new until R10.2 deletes it; the switch between the two is the layout's version (the loader refuses another magic or version today, `Layout::Build`).
+- **Proof.**
+  1. A test that every layout of the three discs reads the same from the old and the new version (the skeleton's line): panes, names resolved, user data, materials, animations and images equal.
+  2. The cook refuses a record built to break each check P-230 lists (an unchecked pattern key, a content count of 65,536 or more, a parent or group member out of range, a TPL with no image, an offset past the file, a texture-coordinate copy past its room, a negative bias); the sources name no such test, so one is written per listed fault (read the row and the code first).
+  3. The importer's tests (`ui_layout_tests.rs`, `layout_json_tests.rs`) pass.
+- **For a player.** Nothing visible yet: the new version is only written and tested.
+- **Read first.** P-184's row says the layout half goes "with E3 steps 1 (P-157, the cook) and 3 (P-151, the draw)": read where R3.1 and R3's draw landings stand and take the pass state word and compare form from them. P-229's "store textures by id" rests on P-155's ids held by `GameTexture` (R4.0 and R4.9). The layout material's ambient write goes in R6.7, not here (the row's placement note).
+
+### R10.2 The readers move to the new version; the old version is deleted
+
+- **What changes.** `Layout::Build`, the animation resource, `TexMap`, the font and the material read the new version only:
+  - Names are compared whole, by id; links are 32-bit (P-218).
+  - Indices, counts and offsets are checked as the cook checked them and a bad record is refused with a message (P-230, in the readers): the unchecked texture-pattern key, the 16-bit counts that never end at 65,536, the unchecked parent and group members, the TPL with no image, `TexCoordAry::Copy` past its room, the bias read as a float.
+  - Images are swapped by store texture id, in `TexMap` and in the pattern animation; the glyph writer no longer switches on the console's texel code (P-229).
+  - `Material::Setup` copies the pass state and compare instead of mapping the blend at every draw, and the 2D material's colours are floats (P-184).
+  The old version's reader branches and the cook's old writer are deleted.
+- **Where.** The readers listed in R10.1's "Where". `Animation.cpp:150-158` (pattern swap by id), `TexMap.cpp:43-64` (`ReplaceImage`), `CharWriter.cpp:83-95`, `Material.cpp:702-714`.
+- **Rows.** P-218, P-229, P-184, P-230 whole (P-184's ambient write goes in R6.7).
+- **Needs first.** R10.1.
+- **Old path.** The old layout version, its cook writer and its readers: deleted in this step.
+- **Proof.**
+  1. Replays identical (P-229's row).
+  2. Picture comparisons of every layout at 4:3, 16:9 and 21:9 before and after, equal (derived from the skeleton's R10.1 line and P-197's proof; nothing is meant to draw differently here).
+  3. A layout with more than 65,535 panes, two pane names alike in their first 16 characters, and user data over 8 bytes loads and finds the right panes (the row's three limits; the sources name no test, so one is written).
+  4. A search for `cUiNone16`, `NameText<17>` and the TPL container walk (`TexMap::ReplaceImage`'s offset walk) returns nothing (derived from the rows).
+- **For a player.** The same screens. Added content can have bigger layouts and long pane names; a damaged layout is refused instead of freezing.
+- **Read first.** The sources do not give the new version's field layout; read `UiData.hpp` and the cook's `ui_layout.rs` first.
+
+### R10.3 P-199, P-200, P-210: the dummy image by name, language marks sized to the pane, the A button's pictures by name
+
+- **What changes.**
+  - P-199: `LayoutManager::replaceIndDummyTexture` finds the layout's `IndDummy.tpl` images by comparing image pointers with the resource's address range inside the archive's bytes. New: the layout's texture list names `IndDummy.tpl` and the swap goes by that entry. The readall harness also flagged `:602-639`.
+  - P-200: a layout's language panes are marked in a `BitFlag<128>`; a pane with more than 128 children, as a layout added by content may have, keeps the other languages' panes past the 128th (`onBit` ignores them). New: the marks are sized to the pane's child count.
+  - P-210: `NebulaIcons::swapPane` finds the A button's two pictures in the `IconAButton` layout by a texture 48 or 40 texels square in the console's IA4 format and walks no deeper than 16 levels, so an added layout with another picture of that size and format has it replaced by the A icon, and one whose A picture is another size or format keeps the console's A. New: by the texture's name in the layout (as P-199), the whole tree walked.
+- **Where.** `native/petari/src/Game/Screen/LayoutManager.cpp` (`:597-642` the dummy swap; `:645-646`, `:34-130`, `:660-705` the marks, `onBit` at `:672-679`; the `BitFlag` template at `:45`, used as `BitFlag< 128 >` at `:645-646`); `native/petari/src/Game/Screen/NebulaIcons.cpp` (`:2368-2390`, the depth limit `:2384`). Lines as cited at 6577392b5 and 241395b49.
+- **Rows.** P-199, P-200, P-210 whole.
+- **Needs first.** R10.2 (names resolved to ids and images by store texture id).
+- **Old path.** none: the pointer-range search, the 128 bit marks and the size-and-format test are deleted in the step.
+- **Proof.**
+  1. A layout whose `IndDummy.tpl` image is not at the address range the old code expected still gets its swap by name (derived from the row).
+  2. A layout with more than 128 children keeps the language panes past the 128th (the row's fault, as a test).
+  3. An `IconAButton` layout with another picture of 48 or 40 texels in IA4 is not replaced, and one whose A picture is another size or format gets the A icon (both faults of the row, as tests).
+  4. Replays identical and pictures of the layouts unchanged at 16:9 (derived; nothing is meant to draw differently).
+- **For a player.** The A button shows its own picture on every layout; added layouts with many panes show their language panes.
+- **Read first.** The sources give no test names for these three; the proofs above are written from the rows' faults (read each row and the code first).
+
+### R10.4 P-197: square layout units; the 0.75 code and Nebula's own undoing of it go
+
+- **What changes.** Today the layouts are drawn on the console's anamorphic 16:9 canvas: `setupDrawForLayout` draws over `layout_width` units, which is 608 at every shape up to 16:9, so at 16:9 the 608 by 456 canvas fills the picture and one layout unit is 4/3 wider than tall. New: square layout units (the canvas 608 times 4/3 wide at 16:9, and wider shapes as now), the unflagged panes given the 4/3 width explicitly and the flagged panes nothing, so every picture stays the same. The row's faults and readers are all taken in this step (plan decision), each its own item; the row closes when the last is done:
+  - A pane the layout file flags for location adjust is narrowed back by 0.75 (`LayoutManager.cpp:200-211`, `:477-482`, `Pane.cpp:69`, `:185-187`, `LayoutUtil.cpp:669-678`). The 0.75 code goes.
+  - Nebula's own screens undo the narrowing again (`NebulaAchievementToast.cpp:388`, `NebulaUi.cpp:571-575` `readScreen`, `NebulaAchievementBoard.cpp:53`, `WipeRing.cpp:209`, `NebulaPaneKit.cpp:91-92`). They work in square units and the undoing goes.
+  - Two empty `isScreen16Per9` branches remain where the console adjusted an angle (`StarPointerCommandStream.cpp:91-92`, `StarPointerLayout.cpp:708-710`, whose ribbon and nozzle angles are taken in square screen units and handed to panes in layout units). They go.
+  - The pointer's hit tests use the same two-shape switch (`LayoutCoreUtil.cpp:93-116`: the 608 canvas unless `isScreen16Per9` and the display is wide), the canvas holder (`LayoutAspect.cpp:206-218`) and the HOME menu (`HomeButtonLayout.cpp:75`, `NebulaHomeMenu.cpp:35-37`, told only `isScreen16Per9`). One canvas from the real aspect serves them all.
+  - The anchors keep the two shapes: full-screen backings and cinema bars get a canvas-sized draw only when the canvas is "wide" (`Layout.cpp:409-432`, `Anchor.hpp:22-26`, `:44`), and a slide's off-screen x is in 16:9 units.
+  - The switch's input is the console's widescreen setting kept as a host setting of 0 or 1 (`NebulaSystemSettings::isWidescreen`, `NebulaSystemSettings.cpp:23-25`), and the host answers it with 1 on every screen (`host_main.cpp:3590-3591`), so every reader's 4:3 branch is dead while a display shape is given. The setting and `NebulaDisplay.wide` (`nebula_game_api.h:376-378`, set at `NebulaFrameClock.cpp:43`) are read together at `CameraContext.cpp:46`, `MultiSceneActor.cpp:54`, `LayoutAspect.cpp:210`, `LayoutCoreUtil.cpp:95`, `:107`, `NebulaUi.cpp:571`, `WipeRing.cpp:22`, `:206`, `DrawUtil.cpp:118` and `ScreenUtil.cpp:89`; the dead branches are read and removed.
+  - The screen's width and aspect follow the flag too: 608 or 832 units and 16:9 unless the display reports wide (`MR::getScreenWidth`, `getScreenAspect`, `ScreenUtil.cpp:88-100`; `isScreen16Per9` is the setting, `SystemUtil.cpp:105-107`).
+  - The camera's field of view is widened below 4:3 only under the 16:9 setting (`CameraContext.cpp:45-55`), and a shake's horizontal offset is scaled by 30 over `MR::getScreenWidth` (`CameraShaker.cpp:161-164`).
+  - The 2D particle pass's width is `MR::getScreenWidth` under the 16:9 setting and the 4:3 layout width otherwise (`ParticleDrawExecutor.cpp:39-48`); the star select's sky model is scaled about its centre by the layout width under the 16:9 setting on a wide display (`MultiSceneActor.cpp:54-66`).
+  - A movie takes the game's 4:3 path and crop only when the gameplay aspect equals 4:3 to 1e-10 and every other shape 16:9 (`presentation_content_aspect`, `runtime/include/galaxy/content_viewport.h:27-33`): the console's two screen modes. New: the movie fitted by its frames' aspect under one rule for any output.
+- **Parts closed here (plan decision).** Every reader that P-197's row lists, not only the layouts; the row closes when all are done:
+  - [ ] the 0.75 narrowing and Nebula's undoing of it; [ ] the two empty branches; [ ] the pointer's hit tests; [ ] the canvas holder; [ ] the HOME menu; [ ] the anchors; [ ] the host setting and the dead 4:3 branches; [ ] the screen width and aspect functions; [ ] the camera's field of view and the shake; [ ] the 2D particle pass; [ ] the star select's sky model; [ ] the movie's two screen modes.
+- **Where.** `native/petari/src/Game/Util/DrawUtil.cpp` (`:113-126`, `setupDrawForLayout`; `:118`); `native/petari/src/Game/System/NebulaFrameClock.cpp` (`:43`, `:46`, `layout_width`); `native/petari/src/Game/Ui/Pane.cpp` (`:69`, `:185-187`); `native/petari/src/Game/Screen/LayoutManager.cpp` (`:200-211`, `:477-482`); `native/petari/src/Game/Util/LayoutUtil.cpp` (`:669-678`); the readers named above: `LayoutCoreUtil.cpp`, `LayoutAspect.cpp`, `HomeButtonLayout.cpp`, `NebulaHomeMenu.cpp`, `Layout.cpp`, `Anchor.hpp`, `ScreenUtil.cpp`, `SystemUtil.cpp`, `CameraContext.cpp`, `CameraShaker.cpp`, `ParticleDrawExecutor.cpp`, `MultiSceneActor.cpp`, `NebulaUi.cpp`, `NebulaAchievementToast.cpp`, `NebulaAchievementBoard.cpp`, `WipeRing.cpp`, `NebulaPaneKit.cpp`, `StarPointerCommandStream.cpp`, `StarPointerLayout.cpp`; `native/petari/src/Game/System/NebulaSystemSettings.cpp` (`:23-25`); `native/host/host_main.cpp` (`:3590-3591`, the answer 1); `native/include/nebula_game_api.h` (`:376-378`, `NebulaDisplay.wide`); `runtime/include/galaxy/content_viewport.h` (`:27-33`, `presentation_content_aspect`). Lines as cited at 241395b49 and 6577392b5.
+- **Rows.** P-197 whole.
+- **Needs first.** R10.2 (the layout file's flags read in the new version). The sources give no order against R8.4 (P-185 reads the same display aspect).
+- **Old path.** The 0.75 narrowing, Nebula's undoing of it and the two empty branches are deleted in the step; the sources name no switch.
+- **Proof.**
+  1. Picture comparisons of every layout at 4:3, 16:9 and 21:9 before and after: equal (the row); on every screen shape, approved where they change (the skeleton).
+  2. The pointer's hit tests agree with the drawn panes at the same shapes (the row's note lists them as readers of the same switch).
+  3. The camera's field of view, a shake, the 2D particle pass, the star select's sky model and a movie at 4:3, 16:9 and 21:9: pictures equal where the rule is not meant to change them, approved where it does (derived from the skeleton's line; the sources give no tolerance).
+  4. The 0.75 narrowing at the cited sites, Nebula's undoing of it and the two empty branches are gone (derived from the row; read each site, the sources name no search term).
+- **For a player.** The same screens at every shape; added layouts and Nebula's own menus no longer need to correct for a stretched canvas.
+- **Read first.** The sources give each reader's modern form only as "one canvas from the real aspect" (and the movie's as one rule by its frames' aspect). The camera's and the sky's readers touch what the game draws, not only layouts: read each, keep the picture the same at every shape the layouts keep today, and record where a shape changes before approving it.
+
+### Rows of this package
+
+| Row | Today | After | Closes at |
+| --- | --- | --- | --- |
+| P-218 | The cooked layout keeps 16-bit pane links (at most 65,535 panes), 16-character names found by their first 16, and 8-byte user data. | 32-bit pane indices, names kept whole and resolved to ids at load, length-prefixed user data; a new `UiData` version. | R10.2 |
+| P-229 | A layout image swap walks the cooked TPL container by byte offsets at run time; pattern animations swap raw pointers; font sheets keep the console's texel format codes, switched on per glyph. | Each TPL image a store texture with a host format and an id, swapped by id; the sheet's kind written by the cook in the renderer's terms. | R10.2 |
+| P-230 | A mod's or damaged layout reads or writes past arrays, divides by zero or hangs: unchecked indices, 16-bit counts, a TPL with no image, an unbounded copy, a negative bias read back unsigned. | The layout build, the animation resource and the cook check every index, count and offset at load and refuse a bad record with a message; the bias a float. | R10.2 |
+| P-184 | A layout material's record keeps the console's blend codes, a packed alpha compare and coordinate generators, turned into the renderer's codes at every draw; 2D colours in the signed register form. | The cook writes the pass state word and compare in the renderer's terms; the draw copies them; colours are floats. The ambient write goes in R6.7. | R10.2 |
+| P-199 | `replaceIndDummyTexture` finds the layout's `IndDummy.tpl` images by comparing image pointers with the resource's address range inside the archive. | The layout's texture list names `IndDummy.tpl`; the swap goes by that entry. | R10.3 |
+| P-200 | A layout's language panes are marked in a `BitFlag<128>`; a pane with more than 128 children keeps other languages' panes past the 128th. | The marks sized to the pane's child count. | R10.3 |
+| P-210 | `NebulaIcons::swapPane` finds the A button's pictures by a 48 or 40 texel square IA4 texture, walks at most 16 levels, and can swap or miss an added layout's picture. | The picture found by the texture's name in the layout (as P-199), the whole tree walked. | R10.3 |
+| P-197 | The layouts are drawn on the console's anamorphic 16:9 canvas: a unit is 4/3 wider than tall; flagged panes are narrowed by 0.75, and Nebula's own screens undo it. | Square layout units; unflagged panes given the 4/3 width, flagged panes nothing; the 0.75 code and the empty branches go; one canvas from the real aspect. | R10.4 |
