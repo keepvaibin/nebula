@@ -7,6 +7,6 @@ $vs = & vswhere.exe -latest -property installationPath
 $vcvars = Join-Path $vs "VC\Auxiliary\Build\vcvars64.bat"
 $ctest = Join-Path $vs "Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\ctest.exe"
 $only = ""
-if ($Name) { $only = " -R `"^" + $Name + '$`" --no-tests=error' }
+if ($Name) { $only = ' -R "^' + $Name + '$" --no-tests=error' }
 cmd.exe /d /c "call `"$vcvars`" >nul && cd /d `"$Dir`" && `"$ctest`" --output-on-failure --timeout 600 -j $Jobs$only"
 exit $LASTEXITCODE

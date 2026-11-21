@@ -181,7 +181,7 @@ AGENT_COMMANDS = (
      "powershell.exe -NoProfile -ExecutionPolicy Bypass -File {folder}/tools/gate/ctest.ps1 -Dir {build}/msvc -Name <name>", ""),
     ("engine", "Run one engine test by name on Direct3D 12 (window hidden, no sound; the names are in tests/engine/suite.json).",
      "python -X utf8 -I {folder}/tools/lumacore/luma_test.py run {folder}/tests/engine/suite.json --bin {build}/bins --pak {pak} "
-     "--work {build}/runs/engine --who agent --lock {build}/runs/engine.lock --renderer d3d12 --test <name>", ""),
+     "--work {build}/runs/engine --who agent --lock {build}/engine.lock --renderer d3d12 --test <name>", ""),
     ("tour", "Play the tour's 12 stops on Direct3D 12 with the step hash on (window hidden, no sound).",
      "python -X utf8 -I {folder}/tools/gate/agent_tour.py --bin {build}/bins --pak {pak} --work {build}/runs/tour --renderer d3d12",
      "For the next command play the 20 stops whose hashes are recorded: the same line with --stops recorded added."),
