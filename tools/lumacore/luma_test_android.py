@@ -20,9 +20,12 @@ folder, writes the plan and judges the files that come back; this module only mo
   1. the run's folder, with the device's paths in its plan and the test's hooks in env.txt (the test build's
      Harness.java sets them), is packed, pushed and unpacked into files/harness/<name>;
   2. the game screen starts with the intent extras nebula.harness and nebula.seconds, and is waited for: its process
-     gone, or the limit and a minute (then stopped: a timeout);
+     gone, or the limit and a minute (then stopped). While it runs, the game's step lines are read from the device's
+     log every PROGRESS_POLL_SECONDS (luma_test.Progress): a process that took no step for luma_test.HANG_SECONDS is
+     stopped as hung (verdict hung, kind fail); one still stepping when the limit passed is too-slow (kind env);
   3. how the process ended comes from Android's own record (ApplicationExitInfo), which Android writes a little after
-     the process is gone: it is read again until the record is there;
+     the process is gone: it is waited for until the record is there, at most EXIT_RECORD_SECONDS; a record that never
+     comes is the verdict no-exit-record (kind tool), never a verdict on the game;
   4. the folder comes back over the local one, the app's log of the run is run.log, the device copy is removed.
 start-check is the push workflow's start check (host_main.cpp run_start_check) on a device or an emulator: the test
 app starts with the intent extra nebula.start_check (its Harness.java gives the game a run folder of its own and no
@@ -51,8 +54,12 @@ GAME_PROCESS = PACKAGE + ":game"  # AndroidManifest.xml: GameActivity android:pr
 ABIS = {"arm64-v8a": "android-arm64", "x86_64": "android-x64"}
 # The game's own log tags in logcat (platform/sdl: __android_log_print) and the system's for a crash.
 LOG_TAGS = ("Nebula", "NebulaGame", "libc", "DEBUG", "AndroidRuntime")
-# How long Android may take to write its exit record after the process is gone.
-EXIT_RECORD_SECONDS = 5.0
+# The longest the runner waits for Android's exit record after the process is gone. The record is waited for, not for a
+# time: it usually comes within tens of milliseconds, and a busy device can take far longer. A record that is not there
+# after this long is no verdict on the game: the run's kind is tool ("the tablet gave no exit record").
+EXIT_RECORD_SECONDS = 60.0
+# How often the runner reads the game's step lines from the device's log while the game runs (an adb call each).
+PROGRESS_POLL_SECONDS = 5.0
 # The start check's run folder (files/harness/<it>) and how long the game process may take to appear after am start.
 START_CHECK = "start-check"
 START_SECONDS = 60.0
@@ -105,15 +112,24 @@ class Device:
         code, out = self.shell("pidof " + GAME_PROCESS)
         return out.strip() if code == 0 else ""
 
-    def exit_record(self, pid):
+    def log_tail(self, pid):
+        """The last lines the game process `pid` wrote to the device's log under its tag, the host's step lines among them
+        (luma_test.PROGRESS_LINE): what the runner sees of the game's progress while it runs. The game's stdout reaches
+        logcat as tag Nebula (host_window_sdl.cpp); --pid keeps a process that took the place of another apart."""
+        r = self.adb("logcat", "-d", "-v", "raw", "--pid=%s" % pid, "-t", "200", "-s", "Nebula")
+        return r.stdout.decode("utf-8", "replace").replace("\r\n", "\n") if r.returncode == 0 else ""
+
+    def exit_record(self, pid, clock=time.time, sleep=time.sleep):
         """Android's record of the game process's end (dumpsys activity exit-info): its exit status when it ended
         itself (reason 1, EXIT_SELF), 128 + the signal when a signal ended it (reason 2), 134 for a crash (reasons 4
         and 5, CRASH and CRASH_NATIVE: the abort the crash reporter raises); None when something else ended it.
         Android writes the record after the process is gone (tens of milliseconds later, more on a busy device), and
         first with reason 0 (UNKNOWN), its real reason and status following: until the record is there with a known
-        reason this asks again, for up to EXIT_RECORD_SECONDS. Returns (found, code)."""
-        began = time.time()
+        reason this asks again, for up to EXIT_RECORD_SECONDS (read on `clock`, waited with `sleep`). Returns (found,
+        code): found False is a record that never came, which is the tool's fault and no verdict on the game."""
+        began = clock()
         deadline = began + EXIT_RECORD_SECONDS
+        pause = 0.1
         while True:
             code, out = self.shell("dumpsys activity exit-info " + PACKAGE)
             lines = out.splitlines() if code == 0 else []
@@ -122,23 +138,25 @@ class Device:
                 if (" pid=%s " % pid) not in line + " " or i + 1 >= len(lines):
                     continue
                 # What was read, for the run's folder (exit-info.txt).
-                self.exit_seen = "pid %s: found after %.2f s\n%s\n%s\n" % (pid, time.time() - began, line.strip(),
+                self.exit_seen = "pid %s: found after %.2f s\n%s\n%s\n" % (pid, clock() - began, line.strip(),
                                                                          lines[i + 1].strip())
                 m = re.search(r"process=(\S+) reason=(\d+) .*status=(-?\d+)", lines[i + 1])
                 if not m or m.group(1) != GAME_PROCESS:
                     return True, None
                 reason, status = int(m.group(2)), int(m.group(3))
-                if reason == 0 and time.time() < deadline:
+                if reason == 0 and clock() < deadline:
                     settling = True  # written, its reason not yet: asked again
                     break
                 return True, {1: status, 2: 128 + status, 4: 134, 5: 134}.get(reason)
             if settling:
-                time.sleep(0.1)
+                sleep(0.1)
                 continue
-            if time.time() >= deadline:
-                self.exit_seen = "pid %s: no record after %.2f s; the last answer:\n%s" % (pid, time.time() - began, out)
+            if clock() >= deadline:
+                self.exit_seen = "pid %s: no record after %.2f s; the last answer:\n%s" % (pid, clock() - began, out)
                 return False, None
-            time.sleep(0.1)
+            # Asked again a little less often the longer it takes: adb calls do not hurry a record that is slow.
+            sleep(pause)
+            pause = min(1.0, pause * 1.5)
 
 
 # What a start check that ended without the game's end shows: the system's lines about starting the app and the
@@ -229,18 +247,18 @@ def host_for(abi):
     return host
 
 
-def run_one(lt, device, test, args, run_folder, previous):
+def run_one(lt, device, test, args, run_folder, previous, clock=time.time, sleep=time.sleep):
     """luma_test.run_one on an Android device: the same layout, the start over adb. A failure while the device no
     longer answers adb (unplugged, asleep with USB off) is lt.DeviceLost: the device went, not the test."""
     try:
-        return run_on_device(lt, device, test, args, run_folder, previous)
+        return run_on_device(lt, device, test, args, run_folder, previous, clock, sleep)
     except (lt.SetupFailed, RuntimeError, OSError, subprocess.TimeoutExpired) as error:
         if not device.answers():
             raise lt.DeviceLost("%s left adb during the test (%s)" % (device.serial, str(error)[:160])) from error
         raise
 
 
-def run_on_device(lt, device, test, args, run_folder, previous):
+def run_on_device(lt, device, test, args, run_folder, previous, clock=time.time, sleep=time.sleep):
     for m in test["mods"]:
         if m["install"] == "import":
             raise lt.HarnessError("install import: the Android app imports with its own screen, not a start argument")
@@ -306,22 +324,37 @@ def run_on_device(lt, device, test, args, run_folder, previous):
 
     device.shell("am force-stop " + PACKAGE)
     device.adb("logcat", "-c")
-    began = time.time()
+    began = clock()
     code, out = device.shell("am start -W -n %s --es nebula.harness %s --ei nebula.seconds %d" % (ACTIVITY, name, limit))
     if code != 0 or "Error" in out:
         raise lt.SetupFailed("am start: %s" % out.strip()[:300])
     ended, game_pid, gone, starts = None, "", False, 1
+    # The game's progress is read from the device's log (lt.Progress): the limit below is the longest the run may take, and
+    # what its end means is judged by the steps (luma_test.py evaluate): hung when none came for lt.HANG_SECONDS while the
+    # process lived, too slow when the limit passed with steps still coming.
+    progress = lt.Progress(None, clock)
+    looked, hung, no_record = None, None, False
     deadline = began + limit + 60
-    while time.time() < deadline:
+    while clock() < deadline:
         now_pid = device.pid()
         if now_pid and game_pid and now_pid != game_pid:
             # The game started again (GameActivity.restartGame) between two looks: the new process is the run's.
             starts += 1
-            deadline = time.time() + limit + 60
+            deadline = clock() + limit + 60
+            progress.new_process()
+            looked = None
         if now_pid:
             game_pid = now_pid
+            if looked is None or clock() - looked >= PROGRESS_POLL_SECONDS:
+                looked = clock()
+                progress.feed_lines(device.log_tail(now_pid).split("\n"))
+                quiet = progress.quiet()
+                if quiet is not None and quiet >= lt.HANG_SECONDS:
+                    # No step for that long, the process alive: hung. The game writes no dump on Android.
+                    hung = {"seconds": int(quiet), "frame": progress.frame, "dumps": []}
+                    break
         elif game_pid:
-            found, ended = device.exit_record(game_pid)
+            found, ended = device.exit_record(game_pid, clock, sleep)
             (run_folder / "exit-info.txt").write_text(device.exit_seen, encoding="utf-8")
             if not found and device.pid() == game_pid:
                 # pidof answered nothing for a process that is still there (adb's answer lost, not the process):
@@ -334,17 +367,23 @@ def run_on_device(lt, device, test, args, run_folder, previous):
                     new_pid = device.pid()
                     if new_pid:
                         break
-                    time.sleep(1)
+                    sleep(1)
             if not new_pid:
                 gone = True
+                no_record = not found  # Android never wrote its record of the end: the tool's fault (kind tool)
                 break
             starts += 1
             game_pid, ended = new_pid, None
-            deadline = time.time() + limit + 60
-        time.sleep(0.5)
+            deadline = clock() + limit + 60
+            progress.new_process()
+            looked = None
+        sleep(0.5)
     if not gone:
-        device.shell("am force-stop " + PACKAGE)  # past its limit: stopped, and the verdict says so (code None)
-    seconds = time.time() - began
+        if hung is None and game_pid:
+            progress.feed_lines(device.log_tail(game_pid).split("\n"))  # how the game stood as the limit passed
+        device.shell("am force-stop " + PACKAGE)  # past its limit, or hung: stopped, and the verdict says so (code None)
+        ended = None
+    seconds = clock() - began
 
     back = run_folder.parent / (run_folder.name + ".back.tar")
     r = device.adb("exec-out", "run-as %s sh -c 'cd %s/harness && tar -cf - %s'" % (PACKAGE, app_files, name))
@@ -368,7 +407,8 @@ def run_on_device(lt, device, test, args, run_folder, previous):
     device.run_as("rm -rf %s/harness/%s" % (app_files, name))
     log = device.adb("logcat", "-d", "-v", "raw", "-s", *LOG_TAGS).stdout
     (run_folder / "run.log").write_bytes(log.replace(b"\r\n", b"\n"))
-    return {"code": ended, "seconds": seconds, "frozen": frozen, "mods": placed, "exe": "GameActivity", "starts": starts}
+    return {"code": ended, "seconds": seconds, "frozen": frozen, "mods": placed, "exe": "GameActivity", "starts": starts,
+            "no_exit_record": no_record, **dict(progress.snapshot(), hung=hung)}
 
 
 def prepare(args):

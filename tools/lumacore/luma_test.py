@@ -118,15 +118,31 @@ class HarnessError(Exception):
 
 
 # The kind of result each verdict is (docs/plan/04-GATE-AND-MAIN.md section 9), the one place a test's kind is decided:
-#   fail  the game or the change is wrong: everything seen once the game has started (a crash, frames that stopped, an exit
-#         code other than 0, a check of the test that did not hold), and a game half's own stop (harness.stop) other than pass;
+#   fail  the game or the change is wrong: everything seen once the game has started (a crash, a game that completed no
+#         step for HANG_SECONDS while its process lived (hung), a run that reached its limit with no step in its last
+#         HANG_SECONDS (timeout), an exit code other than 0, a check of the test that did not hold), and a game half's own
+#         stop (harness.stop) other than pass;
 #   tool  the test tool broke: a test or file the runner itself must provide could not be read (harness-error), a run it
-#         could not set up or start (setup-failed), an exception of the runner's own;
-#   env   the machine was not fit: the disc's game not given, the device gone, the drive full (not-run, device-lost).
+#         could not set up or start (setup-failed), an exception of the runner's own, a picture or report the game writes at
+#         its exit that was not there OUTPUT_SECONDS after the game ended (output-missing), the tablet's exit record that
+#         never came (no-exit-record);
+#   env   the machine was not fit: the disc's game not given, the device gone, the drive full (not-run, device-lost), a run
+#         that was still taking steps when its time limit passed (too-slow).
+# No verdict depends on how long something took: a limit that fires is env unless the game made no step in its last
+# HANG_SECONDS (docs/plan/04-GATE-AND-MAIN.md, "Time limits in the test runner").
 # result.json carries it as "kind"; the gate reads it from there (tools/gate/kinds.py). The gate may change a fail to
 # flake or main afterwards; it never changes pass, tool or env.
-KINDS = {"pass": "pass", "fail": "fail", "crashed": "fail", "timeout": "fail", "harness-error": "tool",
-         "setup-failed": "tool", "not-run": "env", "device-lost": "env"}
+KINDS = {"pass": "pass", "fail": "fail", "crashed": "fail", "timeout": "fail", "hung": "fail", "harness-error": "tool",
+         "setup-failed": "tool", "output-missing": "tool", "no-exit-record": "tool", "not-run": "env", "device-lost": "env",
+         "too-slow": "env"}
+
+# The three lengths of time a verdict is judged by, all counted from the game's own step lines (Progress below):
+# no step for HANG_SECONDS while the game's process lives is a hang (fail); a pause of more than STALL_SECONDS and less
+# than that is written into the result as a stall line and counted, not a failure; what the game writes at its exit (the
+# pictures a test asked for, the loss report) is waited for up to OUTPUT_SECONDS.
+HANG_SECONDS = 120.0
+STALL_SECONDS = 10.0
+OUTPUT_SECONDS = 60.0
 
 
 def kind_of(verdict):
@@ -1779,13 +1795,114 @@ def run_one(test, renderer, args, run_folder, previous):
                 raise
             raise HarnessError("the game could not be started: %s" % error) from error
         with process:
-            code, starts, unwatched = watch_run(process, run_folder, exe.name, test["limit"] + 60)
+            code, starts, unwatched, steps = watch_run(process, run_folder, exe.name, test["limit"] + 60)
     seconds = time.time() - began
     return {"code": code, "seconds": seconds, "frozen": frozen, "mods": mod_ids, "exe": exe.name, "starts": starts,
-            "unwatched": unwatched}
+            "unwatched": unwatched, **steps}
 
 
-def watch_run(first, run_folder, exe_name, limit):
+# What the runner sees of a running game's progress: the host's own report (native/host/host_main.cpp, its main loop), one
+# line a second in the run's log whenever the game's step count has moved, "[  12.345] host: frame 721, file reads ...":
+# the host's clock, then the game's steps so far. The line is written on every platform (on Android it reaches logcat, tag
+# Nebula). A line is "a step was completed"; the host writes none before the first step, nor while no step is taken.
+PROGRESS_LINE = re.compile(r"^\[\s*(\d+\.\d{3})\] host: frame (\d+),")
+# The host's line near the start of every process (the host's clock is 0 there): a start of the game, the first or the one
+# that took the place of another (also ExecStarts').
+START_LINE = "boot: main at"
+
+
+class Progress:
+    """The steps a game has taken, read from its progress lines (PROGRESS_LINE) as its log grows (a file, or text handed to
+    feed_lines), and how long ago the last one was seen, on `clock`. The time before the first step of a process (its
+    start-up) is nobody's pause: quiet() is None until a step is seen, and again for each process that takes the place of
+    the one before (new_process). A line seen twice (a log read again from further back) counts once: only a step the host's
+    clock puts after the last one is a step."""
+
+    def __init__(self, log=None, clock=time.monotonic):
+        self.log = None if log is None else pathlib.Path(log)
+        self.clock = clock
+        self.offset = 0
+        self.rest = b""
+        self.new_process()
+
+    def new_process(self):
+        self.frame = None
+        self.stamp = None
+        self.last = None
+
+    def poll(self):
+        """Reads what the file has gained since the last poll (whole lines only)."""
+        if self.log is None:
+            return
+        try:
+            with open(self.log, "rb") as f:
+                f.seek(self.offset)
+                more = f.read()
+        except OSError:
+            return
+        self.offset += len(more)
+        lines = (self.rest + more).split(b"\n")
+        self.rest = lines.pop()
+        self.feed_lines((line.decode("utf-8", "replace") for line in lines), starts=True)
+
+    def feed_lines(self, lines, starts=False):
+        """Takes lines of the log in order. `starts`: each line is new to this reader (a file read on from where it was), so
+        the host's start line (START_LINE) says the game started again. Text read again from further back (a device's log
+        tail) is given without it: its start line is old news, and its process is told by new_process."""
+        for line in lines:
+            if starts and START_LINE in line:
+                self.new_process()
+                continue
+            m = PROGRESS_LINE.match(line)
+            if m is None:
+                continue
+            stamp = float(m.group(1))
+            if self.stamp is not None and stamp <= self.stamp:
+                continue
+            self.stamp, self.frame, self.last = stamp, int(m.group(2)), self.clock()
+
+    def quiet(self):
+        """Seconds since the last step was seen; None when this process has taken none."""
+        return None if self.last is None else self.clock() - self.last
+
+    def snapshot(self):
+        """What the verdict needs: whether a step was seen, how long ago the last was, and at which step the game stood."""
+        return {"stepped": self.last is not None, "quiet": self.quiet(), "frame": self.frame}
+
+
+def stalls_in(log_lines, after=STALL_SECONDS):
+    """[(seconds, frame)] for each pause between two progress lines of one process of more than `after` seconds on the
+    host's own clock (the lines are a second apart while the game steps), the frame being the last step before it. A line
+    whose time is before the one before, and the host's start line (START_LINE), are another process (the game starting
+    again): no pause is read across it."""
+    found, stamp, frame = [], None, None
+    for line in log_lines:
+        if START_LINE in line:
+            stamp = None
+            continue
+        m = PROGRESS_LINE.match(line)
+        if m is None:
+            continue
+        now = float(m.group(1))
+        if stamp is not None and now >= stamp and now - stamp > after:
+            found.append((int(now - stamp), frame))
+        stamp, frame = now, int(m.group(2))
+    return found
+
+
+def stall_line(seconds, frame):
+    """The line a pause is written as, in the result, on the console and in the run's summary."""
+    return "stall %d s at frame %d" % (seconds, frame)
+
+
+def hang_dump(run_folder, process=None):
+    """The dump step for a game that is judged hung and about to be ended. The host writes the dump itself, from outside
+    its own threads, when no frame came for 10 s in a test run on Windows (nebula-hang-*.dmp, host_main.cpp); this names what
+    it wrote, and the verdict says so. Elsewhere the game writes none, and the verdict says that."""
+    return sorted(p.name for p in pathlib.Path(run_folder).glob("nebula-hang-*.dmp"))
+
+
+def watch_run(first, run_folder, exe_name, limit, clock=time.monotonic, hang_after=HANG_SECONDS, dump=hang_dump):
     """The run's game to its end: the process the runner started and each one that took its place (the host's
     start-again: mods cooked, a mod's code chose other layers). The host writes "<process id> <creation time>" of the new
     process to <crash dumps>/restarted, the run folder here, just after starting it and before its own end. The new
@@ -1795,8 +1912,17 @@ def watch_run(first, run_folder, exe_name, limit):
     The file is read while the process that writes it still runs, and the new process is opened at once: an open
     handle keeps it findable with its exit code however long the old one takes to end, so a new process that ends
     first is still watched. Each process gets `limit` seconds and is ended at it (Popen's kill or Followed's); one
-    ended at its limit, or one that cannot be watched, ends every process that took its place too. Returns (the last process's exit code, or None when
-    one was ended at its limit; processes started; why one could not be watched, or None)."""
+    ended at its limit, or one that cannot be watched, ends every process that took its place too.
+
+    The limit is the longest the run may take; it does not say what the ending means. What the runner needs for that is the
+    game's own steps (Progress): a process whose last step was seen `hang_after` seconds ago is ended as hung, after
+    `dump(run_folder, process)` (the dump step: it returns the names of the dumps the game wrote), and what the last process
+    had done when it ended (a step ever, how long since the last) goes back with the rest. `clock` is the runner's clock for
+    all of it.
+
+    Returns (the last process's exit code, or None when one was ended at its limit or as hung; processes started; why one
+    could not be watched, or None; {"stepped", "quiet", "frame" as Progress.snapshot gives them, and "hung": None, or
+    {"seconds", "frame", "dumps"} for a process ended as hung})."""
     marker = run_folder / "restarted"
     seen = set()
     waiting = []
@@ -1840,9 +1966,12 @@ def watch_run(first, run_folder, exe_name, limit):
             state["unwatched"] = "the game started again more than 4 times"
         return True
 
+    progress = Progress(run_folder / "run.log", clock)
+    hung = None
     process = first
     while True:
-        deadline = time.time() + limit
+        progress.new_process()
+        deadline = clock() + limit
         code = None
         try:
             while True:
@@ -1851,30 +1980,42 @@ def watch_run(first, run_folder, exe_name, limit):
                     break
                 except subprocess.TimeoutExpired:
                     look(False)
+                    progress.poll()
                     if look_exec():
-                        deadline = time.time() + limit
+                        # The log is read to the end of the old start before the new one's steps are looked for.
+                        progress.poll()
+                        progress.new_process()
+                        deadline = clock() + limit
                     if state["unwatched"] is not None and execs is not None:
                         process.kill()
                         process.wait()
                         break
-                    if time.time() >= deadline:
+                    quiet = progress.quiet()
+                    if quiet is not None and quiet >= hang_after:
+                        # Alive, and no step for hang_after seconds: hung. The dump step first, then the end.
+                        hung = {"seconds": int(quiet), "frame": progress.frame, "dumps": dump(run_folder, process)}
+                        process.kill()
+                        process.wait()
+                        break
+                    if clock() >= deadline:
                         process.kill()
                         process.wait()
                         break
         finally:
             if isinstance(process, Followed):
                 process.close()
+        progress.poll()
         if code is None:
-            # Ended at its limit: what took its place goes too, so no process of the run outlives it.
+            # Ended at its limit, or as hung: what took its place goes too, so no process of the run outlives it.
             end_all(waiting)
-            return None, state["starts"], state["unwatched"]
+            return None, state["starts"], state["unwatched"], dict(progress.snapshot(), hung=hung)
         look(True)
         look_exec()
         if state["unwatched"] is not None:
             end_all(waiting)
-            return code, state["starts"], state["unwatched"]
+            return code, state["starts"], state["unwatched"], dict(progress.snapshot(), hung=None)
         if not waiting:
-            return code, state["starts"], None
+            return code, state["starts"], None, dict(progress.snapshot(), hung=None)
         process = waiting.pop(0)
 
 
@@ -2182,6 +2323,11 @@ CRASH_LINE = re.compile(r"^\[\s*\d+\.\d{3}\] crash: ")
 CONSTANTS_WATCH = "[constants] watch"
 
 
+WRITTEN_CHECK = "every picture asked was written"
+LOSS_CHECK = "nothing the game asked for was lost"
+NO_LOSS_REPORT = "no [loss] report at the exit"
+
+
 def evaluate(test, renderer, run_folder, ran):
     """The verdict and every check, from the run's files."""
     facts = read_facts(run_folder)
@@ -2196,10 +2342,12 @@ def evaluate(test, renderer, run_folder, ran):
         checks.append({"check": name, "result": "pass" if ok else "fail", "actual": actual})
         return ok
 
-    # A crash's dump, and a stall's (nebula-hang-*.dmp: the host's every-thread dump when a test run's game made no
-    # frame for 10 s; it goes on, so the run is judged by it here).
+    # A crash's dump. A stall's (nebula-hang-*.dmp: the host's every-thread dump when a test run's game made no frame for
+    # 10 s; the game goes on) is no crash: a pause is judged by the game's step lines, below.
     dumps = sorted(p.name for p in run_folder.glob("*.dmp") if not p.name.startswith("nebula-hang-"))
-    hangs = sorted(p.name for p in run_folder.glob("nebula-hang-*.dmp"))
+    # A pause of HANG_SECONDS or more in the game's step lines is a hang, whether or not the runner was watching (the runner
+    # ends a game as hung at that point, so a log with such a pause is one it did not watch).
+    long_gaps = [seconds for seconds, _ in stalls_in(log_lines) if seconds >= HANG_SECONDS]
     stop = by_key.get("harness.stop", [])
     end = by_key.get("harness.end", [])
     crash_lines = [line for line in log_lines if CRASH_LINE.match(line)]
@@ -2233,15 +2381,32 @@ def evaluate(test, renderer, run_folder, ran):
         if not dumps and not crash_lines:
             reason = "the game ended after %.1f s with exit %d (0x%08X) before its end step, with no crash line and no dump; %s" % (
                 ran.get("seconds", 0.0), code, code & 0xFFFFFFFF, reason)
+    elif ran.get("no_exit_record"):
+        # The tablet's record of how the game's process ended never came (luma_test_android.py): nothing is known of the end.
+        verdict = "no-exit-record"
+        reason = "the tablet gave no exit record for the game's process, so how the game ended is not known"
     elif stop:
         verdict = stop[-1]["value"].get("verdict", "fail")
         reason = stop[-1]["value"].get("reason", "")
+    elif ran.get("hung"):
+        hung = ran["hung"]
+        verdict = "hung"
+        reason = "the game completed no step for %d s while its process was alive (it stood at frame %s); %s" % (
+            hung["seconds"], hung["frame"],
+            ("stall dump: %s" % ", ".join(hung["dumps"])) if hung.get("dumps") else "no stall dump was written")
     elif not end and not meant:
-        verdict = "timeout"
-        reason = "the run did not reach its end step within limit_seconds (%s s)" % test["limit"]
-        stalled = [line for line in log_lines if "the game made no frame for" in line]
-        if stalled:
-            reason += "; %s" % stalled[0].split("host: ", 1)[-1]
+        if ran.get("stepped") and ran.get("quiet") is not None and ran["quiet"] < HANG_SECONDS:
+            # The limit passed while the game was still taking steps: the machine is slow, the game is not wrong.
+            verdict = "too-slow"
+            reason = "too slow on this machine now: still moving when its time limit of %s s passed" % test["limit"]
+        else:
+            verdict = "timeout"
+            reason = "the run did not reach its end step within limit_seconds (%s s)" % test["limit"]
+            if "stepped" in ran:
+                reason += ", and the game took no step in its last %d s" % HANG_SECONDS
+            stalled = [line for line in log_lines if "the game made no frame for" in line]
+            if stalled:
+                reason += "; %s" % stalled[0].split("host: ", 1)[-1]
     # Always checked (test-harness.md 3.7).
     if ran.get("unwatched"):
         add("every process the game started in its place was watched to its end", False, ran["unwatched"])
@@ -2273,7 +2438,8 @@ def evaluate(test, renderer, run_folder, ran):
             frame = end[-1]["value"].get("frame")
             add("the run ended at its end step", end_step["at"] is None or frame == end_step["at"], frame)
         add("no crash dump", not dumps, dumps)
-        add("the game never stopped making frames", not hangs, hangs)
+        add("the game took a step at least every %d s" % HANG_SECONDS, not ran.get("hung") and not long_gaps,
+            long_gaps or ([ran["hung"]["seconds"]] if ran.get("hung") else []))
         add("the game quit by itself with exit 0", ran.get("code") == 0, ran.get("code"))
     # The game says this once when it cannot give a refusal in words (mod_plugins.cpp validate_message): the importer's
     # library did not load or has no luma_validate_message. Every refusal of the run is then codes only.
@@ -2288,14 +2454,14 @@ def evaluate(test, renderer, run_folder, ran):
         # with no material or pipeline, a texture drawn blank, a sound read past its memory) are all 0.
         report = [line for line in log_lines if line.startswith("[loss] ") and not line.startswith("[loss] first")]
         counts = re.findall(r"([\w-]+)=(\d+)", report[-1]) if report else []
-        add("nothing the game asked for was lost", bool(report) and bool(counts) and all(v == "0" for _, v in counts),
-            report[-1] if report else "no [loss] report at the exit")
+        add(LOSS_CHECK, bool(report) and bool(counts) and all(v == "0" for _, v in counts),
+            report[-1] if report else NO_LOSS_REPORT)
     if test["ends"] == "end" and end:
         # Every picture a step asked was written (the host writes them from the GPU at its exit, waiting 5 s): a test
         # whose picture never came is not a pass, whether or not a check of its own reads that picture.
         unwritten = sorted(s["picture"] for s in test["steps"]
                            if "picture" in s and not (run_folder / "pictures" / (s["picture"] + ".png")).exists())
-        add("every picture asked was written", not unwritten, unwritten)
+        add(WRITTEN_CHECK, not unwritten, unwritten)
     for bad in by_key.get("harness.bad_fact", []):
         add("every fact is well formed (JSON, a key a mod may log)", False, bad["value"])
     if not test["bare"]:
@@ -2409,6 +2575,14 @@ def evaluate(test, renderer, run_folder, ran):
         elif c["kind"] == "sound":
             add("sound %s rms %s" % (c["frames"], c["rms"]), *sound_check(run_folder, facts, c))
     failed = [c for c in checks if c["result"] == "fail"]
+    absent = ran.get("missing_outputs") or []
+    if verdict is None and failed and absent and all(
+            (c["check"] == WRITTEN_CHECK and set(c["actual"]) <= set(absent))
+            or (c["check"] == LOSS_CHECK and c["actual"] == NO_LOSS_REPORT) for c in failed):
+        # What the game writes at its exit was still not there OUTPUT_SECONDS after the game ended (settle_outputs), and
+        # nothing else is wrong: the game is not shown wrong; whatever wrote the file, or kept it from the folder, did not.
+        verdict = "output-missing"
+        reason = "the game ended, and %d s later this was still not there: %s" % (OUTPUT_SECONDS, ", ".join(absent))
     if verdict is None:
         verdict, reason = ("fail", "%s (actual: %s)" % (failed[0]["check"], json.dumps(failed[0]["actual"]))) if failed else ("pass", "")
     elif verdict == "pass" and watched:
@@ -2450,6 +2624,54 @@ def sound_check(run_folder, facts, c):
     rms = math.sqrt(sum(v * v for v in values) / len(values)) / 32768.0
     db = 20 * math.log10(rms) if rms > 0 else -math.inf
     return c["rms"][0] <= db <= c["rms"][1], round(db, 2)
+
+
+def picture_complete(path):
+    """Whether a picture file the game wrote is all there: a P6 picture holds the bytes its header counts, a PNG ends with its
+    IEND chunk. A file still being written, or cut short, is not."""
+    path = pathlib.Path(path)
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return False
+    if path.suffix == ".png":
+        return data[:8] == b"\x89PNG\r\n\x1a\n" and data[-12:] == b"\x00\x00\x00\x00IEND\xaeB`\x82"
+    try:
+        w, h, rgb = read_ppm(path)
+    except (ValueError, IndexError):
+        return False
+    return len(rgb) == w * h * 3
+
+
+def settle_outputs(test, run_folder, ran, limit=OUTPUT_SECONDS, clock=time.monotonic, sleep=time.sleep):
+    """What the game writes at its own exit, waited for until it is there and complete, at most `limit` seconds from when the
+    game ended: each picture a step asked (pictures/<name>.ppm, or .png once the runner has made it) and the loss report in
+    run.log. Returns the names of what was still not there, empty when all came. Only a game that reached its end step and
+    ended by itself is held to it (a crashed, hung or ended-at-its-limit game wrote what it wrote). The wait ends at once
+    when everything is there, and runs the whole `limit` when something is not: the game's own wait at its exit for the
+    card is a fixed time, after which it ends without the file, and a slow disk can still be writing what it did write."""
+    if test["ends"] != "end" or ran.get("code") is None or ran.get("hung"):
+        return []
+    if not any(f.get("key") == "harness.end" for f in read_facts(run_folder)):
+        return []
+    log = run_folder / "run.log"
+    pictures = [s["picture"] for s in test["steps"] if "picture" in s]
+    deadline = clock() + limit
+    while True:
+        missing = []
+        for name in pictures:
+            folder = run_folder / "pictures"
+            if not any((folder / (name + ext)).exists() and picture_complete(folder / (name + ext)) for ext in (".png", ".ppm")):
+                missing.append(name)
+        try:
+            text = log.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            text = ""
+        if not any(line.startswith("[loss] ") and not line.startswith("[loss] first") for line in text.splitlines()):
+            missing.append("the [loss] report in run.log")
+        if not missing or clock() >= deadline:
+            return missing
+        sleep(0.2)
 
 
 def finish_pictures(run_folder):
@@ -2539,6 +2761,7 @@ def run_tests(args):
     lock.write_text("%s %s luma-test %s\n" % (args.who, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), suite_name), encoding="utf-8")
     all_pass = True
     passed = {}
+    SUMMARY.clear()
     lost = None  # why the device went, once it has: the tests after it are not run
     try:
         for folder in folders:
@@ -2568,6 +2791,7 @@ def run_tests(args):
                             raise SetupFailed("continue_from %s: that test did not pass earlier in this suite" % test["continue_from"])
                         previous = prev
                     ran = run_one(test, renderer, args, run_folder, previous)
+                    ran["missing_outputs"] = settle_outputs(test, run_folder, ran)
                     pictures = finish_pictures(run_folder)
                     verdict, reason, checks, facts = evaluate(test, renderer, run_folder, ran)
                 except HarnessError as error:
@@ -2600,16 +2824,39 @@ def run_tests(args):
                                 print("harness: %s left in %s: held by %s" % (p.name, p.parent, held), flush=True)
                 setup = {f["key"]: f["value"] for f in facts if f.get("key", "").startswith("setup.")}
                 report(run_folder, test["name"], test["proves"], renderer, verdict, reason, checks, args,
-                       {"setup": setup, "frames": max([f.get("frame", -1) for f in facts] or [-1]),
+                       {"setup": setup, "stalls": run_stalls(run_folder), "frames": max([f.get("frame", -1) for f in facts] or [-1]),
                         "seconds": round(ran.get("seconds", 0.0), 2), "pictures": pictures,
                         "binaries": ran.get("frozen", {}), "exit": ran.get("code"), "starts": ran.get("starts"),
                         "test_path": test_path_of(folder), "not_on_this_system": test["not_here"], "limit_seconds": test["limit"],
                         "limit_scale": args.limit_scale, "test_json": test["raw"]})
+        print(summary_line(SUMMARY), flush=True)
     finally:
         lock.unlink()
         if device is not None:
             android.release_lock(args.device_lock)
     return 0 if all_pass else 1
+
+
+def run_stalls(run_folder):
+    """The pauses of a run as the lines they are written as ("stall 30 s at frame 412"): each gap of more than STALL_SECONDS
+    between two of the game's step lines in run.log. A pause is no failure; the run's summary counts them."""
+    log = pathlib.Path(run_folder) / "run.log"
+    try:
+        lines = log.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return []
+    return [stall_line(seconds, frame) for seconds, frame in stalls_in(lines)]
+
+
+# What this run has reported so far, for the line it ends with: a count of results by kind, and "stalls" (report adds to it).
+SUMMARY = {}
+
+
+def summary_line(tally):
+    """The line the runner ends with: how many results of each kind, and how many pauses the games made."""
+    total = sum(tally.get(k, 0) for k in ("pass", "fail", "tool", "env"))
+    kinds = ", ".join("%s %d" % (k, tally.get(k, 0)) for k in ("pass", "fail", "tool", "env"))
+    return "summary: %d result%s (%s); stalls: %d" % (total, "" if total == 1 else "s", kinds, tally.get("stalls", 0))
 
 
 class SetupFailed(Exception):
@@ -2646,13 +2893,17 @@ def report(run_folder, name, proves, renderer, verdict, reason, checks, args, ex
     test_json = extra.pop("test_json", None)
     result.update(extra)
     # Every result has the same fields; a test refused before it ran has them empty.
-    for key, empty in (("setup", {}), ("frames", None), ("seconds", None), ("pictures", [])):
+    for key, empty in (("setup", {}), ("frames", None), ("seconds", None), ("pictures", []), ("stalls", [])):
         result.setdefault(key, empty)
     (run_folder / "result.json").write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     if test_json is not None:
         (run_folder / "test.json").write_text(json.dumps({"runner": RUNNER_VERSION, "test": test_json}, indent=2, ensure_ascii=False) + "\n",
                                               encoding="utf-8")
     print("%-28s %-7s %-14s %s" % (name, renderer, verdict, reason))
+    for line in result.get("stalls", []):
+        print("%-28s %-7s %s" % ("", "", line))
+    SUMMARY[result["kind"]] = SUMMARY.get(result["kind"], 0) + 1
+    SUMMARY["stalls"] = SUMMARY.get("stalls", 0) + len(result.get("stalls", []))
 
 
 def write_refs(args):

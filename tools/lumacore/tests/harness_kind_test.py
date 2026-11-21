@@ -4,8 +4,10 @@ python -X utf8 -I tools/lumacore/tests/harness_kind_test.py
 
 Every result.json carries "kind": pass, fail (the game or the change is wrong), tool (the runner or the test is) or env (the
 machine was not fit). luma_test.py kind_of is the one place it is decided. Here:
-  1. each verdict has its kind: crashed, timeout and a fail are fail; harness-error and setup-failed are tool; not-run
-     (a disc's game not given) and device-lost are env; a verdict the runner does not know is fail;
+  1. each verdict has its kind: crashed, timeout, hung (no step for 120 s) and a fail are fail; harness-error, setup-failed,
+     output-missing (a picture or report the game writes at its exit never came) and no-exit-record (the tablet's) are tool;
+     not-run (a disc's game not given), device-lost and too-slow (still stepping when the limit passed) are env; a verdict
+     the runner does not know is fail;
   2. report() writes the kind, and the gate's reader (tools/gate/kinds.py read_result) reads the same kind back;
   3. an exception of the runner's own, while it reads a test or runs one, is a result of its own: tool, with the
      exception's name, and its traceback in runner-error.txt; the suite's other tests still run;
@@ -40,8 +42,9 @@ def check(ok, what):
 
 
 # 1. The mapping.
-WANT = {"pass": "pass", "fail": "fail", "crashed": "fail", "timeout": "fail", "harness-error": "tool", "setup-failed": "tool",
-        "not-run": "env", "device-lost": "env", "something-else": "fail"}
+WANT = {"pass": "pass", "fail": "fail", "crashed": "fail", "timeout": "fail", "hung": "fail", "harness-error": "tool",
+        "setup-failed": "tool", "output-missing": "tool", "no-exit-record": "tool", "not-run": "env", "device-lost": "env",
+        "too-slow": "env", "something-else": "fail"}
 for verdict, kind in WANT.items():
     check(luma_test.kind_of(verdict) == kind, "verdict %s is kind %s, not %s" % (verdict, kind, luma_test.kind_of(verdict)))
 
