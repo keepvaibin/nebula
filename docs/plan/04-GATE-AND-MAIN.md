@@ -381,7 +381,7 @@ measure uses them.
 
 **The machine (package T5).** A run that starts the game first asks the machine whether it can carry the run (`machine_ready` in
 `gate.py`, the readings in `tools/gate/machine.py`); a run of documents, builds and tools only never asks. The points come in
-this order, and the first one that cannot be met ends the run as ENV (not judged, never FAIL) with one plain line:
+this order, and the first of points 1, 2 and 4 that cannot be met, or a failed push in 3, ends the run as ENV (not judged, never FAIL) with one plain line:
 
 1. Leftovers. A game process under `D:/NebulaWork/` whose parent is gone and that is older than ten minutes is ended and named in the
    run's summary. A process a held lock (`gate.lock`, `long.lock`, `measure.lock`, `move.lock`) may own is never ended.
@@ -389,9 +389,10 @@ this order, and the first one that cannot be met ends the run as ENV (not judged
    With less, the old run folders are thinned (the three newest passing and the three newest failing runs of each level stay whole;
    of every other run only the files at its top level stay; a run still going or waiting for GitHub is left alone) and the drive is
    looked at again.
-3. The tablet, when the run has a tablet part: it answers adb, it is authorised, and the test data on it (the test app's `game.pak`)
-   has this tree's store version (`runtime/include/galaxy/store_version.inc`); data of another version is pushed again
-   (`luma_test_android.py push-data`).
+3. The tablet, when the run has a tablet part and it answers adb: the test data on it (the test app's `game.pak`) has this tree's
+   store version (`runtime/include/galaxy/store_version.inc`); data of another version is pushed again (`luma_test_android.py
+   push-data`). A tablet that does not answer or is not authorised stops nothing: its part is owed (section 4.3) and the rest of the
+   run is judged.
 4. The graphics card and the PC's memory. The card the game uses is the first one DXGI lists for high performance (what the game
    itself takes; `LUMA_TEST_GPU` names another); its total is DXGI's dedicated memory and what every program holds of it is Windows'
    counter `GPU Adapter Memory`, read by its English name through PDH (any maker's card, any language). One game copy takes what the
@@ -403,4 +404,8 @@ this order, and the first one that cannot be met ends the run as ENV (not judged
 
 The gate puts itself in one Windows job object that ends everything in it when the gate ends or is killed, so every program a run
 starts, and theirs, goes with it. A program that must outlive the run (the play route measure, the long run a move starts, the
-tablet's adb server) is started with the leave-the-job flag (`machine.start_outliving`). Not on Windows nothing of this is done.
+tablet's adb server) is started with the leave-the-job flag (`machine.start_outliving`). So are the servers that other builds
+share: the gate starts the adb server before its first adb call and the compiler cache's server (sccache, port 4227, the build
+script's settings) before its Windows build, when none runs, so neither is ever inside a run's job. The Android build calls Gradle
+with `--no-daemon` (`platform/android/build_apk.ps1`), so no Gradle daemon is left to be cut off. Not on Windows nothing of this is
+done.
