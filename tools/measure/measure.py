@@ -18,7 +18,7 @@ three minutes from the stage's first frame, on each renderer, with one line per 
       A run that was not quiet is printed `not trusted` with its plain reason, compared with nothing and not written:
       a build or another game running; the card used by other programs for more than 10 % (the desktop's compositor,
       dwm.exe, left out); other programs using more than 10 % of all processors' time over the run; the window
-      minimized, covered, active or under the pointer (the runner's window-watch.txt: P-328).
+      minimized, covered, active or the pointer moving over it (the runner's window-watch.txt: P-328).
       Each judged figure is also compared with the median of the anchor's lines of its key (`anchor`): a figure past its
       band on the bad side says "slower than at the start of the native work by N%". That never changes the exit code.
       Writes WORK/measure-verdict.json (each figure's value, median, band, verdict and mark), WORK/result.json (for a
@@ -285,7 +285,7 @@ def read_history(path):
 # What the harness's window watch (window-watch.txt: one line "KIND first at S s, N of the quarter seconds" for each way
 # the desktop reached the window) says, in plain words. A kind not named here is written as it stands.
 WINDOW_REASONS = {"minimized": "the window was minimized", "active": "the window had the keyboard focus",
-                  "pointer": "the pointer was over the window", "covered": "the window was covered by other windows"}
+                  "pointer": "the pointer moved over the window", "covered": "the window was covered by other windows"}
 
 
 def window_disturbed(run_folder):

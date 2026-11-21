@@ -1963,9 +1963,10 @@ def visible_share(rect, above):
     return sum((r - l) * (b - t) for l, t, r, b in pieces) / whole
 
 
-def window_kinds(desktop, ours):
+def window_kinds(desktop, ours, pointer_moved=True):
     """The ways the player's desktop reached the run's window in this look: a list of "active" (the foreground window is the
-    run's, so keys reach it), "pointer" (the pointer is over it), "minimized" and "covered" (less than half of the game's window
+    run's, so keys reach it), "pointer" (the pointer is over it and `pointer_moved`: a pointer that rests where the window
+    came up reaches nothing, a game window that takes no focus reads no pointer that does not move), "minimized" and "covered" (less than half of the game's window
     is visible: the visible windows above it, not minimized and not cloaked, subtracted as rectangles). `desktop` is the
     look: foreground_pid(), pointer_pid() (the process of the top-level window under the pointer) and windows(): the top-level
     windows from the top down, each {pid, visible, minimized, cloaked, rect, through} (through: a layered window the pointer
@@ -1973,7 +1974,7 @@ def window_kinds(desktop, ours):
     kinds = []
     if desktop.foreground_pid() in ours:
         kinds.append("active")
-    if desktop.pointer_pid() in ours:
+    if pointer_moved and desktop.pointer_pid() in ours:
         kinds.append("pointer")
     above = []
     for w in desktop.windows():
@@ -2024,6 +2025,10 @@ def win32_desktop(first_pid, run_folder):
         def foreground_pid(self):
             return pid_of(user32.GetForegroundWindow())
 
+        def pointer_at(self):
+            point = wintypes.POINT()
+            return (point.x, point.y) if user32.GetCursorPos(ctypes.byref(point)) else None
+
         def pointer_pid(self):
             point = wintypes.POINT()
             if not user32.GetCursorPos(ctypes.byref(point)):
@@ -2062,14 +2067,19 @@ def win32_desktop(first_pid, run_folder):
 def watch_window(run_folder, first_pid, done, desktop=None, pids=None, now=time.time, every=0.25):
     """A visible run's window, every quarter second until `done` is set (Windows): a line in run_folder/window-watch.txt
     the first time, and a count, of each way the player's desktop reached it (window_kinds): "minimized", "active" (the
-    foreground window, so keys reach it), "pointer" (the pointer over it) and "covered" (less than half of the game's window
-    is visible). The run's processes: the one started and each one the host started in its place."""
+    foreground window, so keys reach it), "pointer" (the pointer over it and moving: one that rests under the window reaches
+    nothing) and "covered" (less than half of the game's window is visible). The run's processes: the one started and each
+    one the host started in its place."""
     if desktop is None:
         desktop, pids = win32_desktop(first_pid, run_folder)
     seen = {}
     began = now()
+    last = None  # where the pointer was at the look before
     while not done.wait(every):
-        for kind in window_kinds(desktop, pids()):
+        here = desktop.pointer_at() if hasattr(desktop, "pointer_at") else None
+        moved = hasattr(desktop, "pointer_at") is False or (last is not None and here != last)
+        last = here
+        for kind in window_kinds(desktop, pids(), moved):
             first, count = seen.get(kind, (now() - began, 0))
             seen[kind] = (first, count + 1)
     if seen:

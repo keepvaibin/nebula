@@ -137,7 +137,8 @@ def main():
     check("new holder" in (lock / "holder.txt").read_text(encoding="utf-8"), "a lock whose holder ended is taken over")
 
     # command_line
-    env = {k: v for k, v in os.environ.items() if k != "NEBULA_NO_MEASURE_WAIT"}
+    # What a person starting these by hand has: no gate variable, and not inside a self-test (the gate runs this test inside one).
+    env = {k: v for k, v in os.environ.items() if k not in ("NEBULA_NO_MEASURE_WAIT", "NEBULA_SELF_TEST", "NEBULA_SELF_TEST_LOG")}
     live = plant("measure.py abc D:/w 2026-11-21 08:00:00 pid %d\n" % os.getpid())
     dead = plant("measure.py abc D:/w 2026-11-21 08:00:00 pid %d\n" % ended)
     program = [sys.executable, "-X", "utf8", "-I", str(GATE / "measure_wait.py")]
