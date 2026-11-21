@@ -335,6 +335,7 @@ class Gate:
         self.open_rows = []
         self.aside = kinds.read_aside(SET_ASIDE)
         self.verdict = None
+        self.printed_head = None      # the summary line last printed on the screen (late rows print it again)
         self.lines = []
         self.started = time.time()
         self.commit = git("rev-parse", "--short", "HEAD")
@@ -548,6 +549,7 @@ class Gate:
         for text in self.machine_notes:
             print("gate.py: machine: " + text)
         print(head)
+        self.printed_head = head
         print("result:", path)
         for line in self.lines:
             print(line)
@@ -591,9 +593,13 @@ class Gate:
         self.record(name, state, 0.0, detail, log, records)
         if self.verdict is None:
             return
-        self._save()
+        head = self._save()[2]
         for line in kinds.kind_lines([self.results[-1]]):
             print(line, flush=True)
+        # The files carry the new row's count and seconds: the last summary line on the screen says the same.
+        if head != self.printed_head:
+            self.printed_head = head
+            print(head, flush=True)
 
     def prune_runs(self):
         """The passed tests' working files are not evidence once the run passed (N-1060): the drive keeps its room."""
