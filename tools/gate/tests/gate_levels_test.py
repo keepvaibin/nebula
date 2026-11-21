@@ -169,13 +169,13 @@ def main():
         check({"lumalink", "mods/d3d12", "mods/vulkan", "mods/d3d11"} <= set(main_mods.needs),
               "mods = short: LumaLink's check and the mod tests of every renderer are back in the main level")
         # The play route measure runs at the long run's end (N-1043): a check of its own, not a planned one.
-        check(tuple(long_needs.get("coverage", ())) == ("build/windows-coverage",) and "build/windows-coverage" in lg,
+        check(set(long_needs.get("coverage", ())) == {"build/windows-coverage", "data/RMGE01"} and "build/windows-coverage" in lg,
               "long: the coverage build's report runs: %s" % (long_needs.get("coverage"),))
-        check(tuple(long_needs.get("measure/route", ())) == ("build/windows",),
+        check(set(long_needs.get("measure/route", ())) == {"build/windows", "data/RMGE01"},
               "long: the play route measure runs: %s" % (long_needs.get("measure/route"),))
         check((m | lg) <= f | {"pictures/tablet"} and "measure/full" in f, "final has main's and long's: %s" % sorted((m | lg) - f))
         chosen = gate.select(main_needs, ["replays/vulkan"])
-        check(chosen == {"replays/vulkan", "tour/vulkan", "tour/d3d12", "build/windows"}, "--only and its needs: %s" % sorted(chosen))
+        check(chosen == {"replays/vulkan", "tour/vulkan", "tour/d3d12", "build/windows", "data/RMGE01"}, "--only and its needs: %s" % sorted(chosen))
         chosen = gate.select(main_needs, ["replays/tablet"])
         check({"tour/tablet", "tablet/prepare", "tablet/remove", "tour/tablet-pc", "build/android"} <= chosen
               and "tour/d3d12" not in chosen, "the tablet's compare and its needs: %s" % sorted(chosen))

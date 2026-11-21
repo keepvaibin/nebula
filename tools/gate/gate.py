@@ -79,6 +79,7 @@ TREE = HERE.parent.parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(TREE / "tools" / "verify"))
 import gate_tour  # noqa: E402
+import gamedata  # noqa: E402
 import kinds  # noqa: E402
 import landing  # noqa: E402
 import pictures as picture_tool  # noqa: E402
@@ -91,6 +92,10 @@ LEVELS = ("quick", "main", "long", "final")
 # makes a --main run this level unless the change needs everything (then it is the main level).
 LAND_LEVEL = "land"
 SHORT_LEVELS = ("quick", LAND_LEVEL)
+# The US game data by key (tools/gate/gamedata.py): the checks that run the game on it need it besides the build; the other
+# discs' data is asked for the same way by the checks that run their tours.
+US_DISC = "RMGE01"
+DATA = ("build/windows", "data/RMGE01")
 # The twelve stops --quick plays, and the tablet's short part: one per kind of stage (a hub, water, gravity, a boss,
 # sand, ice, lava, a 2D stage, a race, the fleet, the heaviest stop of the tour, the factory). Names as
 # tools/verify/tours/tour_enterable.txt lists them.
@@ -311,6 +316,7 @@ class Gate:
         self.runs_held = False
         self.tree = TREE
         self.mods = getattr(args, "mods", None) or table_mods()
+        self.data_paks = {}   # disc -> its game.pak, once the data check found or made it
         self.main_ref = MAIN_REF
         self.open_rows = []
         self.aside = kinds.read_aside(SET_ASIDE)
@@ -327,6 +333,17 @@ class Gate:
         self.android_bin = str(pathlib.Path(args.build_root) / "android" / "test-bin-arm64-v8a")
         self.lock = threading.Lock()
         self.local = threading.local()
+
+    @property
+    def pak(self):
+        """The US game.pak the run plays on: --pak when it names one, else the data found or made by key (data/RMGE01)."""
+        return self.args.pak or self.data_paks.get(US_DISC, "")
+
+    def paks_text(self):
+        """LUMA_TEST_PAKS: the other discs' game.paks, DISC=path joined by the path separator (--paks, else those found by key)."""
+        if self.args.paks:
+            return self.args.paks
+        return os.pathsep.join("%s=%s" % (d, p) for d, p in sorted(self.data_paks.items()) if d != US_DISC)
 
     def rows(self):
         """The rows of the lane this thread runs (lanes), else the run's."""
@@ -721,14 +738,42 @@ def build_windows(g, root=None, bin_dir=None, sanitize="", coverage=False):
 
     def fn(log):
         seed = ["-SeedFrom", g.args.seed_from] if g.args.seed_from else []
+        # The build refuses no data any more: with --pak it names that pak, else it names none and the data check (data/RMGE01)
+        # asks for the right data by key and writes the bin folder's pak.path.
+        pak = ["-Pak", g.args.pak] if g.args.pak else []
         code = run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", HERE / "build_windows.ps1",
-                    "-Tree", TREE, "-Root", root, "-Bin", bin_dir, "-Pak", g.args.pak, "-Jobs", g.args.jobs, *seed]
+                    "-Tree", TREE, "-Root", root, "-Bin", bin_dir, *pak, "-Jobs", g.args.jobs, *seed]
                    + (["-Sanitize", sanitize] if sanitize else []) + (["-Coverage"] if coverage else []), log)
         text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")
         fails = [l for l in text.splitlines() if l.startswith("FAILED:")]
         if code != 0 or fails:
             return False, "exit %d, %d FAILED: %s" % (code, len(fails), fails[0][8:120] if fails else last_line(text))
+        if g.pak and not g.args.pak:
+            write_pak_path(bin_dir, g.pak)    # another build of this run (the sanitizer's, the coverage one's): the data found already
         return True, "bins at %s" % bin_dir
+    return fn
+
+
+def write_pak_path(bin_dir, pak):
+    """bin/pak.path: the game.pak the harness runs the bin folder's programs on (build_windows.ps1 writes it for --pak)."""
+    (pathlib.Path(bin_dir) / "pak.path").write_text("%s\n" % pak, encoding="ascii")
+
+
+def data_check(g, disc):
+    """The game data of a disc by key (tools/gate/gamedata.py): <disc>-<store version>-<importer tree hash> found in
+    D:/NebulaWork/build/game-data, else made there with this build's importer from the disc's image. For the US disc it also
+    names the data in the bin folder's pak.path. A disc image not on this machine is env, an importer that is not there tool,
+    an importer whose result is wrong fail."""
+    def fn(log):
+        importer = pathlib.Path(g.bin) / "nebula-import.exe"
+        try:
+            pak, how, key = gamedata.GameData().ensure(disc, TREE, importer, log)
+        except gamedata.DataError as error:
+            return False, str(error), None, error.kind
+        g.data_paks[disc] = str(pak)
+        if disc == US_DISC and pathlib.Path(g.bin).is_dir():
+            write_pak_path(g.bin, pak)
+        return True, "%s %s" % (key, how)
     return fn
 
 
@@ -952,7 +997,7 @@ class HarnessSource:
         g = self.g
         pathlib.Path(log).parent.mkdir(parents=True, exist_ok=True)
         code = run(self.command(work, bin_dir, names, lock), log,
-                   env=watch_env(self.renderer, dict(self.env or {}, LUMA_TEST_PAKS=g.args.paks)),
+                   env=watch_env(self.renderer, dict(self.env or {}, LUMA_TEST_PAKS=g.paks_text())),
                    cwd=g.args.build_root)
         for d in pathlib.Path(work).rglob("bin"):
             if d.is_dir():
@@ -1065,7 +1110,7 @@ def start_soak(g):
     log = g.work / "soak-run.log"
     out = log.open("wb")
     process = subprocess.Popen([sys.executable, "-X", "utf8", "-I", str(HERE / "soak.py"), "run", "--bin", str(g.bin),
-                                "--pak", g.args.pak, "--work", str(g.work / "soak"), "--minutes", str(g.args.soak_minutes),
+                                "--pak", getattr(g, "pak", "") or g.args.pak, "--work", str(g.work / "soak"), "--minutes", str(g.args.soak_minutes),
                                 "--who", "gate"], stdout=out, stderr=subprocess.STDOUT, cwd=g.args.build_root)
     out.close()
     return process, log
@@ -1077,7 +1122,7 @@ MEASURE = TREE / "tools" / "measure" / "measure.py"
 MEASURE_BINS = pathlib.Path("D:/NebulaWork/build/measure-bins")
 
 
-def measure_command(sha, bin_dir, android_bin, apk, work, args):
+def measure_command(sha, bin_dir, android_bin, apk, work, args, pak=None, paks=None):
     """tools/measure/measure.py run: the play route on the PC's renderers, the PC held to four cores, and the tablet
     when the gate has one (N-1043, 07-BASE-FIRST stage 1 item 1). The tablet's run installs the test app `apk` with
     the gate's pak and removes it after, inside the tablet's lock (P-321)."""
@@ -1085,9 +1130,9 @@ def measure_command(sha, bin_dir, android_bin, apk, work, args):
     runs = "d3d12,vulkan,d3d11,d3d12-4cores" + (",tablet" if tablet else "")
     cmd = [sys.executable, "-X", "utf8", "-I", str(MEASURE), "run", "--bin", str(bin_dir), "--work", str(work),
            "--commit", sha, "--runs", runs, "--history", str(pathlib.Path(args.work) / "measure-history.tsv"),
-           "--paks", args.paks, "--who", args.who]
+           "--paks", args.paks if paks is None else paks, "--who", args.who]
     if tablet:
-        cmd += ["--device", args.tablet, "--android-bin", str(android_bin), "--apk", str(apk), "--pak", args.pak,
+        cmd += ["--device", args.tablet, "--android-bin", str(android_bin), "--apk", str(apk), "--pak", pak or args.pak,
                 "--device-lock", args.tablet_lock]
     return cmd
 
@@ -1103,7 +1148,7 @@ def measure_route(g):
     def fn(log):
         apk = test_apk(g.args)
         code = run(measure_command(g.commit, g.bin, g.android_bin, apk if apk.is_file() else None, g.work / "measure",
-                                   g.args), log)
+                                   g.args, g.pak, g.paks_text()), log)
         text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")
         said = next((l for l in reversed(text.splitlines()) if l.startswith("measure: ")), "measure: no summary")
         return code == 0, said[len("measure: "):]
@@ -1141,7 +1186,8 @@ def start_measure(sha, g, args, popen=subprocess.Popen, bins=MEASURE_BINS):
             shutil.copy2(test_apk(args), apk)
     except OSError as e:
         return "no measure: the build could not be copied: %s" % e
-    cmd = measure_command(sha, copy / "bin", android, apk, pathlib.Path(args.work) / ("%s-measure" % g.name), args)
+    cmd = measure_command(sha, copy / "bin", android, apk, pathlib.Path(args.work) / ("%s-measure" % g.name), args, getattr(g, "pak", "") or None,
+                          g.paks_text() if hasattr(g, "paks_text") else None)
     cmd += ["--gate-lock", args.gate_lock, "--board", args.board]
     log = pathlib.Path(args.work) / ("measure-%s.log" % sha[:9])
     detach = {"creationflags": 0x8 | 0x200} if os.name == "nt" else {"start_new_session": True}
@@ -1232,7 +1278,7 @@ def device_step(g, step):
         args = [sys.executable, "-X", "utf8", "-I", TREE / "tools" / "lumacore" / "luma_test_android.py", step,
                 "--device", g.args.tablet]
         if step == "prepare":
-            args += ["--apk", test_apk(g.args), "--pak", g.args.pak,
+            args += ["--apk", test_apk(g.args), "--pak", g.pak,
                      "--who", "gate"]
         code = run(args, log, timeout=3600)
         return code == 0, last_line(pathlib.Path(log).read_text(encoding="utf-8", errors="replace"))
@@ -1523,7 +1569,7 @@ def mod_tests(g, renderer, bin_dir=None, label="mods", more_env=None):
     the games' environment. Passes when it exits 0; its rows name each test that did not pass."""
     def fn(log):
         work = g.work / ("runs-%s-%s" % (label, renderer))
-        env = watch_env(renderer, dict(more_env or {}, LUMA_TEST_PAKS=g.args.paks))
+        env = watch_env(renderer, dict(more_env or {}, LUMA_TEST_PAKS=g.paks_text()))
         if g.args.lumalink:
             env["LUMALINK"] = g.args.lumalink
         else:
@@ -1899,8 +1945,9 @@ def long_command(sha, args, tree=LONG_TREE):
     cmd = [sys.executable, "-X", "utf8", "-I", str(pathlib.Path(tree) / "tools" / "gate" / "gate.py"), "--long",
            "--who", args.who, "--covers", "main %s, started by its move (section 14)" % sha[:9], "--work", args.work,
            "--board", args.board, "--status", args.status, "--gate-lock", args.gate_lock, "--long-lock", args.long_lock,
-           "--tablet-lock", args.tablet_lock, "--pak", args.pak, "--paks", args.paks, "--discs", args.discs,
-           "--jobs", args.jobs]
+           "--tablet-lock", args.tablet_lock, "--discs", args.discs, "--jobs", args.jobs]
+    cmd += ["--pak", args.pak] if args.pak else []
+    cmd += ["--paks", args.paks] if args.paks else []
     return cmd + (["--tablet", args.tablet] if args.tablet else [])
 
 
@@ -1954,8 +2001,8 @@ def tablet_part(g, stops, device=None):
     steps at every step (the game runs the actors its picture shows: its clipping follows the picture's shape). When
     the tablet does not answer, its lock stays held, or it leaves during the run, the part is owed (section 4.3)."""
     built = ("build/android",)
-    needs = {"tablet/prepare": built + ("tablet/remove",), "android/tablet": built + ("tablet/prepare",),
-             "tour/tablet": built + ("tablet/prepare",), "tablet/remove": (), "tour/tablet-pc": ("build/windows",),
+    needs = {"tablet/prepare": built + ("data/RMGE01", "tablet/remove"), "android/tablet": built + ("tablet/prepare",),
+             "tour/tablet": built + ("tablet/prepare",), "tablet/remove": (), "tour/tablet-pc": DATA,
              "replays/tablet": ("tour/tablet", "tour/tablet-pc"), "pictures/tablet": ("tour/tablet",)}
     # The tablet's pictures have rows of their own (place tablet, N-1040) for the main level's twelve stops; the long run's tour
     # takes more.
@@ -2031,9 +2078,16 @@ def build_part(g):
     g.check("repo/audit", repo_audit(g))
     g.check("repo/scripts", parse_scripts(g))
     g.check("repo/code", repo_code(g))
-    if g.args.no_build:
-        return True
-    return g.check("build/windows", build_windows(g)) is not False
+    if not g.args.no_build and g.check("build/windows", build_windows(g)) is False:
+        return False
+    # The game data by key, found or made with this build's importer (a disc's data under the tree's own importer is another
+    # key, so a change of the importer is played on the data it makes). Nothing that runs the game can run without it.
+    if not g.args.pak and g.check("data/RMGE01", data_check(g, US_DISC), ("build/windows",)) is False:
+        return False
+    if not g.args.paks:
+        for disc in REGION_DISCS if g.level != LAND_LEVEL else ():
+            g.check("data/%s" % disc, data_check(g, disc), ("build/windows",))
+    return True
 
 
 def unit_part(g):
@@ -2074,15 +2128,15 @@ def engine_lane(g, r):
     """The engine's own tests (tests/engine) on one renderer: start, device loss, window shapes and sizes, stage
     loads, save files."""
     def lane():
-        g.check("engine/%s" % r, harness(g, TREE / "tests" / "engine" / "suite.json", r, "engine"), ("build/windows",))
+        g.check("engine/%s" % r, harness(g, TREE / "tests" / "engine" / "suite.json", r, "engine"), DATA)
         g.picture_jobs.append(("pictures/engine/%s" % r, "engine", r, ("engine/%s" % r,)))
     return lane
 
 
-def tour_lane(g, tour, label, r):
+def tour_lane(g, tour, label, r, needs=DATA):
     """One tour on one renderer, with its pictures."""
     def lane():
-        g.check("%s/%s" % (label, r), harness(g, tour, r, label), ("build/windows",))
+        g.check("%s/%s" % (label, r), harness(g, tour, r, label), needs)
         g.picture_jobs.append(("pictures/%s/%s" % (label, r), label, r, ("%s/%s" % (label, r),)))
     return lane
 
@@ -2100,7 +2154,7 @@ def picture_part(g):
 
 def mods_lane(g, r):
     def lane():
-        g.check("mods/%s" % r, mod_tests(g, r), ("build/windows",))
+        g.check("mods/%s" % r, mod_tests(g, r), DATA)
     return lane
 
 
@@ -2150,7 +2204,7 @@ def sanitizer_part(g):
         return
     tour = gate_tour.write(g.work / "tour-asan", None)
     step_hash.with_hash(tour.parent)
-    g.check("tour-asan/d3d12", harness(g, tour, "d3d12", "tour-asan", bin_dir=asan_bin), ("build/windows-asan",))
+    g.check("tour-asan/d3d12", harness(g, tour, "d3d12", "tour-asan", bin_dir=asan_bin), ("build/windows-asan", "data/RMGE01"))
     if mods:
         g.check("mods-asan/d3d12", mod_tests(g, "d3d12", bin_dir=asan_bin, label="mods-asan"), ("build/windows-asan",))
 
@@ -2178,7 +2232,7 @@ def coverage_part(g):
         return
     tour = gate_tour.write(g.work / "tour-coverage", None)
     step_hash.with_hash(tour.parent)
-    g.check("coverage", coverage_check(g, bin_dir, tour), ("build/windows-coverage",))
+    g.check("coverage", coverage_check(g, bin_dir, tour), ("build/windows-coverage", "data/RMGE01"))
 
 
 def coverage_check(g, bin_dir, tour):
@@ -2266,7 +2320,7 @@ def run_checks(args, known=None, planned=None, selected=None, dry=False):
         unit_part(g)
     if level != "long" and g.mods != "off" and not MOD_TESTS.exists():
         g.missing("mods", "the mod tests are not in the tree (tools/lumacore/mod_tests.py, mods M0)")
-    soak = start_soak(g) if level in ("long", "final") and not g.dry and g.wanted("soak", ("build/windows",)) else None
+    soak = start_soak(g) if level in ("long", "final") and not g.dry and g.wanted("soak", DATA) else None
     tours = write_tours(g, QUICK_STOPS if short else None, QUICK_REGION_STOPS if short else None)
     # Region discs: Direct3D 12 at the quick and main levels; every renderer in the long run and the final check.
     region_renderers = RENDERERS if level in ("long", "final") else ("d3d12",)
@@ -2281,7 +2335,7 @@ def run_checks(args, known=None, planned=None, selected=None, dry=False):
     for disc in REGION_DISCS if level != LAND_LEVEL else ():
         def region_lane(disc=disc):
             for r in region_renderers:
-                tour_lane(g, tours["tour-%s" % disc], "tour-%s" % disc, r)()
+                tour_lane(g, tours["tour-%s" % disc], "tour-%s" % disc, r, DATA + ("data/%s" % disc,))()
         lanes.append(region_lane)
     if level != "long" and mods_on(g):
         lanes += [mods_lane(g, r) for r in renderers]
@@ -2303,7 +2357,7 @@ def run_checks(args, known=None, planned=None, selected=None, dry=False):
         g.lanes(lanes)
     # The soak plays beside the lanes in processes of its own: it is waited for first, so that what is run again alone
     # really runs alone.
-    if level in ("long", "final") and g.wanted("soak", ("build/windows",)) and not g.dry:
+    if level in ("long", "final") and g.wanted("soak", DATA) and not g.dry:
         if soak is None:
             g.missing("soak", "it did not start")
         else:
@@ -2316,7 +2370,7 @@ def run_checks(args, known=None, planned=None, selected=None, dry=False):
     replay_part(g, renderers)
     if level in ("long", "final"):
         # Last, with the machine alone: the gate lock keeps gates out, measure.py takes measure.lock.
-        locked_part(g, "measure", lambda: g.check("measure/route", measure_route(g), ("build/windows",)))
+        locked_part(g, "measure", lambda: g.check("measure/route", measure_route(g), DATA))
     if every and not getattr(g.args, "move", False):
         # With --move the gate waits for GitHub after its own checks, outside gate.lock (main()).
         g.check("github", github_check(g))
@@ -2369,10 +2423,12 @@ def parser(land=False):
                         "`mods =` line of tools/gate/scope.tsv (off: they run in no landing and no nightly run)")
     p.add_argument("--build-root", default=os.environ.get("NEBULA_GATE_BUILD", "D:/NebulaWork/build/gate-%s" % TREE.name),
                    help="where the builds go (kept between runs, so builds are incremental)")
-    p.add_argument("--pak", default=os.environ.get("NEBULA_GATE_PAK", "D:/NebulaWork/build/us-pak-37/game.pak"))
-    p.add_argument("--paks", default=os.environ.get("NEBULA_GATE_PAKS", os.pathsep.join((
-                   "RMGP01=D:/NebulaWork/build/a1-pak-pal-37/game.pak", "RMGJ01=D:/NebulaWork/build/a1-pak-jp-37/game.pak"))),
-                   help="the other discs' game.paks, DISC=path joined by the path separator: the tests with a \"disc\"")
+    p.add_argument("--pak", default=os.environ.get("NEBULA_GATE_PAK", ""),
+                   help="the US game.pak to run on; by default the data found by key, or made on demand, in "
+                        "D:/NebulaWork/build/game-data (tools/gate/gamedata.py)")
+    p.add_argument("--paks", default=os.environ.get("NEBULA_GATE_PAKS", ""),
+                   help="the other discs' game.paks, DISC=path joined by the path separator: the tests with a \"disc\"; "
+                        "by default found by key like the US data")
     p.add_argument("--work", default=os.environ.get("NEBULA_GATE_WORK", "D:/NebulaWork/build/gate-runs"))
     p.add_argument("--discs", default=os.environ.get("NEBULA_GATE_DISCS", "D:/NebulaWork/discs"),
                    help="a folder of disc images named by disc (RMGE01.wbfs, RMGP01.rvz, RMGJ01.rvz): the collision proof")
@@ -2421,6 +2477,8 @@ def main(argv=None):
     argv = sys.argv[1:] if argv is None else list(argv)
     if argv and argv[0] == "land":
         return land_main(argv[1:])
+    if argv and argv[0] == "data":
+        return gamedata.main(argv[1:])
     args = parser().parse_args(argv)
     patterns = [s.strip() for s in args.only.split(",") if s.strip()]
 

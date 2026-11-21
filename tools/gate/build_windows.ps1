@@ -1,9 +1,12 @@
-# build_windows.ps1 -Tree TREE -Root ROOT -Bin BIN -Pak PAK [-Dxc DXC] [-Jobs N]: every Windows build the gate tests,
+# build_windows.ps1 -Tree TREE -Root ROOT -Bin BIN [-Pak PAK] [-Dxc DXC] [-Jobs N]: every Windows build the gate tests,
 # then the bin folder the harness runs. Builds are incremental: ROOT keeps them between runs.
 #   ROOT\game   the game modules, the headless host and the self-description (clang, native/)
 #   ROOT\msvc   Nebula, NebulaVk, NebulaD11, the unit tests and the test extension (MSVC, the tree's root)
 #   ROOT\luma-test.dll  the harness's game half (tools/test_driver/luma_test/luma_test.c)
 #   ROOT\cargo  nebula-import
+# -Pak is optional and never refused: a game.pak of the tree's store version is named in BIN/pak.path; with none, or one of
+# another store version, the bin folder has no pak.path and the build says so. The gate asks for the right data by key
+# (tools/gate/gamedata.py, after this build: the importer is one of the programs built here) and writes pak.path itself.
 # Prints each step's result; any FAILED line or non-zero exit ends it with exit 1. Nothing here reads the
 # environment of the person running it beyond the tools' locations.
 #
@@ -17,7 +20,7 @@ param(
     [Parameter(Mandatory = $true)][string]$Tree,
     [Parameter(Mandatory = $true)][string]$Root,
     [Parameter(Mandatory = $true)][string]$Bin,
-    [Parameter(Mandatory = $true)][string]$Pak,
+    [string]$Pak = "",
     [string]$Dxc = "D:/NebulaWork/build/luma-bins/lh7/dxc",
     [string]$Ffx = "D:/NebulaWork/deps/ffx-fg/FidelityFX-SDK-1.1.4",
     [string]$Llvm = "C:/Program Files/LLVM/bin",
@@ -188,13 +191,18 @@ if ($failed -ne 0) { "build failed"; exit 1 }
 # The bin folder: what luma_test.py runs (the programs, the game modules, the game half, the importer, the
 # self-description, the shader compiler and the pak's path).
 $pv = $null
-# The header only (the pak is several gigabytes).
-$head = New-Object byte[] 12
-$stream = [IO.File]::OpenRead($Pak)
-try { $null = $stream.Read($head, 0, 12) } finally { $stream.Dispose() }
-if ([Text.Encoding]::ASCII.GetString($head, 0, 7) -eq "NBSTORE") { $pv = [BitConverter]::ToUInt32($head, 8) }
-$tv = (Get-Content "$Tree/runtime/include/galaxy/store_version.inc" -Raw).Trim()
-if ("$pv" -ne $tv) { "bins: $Pak is store version $pv, the tree's is $tv"; exit 1 }
+if ($Pak) {
+    # The header only (the pak is several gigabytes).
+    $head = New-Object byte[] 12
+    $stream = [IO.File]::OpenRead($Pak)
+    try { $null = $stream.Read($head, 0, 12) } finally { $stream.Dispose() }
+    if ([Text.Encoding]::ASCII.GetString($head, 0, 7) -eq "NBSTORE") { $pv = [BitConverter]::ToUInt32($head, 8) }
+    $tv = (Get-Content "$Tree/runtime/include/galaxy/store_version.inc" -Raw).Trim()
+    if ("$pv" -ne $tv) {
+        "bins: $Pak is store version $pv, the tree's is ${tv}: no pak.path is written; the gate asks for the right data by key"
+        $Pak = ""
+    }
+}
 if (Test-Path $Bin) { Remove-Item -Recurse -Force $Bin }
 New-Item -ItemType Directory -Force "$Bin/luma" | Out-Null
 Copy-Item "$game/smg_game.dll", "$game/smg_game_plain.dll", "$game/smg_game.luma-placement.json" $Bin
@@ -217,7 +225,7 @@ foreach ($f in "luma_types/luma_types.json", "luma_types/luma_functions.json", "
 }
 Copy-Item "$game/luma_types/luma_services.json" $Bin
 Copy-Item -Recurse $Dxc "$Bin/dxc"
-Set-Content -Path "$Bin/pak.path" -Value $Pak -Encoding ascii
+if ($Pak) { Set-Content -Path "$Bin/pak.path" -Value $Pak -Encoding ascii }
 $commit = & git -C $Tree rev-parse --short HEAD
 Set-Content -Path "$Bin/commit.txt" -Value $commit -Encoding ascii
 "bins ok $commit"

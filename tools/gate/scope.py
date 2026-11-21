@@ -45,7 +45,7 @@ GROUPS = {
                "replays/d3d11", "pictures/declared"]),
     "import": ("the importer's tests, the collision proof on the US disc, the US game data of the tree's importer (found "
                "by its key, else made again), and the 12-stop tour on Direct3D 12 with that data",
-               ["rust", "import/collision/RMGE01", "tour/d3d12", "pictures/tour/d3d12", "replays/d3d12",
+               ["rust", "import/collision/RMGE01", "data/RMGE01", "tour/d3d12", "pictures/tour/d3d12", "replays/d3d12",
                 "pictures/declared"]),
     "android": ("the Android build and its unit tests",
                 ["build/android"]),

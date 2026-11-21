@@ -157,14 +157,16 @@ class Groups(unittest.TestCase):
 
     def test_selection_follows_needs(self):
         chosen = scope.select(self.needs, ["tour1"])
-        self.assertEqual(chosen, {"tour/d3d12", "pictures/tour/d3d12", "replays/d3d12", "pictures/declared", "build/windows"})
+        self.assertEqual(chosen, {"tour/d3d12", "pictures/tour/d3d12", "replays/d3d12", "pictures/declared", "build/windows",
+                                  "data/RMGE01"})
         self.assertNotIn("tour/vulkan", chosen)
         self.assertNotIn("pictures/engine/d3d12", chosen, "the declared-pictures check brings its own name, not the pictures'")
         three = scope.select(self.needs, ["tour3"])
         self.assertTrue({"tour/vulkan", "tour/d3d11", "replays/vulkan", "replays/d3d11", "pictures/tour/vulkan"} <= three)
         self.assertNotIn("engine/vulkan", three)
         tablet = scope.select(self.needs, ["tablet12"])
-        self.assertTrue({"tablet/prepare", "build/android", "tour/tablet", "tablet/remove", "tour/tablet-pc", "build/windows"} <= tablet)
+        self.assertTrue({"tablet/prepare", "build/android", "tour/tablet", "tablet/remove", "tour/tablet-pc", "build/windows",
+                         "data/RMGE01"} <= tablet, "the tablet's part needs the data too")
 
     def test_documents_only_selects_repo_and_no_build(self):
         chosen = scope.select(self.needs, plan("docs/a.md").groups)
