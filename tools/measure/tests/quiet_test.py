@@ -118,6 +118,122 @@ check(quiet.card_use(lambda: counters([0] * 6, [1] * 6), lambda: None, ME) == (N
       "no process list: card use not read")
 check(quiet.card_use(lambda: "nothing useful", lambda: procs, ME) == (None, "card use not read"), "counters with no rows: not read")
 
+# The desktop's compositor draws the game's window too and alone reached 11 %: it is left out of other programs' use.
+percent, detail = quiet.card_use(lambda: counters([0] * 6, [0, 0, 0, 0, 0, 11.0]), lambda: procs, ME)
+check(percent == 0.0 and "dwm" not in detail, "dwm.exe at 11 %% is left out of the sum: %s %s" % (percent, detail))
+percent, detail = quiet.card_use(lambda: counters([0] * 6, [3.0, 2.5, 0, 0, 0, 11.0]), lambda: procs, ME)
+check(abs(percent - 5.5) < 1e-9 and "chrome.exe 5.5%" in detail, "other programs are still counted beside it: %s %s" % (percent, detail))
+procs_upper = procs[:3] + [proc(9, "DWM.EXE", 50)]
+check(quiet.card_use(lambda: counters([0] * 6, [0, 0, 0, 0, 0, 11.0]), lambda: procs_upper, ME)[0] == 0.0,
+      "the name is matched in any case")
+
+# ---- The processors: what other programs used over a run (CpuWatch) ----
+# A run on a machine with 8 processors for 100 seconds: 800 processor-seconds. The system's busy time is read at the start
+# and the end; the process list gives each process's CPU seconds. The game (below the measure) used 200, chrome 100.
+
+
+class Cpu:
+    """Fake readings: a clock of the machine's busy and total time, and a process list that changes."""
+    def __init__(self):
+        self.busy, self.total, self.procs = 1000.0, 5000.0, []
+
+    def times(self):
+        return self.busy, self.total
+
+    def reader(self):
+        return [dict(p) for p in self.procs]
+
+
+def cpu_proc(pid, ppid, name, cpu, created=1.0):
+    return {"pid": pid, "ppid": ppid, "name": name, "created": created, "cpu": cpu}
+
+
+def watched(own_cpu, other_cpu, system_busy, ended_game=False):
+    """The percent and detail for a run whose own processes used `own_cpu` seconds, chrome `other_cpu`, with the machine
+    busy for `system_busy` of 800 seconds."""
+    cpu = Cpu()
+    cpu.procs = [cpu_proc(ME, 50, "python.exe", 1.0), cpu_proc(7, 50, "chrome.exe", 40.0)]
+    watch = quiet.CpuWatch(cpu.reader, cpu.times, own_pid=ME)
+    watch.begin(threaded=False)
+    # The run: the harness (a child of the measure) starts, the game (its child) starts; a program that started later too.
+    cpu.procs = [cpu_proc(ME, 50, "python.exe", 3.0), cpu_proc(7, 50, "chrome.exe", 40.0 + other_cpu),
+                 cpu_proc(101, ME, "python.exe", 2.0, 2.0), cpu_proc(102, 101, "NebulaVk.exe", own_cpu - 5.0, 2.0)]
+    watch.sample()
+    if ended_game:  # the game ends before the last look: it keeps the time of the look before
+        cpu.procs = [p for p in cpu.procs if p["pid"] != 102]
+    cpu.busy += system_busy
+    cpu.total += 800.0
+    return watch.end()
+
+
+percent, detail = watched(own_cpu=200.0, other_cpu=100.0, system_busy=310.0)
+# busy 310 - own (the measure 2 + the harness 2 + the game 195 = 199 plus ... see below) is computed from the readings.
+check(abs(percent - (310.0 - (2.0 + 2.0 + 195.0)) / 800.0 * 100.0) < 1e-9, "others = the machine's busy time less the own processes' CPU: %s" % percent)
+check("chrome.exe 12.5%" in detail and detail.startswith("other programs use the processors 13.9%"),
+      "the biggest named program is said: %s" % detail)
+percent, detail = watched(own_cpu=200.0, other_cpu=0.0, system_busy=199.0)
+check(percent == 0.0 and "(" not in detail, "only the own processes busy: others 0, nothing named: %s %s" % (percent, detail))
+percent, detail = watched(own_cpu=200.0, other_cpu=0.0, system_busy=100.0)
+check(percent == 0.0, "own CPU above the machine's busy time (a look a little late) is never negative: %s" % percent)
+percent, detail = watched(own_cpu=200.0, other_cpu=0.0, system_busy=199.0 + 90.0)
+check(abs(percent - 90.0 / 800.0 * 100.0) < 1e-9 and "(" not in detail,
+      "busy time no readable program explains (the system's own, protected programs) still counts: %s %s" % (percent, detail))
+percent, detail = watched(own_cpu=200.0, other_cpu=100.0, system_busy=310.0, ended_game=True)
+check(abs(percent - (310.0 - 199.0) / 800.0 * 100.0) < 1e-9, "a game that ended keeps the CPU of its last look: %s" % percent)
+# The limit's two sides, as the measure applies them.
+check(quiet.CPU_LIMIT == 10.0 and watched(200.0, 0.0, 199.0 + 80.0)[0] <= quiet.CPU_LIMIT < watched(200.0, 0.0, 199.0 + 80.5)[0],
+      "exactly 10 %% of 800 processor-seconds (80) is not more than 10 %%")
+# A process that was already running at the start counts only what it used since: chrome's 40 s before the start are not its run.
+percent, detail = watched(own_cpu=200.0, other_cpu=0.0, system_busy=199.0)
+check("chrome" not in detail, "CPU used before the watch began is not counted: %s" % detail)
+# A game the host started in its place (its parent, the first game, has ended): still below the measure.
+cpu = Cpu()
+cpu.procs = [cpu_proc(ME, 50, "python.exe", 1.0)]
+watch = quiet.CpuWatch(cpu.reader, cpu.times, own_pid=ME)
+watch.begin(threaded=False)
+cpu.procs = [cpu_proc(ME, 50, "python.exe", 1.0), cpu_proc(101, ME, "NebulaVk.exe", 50.0, 2.0)]
+watch.sample()
+cpu.procs = [cpu_proc(ME, 50, "python.exe", 1.0), cpu_proc(103, 101, "NebulaVk.exe", 40.0, 3.0)]  # 101 has ended
+watch.sample()
+cpu.busy += 90.0
+cpu.total += 800.0
+percent, detail = watch.end()
+check(abs(percent) < 1e-9, "a restarted game (its parent ended) is still the measure's own: %s" % percent)
+# Unreadable: no process list, or no system times: not read (the measure trusts the run and says so).
+dead = quiet.CpuWatch(lambda: None, cpu.times, own_pid=ME)
+dead.begin(threaded=False)
+check(dead.end() == (None, "processor use not read"), "no process list: processor use not read")
+dead = quiet.CpuWatch(cpu.reader, lambda: None, own_pid=ME)
+dead.begin(threaded=False)
+check(dead.end() == (None, "processor use not read"), "no system times: processor use not read")
+still = Cpu()
+still.procs = [cpu_proc(ME, 50, "python.exe", 1.0)]
+frozen = quiet.CpuWatch(still.reader, still.times, own_pid=ME)
+frozen.begin(threaded=False)
+check(frozen.end() == (None, "processor use not read"), "no time passed: not read, not a division by zero")
+# The thread looks while the run goes on, and stops at end().
+looks = []
+live = quiet.CpuWatch(lambda: looks.append(1) or [cpu_proc(ME, 50, "python.exe", 1.0)], still.times, own_pid=ME, every=0.01)
+live.begin()
+import time  # noqa: E402
+time.sleep(0.3)
+live.end()
+seen = len(looks)
+time.sleep(0.1)
+check(seen >= 5 and len(looks) == seen and not live.thread.is_alive(), "the thread looks every few seconds and ends with the watch: %d looks" % seen)
+# The Machine hands out a watch with its fakes.
+mach = quiet.Machine(own_pid=ME, cpu_reader=cpu.reader, system_times=cpu.times)
+w = mach.cpu_watch()
+check(isinstance(w, quiet.CpuWatch) and w.reader == cpu.reader and w.own_pid == ME, "Machine.cpu_watch uses the fakes")
+# The real readings work on this computer (Windows only): the process list holds this process, the system times grow.
+if quiet.os.name == "nt":
+    real = quiet.read_cpu_processes()
+    me = [p for p in real if p["pid"] == quiet.os.getpid()] if real else []
+    check(len(me) == 1 and me[0]["cpu"] >= 0.0 and me[0]["name"].lower().startswith("python"),
+          "the real process list names this process: %s" % me)
+    first = quiet.read_system_times()
+    check(first is not None and first[1] >= first[0] > 0, "the real system times: busy no more than total: %s" % (first,))
+
 # ---- The machine object the measure uses ----
 mach = quiet.Machine(minutes=0.0, own_pid=ME, lister=lambda: busy, sleep=lambda s: None, clock=lambda: 0.0, say=lambda s: None,
                      reader=lambda: counters([0] * 6, [8.0, 4.0, 0, 0, 0, 0.0]))
