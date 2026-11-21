@@ -29,6 +29,8 @@ LAST_FAULTS = 20
 # What the published page says in place of "Loading..." when its data cannot be loaded, and how long it waits at most.
 NO_DATA = "The progress data could not be loaded. On the PC, open progress.html in the folder above this one."
 WAIT_SECONDS = 3
+REPAIR_FIELDS = ("id", "opened", "source", "kind", "check", "renderer", "step", "commit", "evidence", "row", "state", "closed",
+                 "seen", "note")
 
 
 def make_static(steps):
@@ -43,11 +45,12 @@ def make_static(steps):
             "steps": [{"id": s["step"], "package": s["package"], "title": s["title"]} for s in steps]}
 
 
-def make_data(steps, landings, state, claims, stale, faults, flakes, now, set_aside=()):
+def make_data(steps, landings, state, claims, stale, faults, flakes, now, set_aside=(), repairs=()):
     """What changes. `steps`: plan.read_steps (state, commit, agent). `landings`: live.read_landings. `state`:
     live.read_state. `claims`: live.read_claims. `stale`: set of stale package names. `faults`: live.fault_groups.
     `flakes`: a count. `now`: the time of writing (text). `set_aside`: [{test, renderer, since, why}] of the tests the gate
-    has set aside (its flakes.tsv and set-aside.tsv are in the live folder).
+    has set aside (its flakes.tsv and set-aside.tsv are in the live folder). `repairs`: [dict] of repairs.tsv, in the order
+    to show (live.repair_order: open ones of kind fail first).
 
     "steps" is keyed by step id and has no entry for a step still open; an entry has `state`, and `agent` (a started or
     blocked step), `commit` and `time` (a landed step; the time is the landing's, when the tool recorded it)."""
@@ -79,6 +82,7 @@ def make_data(steps, landings, state, claims, stale, faults, flakes, now, set_as
                                             "test", "first_error", "could_not", "run_folder")} for g in faults],
         "flakes": flakes,
         "set_aside": [dict(a) for a in set_aside],
+        "repairs": [{k: r.get(k, "") for k in REPAIR_FIELDS} for r in repairs],
     }
 
 
@@ -145,6 +149,7 @@ h2 { font-size: 1.05rem; margin: 28px 0 10px; }
 .row b { font-weight: 650; }
 .tag { display: inline-block; padding: 0 7px; border-radius: 9px; font-size: 0.78rem; border: 1px solid var(--border); color: var(--muted); }
 .tag.stale { color: var(--warn); border-color: var(--warn); }
+.tag.bad { color: var(--blocked); border-color: var(--blocked); }
 .kv { display: grid; grid-template-columns: 7.5rem 1fr; gap: 2px 10px; font-size: 0.9rem; margin-top: 6px; }
 .kv dt { color: var(--muted); margin: 0; } .kv dd { margin: 0; }
 .err { font-family: ui-monospace, SFMono-Regular, Consolas, Menlo, monospace; font-size: 0.82rem; }
@@ -277,6 +282,26 @@ h2 { font-size: 1.05rem; margin: 28px 0 10px; }
       if (k.stale) r.appendChild(el("span", "tag stale", "stale"));
       c.appendChild(r);
       c.appendChild(el("div", "muted", k.time + (k.branch ? "  " + k.branch : "")));
+      app.appendChild(c);
+    });
+
+    var repairs = d.repairs || [];
+    section("Repairs (" + repairs.filter(function (r) { return r.state === "open" && r.kind === "fail"; }).length +
+            " open of kind fail, " + repairs.length + " in all)");
+    if (!repairs.length) none("No repair recorded.");
+    function dash(v) { return v === "-" ? "" : v; }
+    repairs.forEach(function (r) {
+      var c = el("div", "card");
+      var row = el("div", "row");
+      row.appendChild(el("b", null, r.id));
+      row.appendChild(el("span", "tag" + (r.state === "open" && r.kind === "fail" ? " bad" : ""), r.state));
+      row.appendChild(el("span", "tag", r.kind));
+      row.appendChild(el("span", null, r.check + (dash(r.renderer) ? " on " + r.renderer : "")));
+      c.appendChild(row);
+      kv(c, [["Traced to", dash(r.step) || dash(r.commit) ? [dash(r.step) ? "step " + r.step : "", dash(r.commit) ? "commit " + r.commit : ""].filter(Boolean).join(", ") : "not traced to a landing"],
+             ["Seen", r.seen + (r.seen === "1" ? " time" : " times")], ["Source", r.source], ["Opened", r.opened],
+             ["Ledger row", dash(r.row)], ["Evidence", dash(r.evidence), "err"], ["Closed by", dash(r.closed)],
+             ["Note", dash(r.note)]]);
       app.appendChild(c);
     });
 
@@ -415,6 +440,16 @@ def make_status(static, data, landings, faults, now):
     out += ["", "## Last %d landings" % LAST_LANDINGS, ""]
     out += table(["When", "Step", "Title", "Commit"], [(minute(r["finished"]), r["step"], title.get(r["step"], ""), r["commit"])
                                                        for r in last]) if last else ["None yet."]
+    repairs = data.get("repairs", [])
+    out += ["", "## Repairs", ""]
+    out += ["%d open of kind fail, %d in all." % (sum(1 for r in repairs if r["state"] == "open" and r["kind"] == "fail"),
+                                                  len(repairs))] if repairs else ["No repair recorded."]
+    if repairs:
+        out += [""] + table(["Id", "State", "Kind", "Check", "Renderer", "Traced to", "Seen"],
+                            [(r["id"], r["state"], r["kind"], r["check"], r["renderer"],
+                              " ".join(x for x in ("step " + r["step"] if r["step"] not in ("", "-") else "",
+                                                   "commit " + r["commit"] if r["commit"] not in ("", "-") else "") if x) or "not traced",
+                              r["seen"]) for r in repairs])
     out += ["", "## Blocked", ""]
     out += ["- %s %s: %s" % (b["step"], title.get(b["step"], ""), " ".join((b["reason"] or "(no reason written)").split()))
             for b in data["blocked"]] or ["Nothing is blocked."]

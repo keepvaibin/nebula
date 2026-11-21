@@ -210,8 +210,9 @@ class CommandsTest(unittest.TestCase):
             self.assertTrue(text.startswith("NEXT: A.1"), text[:60])
             self.assertIn("plan.py start A.1\n", text)
         code, text = self.t.run(["next", "--agent", "2"])
-        self.assertEqual(code, 1, "its own started step is the only thing in its list")
-        self.assertIn("G6 has step G6.1 started by agent 2: land it first", text)
+        self.assertEqual(code, 0, "its own started step is shown again, and nothing new is given")
+        self.assertTrue(text.startswith("IN WORK: G6.1"), text[:60])
+        self.assertIn("plan.py land G6.1 --agent 2", text)
 
     def test_a_stale_claim_is_reported_by_next_and_status_and_not_taken_without_the_flag(self):
         self.plan(("G6.1", "G6", "", "open"), ("G6.2", "G6", "", "open"), ("A.1", "A", "", "open"))
@@ -248,7 +249,7 @@ class CommandsTest(unittest.TestCase):
     def test_the_real_branch_time_is_read_from_git(self):
         self.plan(("G6.1", "G6", "", "open"))
         self.t.run(["start", "G6.1", "--agent", "2"], expect=0)
-        folder = self.t.folder("G6.1")
+        folder = self.t.folder("G6.1", agent=2)
         (folder / "x.txt").write_text("x", encoding="utf-8")
         self.t.git("add", "-A", cwd=folder)
         with mock.patch.dict(os.environ, {"GIT_COMMITTER_DATE": "2020-01-02T03:04:05+00:00", "GIT_AUTHOR_DATE": "2020-01-02T03:04:05+00:00"}):
@@ -297,14 +298,32 @@ class CommandsTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("step G6.1 was started by agent 2, not agent 1", text)
 
-    def test_the_started_limit_is_per_agent(self):
-        self.plan(*[("S%d.1" % i, "S%d" % i, "", "open") for i in range(1, 4)], ("A.1", "A", "", "open"), ("G6.1", "G6", "", "open"))
-        for i in range(1, 4):
-            self.t.run(["start", "S%d.1" % i], expect=0)
-        code, text = self.t.run(["start", "A.1"])
+    def test_one_thing_in_work_for_each_agent_and_the_other_agent_is_not_held_up(self):
+        self.plan(("S1.1", "S1", "", "open"), ("S2.1", "S2", "", "open"), ("G6.1", "G6", "", "open"), ("G7.1", "G7", "", "open"))
+        self.t.run(["start", "S1.1"], expect=0)
+        code, text = self.t.run(["start", "S2.1"])
         self.assertEqual(code, 1)
-        self.assertIn("3 steps are started and not landed (S1.1, S2.1, S3.1)", text)
-        self.t.run(["start", "G6.1", "--agent", "2"], expect=0)
+        self.assertIn("you have S1.1 in work. Land it (plan.py land S1.1) or block it (plan.py blocked S1.1 \"<why>\") first.", text)
+        self.t.run(["start", "G6.1", "--agent", "2"], expect=0)           # agent 1's step in work does not hold agent 2 up
+        code, text = self.t.run(["start", "G7.1", "--agent", "2"])
+        self.assertEqual(code, 1)
+        self.assertIn("you have G6.1 in work. Land it (plan.py land G6.1 --agent 2) or block it "
+                      "(plan.py blocked G6.1 \"<why>\" --agent 2) first.", text)
+
+    def test_agent_2_works_in_its_own_folder(self):
+        self.plan(("A.1", "A", "", "open"), ("G6.1", "G6", "", "open"), ("G6.2", "G6", "", "open"))
+        self.t.run(["start", "A.1"], expect=0)
+        code, text = self.t.run(["start", "G6.1", "--agent", "2"], expect=0)
+        one, two = self.t.folder(agent=1), self.t.folder(agent=2)
+        self.assertEqual((one.name, two.name), ("Nebula-native", "Nebula-native-2"))
+        self.assertIn("in %s" % two.as_posix(), text)
+        self.assertEqual(self.t.git("rev-parse", "--abbrev-ref", "HEAD", cwd=one), "native/A.1")
+        self.assertEqual(self.t.git("rev-parse", "--abbrev-ref", "HEAD", cwd=two), "native/G6.1")
+        (one / "loose.txt").write_text("x", encoding="utf-8")             # agent 1's loose file does not stop agent 2's folder
+        plan.set_state(self.t.tree, "G6.1", "landed")
+        self.t.run(["start", "G6.2", "--agent", "2"], expect=0)
+        self.assertEqual(sorted(p.name for p in self.t.work.iterdir()), ["Nebula-native", "Nebula-native-2"], "two folders, no more")
+        self.assertEqual(self.t.git("rev-parse", "--abbrev-ref", "HEAD", cwd=two), "native/G6.2")
 
     def test_the_pair_is_refused_at_start(self):
         self.plan(("G2.1", "G2", "", "open"), ("R7.1", "R7", "", "open"))
