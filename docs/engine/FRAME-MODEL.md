@@ -80,21 +80,21 @@ Two frames are in flight (`kFramesInFlight`, `runtime/include/galaxy/render/rend
 | Renderer | Per frame | Inside a frame, the whole GPU |
 | --- | --- | --- |
 | Direct3D 12 | the slot about to be used again (`renderer_d3d12.cpp:3809-3817`); the oldest history ring segment when it is reused (:3966-3970); the frame latency waitable, 100 ms bound (:4356); the copy queue's slot before its staging is written again (`gpu_texture_backend_d3d12.cpp:513`, from `texture_store.cpp:666`) | `wait_for_gpu` (:916) in `reset_sampler_frame` (:1410), `prepare_temporal_upscaler` (:5019, :5052), `record_temporal_upscale` (:5214), and a capture's readback (:6889, :6892) |
-| Vulkan | the slot (`vk/renderer_vk.cpp:2012`); the history ring segment (:2110) | `vkDeviceWaitIdle` when a size no longer matches: the temporal upscaler's preparation and record (`vk/renderer_vk_frame.cpp:922`, :953, :1428) and frame generation's HUD-less targets (:1455, :1495, :1548); the sampler array's restart waits for the last submitted frame (:2710, :2729); the post-process's self-test, in the first frame it is built (`vk/post_process_vk.cpp:947`, 1.8) |
-| Direct3D 11 | the slot (`d3d11/renderer_d3d11.cpp:530`); the frame latency waitable, 100 ms bound (:653) | none; a window size change waits for the GPU idle (`d3d11/renderer_d3d11_scene.cpp:246`) |
-| Metal | the slot (`mtl/renderer_mtl.mm:592`, `wait_for_fence_value`); the history ring segment (:679); a drawable (`nextDrawable`, :1183, in `present`) | `wait_for_gpu_idle` (:499) when the temporal upscaler's size no longer matches (`mtl/renderer_mtl_draw.mm:736`, :757); the sampler array restarts when nearly full and waits for the last submitted frame (:244-247, the wait :261; P-066); the post-process's self-test, in the first frame it is built (`mtl/post_process_mtl.mm:792`, 1.8) |
+| Vulkan | the slot (`runtime/src/render/vk/renderer_vk.cpp:2012`); the history ring segment (:2110) | `vkDeviceWaitIdle` when a size no longer matches: the temporal upscaler's preparation and record (`runtime/src/render/vk/renderer_vk_frame.cpp:922`, :953, :1428) and frame generation's HUD-less targets (:1455, :1495, :1548); the sampler array's restart waits for the last submitted frame (:2710, :2729); the post-process's self-test, in the first frame it is built (`runtime/src/render/vk/post_process_vk.cpp:947`, 1.8) |
+| Direct3D 11 | the slot (`runtime/src/render/d3d11/renderer_d3d11.cpp:530`); the frame latency waitable, 100 ms bound (:653) | none; a window size change waits for the GPU idle (`runtime/src/render/d3d11/renderer_d3d11_scene.cpp:246`) |
+| Metal | the slot (`runtime/src/render/mtl/renderer_mtl.mm:592`, `wait_for_fence_value`); the history ring segment (:679); a drawable (`nextDrawable`, :1183, in `present`) | `wait_for_gpu_idle` (:499) when the temporal upscaler's size no longer matches (`runtime/src/render/mtl/renderer_mtl_draw.mm:736`, :757); the sampler array restarts when nearly full and waits for the last submitted frame (:244-247, the wait :261; P-066); the post-process's self-test, in the first frame it is built (`runtime/src/render/mtl/post_process_mtl.mm:792`, 1.8) |
 
 Outside a frame, `wait_for_gpu` drains the GPU at a window size change (:1955), a swap chain's re-creation or resize
 (:3371, :3419), an HDR switch (:4164), shutdown (:3114, :3141) and the pictures at exit (:6754). Those are allowed by the
-rules of part 2; the waits inside a frame are not, and are in the list (1.9). Metal drains at a window size change (`mtl/renderer_mtl_scene.mm:353`), the pictures at exit
-(`mtl/renderer_mtl_draw.mm:618`) and shutdown (`mtl/renderer_mtl.mm:366`). Vulkan drains the same way at window size changes,
-a swap chain's re-creation and shutdown (`vk/renderer_vk_frame.cpp:425`, `vk/renderer_vk.cpp:1062`, :3022, :1723),
-when FSR's swap chain is made anew (`vk/renderer_vk.cpp:1067`), when the surface is let go (:1449) and for the pictures
-at exit (`vk/renderer_vk_frame.cpp:3533`); Direct3D 11 at shutdown (`d3d11/renderer_d3d11.cpp:374`).
+rules of part 2; the waits inside a frame are not, and are in the list (1.9). Metal drains at a window size change (`runtime/src/render/mtl/renderer_mtl_scene.mm:353`), the pictures at exit
+(`runtime/src/render/mtl/renderer_mtl_draw.mm:618`) and shutdown (`runtime/src/render/mtl/renderer_mtl.mm:366`). Vulkan drains the same way at window size changes,
+a swap chain's re-creation and shutdown (`runtime/src/render/vk/renderer_vk_frame.cpp:425`, `runtime/src/render/vk/renderer_vk.cpp:1062`, :3022, :1723),
+when FSR's swap chain is made anew (`runtime/src/render/vk/renderer_vk.cpp:1067`), when the surface is let go (:1449) and for the pictures
+at exit (`runtime/src/render/vk/renderer_vk_frame.cpp:3533`); Direct3D 11 at shutdown (`runtime/src/render/d3d11/renderer_d3d11.cpp:374`).
 
 With vsync off and a frame-rate cap, each renderer's `PresentPacer::pace` sleeps up to 2 ms toward the present's slot
-before it presents (`runtime/include/galaxy/render/renderer_common.h:181-202`; `renderer_d3d12.cpp:4311`, `vk/renderer_vk.cpp:2246`,
-`d3d11/renderer_d3d11.cpp:649`, `mtl/renderer_mtl.mm:736`): a wait of the render thread on the clock, not on the GPU,
+before it presents (`runtime/include/galaxy/render/renderer_common.h:181-202`; `renderer_d3d12.cpp:4311`, `runtime/src/render/vk/renderer_vk.cpp:2246`,
+`runtime/src/render/d3d11/renderer_d3d11.cpp:649`, `runtime/src/render/mtl/renderer_mtl.mm:736`): a wait of the render thread on the clock, not on the GPU,
 and pacing's (E6b).
 
 The game thread waits on the render thread at three places: queue room (1.2 item 3), the render thread idle (1.2 item
@@ -128,8 +128,8 @@ game touches goes through the save worker.
 | --- | --- | --- |
 | Window owner (`window_owner.cpp:20`) | the window's size, focus, input | the size reaches the aspect latch (1.5) and the swap chain's resize (1.4, a whole-GPU wait) |
 | Display clock (`vblank_clock_win32.cpp:175`, started once by `vblank_grid`) | the vertical blank's time and period | under `g_mutex`, read by the step wait and the present slots |
-| Pipeline workers (`core/pipelines.cpp:104`, lowest priority) | compiling pipeline states | each published to an atomic cell (`cell` :145, `publish` :164); a draw whose pipeline is not there yet compiles it on the render thread (`create_now` :253; a quick link where pipelines link from parts, :271) |
-| Record workers (`core/draw_record.h`, `RecordPool`) | encoding a pass's chunks | fork and join inside the walk: the render thread takes a share and returns when all are done |
+| Pipeline workers (`runtime/src/render/core/pipelines.cpp:104`, lowest priority) | compiling pipeline states | each published to an atomic cell (`cell` :145, `publish` :164); a draw whose pipeline is not there yet compiles it on the render thread (`create_now` :253; a quick link where pipelines link from parts, :271) |
+| Record workers (`runtime/src/render/core/draw_record.h`, `RecordPool`) | encoding a pass's chunks | fork and join inside the walk: the render thread takes a share and returns when all are done |
 | Texture pack workers (`texture_pack.cpp:176`) | reading and decoding replacements | decoded pixels picked up at `pump` once a frame; the upload is the render thread's |
 | Movie (`movie_playback.cpp:85`, :357, :903; :1200 prepares the decoder) | decoding a movie | pictures through the stager to the render thread |
 | Streamline start (`renderer_d3d12.cpp:2314`) | loading the vendor's library | joined at device creation, before any frame |
@@ -141,7 +141,7 @@ game touches goes through the save worker.
 
 Not part of a frame: controllers (`controller_hid.cpp`, `wiimote_hid.cpp`, `switch2_ble_win.cpp`), mods' services
 (`luma_net.cpp`, `luma_fs.cpp`, `luma_mods.cpp`, `luma_assets.cpp`, `luma_capture.cpp`, `luma_input.cpp`), the settings
-screen's workers (`ui/native_settings.cpp`), updates (`update/update.cpp`), vendor downloads, Discord. Nor the host's
+screen's workers (`runtime/src/ui/native_settings.cpp`), updates (`runtime/src/update/update.cpp`), vendor downloads, Discord. Nor the host's
 and the platforms' own: the crash writer (`native/host/host_main.cpp:1904`), the benchmark report's sender (:1965),
 the start-again hand-over (:4513, :4603), the mods' background cook (:5505; it waits for the layers the mods' code
 chooses, and nothing waits for it inside a step), the sound clock of a build without a renderer (:6507), the SDL
@@ -183,27 +183,27 @@ it: the records hold eye-space work for one camera, not geometry the GPU places 
 ### 1.8 After the scene: post-process, upscalers, frame generation
 
 Read for the rules (whole-GPU waits, compiles, file reads on the render thread): `post_process.cpp`,
-`vk/post_process_vk.cpp`, `mtl/post_process_mtl.mm`, `temporal_upscaler.cpp`, `vk/temporal_upscaler_vk.cpp`,
-`xess_upscaler.cpp`, `mtl/metalfx_mtl.mm`, `mtl/sgsr2_mtl.mm`, `fsr_frame_generation.cpp`,
-`fsr_frame_generation_core.inl`, `vk/fsr_frame_generation_vk.cpp`.
+`runtime/src/render/vk/post_process_vk.cpp`, `runtime/src/render/mtl/post_process_mtl.mm`, `temporal_upscaler.cpp`, `runtime/src/render/vk/temporal_upscaler_vk.cpp`,
+`xess_upscaler.cpp`, `runtime/src/render/mtl/metalfx_mtl.mm`, `runtime/src/render/mtl/sgsr2_mtl.mm`, `fsr_frame_generation.cpp`,
+`fsr_frame_generation_core.inl`, `runtime/src/render/vk/fsr_frame_generation_vk.cpp`.
 
 - Direct3D 12: the post-process programs are made at the renderer's start (`renderer_d3d12.cpp:2713`), where a
   self-test of the anti-aliasing waits for the GPU once (`post_process.cpp:296`, :794); allowed, it is before any frame.
   The temporal upscaler's preparation and record drain the whole GPU (1.4; P-028, written).
-- Vulkan: the bloom's pipelines are built in `begin_frame` the first time it runs (`vk/renderer_vk.cpp:1997`,
-  `vk/game_bloom_vk.cpp:52`) and the post-process's in `sync_post_process` the first frame that needs them
-  (`vk/renderer_vk.cpp:2821`, `vk/post_process_vk.cpp:441`): compiles inside a frame, and the post-process's
-  self-test then waits for the GPU in that frame (`vk/post_process_vk.cpp:947`). A swap chain made again builds
-  the present pipelines again (`vk/post_process_vk.cpp:152-170`, from `create_swapchain`), outside a frame's walk.
+- Vulkan: the bloom's pipelines are built in `begin_frame` the first time it runs (`runtime/src/render/vk/renderer_vk.cpp:1997`,
+  `runtime/src/render/vk/game_bloom_vk.cpp:52`) and the post-process's in `sync_post_process` the first frame that needs them
+  (`runtime/src/render/vk/renderer_vk.cpp:2821`, `runtime/src/render/vk/post_process_vk.cpp:441`): compiles inside a frame, and the post-process's
+  self-test then waits for the GPU in that frame (`runtime/src/render/vk/post_process_vk.cpp:947`). A swap chain made again builds
+  the present pipelines again (`runtime/src/render/vk/post_process_vk.cpp:152-170`, from `create_swapchain`), outside a frame's walk.
 - Metal: the post-process and bloom compile their MSL on a worker from the renderer's start
-  (`mtl/post_process_mtl.mm:112-130`, `mtl/game_bloom_mtl.mm:46-56`); the render thread makes their pipeline states
+  (`runtime/src/render/mtl/post_process_mtl.mm:112-130`, `runtime/src/render/mtl/game_bloom_mtl.mm:46-56`); the render thread makes their pipeline states
   from it the first frame it is ready (`poll_ready`, `post_process_mtl.mm:272`, `game_bloom_mtl.mm:107`), and the
   post-process's self-test waits for the GPU there (`post_process_mtl.mm:792`). Ambient occlusion compiles at the
-  renderer's start (`mtl/ambient_occlusion_mtl.mm:59`, from `mtl/renderer_mtl.mm:118`). The utility pipelines
-  (`mtl/renderer_mtl_scene.mm:56`, from `utility_pipeline` :67) and the scene camera's (`mtl/scene_camera_mtl.mm:45`,
+  renderer's start (`runtime/src/render/mtl/ambient_occlusion_mtl.mm:59`, from `runtime/src/render/mtl/renderer_mtl.mm:118`). The utility pipelines
+  (`runtime/src/render/mtl/renderer_mtl_scene.mm:56`, from `utility_pipeline` :67) and the scene camera's (`runtime/src/render/mtl/scene_camera_mtl.mm:45`,
   from `pipeline` :108) compile from source on the render thread when a key is first asked for; SGSR 2
-  (`mtl/sgsr2_mtl.mm:58`) and the MetalFX depth copy (`mtl/metalfx_mtl.mm:244`) when their upscaler is made; the game's
-  programs from their text when their pipeline is made (`mtl/pipelines_mtl.mm:283`).
+  (`runtime/src/render/mtl/sgsr2_mtl.mm:58`) and the MetalFX depth copy (`runtime/src/render/mtl/metalfx_mtl.mm:244`) when their upscaler is made; the game's
+  programs from their text when their pipeline is made (`runtime/src/render/mtl/pipelines_mtl.mm:283`).
 - The upscalers' and frame generation's bodies (XeSS, FSR, the Vulkan temporal upscaler, SGSR 2) wait for no fence and
   read no file in a frame.
 
@@ -215,10 +215,10 @@ with no row has a new one.
 
 | Part | Where | Row |
 | --- | --- | --- |
-| A draw whose pipeline is not ready compiles it on the render thread | `core/pipelines.cpp:253` (`create_now`) | P-010, E3 step 1 (a form known at load) |
-| Utility pipelines compiled on the render thread at first use, outside the cache | `core/pipelines.cpp` | P-052 (written, engine/b) |
-| A present waits for every pipeline creation in flight (Direct3D 12) | `core/present_gate.h` | N-1067, E3 step 1 |
-| The sampler heap or array, full, waits for the whole GPU | `renderer_d3d12.cpp:1410`; `vk/renderer_vk_frame.cpp:2710`, :2729; `mtl/renderer_mtl_draw.mm:261` (each `reset_sampler_frame`) | P-048, P-056, P-066, E3 step 2 |
+| A draw whose pipeline is not ready compiles it on the render thread | `runtime/src/render/core/pipelines.cpp:253` (`create_now`) | P-010, E3 step 1 (a form known at load) |
+| Utility pipelines compiled on the render thread at first use, outside the cache | `runtime/src/render/core/pipelines.cpp` | P-052 (written, engine/b) |
+| A present waits for every pipeline creation in flight (Direct3D 12) | `runtime/src/render/core/present_gate.h` | N-1067, E3 step 1 |
+| The sampler heap or array, full, waits for the whole GPU | `renderer_d3d12.cpp:1410`; `runtime/src/render/vk/renderer_vk_frame.cpp:2710`, :2729; `runtime/src/render/mtl/renderer_mtl_draw.mm:261` (each `reset_sampler_frame`) | P-048, P-056, P-066, E3 step 2 |
 | Size changes drain the whole GPU inside a frame | `renderer_d3d12.cpp:5019`, :5052, :5214 (the temporal upscaler), :1955; Vulkan's at size changes inside a frame (1.4) | P-028 (written for Direct3D 12 on engine/b; Vulkan's side open) |
 | The game thread waits for frame F - 2's probe answers | `render_core.cpp:1585` | N-1068, E4 |
 | The game thread waits for the whole render queue at an aspect change | `host_main.cpp:3228` | N-1081 |
@@ -232,7 +232,7 @@ with no row has a new one.
 | A copy before the list writes the frame reads the picture shown last, as the console's frame buffer held it | `draw_walker.cpp:1583` | E4 (the last picture asked for by name) |
 | The scene's camera found at its opaque end, as the game loads its projection after the scene begins | `draw_walker.cpp:1356` | E4 (`GameScene::draw3D` states its passes) |
 | A target's texture table rebuilt each frame; each draw names its textures again | `draw_walker.cpp:878`, :920 | E3 step 2 (each form's texture list) |
-| Vulkan's bloom and post-process pipelines built on the render thread in the first frame that needs them, and the post-process's self-test waiting for the GPU there | `vk/renderer_vk.cpp:1997`, :2821; `vk/post_process_vk.cpp:947` | P-052 (its Vulkan half: open) |
+| Vulkan's bloom and post-process pipelines built on the render thread in the first frame that needs them, and the post-process's self-test waiting for the GPU there | `runtime/src/render/vk/renderer_vk.cpp:1997`, :2821; `runtime/src/render/vk/post_process_vk.cpp:947` | P-052 (its Vulkan half: open) |
 | Metal's own pipelines made on the render thread in a frame: the utility and scene camera pipelines compiled from source there, the post-process's and bloom's states made from a worker's compile, and the post-process's self-test waiting for the GPU | `mtl/*_mtl.mm` (1.8) | P-065 (its text says every compile is on the render thread: the post-process's and bloom's are on a worker, ambient occlusion's at the start) |
 
 This list covers the render path as read for this file: every file of 1.1 to 1.8, with the files stage 2 item 1
@@ -858,7 +858,7 @@ Read at cfc2e368e.
    coordinate matrix before and after its calc and compares them (`Material.cpp:262-276`).
 4. The ambient colours are a global pair (`MaterialAmbient`): set by each actor's light load
    (`LightFunction.cpp:189`), by a material with its own ambient when it is sent (`Material.cpp:481-488`), and to black
-   by the 2-D layers (`Ui/Material.cpp:749-750`, `DrawUtil.cpp:32-33`). A form that reads them is filled again when the
+   by the 2-D layers (`native/petari/src/Game/Ui/Material.cpp:749-750`, `DrawUtil.cpp:32-33`). A form that reads them is filled again when the
    pair's generation changes in the plain module, and at every draw in a module with hook points
    (`Material.cpp:746-750`); a material that reads the pair after another set it reads that one's.
 5. The render thread (`draw_walker.cpp:588-612`, `:620-664`): a slot is used as it is; a form's rows in the list are
@@ -947,7 +947,7 @@ pictures at a step do not.
 Read at cfc2e368e.
 
 **Today.** A site is game code that draws without a model's material: effects, shadows, debug and 2-D shapes,
-gauges, glows, particles, the mods' draw services. It draws through `TypedDraw` (`Render/TypedDraw.cpp`):
+gauges, glows, particles, the mods' draw services. It draws through `TypedDraw` (`native/petari/src/Game/Render/TypedDraw.cpp`):
 
 1. A `SiteMaterial` (a written shader, its state, up to 256 floats inline, a texture list) is copied whole into the
    frame's arena and listed as new constants at every `TypedDraw` made or `setMaterial` called (`:193-208`), and its
@@ -973,8 +973,8 @@ The sites (`git grep` of `vertices<` and `.vertices(` over `native/petari`, less
 `MiiHead.cpp:41`, which reads a Mii shape): 109 in 47 files, 56 triangle strips, 36 quads, 8 fans, 4 triangle lists,
 1 line list, 1 line strip, and 3 whose primitive is chosen as they run (`MarioShadow.cpp:331`,
 `ParticleDraw.cpp:243`, `:245`). P-154's count of 11-17 was 109 in 47 with 35 quads; one quad site is new since.
-`Util/DirectDraw.cpp` holds 17 (lines, circles, fans, cylinders, sphere parts, boxes, textured quads, under the
-`TDDraw` namespace), used from 19 files, most by `MarioActorSpecialDraw.cpp` (30 calls); `System/LumaDraw.cpp` holds
+`native/petari/src/Game/Util/DirectDraw.cpp` holds 17 (lines, circles, fans, cylinders, sphere parts, boxes, textured quads, under the
+`TDDraw` namespace), used from 19 files, most by `MarioActorSpecialDraw.cpp` (30 calls); `native/petari/src/Game/System/LumaDraw.cpp` holds
 7, the mods' draw services.
 
 Particles (P-149, P-150): each particle's matrix is built in eye space by its shape, taken back to the world through
@@ -1059,115 +1059,115 @@ step is read with each family). The primitives agree with 2.12's count: 56 strip
 
 | # | Site | Primitive | Kind | Group | Read |
 | --- | --- | --- | --- | --- | --- |
-| 1 | `Enemy/RingBeam.cpp:80` | strip | state | shadows | RingBeamShadowDrawer; 32 point matrices along the beam's ring, band top |
-| 2 | `Enemy/RingBeam.cpp:92` | strip | state | shadows | band 500 down |
-| 3 | `Enemy/RingBeam.cpp:111` | strip | state | shadows | -x wall |
-| 4 | `Enemy/RingBeam.cpp:126` | strip | state | shadows | +x wall |
-| 5 | `LiveActor/ShadowSurfaceBox.cpp:72` | quad | fixed | shadows | unit box face, one of 8 arrangements by setPart; matrix carries size |
-| 6 | `LiveActor/ShadowSurfaceBox.cpp:78` | quad | fixed | shadows | as 5 |
-| 7 | `LiveActor/ShadowSurfaceBox.cpp:84` | quad | fixed | shadows | as 5 |
-| 8 | `LiveActor/ShadowSurfaceCircle.cpp:70` | fan | fixed | shadows | unit circle, cSegments; radius in the matrix |
-| 9 | `LiveActor/ShadowVolumeBox.cpp:136` | strip | numbers | shadows | 14 corners from the box and its drop (mPoints) |
-| 10 | `LiveActor/ShadowVolumeBox.cpp:154` | fan | numbers | shadows | as 9, cap |
-| 11 | `LiveActor/ShadowVolumeBox.cpp:166` | fan | numbers | shadows | as 9, cap |
-| 12 | `LiveActor/ShadowVolumeLine.cpp:90` | quad | numbers | shadows | two ends, widths, drops (8 points) |
-| 13 | `LiveActor/ShadowVolumeLine.cpp:96` | quad | numbers | shadows | as 12 |
-| 14 | `LiveActor/ShadowVolumeLine.cpp:102` | strip | numbers | shadows | as 12 |
-| 15 | `Map/Flag.cpp:394` | strip | state | strips | cloth points, one strip per row |
-| 16 | `Map/Flag.cpp:417` | strip | numbers | strips | stick: position, up, length |
-| 17 | `Map/OceanBowl.cpp:328` | strip | state | strips | wave grid, one strip per column |
-| 18 | `Map/OceanBowlBloomDrawer.cpp:30` | strip | state | strips | 17's grid, bloom pass |
-| 19 | `Map/OceanRingDrawer.cpp:152` | strip | state | strips | ring part's water points |
-| 20 | `Map/OceanRingDrawer.cpp:162` | strip | state | strips | 19's points, bloom pass; near the camera only |
-| 21 | `Map/OceanSphere.cpp:696` | strip | state | strips | wave points (updatePoints); SiteMesh twin mMeshFace drawn beyond 10000 from the player (OceanSphere.cpp:412-416) |
-| 22 | `Map/OceanSphere.cpp:700` | strip | state | strips | as 21, mMeshBack |
-| 23 | `Map/WaterPlant.cpp:284` | strip | state | strips | per plant swing, 4 points |
-| 24 | `Map/WaterRoad.cpp:285` | strip | numbers | strips | the kept mesh (mMeshHigh, WaterRoad.cpp:241-260) cut at the rail coordinate in its demo, the end row mixed (:262-325, from :710) |
-| 25 | `Map/WhirlPoolAccelerator.cpp:136` | strip | state | strips | whirl points |
-| 26 | `MapObj/AstroDomeOrbit.cpp:133` | strip | numbers | strips | ring: center, radius, width, height (mRingCos/Sin fixed) |
-| 27 | `MapObj/AstroDomeOrbit.cpp:164` | strip | numbers | strips | as 26, side wall |
-| 28 | `MapObj/ClipFieldFillDraw.cpp:54` | strip | fixed | 2-D | screen quad in eye space, screen size in the matrix; stencil fill |
-| 29 | `MapObj/ElectricRail.cpp:462` | strip | numbers | strips | vanishing: the kept mesh (ElectricRail.cpp:441-446, drawn while waiting, :283-287) at radius mEaseIn |
-| 30 | `MapObj/ElectricRailMoving.cpp:269` | strip | numbers | strips | as 29 at mRailWidth (ElectricRailMoving.cpp:89-93, :244-249) |
-| 31 | `MapObj/GCaptureRibbon.cpp:17` | strip | numbers | strips | quad from start, end, offset |
-| 32 | `MapObj/SnowFloor.cpp:663` | quad | state | quads | footprint trail, one quad per segment |
-| 33 | `MapObj/SnowFloorTile.cpp:469` | quad | numbers | quads | tile quad; drawn 16 times identical per layer (sStripCount), as Petari's drawLayer at cec16c113 |
-| 34 | `MapObj/SpiderThreadPart.cpp:517` | strip | numbers | strips | two points, side, up: upper edge |
-| 35 | `MapObj/SpiderThreadPart.cpp:524` | strip | numbers | strips | as 34, right lower |
-| 36 | `MapObj/SpiderThreadPart.cpp:531` | strip | numbers | strips | as 34, left lower |
-| 37 | `MapObj/SpiderThreadPart.cpp:545` | strip | state | strips | thread points |
-| 38 | `MapObj/SpiderThreadPart.cpp:561` | strip | state | strips | as 37 |
-| 39 | `MapObj/SpiderThreadPart.cpp:576` | strip | state | strips | as 37 |
-| 40 | `MapObj/SpinDriverPathDrawer.cpp:312` | strip | fixed | strips | path made once (initPositionList, SpinDriverPathDrawer.cpp:132); coord, mask, fade are values |
-| 41 | `MapObj/TrampleStar.cpp:617` | list | state | strips | surface rebuilt by calcSurface each step (TrampleStar.cpp:293-338) |
-| 42 | `MapObj/WarpPod.cpp:606` | quad | fixed | quads | two crossed quads per segment of a path made once (WarpPod.cpp:501-517) |
-| 43 | `MapObj/WhirlPool.cpp:112` | strip | state | strips | whirl points |
-| 44 | `Mii/MiiFaceTexture.cpp:179` | quad | fixed | 2-D | unit quad under an eye matrix, into the face texture |
-| 45 | `Particle/ParticleDraw.cpp:243` | chosen | state | particles | corner batch |
-| 46 | `Particle/ParticleDraw.cpp:245` | chosen | state | particles | corner batch with extras |
-| 47 | `Player/MarineSnow.cpp:174` | quad | state | points | one camera-facing quad per flake: an instance per point |
-| 48 | `Player/MarioActorSpecialDraw.cpp:144` | quad | numbers | 2-D | screen box from position and size |
-| 49 | `Player/MarioActorSpecialDraw.cpp:411` | fan | fixed | fans | 16-segment circle under a matrix (position, normal, radius) |
-| 50 | `Player/MarioActorSpecialDraw.cpp:446` | strip | fixed | 2-D | screen quad (frame ripple) |
-| 51 | `Player/MarioActorSpecialDraw.cpp:689` | quad | numbers | 2-D | screen box from a projected radius |
-| 52 | `Player/MarioFoo.cpp:658` | quad | numbers | quads | beam: center, side, front, length |
-| 53 | `Player/MarioFoo.cpp:668` | quad | numbers | quads | as 52, other side |
-| 54 | `Player/MarioFoo.cpp:737` | quad | state | quads | trail points |
-| 55 | `Player/MarioFoo.cpp:745` | quad | state | quads | as 54 |
-| 56 | `Player/MarioShadow.cpp:331` | chosen | state | shadows | collision polygons under the player (3 or 4 corners) |
-| 57 | `Player/MarioShadow.cpp:441` | fan | fixed | shadows | 16-segment ellipse in the shadow target's alpha |
-| 58 | `Player/MarioShadow.cpp:520` | list | state | shadows | edge polygons |
-| 59 | `Ride/Creeper.cpp:492` | strip | state | strips | vine points |
-| 60 | `Ride/Creeper.cpp:498` | strip | state | strips | as 59 |
-| 61 | `Ride/Creeper.cpp:504` | strip | state | strips | as 59 |
-| 62 | `Ride/PlantStalk.cpp:164` | strip | state | strips | grown points |
-| 63 | `Ride/PlantStalk.cpp:177` | strip | state | strips | as 62 |
-| 64 | `Ride/PlantStalk.cpp:190` | strip | state | strips | as 62 |
-| 65 | `Ride/SpaceCocoon.cpp:819` | strip | state | strips | stalk points |
-| 66 | `Ride/SwingRope.cpp:678` | strip | numbers | strips | one segment: two points, side, front |
-| 67 | `Ride/SwingRope.cpp:688` | strip | state | strips | rope points |
-| 68 | `Ride/Trapeze.cpp:679` | strip | numbers | strips | rope segment A to B, side, front |
-| 69 | `Ride/Trapeze.cpp:693` | strip | numbers | strips | as 68 |
-| 70 | `Ride/Trapeze.cpp:707` | strip | numbers | strips | as 68 |
-| 71 | `Screen/DepthOfFieldBlur.cpp:109` | strip | numbers | 2-D | ramp of 4 stops from two distances |
-| 72 | `Screen/ImageEffectLocalUtil.cpp:132` | strip | fixed | 2-D | unit quad |
-| 73 | `Screen/MovieDraw.cpp:46` | quad | numbers | 2-D | x, y, width, height |
-| 74 | `Screen/ScreenBlurEffect.cpp:81` | strip | numbers | 2-D | quad at -scale from fovy and aspect |
-| 75 | `Screen/StarPointerBlur.cpp:157` | strip | state | 2-D | pointer trail points, runs of the trail |
-| 76 | `Screen/StarPointerBlur.cpp:178` | strip | state | 2-D | as 75 |
-| 77 | `Screen/WaterCameraFilter.cpp:141` | strip | numbers | 2-D | screen quad, texture centred on the player's screen position |
-| 78 | `System/LumaDraw.cpp:353` | quad | numbers | mods | 2-D rect |
-| 79 | `System/LumaDraw.cpp:745` | quad | numbers | mods | 2-D thick line |
-| 80 | `System/LumaDraw.cpp:780` | list | numbers | mods | 2-D triangle |
-| 81 | `System/LumaDraw.cpp:837` | quad | numbers | mods | 2-D image |
-| 82 | `System/LumaDraw.cpp:1372` | quad | numbers | mods | 3-D line, thickness |
-| 83 | `System/LumaDraw.cpp:1398` | list | numbers | mods | 3-D triangle |
-| 84 | `System/LumaDraw.cpp:1621` | quad | numbers | mods | 3-D camera-facing image |
-| 85 | `Ui/UiCommon.cpp:51` | quad | numbers | 2-D | layout pane quad: base, size, colours, coords |
-| 86 | `Util/BezierSurface.cpp:716` | strip | numbers | strips | patch from its control points, by a table per divide level |
-| 87 | `Util/BezierSurface.cpp:746` | strip | numbers | strips | as 86 with normals and coords |
-| 88 | `Util/DirectDraw.cpp:50` | line list | numbers | lines | TDDraw::drawLine |
-| 89 | `Util/DirectDraw.cpp:75` | line strip | numbers | lines | TDDraw::drawCircle outline, segments |
-| 90 | `Util/DirectDraw.cpp:86` | fan | numbers | fans | TDDraw::drawFillCircle (2-D), segments |
-| 91 | `Util/DirectDraw.cpp:108` | fan | numbers | fans | TDDraw::drawFillCircle by a normal |
-| 92 | `Util/DirectDraw.cpp:128` | fan | numbers | fans | TDDraw::drawFillFan, angles |
-| 93 | `Util/DirectDraw.cpp:160` | strip | numbers | strips | TDDraw::drawCylinder, segments |
-| 94 | `Util/DirectDraw.cpp:191` | strip | numbers | strips | TDDraw::drawSpherePart, segments |
-| 95 | `Util/DirectDraw.cpp:227` | quad | numbers | 2-D | TDDraw::drawTexture: position, size |
-| 96 | `Util/DirectDraw.cpp:258` | quad | numbers | quads | TDDraw::drawTexture3D: center, normal, up, width, height, flips |
-| 97 | `Util/DirectDraw.cpp:266` | quad | numbers | quads | TDDraw::drawFillBox (3-D): one quad from two corners |
-| 98 | `Util/DirectDraw.cpp:276` | quad | numbers | 2-D | TDDraw::drawFillBox (2-D) |
-| 99 | `Util/DirectDraw.cpp:296` | quad | fixed | quads | TDDraw::drawFillBox3D: unit cube face under the matrix (center, height, side, front) |
-| 100 | `Util/DirectDraw.cpp:302` | quad | fixed | quads | as 99 |
-| 101 | `Util/DirectDraw.cpp:308` | quad | fixed | quads | as 99 |
-| 102 | `Util/DirectDraw.cpp:314` | quad | fixed | quads | as 99 |
-| 103 | `Util/DirectDraw.cpp:320` | quad | fixed | quads | as 99 |
-| 104 | `Util/DirectDraw.cpp:326` | quad | fixed | quads | as 99 |
-| 105 | `Util/DrawUtil.cpp:80` | quad | fixed | 2-D | screen colour quad |
-| 106 | `Util/DrawUtil.cpp:99` | quad | fixed | 2-D | screen picture quad |
-| 107 | `Util/DrawUtil.cpp:158` | strip | fixed | shadows | screen quad clearing the stencil |
-| 108 | `Util/DrawUtil.cpp:179` | quad | numbers | 2-D | fillScreenArea: min, max |
-| 109 | `Util/DrawUtil.cpp:220` | strip | fixed | shadows | screen quad, half black where the stencil is set |
+| 1 | `native/petari/src/Game/Enemy/RingBeam.cpp:80` | strip | state | shadows | RingBeamShadowDrawer; 32 point matrices along the beam's ring, band top |
+| 2 | `native/petari/src/Game/Enemy/RingBeam.cpp:92` | strip | state | shadows | band 500 down |
+| 3 | `native/petari/src/Game/Enemy/RingBeam.cpp:111` | strip | state | shadows | -x wall |
+| 4 | `native/petari/src/Game/Enemy/RingBeam.cpp:126` | strip | state | shadows | +x wall |
+| 5 | `native/petari/src/Game/LiveActor/ShadowSurfaceBox.cpp:72` | quad | fixed | shadows | unit box face, one of 8 arrangements by setPart; matrix carries size |
+| 6 | `native/petari/src/Game/LiveActor/ShadowSurfaceBox.cpp:78` | quad | fixed | shadows | as 5 |
+| 7 | `native/petari/src/Game/LiveActor/ShadowSurfaceBox.cpp:84` | quad | fixed | shadows | as 5 |
+| 8 | `native/petari/src/Game/LiveActor/ShadowSurfaceCircle.cpp:70` | fan | fixed | shadows | unit circle, cSegments; radius in the matrix |
+| 9 | `native/petari/src/Game/LiveActor/ShadowVolumeBox.cpp:136` | strip | numbers | shadows | 14 corners from the box and its drop (mPoints) |
+| 10 | `native/petari/src/Game/LiveActor/ShadowVolumeBox.cpp:154` | fan | numbers | shadows | as 9, cap |
+| 11 | `native/petari/src/Game/LiveActor/ShadowVolumeBox.cpp:166` | fan | numbers | shadows | as 9, cap |
+| 12 | `native/petari/src/Game/LiveActor/ShadowVolumeLine.cpp:90` | quad | numbers | shadows | two ends, widths, drops (8 points) |
+| 13 | `native/petari/src/Game/LiveActor/ShadowVolumeLine.cpp:96` | quad | numbers | shadows | as 12 |
+| 14 | `native/petari/src/Game/LiveActor/ShadowVolumeLine.cpp:102` | strip | numbers | shadows | as 12 |
+| 15 | `native/petari/src/Game/Map/Flag.cpp:394` | strip | state | strips | cloth points, one strip per row |
+| 16 | `native/petari/src/Game/Map/Flag.cpp:417` | strip | numbers | strips | stick: position, up, length |
+| 17 | `native/petari/src/Game/Map/OceanBowl.cpp:328` | strip | state | strips | wave grid, one strip per column |
+| 18 | `native/petari/src/Game/Map/OceanBowlBloomDrawer.cpp:30` | strip | state | strips | 17's grid, bloom pass |
+| 19 | `native/petari/src/Game/Map/OceanRingDrawer.cpp:152` | strip | state | strips | ring part's water points |
+| 20 | `native/petari/src/Game/Map/OceanRingDrawer.cpp:162` | strip | state | strips | 19's points, bloom pass; near the camera only |
+| 21 | `native/petari/src/Game/Map/OceanSphere.cpp:696` | strip | state | strips | wave points (updatePoints); SiteMesh twin mMeshFace drawn beyond 10000 from the player (OceanSphere.cpp:412-416) |
+| 22 | `native/petari/src/Game/Map/OceanSphere.cpp:700` | strip | state | strips | as 21, mMeshBack |
+| 23 | `native/petari/src/Game/Map/WaterPlant.cpp:284` | strip | state | strips | per plant swing, 4 points |
+| 24 | `native/petari/src/Game/Map/WaterRoad.cpp:285` | strip | numbers | strips | the kept mesh (mMeshHigh, WaterRoad.cpp:241-260) cut at the rail coordinate in its demo, the end row mixed (:262-325, from :710) |
+| 25 | `native/petari/src/Game/Map/WhirlPoolAccelerator.cpp:136` | strip | state | strips | whirl points |
+| 26 | `native/petari/src/Game/MapObj/AstroDomeOrbit.cpp:133` | strip | numbers | strips | ring: center, radius, width, height (mRingCos/Sin fixed) |
+| 27 | `native/petari/src/Game/MapObj/AstroDomeOrbit.cpp:164` | strip | numbers | strips | as 26, side wall |
+| 28 | `native/petari/src/Game/MapObj/ClipFieldFillDraw.cpp:54` | strip | fixed | 2-D | screen quad in eye space, screen size in the matrix; stencil fill |
+| 29 | `native/petari/src/Game/MapObj/ElectricRail.cpp:462` | strip | numbers | strips | vanishing: the kept mesh (ElectricRail.cpp:441-446, drawn while waiting, :283-287) at radius mEaseIn |
+| 30 | `native/petari/src/Game/MapObj/ElectricRailMoving.cpp:269` | strip | numbers | strips | as 29 at mRailWidth (ElectricRailMoving.cpp:89-93, :244-249) |
+| 31 | `native/petari/src/Game/MapObj/GCaptureRibbon.cpp:17` | strip | numbers | strips | quad from start, end, offset |
+| 32 | `native/petari/src/Game/MapObj/SnowFloor.cpp:663` | quad | state | quads | footprint trail, one quad per segment |
+| 33 | `native/petari/src/Game/MapObj/SnowFloorTile.cpp:469` | quad | numbers | quads | tile quad; drawn 16 times identical per layer (sStripCount), as Petari's drawLayer at cec16c113 |
+| 34 | `native/petari/src/Game/MapObj/SpiderThreadPart.cpp:517` | strip | numbers | strips | two points, side, up: upper edge |
+| 35 | `native/petari/src/Game/MapObj/SpiderThreadPart.cpp:524` | strip | numbers | strips | as 34, right lower |
+| 36 | `native/petari/src/Game/MapObj/SpiderThreadPart.cpp:531` | strip | numbers | strips | as 34, left lower |
+| 37 | `native/petari/src/Game/MapObj/SpiderThreadPart.cpp:545` | strip | state | strips | thread points |
+| 38 | `native/petari/src/Game/MapObj/SpiderThreadPart.cpp:561` | strip | state | strips | as 37 |
+| 39 | `native/petari/src/Game/MapObj/SpiderThreadPart.cpp:576` | strip | state | strips | as 37 |
+| 40 | `native/petari/src/Game/MapObj/SpinDriverPathDrawer.cpp:312` | strip | fixed | strips | path made once (initPositionList, SpinDriverPathDrawer.cpp:132); coord, mask, fade are values |
+| 41 | `native/petari/src/Game/MapObj/TrampleStar.cpp:617` | list | state | strips | surface rebuilt by calcSurface each step (TrampleStar.cpp:293-338) |
+| 42 | `native/petari/src/Game/MapObj/WarpPod.cpp:606` | quad | fixed | quads | two crossed quads per segment of a path made once (WarpPod.cpp:501-517) |
+| 43 | `native/petari/src/Game/MapObj/WhirlPool.cpp:112` | strip | state | strips | whirl points |
+| 44 | `native/petari/src/Game/Mii/MiiFaceTexture.cpp:179` | quad | fixed | 2-D | unit quad under an eye matrix, into the face texture |
+| 45 | `native/petari/src/Game/Particle/ParticleDraw.cpp:243` | chosen | state | particles | corner batch |
+| 46 | `native/petari/src/Game/Particle/ParticleDraw.cpp:245` | chosen | state | particles | corner batch with extras |
+| 47 | `native/petari/src/Game/Player/MarineSnow.cpp:174` | quad | state | points | one camera-facing quad per flake: an instance per point |
+| 48 | `native/petari/src/Game/Player/MarioActorSpecialDraw.cpp:144` | quad | numbers | 2-D | screen box from position and size |
+| 49 | `native/petari/src/Game/Player/MarioActorSpecialDraw.cpp:411` | fan | fixed | fans | 16-segment circle under a matrix (position, normal, radius) |
+| 50 | `native/petari/src/Game/Player/MarioActorSpecialDraw.cpp:446` | strip | fixed | 2-D | screen quad (frame ripple) |
+| 51 | `native/petari/src/Game/Player/MarioActorSpecialDraw.cpp:689` | quad | numbers | 2-D | screen box from a projected radius |
+| 52 | `native/petari/src/Game/Player/MarioFoo.cpp:658` | quad | numbers | quads | beam: center, side, front, length |
+| 53 | `native/petari/src/Game/Player/MarioFoo.cpp:668` | quad | numbers | quads | as 52, other side |
+| 54 | `native/petari/src/Game/Player/MarioFoo.cpp:737` | quad | state | quads | trail points |
+| 55 | `native/petari/src/Game/Player/MarioFoo.cpp:745` | quad | state | quads | as 54 |
+| 56 | `native/petari/src/Game/Player/MarioShadow.cpp:331` | chosen | state | shadows | collision polygons under the player (3 or 4 corners) |
+| 57 | `native/petari/src/Game/Player/MarioShadow.cpp:441` | fan | fixed | shadows | 16-segment ellipse in the shadow target's alpha |
+| 58 | `native/petari/src/Game/Player/MarioShadow.cpp:520` | list | state | shadows | edge polygons |
+| 59 | `native/petari/src/Game/Ride/Creeper.cpp:492` | strip | state | strips | vine points |
+| 60 | `native/petari/src/Game/Ride/Creeper.cpp:498` | strip | state | strips | as 59 |
+| 61 | `native/petari/src/Game/Ride/Creeper.cpp:504` | strip | state | strips | as 59 |
+| 62 | `native/petari/src/Game/Ride/PlantStalk.cpp:164` | strip | state | strips | grown points |
+| 63 | `native/petari/src/Game/Ride/PlantStalk.cpp:177` | strip | state | strips | as 62 |
+| 64 | `native/petari/src/Game/Ride/PlantStalk.cpp:190` | strip | state | strips | as 62 |
+| 65 | `native/petari/src/Game/Ride/SpaceCocoon.cpp:819` | strip | state | strips | stalk points |
+| 66 | `native/petari/src/Game/Ride/SwingRope.cpp:678` | strip | numbers | strips | one segment: two points, side, front |
+| 67 | `native/petari/src/Game/Ride/SwingRope.cpp:688` | strip | state | strips | rope points |
+| 68 | `native/petari/src/Game/Ride/Trapeze.cpp:679` | strip | numbers | strips | rope segment A to B, side, front |
+| 69 | `native/petari/src/Game/Ride/Trapeze.cpp:693` | strip | numbers | strips | as 68 |
+| 70 | `native/petari/src/Game/Ride/Trapeze.cpp:707` | strip | numbers | strips | as 68 |
+| 71 | `native/petari/src/Game/Screen/DepthOfFieldBlur.cpp:109` | strip | numbers | 2-D | ramp of 4 stops from two distances |
+| 72 | `native/petari/src/Game/Screen/ImageEffectLocalUtil.cpp:132` | strip | fixed | 2-D | unit quad |
+| 73 | `native/petari/src/Game/Screen/MovieDraw.cpp:46` | quad | numbers | 2-D | x, y, width, height |
+| 74 | `native/petari/src/Game/Screen/ScreenBlurEffect.cpp:81` | strip | numbers | 2-D | quad at -scale from fovy and aspect |
+| 75 | `native/petari/src/Game/Screen/StarPointerBlur.cpp:157` | strip | state | 2-D | pointer trail points, runs of the trail |
+| 76 | `native/petari/src/Game/Screen/StarPointerBlur.cpp:178` | strip | state | 2-D | as 75 |
+| 77 | `native/petari/src/Game/Screen/WaterCameraFilter.cpp:141` | strip | numbers | 2-D | screen quad, texture centred on the player's screen position |
+| 78 | `native/petari/src/Game/System/LumaDraw.cpp:353` | quad | numbers | mods | 2-D rect |
+| 79 | `native/petari/src/Game/System/LumaDraw.cpp:745` | quad | numbers | mods | 2-D thick line |
+| 80 | `native/petari/src/Game/System/LumaDraw.cpp:780` | list | numbers | mods | 2-D triangle |
+| 81 | `native/petari/src/Game/System/LumaDraw.cpp:837` | quad | numbers | mods | 2-D image |
+| 82 | `native/petari/src/Game/System/LumaDraw.cpp:1372` | quad | numbers | mods | 3-D line, thickness |
+| 83 | `native/petari/src/Game/System/LumaDraw.cpp:1398` | list | numbers | mods | 3-D triangle |
+| 84 | `native/petari/src/Game/System/LumaDraw.cpp:1621` | quad | numbers | mods | 3-D camera-facing image |
+| 85 | `native/petari/src/Game/Ui/UiCommon.cpp:51` | quad | numbers | 2-D | layout pane quad: base, size, colours, coords |
+| 86 | `native/petari/src/Game/Util/BezierSurface.cpp:716` | strip | numbers | strips | patch from its control points, by a table per divide level |
+| 87 | `native/petari/src/Game/Util/BezierSurface.cpp:746` | strip | numbers | strips | as 86 with normals and coords |
+| 88 | `native/petari/src/Game/Util/DirectDraw.cpp:50` | line list | numbers | lines | TDDraw::drawLine |
+| 89 | `native/petari/src/Game/Util/DirectDraw.cpp:75` | line strip | numbers | lines | TDDraw::drawCircle outline, segments |
+| 90 | `native/petari/src/Game/Util/DirectDraw.cpp:86` | fan | numbers | fans | TDDraw::drawFillCircle (2-D), segments |
+| 91 | `native/petari/src/Game/Util/DirectDraw.cpp:108` | fan | numbers | fans | TDDraw::drawFillCircle by a normal |
+| 92 | `native/petari/src/Game/Util/DirectDraw.cpp:128` | fan | numbers | fans | TDDraw::drawFillFan, angles |
+| 93 | `native/petari/src/Game/Util/DirectDraw.cpp:160` | strip | numbers | strips | TDDraw::drawCylinder, segments |
+| 94 | `native/petari/src/Game/Util/DirectDraw.cpp:191` | strip | numbers | strips | TDDraw::drawSpherePart, segments |
+| 95 | `native/petari/src/Game/Util/DirectDraw.cpp:227` | quad | numbers | 2-D | TDDraw::drawTexture: position, size |
+| 96 | `native/petari/src/Game/Util/DirectDraw.cpp:258` | quad | numbers | quads | TDDraw::drawTexture3D: center, normal, up, width, height, flips |
+| 97 | `native/petari/src/Game/Util/DirectDraw.cpp:266` | quad | numbers | quads | TDDraw::drawFillBox (3-D): one quad from two corners |
+| 98 | `native/petari/src/Game/Util/DirectDraw.cpp:276` | quad | numbers | 2-D | TDDraw::drawFillBox (2-D) |
+| 99 | `native/petari/src/Game/Util/DirectDraw.cpp:296` | quad | fixed | quads | TDDraw::drawFillBox3D: unit cube face under the matrix (center, height, side, front) |
+| 100 | `native/petari/src/Game/Util/DirectDraw.cpp:302` | quad | fixed | quads | as 99 |
+| 101 | `native/petari/src/Game/Util/DirectDraw.cpp:308` | quad | fixed | quads | as 99 |
+| 102 | `native/petari/src/Game/Util/DirectDraw.cpp:314` | quad | fixed | quads | as 99 |
+| 103 | `native/petari/src/Game/Util/DirectDraw.cpp:320` | quad | fixed | quads | as 99 |
+| 104 | `native/petari/src/Game/Util/DirectDraw.cpp:326` | quad | fixed | quads | as 99 |
+| 105 | `native/petari/src/Game/Util/DrawUtil.cpp:80` | quad | fixed | 2-D | screen colour quad |
+| 106 | `native/petari/src/Game/Util/DrawUtil.cpp:99` | quad | fixed | 2-D | screen picture quad |
+| 107 | `native/petari/src/Game/Util/DrawUtil.cpp:158` | strip | fixed | shadows | screen quad clearing the stencil |
+| 108 | `native/petari/src/Game/Util/DrawUtil.cpp:179` | quad | numbers | 2-D | fillScreenArea: min, max |
+| 109 | `native/petari/src/Game/Util/DrawUtil.cpp:220` | strip | fixed | shadows | screen quad, half black where the stencil is set |
 
 Read in passing:
 
@@ -1479,7 +1479,7 @@ file 00 4.3 holds on the PC and the tablet.
    next sequence's start walks the frame unseen (`render_core.cpp` on `rows/i016` :796-805). Measured: the real frame
    shown for 5 to 13 of about 2,640 steps with VSync on.
 4. The present, by renderer.
-   - Direct3D 12 and 11: flip model, frame latency 1 (`renderer_d3d12.cpp:3356`, `d3d11/renderer_d3d11.cpp:308`); the
+   - Direct3D 12 and 11: flip model, frame latency 1 (`renderer_d3d12.cpp:3356`, `runtime/src/render/d3d11/renderer_d3d11.cpp:308`); the
      render thread waits on the latency object before each present (:4405-4413). A game frame at 60 goes out with sync
      interval 1 (aba64e331, M1: `present_sync_interval`, :4305-4331). The frame statistics are read after every present
      into the pacing recorder (`dxgi_pacing.h:15-37`, :4479-4483). No display time is asked. At 240 Hz a picture

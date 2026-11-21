@@ -132,7 +132,7 @@ What is read so far (at a1f423dd8):
   65 samples of 32 kHz into each tick, at any output rate: how the game's sounds change volume, as made; stays.
 - Archives and file access. The game's archive names (`.arc`, `.szs` in 18 runtime, 6 game and 10 header lines) are
   names only: the store drops the ending (`asset_store.h:118-119`, `asset_store.cpp:33`). The game reads the store
-  (`game.pak`, `cook/store.rs`) through `AssetFolder` and `GameAssets::load` (`FileUtil.cpp:88`); `ResourceHolder`
+  (`game.pak`, `crates/nebula-import/src/cook/store.rs`) through `AssetFolder` and `GameAssets::load` (`FileUtil.cpp:88`); `ResourceHolder`
   files a folder's entries into tables by the cooked kind (`ResourceHolder.hpp:22-29`, `NEBULA_ASSET_KIND_*`). No
   archive or compression is read while the game runs. Class: modern; nothing of the console's file system is left in
   this path. `SoundArchive` maps the cooked sound archive from the store (`SoundArchive.hpp:11-13`);
