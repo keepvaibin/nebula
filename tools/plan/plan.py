@@ -40,8 +40,10 @@ tool     Writes a tool fault into BLOCKED.md under "tools" and into tool-faults.
 toolfault --last --could-not "TEXT": the sentence on what the agent's last tool fault stopped it from doing.
 status   Writes STATUS.md and prints it: steps landed, started, blocked, claims, the last five landings, the next step.
          The agent runs it at every start and after every context compaction; it is the only memory it needs.
-page     Writes progress-data.json and progress.html into the live folder (page.py), from steps.tsv, the live state, the
-         tool faults and tests/flakes.tsv. land, start, blocked and toolfault do it too, so the page is never behind.
+page     Writes three files into the live folder (page.py), from steps.tsv, the live state, the tool faults and
+         tests/flakes.tsv: progress.html (static, rewritten only when the tool or the step list changes),
+         progress-data.json (only what changes) and progress-local.html (the data embedded, for opening from disk).
+         Publish the first two. land, start, blocked and toolfault do it too, so the page is never behind.
 rows     What a card's "Rows." line means (closes whole / advances), for one step or all of them.
 
 Exit codes: 0 done; 1 refused or failed; 2 the command was wrong; 3 the same failure three times; 4 a tool or
@@ -910,11 +912,13 @@ def status_text(tree, work_root=WORK_ROOT, at=None, live=None):
 
 
 def page_paths(live=None):
+    """(progress.html, progress-data.json, progress-url.txt, progress-local.html)."""
     d = live_dir(live)
-    return d / "progress.html", d / "progress-data.json", d / "progress-url.txt"
+    return d / "progress.html", d / "progress-data.json", d / "progress-url.txt", d / "progress-local.html"
 
 
 def page_data(tree, live=None, at=None):
+    """(static, data): what never changes with progress (the step list), and what does."""
     steps = read_steps(tree, live)
     reasons = blocked_reasons(tree)
     for s in steps:
@@ -923,21 +927,23 @@ def page_data(tree, live=None, at=None):
     d = live_dir(live)
     claims = lv.read_claims(d)
     at = at or now()
-    return page.make_data(steps, lv.read_landings(d), lv.read_state(d), claims, stale_of(tree, claims, at),
-                          lv.fault_groups(lv.read_faults(d)), count_flakes(tree), lv.stamp(at))
+    return page.make_static(steps), page.make_data(steps, lv.read_landings(d), lv.read_state(d), claims, stale_of(tree, claims, at),
+                                                   lv.fault_groups(lv.read_faults(d)), count_flakes(tree), lv.stamp(at))
 
 
 def write_page(tree, live=None, at=None):
-    """Writes progress-data.json (always) and progress.html (when its text changed) into the live folder.
-    Returns (html path, json path, data)."""
-    html_path, json_path, _ = page_paths(live)
-    data = page_data(tree, live, at)
+    """Writes the three files into the live folder: progress-data.json and progress-local.html (the data embedded, for
+    opening from disk) each time, progress.html only when its text changed, which it does when this tool or the plan's
+    step list changes and never because progress changed. Returns (html path, json path, local path, data)."""
+    html_path, json_path, _, local_path = page_paths(live)
+    static, data = page_data(tree, live, at)
     with lv.locked(live_dir(live)):
-        atomic_write(json_path, page.data_json(data))
-        html = page.render(data)
+        html = page.render(static)
         if not html_path.exists() or html_path.read_text(encoding="utf-8") != html:
             atomic_write(html_path, html)
-    return html_path, json_path, data
+        atomic_write(json_path, page.data_json(data))
+        atomic_write(local_path, page.render(static, data))
+    return html_path, json_path, local_path, data
 
 
 def refresh_page(a):
@@ -1329,12 +1335,16 @@ def cmd_status(a):
 
 
 def cmd_page(a):
-    html_path, json_path, data = write_page(a.tree, a.live)
-    say("progress.html: %s (%d bytes)" % (html_path.as_posix(), html_path.stat().st_size))
-    say("progress-data.json: %s (%d bytes)" % (json_path.as_posix(), json_path.stat().st_size))
-    say("%d of %d steps landed, %d started, %d blocked, %d tool fault kinds, %d flakes." % (
-        data["landed"], data["total"], len(data["started"]), len(data["blocked"]), len(data["tool_faults"]), data["flakes"]))
-    say("Publish progress.html with progress-data.json as its supporting file; keep the address in %s." % page_paths(a.live)[2].as_posix())
+    html_path, json_path, local_path, data = write_page(a.tree, a.live)
+    steps = data["steps"]
+    count = lambda state: sum(1 for e in steps.values() if e["state"] == state)
+    say("progress.html:        %s (%d bytes)  publish" % (html_path.as_posix(), html_path.stat().st_size))
+    say("progress-data.json:   %s (%d bytes)  publish" % (json_path.as_posix(), json_path.stat().st_size))
+    say("progress-local.html:  %s (%d bytes)  for opening from disk; do not publish" % (local_path.as_posix(), local_path.stat().st_size))
+    say("%d steps landed, %d started, %d blocked, %d tool fault kinds, %d flakes." % (
+        count("landed"), count("started"), count("blocked"), len(data["tool_faults"]), data["flakes"]))
+    say("Publish progress.html with progress-data.json as its supporting file; after a landing publish again to the same address "
+        "(the address is kept in %s). progress.html changes only when the tool or the plan's step list changes." % page_paths(a.live)[2].as_posix())
     return 0
 
 
