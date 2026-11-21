@@ -702,5 +702,12 @@ class OwedTest(RerunBase):
             static["steps"][0]["id"], static["steps"][0]["title"]), text)
 
 
+def main():
+    # The gate starts every self-test with `--work <folder>`; the tests make their own temporary folders and ignore it.
+    result = unittest.main(argv=[sys.argv[0]], exit=False, verbosity=1).result
+    print("plan_rerun_test: %s (%d tests)" % ("pass" if result.wasSuccessful() else "FAIL", result.testsRun))
+    return 0 if result.wasSuccessful() else 1
+
+
 if __name__ == "__main__":
-    unittest.main()
+    sys.exit(main())
