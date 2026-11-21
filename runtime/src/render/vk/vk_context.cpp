@@ -308,6 +308,12 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     failure_.clear();
     if (load_vulkan() != VK_SUCCESS) {
         std::fprintf(stderr, "[vulkan] no Vulkan loader\n");
+        if (::galaxy::launch_args().software_device) {
+            // No loader, so no software device either: said at the start, and no other renderer is tried in its place.
+            std::printf("%s\n", software_device_missing_line(RendererKind::kVulkan).c_str());
+            failure_ = "no Vulkan driver";
+            return false;
+        }
         note_no_device();
         failure_ = "no Vulkan driver";
         return false;
@@ -443,8 +449,8 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     debug_names_ = debug_utils;
     VkSurfaceKHR window_surface = VK_NULL_HANDLE;
     // Every failure from here leaves no instance, device or surface behind.
-    const auto fail = [&](const char* message) {
-        std::fprintf(stderr, "[vulkan] %s\n", message);
+    const auto fail = [&](const char* message, bool say = true) {
+        if (say) std::fprintf(stderr, "[vulkan] %s\n", message);
         failure_ = message;
         if (window_surface != VK_NULL_HANDLE) {
             if (device_ != VK_NULL_HANDLE) {
@@ -546,6 +552,11 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     for (const VkPhysicalDevice candidate : devices) {
         VkPhysicalDeviceProperties candidate_properties{};
         vkGetPhysicalDeviceProperties(candidate, &candidate_properties);
+        // --software-device: only a device of the processor type (renderer_choice.h adapter_allowed).
+        if (!adapter_allowed(candidate_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU, ::galaxy::launch_args().software_device,
+                             true)) {
+            continue;
+        }
         VulkanFacts facts;
         facts.swapchain = has_device_extension(candidate, VK_KHR_SWAPCHAIN_EXTENSION_NAME);
         facts.version = std::min(app.apiVersion, candidate_properties.apiVersion);
@@ -579,6 +590,12 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
             break;
         }
         if (refused != RendererRefusal::kVulkanVersion) refused = RendererRefusal::kNoPresentQueue;
+    }
+    if (physical_ == VK_NULL_HANDLE && ::galaxy::launch_args().software_device) {
+        // Said at the start, and no other renderer is tried in its place.
+        const std::string missing = software_device_missing_line(RendererKind::kVulkan);
+        std::printf("%s\n", missing.c_str());
+        return fail(missing.c_str() + std::string("[gpu] ").size(), false);
     }
     if (physical_ == VK_NULL_HANDLE) {
         note_no_device();

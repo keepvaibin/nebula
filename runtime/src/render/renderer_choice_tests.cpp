@@ -119,12 +119,35 @@ void test_check_text() {
 }
 }  // namespace
 
+// --software-device 1 (launch_args.h software_device): which adapter a renderer takes.
+void test_software_device() {
+    using namespace galaxy::render;
+    // A list with a hardware adapter first and Microsoft's software one after it (the order DXGI lists them in).
+    const std::vector<bool> both{false, true};
+    check(first_allowed_adapter(both, true, false) == std::optional<std::size_t>(1u), "the option takes the software adapter, not the first");
+    check(first_allowed_adapter(both, false, false) == std::optional<std::size_t>(0u), "without the option the hardware adapter");
+    check(first_allowed_adapter({true}, false, false) == std::nullopt, "without the option and the start check a software adapter is not taken");
+    check(first_allowed_adapter({true}, false, true) == std::optional<std::size_t>(0u), "the start check takes it");
+    check(first_allowed_adapter({false, false}, true, false) == std::nullopt, "the option with no software adapter gives none");
+    check(first_allowed_adapter({false, false}, true, true) == std::nullopt, "the start check does not widen the option");
+    check(first_allowed_adapter({}, true, false) == std::nullopt && first_allowed_adapter({}, false, false) == std::nullopt,
+          "an empty list gives none");
+    check(adapter_allowed(true, true, false) && !adapter_allowed(false, true, false) && !adapter_allowed(true, false, false) &&
+              adapter_allowed(false, false, false),
+          "adapter_allowed: the four cases");
+    check(software_device_missing_line(RendererKind::kD3D12) == "[gpu] --software-device: no software device for d3d12" &&
+              software_device_missing_line(RendererKind::kVulkan) == "[gpu] --software-device: no software device for vulkan" &&
+              software_device_missing_line(RendererKind::kMetal) == "[gpu] --software-device: no software device for metal",
+          "the line a start ends with");
+}
+
 int main() {
     try {
         test_keys();
         test_rules();
         test_choice();
         test_check_text();
+        test_software_device();
     } catch (const std::exception& failure) {
         std::cerr << "renderer choice test failed: " << failure.what() << '\n';
         return 1;

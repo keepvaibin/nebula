@@ -60,6 +60,7 @@ After a crash with mods turned on, the next start is a safe start. If only mod c
 | `--timeline FILE` | Where the recorded timeline goes. The default is `diagnostics/timeline-PROCESS-ID.bin` in the data folder. |
 | `--console-log 1` | Writes the log to the terminal Nebula was started from, or to a console window of its own, instead of `logs/latest.log` in the settings folder. When the output already goes to a pipe or a file, the log stays there without this argument. |
 | `--gpu-validation 1` or `--gpu-validation 2` | Turns on the graphics API's validation layer. `1` is the Direct3D 12 debug layer, or the Khronos validation layer when it is installed. `2` also turns on Direct3D 12 GPU-based validation. After a lost Direct3D 12 device, the log lists the objects that were still alive (`[D3D12-LIVE-OBJECT]`). The game runs much slower with validation on. |
+| `--software-device 1` | Runs on a software graphics device, with no graphics card. Direct3D 12 and Direct3D 11 take Microsoft's software adapter and no other, and Vulkan takes a device of the processor type. A computer that has none ends the start with the line `[gpu] --software-device: no software device for RENDERER` and a non-zero exit code; no other renderer is tried in its place. Metal has no software device and always ends this way. The game is much slower on a software device. Test tools use it to play recorded plays without a graphics card. |
 
 ## Benchmark
 

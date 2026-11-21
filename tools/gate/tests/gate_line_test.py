@@ -32,7 +32,7 @@ The kind worse:
   also_names_are_planned           each name of the table is planned (its checks selected); soak asks for 30 minutes, soak/long the long run's 120
   also_after_the_checks            they run after the needed checks and before the measure, one after another
   also_stress_is_a_fail            asked for by name, the stress lane is told its result is a fail; the nightly's is not
-  also_refusals                    replays/software is refused as not built (exit 2, with the words), soak with soak/long, an unknown name, as before
+  also_refusals                    a name of the table whose part is not built is refused (exit 2, with the words), soak with soak/long, an unknown name, as before
 Exit 0 when every case holds.
 """
 import contextlib
@@ -45,6 +45,7 @@ import sys
 import tempfile
 import time
 import unittest
+import unittest.mock
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -576,7 +577,11 @@ class Worse(unittest.TestCase):
 class Also(unittest.TestCase):
     """--also by name."""
 
-    CHECKS = {"stress": "stress/engine/d3d12", "sanitizer/tour": "tour-asan/d3d12", "soak": "soak", "soak/long": "soak/long"}
+    CHECKS = {"stress": "stress/engine/d3d12", "sanitizer/tour": "tour-asan/d3d12", "soak": "soak", "soak/long": "soak/long",
+              "replays/software": "replays/software"}
+    # A name of the table whose part is not on main (every part is today): the landing refuses it. A plant, as the table's own
+    # entry for `replays/software` was before package T9.
+    UNBUILT = {"future/part": gate.AlsoPart(None, ("future/part",))}
 
     def run_also(self, names, setup=None, paths=("docs/plan/x.md",)):
         with Gates(self) as w:
@@ -593,6 +598,7 @@ class Also(unittest.TestCase):
             self.assertIsNotNone(w.row(g, check), "%s: %s" % (name, [r["check"] for r in g.results]))
             self.assertEqual(w.row(g, check)["state"], "pass", name)
         self.assertEqual(sorted(gate.ALSO_PARTS), ["replays/software", "sanitizer/tour", "soak", "soak/long", "stress"])
+        self.assertTrue(all(part.run is not None for part in gate.ALSO_PARTS.values()), "every name of the table is built")
 
     def test_the_soaks_ask_for_their_lengths(self):
         g, w = self.run_also(["soak"])
@@ -644,12 +650,13 @@ class Also(unittest.TestCase):
         self.assertTrue(w2.stress_fails and not any(w2.stress_fails), "the nightly's stress lane is not: %s" % w2.stress_fails)
 
     def test_the_unbuilt_name_is_refused(self):
-        with Gates(self) as w:
+        with Gates(self) as w, unittest.mock.patch.dict(gate.ALSO_PARTS, self.UNBUILT):
             args = gate.parser().parse_args(w.argv())
-            why = gate.also_problem(args, ["replays/software"], {}, {})
-            self.assertEqual(why, "--also replays/software: this check is not built yet")
+            why = gate.also_problem(args, ["future/part"], {}, {})
+            self.assertEqual(why, "--also future/part: this check is not built yet")
             self.assertEqual(gate.also_problem(args, ["soak", "soak/long"], {}, {}), "--also: soak and soak/long are one soak at two lengths; ask for one")
-            self.assertEqual(gate.also_problem(args, [n for n in gate.ALSO_PARTS if n not in ("replays/software", "soak/long")], {}, {}), "")
+            self.assertEqual(gate.also_problem(args, [n for n in gate.ALSO_PARTS if n not in ("future/part", "soak/long")], {}, {}), "")
+            self.assertEqual(gate.also_problem(args, ["replays/software"], {}, {}), "", "replays/software is built (T9)")
             unknown = gate.also_problem(args, ["tour/d3d99", "soak"], {}, {})
             self.assertTrue(unknown.startswith("--also names no check the gate knows: tour/d3d99."), unknown)
             self.assertIn("stress", unknown, "the table's names are listed")
@@ -657,8 +664,8 @@ class Also(unittest.TestCase):
                              "a name only the long run has is unknown to a landing, no longer a special case")
 
     def test_the_landing_refuses_before_it_queues_anything(self):
-        with Gates(self) as w:
-            for name, words in (("replays/software", "--also replays/software: this check is not built yet"),
+        with Gates(self) as w, unittest.mock.patch.dict(gate.ALSO_PARTS, self.UNBUILT):
+            for name, words in (("future/part", "--also future/part: this check is not built yet"),
                                 ("soak,soak/long", "are one soak at two lengths")):
                 queue = w.t / ("queue-%s.tsv" % name.replace("/", "-").replace(",", "-"))
                 err, out = io.StringIO(), io.StringIO()

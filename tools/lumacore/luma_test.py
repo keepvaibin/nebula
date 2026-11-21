@@ -1787,6 +1787,9 @@ def run_one(test, renderer, args, run_folder, previous):
     if getattr(args, "gpu_validation", 0):
         # The graphics API's debug layer (the gate's validate lane): the game says whether it is really on at its start.
         command += ["--gpu-validation", str(int(args.gpu_validation))]
+    if getattr(args, "software_device", 0):
+        # The software graphics device (docs/using-nebula/command-line-arguments.md): no graphics card is used.
+        command += ["--software-device", "1"]
     hidden = {}
     if test.get("visible") and platform.system() == "Windows":
         # A visible run (the play route measure) shows without taking the focus: the player's keys stay where they were
@@ -2931,6 +2934,8 @@ def run_tests(args):
         raise SystemExit("give --lock or LUMA_TEST_LOCK")
     if not args.limit_scale >= 1:
         raise SystemExit("--limit-scale is at least 1")
+    if getattr(args, "software_device", 0) and args.device:
+        raise SystemExit("--software-device: a device runs on its own graphics chip; the option is for this computer's programs")
     lock = pathlib.Path(args.lock)
     if lock.exists():
         raise EnvRefused("run.lock held: " + lock.read_text(encoding="utf-8", errors="replace").strip())
@@ -3174,6 +3179,9 @@ def main():
     run.add_argument("--gpu-validation", type=int, choices=(0, 1), default=int(os.environ.get("LUMA_TEST_GPU_VALIDATION") or 0),
                      help="1: every game starts with --gpu-validation 1, the graphics API's debug layer (or LUMA_TEST_GPU_VALIDATION); "
                           "the run is much slower, so give --limit-scale too")
+    run.add_argument("--software-device", type=int, choices=(0, 1), default=int(os.environ.get("LUMA_TEST_SOFTWARE_DEVICE") or 0),
+                     help="1: every game starts with --software-device 1, on Microsoft's software graphics device and no graphics "
+                          "card (or LUMA_TEST_SOFTWARE_DEVICE); the run is much slower, so give --limit-scale too; not with --device")
     run.add_argument("--gpu", default=os.environ.get("LUMA_TEST_GPU") or None,
                      help="the GPU every run starts on (or LUMA_TEST_GPU): vendor:device:subsystem in lowercase hex, as "
                           "Nebula Settings writes config.ini gpu; result.json's gpu names the adapter the game used")

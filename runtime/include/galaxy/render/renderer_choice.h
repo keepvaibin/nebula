@@ -110,4 +110,15 @@ inline constexpr std::string_view kRendererCheckHeader = "nebula-renderers 1";
 void note_no_device() noexcept;
 [[nodiscard]] bool found_no_device() noexcept;
 
+// Whether a renderer takes an adapter (launch_args.h software_device and start_check). `software_adapter`: Microsoft's software adapter
+// (DXGI_ADAPTER_FLAG_SOFTWARE) or, on Vulkan, a device of the processor type. With --software-device (`software_only`) only a software
+// adapter is taken; without it a hardware adapter always, and a software one only in the start check.
+[[nodiscard]] bool adapter_allowed(bool software_adapter, bool software_only, bool start_check) noexcept;
+// The place of the first adapter adapter_allowed lets through in a renderer's list (one flag each: whether it is a software adapter);
+// none for a list with none.
+[[nodiscard]] std::optional<std::size_t> first_allowed_adapter(const std::vector<bool>& software_adapters, bool software_only,
+                                                               bool start_check) noexcept;
+// The line a renderer ends its start with when --software-device found no software device for it.
+[[nodiscard]] std::string software_device_missing_line(RendererKind kind);
+
 }  // namespace galaxy::render
