@@ -1672,6 +1672,19 @@ def board_line(board, text):
             f.write("%s %s\n" % (datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), text))
 
 
+def owed_line(who, mode, name, commit, owed):
+    """The board line for the rows a run owes (`owed`: their check names): what is owed, by the rows' own names. A row of the speed
+    measure (measure/...) is the measure's; any other owed row is the tablet's part. It says when the rows run again."""
+    measure = [r for r in owed if r.startswith("measure/")]
+    part = [r for r in owed if not r.startswith("measure/")]
+    what = " and ".join((["the tablet's part"] if part else []) + (["the speed measure"] if measure else []))
+    when = " and ".join((["the tablet is back"] if part or any("tablet" in r for r in measure) else []) +
+                        (["the machine is quiet"] if any("tablet" not in r for r in measure) else []))
+    rows = ",".join(owed)
+    return ("%s OWED: %s of %s gate %s on %s: %s. It runs on main's newest commit first when %s (gate.py --main --only \"%s\")." % (
+        who, what, mode, name, commit[:9], ", ".join(owed), when, rows))
+
+
 # Who goes first among the lock's waiters (07-BASE-FIRST, How the work flows: the long run does not take the lock
 # while a landing waits): a landing's gate (quick or main) before the work that waits for no one (the long run's
 # parts, the measure, queued loops), otherwise first come. gate.py keeps the order, not the agents.
@@ -3483,6 +3496,20 @@ def unbuffer_output():
 
 
 def main(argv=None):
+    """One run of the gate, or `land`/`data`. A candidate branch (gate/<run>, section 5.3) this run pushed to origin is removed from
+    origin when the run ends, whatever the end: passed and moved, checks failed, stopped on a red job of GitHub, not judged, refused after
+    the push, or an exception. The one that stays is a candidate whose jobs are read after the move (github-pending.tsv): the settle
+    removes it once it has read them. GitHub's run stays readable by the commit."""
+    left = []
+    try:
+        return run_main(argv, left)
+    finally:
+        for candidate in left:
+            delete_candidate(candidate)
+
+
+def run_main(argv, left):
+    """main() with the list `left` of the candidates this run pushed and has not handed on."""
     # A self-test that starts this tool as a child process runs it under the live-state guard (tools/gate/selftest_guard.py).
     import pathlib as _pathlib
     import sys as _sys
@@ -3620,6 +3647,7 @@ def main(argv=None):
             pushed = push_candidate(commit, candidate)
             if pushed is not None:
                 return refuse("the candidate could not be pushed as %s: %s" % (candidate, pushed))
+            left.append(candidate)
     quick = None
     if args.mode in ("main", "final") and not patterns and plan is None:
         quick = quick_passed(args.work, git("rev-parse", "--short", "HEAD"), whole=True)
@@ -3676,9 +3704,7 @@ def main(argv=None):
                                                                                     watch.red))
         owed = [r["check"] for r in g.results if r["state"] == "owed"]
         if owed and args.board:
-            board_line(args.board, "%s OWED: the tablet's part of %s gate %s on %s: %s. It runs on main's newest "
-                       "commit first when the tablet is back (gate.py --main --only \"%s\")." % (
-                           args.who, args.mode, g.name, commit[:9], ", ".join(owed), ",".join(owed)))
+            board_line(args.board, owed_line(args.who, args.mode, g.name, commit, owed))
         if args.move and code == 0 and not (watch is not None and watch.red):
             # The machine is free for the next gate from here (section 5.5); this process waits for GitHub alone, when the
             # plan has a GitHub part, and moves main once every `must` job is green for the commit.
@@ -3744,8 +3770,7 @@ def main(argv=None):
                         commit[:9], type(e).__name__, e), file=sys.stderr)
             if keep_candidate:
                 g.late("github/after", "pass", "its jobs are read after the move (github-pending.tsv in the live folder)")
-            if candidate is not None and not keep_candidate:
-                delete_candidate(candidate)
+                left.remove(candidate)       # the settle of the pending line removes it
             if why is not None:
                 # `fail` (exit 1) only where a job of GitHub is red: the change is at fault. Every other reason (main moved, the push, a
                 # lock, GitHub not finishing) judged nothing: not-judged, exit 2.
