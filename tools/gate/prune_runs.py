@@ -15,6 +15,7 @@ import sys
 
 KEPT = frozenset(("result.json", "run.log", "facts.jsonl", "test.json", "plan.txt"))
 MARK = "pruned.txt"
+KEEP = "keep.txt"       # a run folder with this file in it is kept whole (a stress lane's evidence, tools/gate/stress.py)
 
 
 def size(path):
@@ -36,8 +37,10 @@ def passed_tests(run):
 
 
 def prune(run):
-    """Removes the working files of a run's passed tests: (tests, bytes freed)."""
+    """Removes the working files of a run's passed tests: (tests, bytes freed). A run folder with a keep.txt is left whole."""
     tests, freed = 0, 0
+    if (pathlib.Path(run) / KEEP).is_file():
+        return tests, freed
     for folder in list(passed_tests(run)):
         if (folder / MARK).exists():
             continue

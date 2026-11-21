@@ -340,14 +340,37 @@ A main gate may run beside it; they share the tablet through its lock.
 This section is what the tools do now. Where it differs from an older section above, this section is right.
 
 **Checks by what changed.** `tools/gate/scope.tsv` maps path patterns to groups of checks (`tools/gate/scope.py` names the
-groups once: `repo`, `tools`, `build`, `unit`, `start`, `engine1`, `engine3`, `tour1`, `tour3`, `import`, `android`, `tablet12`).
+groups once: `repo`, `tools`, `build`, `unit`, `start`, `engine1`, `engine3`, `tour1`, `tour3`, `validate`, `import`, `android`, `tablet12`).
 The group `repo` (the cheap repository checks) is in every run, whatever the rows say. Every row a changed file matches adds its groups; a landing runs the union over all changed files (`git diff --name-only` from the
 merge base with `origin/main`). A change of documents only runs `repo`, with no build, so it lands in minutes. A change to the
 game runs the build, the unit tests, a start on each renderer and the 12-stop tour on Direct3D 12 with its pictures and replays.
-A change to the renderers runs the engine tests and the tour on all three. A file that no row names makes the run `full`:
+A change to the renderers runs the engine tests and the tour on all three, and `validate` (below). A file that no row names makes the run `full`:
 everything the main gate runs on the native game (every renderer's engine tests and 102-stop tour, the other discs, the Android
 build and the tablet's short part). The full set on three renderers, three discs and the tablet is also the nightly run's first
 part. `python -X utf8 -I tools/gate/scope.py --base origin/main` prints the groups and the checks of the branch you are in.
+
+**Faults under heavy load, and faults in how the card is driven (package T12).** Two lanes, both on the machine alone for their tests'
+time, neither read by a person until it fails.
+`validate` (`tools/gate/validate.py`) plays the 12-stop tour one copy at a time on each renderer with the graphics API's debug layer
+on (`luma_test.py run --gpu-validation 1`, time limits four times the usual; Direct3D 11's and 12's debug layer, Vulkan's validation
+layer where the game finds one). It is in every landing that changes `runtime/src/render/**` or `runtime/include/galaxy/render/**`
+(group `validate`), and in the nightly run on the whole tour. An error message of a layer is a fail, the first line the message; an
+error whose id is listed in `tools/gate/validate-known.tsv` (renderer, id, ledger row, first words) is counted and reported; a
+warning is counted only. Each renderer says at its start whether its layer is on (`[gpu] d3d11 debug-layer=1`, `[gpu] d3d12
+debug-layer=1`, `[vulkan] ... validation=1`); a layer that is not installed leaves its check out with one line ("not run: the
+Direct3D debug layer is not installed on this PC") and one line a day in `tool-faults.tsv`: never fail, tool or env. A run that
+reached its time limit while the game still moved is `tool` ("the validate lane's time limit is too short for this test").
+`gate.py --main --scope validate --serial` runs the lane alone, one copy at a time.
+`stress` (`tools/gate/stress.py`; the nightly run only, or by name: `gate.py --long --only "stress/*"`) plays twelve copies of the game
+at once, whatever the graphics card's rule says (the PC's memory rule still holds: fewer copies when it is short, and the run says how
+many): for each renderer one lane of the engine suite and the 12-stop tour (`stress/engine/<r>`, `stress/tour/<r>/1`) and three more
+tours (`stress/tour/<r>/2` to `/4`), each with its own run folder and saves and every engine watch on. A test that fails there and
+passes run again alone has the kind `stress`: it never fails a run, is not in flakes.tsv and does not count toward setting a test
+aside; the run folder is kept whole (`keep.txt`, which the thinning and the pruning leave alone) and one repair is opened (source
+`stress`, kind `stress`; the watch's line or the first failure line is its note). One that fails alone too is a plain `fail`. A run
+that reached its time limit while the game still moved and passed alone is only counted ("N runs were too slow under the load").
+A fault that shows rarely is never hunted by repeating runs: it gets a watch (a cheap check in the game that prints one line naming
+what was wrong), and the work goes on.
 
 **The mod suites are off.** The owner set all mod work aside until the native rewrite is done. The line `mods = off` at the top of
 `scope.tsv` keeps the mod suites and LumaLink's own check out of every landing, the main level and the nightly run. `short` (the

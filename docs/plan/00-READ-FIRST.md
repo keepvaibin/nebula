@@ -240,6 +240,14 @@ Everything a person reads (settings, messages, docs, comments, commit messages) 
 - Each agent keeps `docs/plan/PROGRESS-AGENT-N.md`: one dated entry per finished package with what was done, the gate run, the measurements. Short and factual.
 - The ledger is updated in the same commit as the fix it records.
 
+### 5.8 A fault that shows rarely
+
+Never hunt a fault that shows rarely by repeating runs. Give it a watch: a cheap check inside the game or the renderer that prints one
+line naming what was wrong when it happens (Direct3D 11's `[constants] watch` is the model), turn it on in the gate for the renderer
+(`WATCHES` in `tools/gate/gate.py`), and go on. A test that fails once under the load of twelve copies of the game (the nightly run's
+`stress` lane) and passes alone is a `stress` result with a repair; its note carries the watch's line. If the line does not name the
+cause, the next change adds a watch that will.
+
 ---
 
 ## 6. Who owns which files

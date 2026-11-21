@@ -1784,6 +1784,9 @@ def run_one(test, renderer, args, run_folder, previous):
         command += ["--diagnostics", ",".join(diagnostics)]
         if "timeline" in diagnostics:
             command += ["--timeline", str(run_folder / "timeline.bin")]
+    if getattr(args, "gpu_validation", 0):
+        # The graphics API's debug layer (the gate's validate lane): the game says whether it is really on at its start.
+        command += ["--gpu-validation", str(int(args.gpu_validation))]
     hidden = {}
     if test.get("visible") and platform.system() == "Windows":
         # A visible run (the play route measure) shows without taking the focus: the player's keys stay where they were
@@ -3168,6 +3171,9 @@ def main():
                      "of these bins wrote); a test with \"fresh\": true starts without it")
     run.add_argument("--diagnostics", default=os.environ.get("LUMA_TEST_DIAGNOSTICS"),
                      help="the game's --diagnostics for every run (or LUMA_TEST_DIAGNOSTICS), e.g. ring-stress")
+    run.add_argument("--gpu-validation", type=int, choices=(0, 1), default=int(os.environ.get("LUMA_TEST_GPU_VALIDATION") or 0),
+                     help="1: every game starts with --gpu-validation 1, the graphics API's debug layer (or LUMA_TEST_GPU_VALIDATION); "
+                          "the run is much slower, so give --limit-scale too")
     run.add_argument("--gpu", default=os.environ.get("LUMA_TEST_GPU") or None,
                      help="the GPU every run starts on (or LUMA_TEST_GPU): vendor:device:subsystem in lowercase hex, as "
                           "Nebula Settings writes config.ini gpu; result.json's gpu names the adapter the game used")

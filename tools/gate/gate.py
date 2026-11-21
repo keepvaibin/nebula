@@ -114,6 +114,9 @@ import machine  # noqa: E402
 import pictures as picture_tool  # noqa: E402
 import scope  # noqa: E402
 import step_hash  # noqa: E402
+import judged  # noqa: E402
+import stress  # noqa: E402
+import validate  # noqa: E402
 
 LEVELS = ("quick", "main", "long", "final")
 # A landing's own level (tools/gate/scope.py, gate.py land): the checks of the groups a change needs, the 12 quick stops of
@@ -289,9 +292,9 @@ def level_has(level, planned_level):
 
 
 # How a state reads in a row: the kinds that need a person's eye in capitals (tools/plan/plan.py reads these words).
-LABELS = {"fail": "FAIL", "tool": "TOOL", "env": "ENV", "flake": "FLAKE", "new": "NEW"}
+LABELS = {"fail": "FAIL", "tool": "TOOL", "env": "ENV", "flake": "FLAKE", "new": "NEW", "stress": "STRESS"}
 NOT_PASSED = ("fail", "tool", "env")
-STATES = ("pass", "known", "planned", "owed", "fail", "tool", "env", "flake", "main", "new")
+STATES = ("pass", "known", "planned", "owed", "fail", "tool", "env", "flake", "main", "stress", "new")
 
 
 def default_records(state, detail):
@@ -353,6 +356,7 @@ class Gate:
         # The machine (machine_ready): what the run's summary says of it, how many game copies run at once (None: no limit set), and
         # the thread that reads what the game processes hold of the card.
         self.machine_notes = []
+        self.layer_seen = {}          # the validate lane: {renderer: the layer error ids its first runs showed}
         self.card_shared = False
         self.slots = None
         self.sampler = None
@@ -504,6 +508,10 @@ class Gate:
             print("%-34s %-7s %7.1f s  %s" % (row["check"], LABELS.get(row["state"], row["state"]), row["seconds"],
                                               row["detail"]), flush=True)
         self.open_rows += settler.open_rows
+        if settler.stress_results:
+            # The stress lane's results: the run folder is kept whole, and one repair is opened for each (never a fault of the run).
+            stress.open_repairs(getattr(self.args, "live", NATIVE), self.work, self.commit, settler.stress_results,
+                                say=lambda text: print(text, flush=True))
         self.aside = kinds.read_aside(SET_ASIDE)
 
     def plan_rows(self):
@@ -1007,8 +1015,9 @@ def collision_proof(g, image):
 EXES = {"d3d12": "Nebula.exe", "vulkan": "NebulaVk.exe", "d3d11": "NebulaD11.exe"}
 
 
-def start_check(g, renderer):
-    """The program's start without game data (host_main.cpp run_start_check): window, renderer, 300 frames shown."""
+def start_check(g, renderer, extra=()):
+    """The program's start without game data (host_main.cpp run_start_check): window, renderer, 300 frames shown. `extra`: more
+    options of the game (the validate lane's probe passes --gpu-validation 1)."""
     def fn(log):
         out = g.work / ("start-" + renderer)
         for sub in ("data", "settings"):
@@ -1023,7 +1032,7 @@ def start_check(g, renderer):
             try:
                 code = subprocess.run([str(pathlib.Path(g.bin) / EXES[renderer]), "--start-check", "300",
                                        "--data", str(out / "data"), "--settings", str(out / "settings"),
-                                       "--crash-dumps", str(out)], stdout=f, stderr=subprocess.STDOUT, timeout=300,
+                                       "--crash-dumps", str(out), *extra], stdout=f, stderr=subprocess.STDOUT, timeout=300,
                                       **hidden).returncode
             except subprocess.TimeoutExpired:
                 code = 124
@@ -1112,12 +1121,17 @@ class HarnessSource:
     """One harness suite on one renderer that can run its tests again (kinds.Settler's source): alone with the same
     build, and on main's kept build. The first run is harness()'s; this class makes the command for all three."""
 
-    def __init__(self, g, suite, renderer, label, device=None, bin_dir=None, env=None):
+    def __init__(self, g, suite, renderer, label, device=None, bin_dir=None, env=None, judge=None):
         self.g, self.suite, self.renderer, self.label = g, suite, renderer, label
         self.device, self.bin_dir, self.env = device, bin_dir, env
         self.suite_dir, self.listed = suite_layout(suite)
         self.tag = "%s-%s" % (label, renderer)
         self.second = None
+        # A lane's own judgement of each test after its run (validate_judge, stress_judge): judge(source, work, results) -> results.
+        # It adds to `final` the tests that are not run again alone, and sets `counted` (what the first run's judgement counted).
+        self.judge = judge
+        self.final = set()
+        self.counted = ""
 
     def first_work(self):
         return self.g.work / ("runs-%s" % self.tag)
@@ -1147,7 +1161,14 @@ class HarnessSource:
         return code
 
     def read(self, work, names):
-        return kinds.read_cases(work, self.suite_dir, names, self.renderer, kind_of_verdict)
+        results, declared, problem = kinds.read_cases(work, self.suite_dir, names, self.renderer, kind_of_verdict)
+        if self.judge is not None and not problem:
+            results = self.judge(self, work, results)
+        return results, declared, problem
+
+    def kept_first(self, name):
+        """Where the first run of a test that failed and passed alone is kept (adopt)."""
+        return str(self.g.work / "rerun" / "first" / self.tag / name)
 
     def alone(self, names):
         """The tests run again by themselves, nothing else running: the same build, a fresh folder rerun/ in the run's."""
@@ -1212,15 +1233,17 @@ def git_in(tree, *args):
     return r.stdout.strip() if r.returncode == 0 else ""
 
 
-def harness(g, suite, renderer, label, device=None, bin_dir=None, env=None):
+def harness(g, suite, renderer, label, device=None, bin_dir=None, env=None, judge=None, stress_lane=False, stress_fails=False):
     """One harness suite on one renderer, on this computer or on an Android device (its serial; the test app
     prepared and the device's lock held by the gate). Each test's kind is read from its result.json (the runner
     writes it); a test that left none, a result that cannot be read, a number of results other than the suite lists,
     and none at all are tool. Passes when every test passed (a test whose disc has no pak is not-run: env). The
     results go with it, and a source that runs a failed test again alone and on main's build (not on a device: its
-    test app is removed when its part ends). `env`: more for the games' environment (the coverage build's counts)."""
+    test app is removed when its part ends). `env`: more for the games' environment (the coverage build's counts). `judge`: the
+    lane's own judgement of each test (HarnessSource). `stress_lane`: the check is a stress lane's (kinds.Cases.stress);
+    `stress_fails`: its stress result is a fail (a landing asked for the lane by --also)."""
     def fn(log):
-        source = HarnessSource(g, suite, renderer, label, device, bin_dir, env)
+        source = HarnessSource(g, suite, renderer, label, device, bin_dir, env, judge)
         work = source.first_work()
         code = source.start(work, bin_dir or g.bin, None, log, g.work / ("harness-%s-%s.lock" % (label, renderer)))
         results, declared, problem = source.read(work, source.listed)
@@ -1237,7 +1260,8 @@ def harness(g, suite, renderer, label, device=None, bin_dir=None, env=None):
             problem = "the runner exited %d though every test passed" % code
         elif problem is None and not passes and code == 0:
             problem = "the runner exited 0 though a test did not pass"
-        cases = kinds.Cases(results, declared, problem, renderer, None if device else source)
+        cases = kinds.Cases(results, declared, problem, renderer, None if device else source, final=source.final,
+                            extra=source.counted, stress=stress_lane, stress_fails=stress_fails)
         return passes and problem is None, "", cases
     return fn
 
@@ -2285,7 +2309,7 @@ def tablet_part(g, stops, device=None):
 
 # The checks of a run that start the game (on this computer or the tablet), and those that never do: a run whose checks are all of
 # the second kind (documents, tools, builds) asks nothing of the machine. A test pins that every check of every level is in one.
-GAME_CHECKS = ("start/", "engine/", "tour", "mods", "soak", "coverage", "android/", "tablet/", "measure/")
+GAME_CHECKS = ("start/", "engine/", "tour", "mods", "soak", "coverage", "android/", "tablet/", "measure/", "validate/", "stress/")
 NO_GAME_CHECKS = ("repo/", "build/", "data/", "unit/", "rust", "lumalink", "import/", "harness/", "description/", "pictures/",
                   "replays/", "github", "part/", "lane/", "gate/")
 # The locks a held gate, long run or measure keeps: a game process that one of them may own is never ended as a leftover.
@@ -2323,9 +2347,13 @@ def lanes_asked(g):
     regions = 0 if level == LAND_LEVEL else len(REGION_DISCS)
     tablet = 0 if level == "quick" else 1
     if level == "long":
-        return max(renderers + regions, tablet, 1)
+        # The long run's parts play one after another: the biggest is the stress part (twelve copies, stress_part).
+        return max(renderers + regions, tablet, stress.COPIES)
     mods = renderers * g.args.mod_parallel if mods_on(g) else 0
-    return renderers + regions + mods + tablet + (2 if level == "final" else 0)
+    # The validate lane: one copy for each renderer (asking for it costs nothing where the layer is not installed).
+    validate_copies = 0 if level == "quick" else len(RENDERERS)
+    asked = renderers + regions + mods + tablet + validate_copies + (2 if level == "final" else 0)
+    return max(asked, stress.COPIES) if level == "final" else asked     # the final check's stress part follows its lanes
 
 
 def renderers_of(level):
@@ -2612,6 +2640,147 @@ def mods_lane(g, r):
     return lane
 
 
+# The validate lane (tools/gate/validate.py): the runner's --gpu-validation 1, and its time limits four times the usual.
+VALIDATE_ENV = {"LUMA_TEST_GPU_VALIDATION": "1", "LUMA_TEST_LIMIT_SCALE": str(validate.LIMIT_SCALE)}
+
+
+def layer_probe(g, renderer, log):
+    """Whether the renderer's debug layer is on when the game starts with --gpu-validation 1: True or False as its start says, None
+    when the start said nothing (the lane then runs, and each test's own log says). The program's start check, no game data."""
+    start_check(g, renderer, ("--gpu-validation", "1"))(log)
+    return validate.layer_state(pathlib.Path(log).read_text(encoding="utf-8", errors="replace"), renderer)
+
+
+def layer_fault(g, renderer, line):
+    """The line a layer that is not installed leaves in tool-faults.tsv (the progress page shows it): a day at most for each renderer."""
+    folder = getattr(g.args, "live", None)
+    if not folder:
+        return
+    sys.path.insert(0, str(TREE / "tools" / "plan"))
+    import live  # noqa: E402 - tools/plan, as fault_writer
+    name = "validate/%s" % renderer
+    if validate.fault_due(live.read_faults(folder), name, datetime.datetime.now()):
+        fault_writer(folder)("gate", "", "ENV", name, "", line, str(g.work))
+
+
+def read_logs(work, suite_dir, renderer, tests):
+    """{test: the text of its run.log} of the runs a work folder holds."""
+    out = {}
+    for test in tests:
+        path = pathlib.Path(work) / "runs" / suite_dir / test / renderer / "run.log"
+        try:
+            out[test] = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            out[test] = ""
+    return out
+
+
+def validate_judge(g, renderer, known):
+    """HarnessSource.judge of the validate lane: the layer's messages and the time limit (validate.judge_results), then the step
+    hashes against the recordings. A listed error is counted into the check's detail (source.counted), an unlisted one is a fail."""
+    def judge(source, work, results):
+        out, final, totals = validate.judge_results(renderer, results, read_logs(work, source.suite_dir, renderer, results), known)
+        source.final |= final
+        if pathlib.Path(work) == source.first_work():
+            source.counted = validate.summary(renderer, totals, known)
+            g.layer_seen[renderer] = set(totals.errors)
+        return judged.hash_results(work, out)
+    return judge
+
+
+def validate_check(g, renderer, tour):
+    """validate/<renderer>: the tour with the debug layer on, one copy at a time; the check is left out, with one plain line, on a PC
+    where the layer is not installed (never fail, tool or env)."""
+    def fn(log):
+        known = validate.read_known()
+        if layer_probe(g, renderer, log) is False:
+            line = validate.missing_layer_line(renderer)
+            layer_fault(g, renderer, line)
+            return True, line
+        return harness(g, tour, renderer, "validate", env=VALIDATE_ENV, judge=validate_judge(g, renderer, known))(log)
+    return fn
+
+
+def validate_lane(g, r, tour):
+    def lane():
+        g.check("validate/%s" % r, validate_check(g, r, tour), DATA)
+    lane.copies = 1
+    lane.part = "validate"
+    return lane
+
+
+def validate_tour(g, tours):
+    """The tour the validate lane plays: the 12 stops (a landing's tour, or one written beside it at the main level); the long run's
+    whole tour."""
+    if g.level in SHORT_LEVELS or g.level == "long":
+        return tours["tour"]
+    tour = gate_tour.write(g.work / "tour-validate", QUICK_STOPS)
+    step_hash.with_hash(tour.parent)
+    return tour
+
+
+def validate_gone(g, known):
+    """After the whole tour: the listed ids that no renderer's run showed any more (the nightly report says so)."""
+    for renderer, ident, row, words in validate.not_seen(known, g.layer_seen):
+        text = "validate: %s %s (%s, %s) was not seen in this whole tour: its line in validate-known.tsv can go" % (
+            renderer, ident, row, words)
+        g.machine_notes.append(text)
+        print("gate.py: " + text, flush=True)
+
+
+def stress_judge(g, renderer):
+    """HarnessSource.judge of the stress lane: the step hashes against the recordings, and the pictures against their approved copies
+    (pictures.py check, the runs of this source's folder). A test judged a fail is run again alone, as any."""
+    def judge(source, work, results):
+        out = judged.hash_results(work, results)
+        if any(kind == "pass" for kind, _ in out.values()):
+            log = g.work / ("%s-pictures-%s.log" % (source.tag, "first" if pathlib.Path(work) == source.first_work() else "again"))
+            run([sys.executable, "-X", "utf8", "-I", HERE / "pictures.py", "check", "--runs", work, "--renderer", renderer,
+                 "--place", "pc", "--manifest", pathlib.Path(g.tree) / picture_tool.MANIFEST_NAME, "--store", PICTURE_STORE,
+                 "--changes", pathlib.Path(g.tree) / picture_tool.CHANGES_NAME], log, cwd=TREE)
+            out = judged.picture_results(log.read_text(encoding="utf-8", errors="replace").splitlines(), out)
+        return out
+    return judge
+
+
+def stress_lane_of(g, plan, tour, fails):
+    """One of the twelve lanes (stress.lanes): its checks one after another, each a harness suite with this renderer's watches on."""
+    def lane():
+        for name, kind, r, n in plan:
+            suite = TREE / "tests" / "engine" / "suite.json" if kind == "engine" else tour
+            label = "stress-engine" if kind == "engine" else "stress-tour-%d" % n
+            g.check(name, harness(g, suite, r, label, judge=stress_judge(g, r), stress_lane=True, stress_fails=fails), DATA)
+    lane.copies = 1
+    return lane
+
+
+def stress_part(g):
+    """The stress lane: twelve copies of the game side by side whatever the graphics card's rule says (stress.copies_for: fewer only
+    when the PC's memory is short), the engine suite and the 12-stop tour on each renderer and nine more tours. A failure with the
+    copies running that passes alone is `stress` (kinds.Settler)."""
+    tour = gate_tour.write(g.work / "tour-stress", QUICK_STOPS)
+    step_hash.with_hash(tour.parent)
+    fails = "stress" in landing.also_names(getattr(g.args, "also", ""))
+    previous = g.slots
+    if not g.dry:
+        copies, _, note = stress.copies_for(machine.memory_free())
+        g.machine_notes.append(note)
+        print("gate.py: " + note, flush=True)
+        g.slots = machine.Slots(copies)
+    try:
+        g.lanes([stress_lane_of(g, plan, tour, fails) for plan in stress.lanes()])
+    finally:
+        g.slots = previous
+
+
+def stress_lane(g):
+    def lane():
+        stress_part(g)
+    lane.part = "stress"
+    lane.copies = stress.COPIES
+    return lane
+
+
 def write_tours(g, stops, region_stops):
     """The tour and the other discs' tours: {label: suite.json}."""
     tours = {"tour": gate_tour.write(g.work / "tour", stops)}
@@ -2803,17 +2972,30 @@ def run_checks(args, known=None, planned=None, selected=None, dry=False):
         lanes.append(android_lane(g, QUICK_STOPS if level in ("main", LAND_LEVEL) else None))
     if level in ("long", "final"):
         lanes += [sanitizer_lane(g), coverage_lane(g)]
+    if level != "quick":
+        # The debug layers' messages (T12): one lane for each renderer, beside the others in a landing, a part of its own in the long run.
+        vtour = validate_tour(g, tours)
+        lanes += [validate_lane(g, r, vtour) for r in RENDERERS]
+    if level == "long":
+        lanes.append(stress_lane(g))
     if level == "long":
         # Part by part under the gate lock: the tours of every renderer and disc side by side, then the tablet, then
         # the sanitizer build's runs, then the coverage build's. The soak, started above in processes of its own at
         # below-normal priority, is the only work that runs beside another gate.
-        apart = {n: [l for l in lanes if getattr(l, "part", "") == n] for n in ("tablet", "sanitizer", "coverage")}
+        apart = {n: [l for l in lanes if getattr(l, "part", "") == n] for n in ("tablet", "sanitizer", "coverage", "validate", "stress")}
         tour_lanes = [l for l in lanes if not getattr(l, "part", "")]
         for name, part in (("tours", tour_lanes),) + tuple(apart.items()):
             if part:
                 locked_part(g, name, lambda part=part: g.lanes(part))
     else:
         g.lanes(lanes)
+        if level == "final":
+            stress_part(g)       # the final check is the main and long levels on one commit: the stress lane follows the others
+    if level == "long" and not g.dry and g.layer_seen:
+        try:
+            validate_gone(g, validate.read_known())
+        except validate.KnownError:
+            pass        # the check validate/<renderer> already said the list is wrong
     # The soak plays beside the lanes in processes of its own: it is waited for first, so that what is run again alone
     # really runs alone.
     if level in ("long", "final") and g.wanted("soak", DATA) and not g.dry:

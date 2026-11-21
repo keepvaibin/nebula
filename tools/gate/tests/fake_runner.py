@@ -15,7 +15,9 @@ run of that test leaves, by the phase it is in: the first run (any other work fo
   "garbage"         a result.json that is not JSON;  "no-verdict": one that names no verdict
 A test the scenario does not name passes. "exit" overrides the exit code (the real one: 0 when all passed, else 1);
 "refuse": the runner ends with exit 3 and no result (the machine was not fit). Each run also leaves phase.txt in the
-test's run folder, so a test can see which run its folder holds.
+test's run folder, so a test can see which run its folder holds, and env.txt (the LUMA_TEST_GPU_VALIDATION and
+LUMA_TEST_LIMIT_SCALE the run was started with). "logs": {name: {phase: text}} (phase "all": every run) is the text of the
+test's run.log, which a lane reads for the graphics layer's messages.
 """
 import json
 import os
@@ -56,6 +58,11 @@ def main():
         run = work / "runs" / suite / name / renderer
         run.mkdir(parents=True, exist_ok=True)
         (run / "phase.txt").write_text(phase, encoding="utf-8")
+        (run / "env.txt").write_text("validation=%s scale=%s" % (os.environ.get("LUMA_TEST_GPU_VALIDATION", ""),
+                                                                 os.environ.get("LUMA_TEST_LIMIT_SCALE", "")), encoding="utf-8")
+        logs = scenario.get("logs", {}).get(name, {})
+        if logs.get(phase, logs.get("all")) is not None:
+            (run / "run.log").write_text(logs.get(phase, logs.get("all")), encoding="utf-8")
         verdict, kind, reason = "pass", "pass", ""
         if outcome.startswith("fail"):
             verdict, kind, reason = "fail", "fail", outcome.partition(":")[2]

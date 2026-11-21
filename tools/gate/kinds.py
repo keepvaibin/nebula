@@ -13,7 +13,10 @@ Every check and every test ends as one kind:
   flake  failed, then passed when run again alone (tests/flakes: <plan>/native/flakes.tsv);
   main   failed again alone, and fails on main's build in the same way: main is at fault, not the change;
   new    a picture with no approved copy, or one that the change declares (PICTURES-CHANGE.txt): it never fails a run, the
-         gate approves it when the change lands (tools/gate/pictures.py).
+         gate approves it when the change lands (tools/gate/pictures.py);
+  stress failed in the stress lane (twelve copies of the game at once, T12), then passed run alone: it never fails a run, is
+         not written to the flakes file and does not count toward setting a test aside; the lane keeps the run folder and
+         opens a repair (tools/gate/stress.py). It failing alone too is a plain fail; asked for by `--also stress` it is a fail.
 
 Where each is decided:
   a test's pass, fail, tool or env   tools/lumacore/luma_test.py kind_of (written into result.json as "kind");
@@ -34,7 +37,7 @@ import subprocess
 
 # The order a check's kind is the worst of its tests' (known, the list of tests expected to fail, and new, a picture to
 # approve, sit just before pass: neither fails a run).
-ORDER = ("fail", "tool", "env", "flake", "main", "known", "new", "pass")
+ORDER = ("fail", "tool", "env", "flake", "main", "stress", "known", "new", "pass")
 RANK = {k: i for i, k in enumerate(ORDER)}
 # What result.json's "kind" may say.
 RESULT_KINDS = ("pass", "fail", "tool", "env")
@@ -162,14 +165,22 @@ class Cases:
     """What a check that runs tests hands the gate. `results` {test: (kind, message)}; `declared` the number of cases it
     should run (None where a check has no such list); `problem` a check-level fault (a count that does not match: tool);
     `renderer` the renderer its tests ran on (the key of flakes and the set-aside list); `source` something that can run
-    some of its tests again (see Settler); `fresh` whether `results` are this check's own."""
+    some of its tests again (see Settler); `final` the tests that are not run again (a fault of the lane's own rule, the same
+    on every run: a validation layer's error); `extra` a sentence for the check's detail (what the lane counted);
+    `stress` the check is a stress lane's (twelve copies at once): a test that fails there and passes alone is `stress`, not
+    flake, and `stress_fails` (asked for by --also) makes it a fail."""
 
-    def __init__(self, results, declared=None, problem=None, renderer="", source=None):
+    def __init__(self, results, declared=None, problem=None, renderer="", source=None, final=(), extra="", stress=False,
+                 stress_fails=False):
         self.results = dict(results)
         self.declared = declared
         self.problem = problem
         self.renderer = renderer
         self.source = source
+        self.final = set(final)
+        self.extra = extra
+        self.stress = stress
+        self.stress_fails = stress_fails
 
 
 def cases_of_verdicts(verdicts, kind_of_verdict, renderer=""):
@@ -196,7 +207,7 @@ def judge_cases(cases, known=None, aside=(), passed=True):
         elif kind == "fail" and (test, cases.renderer) in aside:
             records.append(record(test, kind, message, counts=False, note="set aside"))
         else:
-            records.append(record(test, kind, message))
+            records.append(record(test, kind, message, final=test in cases.final))
     if cases.problem:
         records.append(record("-", "tool", cases.problem))
     if not passed and not records:
@@ -224,6 +235,11 @@ def describe(cases, records):
     main = sorted(r["test"] for r in bad if r["kind"] == "main")
     if main:
         text += "; main is at fault: " + ", ".join(main)
+    stress = sorted(r["test"] for r in bad if r["kind"] == "stress")
+    if stress:
+        text += "; failed under load, passed alone (stress): " + ", ".join(stress)
+    if getattr(cases, "extra", ""):
+        text += "; " + cases.extra
     problems = [r["message"] for r in records if r["test"] == "-"]
     if problems:
         text += "; " + "; ".join(problems)
@@ -234,8 +250,8 @@ def state_of(records):
     """A check's state from its records: the worst kind of those that count; known when only listed or set aside tests
     did not pass; else flake or main when a test was settled so, else pass."""
     kinds = [r["kind"] for r in records if r["counts"]]
-    kinds += [r["kind"] for r in records if not r["counts"] and r["kind"] in ("flake", "main")]
-    kinds += ["known" for r in records if not r["counts"] and r["kind"] not in ("flake", "main")]
+    kinds += [r["kind"] for r in records if not r["counts"] and r["kind"] in ("flake", "main", "stress")]
+    kinds += ["known" for r in records if not r["counts"] and r["kind"] not in ("flake", "main", "stress")]
     return worst(kinds)
 
 
@@ -349,6 +365,10 @@ class Settler:
         self.say = say
         self.open_rows = []
         self.newly_aside = []
+        # The stress lane's (Cases.stress): what failed with the other copies running and passed alone, [{check, test, renderer,
+        # message, folder}], and the tests that were only too slow under the load (not a fault, only counted).
+        self.stress_results = []
+        self.slow_under_load = []
 
     def settle(self, check, cases, records):
         """Records after the second run and the check against main."""
@@ -365,21 +385,54 @@ class Settler:
             again = {}
             self.say("%s: the second run broke (%s: %s); the first result stands" % (check, type(error).__name__, error))
         for r in slow:
-            self.settle_slow(check, cases, r, again.get(r["test"], ("tool", "the second run reported nothing")))
+            second = again.get(r["test"], ("tool", "the second run reported nothing"))
+            if cases.stress and second[0] == "pass":
+                # Slow with twelve copies is no fault: counted, the test is a pass, its second run takes the first's place.
+                records.remove(r)
+                cases.source.adopt(r["test"])
+                self.slow_under_load.append(r["test"])
+                cases.extra = "; ".join(x for x in (cases.extra, "%d run%s too slow under the load" % (
+                    len(self.slow_under_load), "" if len(self.slow_under_load) == 1 else "s")) if x)
+                self.say("%s: %s was too slow under the load and passed alone: only counted" % (check, r["test"]))
+                continue
+            self.settle_slow(check, cases, r, second)
         still = []
         for r in failing:
             kind, message = again.get(r["test"], ("tool", "the second run reported nothing"))
             if kind == "pass":
                 first = r["message"]
+                if cases.stress:
+                    self.stress(check, cases, r, first)
+                    continue
                 r.update(kind="flake", counts=False, note="failed once, passed alone")
                 cases.source.adopt(r["test"])
                 self.flake(check, cases, r["test"], first)
             else:
                 r["again"] = (kind, message)
                 still.append(r)
-        if still:
+        if still and cases.stress:
+            for r in still:
+                r["note"] = "failed alone too: not the load"
+                self.say("%s: %s failed alone too: fail" % (check, r["test"]))
+        elif still:
             self.against_main(check, cases, still)
         return records
+
+    def stress(self, check, cases, r, first):
+        """A test of the stress lane that failed with the other copies running and passed alone: kind stress (never fails a run,
+        no line in flakes.tsv, not counted toward setting a test aside), its first failure kept for the repair; with
+        Cases.stress_fails (the landing asked for the lane by --also: its proof that a fault under load is gone) a fail."""
+        test = r["test"]
+        cases.source.adopt(test)
+        if cases.stress_fails:
+            r.update(kind="fail", final=True, message="failed with the other copies running, passed alone: %s" % first)
+            self.say("%s: %s failed with the other copies running and passed alone: fail (asked for by --also)" % (check, test))
+            return
+        r.update(kind="stress", counts=False, note="failed with the other copies running, passed alone")
+        kept = getattr(cases.source, "kept_first", None)
+        self.stress_results.append({"check": check, "test": test, "renderer": cases.renderer, "message": first,
+                                    "folder": kept(test) if kept else ""})
+        self.say("%s: %s STRESS (failed with the other copies running, passed alone): %s" % (check, test, first))
 
     def settle_slow(self, check, cases, r, second):
         """A test too slow in the crowd, after its run alone: a pass is flake; too slow again is fail, with its speed; a fail is
