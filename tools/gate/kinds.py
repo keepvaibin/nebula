@@ -8,7 +8,9 @@ Every check and every test ends as one kind:
   env    the machine was not fit: the tablet away, the drive full, another graphics card than the approved pictures
          name, a lock not had in time;
   flake  failed, then passed when run again alone (tests/flakes: <plan>/native/flakes.tsv);
-  main   failed again alone, and fails on main's build in the same way: main is at fault, not the change.
+  main   failed again alone, and fails on main's build in the same way: main is at fault, not the change;
+  new    a picture with no approved copy, or one that the change declares (PICTURES-CHANGE.txt): it never fails a run, the
+         gate approves it when the change lands (tools/gate/pictures.py).
 
 Where each is decided:
   a test's pass, fail, tool or env   tools/lumacore/luma_test.py kind_of (written into result.json as "kind");
@@ -26,8 +28,9 @@ import json
 import pathlib
 import subprocess
 
-# The order a check's kind is the worst of its tests' (known, the list of tests expected to fail, sits before pass).
-ORDER = ("fail", "tool", "env", "flake", "main", "known", "pass")
+# The order a check's kind is the worst of its tests' (known, the list of tests expected to fail, and new, a picture to
+# approve, sit just before pass: neither fails a run).
+ORDER = ("fail", "tool", "env", "flake", "main", "known", "new", "pass")
 RANK = {k: i for i, k in enumerate(ORDER)}
 # What result.json's "kind" may say.
 RESULT_KINDS = ("pass", "fail", "tool", "env")

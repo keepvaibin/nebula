@@ -2461,6 +2461,16 @@ def gpu_line(log_lines):
     return "unknown"
 
 
+def test_path_of(folder):
+    """The test's own folder under the repository's tests/ ("engine/boot"), or None for a test that is not kept there (a
+    tour is written into the run's folder). tools/gate/pictures.py files a test's approved pictures under it, whatever name
+    the run gave its suite."""
+    try:
+        return pathlib.Path(folder).resolve().relative_to(TREE / "tests").as_posix()
+    except ValueError:
+        return None
+
+
 def run_tests(args):
     target = pathlib.Path(args.target).resolve()
     if target.is_file() and target.name == "suite.json":
@@ -2584,7 +2594,7 @@ def run_tests(args):
                        {"setup": setup, "frames": max([f.get("frame", -1) for f in facts] or [-1]),
                         "seconds": round(ran.get("seconds", 0.0), 2), "pictures": pictures,
                         "binaries": ran.get("frozen", {}), "exit": ran.get("code"), "starts": ran.get("starts"),
-                        "not_on_this_system": test["not_here"], "limit_seconds": test["limit"],
+                        "test_path": test_path_of(folder), "not_on_this_system": test["not_here"], "limit_seconds": test["limit"],
                         "limit_scale": args.limit_scale, "test_json": test["raw"]})
     finally:
         lock.unlink()
