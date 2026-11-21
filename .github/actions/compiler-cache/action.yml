@@ -2,11 +2,18 @@ name: Compiler cache
 description: >-
   sccache in front of every compiler CMake drives (CMAKE_C_COMPILER_LAUNCHER and CMAKE_CXX_COMPILER_LAUNCHER, which
   CMake takes from the environment) and of rustc, its cache restored from this job's newest run on this branch or on
-  main. The job saves it again with actions/cache/save at its end (key: this step's output `key`).
+  main. The job saves it again with actions/cache/save at its end (key: this step's output `key`). What sccache stores
+  is keyed by the content of what is compiled, so a hit is the object the compiler would make. Its size is limited by
+  `size` (the least recently used entries leave first), so the saved entries cannot grow past GitHub's 10 GB for the
+  whole repository.
 inputs:
   name:
     description: The cache's name, one per job (and matrix leg).
     required: true
+  size:
+    description: The most sccache keeps on disk, uncompressed (the saved entry is about half to three quarters of it).
+    required: false
+    default: 1G
 outputs:
   key:
     description: The key the job saves the cache under.
@@ -25,7 +32,7 @@ runs:
         dir="$(cd "$RUNNER_TEMP" && pwd -W 2>/dev/null || pwd)/sccache"
         {
           echo "SCCACHE_DIR=$dir"
-          echo "SCCACHE_CACHE_SIZE=6G"
+          echo "SCCACHE_CACHE_SIZE=${{ inputs.size }}"
           echo "CMAKE_C_COMPILER_LAUNCHER=sccache"
           echo "CMAKE_CXX_COMPILER_LAUNCHER=sccache"
           echo "RUSTC_WRAPPER=sccache"
