@@ -2139,6 +2139,9 @@ def check_value(actual, op, value, within):
 # The host's own crash line (native/host/host_main.cpp log_line("crash:", ...)): its time, then the tag. A mod or a
 # fact that writes the word elsewhere is not a crash.
 CRASH_LINE = re.compile(r"^\[\s*\d+\.\d{3}\] crash: ")
+# Direct3D 11's constants watch (--diagnostics constants-watch, runtime/include/galaxy/render/d3d11/constants_watch_d3d11.h,
+# ledger P-332): the line it prints when a compute read of the constant ring did not read what was written.
+CONSTANTS_WATCH = "[constants] watch"
 
 
 def evaluate(test, renderer, run_folder, ran):
@@ -2238,6 +2241,10 @@ def evaluate(test, renderer, run_folder, ran):
     # library did not load or has no luma_validate_message. Every refusal of the run is then codes only.
     coded = [line for line in log_lines if "refusals are given as codes" in line]
     add("refusals are given in words", not coded, coded)
+    # The constants watch's line (the gate's Direct3D 11 runs turn the watch on) fails the run, whatever else it says.
+    watched = [line for line in log_lines if CONSTANTS_WATCH in line]
+    if watched:
+        add("the constants watch saw every read right", False, watched[:3])
     if test["ends"] == "end" and end:
         # Nothing the game asked for was lost (galaxy/loss_report.h): the [loss] counts the host logs at its exit (a draw
         # with no material or pipeline, a texture drawn blank, a sound read past its memory) are all 0.
@@ -2366,6 +2373,8 @@ def evaluate(test, renderer, run_folder, ran):
     failed = [c for c in checks if c["result"] == "fail"]
     if verdict is None:
         verdict, reason = ("fail", "%s (actual: %s)" % (failed[0]["check"], json.dumps(failed[0]["actual"]))) if failed else ("pass", "")
+    elif verdict == "pass" and watched:
+        verdict, reason = "fail", "the constants watch saw a wrong read: %s" % watched[0]
     return verdict, reason, checks, facts
 
 

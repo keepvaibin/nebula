@@ -46,7 +46,8 @@ int main() {
     for (const DiagnosticName& entry : kDiagnosticNames) {
         every |= entry.what;
     }
-    ok &= expect(every == (kDiagnoseFramePlans << 1u) - 1u, "every diagnostic has a name");
+    ok &= expect(every == (kDiagnoseConstantsWatch << 1u) - 1u, "every diagnostic has a name");
+    ok &= expect(parses("constants-watch", kDiagnoseConstantsWatch), "the constants watch has its name");
     std::cout << (ok ? "launch args tests passed\n" : "launch args tests failed\n");
     return ok ? 0 : 1;
 }

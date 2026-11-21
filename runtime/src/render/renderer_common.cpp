@@ -101,19 +101,33 @@ float4 main(float4 pos : SV_Position) : SV_Target {
 )HLSL";
 
 // Screen probes: each point's depth, 0 near to 1 far (the depth buffer is reversed), at the frame pixel the CPU found
-// for it (ScreenProbePixel); a point the game did not ask about (~0u) reads 0.
+// for it (ScreenProbePixel); a point the game did not ask about (~0u) reads 0. The points' first element holds their
+// count (write_screen_probe_points): the count travels with the points, and the shader reads no constant (P-332).
 static constexpr char kScreenProbeCs[] = R"HLSL(
-cbuffer C : register(b0) {
-    uint count;
-};
 Texture2D<float> depth : register(t0);
 StructuredBuffer<uint2> pixels : register(t1);
 RWStructuredBuffer<float> values : register(u0);
 [numthreads(64, 1, 1)]
 void main(uint3 id : SV_DispatchThreadID) {
+    const uint count = pixels[0].x;
     if (id.x >= count) return;
-    const uint2 pixel = pixels[id.x];
+    const uint2 pixel = pixels[id.x + 1u];
     values[id.x] = pixel.x == 0xffffffffu ? 0.0 : saturate(1.0 - depth.Load(int3(int2(pixel), 0)));
+}
+)HLSL";
+
+// The constants watch (d3d11::ConstantsWatch, P-332): the three words of the piece bound at b0, as this dispatch reads
+// them, into u0.
+static constexpr char kConstantsWatchCs[] = R"HLSL(
+cbuffer C : register(b0) {
+    uint3 words;
+};
+RWStructuredBuffer<uint> seen : register(u0);
+[numthreads(1, 1, 1)]
+void main() {
+    seen[0] = words.x;
+    seen[1] = words.y;
+    seen[2] = words.z;
 }
 )HLSL";
 
@@ -223,6 +237,20 @@ ScreenProbePixel screen_probe_pixel(const ScreenProbe& probe, const FrameMap& ma
         return static_cast<std::uint32_t>(std::min(at * scale, static_cast<float>(size - 1u)));
     };
     return {pixel(probe.x, map.sx, map.width), pixel(probe.y, map.sy, map.height)};
+}
+
+std::string_view constants_watch_shader_source() noexcept {
+    return std::string_view{kConstantsWatchCs, sizeof(kConstantsWatchCs) - 1u};
+}
+
+void write_screen_probe_points(std::span<const ScreenProbe> probes, const FrameMap& map, void* out) noexcept {
+    auto* const bytes = static_cast<std::uint8_t*>(out);
+    const ScreenProbePixel count{static_cast<std::uint32_t>(probes.size()), 0u};
+    std::memcpy(bytes, &count, sizeof(count));
+    for (std::size_t i = 0; i < probes.size(); ++i) {
+        const ScreenProbePixel pixel = screen_probe_pixel(probes[i], map);
+        std::memcpy(bytes + (i + 1u) * sizeof(ScreenProbePixel), &pixel, sizeof(pixel));
+    }
 }
 
 SceneClearValues make_scene_clear_values(std::uint32_t rgba, std::uint8_t frame_format) noexcept {

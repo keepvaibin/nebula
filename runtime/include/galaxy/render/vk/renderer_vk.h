@@ -953,7 +953,7 @@ private:
     // The same into an RGBA16F picture (color_pass_wide_: the frame shown with float_scene_).
     VkPipeline conversion_pipeline_wide_ = VK_NULL_HANDLE;
     VkPipeline display_filter_pipeline_wide_ = VK_NULL_HANDLE;
-    // Screen probes (ScreenProbeCs): set {t0 the scene's depth, t1 the pixels, u0 the values}, the count pushed.
+    // Screen probes (ScreenProbeCs): set {t0 the scene's depth, t1 the points with their count, u0 the values}.
     VkDescriptorSetLayout probe_set_layout_ = VK_NULL_HANDLE;
     VkPipelineLayout probe_layout_ = VK_NULL_HANDLE;
     // HDR output's 2D layer (begin_layer_2d): its set while the float set is live and the float set while it is, the

@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <deque>
 #include <limits>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -136,8 +137,9 @@ inline constexpr unsigned kSceneConversionConstantCount = 7u;
 // layer left as it started is discarded (the float scene keeps its light past white there), any other takes the layer's.
 [[nodiscard]] std::string_view layer_merge_shader_source() noexcept;
 
-// Screen probes (one compute dispatch a probe pass): t0 the scene's depth, t1 each point's frame pixel, u0 each point's
-// depth as the game reads it (0 near, 1 far); b0 the count. 64 points a group.
+// Screen probes (one compute dispatch a probe pass): t0 the scene's depth, t1 the points (write_screen_probe_points: the
+// count, then each point's frame pixel), u0 each point's depth as the game reads it (0 near, 1 far). No constant: the
+// count travels with the points (P-332). 64 points a group.
 [[nodiscard]] std::string_view screen_probe_shader_source() noexcept;
 inline constexpr unsigned kScreenProbeGroup = 64u;
 struct ScreenProbePixel {
@@ -146,6 +148,15 @@ struct ScreenProbePixel {
 };
 // The frame pixel a probe names in the target `map` describes; ~0u for a point the game did not ask about (x or y below 0).
 [[nodiscard]] ScreenProbePixel screen_probe_pixel(const ScreenProbe& probe, const FrameMap& map) noexcept;
+// The points buffer of `count` probes: one element for the count, then one a point.
+[[nodiscard]] constexpr std::size_t screen_probe_points_bytes(std::size_t count) noexcept {
+    return (count + 1u) * sizeof(ScreenProbePixel);
+}
+// The points buffer into `out` (screen_probe_points_bytes(probes.size()) bytes): element 0 {count, 0}, then each probe's
+// screen_probe_pixel in `map`.
+void write_screen_probe_points(std::span<const ScreenProbe> probes, const FrameMap& map, void* out) noexcept;
+// Direct3D 11's constants watch (d3d11::ConstantsWatch): b0's first three words, as one dispatch reads them, into u0.
+[[nodiscard]] std::string_view constants_watch_shader_source() noexcept;
 
 // The renderers' utility shaders (HLSL; the Vulkan backend annotates and compiles the same source): the
 // fullscreen-triangle blit, the scene target colour-channel clear, the depth carry after a resolution change, and the

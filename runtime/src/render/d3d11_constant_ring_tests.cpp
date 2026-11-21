@@ -122,7 +122,7 @@ bool whole_pieces(Context& context, ID3D11ComputeShader* shader, std::uint32_t f
             std::memcpy(piece + 2048u * 16u + 4u, &mixed, 4u);
             std::memcpy(piece + 65536u - 4u, &n, 4u);
             context.end_constants();
-            galaxy::render::d3d11::bind_place(immediate, galaxy::render::d3d11::kComputeConstants, 0u, place);
+            const galaxy::render::d3d11::ComputeConstants bound(immediate, place);
             immediate->Dispatch(1u, 1u, 1u);
         }
         (void)context.signal();
@@ -151,8 +151,10 @@ bool rounding_zeroed(Context& context, ID3D11ComputeShader* shader) {
     const std::uint32_t value = 0x13572468u;
     const Context::ConstantPlace place = context.put_constants(&value, sizeof(value));
     bool ok = expect(place.buffer != nullptr && place.count == 16u, "a 4-byte put is one 256-byte piece");
-    galaxy::render::d3d11::bind_place(immediate, galaxy::render::d3d11::kComputeConstants, 0u, place);
-    immediate->Dispatch(1u, 1u, 1u);
+    {
+        const galaxy::render::d3d11::ComputeConstants bound(immediate, place);
+        immediate->Dispatch(1u, 1u, 1u);
+    }
     const std::vector<std::uint32_t> values = read_answers(context, answers);
     ok &= expect(values.size() == 2u && values[0] == value, "the put's value is read");
     ok &= expect(values.size() == 2u && values[1] == 0u, "the rest of its piece reads zero");

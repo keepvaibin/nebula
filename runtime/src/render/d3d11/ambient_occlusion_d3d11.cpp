@@ -193,18 +193,20 @@ bool AmbientOcclusion::record(ID3D11DeviceContext1* context, const Inputs& in) {
 
     // No target stays bound over the depth (its depth-stencil view) while it is read.
     context->OMSetRenderTargets(0u, nullptr, nullptr);
-    bind_place(context, kComputeConstants, 0u, constants);
-    ID3D11ShaderResourceView* const fixed[5] = {in.depth->view.Get(), nullptr, nullptr, objects_.view.Get(),
-                                                tiles_.view.Get()};
-    context->CSSetShaderResources(0u, 5u, fixed);
-    dispatch(context, distance_pass_.Get(), nullptr, *distance_, width, height);
     ID3D11UnorderedAccessView* const no_storage = nullptr;
-    context->CSSetUnorderedAccessViews(0u, 1u, &no_storage, nullptr);
-    ID3D11ShaderResourceView* const distances = distance_->view.Get();
-    context->CSSetShaderResources(2u, 1u, &distances);
-    dispatch(context, in.ssao ? ssao_.Get() : occlusion_.Get(), nullptr, *raw_, width, height);
-    context->CSSetUnorderedAccessViews(0u, 1u, &no_storage, nullptr);
-    dispatch(context, denoise_.Get(), raw_->view.Get(), *denoised_, width, height);
+    {
+        const ComputeConstants bound(context, constants);  // the three passes', emptied after the last
+        ID3D11ShaderResourceView* const fixed[5] = {in.depth->view.Get(), nullptr, nullptr, objects_.view.Get(),
+                                                    tiles_.view.Get()};
+        context->CSSetShaderResources(0u, 5u, fixed);
+        dispatch(context, distance_pass_.Get(), nullptr, *distance_, width, height);
+        context->CSSetUnorderedAccessViews(0u, 1u, &no_storage, nullptr);
+        ID3D11ShaderResourceView* const distances = distance_->view.Get();
+        context->CSSetShaderResources(2u, 1u, &distances);
+        dispatch(context, in.ssao ? ssao_.Get() : occlusion_.Get(), nullptr, *raw_, width, height);
+        context->CSSetUnorderedAccessViews(0u, 1u, &no_storage, nullptr);
+        dispatch(context, denoise_.Get(), raw_->view.Get(), *denoised_, width, height);
+    }
     context->CSSetUnorderedAccessViews(0u, 1u, &no_storage, nullptr);
     ID3D11ShaderResourceView* const none[5] = {};
     context->CSSetShaderResources(0u, 5u, none);

@@ -692,6 +692,23 @@ HARNESS_SELF = sorted([*(TREE / "tools" / "lumacore").glob("harness_*_test.py"),
 DESCRIPTION_SELF = sorted((TREE / "tools" / "lumacore").glob("*_fixture_test.py"))
 
 
+# The game's watches by renderer (--diagnostics names): every game the gate starts on that renderer runs with them, and
+# the runner fails a run that prints a watch's line. Direct3D 11's constants watch, ledger P-332 (luma_test.py
+# CONSTANTS_WATCH).
+WATCHES = {"d3d11": ("constants-watch",)}
+
+
+def watch_env(renderer, env=None):
+    """`env` (more for the games' environment) with `renderer`'s watches added to the runner's --diagnostics for every
+    run (LUMA_TEST_DIAGNOSTICS, which luma_test.py reads, kept as given and each name once)."""
+    out = dict(env or {})
+    watches = WATCHES.get(renderer, ())
+    if watches:
+        given = [d for d in out.get("LUMA_TEST_DIAGNOSTICS", os.environ.get("LUMA_TEST_DIAGNOSTICS", "")).split(",") if d]
+        out["LUMA_TEST_DIAGNOSTICS"] = ",".join(given + [w for w in watches if w not in given])
+    return out
+
+
 def harness(g, suite, renderer, label, device=None, bin_dir=None, env=None):
     """One harness suite on one renderer, on this computer or on an Android device (its serial; the test app
     prepared and the device's lock held by the gate). Passes when every test in it passed (a test whose disc has no
@@ -702,8 +719,8 @@ def harness(g, suite, renderer, label, device=None, bin_dir=None, env=None):
         on_device = ["--device", device, "--bin", g.android_bin] if device else ["--bin", bin_dir or g.bin]
         code = run([sys.executable, "-X", "utf8", "-I", TREE / "tools/lumacore/luma_test.py", "run", suite]
                    + on_device + ["--work", work, "--who", "gate", "--lock", g.work / ("harness-%s-%s.lock" % (label, renderer)),
-                                  "--commit", g.commit, "--renderer", renderer], log, env=dict(env or {}, LUMA_TEST_PAKS=g.args.paks),
-                   cwd=g.args.build_root)
+                                  "--commit", g.commit, "--renderer", renderer], log,
+                   env=watch_env(renderer, dict(env or {}, LUMA_TEST_PAKS=g.args.paks)), cwd=g.args.build_root)
         # The run's copies of the programs are not evidence: removed so the drive does not fill.
         for d in work.rglob("bin"):
             if d.is_dir():
@@ -1100,7 +1117,7 @@ def mod_tests(g, renderer, bin_dir=None, label="mods", more_env=None):
     the games' environment. Passes when it exits 0; its rows name each test that did not pass."""
     def fn(log):
         work = g.work / ("runs-%s-%s" % (label, renderer))
-        env = dict(more_env or {}, LUMA_TEST_PAKS=g.args.paks)
+        env = watch_env(renderer, dict(more_env or {}, LUMA_TEST_PAKS=g.args.paks))
         if g.args.lumalink:
             env["LUMALINK"] = g.args.lumalink
         else:

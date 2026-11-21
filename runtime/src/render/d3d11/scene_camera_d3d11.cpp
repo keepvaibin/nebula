@@ -116,9 +116,11 @@ bool SceneCamera::record(ID3D11DeviceContext1* context, const Inputs& in) {
     context->CSSetUnorderedAccessViews(0u, 1u, &storage, nullptr);
     ID3D11ShaderResourceView* const meter_inputs[3] = {in.wide->view.Get(), nullptr, in.depth->view.Get()};
     context->CSSetShaderResources(0u, 3u, meter_inputs);
-    bind_place(context, kComputeConstants, 0u, place);
     context->CSSetShader(meter_.Get(), nullptr, 0u);
-    context->Dispatch(1u, 1u, 1u);
+    {
+        const ComputeConstants bound(context, place);
+        context->Dispatch(1u, 1u, 1u);
+    }
     ID3D11UnorderedAccessView* const no_storage = nullptr;
     context->CSSetShaderResources(0u, 3u, none);
     context->CSSetUnorderedAccessViews(0u, 1u, &no_storage, nullptr);

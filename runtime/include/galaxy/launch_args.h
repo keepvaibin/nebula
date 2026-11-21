@@ -40,6 +40,8 @@ enum Diagnostic : unsigned {
                                          // answered for and its values' hash (ledger P-242)
     kDiagnoseFramePlans = 1u << 20u,     // frame-plans: every 60th frame list's shape and the walk's plans of it
                                          // (frame-plans-<pid>.txt; walk_plan_tests' fixtures, ledger P-044)
+    kDiagnoseConstantsWatch = 1u << 21u,  // constants-watch: Direct3D 11 checks a compute read of its constant ring once
+                                          // a frame and prints "[constants] watch" on a wrong read (ledger P-332)
 };
 
 // The names --diagnostics takes, each one item or a set. "1" is the launcher's recording.
@@ -71,6 +73,7 @@ inline constexpr DiagnosticName kDiagnosticNames[] = {
     {"hdr-highlights", kDiagnoseHdrHighlights},
     {"probe-reads", kDiagnoseProbeReads},
     {"frame-plans", kDiagnoseFramePlans},
+    {"constants-watch", kDiagnoseConstantsWatch},
     {"frames", kDiagnoseFrames},
     {"gpu", kDiagnoseGpuPasses},
     {"threads", kDiagnoseThreadCpu | kDiagnoseProfile},

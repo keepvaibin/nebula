@@ -585,6 +585,7 @@ bool Context::make_constant_ring(std::size_t bytes) {
     // place in the new one is free.
     ring_ = std::move(ring);
     ring_bytes_ = bytes;
+    ++ring_generation_;
     ring_fresh_ = true;
     ring_written_ = 0u;
     ring_done_ = 0u;

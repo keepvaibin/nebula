@@ -477,16 +477,13 @@ bool RendererMtl::record_screen_probes(std::size_t slot, std::span<const ScreenP
     }
     mtl::Context& context = mtl::Context::get();
     if (out.capacity < probes.size()) {
-        out.pixels = context.create_buffer(probes.size() * sizeof(ScreenProbePixel), mtl::Storage::Shared, "screen probe pixels");
+        out.pixels = context.create_buffer(screen_probe_points_bytes(probes.size()), mtl::Storage::Shared, "screen probe pixels");
         out.values = context.create_buffer(probes.size() * sizeof(float), mtl::Storage::Shared, "screen probe values");
         if (!out.pixels || !out.values) throw std::runtime_error("screen probe buffers unavailable");
         out.capacity = probes.size();
     }
-    // The slot is idle (fence 0): the GPU has finished with its pixels.
-    for (std::size_t i = 0; i < probes.size(); ++i) {
-        const ScreenProbePixel pixel = screen_probe_pixel(probes[i], scene_map_);
-        std::memcpy(out.pixels->mapped + i * sizeof(ScreenProbePixel), &pixel, sizeof(pixel));
-    }
+    // The slot is idle (fence 0): the GPU has finished with its pixels. The count goes with them (P-332).
+    write_screen_probe_points(probes, scene_map_, out.pixels->mapped);
     out.fence = kProbesInFrame;
     const auto count = static_cast<std::uint32_t>(probes.size());
     if (scene_pass_open_) {
@@ -581,8 +578,6 @@ void RendererMtl::dispatch_screen_probes(std::size_t slot, std::uint32_t count) 
         [compute setTexture:texture_of(scene_.depth) atIndex:0];
         [compute setBuffer:buffer_of(out.pixels) offset:0 atIndex:1];
         [compute setBuffer:buffer_of(out.values) offset:0 atIndex:2];
-        std::uint32_t constants[4] = {count, 0u, 0u, 0u};
-        [compute setBytes:constants length:sizeof(constants) atIndex:mtl::kUtilityPushBuffer];
         [compute dispatchThreadgroups:MTLSizeMake((count + kScreenProbeGroup - 1u) / kScreenProbeGroup, 1, 1)
                 threadsPerThreadgroup:MTLSizeMake(kScreenProbeGroup, 1, 1)];
         [compute endEncoding];

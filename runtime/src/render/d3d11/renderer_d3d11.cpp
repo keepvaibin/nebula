@@ -195,6 +195,12 @@ bool RendererD3D11::create_states() {
               "utility pixel shader");
     }
     check(device->CreateComputeShader(g_utility_ScreenProbeCs, sizeof(g_utility_ScreenProbeCs), nullptr, &probe_cs_), "probe shader");
+    if (galaxy::diagnosing(galaxy::kDiagnoseConstantsWatch)) {
+        constants_watch_ = std::make_unique<d3d11::ConstantsWatch>();
+        if (!constants_watch_->initialize(device, g_utility_ConstantsWatchCs)) {
+            std::cerr << "[constants] watch: its objects could not be made; the run is not watched\n";
+        }
+    }
 
     D3D11_RASTERIZER_DESC raster{};
     raster.FillMode = D3D11_FILL_SOLID;
@@ -622,6 +628,9 @@ std::uint64_t RendererD3D11::end_frame(bool present_swap_chain, SubmissionCallba
         mirrored_store_->backend().set_upload_list(nullptr);
     }
     ID3D11DeviceContext1* const ctx = context();
+    if (constants_watch_ != nullptr) {
+        constants_watch_->frame(ctx);  // fenced by this frame's signal below
+    }
     if (frame.timed) {
         ctx->End(frame.frame_time[1].Get());
         ctx->End(frame.disjoint.Get());

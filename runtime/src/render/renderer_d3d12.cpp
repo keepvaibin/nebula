@@ -1499,23 +1499,21 @@ bool RendererD3D12::create_conversion_pipeline() {
         d3d_check(core::utility_pipeline(device_.Get(), pd, &display_filter_pipeline_wide_), "CreateDisplayFilterPSO wide");
     }
 
-    // Screen probes: b0 the count, t0 the depth (a table), t1 the pixels and u0 the values (root views).
+    // Screen probes: t0 the depth (a table), t1 the points with their count and u0 the values (root views).
     {
         D3D12_DESCRIPTOR_RANGE range{};
         range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
         range.NumDescriptors = 1;
-        D3D12_ROOT_PARAMETER params[4]{};
-        params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-        params[0].Constants.Num32BitValues = 1;
-        params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        params[1].DescriptorTable.NumDescriptorRanges = 1;
-        params[1].DescriptorTable.pDescriptorRanges = &range;
-        params[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
-        params[2].Descriptor.ShaderRegister = 1;
-        params[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
-        params[3].Descriptor.ShaderRegister = 0;
+        D3D12_ROOT_PARAMETER params[3]{};
+        params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        params[0].DescriptorTable.NumDescriptorRanges = 1;
+        params[0].DescriptorTable.pDescriptorRanges = &range;
+        params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+        params[1].Descriptor.ShaderRegister = 1;
+        params[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+        params[2].Descriptor.ShaderRegister = 0;
         D3D12_ROOT_SIGNATURE_DESC rsd{};
-        rsd.NumParameters = 4;
+        rsd.NumParameters = 3;
         rsd.pParameters = params;
         ComPtr<ID3DBlob> blob, err;
         d3d_check(D3D12SerializeRootSignature(&rsd, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &err), "SerializeProbeRS");
@@ -6665,11 +6663,9 @@ bool RendererD3D12::record_screen_probes(std::size_t slot, std::span<const Scree
         if (out.mapped == nullptr) throw std::runtime_error("screen probe readback could not be mapped");
         out.bytes = bytes;
     }
-    const UploadRing::Allocation pixels = constant_ring_.allocate(probes.size() * sizeof(ScreenProbePixel), 16u);
-    for (std::size_t i = 0; i < probes.size(); ++i) {
-        const ScreenProbePixel pixel = screen_probe_pixel(probes[i], frame_);
-        std::memcpy(pixels.cpu + i * sizeof(ScreenProbePixel), &pixel, sizeof(pixel));
-    }
+    // The count with the points (write_screen_probe_points): the dispatch reads no constant (P-332).
+    const UploadRing::Allocation pixels = constant_ring_.allocate(screen_probe_points_bytes(probes.size()), 16u);
+    write_screen_probe_points(probes, frame_, pixels.cpu);
 
     ID3D12GraphicsCommandList* const list = command_list_.Get();
     resolve_scene(true, false);  // depth alone
@@ -6681,10 +6677,9 @@ bool RendererD3D12::record_screen_probes(std::size_t slot, std::span<const Scree
     list->SetComputeRootSignature(probe_root_signature_.Get());
     list->SetPipelineState(probe_pipeline_.Get());
     srv_ring_.bind(list);
-    list->SetComputeRoot32BitConstants(0, 1, &count, 0);
-    list->SetComputeRootDescriptorTable(1, srv_ring_.gpu_at(conv_scene_depth_index_));
-    list->SetComputeRootShaderResourceView(2, pixels.gpu);
-    list->SetComputeRootUnorderedAccessView(3, out.values->GetGPUVirtualAddress());
+    list->SetComputeRootDescriptorTable(0, srv_ring_.gpu_at(conv_scene_depth_index_));
+    list->SetComputeRootShaderResourceView(1, pixels.gpu);
+    list->SetComputeRootUnorderedAccessView(2, out.values->GetGPUVirtualAddress());
     list->Dispatch((count + kScreenProbeGroup - 1u) / kScreenProbeGroup, 1, 1);
 
     // The depth goes back with the values' change to the copy, in one call.

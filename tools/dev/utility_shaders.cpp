@@ -1,7 +1,8 @@
 // Build tool: compiles the renderer's utility shaders (runtime/src/render/utility_shader_table.inc) into a header of
 // bytecode arrays, with the flags the renderer used at run time: the same compiler, so the same bytes.
 // utility_shaders <output header> [sm50]: sm50 compiles them for shader model 5.0 (the Direct3D 11 renderer) and adds the
-// depth clear's pixel shader (ClearDepthPs), which Direct3D 11 needs for a rectangle of depth.
+// depth clear's pixel shader (ClearDepthPs), which Direct3D 11 needs for a rectangle of depth, and the constants watch's
+// compute shader (ConstantsWatchCs, d3d11::ConstantsWatch).
 
 #include "galaxy/render/renderer_common.h"
 
@@ -59,6 +60,7 @@ int main(int argc, char** argv) {
 #undef X
     if (sm50) {
         ok = emit(out, "ClearDepthPs", clear_depth_pixel_shader_source(), "ps_5_0", "main") && ok;
+        ok = emit(out, "ConstantsWatchCs", constants_watch_shader_source(), "cs_5_0", "main") && ok;
     }
     std::fclose(out);
     if (!ok) {

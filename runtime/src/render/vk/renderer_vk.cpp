@@ -520,12 +520,10 @@ bool RendererVk::create_layouts() {
         info.bindingCount = 3;
         info.pBindings = bindings;
         vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &probe_set_layout_), "probe set layout");
-        const VkPushConstantRange count{VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(std::uint32_t)};
+        // No push constant: the count travels with the points (write_screen_probe_points, P-332).
         VkPipelineLayoutCreateInfo layout{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
         layout.setLayoutCount = 1;
         layout.pSetLayouts = &probe_set_layout_;
-        layout.pushConstantRangeCount = 1;
-        layout.pPushConstantRanges = &count;
         vk::check(vkCreatePipelineLayout(device, &layout, nullptr, &probe_layout_), "probe pipeline layout");
     }
     {

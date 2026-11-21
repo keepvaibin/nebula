@@ -1183,7 +1183,7 @@ bool RendererD3D11::record_screen_probes(std::size_t slot, std::span<const Scree
     if (out.capacity < count) {
         out = ProbeSlot{};
         D3D11_BUFFER_DESC desc{};
-        desc.ByteWidth = count * sizeof(ScreenProbePixel);
+        desc.ByteWidth = static_cast<UINT>(screen_probe_points_bytes(count));
         desc.Usage = D3D11_USAGE_DYNAMIC;
         desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
         desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
@@ -1220,22 +1220,15 @@ bool RendererD3D11::record_screen_probes(std::size_t slot, std::span<const Scree
     if (FAILED(ctx->Map(out.points.Get(), 0u, D3D11_MAP_WRITE_DISCARD, 0u, &mapped))) {
         return false;
     }
-    for (std::uint32_t i = 0; i < count; ++i) {
-        const ScreenProbePixel pixel = screen_probe_pixel(probes[i], scene_map_);
-        std::memcpy(static_cast<std::uint8_t*>(mapped.pData) + i * sizeof(ScreenProbePixel), &pixel, sizeof(pixel));
-    }
+    // The count with the points (write_screen_probe_points): the dispatch reads no constant (P-332).
+    write_screen_probe_points(probes, scene_map_, mapped.pData);
     ctx->Unmap(out.points.Get(), 0u);
 
     end_scene_pass();
     resolve_scene_depth();  // depth alone
-    const d3d11::Context::ConstantPlace constants = d3d11::Context::get().put_constants(&count, sizeof(count));
-    if (constants.buffer == nullptr) {
-        return false;
-    }
     ID3D11ShaderResourceView* const views[2] = {scene_.depth->view.Get(), out.points_view.Get()};
     ID3D11UnorderedAccessView* const values = out.values_view.Get();
     ctx->CSSetShader(probe_cs_.Get(), nullptr, 0u);
-    d3d11::bind_place(ctx, d3d11::kComputeConstants, 0u, constants);
     ctx->CSSetShaderResources(0u, 2u, views);
     ctx->CSSetUnorderedAccessViews(0u, 1u, &values, nullptr);
     ctx->Dispatch((count + kScreenProbeGroup - 1u) / kScreenProbeGroup, 1u, 1u);

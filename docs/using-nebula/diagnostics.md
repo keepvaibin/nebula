@@ -15,6 +15,7 @@ Files go to the `diagnostics` folder in Nebula's data folder, named with the pro
 
 | Name | Records |
 |---|---|
+| `constants-watch` | A test, on Direct3D 11: once a frame a small compute job reads a numbered piece of the constant ring and writes back what it saw; a wrong read prints one line starting `[constants] watch` with what was written and what was read, and the test runner fails the run. The gate turns it on for its Direct3D 11 runs (ledger P-332). |
 | `device-faults` | For a lost graphics device: the Direct3D 12 breadcrumbs and page faults (DRED), or the Vulkan vendor's fault data in `logs/device_fault_VENDOR_DEVICE.bin` beside the settings. |
 | `file-reads` | Each read and map of the game's files, and the sound clock, with the frame it happened in. |
 | `frame-tails` | A histogram of frame intervals every 2 seconds. |

@@ -18,6 +18,7 @@
 #include "galaxy/platform_time.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/render/ambient_occlusion_objects.h"
+#include "galaxy/render/d3d11/constants_watch_d3d11.h"
 #include "galaxy/render/d3d11/d3d11_context.h"
 #include "galaxy/render/d3d11/fx_d3d11.h"
 #include "galaxy/render/display_modes.h"
@@ -506,6 +507,9 @@ private:
     std::array<d3d11::ComPtr<ID3D11PixelShader>, static_cast<std::size_t>(Utility::Count)> utility_ps_{};
     d3d11::ComPtr<ID3D11VertexShader> full_screen_vs_;
     d3d11::ComPtr<ID3D11ComputeShader> probe_cs_;
+    // --diagnostics constants-watch: once a frame, a compute read of a ring piece checked against what was written
+    // (P-332); null without it.
+    std::unique_ptr<d3d11::ConstantsWatch> constants_watch_;
     d3d11::ComPtr<ID3D11RasterizerState> utility_raster_;
     std::array<d3d11::ComPtr<ID3D11BlendState>, 16> write_masks_{};  // by D3D11_COLOR_WRITE_ENABLE_* mask
     std::array<d3d11::ComPtr<ID3D11DepthStencilState>, static_cast<std::size_t>(DepthUse::Count)> depth_uses_{};

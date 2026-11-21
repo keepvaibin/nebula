@@ -932,6 +932,12 @@ if(NEBULA_D3D11)
     # The constant ring on the machine's own device (P-242); the test compiles its own small shaders.
     galaxy_test(galaxy_d3d11_constant_ring_tests SOURCES runtime/src/render/d3d11_constant_ring_tests.cpp
         LIBS galaxy_render_d3d11 d3dcompiler)
+    # The screen probes' count travels with their points (P-332): another test's count bound at b0 changes no answer.
+    galaxy_test(galaxy_d3d11_probe_count_tests SOURCES runtime/src/render/d3d11_probe_count_tests.cpp
+        LIBS galaxy_render_d3d11 d3dcompiler)
+    # The constants watch (P-332): a wrong binding prints its line, the right ones nothing.
+    galaxy_test(galaxy_d3d11_constants_watch_tests SOURCES runtime/src/render/d3d11_constants_watch_tests.cpp
+        LIBS galaxy_render_d3d11 d3dcompiler)
 endif()
 
 # AV1 movies (a mod's movie, NMOV codec 1): dav1d 1.5.1 built in-tree (cmake/dav1d.cmake), for every renderer.

@@ -197,12 +197,13 @@ bool GameBloom::keep(ID3D11DeviceContext1* context, const Inputs& in) {
     return kept_;
 }
 
-// One compute pass: t0-t2 read, u0-u2 written. The last pass's inputs are let go before its outputs are bound, and its
-// outputs before they are read (Direct3D 11 nulls a view bound for reading and writing at once).
+// One compute pass: t0-t2 read, u0-u2 written, its constants bound for its dispatch alone. The last pass's inputs are let
+// go before its outputs are bound, and its outputs before they are read (Direct3D 11 nulls a view bound for reading and
+// writing at once).
 void GameBloom::dispatch(ID3D11DeviceContext1* context, ID3D11ComputeShader* shader, const Constants& c,
                          const std::array<Texture*, 3>& srvs, const std::array<Texture*, 3>& uavs, unsigned width,
                          unsigned height) {
-    bind_place(context, kComputeConstants, 0u, Context::get().put_constants(&c, sizeof(c)));
+    const ComputeConstants bound(context, Context::get().put_constants(&c, sizeof(c)));
     ID3D11ShaderResourceView* const none[3] = {};
     context->CSSetShaderResources(0u, 3u, none);
     ID3D11UnorderedAccessView* const outputs[3] = {uav_of(uavs[0]), uav_of(uavs[1]), uav_of(uavs[2])};

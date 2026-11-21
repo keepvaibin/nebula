@@ -3345,18 +3345,15 @@ bool RendererVk::record_screen_probes(std::size_t slot, std::span<const ScreenPr
     }
     vk::Context& context = vk::Context::get();
     if (out.capacity < probes.size()) {
-        out.pixels = context.create_buffer(probes.size() * sizeof(ScreenProbePixel), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        out.pixels = context.create_buffer(screen_probe_points_bytes(probes.size()), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                                            "screen probe pixels");
         out.values = context.create_readback_buffer(probes.size() * sizeof(float), "screen probe values",
                                                     VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
         if (!out.pixels || !out.values) throw std::runtime_error("screen probe buffers unavailable");
         out.capacity = probes.size();
     }
-    // The slot is idle (fence 0): the GPU has finished with its pixels.
-    for (std::size_t i = 0; i < probes.size(); ++i) {
-        const ScreenProbePixel pixel = screen_probe_pixel(probes[i], scene_map_);
-        std::memcpy(out.pixels->mapped + i * sizeof(ScreenProbePixel), &pixel, sizeof(pixel));
-    }
+    // The slot is idle (fence 0): the GPU has finished with its pixels. The count goes with them (P-332).
+    write_screen_probe_points(probes, scene_map_, out.pixels->mapped);
     out.fence = kProbesInFrame;  // fenced at end_frame
     const auto count = static_cast<std::uint32_t>(probes.size());
     if (scene_pass_open_) {
@@ -3472,7 +3469,7 @@ void RendererVk::dispatch_screen_probes(std::size_t slot, std::uint32_t count) {
 
     const VkDescriptorSet set = allocate_frame_set(probe_set_layout_);
     const VkDescriptorImageInfo depth{VK_NULL_HANDLE, scene_.depth->view, kDepthSampleLayout};
-    const VkDescriptorBufferInfo pixels{out.pixels->buffer, 0, count * sizeof(ScreenProbePixel)};
+    const VkDescriptorBufferInfo pixels{out.pixels->buffer, 0, screen_probe_points_bytes(count)};
     const VkDescriptorBufferInfo values{out.values->buffer, 0, count * sizeof(float)};
     VkWriteDescriptorSet writes[3]{};
     for (std::uint32_t i = 0; i < 3u; ++i) {
@@ -3489,7 +3486,6 @@ void RendererVk::dispatch_screen_probes(std::size_t slot, std::uint32_t count) {
 
     vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_COMPUTE, probe_pipeline_);
     vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_COMPUTE, probe_layout_, 0, 1, &set, 0, nullptr);
-    vkCmdPushConstants(commands, probe_layout_, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(count), &count);
     vkCmdDispatch(commands, (count + kScreenProbeGroup - 1u) / kScreenProbeGroup, 1, 1);
 
     // The depth back to the scene pass, and the probe values to the host, in one call.
