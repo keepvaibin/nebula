@@ -119,20 +119,22 @@ class HarnessError(Exception):
 
 # The kind of result each verdict is (docs/plan/04-GATE-AND-MAIN.md section 9), the one place a test's kind is decided:
 #   fail  the game or the change is wrong: everything seen once the game has started (a crash, a game that completed no
-#         step for HANG_SECONDS while its process lived (hung), a run that reached its limit with no step in its last
-#         HANG_SECONDS (timeout), an exit code other than 0, a check of the test that did not hold), and a game half's own
-#         stop (harness.stop) other than pass;
+#         step for HANG_SECONDS while its process lived (hung), a run that reached its limit with the game in a pause
+#         that ended or never stepped (timeout), a run that reached its limit and did not reach its end although the
+#         game ran at 80% of full speed or more (not-reached), an exit code other than 0, a check of the test that did
+#         not hold), and a game half's own stop (harness.stop) other than pass;
 #   tool  the test tool broke: a test or file the runner itself must provide could not be read (harness-error), a run it
 #         could not set up or start (setup-failed), an exception of the runner's own, a picture or report the game writes at
 #         its exit that was not there OUTPUT_SECONDS after the game ended (output-missing), the tablet's exit record that
 #         never came (no-exit-record);
 #   env   the machine was not fit: the disc's game not given, the device gone, the drive full (not-run, device-lost), a run
-#         that was still taking steps when its time limit passed (too-slow).
-# No verdict depends on how long something took: a limit that fires is env unless the game made no step in its last
-# HANG_SECONDS (docs/plan/04-GATE-AND-MAIN.md, "Time limits in the test runner").
+#         that reached its time limit while the game ran at under 80% of full speed (too-slow: the gate runs it again alone,
+#         tools/gate/kinds.py Settler; alone it is a flake if it passes, a fail if it is too slow again).
+# No verdict depends on how long something took (docs/plan/04-GATE-AND-MAIN.md, "Time limits in the test runner").
 # result.json carries it as "kind"; the gate reads it from there (tools/gate/kinds.py). The gate may change a fail to
 # flake or main afterwards; it never changes pass, tool or env.
-KINDS = {"pass": "pass", "fail": "fail", "crashed": "fail", "timeout": "fail", "hung": "fail", "harness-error": "tool",
+KINDS = {"pass": "pass", "fail": "fail", "crashed": "fail", "timeout": "fail", "hung": "fail", "not-reached": "fail",
+         "harness-error": "tool",
          "setup-failed": "tool", "output-missing": "tool", "no-exit-record": "tool", "not-run": "env", "device-lost": "env",
          "too-slow": "env"}
 
@@ -143,6 +145,11 @@ KINDS = {"pass": "pass", "fail": "fail", "crashed": "fail", "timeout": "fail", "
 HANG_SECONDS = 120.0
 STALL_SECONDS = 10.0
 OUTPUT_SECONDS = 60.0
+# The game takes 60 steps a second (galaxy/game_step.h kGameStepsPerSecond). A run that reaches its time limit with its end
+# not reached is judged by how much game time it got: at FULL_SPEED_SHARE of full speed or more the machine was not the
+# reason (not-reached, fail); under it the run is too-slow, which the gate runs again alone.
+GAME_STEPS_PER_SECOND = 60.0
+FULL_SPEED_SHARE = 0.8
 
 
 def kind_of(verdict):
@@ -1767,7 +1774,7 @@ def run_one(test, renderer, args, run_folder, previous):
         # The importer's library is opened by name (dlopen "libnebula_import.so"), SDL's beside the game.
         env["LD_LIBRARY_PATH"] = os.pathsep.join([str(run_folder / "bin")] + [p for p in [os.environ.get("LD_LIBRARY_PATH")] if p])
     command = [str(run_folder / "bin" / exe.name), "--pak", pak, "--saves", str(run_folder / "saves"),
-               "--seconds", str(int(math.ceil(test["limit"]))), "--settings", str(settings),
+               "--seconds", str(int(math.ceil(test["limit"])) + int(HANG_SECONDS) + 30), "--settings", str(settings),
                "--crash-dumps", str(run_folder), "--extension", str(run_folder / "bin" / HOST["extension"])] + imports
     diagnostics = run_diagnostics(test, args)
     if diagnostics:
@@ -1795,7 +1802,7 @@ def run_one(test, renderer, args, run_folder, previous):
                 raise
             raise HarnessError("the game could not be started: %s" % error) from error
         with process:
-            code, starts, unwatched, steps = watch_run(process, run_folder, exe.name, test["limit"] + 60)
+            code, starts, unwatched, steps = watch_run(process, run_folder, exe.name, test["limit"])
     seconds = time.time() - began
     return {"code": code, "seconds": seconds, "frozen": frozen, "mods": mod_ids, "exe": exe.name, "starts": starts,
             "unwatched": unwatched, **steps}
@@ -1866,8 +1873,12 @@ class Progress:
         return None if self.last is None else self.clock() - self.last
 
     def snapshot(self):
-        """What the verdict needs: whether a step was seen, how long ago the last was, and at which step the game stood."""
-        return {"stepped": self.last is not None, "quiet": self.quiet(), "frame": self.frame}
+        """What the verdict needs: whether a step was seen, how long ago the last was, at which step the game stood, and its
+        speed: the steps it had completed divided by the host's seconds at the last step line (steps a second, over this
+        process's whole run; the host's frame count is the game's own step count, not the pictures drawn: the line's
+        "renderer frames" is that)."""
+        rate = self.frame / self.stamp if self.frame and self.stamp else None
+        return {"stepped": self.last is not None, "quiet": self.quiet(), "frame": self.frame, "rate": rate}
 
 
 def stalls_in(log_lines, after=STALL_SECONDS):
@@ -1914,15 +1925,17 @@ def watch_run(first, run_folder, exe_name, limit, clock=time.monotonic, hang_aft
     first is still watched. Each process gets `limit` seconds and is ended at it (Popen's kill or Followed's); one
     ended at its limit, or one that cannot be watched, ends every process that took its place too.
 
-    The limit is the longest the run may take; it does not say what the ending means. What the runner needs for that is the
-    game's own steps (Progress): a process whose last step was seen `hang_after` seconds ago is ended as hung, after
-    `dump(run_folder, process)` (the dump step: it returns the names of the dumps the game wrote), and what the last process
-    had done when it ended (a step ever, how long since the last) goes back with the rest. `clock` is the runner's clock for
-    all of it.
+    The limit is when the runner looks at how the run stands; what the ending means is judged by the game's own steps
+    (Progress). A process whose last step was seen `hang_after` seconds ago is ended as hung, after `dump(run_folder,
+    process)` (the dump step: it returns the names of the dumps the game wrote). When the limit passes with the game in a
+    pause (no step for STALL_SECONDS) nothing is decided: the run goes on until steps come again (then the limit is judged) or
+    the pause reaches `hang_after` (hung). When the limit passes with the game stepping, or with no step ever taken, the game
+    is ended and the run says so (limit_hit). `clock` is the runner's clock for all of it. The game's own --seconds is set
+    beyond the limit, a pause and a margin, so that the runner and not the game decides what the limit means.
 
     Returns (the last process's exit code, or None when one was ended at its limit or as hung; processes started; why one
-    could not be watched, or None; {"stepped", "quiet", "frame" as Progress.snapshot gives them, and "hung": None, or
-    {"seconds", "frame", "dumps"} for a process ended as hung})."""
+    could not be watched, or None; {"stepped", "quiet", "frame", "rate" as Progress.snapshot gives them, "limit_hit", and
+    "hung": None, or {"seconds", "frame", "dumps"} for a process ended as hung})."""
     marker = run_folder / "restarted"
     seen = set()
     waiting = []
@@ -1968,6 +1981,7 @@ def watch_run(first, run_folder, exe_name, limit, clock=time.monotonic, hang_aft
 
     progress = Progress(run_folder / "run.log", clock)
     hung = None
+    limit_hit = False
     process = first
     while True:
         progress.new_process()
@@ -1998,6 +2012,11 @@ def watch_run(first, run_folder, exe_name, limit, clock=time.monotonic, hang_aft
                         process.wait()
                         break
                     if clock() >= deadline:
+                        if quiet is not None and quiet > STALL_SECONDS:
+                            # The limit passed in a pause: nothing is decided yet. If steps come again the limit is judged
+                            # then; if the pause reaches hang_after the check above ends the game as hung.
+                            continue
+                        limit_hit = True
                         process.kill()
                         process.wait()
                         break
@@ -2008,14 +2027,14 @@ def watch_run(first, run_folder, exe_name, limit, clock=time.monotonic, hang_aft
         if code is None:
             # Ended at its limit, or as hung: what took its place goes too, so no process of the run outlives it.
             end_all(waiting)
-            return None, state["starts"], state["unwatched"], dict(progress.snapshot(), hung=hung)
+            return None, state["starts"], state["unwatched"], dict(progress.snapshot(), hung=hung, limit_hit=limit_hit)
         look(True)
         look_exec()
         if state["unwatched"] is not None:
             end_all(waiting)
-            return code, state["starts"], state["unwatched"], dict(progress.snapshot(), hung=None)
+            return code, state["starts"], state["unwatched"], dict(progress.snapshot(), hung=None, limit_hit=False)
         if not waiting:
-            return code, state["starts"], None, dict(progress.snapshot(), hung=None)
+            return code, state["starts"], None, dict(progress.snapshot(), hung=None, limit_hit=False)
         process = waiting.pop(0)
 
 
@@ -2395,15 +2414,22 @@ def evaluate(test, renderer, run_folder, ran):
             hung["seconds"], hung["frame"],
             ("stall dump: %s" % ", ".join(hung["dumps"])) if hung.get("dumps") else "no stall dump was written")
     elif not end and not meant:
-        if ran.get("stepped") and ran.get("quiet") is not None and ran["quiet"] < HANG_SECONDS:
-            # The limit passed while the game was still taking steps: the machine is slow, the game is not wrong.
-            verdict = "too-slow"
-            reason = "too slow on this machine now: still moving when its time limit of %s s passed" % test["limit"]
+        if ran.get("limit_hit") and ran.get("stepped") and ran.get("rate") is not None:
+            # The limit passed with the game stepping: how much game time did it get? At 80% of full speed or more the
+            # machine was not the reason; under that it is too slow, which the gate runs again alone.
+            share = ran["rate"] / GAME_STEPS_PER_SECOND
+            if share >= FULL_SPEED_SHARE:
+                verdict = "not-reached"
+                reason = "its end was not reached in %s s although the game ran at full speed" % test["limit"]
+            else:
+                verdict = "too-slow"
+                reason = ("too slow on this machine now: still moving when its time limit of %s s passed "
+                          "(the game ran at %d%% of full speed)" % (test["limit"], round(share * 100)))
         else:
             verdict = "timeout"
             reason = "the run did not reach its end step within limit_seconds (%s s)" % test["limit"]
-            if "stepped" in ran:
-                reason += ", and the game took no step in its last %d s" % HANG_SECONDS
+            if ran.get("limit_hit"):
+                reason += ", and the game never took a step"
             stalled = [line for line in log_lines if "the game made no frame for" in line]
             if stalled:
                 reason += "; %s" % stalled[0].split("host: ", 1)[-1]

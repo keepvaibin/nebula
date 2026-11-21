@@ -421,18 +421,20 @@ those of the T6 branch.
 steps: `[  12.345] host: frame 721, file reads ...` (`native/host/host_main.cpp`, the main loop; the number is the game's own step
 count, the time is the host's clock). The line is written on every platform; on a tablet it is in the device's log under the tag
 `Nebula`. A new line is "a step was completed". The runner reads it from `run.log` as the file grows (`luma_test.Progress`), and on a
-tablet from the log of the game's process every 5 seconds. The host writes no line before the game's first step and none while no step
+tablet from the log of the game's process every 2 seconds. The host writes no line before the game's first step and none while no step
 is taken, and the host's line `boot: main at` starts every process, so the start-up of a game, and of the game that takes its place
 after a restart, is nobody's pause.
 
-**What the runner does with it.**
+**What the runner does with it.** The count in the host's line is the game's own step count (`frame`), not the pictures drawn (that is `renderer frames`, a field of its own).
 
 | What happened | Result | Kind |
 |---|---|---|
 | The game's process was alive and no step was completed for 120 seconds | verdict `hung`; the dump step is called first (it names the stall dump the host wrote, `nebula-hang-*.dmp`, which only a Windows test run writes; the game writes none on a tablet or elsewhere); the process is ended | `fail` |
 | A pause of more than 10 and less than 120 seconds | a line `stall <seconds> s at frame <n>` in the test's `result.json` (`"stalls"`) and on the console under the test's line; the test is judged as if it had not happened | none: counted |
-| The run's time limit passed (the game's own end, or the runner's end a minute later) while steps were still being completed in the last 120 seconds | verdict `too-slow`: "too slow on this machine now: still moving when its time limit of N s passed" | `env` |
-| The run's time limit passed and the game completed no step in its last 120 seconds, or never completed one | verdict `timeout` | `fail` |
+| The run's time limit passed while the game was in a pause (no step for 10 seconds) | nothing is decided yet: the runner waits on. If steps come again, the row below applies then; if the pause reaches 120 seconds, verdict `hung` as above, so a short limit never turns a hang into `env` | `fail` if it hangs |
+| The run's time limit passed with the game stepping, and the game's speed over the run (its steps divided by its seconds; the game steps 60 a second at full speed) was 80% of that or more (48 a second) | verdict `not-reached`: "its end was not reached in N s although the game ran at full speed"; the machine was not the reason | `fail` |
+| The same, with the speed under 80% | verdict `too-slow`: "too slow on this machine now: still moving when its time limit of N s passed (the game ran at P% of full speed)". The gate runs the test again alone at the end of the run, as it does a fail (`kinds.py`, `Settler`): if it passes alone it is a `flake` (the machine was busy); if it is too slow again, or fails, it is `fail` with "too slow even alone: the game ran at P% of full speed" (it is not run on main's build). Slowness never ends as `env` twice | `env` for now |
+| The run's time limit passed and the game never took a step (it never started stepping) | verdict `timeout` | `fail` |
 | A picture a step asked for, or the loss report, is not there and complete 60 seconds after the game ended by itself at its end step | verdict `output-missing`; nothing else was wrong | `tool` |
 | On a tablet, Android's record of how the game's process ended did not come within 60 seconds | verdict `no-exit-record`: "the tablet gave no exit record" | `tool` |
 
@@ -443,25 +445,25 @@ lines on the host's own clock, so how late the runner looked does not change it.
 
 | # | Where | Length | What it guards | Now |
 |---|---|---|---|---|
-| 1 | `luma_test.py` 482 | `limit_seconds` of the test, 180 when it names none (the tests name 120 to 480) | the longest a test may take | same length; when it passes: `too-slow` (env) or `timeout` (fail), by the steps |
-| 2 | `luma_test.py` 1770 | the same, as the game's own `--seconds` | the game ends by itself at the limit (exit 0, no end step) | same; the game that ended itself at its limit is judged as in 1 |
-| 3 | `luma_test.py` 1798, 1974, 1988 | the limit and 60 seconds, for each process of a run (a restart gives the new process its own) | the runner ends a game that did not end by itself | same; judged as in 1. Was `timeout`, `fail` |
-| 4 | `luma_test.py` 143 | 120 seconds with no step, process alive | a game that has stopped | new: `hung` (fail); the host's 10-second stall dump no longer fails a run |
-| 5 | `luma_test.py` 144 | 10 seconds with no step | a pause worth a line | new: a `stall` line (was a failure: the check "the game never stopped making frames") |
-| 6 | `luma_test.py` 145, 2659 | 60 seconds, from the game's end | the pictures and the loss report the game writes at its exit | new: waited for; absence is `tool` (was `fail`, with no wait) |
-| 7 | `luma_test.py` 692 | 600 frames, a step's `timeout` when the test gives none | a wait for a fact that does not come: a frame count, not time | same; it is the test's own stop, `fail` |
-| 8 | `luma_test.py` 2772, 2969 | the limit times `--limit-scale` (at least 1) | a renderer slower than the limits were set for | same |
-| 9 | `luma_test.py` 1753 | the limit, as the length of the sound recording | how long the game's sound is kept | same; no verdict |
-| 10 | `luma_test.py` 2051 | 60 seconds | waiting for a game that was ended at its limit to be gone, so no process holds a file | same; no verdict |
-| 11 | `luma_test.py` 2229 | 2 seconds | the image of a process that has just ended closes a moment later (removing the run's copy of the game) | same; no verdict |
-| 12 | `luma_test.py` 2238, 2822 | the limit | waiting for the game's crash watcher (a second copy of the game) before removing the run's copy | same; no verdict (a line is printed) |
-| 13 | `luma_test_android.py` 60 | 60 seconds (was 5) | Android's exit record of the game's process | now waits for the record; absence is `no-exit-record` (tool) |
-| 14 | `luma_test_android.py` 337, 343, 377 | the limit and 60 seconds | the tablet's game that did not end | same; judged as in 1 |
-| 15 | `luma_test_android.py` 366 | 15 seconds | the new process after a restart (`restartGame`) to appear | same; without one the run ends there |
-| 16 | `luma_test_android.py` 76, 80, 84 | 600 seconds per adb call | a call that does not answer | same; a call that times out ends the test as `tool` (the runner raised), or `env` when the device no longer answers |
-| 17 | `luma_test_android.py` 442, 448 | 3600 and 1800 seconds | pushing the game data to the tablet, and copying it in | same; not a verdict on a test |
-| 18 | `luma_test_android.py` 65, 531 | 60 seconds for the game process to appear, `--limit` 300 seconds for a start check | the push workflow's start check | same; the start check is not a test |
-| 19 | `luma_test_android.py` 62 | 5 seconds | how often the game's step lines are read from the tablet's log | new; no verdict |
+| 1 | `luma_test.py` 489 | `limit_seconds` of the test, 180 when it names none (the tests name 120 to 480) | when the runner looks at how the run stands | same length; judged by pause and speed as in the table above: `hung`, `not-reached` (fail), `too-slow` (env, then run again alone) or `timeout` (never stepped) |
+| 2 | `luma_test.py` 1777 | the limit plus 150 seconds, as the game's own `--seconds` (was the limit) | a safety net: the game ends by itself if the runner is gone | longer by 150 s, so that the runner and not the game decides what the limit means; the game waits out a pause of 120 s past the limit |
+| 3 | `luma_test.py` 1805, 1988, 2002 | the limit (was the limit and 60 seconds), for each process of a run (a restart gives the new process its own) | the runner ends the game at the limit | the runner ends it at the limit, or waits on if the game is in a pause; judged as in 1 |
+| 4 | `luma_test.py` 145 | 120 seconds with no step, process alive | a game that has stopped | new: `hung` (fail); the host's 10-second stall dump no longer fails a run |
+| 5 | `luma_test.py` 146 | 10 seconds with no step | a pause worth a line | new: a `stall` line (was a failure: the check "the game never stopped making frames") |
+| 6 | `luma_test.py` 147, 2685 | 60 seconds, from the game's end | the pictures and the loss report the game writes at its exit | new: waited for; absence is `tool` (was `fail`, with no wait) |
+| 7 | `luma_test.py` 699 | 600 frames, a step's `timeout` when the test gives none | a wait for a fact that does not come: a frame count, not time | same; it is the test's own stop, `fail` |
+| 8 | `luma_test.py` 2798, 2994 | the limit times `--limit-scale` (at least 1) | a renderer slower than the limits were set for | same |
+| 9 | `luma_test.py` 1760 | the limit, as the length of the sound recording | how long the game's sound is kept | same; no verdict |
+| 10 | `luma_test.py` 2070 | 60 seconds | waiting for a game that was ended at its limit to be gone, so no process holds a file | same; no verdict |
+| 11 | `luma_test.py` 2248 | 2 seconds | the image of a process that has just ended closes a moment later (removing the run's copy of the game) | same; no verdict |
+| 12 | `luma_test.py` 2257, 2848 | the limit | waiting for the game's crash watcher (a second copy of the game) before removing the run's copy | same; no verdict (a line is printed) |
+| 13 | `luma_test_android.py` 62 | 60 seconds (was 5) | Android's exit record of the game's process | now waits for the record; absence is `no-exit-record` (tool) |
+| 14 | `luma_test_android.py` 341, 350, 388 | the limit (was the limit and 60 seconds) | the tablet's game that did not end | as in 3 |
+| 15 | `luma_test_android.py` 377 | 15 seconds | the new process after a restart (`restartGame`) to appear | same; without one the run ends there |
+| 16 | `luma_test_android.py` 78, 82, 86 | 600 seconds per adb call | a call that does not answer | same; a call that times out ends the test as `tool` (the runner raised), or `env` when the device no longer answers |
+| 17 | `luma_test_android.py` 453, 459 | 3600 and 1800 seconds | pushing the game data to the tablet, and copying it in | same; not a verdict on a test |
+| 18 | `luma_test_android.py` 67, 542 | 60 seconds for the game process to appear, `--limit` 300 seconds for a start check | the push workflow's start check | same; the start check is not a test |
+| 19 | `luma_test_android.py` 64 | 2 seconds | how often the game's step lines are read from the tablet's log | new; no verdict |
 | 20 | `gate_tour.py` 81 | 240 seconds per stop | the longest a stop of the tour may take | same; judged as in 1 |
 
 Not time limits: the runner's polling pauses (0.1 s for a process, 0.2 s for a file at the end, 0.25 and 0.5 s on a tablet).

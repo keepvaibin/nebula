@@ -20,9 +20,11 @@ folder, writes the plan and judges the files that come back; this module only mo
   1. the run's folder, with the device's paths in its plan and the test's hooks in env.txt (the test build's
      Harness.java sets them), is packed, pushed and unpacked into files/harness/<name>;
   2. the game screen starts with the intent extras nebula.harness and nebula.seconds, and is waited for: its process
-     gone, or the limit and a minute (then stopped). While it runs, the game's step lines are read from the device's
-     log every PROGRESS_POLL_SECONDS (luma_test.Progress): a process that took no step for luma_test.HANG_SECONDS is
-     stopped as hung (verdict hung, kind fail); one still stepping when the limit passed is too-slow (kind env);
+     gone, or the limit (then stopped). While it runs, the game's step lines are read from the device's log every
+     PROGRESS_POLL_SECONDS (luma_test.Progress): a process that took no step for luma_test.HANG_SECONDS is stopped as hung
+     (verdict hung, kind fail); a limit that passes in a pause waits for steps or for the hang; one that passes with the
+     game stepping is judged by the game's speed (not-reached, kind fail, at 80% of full speed or more; else too-slow, kind
+     env, which the gate runs again alone);
   3. how the process ended comes from Android's own record (ApplicationExitInfo), which Android writes a little after
      the process is gone: it is waited for until the record is there, at most EXIT_RECORD_SECONDS; a record that never
      comes is the verdict no-exit-record (kind tool), never a verdict on the game;
@@ -59,7 +61,7 @@ LOG_TAGS = ("Nebula", "NebulaGame", "libc", "DEBUG", "AndroidRuntime")
 # after this long is no verdict on the game: the run's kind is tool ("the tablet gave no exit record").
 EXIT_RECORD_SECONDS = 60.0
 # How often the runner reads the game's step lines from the device's log while the game runs (an adb call each).
-PROGRESS_POLL_SECONDS = 5.0
+PROGRESS_POLL_SECONDS = 2.0
 # The start check's run folder (files/harness/<it>) and how long the game process may take to appear after am start.
 START_CHECK = "start-check"
 START_SECONDS = 60.0
@@ -325,33 +327,42 @@ def run_on_device(lt, device, test, args, run_folder, previous, clock=time.time,
     device.shell("am force-stop " + PACKAGE)
     device.adb("logcat", "-c")
     began = clock()
-    code, out = device.shell("am start -W -n %s --es nebula.harness %s --ei nebula.seconds %d" % (ACTIVITY, name, limit))
+    code, out = device.shell("am start -W -n %s --es nebula.harness %s --ei nebula.seconds %d" % (
+        ACTIVITY, name, limit + int(lt.HANG_SECONDS) + 30))
     if code != 0 or "Error" in out:
         raise lt.SetupFailed("am start: %s" % out.strip()[:300])
     ended, game_pid, gone, starts = None, "", False, 1
-    # The game's progress is read from the device's log (lt.Progress): the limit below is the longest the run may take, and
-    # what its end means is judged by the steps (luma_test.py evaluate): hung when none came for lt.HANG_SECONDS while the
-    # process lived, too slow when the limit passed with steps still coming.
+    # The game's progress is read from the device's log (lt.Progress). The limit is when the runner looks at how the run
+    # stands, judged by the steps as on a PC (luma_test.py watch_run, evaluate): the game's own --seconds is set beyond it.
+    # Hung when no step came for lt.HANG_SECONDS while the process lived; a limit that passes in a pause waits for steps to
+    # come again or for the hang; one that passes with the game stepping, or with no step ever, ends the game (limit_hit).
     progress = lt.Progress(None, clock)
-    looked, hung, no_record = None, None, False
-    deadline = began + limit + 60
-    while clock() < deadline:
+    looked, hung, no_record, limit_hit = None, None, False, False
+    deadline = began + limit
+    while True:
+        past = clock() >= deadline
+        if past and not game_pid:
+            break  # the game never appeared
         now_pid = device.pid()
         if now_pid and game_pid and now_pid != game_pid:
             # The game started again (GameActivity.restartGame) between two looks: the new process is the run's.
             starts += 1
-            deadline = clock() + limit + 60
+            deadline = clock() + limit
+            past = False
             progress.new_process()
             looked = None
         if now_pid:
             game_pid = now_pid
-            if looked is None or clock() - looked >= PROGRESS_POLL_SECONDS:
+            if looked is None or past or clock() - looked >= PROGRESS_POLL_SECONDS:
                 looked = clock()
                 progress.feed_lines(device.log_tail(now_pid).split("\n"))
                 quiet = progress.quiet()
                 if quiet is not None and quiet >= lt.HANG_SECONDS:
                     # No step for that long, the process alive: hung. The game writes no dump on Android.
                     hung = {"seconds": int(quiet), "frame": progress.frame, "dumps": []}
+                    break
+                if past and not (quiet is not None and quiet > lt.STALL_SECONDS):
+                    limit_hit = True
                     break
         elif game_pid:
             found, ended = device.exit_record(game_pid, clock, sleep)
@@ -374,13 +385,13 @@ def run_on_device(lt, device, test, args, run_folder, previous, clock=time.time,
                 break
             starts += 1
             game_pid, ended = new_pid, None
-            deadline = clock() + limit + 60
+            deadline = clock() + limit
             progress.new_process()
             looked = None
         sleep(0.5)
     if not gone:
-        if hung is None and game_pid:
-            progress.feed_lines(device.log_tail(game_pid).split("\n"))  # how the game stood as the limit passed
+        if hung is None and not limit_hit and game_pid:
+            progress.feed_lines(device.log_tail(game_pid).split("\n"))  # how the game stood
         device.shell("am force-stop " + PACKAGE)  # past its limit, or hung: stopped, and the verdict says so (code None)
         ended = None
     seconds = clock() - began
@@ -408,7 +419,7 @@ def run_on_device(lt, device, test, args, run_folder, previous, clock=time.time,
     log = device.adb("logcat", "-d", "-v", "raw", "-s", *LOG_TAGS).stdout
     (run_folder / "run.log").write_bytes(log.replace(b"\r\n", b"\n"))
     return {"code": ended, "seconds": seconds, "frozen": frozen, "mods": placed, "exe": "GameActivity", "starts": starts,
-            "no_exit_record": no_record, **dict(progress.snapshot(), hung=hung)}
+            "no_exit_record": no_record, **dict(progress.snapshot(), hung=hung, limit_hit=limit_hit)}
 
 
 def prepare(args):
