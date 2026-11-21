@@ -188,8 +188,9 @@ class Tree:
     def run(self, args, expect=None):
         return run(args, self.tree, self.work, self.store, expect, self.live)
 
-    def folder(self, step_id):
-        return plan.work_folder(self.work, step_id)
+    def folder(self, step_id=None, agent=1):
+        """The agent's work folder: the same one for every step (the id is only there to read well)."""
+        return plan.work_folder(self.work, agent)
 
     def commit(self, step_id, message="work", files=None):
         """A commit in the step's work folder (an edit of runtime/src/render/a.cpp unless `files` says what to write)."""

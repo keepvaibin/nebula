@@ -7,6 +7,7 @@ it a temporary folder), never in an untracked file inside one work folder:
     claims.tsv        package, agent, time, branch       who holds which package
     tool-faults.tsv   time, agent, step, kind, check, test, first_error, run_folder, could_not
     landings.tsv      step, commit, finished, seconds, agent
+    repairs.tsv       id, opened, source, kind, check, renderer, step, commit, evidence, row, state, closed, seen, note
     progress.html, STATUS.md, publish/index.html, publish/progress-data.json, progress-url.txt  (page.py and plan.py page)
 
 Every change is made under one lock folder (`lock`, made with mkdir, which is atomic) and written as a whole file
@@ -27,6 +28,11 @@ STATE_COLUMNS = ["step", "state", "agent", "reason", "time"]
 CLAIM_COLUMNS = ["package", "agent", "time", "branch"]
 FAULT_COLUMNS = ["time", "agent", "step", "kind", "check", "test", "first_error", "run_folder", "could_not"]
 LANDING_COLUMNS = ["step", "commit", "finished", "seconds", "agent"]
+REPAIR_COLUMNS = ["id", "opened", "source", "kind", "check", "renderer", "step", "commit", "evidence", "row", "state", "closed",
+                  "seen", "note"]
+REPAIR_SOURCES = ("nightly", "stress", "measure")
+REPAIR_KINDS = ("fail", "stress", "worse")
+REPAIR_STATES = ("open", "started", "landed", "set-aside")
 STALE_HOURS = 48
 
 
@@ -250,3 +256,82 @@ def add_landing(live, step, commit, seconds, agent=1, now=None):
         rows = read_rows(path, LANDING_COLUMNS)
         rows.append({"step": step, "commit": commit, "finished": stamp(now), "seconds": str(int(seconds)), "agent": str(agent)})
         write_rows(path, LANDING_COLUMNS, rows)
+
+
+# ---- repairs ------------------------------------------------------------------------------------------------------
+# What is found wrong after a landing (the nightly run, a stress run, a measure). A repair is a line of repairs.tsv; the
+# coding agent is given the oldest open one of kind `fail` before any step (plan.py next). Every empty cell is `-`.
+
+def read_repairs(live):
+    return read_rows(pathlib.Path(live) / "repairs.tsv", REPAIR_COLUMNS)
+
+
+def next_repair_id(rows):
+    top = 0
+    for r in rows:
+        m = re.match(r"^R-(\d+)$", r["id"])
+        if m:
+            top = max(top, int(m.group(1)))
+    return "R-%03d" % (top + 1)
+
+
+def add_repair(live, source, kind, check, renderer="-", step="-", commit="-", evidence="", row="-", note="", now=None):
+    """Appends a repair, or counts the one already there: a repair with the same check and renderer that is `open`, `started`
+    or `set-aside` gets its `seen` one higher and the date added to its note (no new line). Returns (row, new)."""
+    path = pathlib.Path(live) / "repairs.tsv"
+    when = now or datetime.datetime.now()
+    renderer = clean(renderer) or "-"
+    with locked(live):
+        rows = read_repairs(live)
+        for r in rows:
+            if r["check"] == clean(check) and r["renderer"] == renderer and r["state"] in ("open", "started", "set-aside"):
+                r["seen"] = str(int(r["seen"] or "1") + 1)
+                r["note"] = clean("%s; seen again %s" % (r["note"], when.date().isoformat()))
+                write_rows(path, REPAIR_COLUMNS, rows)
+                return {k: clean(v) for k, v in r.items()}, False
+        row_new = {"id": next_repair_id(rows), "opened": stamp(when), "source": source, "kind": kind, "check": check,
+                   "renderer": renderer, "step": clean(step) or "-", "commit": clean(commit) or "-",
+                   "evidence": clean(evidence) or "-", "row": clean(row) or "-", "state": "open", "closed": "-", "seen": "1",
+                   "note": clean(note) or "-"}
+        rows.append(row_new)
+        write_rows(path, REPAIR_COLUMNS, rows)
+        return {k: clean(v) for k, v in row_new.items()}, True
+
+
+def set_repair(live, repair_id, state, closed=None):
+    """The repair's state (and, for `landed`, the closing commit). Returns the row, or None when there is no such repair."""
+    path = pathlib.Path(live) / "repairs.tsv"
+    with locked(live):
+        rows = read_repairs(live)
+        for r in rows:
+            if r["id"] == repair_id:
+                r["state"] = state
+                if closed is not None:
+                    r["closed"] = closed
+                write_rows(path, REPAIR_COLUMNS, rows)
+                return {k: clean(v) for k, v in r.items()}
+    return None
+
+
+def repair_order(rows):
+    """Open repairs of kind `fail` first, then the other open ones, then started, set-aside and landed; each group in id order."""
+    rank = {"open": 0, "started": 1, "set-aside": 2, "landed": 3}
+    return sorted(rows, key=lambda r: (rank.get(r["state"], 9), 0 if r["kind"] == "fail" else 1, r["id"]))
+
+
+def oldest_open_fail(rows):
+    """The repair `next` gives before any step: the oldest `open` one of kind `fail` (None when there is none)."""
+    return next((r for r in rows if r["state"] == "open" and r["kind"] == "fail"), None)
+
+
+def repair_what(r):
+    """What failed, in words: the check, and the renderer when there is one."""
+    return r["check"] + (" on %s" % r["renderer"] if r["renderer"] not in ("", "-") else "")
+
+
+def repair_traced(r):
+    """The landing the fault was traced to, in words."""
+    if r["step"] in ("", "-") and r["commit"] in ("", "-"):
+        return "not traced to a landing"
+    return "traced to %s" % " ".join(x for x in ("step " + r["step"] if r["step"] not in ("", "-") else "",
+                                                 "commit " + r["commit"] if r["commit"] not in ("", "-") else "") if x)

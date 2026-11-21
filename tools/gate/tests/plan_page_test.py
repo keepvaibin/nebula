@@ -77,7 +77,20 @@ class DataTest(unittest.TestCase):
                                       "A.2": {"state": "started", "agent": "2"}, "B.1": {"state": "blocked", "agent": "1"},
                                       "C.1": {"state": "landed"}})
         self.assertNotIn("B.2", d["steps"])
-        self.assertEqual(sorted(d), ["blocked", "claims", "flakes", "generated", "set_aside", "steps", "tool_faults"])
+        self.assertEqual(sorted(d), ["blocked", "claims", "flakes", "generated", "repairs", "set_aside", "steps", "tool_faults"])
+
+    def test_the_repairs_are_in_the_data_in_the_order_given_with_every_field(self):
+        rows = [{"id": "R-002", "opened": "2026-11-21T01:00:00", "source": "nightly", "kind": "fail", "check": "tour/d3d11",
+                 "renderer": "d3d11", "step": "S0.2.5", "commit": "abc1234", "evidence": "D:/ev/1", "row": "P-242", "state": "open",
+                 "closed": "-", "seen": "2", "note": "stop 025 differs"},
+                {"id": "R-001", "opened": "2026-11-20T01:00:00", "source": "stress", "kind": "stress", "check": "soak",
+                 "renderer": "-", "step": "-", "commit": "-", "evidence": "D:/ev/2", "row": "-", "state": "open", "closed": "-",
+                 "seen": "1", "note": "-"}]
+        d = page.make_data(plan_of(step("A.1", "A")), [], {}, [], set(), [], 0, "2026-11-20T12:00:00", repairs=rows)
+        self.assertEqual([r["id"] for r in d["repairs"]], ["R-002", "R-001"])
+        self.assertEqual(sorted(d["repairs"][0]), sorted(page.REPAIR_FIELDS))
+        self.assertEqual(d["repairs"][0], rows[0])
+        self.assertEqual(self.data(plan_of(step("A.1", "A")))["repairs"], [], "none recorded: an empty list")
 
     def test_blocked_steps_carry_their_reason_and_agent(self):
         steps = plan_of(step("A.1", "A", state="blocked", agent="2"))
@@ -294,6 +307,38 @@ class PageFilesTest(unittest.TestCase):
         self.assertTrue(all(p.is_file() for p in self.outputs()))
 
 
+class RepairsPageTest(unittest.TestCase):
+    """The repairs of the live folder reach the page's data, STATUS.md and `plan.py status`."""
+
+    def test_repairs_reach_the_data_file_the_page_and_the_status_file_open_fail_first(self):
+        with Tree() as t:
+            lv.add_repair(t.live, "stress", "stress", "soak", "-", "-", "-", "D:/ev/soak", "-", "a stress finding")
+            lv.add_repair(t.live, "nightly", "fail", "tour/d3d11", "d3d11", "A.1", "abc123456", "D:/ev/tour", "P-001", "stop differs")
+            lv.add_repair(t.live, "measure", "worse", "measure/route", "-", "-", "-", "D:/ev/m", "-", "slower")
+            lv.add_repair(t.live, "nightly", "fail", "unit/game", "-", "-", "-", "D:/ev/u", "-", "a unit fails")
+            lv.set_repair(t.live, "R-004", "landed", "0123456789")
+            written = plan.write_page(t.tree, t.live)
+            ids = [r["id"] for r in written.data["repairs"]]
+            self.assertEqual(ids, ["R-002", "R-001", "R-003", "R-004"], "open fail first, then the other open ones, landed last")
+            on_disk = json.loads(written.paths.data.read_text(encoding="utf-8"))
+            self.assertEqual(on_disk["repairs"], written.data["repairs"])
+            self.assertEqual(embedded(written.paths.html.read_text(encoding="utf-8"), "embedded-data")["repairs"], on_disk["repairs"])
+            status = written.paths.status.read_text(encoding="utf-8")
+            self.assertIn("| R-002 | open | fail | tour/d3d11 | d3d11 | step A.1 commit abc123456 | 1 |", status)
+            self.assertIn("| R-004 | landed | fail | unit/game | - | not traced | 1 |", status)
+            text = t.run(["status"], expect=0)[1]
+            self.assertIn("## Repairs (1 open of kind fail, 4 in all)", text)
+            self.assertLess(text.index("- R-002 open fail: tour/d3d11 on d3d11, traced to step A.1 commit abc123456, seen 1x"),
+                            text.index("- R-001 open stress: soak, not traced to a landing, seen 1x"))
+            self.assertIn("- R-004 landed fail: unit/game, not traced to a landing, seen 1x", text)
+
+    def test_the_html_has_the_repairs_section_and_no_outside_address(self):
+        html = page.render(page.make_static(plan_of(step("A.1", "A"))))
+        self.assertIn('section("Repairs (', html)
+        self.assertIn("Traced to", html)
+        self.assertNotRegex(html, r"https?://")
+
+
 class RegenerateTest(unittest.TestCase):
     """Every command that changes the state makes the progress files again at its end, and a failure there is one warning
     line that changes nothing of the command's result."""
@@ -488,6 +533,10 @@ class StatusTextTest(unittest.TestCase):
             "| 2026-11-20 10:01 | S0.1 | Step number 1 | c01 |",
             "| 2026-11-20 10:00 | S0.0 | Step number 0 | c00 |",
             "",
+            "## Repairs",
+            "",
+            "No repair recorded.",
+            "",
             "## Blocked",
             "",
             "- S3.1 Step number 7: needs the owner | now",
@@ -503,6 +552,22 @@ class StatusTextTest(unittest.TestCase):
             "| 2026-11-20 11:01 | S0.1 | t1 | error 1 | run it |",
             "| 2026-11-20 11:00 | S0.0 | harness/self | error 0 | - |",
             ""]))
+
+    def test_the_repairs_section_names_check_renderer_traced_landing_seen_count_and_state(self):
+        static, data, rows, events = self.state(faults=0)
+        data["repairs"] = [
+            {"id": "R-003", "opened": "2026-11-21T01:00:00", "source": "nightly", "kind": "fail", "check": "tour/d3d11",
+             "renderer": "d3d11", "step": "S0.2.5", "commit": "abc1234", "evidence": "D:/ev/1", "row": "P-242", "state": "open",
+             "closed": "-", "seen": "2", "note": "x"},
+            {"id": "R-001", "opened": "2026-11-20T01:00:00", "source": "stress", "kind": "stress", "check": "soak", "renderer": "-",
+             "step": "-", "commit": "-", "evidence": "D:/ev/2", "row": "-", "state": "started", "closed": "-", "seen": "1", "note": "-"}]
+        text = page.make_status(static, data, rows, events, "2026-11-20T12:00:00")[0].splitlines()
+        at = text.index("## Repairs")
+        self.assertEqual(text[at + 2], "1 open of kind fail, 2 in all.")
+        self.assertEqual(text[at + 4:at + 8], [
+            "| Id | State | Kind | Check | Renderer | Traced to | Seen |", "| --- | --- | --- | --- | --- | --- | --- |",
+            "| R-003 | open | fail | tour/d3d11 | d3d11 | step S0.2.5 commit abc1234 | 2 |",
+            "| R-001 | started | stress | soak | - | not traced | 1 |"], "in the order given: open fail repairs first")
 
     def test_a_path_that_starts_with_the_home_folder_is_written_with_a_tilde(self):
         for old, new in (("C:/Users/vaibh/Documents/Nebula/a.txt", "~/Documents/Nebula/a.txt"),
@@ -823,6 +888,24 @@ setTimeout(function () { console.log(JSON.stringify({ early: early, late: snap()
                            encoding="utf-8", timeout=60)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         return json.loads(r.stdout.strip().splitlines()[-1])
+
+    def test_the_repairs_are_drawn_open_fail_first_with_check_renderer_traced_landing_seen_count_and_state(self):
+        lv.add_repair(self.live, "nightly", "fail", "tour/d3d11", "d3d11", "S6.3", "abc1234", "D:/NebulaWork/build/gate-runs/n1", "P-242",
+                      "stop 025 differs", now=NOW)
+        lv.add_repair(self.live, "nightly", "fail", "tour/d3d11", "d3d11", "S6.3", "abc1234", "D:/ev", "P-242", "again", now=NOW)
+        lv.add_repair(self.live, "stress", "stress", "soak", "-", "-", "-", "D:/ev/soak", "-", "slow leak", now=NOW)
+        with mock.patch.object(plan, "now", lambda: NOW):
+            self.written = plan.write_page(self.tree, self.live)
+        self.json = self.written.paths.data
+        for html in (self.written.paths.html, self.written.paths.index):
+            app = self.node(html, "fetch")["late"]["app"]
+            self.assertIn("Repairs (1 open of kind fail, 2 in all)", app)
+            self.assertIn("tour/d3d11 on d3d11", app)
+            self.assertIn("step S6.3, commit abc1234", app)
+            self.assertIn("2 times", app)
+            self.assertIn("not traced to a landing", app)
+            self.assertIn("D:/NebulaWork/build/gate-runs/n1", app)
+            self.assertLess(app.index("tour/d3d11 on d3d11"), app.index("soak"), "open fail first")
 
     def test_the_real_plan_data_has_138_steps_and_40_landed(self):
         static = embedded(self.html.read_text(encoding="utf-8"), "plan-static")
