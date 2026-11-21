@@ -4,7 +4,8 @@ python -X utf8 -I tools/gate/tests/pictures_test.py [--work <folder>]
 
 - approved pictures, drawn again the same: check passes;
 - one pixel changed by 1: check fails, names 1 pixel and difference 1, and writes the review page;
-- a picture with none approved: "new"; an approved one the runs did not take: "missing" with --complete only;
+- a picture with none approved: "new" (it does not fail the check; pictures_new_test.py has the rest); an approved one
+  the runs did not take: "missing" with --complete only;
 - a failed run's pictures are refused by approve;
 - runs on another driver: check fails on the machine row, approve refuses them without --new-machine, and runs of
   two drivers together always.
@@ -73,8 +74,9 @@ def main():
     make_run(work, "002-B-1", {(1, 1): (200, 0, 0)}, pictures=("arrive",))
     make_run(work, "003-C-1", {})
     code, out = tool("check", *common)
-    check(code == 1 and "new      tour/003-C-1/d3d12/arrive" in out and "missing" not in out,
-          "a new picture fails; without --complete one not taken is not missing", out)
+    check(code == 0 and "new      tour/003-C-1/d3d12/arrive" in out and "missing" not in out,
+          "a new picture is listed and does not fail (the gate approves it at the landing); without --complete one not taken "
+          "is not missing", out)
     code, out = tool("check", *common, "--complete")
     check(code == 1 and "missing  tour/002-B-1/d3d12/after" in out, "with --complete one not taken is missing", out)
 

@@ -192,8 +192,36 @@ It is the only place Linux and Mac code is built, so it is part of the main gate
 
 ## 9. Pictures and flaky tests
 
-**Pictures.** A changed picture fails the gate. It is approved only in a commit that names the cause: the ledger row or the
-intended change, and which pictures. A picture whose change has no known cause is never approved; it is a fault to trace.
+**Pictures** (`tools/gate/pictures.py`). A picture that differs from its approved copy fails the gate, unless the change
+declares it. A picture with no approved copy is `new`: it never fails a run.
+
+- *One list.* `tests/pictures/approved.tsv` holds every approved picture for every level and suite. A row is found by the
+  test's own place (its folder under `tests/`, which the runner writes into `result.json` as `test_path`; for a tour, which
+  is written into the run's folder, the tour: `tour`, `tour-RMGP01`, `tour-RMGJ01`), the picture's name, the renderer and the
+  machine, never by the name a run gave its suite. A picture approved from any passing run counts everywhere.
+- *The machine is part of the key.* A row belongs to a place (the PC or the tablet, taken from the run's platform) and the
+  adapter and driver that place's `machine` row names for the renderer. The PC's and the tablet's Vulkan pictures are two sets
+  of rows. A run on an adapter or driver no row names is `env`, and its pictures are not judged.
+- *Declaring a change.* The branch has a file `PICTURES-CHANGE.txt` at its root, one line for each picture or pattern:
+  `<test path or pattern> <picture or *> <renderer or all> :: <reason>` (shell-style `*`; the test path is `suite/test` as the
+  run's lines print it, for example `tour/010-CannonFleetGalaxy-1`). A differing picture a line names is `new`; one no line
+  names is `fail`. A line that names no differing picture is stale: the check `pictures/declared` of a main gate is `tool`
+  (`env` when the tablet's pictures were not taken, since they cannot be told from it).
+- *What a run leaves.* In its folder: `new-pictures.tsv` (one line for each new or declared picture, complete enough to be its
+  approved row), the pictures' files and the sheet to look at, `new-pictures/sheet/review.html`. The summary prints the count
+  and the sheet's path.
+- *Approval at the landing.* When a run with `--move` has passed (and GitHub is green) and left new pictures, the gate calls
+  `pictures.approve_landing` (`gate.py approve_pictures`) before it moves main: it puts the files in the picture store, adds or
+  replaces the rows, removes `PICTURES-CHANGE.txt`, and makes ONE commit on top of the tested commit that touches only those
+  files (message `pictures: N approved for <the tests>`, the repository's own identity). Then it runs the picture checks again
+  on the same run folders (no game runs); they must all be `pass`, else nothing moves and the result is `tool`. Only then
+  main moves, to that commit. The runs' working files are pruned after this.
+- *Nightly pictures.* The full tours and the other discs' pictures are taken only by the nightly run. Its new ones are `new`
+  there, and `pictures.py approve --new --runs <the nightly's folder>` writes their rows (the rows for a normal landing).
+- *A driver change.* `pictures.py driver-update --runs <folder>` for runs on an adapter or driver no row names: each picture is
+  compared with the approved copy of the machine the rows name (same renderer, same card maker); equal, or no channel of any
+  pixel off by more than 1 of 255, is approved for the new machine; the rest are listed as `FAIL`. It moves nothing by itself.
+- A picture whose change has no known cause is never declared; it is a fault to trace.
 
 **Kinds of result.** Every check and every test ends as one kind (`tools/gate/kinds.py`; the runner writes `"kind"` into each
 test's `result.json`):
@@ -206,8 +234,9 @@ test's `result.json`):
 | `env` | The machine was not fit: the tablet does not answer, the drive is full, another graphics card or driver than the approved pictures name, a lock not had in time. The tablet's `owed` state is `env`. | no: not judged (an owed tablet part does not change the verdict) |
 | `flake` | It failed, then passed when run again alone. | no |
 | `main` | It failed again alone and fails the same way on main's build: main is at fault. | no |
+| `new` | A picture with no approved copy, or one the change declares in `PICTURES-CHANGE.txt`. | no: approved at the landing |
 
-A check's kind is the worst of its tests, in the order fail, tool, env, flake, main, pass. The run ends with one line
+A check's kind is the worst of its tests, in the order fail, tool, env, flake, main, known, new, pass. The run ends with one line
 `KIND <kind> <check> <test> :: <first line of its message>` for each result that is not a pass (those of kind `main`
 first), then the last line `VERDICT pass` (exit 0), `VERDICT fail` (a fail is left: exit 1) or `VERDICT not-judged` (no
 fail, but a tool or env: exit 2). The same facts are in `verdict.json` in the run's folder. Main moves only on

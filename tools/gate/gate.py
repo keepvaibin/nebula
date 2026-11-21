@@ -19,6 +19,10 @@ starts the game for a test goes through here.
          be green (planned.tsv's github/<job> lines aside), then moves main and deletes gate/<run>. GitHub's slow
          jobs (OWED_JOBS: the Android cloud builds and the emulator's start check) are owed: main moves when every
          other job is green, tools/gate/owed.py reads them after the move and writes OWED-GREEN or OWED-RED.
+         A picture with no approved copy (kind new), or one the branch declares in PICTURES-CHANGE.txt, never fails a run:
+         when the checks have passed and GitHub is green, the gate approves them before it moves main, as one commit on
+         top of the tested one that touches only tests/pictures/approved.tsv (and removes PICTURES-CHANGE.txt), runs the
+         picture checks again on the same runs (all must pass, else nothing moves: tool), and moves main to that commit.
          After the move the play route measure (tools/measure) starts on a copy of the build, then the long run.
 --long   level 3, on main's newest commit, under the long lock, at below-normal priority: the tablet's 102 stops
          against the PC's, a sanitizer build's tour, the soak, every disc on every renderer.
@@ -37,7 +41,9 @@ Every check and every test ends as one kind (tools/gate/kinds.py; docs/plan/04-G
          and renderer in seven days sets the test aside (<plan>/native/set-aside.tsv): it still runs and is reported,
          its fail does not count;
   main   it failed again alone and fails the same way on main's kept build (<build>/base-bins/<commit>): main is at
-         fault, not the change.
+         fault, not the change;
+  new    a picture with no approved copy, or one the change declares (tools/gate/pictures.py): it never fails a run, the
+         landing approves it.
 After every lane has ended, each test that is fail is run once more alone, then on main's build (settle).
 Each check's state: those kinds, and
   known    it failed only in tests tools/gate/known-failures.tsv lists for it (each with an open ledger row); a listed
@@ -74,6 +80,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(TREE / "tools" / "verify"))
 import gate_tour  # noqa: E402
 import kinds  # noqa: E402
+import pictures as picture_tool  # noqa: E402
 import step_hash  # noqa: E402
 
 LEVELS = ("quick", "main", "long", "final")
@@ -137,6 +144,8 @@ FLAKES = NATIVE / "flakes.tsv"
 SET_ASIDE = NATIVE / "set-aside.tsv"
 BASE_BINS = pathlib.Path("D:/NebulaWork/build/base-bins")
 MAIN_REF = "origin/main"
+# The picture store (the approved pictures' files, outside the repository): tests of this file put their own in it.
+PICTURE_STORE = picture_tool.STORE
 
 
 # The two lists ----------------------------------------------------------------------------------------------------
@@ -282,6 +291,9 @@ class Gate:
         self.selected = selected
         self.cases = {}
         self.picture_jobs = []
+        self.picture_calls = []
+        self.new_pictures = []
+        self.runs_held = False
         self.tree = TREE
         self.main_ref = MAIN_REF
         self.open_rows = []
@@ -450,6 +462,8 @@ class Gate:
             self.record("gate/none", "tool", 0.0, "no check ran")
         self.verdict = kinds.verdict_of([r["records"] for r in self.results])
         self.code = kinds.EXIT_OF[self.verdict]
+        if not self.dry:
+            self.new_pictures = picture_tool.gather(self.work, PICTURE_STORE)
         passed = self.verdict == "pass"
         counts = self.counts()
         seconds = round(time.time() - self.started, 1)
@@ -468,16 +482,16 @@ class Gate:
             " only " + self.args.only if self.args.only else "", self.verdict.upper(), len(self.results),
             ", ".join("%d %s" % (n, s if s != "fail" else "failed") for s, n in counts.items() if n), seconds)
         aside_line = ["set aside (still run, do not count): " + ", ".join(aside)] if aside else []
-        lines = aside_line + [head] + ["  %-34s %-7s %s" % (r["check"], r["state"], r["detail"]) for r in self.results]
+        new_line = [self.new_pictures_line()] if self.new_pictures else []
+        lines = aside_line + new_line + [head] + ["  %-34s %-7s %s" % (r["check"], r["state"], r["detail"]) for r in self.results]
         path.with_suffix(".txt").write_text("\n".join(lines + self.lines) + "\n", encoding="utf-8")
         append_history(pathlib.Path(self.args.work) / "history.tsv", out)
         if passed and not self.args.keep_runs and not self.args.out:
-            # The passed tests' working files are not evidence once the run passed (N-1060): the drive keeps its room.
-            import prune_runs
-            tests, freed = prune_runs.prune(self.work)
-            if tests:
-                print("gate.py: %d passed tests' working files removed (%.1f GB); --keep-runs keeps them" % (
-                    tests, freed / 1e9))
+            if self.new_pictures and getattr(self.args, "move", False):
+                # The approval at the landing runs the picture checks again on these folders (main()): pruned after it.
+                self.runs_held = True
+            else:
+                self.prune_runs()
         if self.level == "main" and not self.args.only and seconds > MAIN_GATE_SECONDS:
             print("gate.py: this main gate took %.0f minutes, over 30: a ledger row for Agent 1 (section 7)" % (seconds / 60))
         if self.args.record:
@@ -487,7 +501,7 @@ class Gate:
             shutil.copyfile(path, keep.with_suffix(".json"))
             shutil.copyfile(path.with_suffix(".txt"), keep.with_suffix(".txt"))
             print("recorded:", keep.with_suffix(".txt"))
-        for line in aside_line:
+        for line in aside_line + new_line:
             print("gate.py: " + line)
         for text in self.open_rows:
             print("gate.py: ledger row to open: " + text)
@@ -497,6 +511,22 @@ class Gate:
             print(line)
         return passed
 
+    def prune_runs(self):
+        """The passed tests' working files are not evidence once the run passed (N-1060): the drive keeps its room."""
+        import prune_runs
+        tests, freed = prune_runs.prune(self.work)
+        self.runs_held = False
+        if tests:
+            print("gate.py: %d passed tests' working files removed (%.1f GB); --keep-runs keeps them" % (tests, freed / 1e9))
+
+    def new_pictures_line(self):
+        """What the summary says of the pictures that have no approved copy (or that the change declares)."""
+        declared = sum(1 for e in self.new_pictures if e["kind"] == "declared")
+        return "%d new picture%s%s: look at %s; the landing approves them" % (
+            len(self.new_pictures), "" if len(self.new_pictures) == 1 else "s",
+            " (%d declared in %s)" % (declared, picture_tool.CHANGES_NAME) if declared else "",
+            self.work / "new-pictures" / "sheet" / "review.html")
+
     def write_verdict(self, verdict=None, why=""):
         """verdict.json in the run's folder: the verdict, and every result that is not a pass (the same facts as the KIND
         lines of the run's end). `verdict` and `why` say when the run's last word is not its checks' (main not moved)."""
@@ -505,6 +535,9 @@ class Gate:
                 "level": self.level, "commit": self.commit, "exit": kinds.EXIT_OF[verdict or self.verdict],
                 "lines": self.lines, "results": results,
                 "set_aside": sorted("%s %s" % k for k in self.aside), "open_rows": self.open_rows,
+                "new_pictures": {"count": len(self.new_pictures), "list": str(self.work / "new-pictures.tsv"),
+                                 "sheet": str(self.work / "new-pictures" / "sheet" / "review.html")}
+                if self.new_pictures else None,
                 "checks": [{"check": r["check"], "state": r["state"], "detail": r["detail"]} for r in self.results]}
         (self.work / "verdict.json").write_text(json.dumps(body, indent=2) + "\n", encoding="utf-8")
 
@@ -1355,31 +1388,106 @@ def take_device_lock(path, who):
     return None
 
 
+# What each line of pictures.py check starts with, as a kind (tools/gate/kinds.py).
+PICTURE_KINDS = {"same": "pass", "new": "new", "declared": "new", "changed": "fail", "missing": "fail", "machine": "env"}
+
+
+def picture_result(g, label, renderer, place, log, keep_new=True):
+    """pictures.py check on a harness suite's runs against the approved pictures of that place, pc or tablet (tolerance none;
+    the manifest, the store and PICTURES-CHANGE.txt are the tree under test's). (passed, detail, cases, kind): each picture
+    is a case of its own kind: same is pass, a picture with no approved copy or one the change declares is new, a difference
+    nothing declares or an approved one not taken (above the quick level) is fail, another graphics card or driver than the
+    approved pictures name is env, and no summary line, a bad declaration file, or no picture at all is tool. `keep_new`: the
+    new and declared pictures go to <run>/new-pictures/<check>/ (the landing approves them)."""
+    work = g.work / ("runs-%s-%s" % (label, renderer))
+    tag = "%s-%s-%s" % (label, renderer, place)
+    cmd = [sys.executable, "-X", "utf8", "-I", HERE / "pictures.py", "check", "--runs", work, "--renderer", renderer,
+           "--place", place, "--manifest", pathlib.Path(g.tree) / picture_tool.MANIFEST_NAME, "--store", PICTURE_STORE,
+           "--changes", pathlib.Path(g.tree) / picture_tool.CHANGES_NAME]
+    if g.level != "quick":
+        cmd.append("--complete")
+    if keep_new:
+        cmd += ["--new-out", g.work / "new-pictures" / tag]
+    code = run(cmd, log, cwd=TREE)
+    lines = pathlib.Path(log).read_text(encoding="utf-8", errors="replace").splitlines()
+    results = {}
+    for line in lines:
+        words = line.split(None, 2)
+        if len(words) >= 2 and words[0] in PICTURE_KINDS:
+            results[words[1]] = (PICTURE_KINDS[words[0]], words[2].strip() if len(words) > 2 else "")
+    summary = next((l for l in reversed(lines) if l.startswith("pictures: ")), None)
+    review = next((l for l in lines if l.startswith("review: ")), "")
+    others = [w[0] + " " + w[1] for w in (l.split() for l in lines) if len(w) > 1 and w[0] in PICTURE_KINDS and w[0] != "same"]
+    detail = ((summary or "no summary")[len("pictures: "):] + ("; not: " + ", ".join(others[:8]) + (" ..." if len(others) > 8 else "")
+                                                                if others else ""))
+    problem = None
+    if summary is None:
+        problem = "pictures.py reported no summary: %s" % (last_line("\n".join(lines)) or "nothing")
+    elif summary.startswith("pictures: 0 of 0") and not any(k == "env" for k, _ in results.values()):
+        problem = "the runs took no picture: nothing was compared"
+    elif code == 2:
+        problem = "pictures.py stopped: %s" % (last_line("\n".join(lines)) or "no reason given")
+    cases = kinds.Cases(results, None, problem, renderer, None)
+    return code == 0, detail + ("; " + review if review else ""), cases, "fail"
+
+
 def pictures(g, label, renderer, place="pc"):
     """The pictures a harness suite's runs took against the approved ones of that place, pc or tablet
-    (tools/gate/pictures.py, tolerance none). Above the quick level it also fails on an approved picture its runs did
-    not take."""
+    (tools/gate/pictures.py). Above the quick level it also fails on an approved picture its runs did not take."""
     def fn(log):
-        work = g.work / ("runs-%s-%s" % (label, renderer))
-        code = run([sys.executable, "-X", "utf8", "-I", TREE / "tools" / "gate" / "pictures.py", "check", "--runs", work,
-                    "--renderer", renderer, "--place", place] + (["--complete"] if g.level != "quick" else []), log,
-                   cwd=TREE)
-        lines = pathlib.Path(log).read_text(encoding="utf-8", errors="replace").splitlines()
-        summary = next((l for l in reversed(lines) if l.startswith("pictures: ")), "no summary")
-        others = [l.split()[0] + " " + l.split()[1] for l in lines if l.split() and l.split()[0] in ("changed", "new", "missing", "machine")]
-        review = next((l for l in lines if l.startswith("review: ")), "")
-        detail = summary[len("pictures: "):] + ("; not: " + ", ".join(others[:8]) + (" ..." if len(others) > 8 else "") if others else "")
-        # Another graphics card or driver than the approved pictures name is env; none taken at all is tool; a picture
-        # that differs is a fail.
-        words = {l.split()[0] for l in lines if l.split()}
-        if code != 0 and "machine" in words and not words & {"changed", "new", "missing"}:
-            fail_kind = "env"
-        elif summary.startswith("pictures: 0 of 0"):
-            fail_kind, code = "tool", 1
-        else:
-            fail_kind = "fail"
-        return code == 0, detail + ("; " + review if review else ""), None, fail_kind
+        if (label, renderer, place) not in g.picture_calls:
+            g.picture_calls.append((label, renderer, place))
+        return picture_result(g, label, renderer, place, log)
     return fn
+
+
+def picture_recheck(g):
+    """The picture checks of the run again on the same run folders, as the tree stands now (with the approvals): [(check,
+    state)]. No game runs."""
+    states = []
+    for label, renderer, place in list(g.picture_calls):
+        log = g.work / ("pictures-again-%s-%s-%s.log" % (label, renderer, place))
+        try:
+            passed, _, cases, _ = picture_result(g, label, renderer, place, log, keep_new=False)
+            _, state = kinds.judge_cases(cases, {}, (), passed)
+        except Exception as error:  # noqa: BLE001 - a check that raised is the tool's: not a pass
+            state = "tool (%s: %s)" % (type(error).__name__, error)
+        states.append(("pictures/%s/%s%s" % (label, renderer, "" if place == "pc" else "/" + place), state))
+    return states
+
+
+def declared_check(g):
+    """Every line of PICTURES-CHANGE.txt names a differing picture some picture check took (a line that names none is stale:
+    tool). When the tablet's part was owed, its pictures were not taken, so a stale line cannot be told from one for them:
+    env."""
+    def fn(log):
+        entries = picture_tool.gather(g.work, PICTURE_STORE)
+        path = pathlib.Path(g.tree) / picture_tool.CHANGES_NAME
+        try:
+            unused = picture_tool.unused_declarations(path, entries)
+        except picture_tool.DeclarationError as error:
+            return False, str(error), None, "tool"
+        if not unused:
+            return True, "every declared change names a differing picture" if path.is_file() else "no declared change"
+        owed = any(r["state"] == "owed" for r in g.results)
+        text = "; ".join("%s line %d: %s" % (picture_tool.CHANGES_NAME, n, t) for n, t in unused[:4])
+        if owed:
+            return False, "%d declared change%s name no differing picture (the tablet's pictures were not taken): %s" % (
+                len(unused), "" if len(unused) == 1 else "s", text), None, "env"
+        return False, "%d declared change%s name no differing picture (stale): %s" % (
+            len(unused), "" if len(unused) == 1 else "s", text), None, "tool"
+    return fn
+
+
+def approve_pictures(g, commit, say=print):
+    """The approval at a landing (pictures.py approve_landing): (the commit main moves to, None), or (the tested commit, why
+    not) when it could not be done. Nothing to approve: the tested commit."""
+    if not g.new_pictures:
+        return commit, None
+    sha, why = picture_tool.approve_landing(g.tree, g.work, PICTURE_STORE, lambda: picture_recheck(g), GIT, say=say)
+    if why is not None:
+        return commit, why
+    return sha or commit, None
 
 
 MOD_TESTS = TREE / "tools" / "lumacore" / "mod_tests.py"
@@ -1827,7 +1935,8 @@ def tablet_part(g, stops, device=None):
     needs = {"tablet/prepare": built + ("tablet/remove",), "android/tablet": built + ("tablet/prepare",),
              "tour/tablet": built + ("tablet/prepare",), "tablet/remove": (), "tour/tablet-pc": ("build/windows",),
              "replays/tablet": ("tour/tablet", "tour/tablet-pc"), "pictures/tablet": ("tour/tablet",)}
-    # The tablet's pictures are approved for the main level's twelve stops (N-1040); the long run's tour takes more.
+    # The tablet's pictures have rows of their own (place tablet, N-1040) for the main level's twelve stops; the long run's tour
+    # takes more.
     checks = TABLET_CHECKS + (("pictures/tablet",) if g.level == "main" else ())
     wanted = [n for n in checks if g.wanted(n, needs[n])]
     if g.dry or not wanted:
@@ -1958,8 +2067,12 @@ def tour_lane(g, tour, label, r):
 def picture_part(g):
     """The pictures of the engine tests and the tours, checked after the second runs (settle): a test that failed once and
     passed alone has its second run's pictures. In the order of their names, whichever lane asked first."""
-    for name, label, r, needs in sorted(g.picture_jobs, key=lambda job: job[0]):
+    jobs = sorted(g.picture_jobs, key=lambda job: job[0])
+    for name, label, r, needs in jobs:
         g.check(name, pictures(g, label, r), needs)
+    if g.level in ("main", "final"):
+        # A declared change that names no picture is stale; only a level that takes every picture can tell.
+        g.check("pictures/declared", declared_check(g), tuple(j[0] for j in jobs))
 
 
 def mods_lane(g, r):
@@ -2368,6 +2481,7 @@ def main(argv=None):
                                % candidate)
             taken = []
             add_waiting(args.work, commit, candidate, os.getpid())
+            landed = commit  # the commit main moves to: the tested one, or on top of it the pictures' approval
             try:
                 green, detail = github_wait(candidate, commit, planned_jobs(planned), wait_minutes=args.github_wait,
                                             log=str(g.work / "github.log"), owed=EVERY_JOB)
@@ -2379,19 +2493,29 @@ def main(argv=None):
                         why = held
                     else:
                         try:
-                            why = move_main(commit, g.name, g.work, args.board, args.who, args.covers)
+                            # The pictures with no approved copy are approved as part of the landing: one commit on top of
+                            # the tested one, the picture checks run again on the same runs, and only then main moves.
+                            landed, approval_fault = approve_pictures(g, commit)
+                            if approval_fault is not None:
+                                code, tool_fault = 2, "pictures not approved: " + approval_fault
+                                print("KIND tool pictures/approve - :: " + approval_fault)
+                                why = tool_fault
+                            else:
+                                why = move_main(landed, g.name, g.work, args.board, args.who, args.covers)
+                                if why is not None and landed != commit:
+                                    git("reset", "--hard", "-q", commit)
                         finally:
                             shutil.rmtree(move_lock, ignore_errors=True)
             finally:
                 drop_waiting(args.work, commit)
             subprocess.run([GIT, "-C", str(TREE), "push", "origin", "--delete", candidate], capture_output=True, text=True)
             if why is not None:
-                code, summary = 1, "passed, main not moved: " + why
+                code, summary = (2 if code == 2 else 1), "passed, main not moved: " + why
                 print("gate.py: main not moved: " + why, file=sys.stderr)
                 board_line(args.board, "%s NOTICE: main gate %s on %s passed its checks; main not moved: %s." % (
                     args.who, g.name, commit[:9], why))
             else:
-                summary = "passed, GitHub green (%s), main moved to %s" % (detail, commit[:9])
+                summary = "passed, GitHub green (%s), main moved to %s" % (detail, landed[:9])
                 # The build that moved main is kept (the two newest): a test that fails in a later change is run on it.
                 kept = kinds.keep_base(git("rev-parse", "HEAD"), g.bin, BASE_BINS)
                 if kept is not None:
@@ -2402,16 +2526,18 @@ def main(argv=None):
                     board_line(args.board, "%s OWED: main %s moved with GitHub's %s not ended; %s." % (
                         args.who, commit[:9], ", ".join(owed), start_owed(candidate, commit, owed, args)))
                 # First the measure (it queues for the gate lock now), then the long run, whose parts queue behind it.
-                measured = start_measure(commit, g, args)
+                measured = start_measure(landed, g, args)
                 print("gate.py: measure: %s" % measured)
                 board_line(args.board, "%s MEASURE: %s." % (args.who, measured))
-                started, what = start_long(commit, args)
+                started, what = start_long(landed, args)
                 print("gate.py: long run: %s" % what)
                 if started is not None:
                     board_line(args.board, "%s LONG: %s; none had started in 6 hours (section 14, N-1046)." % (args.who, what))
                 elif what.startswith("its tree"):
-                    board_line(args.board, "%s NOTICE: main moved to %s; no long run started: %s." % (args.who, commit[:9], what))
+                    board_line(args.board, "%s NOTICE: main moved to %s; no long run started: %s." % (args.who, landed[:9], what))
     finally:
+        if g is not None and g.runs_held:
+            g.prune_runs()
         for lock in taken:
             free_gate_lock(lock, holder, args.board, args.who, summary)
         if args.status:
