@@ -789,6 +789,27 @@ def parse_scripts(g):
     return fn
 
 
+# What build_windows.ps1 (build_steps.ps1) prints when a step failed only in the compiler cache's own client and was run again, and
+# when it failed so twice (exit 2).
+CACHE_AGAIN = "job(s) failed in the compiler cache, not in the compiler; built again"
+NOT_JUDGED_BUILD = "build not judged: the compiler cache failed twice in the same way, not the compiler"
+
+
+def cache_again(g, text, check="build/windows"):
+    """One line of tool-faults.tsv (kind TOOL) for each time the build was run again by itself because its compiler cache failed,
+    so the planner sees how often it happens. Never fails the check."""
+    lines = [l.strip() for l in text.splitlines() if CACHE_AGAIN in l]
+    live = getattr(g.args, "live", None)
+    if not lines or not live:
+        return
+    agent = getattr(g.args, "agent", None) or os.environ.get("NEBULA_AGENT", "1")
+    for line in lines:
+        try:
+            fault_writer(live)(agent, "", "TOOL", check, "", line, str(g.work), could_not="nothing: the build was run again by itself")
+        except Exception as e:  # noqa: BLE001 - the record is a report; the build's result stands without it
+            print("gate.py: the tool-fault record could not be written (%s: %s)" % (type(e).__name__, e), flush=True)
+
+
 def build_windows(g, root=None, bin_dir=None, sanitize="", coverage=False):
     """The game modules (clang) and every Windows program with the unit tests and the test extension (MSVC), into the
     build root; then the bin folder the harness runs. `sanitize`: the game modules with those sanitizers, `coverage`:
@@ -806,6 +827,11 @@ def build_windows(g, root=None, bin_dir=None, sanitize="", coverage=False):
                    + (["-Sanitize", sanitize] if sanitize else []) + (["-Coverage"] if coverage else []), log)
         text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")
         fails = [l for l in text.splitlines() if l.startswith("FAILED:")]
+        cache_again(g, text, "build/windows-asan" if sanitize else "build/windows-coverage" if coverage else "build/windows")
+        if code == 2 and NOT_JUDGED_BUILD in text:
+            # The compiler cache's own client failed twice and no compiler said anything: not the change's fault, not counted.
+            cached = next((l for l in text.splitlines() if CACHE_AGAIN in l), "")
+            return False, "%s%s" % (NOT_JUDGED_BUILD, ("; " + cached) if cached else ""), None, "tool"
         if code != 0 or fails:
             return False, "exit %d, %d FAILED: %s" % (code, len(fails), fails[0][8:120] if fails else last_line(text))
         if g.pak and not g.args.pak:
@@ -2866,8 +2892,19 @@ def parser(land=False):
     return p
 
 
+def unbuffer_output():
+    """A line is on the screen (or in the file the output goes to) when it is printed, not when the buffer fills: a landing's
+    checks run for minutes, and `gate.py land > file` showed nothing until it ended."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(line_buffering=True)
+        except (AttributeError, ValueError, OSError):
+            pass
+
+
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else list(argv)
+    unbuffer_output()
     # The run's job object (machine.py): every program the gate starts, and theirs, ends with it, however it ends. Once a process.
     if machine.RUN_JOB[0] is None:
         machine.join_new_job(lambda text: print(text, file=sys.stderr, flush=True))
@@ -3209,7 +3246,7 @@ class GateChecker:
     def run(self, tree, tip, names, groups_text, also=""):
         cmd = self.command(tree, names, groups_text, also)
         lines = []
-        env = dict(os.environ, PYTHONIOENCODING="utf-8")
+        env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1")     # each check's line arrives when it ends
         try:
             with self.popen(cmd, cwd=str(tree), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, text=True,
                             encoding="utf-8", errors="replace") as p:
@@ -3225,11 +3262,11 @@ class GateChecker:
 
 def fault_writer(live_folder):
     """landing.Landing's `faults`: one line of tool-faults.tsv at once (tools/plan/live.py), never through a landing."""
-    def write(agent, step, kind, check, test, message, run_folder):
+    def write(agent, step, kind, check, test, message, run_folder, could_not=""):
         sys.path.insert(0, str(TREE / "tools" / "plan"))
         import live  # noqa: E402 - tools/plan, beside the step tool that shows the table
         pathlib.Path(live_folder).mkdir(parents=True, exist_ok=True)
-        live.append_fault(live_folder, agent, step, kind, check, message, test=test, run_folder=run_folder)
+        live.append_fault(live_folder, agent, step, kind, check, message, test=test, run_folder=run_folder, could_not=could_not)
     return write
 
 
