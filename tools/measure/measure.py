@@ -187,11 +187,19 @@ def figures(run_folder):
 
 def scene_of(run_folder):
     """The scene a run measured: the stage (name:scenario) or the stop of the test's description (test.json, which the
-    harness copies into the run's folder), else the test's name."""
-    try:
-        test = json.loads((pathlib.Path(run_folder) / "test.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    harness copies into the run's folder; the route's own when the folder has none), else the test's name."""
+    test = None
+    # The tablet's run folder holds no test.json: the route's own description is the same test.
+    for path in (pathlib.Path(run_folder) / "test.json", ROUTE / "test.json"):
+        try:
+            test = json.loads(path.read_text(encoding="utf-8"))
+            break
+        except (OSError, ValueError):
+            continue
+    if test is None:
         return "unknown"
+    if isinstance(test.get("test"), dict):  # the harness's copy wraps the description: {"runner": ..., "test": {...}}
+        test = test["test"]
     stage = test.get("stage")
     if isinstance(stage, dict) and stage.get("name"):
         return "%s:%s" % (stage["name"], stage.get("scenario", 1))
