@@ -38,6 +38,11 @@ land BRANCH [BRANCH ...] | land --queue: the landing queue (tools/gate/landing.p
          folder, runs the checks of the groups the union of their changed files needs (tools/gate/scope.tsv) once, moves main, and
          halves the batch to find the branch at fault. Exit 0 landed, 1 fail, 2 not judged, 3 the same failure three times.
 --scope GROUPS|auto|full: with --main (--move too), only the checks of these groups; what `land` runs on the batch's tip.
+--also NAMES: with --scope, and with `land` (a repair's check): more checks, by the names the gate gives them (comma-separated),
+         run in the landing besides what the groups need. They run as the main level runs them, every stop of a tour, as the
+         nightly run does (`--main --only NAME` is how one nightly check is run by hand), so a landing with --also runs its groups'
+         checks at that depth too. A name the gate does not know, or one only the long run has, refuses the landing before
+         anything runs (exit 2) and lists the names.
 --mods off|short|full: the mod suites and LumaLink's check; off in tools/gate/scope.tsv (they run in no landing and no nightly).
 data list | adopt | path DISC | make DISC | clean: the game data by key (tools/gate/gamedata.py).
 --serial: the parts that start the game one after another; by default they run side by side (section 7).
@@ -2490,6 +2495,49 @@ def select(names_needs, patterns):
     return chosen
 
 
+TABLET_NAMES = TABLET_CHECKS + ("pictures/tablet",)
+
+
+def level_needs(args, level, known, planned):
+    """{check: needs} of one level: the names a dry run of that level registers."""
+    a = argparse.Namespace(**vars(args))
+    a.mode = level
+    dry = run_checks(a, known, planned, dry=True)
+    shutil.rmtree(dry.work, ignore_errors=True)
+    return dry.needs
+
+
+def also_problem(args, also, known, planned):
+    """Why `--also` cannot be run ("" when it can): a name must be a check of the main level, which is how a landing runs it. A
+    name that only the long run has is said so; any other is unknown, and the known names are printed."""
+    main_needs = level_needs(args, "main", known, planned)
+    unknown = [n for n in also if n not in main_needs]
+    if not unknown:
+        return ""
+    long_only = [n for n in unknown if n in level_needs(args, "long", known, planned)]
+    other = [n for n in unknown if n not in long_only]
+    parts = []
+    if other:
+        parts.append("--also names no check the gate knows: %s. The checks a landing can run are: %s" % (
+            ", ".join(other), ", ".join(sorted(main_needs))))
+    if long_only:
+        parts.append("--also: %s only the long run (gate.py --long) has; a landing cannot run %s" % (
+            ", ".join(long_only), "it" if len(long_only) == 1 else "them"))
+    return " ".join(parts)
+
+
+def landing_selection(args, plan, also, known, planned):
+    """The checks of a landing with a plan that is not full: those of the plan's groups, and those `also` names, each with what
+    it needs, from a dry run of the level the landing has (args.mode: the main level when there is an --also, else the landing's
+    own)."""
+    dry = run_checks(args, known, planned, dry=True)
+    shutil.rmtree(dry.work, ignore_errors=True)
+    selected = scope.select(dry.needs, plan.groups)
+    if also:
+        selected |= select(dry.needs, also)
+    return selected
+
+
 def parser(land=False):
     """The options of a run. `land`: for `gate.py land`, whose options are a run's besides the branches (no level flag)."""
     p = argparse.ArgumentParser(prog="gate.py land" if land else None, description=__doc__.split("\n")[0])
@@ -2524,6 +2572,9 @@ def parser(land=False):
                    help="--main: only the checks of the groups a change needs (tools/gate/scope.py): GROUP[,GROUP...], 'auto' "
                         "for the groups of the files changed from the merge base with origin/main, or 'full'; what a "
                         "landing runs (gate.py land). With --move the run lands the commit the way a main gate does")
+    p.add_argument("--also", default="",
+                   help="--scope or `land`: more checks to run in the landing, by the names the gate gives them (comma-separated); "
+                        "they run as the main level runs them. A name the gate does not know refuses the landing")
     p.add_argument("--mods", choices=scope.MODS_VALUES, default=None,
                    help="the mod suites and LumaLink's own check: off, short (the quick mod set) or full; the default is the "
                         "`mods =` line of tools/gate/scope.tsv (off: they run in no landing and no nightly run)")
@@ -2593,6 +2644,9 @@ def main(argv=None):
         print(kinds.verdict_line("not-judged"), flush=True)
         return 2
 
+    also = landing.also_names(args.also)
+    if also and not args.scope:
+        return refuse("--also goes with --scope: it adds checks to a landing's")
     plan = None
     if args.scope:
         if args.mode != "main" or patterns:
@@ -2609,12 +2663,15 @@ def main(argv=None):
         except scope.ScopeError as error:
             return refuse("tools/gate/scope.tsv or --scope is wrong:\n  " + "\n  ".join(error.problems))
         print("gate.py: scope: " + "; ".join(scope.describe(plan)), flush=True)
-        if not plan.full:
+        if not plan.full and not also:
             args.mode = LAND_LEVEL
+        elif also and not plan.full:
+            print("gate.py: also: %s. The landing keeps the main level so that they run as the nightly run runs them (every stop of "
+                  "a tour)." % ", ".join(also), flush=True)
     if args.move and (args.mode not in ("main", LAND_LEVEL) or patterns or args.no_build):
         return refuse("--move goes with --main alone: the whole main gate, built here")
     if plan is not None and not plan.full:
-        needs_tablet = "tablet12" in plan.groups   # `android` alone is the build: it needs no tablet
+        needs_tablet = "tablet12" in plan.groups or any(n in TABLET_NAMES for n in also)   # `android` alone is the build: no tablet
     else:
         needs_tablet = args.mode != "quick"
     if needs_tablet and not args.tablet:
@@ -2622,11 +2679,13 @@ def main(argv=None):
     known, planned, problems = read_lists()
     if problems:
         return refuse("the lists are wrong:\n  " + "\n  ".join(problems))
+    if also:
+        why = also_problem(args, also, known, planned)
+        if why:
+            return refuse(why)
     selected = None
     if plan is not None and not plan.full:
-        dry = run_checks(args, known, planned, dry=True)
-        shutil.rmtree(dry.work, ignore_errors=True)
-        selected = scope.select(dry.needs, plan.groups)
+        selected = landing_selection(args, plan, also, known, planned)
         if not selected:
             return refuse("the groups %s name no check of this tree" % ",".join(plan.groups))
         print("gate.py: the landing runs %d checks: %s" % (len(selected), ", ".join(sorted(selected))), flush=True)
@@ -2888,7 +2947,7 @@ class GateChecker:
     def __init__(self, args, say=print, popen=subprocess.Popen):
         self.args, self.say, self.popen = args, say, popen
 
-    def command(self, tree, names, groups_text):
+    def command(self, tree, names, groups_text, also=""):
         a = self.args
         scope_text = "full" if groups_text.startswith("full") else groups_text
         cmd = [sys.executable, "-X", "utf8", "-I", str(pathlib.Path(tree) / "tools" / "gate" / "gate.py"), "--main", "--move",
@@ -2904,10 +2963,12 @@ class GateChecker:
             cmd += ["--mods", a.mods]
         if a.github_again:
             cmd += ["--github-again", "--live", a.live, "--agent", a.agent]
+        if also:
+            cmd += ["--also", also]
         return cmd
 
-    def run(self, tree, tip, names, groups_text):
-        cmd = self.command(tree, names, groups_text)
+    def run(self, tree, tip, names, groups_text, also=""):
+        cmd = self.command(tree, names, groups_text, also)
         lines = []
         env = dict(os.environ, PYTHONIOENCODING="utf-8")
         try:
@@ -2942,6 +3003,19 @@ def land_main(argv):
         print("gate.py: land takes branches to put in the queue, or --queue to run what waits: one of the two", file=sys.stderr)
         print(kinds.verdict_line("not-judged"), flush=True)
         return landing.EXIT_NOT_JUDGED
+    also = landing.also_names(args.also)
+    if also and args.queue:
+        print("gate.py: --also goes with branches: it is asked for by the caller that lands them", file=sys.stderr)
+        print(kinds.verdict_line("not-judged"), flush=True)
+        return landing.EXIT_NOT_JUDGED
+    if also:
+        # Before anything is queued or run: a name the gate does not know refuses the landing, and the names are printed.
+        known, planned, problems = read_lists()
+        why = ("the lists are wrong:\n  " + "\n  ".join(problems)) if problems else also_problem(args, also, known, planned)
+        if why:
+            print("gate.py: " + why, file=sys.stderr)
+            print(kinds.verdict_line("not-judged"), flush=True)
+            return landing.EXIT_NOT_JUDGED
     sys.path.insert(0, str(TREE / "tools" / "plan"))
     import failures  # noqa: E402 - tools/plan/failures.py: the step tool's rule, in one place
     queue = landing.Queue(args.queue_file)
@@ -2949,7 +3023,7 @@ def land_main(argv):
                              store=failures.Store(args.failures), faults=fault_writer(args.live))
     if args.queue:
         return runner.run_only_queue()
-    return runner.land(args.branches, args.agent, args.wait_minutes)
+    return runner.land(args.branches, args.agent, args.wait_minutes, also=",".join(also))
 
 
 def below_normal():

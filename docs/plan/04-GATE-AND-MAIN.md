@@ -356,6 +356,15 @@ for the branch (`tools/plan/failures.py`); the third in a row stops the retries.
 and is written to `D:/NebulaWork/plan/native/tool-faults.tsv` at once. `plan.py land` makes this one call. `--quick` and `--main`
 still work unchanged until package T10 removes them.
 
+**A repair's check.** `gate.py land BRANCH --also NAMES` (`plan.py land R-003` sends it) runs the named checks in this landing besides
+what the changed files need. NAMES are check names as the gate gives them, comma-separated; they are the main level's, so a check
+that only the nightly run has (another disc's tour, the full tours) can be named. They run as the main level runs them, every stop of
+a tour, so a landing with `--also` runs its groups' checks at that depth too (`--main --only NAME` is how one nightly check is run by
+hand; `--also` does the same inside a landing). A name the gate does not know refuses the landing before anything is queued or run
+(exit 2, `VERDICT not-judged`) and lists the known names; a check that only the long run has (the soak, the sanitizer tour, the
+coverage report, the play route measure) is refused the same way and said so. The names travel with the branch in the queue (the
+column `also`), so a caller that only waits for another's runner still gets its checks; a batch runs the union of its branches'.
+
 **Game data by key.** `D:/NebulaWork/build/game-data/` holds one folder per disc, store version and importer
 (`<disc>-<store>-<first 12 characters of the git tree hash of crates/nebula-import>`). The gate asks for a disc's data by that
 key (the check `data/RMGE01`, and `data/RMGP01` and `data/RMGJ01` for the other discs): found, it is used; not found, it is made

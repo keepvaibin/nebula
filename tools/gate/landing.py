@@ -3,8 +3,10 @@
     gate.py land BRANCH [BRANCH ...]     put the branches in the queue and wait until each is landed, failed or does not apply
     gate.py land --queue                 run what waits in the queue, take nothing new
 
-The queue is a file, D:/NebulaWork/plan/landing-queue.tsv: time, branch, agent, state, commit, run folder, note; it is
-changed only under a lock folder beside it. A state is `waiting`, `running`, `landed`, `failed` or `conflict`. A caller
+The queue is a file, D:/NebulaWork/plan/landing-queue.tsv: time, branch, agent, state, commit, run folder, note, also; it is
+changed only under a lock folder beside it. `also` is what the caller asked for with `gate.py land --also NAMES`: checks, by
+the names the gate gives them, that run in this landing besides what the changed files need (a repair's check); a batch runs
+the union of the `also` of its branches. A file of seven columns (before `also`) is read as it is. A state is `waiting`, `running`, `landed`, `failed` or `conflict`. A caller
 puts its branches in the queue and, when no queue runner is alive (the runner lock folder), becomes the runner; otherwise it
 waits until its branches reach an end state. The runner:
 
@@ -58,7 +60,7 @@ TEMP_BRANCH = "land/tmp"
 MAIN_REF = "origin/main"
 GIT = next((p for p in ("C:/Program Files/Git/cmd/git.exe",) if os.path.exists(p)), "git")
 
-COLUMNS = ("time", "branch", "agent", "state", "commit", "run folder", "note")
+COLUMNS = ("time", "branch", "agent", "state", "commit", "run folder", "note", "also")
 WAITING, RUNNING, LANDED, FAILED, CONFLICT = "waiting", "running", "landed", "failed", "conflict"
 STATES = (WAITING, RUNNING, LANDED, FAILED, CONFLICT)
 ENDED = (LANDED, FAILED, CONFLICT)
@@ -93,6 +95,21 @@ def stamp(clock=time.time):
 
 def cell(text):
     return str(text).replace("\t", " ").replace("\r", " ").replace("\n", " ")
+
+
+def also_names(*texts):
+    """The check names of comma-separated texts, each once, in the order given."""
+    out = []
+    for text in texts:
+        for name in str(text or "").split(","):
+            name = name.strip()
+            if name and name not in out:
+                out.append(name)
+    return out
+
+
+def also_text(*texts):
+    return ",".join(also_names(*texts))
 
 
 # The lock folders ------------------------------------------------------------------------------------------------------
@@ -172,13 +189,15 @@ class Queue:
         rows = []
         for line in text.splitlines()[1:]:
             cells = line.split("\t")
+            if len(cells) == len(COLUMNS) - 1:       # a file written before the column `also`
+                cells.append("")
             if len(cells) == len(COLUMNS):
                 rows.append(dict(zip(COLUMNS, cells)))
         return rows
 
     def _write(self, rows):
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        text = "\t".join(COLUMNS) + "\n" + "".join("\t".join(cell(r[c]) for c in COLUMNS) + "\n" for r in rows)
+        text = "\t".join(COLUMNS) + "\n" + "".join("\t".join(cell(r.get(c, "")) for c in COLUMNS) + "\n" for r in rows)
         tmp = self.path.with_name(self.path.name + ".tmp%d" % os.getpid())
         tmp.write_text(text, encoding="utf-8", newline="\n")
         for attempt in range(40):
@@ -209,16 +228,19 @@ class Queue:
     def row(self, branch):
         return next((r for r in self.read() if r["branch"] == branch), None)
 
-    def add(self, branches, agent, commit_of):
-        """Puts the branches in the queue as waiting. A branch already waiting or running stays as it is (its caller
-        attaches to it); one that ended, or went back to waiting not judged, starts again."""
+    def add(self, branches, agent, commit_of, also=""):
+        """Puts the branches in the queue as waiting, with the checks the caller asked for besides the changed files' (`also`,
+        comma-separated names). A branch already waiting or running stays as it is (its caller attaches to it; a waiting one
+        takes the caller's `also` in as well); one that ended, or went back to waiting not judged, starts again."""
         def fn(rows):
             for b in branches:
-                new = dict(zip(COLUMNS, (stamp(self.clock), b, agent, WAITING, commit_of(b) or "", "", "")))
+                new = dict(zip(COLUMNS, (stamp(self.clock), b, agent, WAITING, commit_of(b) or "", "", "", also_text(also))))
                 old = next((r for r in rows if r["branch"] == b), None)
                 if old is None:
                     rows.append(new)
                 elif old["state"] == RUNNING or (old["state"] == WAITING and not old["note"].startswith(NOT_JUDGED)):
+                    if old["state"] == WAITING:
+                        old["also"] = also_text(old.get("also", ""), also)
                     continue
                 else:
                     rows[rows.index(old)] = new
@@ -439,10 +461,10 @@ class Landing:
     def commit_of(self, branch):
         return resolve_branch(self.repo, self.tree if (self.tree / ".git").exists() else self.source, branch)[:9]
 
-    def land(self, branches, agent="1", wait_minutes=600.0):
+    def land(self, branches, agent="1", wait_minutes=600.0, also=""):
         """Queues the branches and sees them to an end: the runner when none is alive, else a waiter. Returns the exit code
-        and prints the caller's lines."""
-        self.queue.add(branches, agent, self.commit_of)
+        and prints the caller's lines. `also`: checks (comma-separated names) this landing runs besides the changed files'."""
+        self.queue.add(branches, agent, self.commit_of, also)
         deadline = self.clock() + 60.0 * wait_minutes
         while True:
             rows = {b: self.queue.row(b) for b in branches}
@@ -556,6 +578,8 @@ class Landing:
             agents = {r["branch"]: r["agent"] for r in rows}
             self.agents = getattr(self, "agents", {})
             self.agents.update(agents)
+            self.alsos = getattr(self, "alsos", {})
+            self.alsos.update({r["branch"]: r.get("also", "") for r in rows})
             try:
                 stop = self.batch(names)
             except Exception as error:  # noqa: BLE001 - a runner that breaks has judged nothing: the branches wait again
@@ -588,8 +612,10 @@ class Landing:
         else:
             plan = scope.plan_for(paths, self.table or self.tip_table(tree))
         self.runs += 1
-        self.say("gate.py: run %d on %s: %s (%s)" % (self.runs, ", ".join(prep.order), plan.text(), prep.tip[:9]))
-        result = self.checker.run(tree, prep.tip, list(prep.order), plan.text())
+        also = also_text(*[getattr(self, "alsos", {}).get(b, "") for b in prep.order])
+        self.say("gate.py: run %d on %s: %s%s (%s)" % (self.runs, ", ".join(prep.order), plan.text(),
+                                                      " and also %s" % also if also else "", prep.tip[:9]))
+        result = self.checker.run(tree, prep.tip, list(prep.order), plan.text(), **({"also": also} if also else {}))
         for b in prep.order:
             self.last[b] = result
         if result.verdict == "not-judged" or (result.verdict == "pass" and not result.moved and result.why_kind != "github"):
