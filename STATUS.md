@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-21 13:54.
+Written 2026-11-21 13:55.
 
 Steps landed: 0 of 138 (0%).
 
@@ -45,7 +45,7 @@ None yet.
 
 | Id | State | Kind | Check | Renderer | Traced to | Seen |
 | --- | --- | --- | --- | --- | --- | --- |
-| R-001 | open | stress | stress/tour/d3d12/1 | d3d12 | commit 9ca5c7918 | 1 |
+| R-001 | open | stress | stress/tour/d3d12/1 | d3d12 | commit 9ca5c7918 | 2 |
 
 ## For the owner to check by hand
 
