@@ -121,6 +121,10 @@ struct LaunchArgs {
     // Started with its window hidden (Windows: STARTUPINFO's SW_HIDE, as a test starts it; elsewhere --hidden 1): no
     // window, dialog or Discord status, and no keyboard, mouse, controller motor or Wii Remote of the player's.
     bool started_hidden = false;
+    // --no-focus 1 (a test's visible run, Windows; every platform accepts it and ignores it elsewhere): the game window never asks for
+    // the keyboard focus (shown without activating, no foreground, active or focus call), and the game runs as it does with the focus:
+    // the window never counts as "not in front" (no pause or mute on focus loss, no background rendering, the fine timer held).
+    bool no_focus = false;
     bool timed = false;                 // --seconds over 0: a run that ends by itself, a test's
     // --start-check N: the program's start without the game's files (host_main.cpp run_start_check): the window and the
     // renderer, which may take a software adapter when no graphics card runs it, then N frames drawn and shown.

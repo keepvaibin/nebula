@@ -312,6 +312,89 @@ finally:
     m.run = real_run
 check(seen_args[0].pending == "P.tsv" and seen_args[1].pending == "", "--pending FILE on the command line: %s" % [a.pending for a in seen_args])
 
+# ================= 4b. The tablet's measure takes no measurement lock and waits for no quiet PC =================
+def lock_args(runs, lock):
+    return argparse.Namespace(work=str(pathlib.Path(tempfile.mkdtemp())), commit="0123456789ab", gate_lock="", lock=str(lock), board="",
+                              who="t", wait=1.0, runs=runs, history=str(pathlib.Path(tempfile.mkdtemp()) / "h.tsv"), pending="",
+                              quiet_minutes=0.0)
+
+
+held = pathlib.Path(tempfile.mkdtemp()) / "measure.lock"
+held.mkdir()
+(held / "holder.txt").write_text("measure.py other D:/w 2026-11-21 08:00:00 pid %d\n" % __import__("os").getpid(), encoding="utf-8")
+ran = []
+real = m.measure_runs
+try:
+    m.measure_runs = lambda a, w: ran.append(a.runs) or (0, ["fake"])
+    with contextlib.redirect_stdout(io.StringIO()) as o:
+        code = m.run(lock_args("tablet", held))
+    check(code == 0 and ran == ["tablet"] and (held / "holder.txt").exists(),
+          "runs=tablet beside a PC measure that holds the lock: runs, and leaves the lock as it was: %s %s" % (code, o.getvalue()))
+    ran.clear()
+    free = pathlib.Path(tempfile.mkdtemp()) / "measure.lock"
+    seen_lock = []
+    m.measure_runs = lambda a, w: seen_lock.append(free.exists()) or (0, ["fake"])
+    with contextlib.redirect_stdout(io.StringIO()):
+        m.run(lock_args("tablet", free))
+    check(seen_lock == [False] and not free.exists(), "runs=tablet makes no measurement lock folder: %s" % seen_lock)
+    m.measure_runs = lambda a, w: ran.append(a.runs) or (0, ["fake"])
+    with contextlib.redirect_stdout(io.StringIO()) as o:
+        code = m.run(lock_args("d3d12,tablet", held))
+    check(code == 2 and ran == [] and "is held" in o.getvalue(), "a PC run beside it is refused: %s %s" % (code, o.getvalue()))
+    with contextlib.redirect_stdout(io.StringIO()) as o:
+        code = m.run(lock_args("d3d12", held))
+    check(code == 2 and ran == [], "so is d3d12 alone")
+    seen_lock.clear()
+    m.measure_runs = lambda a, w: seen_lock.append(free.exists()) or (0, ["fake"])
+    with contextlib.redirect_stdout(io.StringIO()):
+        m.run(lock_args("d3d12,tablet", free))
+    check(seen_lock == [True] and not free.exists(), "a PC run takes the lock and frees it")
+finally:
+    m.measure_runs = real
+check(m.tablet_only(argparse.Namespace(runs="tablet")) and not m.tablet_only(argparse.Namespace(runs="tablet,d3d12")) and
+      not m.tablet_only(argparse.Namespace(runs="")), "tablet_only names the tablet and nothing else")
+
+
+class NoPcMachine:
+    """A machine that fails the test when the PC's quiet, card or processor checks are asked for."""
+    def wait_quiet(self):
+        raise AssertionError("the tablet's measure waited for a quiet PC")
+
+    def card_use(self):
+        raise AssertionError("the tablet's measure read the card")
+
+    def cpu_watch(self):
+        raise AssertionError("the tablet's measure watched the processors")
+
+
+class FakeTabletDevice:
+    def answers(self):
+        return True
+
+    def shell(self, command):
+        return 0, "0\n"
+
+
+class FakeGate:
+    def take_device_lock_wait(self, path, who, minutes):
+        pathlib.Path(path).mkdir()
+        return None
+
+
+def tablet_harness(command, env=None, check=False):
+    if "prepare" in command or "remove" in command:
+        return type("D", (), {"returncode": 0})()
+    write_run(pathlib.Path(command[command.index("--work") + 1]) / "runs" / "measure-route" / "vulkan", steps=None)
+    return type("D", (), {"returncode": 0})()
+
+
+targs = argparse.Namespace(runs="tablet", bin="B", android_bin="AB", apk="T.apk", pak="G.pak", device="SERIAL",
+                           device_lock=str(pathlib.Path(tempfile.mkdtemp()) / "tablet.lock"), device_wait=1.0, paks="",
+                           commit="0123456789ab", history=str(pathlib.Path(tempfile.mkdtemp()) / "h.tsv"), pending="")
+with contextlib.redirect_stdout(io.StringIO()):
+    code, said = m.measure_runs(targs, pathlib.Path(tempfile.mkdtemp()), tablet_harness, FakeTabletDevice(), FakeGate(), NoPcMachine())
+check(code == 0, "the tablet's measure asks the PC for nothing: %s %s" % (code, said))
+
 # ================= 5. result.json =================
 history = new_history()
 code, said, calls, result, out = go(history, "d3d12", steady(), "%09d" % 7)

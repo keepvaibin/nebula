@@ -5762,6 +5762,8 @@ void read_launch_args(int argc, char** argv) {
             args.start_again_of = argv[i + 1];
         } else if (key == "--hidden") {
             args.started_hidden = argv[i + 1][0] == '1';  // Windows reads its start's window instead, below
+        } else if (key == "--no-focus") {
+            args.no_focus = argv[i + 1][0] == '1';
         } else if (key == "--renderer") {
             const std::string_view api = argv[i + 1];
             args.renderer = api == "d3d12" ? 1u : api == "d3d11" ? 2u : api == "vulkan" ? 3u : 0u;
@@ -6071,7 +6073,7 @@ int main(int argc, char** argv) {
                    key == "--crash-dumps" || key == "--gpu-validation" || key == "--console-log" ||
                    key == "--gpu-start-retry" || key == "--extension" || key == "--import" || key == "--imports-taken" ||
                    key == "--safe-start" || key == "--shipped-mods" || key == "--mod-dev" || key == "--renderer" || key == "--started-again" ||
-                   key == "--start-again-of" || key == "--hidden" || key == "--gpu-driver" || key == "--gpu-driver-library" ||
+                   key == "--start-again-of" || key == "--hidden" || key == "--no-focus" || key == "--gpu-driver" || key == "--gpu-driver-library" ||
                    key == "--gpu-driver-hooks" || key == "--start-check") {
             // Read above, before anything uses them.
         } else if (key == "--seconds") {

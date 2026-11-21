@@ -1776,6 +1776,8 @@ def run_one(test, renderer, args, run_folder, previous):
     command = [str(run_folder / "bin" / exe.name), "--pak", pak, "--saves", str(run_folder / "saves"),
                "--seconds", str(int(math.ceil(test["limit"])) + int(HANG_SECONDS) + 30), "--settings", str(settings),
                "--crash-dumps", str(run_folder), "--extension", str(run_folder / "bin" / HOST["extension"])] + imports
+    # No game of a test run takes the player's keyboard focus, hidden or visible (docs/using-nebula/command-line-arguments.md).
+    command += ["--no-focus", "1"]
     diagnostics = run_diagnostics(test, args)
     if diagnostics:
         # A stress or record the whole run is made under (--diagnostics ring-stress): the game's own switch.
@@ -1931,14 +1933,73 @@ def hang_dump(run_folder, process=None):
     return sorted(p.name for p in pathlib.Path(run_folder).glob("nebula-hang-*.dmp"))
 
 
-def watch_window(run_folder, first_pid, done):
-    """A visible run's window, every quarter second until `done` is set (Windows): a line in run_folder/window-watch.txt
-    the first time, and a count, of each way the player's desktop reached it: "minimized", "active" (the foreground
-    window, so keys reach it) and "pointer" (the pointer over it). The run's processes: the one started and each one
-    the host started in its place (run_folder/restarted)."""
+COVERED_BELOW = 0.5  # a window with less than this share of its area visible is "covered"
+
+
+def visible_share(rect, above):
+    """The share (0 to 1) of the rectangle `rect` (left, top, right, bottom) that none of the rectangles `above` covers:
+    each is subtracted as a rectangle (a window above it, in front, has its whole rectangle)."""
+    pieces = [rect]
+    for hole in above:
+        h_l, h_t, h_r, h_b = hole
+        rest = []
+        for l, t, r, b in pieces:
+            if h_l >= r or h_r <= l or h_t >= b or h_b <= t:  # does not touch this piece
+                rest.append((l, t, r, b))
+                continue
+            if h_t > t:
+                rest.append((l, t, r, h_t))                                  # above the hole
+            if h_b < b:
+                rest.append((l, h_b, r, b))                                  # below it
+            mid_t, mid_b = max(t, h_t), min(b, h_b)
+            if h_l > l:
+                rest.append((l, mid_t, h_l, mid_b))                          # left of it
+            if h_r < r:
+                rest.append((h_r, mid_t, r, mid_b))                          # right of it
+        pieces = rest
+    whole = (rect[2] - rect[0]) * (rect[3] - rect[1])
+    if whole <= 0:
+        return 1.0
+    return sum((r - l) * (b - t) for l, t, r, b in pieces) / whole
+
+
+def window_kinds(desktop, ours):
+    """The ways the player's desktop reached the run's window in this look: a list of "active" (the foreground window is the
+    run's, so keys reach it), "pointer" (the pointer is over it), "minimized" and "covered" (less than half of the game's window
+    is visible: the visible windows above it, not minimized and not cloaked, subtracted as rectangles). `desktop` is the
+    look: foreground_pid(), pointer_pid() (the process of the top-level window under the pointer) and windows(): the top-level
+    windows from the top down, each {pid, visible, minimized, cloaked, rect, through} (through: a layered window the pointer
+    passes through, an overlay that hides nothing). `ours`: the run's process ids."""
+    kinds = []
+    if desktop.foreground_pid() in ours:
+        kinds.append("active")
+    if desktop.pointer_pid() in ours:
+        kinds.append("pointer")
+    above = []
+    for w in desktop.windows():
+        if w["pid"] in ours:
+            if w["visible"] and w["minimized"]:
+                kinds.append("minimized")
+                break
+            if w["visible"] and not w["cloaked"]:
+                share = visible_share(w["rect"], above)
+                if share < COVERED_BELOW:
+                    kinds.append("covered")
+                    break
+            continue
+        if (w["visible"] and not w["minimized"] and not w["cloaked"] and not w["through"]
+                and w["rect"][2] > w["rect"][0] and w["rect"][3] > w["rect"][1]):
+            above.append(w["rect"])
+    return kinds
+
+
+def win32_desktop(first_pid, run_folder):
+    """The look at the real desktop (Windows), and the set of the run's processes: the one started and each one the host
+    started in its place (run_folder/restarted)."""
     import ctypes
     from ctypes import wintypes
     user32 = ctypes.WinDLL("user32", use_last_error=True)
+    dwm = ctypes.WinDLL("dwmapi")
     user32.GetForegroundWindow.restype = wintypes.HWND
     user32.WindowFromPoint.restype = wintypes.HWND
     user32.WindowFromPoint.argtypes = [wintypes.POINT]
@@ -1947,13 +2008,44 @@ def watch_window(run_folder, first_pid, done):
     user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
     user32.IsIconic.argtypes = [wintypes.HWND]
     user32.IsWindowVisible.argtypes = [wintypes.HWND]
+    user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+    user32.GetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int]
+    dwm.DwmGetWindowAttribute.argtypes = [wintypes.HWND, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD]
     enum_proc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    GWL_EXSTYLE, WS_EX_LAYERED, WS_EX_TRANSPARENT, DWMWA_CLOAKED, GA_ROOT = -20, 0x80000, 0x20, 14, 2
 
     def pid_of(hwnd):
         pid = wintypes.DWORD(0)
         if hwnd:
             user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
         return pid.value
+
+    class Desktop:
+        def foreground_pid(self):
+            return pid_of(user32.GetForegroundWindow())
+
+        def pointer_pid(self):
+            point = wintypes.POINT()
+            if not user32.GetCursorPos(ctypes.byref(point)):
+                return 0
+            under = user32.WindowFromPoint(point)
+            return pid_of(user32.GetAncestor(under, GA_ROOT)) if under else 0
+
+        def windows(self):
+            found = []
+
+            def visit(hwnd, _):
+                rect, cloaked = wintypes.RECT(), ctypes.c_int(0)
+                user32.GetWindowRect(hwnd, ctypes.byref(rect))
+                dwm.DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, ctypes.byref(cloaked), 4)
+                style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+                found.append({"pid": pid_of(hwnd), "visible": bool(user32.IsWindowVisible(hwnd)),
+                              "minimized": bool(user32.IsIconic(hwnd)), "cloaked": cloaked.value != 0,
+                              "rect": (rect.left, rect.top, rect.right, rect.bottom),
+                              "through": bool(style & WS_EX_LAYERED and style & WS_EX_TRANSPARENT)})
+                return True
+            user32.EnumWindows(enum_proc(visit), 0)  # the top-level windows, the top one first
+            return found
 
     def pids():
         out = {first_pid}
@@ -1964,30 +2056,21 @@ def watch_window(run_folder, first_pid, done):
         except OSError:
             pass
         return out
+    return Desktop(), pids
 
+
+def watch_window(run_folder, first_pid, done, desktop=None, pids=None, now=time.time, every=0.25):
+    """A visible run's window, every quarter second until `done` is set (Windows): a line in run_folder/window-watch.txt
+    the first time, and a count, of each way the player's desktop reached it (window_kinds): "minimized", "active" (the
+    foreground window, so keys reach it), "pointer" (the pointer over it) and "covered" (less than half of the game's window
+    is visible). The run's processes: the one started and each one the host started in its place."""
+    if desktop is None:
+        desktop, pids = win32_desktop(first_pid, run_folder)
     seen = {}
-    began = time.time()
-    while not done.wait(0.25):
-        ours = pids()
-        kinds = []
-        if pid_of(user32.GetForegroundWindow()) in ours:
-            kinds.append("active")
-        point = wintypes.POINT()
-        if user32.GetCursorPos(ctypes.byref(point)):
-            under = user32.WindowFromPoint(point)
-            if under and pid_of(user32.GetAncestor(under, 2)) in ours:  # GA_ROOT
-                kinds.append("pointer")
-        minimized = []
-
-        def visit(hwnd, _):
-            if pid_of(hwnd) in ours and user32.IsWindowVisible(hwnd) and user32.IsIconic(hwnd):
-                minimized.append(hwnd)
-            return True
-        user32.EnumWindows(enum_proc(visit), 0)
-        if minimized:
-            kinds.append("minimized")
-        for kind in kinds:
-            first, count = seen.get(kind, (time.time() - began, 0))
+    began = now()
+    while not done.wait(every):
+        for kind in window_kinds(desktop, pids()):
+            first, count = seen.get(kind, (now() - began, 0))
             seen[kind] = (first, count + 1)
     if seen:
         lines = ["%s first at %.1f s, %d of the quarter seconds" % (k, first, n) for k, (first, n) in sorted(seen.items())]
@@ -3091,6 +3174,16 @@ def main():
     refs.add_argument("--looked", action="store_true")
     args = parser.parse_args()
     if args.command == "run":
+        if not args.device and not os.environ.get("NEBULA_SELF_TEST"):
+            # Started by hand while a speed measure runs: wait for it (at most 15 minutes; the gate, a landing and the measure
+            # itself set NEBULA_NO_MEASURE_WAIT). A run on the tablet needs no quiet PC.
+            _gate = str(pathlib.Path(__file__).resolve().parents[1] / "gate")
+            sys.path.insert(0, _gate)
+            try:
+                import measure_wait
+            finally:
+                sys.path.remove(_gate)
+            measure_wait.wait()
         try:
             return run_tests(args)
         except EnvRefused as error:

@@ -6,7 +6,8 @@ three minutes from the stage's first frame, on each renderer, with one line per 
                  [--pending FILE] [--paks ...] [--quiet-minutes 30]
                  [--gate-lock D:/NebulaWork/plan/gate.lock --board FILE --who NAME] [--lock measure.lock]
       Takes the gate lock (through its queue, so no gate, long run part or gate build runs beside it; none when the
-      caller holds it) and the measurement lock, then measures each run named (real time, a visible window, no sound):
+      caller holds it) and the measurement lock (not when --runs names only the tablet: the tablet's measure needs no
+      quiet PC, and in a landing it runs beside the PC's lanes), then measures each run named (real time, a visible window, no sound):
       it first waits for a quiet machine (quiet.py: no compiler, build tool or other copy of the game, looking every
       30 seconds for up to 30 minutes), reads the graphics card's use by other programs before and after, watches the
       processors' use by other programs over the run, runs tests/measure/route through the harness, and compares each
@@ -310,16 +311,33 @@ def run_folder_of(work, renderer):
     return found[-1] if found else None
 
 
-def take_lock(path, who):
-    lock = pathlib.Path(path)
+def measure_wait_module():
+    sys.path.insert(0, str(TREE / "tools" / "gate"))
     try:
-        lock.mkdir()
-    except FileExistsError:
-        holder = lock / "holder.txt"
-        raise SystemExit("measure.py: the measurement lock %s is held: %s" % (
-            lock, holder.read_text(encoding="utf-8", errors="replace").strip() if holder.exists() else "unknown"))
-    (lock / "holder.txt").write_text("%s %s\n" % (who, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
-                                     encoding="utf-8")
+        import measure_wait
+    finally:
+        sys.path.remove(str(TREE / "tools" / "gate"))
+    return measure_wait
+
+
+def take_lock(path, who, alive=None):
+    """The measurement lock: a folder made at once or not at all, its holder.txt ending "pid N" (this process), which builds and
+    test runs started by hand read (tools/gate/measure_wait.py). A lock whose holder's process has ended is taken over."""
+    lock = pathlib.Path(path)
+    waiter = measure_wait_module()
+    for _ in range(2):
+        try:
+            lock.mkdir()
+            break
+        except FileExistsError:
+            held = waiter.holder_of(lock, alive or waiter.process_alive)
+            if held is not None:
+                raise SystemExit("measure.py: the measurement lock %s is held: %s" % (lock, held))
+            shutil.rmtree(lock, ignore_errors=True)  # its holder has ended
+    else:
+        raise SystemExit("measure.py: the measurement lock %s could not be taken" % lock)
+    (lock / "holder.txt").write_text("%s %s pid %d\n" % (who, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                                         os.getpid()), encoding="utf-8")
 
 
 def processor_mask(cores):
@@ -754,6 +772,12 @@ def measure_runs(args, work, runner=subprocess.run, device=None, gate=None, mach
     return code, said
 
 
+def tablet_only(args):
+    """Whether `--runs` names the tablet and nothing else."""
+    names = [n for n in getattr(args, "runs", "").split(",") if n]
+    return bool(names) and all(n == "tablet" for n in names)
+
+
 def stopped_result(args, work, why):
     """result.json for a measure that did not start or did not end: every run named is a tool fault with the reason."""
     names = [n for n in getattr(args, "runs", "").split(",") if n]
@@ -763,6 +787,8 @@ def stopped_result(args, work, why):
 def run(args):
     work = pathlib.Path(args.work)
     work.mkdir(parents=True, exist_ok=True)
+    # The harness this measure starts (and the builds it makes) never wait for the measure's own lock.
+    os.environ["NEBULA_NO_MEASURE_WAIT"] = "1"
     holder = "measure.py: the play route measure of %s pid %d" % (args.commit[:9], os.getpid())
     gate = gate_module() if args.gate_lock else None
     if gate is not None:
@@ -772,13 +798,17 @@ def run(args):
             stopped_result(args, work, why)
             return EXIT_TOOL
     summary, code = "ended early", EXIT_TOOL
+    # The measurement lock is for the PC's runs: an invocation of the tablet alone takes none (in a landing it runs beside the
+    # PC's lanes, and it must not hold up a PC measure or a build started by hand).
+    locked = not tablet_only(args)
     try:
-        try:
-            take_lock(args.lock, "measure.py %s %s" % (args.commit[:9], work))
-        except SystemExit as e:
-            print("measure: no measure: %s" % e)
-            stopped_result(args, work, str(e))
-            return EXIT_TOOL
+        if locked:
+            try:
+                take_lock(args.lock, "measure.py %s %s" % (args.commit[:9], work))
+            except SystemExit as e:
+                print("measure: no measure: %s" % e)
+                stopped_result(args, work, str(e))
+                return EXIT_TOOL
         try:
             if getattr(args, "pending", ""):
                 # This landing's lines only: a file left by an earlier measure at the same path is not kept again.
@@ -792,7 +822,8 @@ def run(args):
             summary, code = "the measure stopped: %s: %s" % (type(e).__name__, e), EXIT_TOOL
             stopped_result(args, work, summary)
         finally:
-            shutil.rmtree(args.lock, ignore_errors=True)
+            if locked:
+                shutil.rmtree(args.lock, ignore_errors=True)
     finally:
         if gate is not None:
             gate.free_gate_lock(args.gate_lock, holder, args.board, args.who, "measure of %s: %s" % (args.commit[:9],

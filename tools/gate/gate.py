@@ -3008,6 +3008,9 @@ def main(argv=None):
     finally:
         _sys.path.remove(_gate)
     selftest_guard.install_if_asked()
+    # What the gate starts (builds, test runs, a landing's measure) never waits for a speed measure: the gate has the machine's
+    # lock itself, and a measure it started is its own (tools/gate/measure_wait.py).
+    os.environ["NEBULA_NO_MEASURE_WAIT"] = "1"
     argv = sys.argv[1:] if argv is None else list(argv)
     unbuffer_output()
     # The run's job object (machine.py): every program the gate starts, and theirs, ends with it, however it ends. Once a process.

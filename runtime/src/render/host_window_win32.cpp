@@ -101,7 +101,8 @@ bool is_minimized() noexcept {
 }
 
 bool is_background() noexcept {
-    return s_background.load(std::memory_order_relaxed);
+    // A window started with --no-focus is never "not in front": the game runs as it does with the focus (launch_args.h).
+    return !galaxy::launch_args().no_focus && s_background.load(std::memory_order_relaxed);
 }
 
 namespace {
@@ -579,13 +580,15 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
             return {};
         }
         // Files dropped on the window import (WM_DROPFILES).
+        // --no-focus 1 (a test's visible run): shown without activating, never the foreground window (launch_args.h no_focus).
+        const bool no_focus = !hidden_window && galaxy::launch_args().no_focus;
         const DWORD ex_style =
             hidden_window ? (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE)
-                          : (WS_EX_APPWINDOW | WS_EX_ACCEPTFILES);
+                          : (WS_EX_APPWINDOW | WS_EX_ACCEPTFILES | (no_focus ? WS_EX_NOACTIVATE : 0u));
         opened.window = owner.start({
             kWindowClass, L"Nebula", window_style, ex_style,
             window_x, window_y, static_cast<int>(outer_width),
-            static_cast<int>(outer_height), !hidden_window, !hidden_window});
+            static_cast<int>(outer_height), !hidden_window, !hidden_window, no_focus});
         if (opened.window == nullptr) {
             std::cerr << "[Renderer] CreateWindow failed\n";
             return {};
@@ -1033,7 +1036,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
     if (msg == WM_ACTIVATEAPP) {
         // The 1 ms timer only while in front: it costs a laptop's battery for every program.
-        galaxy::host::hold_high_resolution_timer(wp != FALSE);
+        galaxy::host::hold_high_resolution_timer(wp != FALSE || galaxy::launch_args().no_focus);
         // What the game does without focus is the host's to decide (runtime_settings focus_loss): it is woken to look.
         s_background.store(wp == FALSE, std::memory_order_relaxed);
         wake_main_thread();
