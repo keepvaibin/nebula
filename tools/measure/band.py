@@ -17,7 +17,7 @@ place with --history), with columns added at the end: the key's parts the old li
 each compared figure of that line: `trusted` (counts for a baseline), `outlier` (worse once, fine when measured again),
 `worse` (worse twice), `retired` (before an accepted slowdown). Lines written before the marks existed have none, so
 they never count for a baseline. Columns are only ever added at the end, so an older file's lines keep their places: a line
-written before `cpu_ms` existed reads with that cell empty, never 0.
+written before `cpu_ms` or the cpu_work, cpu_game and cpu_render columns existed reads with those cells empty, never 0.
 
 The pair (`measure.py pair`) compares two builds that ran side by side in the same minutes, so only the ratio of a figure is
 judged, never a value against another day's. Its band of a figure is learned from pairs of one build against itself
@@ -33,7 +33,8 @@ import tempfile
 TAB = "\t"
 COLUMNS = ("commit", "time", "device", "renderer", "rate", "refresh_hz", "gap_max_ms", "gap_p99_ms", "late_per_min",
            "step_max_ms", "steps_over_18", "render_ms", "gpu_ms", "memory_mb", "run",
-           "computer", "gpu", "scene", "size", "marks", "step_ms", "step_p99_ms", "anchor", "cpu_ms")
+           "computer", "gpu", "scene", "size", "marks", "step_ms", "step_p99_ms", "anchor", "cpu_ms", "cpu_work_ms", "cpu_game_ms",
+           "cpu_render_ms")
 OLD_COLUMNS = 15  # the lines written before the key's parts and the marks were kept
 # What makes two runs comparable (with the figure's own name): the history line's columns.
 KEY_COLUMNS = ("computer", "gpu", "device", "renderer", "scene", "size", "rate")
@@ -41,13 +42,18 @@ KEY_COLUMNS = ("computer", "gpu", "device", "renderer", "scene", "size", "rate")
 # misses or a size: higher is bad. A figure where lower is bad (pictures a second) is named "lower" here.
 FIGURES = {"gap_max_ms": "higher", "gap_p99_ms": "higher", "late_per_min": "higher", "step_ms": "higher",
            "step_p99_ms": "higher", "step_max_ms": "higher", "steps_over_18": "higher", "render_ms": "higher",
-           "gpu_ms": "higher", "memory_mb": "higher", "cpu_ms": "higher"}
-# The figures that get a verdict. The others (largest single values, a count of slow steps, and the step's time on the clock,
-# which holds waits as well as work: the cost of a step is cpu_ms, the processor time) are shown only.
-JUDGED = ("cpu_ms", "gap_p99_ms", "late_per_min", "render_ms", "gpu_ms", "memory_mb")
+           "gpu_ms": "higher", "memory_mb": "higher", "cpu_ms": "higher", "cpu_work_ms": "higher", "cpu_game_ms": "higher",
+           "cpu_render_ms": "higher"}
+# The figures that get a verdict. The others are shown only: largest single values, a count of slow steps, the step's time on
+# the clock (it holds waits as well as work) and cpu_ms, the processor time of the whole process per step, which holds waiting
+# too (a timer's spin, a present that blocks). The cost of a step is the processor time of the frame threads' work only: all
+# together (cpu_work_ms), the game thread's (cpu_game_ms) and the render thread's (cpu_render_ms). Any other frame thread's
+# cpu_<name>_ms is shown.
+JUDGED = ("cpu_work_ms", "cpu_game_ms", "cpu_render_ms", "gap_p99_ms", "late_per_min", "render_ms", "gpu_ms", "memory_mb")
 # The least a band is wide, by figure (a time in ms, late frames a minute, memory in MB); a figure not named has none.
 FLOORS = {"gap_max_ms": 0.25, "gap_p99_ms": 0.25, "step_ms": 0.02, "step_p99_ms": 0.02, "render_ms": 0.02,
-          "gpu_ms": 0.02, "late_per_min": 2.0, "memory_mb": 32.0, "cpu_ms": 0.02}
+          "gpu_ms": 0.02, "late_per_min": 2.0, "memory_mb": 32.0, "cpu_ms": 0.02, "cpu_work_ms": 0.02, "cpu_game_ms": 0.02,
+          "cpu_render_ms": 0.02}
 ANCHOR_LEAST_LINES = 5
 BASELINE_RUNS = 10
 LEAST_RUNS = 5
@@ -275,7 +281,7 @@ def keep(pending, history):
 
 # ---- The pair ----
 # The least a pair's band is wide, as a share of the ratio (0.05: the ratio may be 5 % off 1), by figure.
-PAIR_LEAST = {"cpu_ms": 0.03, "render_ms": 0.05, "gpu_ms": 0.05, "memory_mb": 0.02, "gap_p99_ms": 0.25, "late_per_min": 0.50}
+PAIR_LEAST = {"cpu_work_ms": 0.03, "cpu_game_ms": 0.03, "cpu_render_ms": 0.03, "render_ms": 0.05, "gpu_ms": 0.05, "memory_mb": 0.02, "gap_p99_ms": 0.25, "late_per_min": 0.50}
 PAIR_ROUNDS = 3  # rounds before "worse"
 BANDS_COLUMNS = ("computer", "gpu", "renderer", "scene", "size", "rate", "figure", "band", "ratios", "commit", "time")
 BANDS_KEY = BANDS_COLUMNS[:6]

@@ -6533,6 +6533,10 @@ int main(int argc, char** argv) {
 #if defined(NEBULA_HOST_SDL)
     galaxy::sdl::start_thread_sampler();
 #endif
+#if defined(NEBULA_HOST_RENDERER)
+    // The pacing line's frame-thread work times come from the marks the frame threads make (perf_hint.h).
+    galaxy::pacing::set_work_reader(&galaxy::host::perf_hint_work_cpu);
+#endif
     std::thread game([] {
         name_thread(L"Nebula Game");
         galaxy::host::perf_hint_add_current_thread("game");

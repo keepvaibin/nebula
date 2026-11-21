@@ -8,6 +8,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
+#include <utility>
 #include <vector>
 
 namespace galaxy::pacing {
@@ -20,6 +22,13 @@ struct Picture {
     std::int64_t displayed_qpc = 0;  // the moment it reached the display; 0 when the renderer cannot tell, -1 never
     std::int64_t render_ns = 0;      // the render thread's time on it
     bool generated = false;          // an in-between picture (interpolated or generated)
+};
+
+// One frame thread's processor time spent working in a window, in nanoseconds (perf_hint.h: from its mark of work to its mark of
+// waiting, so a timer's spin and a blocked call are not in it).
+struct ThreadWorkNs {
+    std::string name;
+    std::int64_t ns = 0;
 };
 
 struct Summary {
@@ -56,6 +65,15 @@ struct Summary {
     // the window's processor time is known (Window::set_cpu_ns), else cpu_known is false and the line leaves it out.
     bool cpu_known = false;
     double cpu_us_per_step = 0.0;
+    // The frame threads' work processor time per step, all together and by thread, in microseconds: set only when the window's
+    // threads were read (Window::set_thread_work), else work_known is false and the line leaves them out.
+    bool work_known = false;
+    double cpu_work_us_per_step = 0.0;
+    struct ThreadUs {
+        std::string name;
+        double us_per_step = 0.0;
+    };
+    std::vector<ThreadUs> thread_cpu;
 };
 
 class Window {
@@ -65,6 +83,8 @@ public:
     void add_picture(const Picture& picture);
     // The processor time the process used over the window, in nanoseconds (-1: not known). Cleared with the window.
     void set_cpu_ns(std::int64_t cpu_ns) { cpu_ns_ = cpu_ns; }
+    // The frame threads' work processor time over the window (empty: not known). Cleared with the window.
+    void set_thread_work(std::vector<ThreadWorkNs> threads) { threads_ = std::move(threads); }
     // refresh_qpc: the display's refresh period in ticks (0: unknown, then no refresh counts). frequency: ticks a second.
     [[nodiscard]] Summary summarize(std::int64_t refresh_qpc, std::int64_t frequency) const;
     void clear();
@@ -76,6 +96,7 @@ private:
     std::vector<double> step_work_us_;
     std::vector<Picture> pictures_;
     std::int64_t cpu_ns_ = -1;
+    std::vector<ThreadWorkNs> threads_;
 };
 
 }  // namespace galaxy::pacing

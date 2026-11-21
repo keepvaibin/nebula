@@ -218,6 +218,118 @@ int main() {
             ok &= expect(ns >= 30'000'000 && ns <= 64 * 600'000'000LL, "a 300 ms spin: its processor time in the stamps");
         }
     }
+    // The frame threads' work per step: 600 steps in which the game thread worked 1.2 s and the render thread 0.6 s are 2000 and
+    // 1000 us a step, together 3000; no threads read is not a number.
+    {
+        galaxy::pacing::Window w;
+        for (int i = 0; i < 600; ++i) w.add_step(at(1'000'000.0 + i * kStep));
+        w.set_thread_work({{"game", 1'200'000'000}, {"render", 600'000'000}});
+        galaxy::pacing::Summary s = w.summarize(kRefresh60, kHz);
+        ok &= expect(s.work_known && s.thread_cpu.size() == 2 && s.thread_cpu[0].name == "game" &&
+                         close_to(s.thread_cpu[0].us_per_step, 2000.0, 0.001) && s.thread_cpu[1].name == "render" &&
+                         close_to(s.thread_cpu[1].us_per_step, 1000.0, 0.001) && close_to(s.cpu_work_us_per_step, 3000.0, 0.001),
+                     "frame threads' work: 2000 and 1000 us a step, 3000 together");
+        w.set_thread_work({});
+        ok &= expect(!w.summarize(kRefresh60, kHz).work_known, "no threads: the work is not known");
+        w.set_thread_work({{"game", 1'000'000}});
+        w.clear();
+        for (int i = 0; i < 600; ++i) w.add_step(at(1'000'000.0 + i * kStep));
+        ok &= expect(!w.summarize(kRefresh60, kHz).work_known, "a cleared window forgets its threads' work");
+        galaxy::pacing::Window none;
+        none.set_thread_work({{"game", 1'000'000}});
+        ok &= expect(!none.summarize(kRefresh60, kHz).work_known, "no steps: no per step figure");
+    }
+    // Their fields in the line: the sum, then each thread by its name; none when not known.
+    {
+        galaxy::pacing::Summary s;
+        s.steps = 600;
+        const std::string without = galaxy::pacing::line(s);
+        ok &= expect(without.find("cpu_work_us_per_step") == std::string::npos && without.find("cpu_game_us_per_step") == std::string::npos,
+                     "not read: no cpu_work fields in the line");
+        s.work_known = true;
+        s.cpu_work_us_per_step = 2500.04;
+        s.thread_cpu = {{"game", 1900.0}, {"render", 600.04}, {"step_worker", 0.0}};
+        const std::string with = galaxy::pacing::line(s);
+        ok &= expect(with.compare(0, without.size(), without) == 0 &&
+                         with.substr(without.size()) == " cpu_work_us_per_step=2500.0 cpu_game_us_per_step=1900.0 "
+                                                       "cpu_render_us_per_step=600.0 cpu_step_worker_us_per_step=0.0",
+                     "known: the sum, then each thread by its name, one decimal");
+    }
+    // Units as nanoseconds: a cycle count by the counter's rate over the span the stamps close (Windows on x64), nanoseconds as
+    // they are elsewhere.
+    {
+        galaxy::ProcessCpuStamp a, b;
+        ok &= expect(galaxy::cpu_units_to_ns(5, a, b) == -1, "stamps that are not known: -1");
+        a.known = b.known = true;
+#if defined(GALAXY_PROCESS_CYCLES)
+        a.counter = 1'000;
+        b.counter = 1'000 + 3'000'000'000ULL;
+        a.qpc = 5;
+        b.qpc = 5 + galaxy::qpc_frequency();  // one second of the clock: the counter ran at 3 GHz
+        ok &= expect(galaxy::cpu_units_to_ns(6'000'000'000ULL, a, b) == 2'000'000'000LL, "6e9 cycles on a 3 GHz counter: 2 s");
+        b.counter = a.counter;
+        ok &= expect(galaxy::cpu_units_to_ns(1, a, b) == -1, "an empty counter span: -1");
+#else
+        ok &= expect(galaxy::cpu_units_to_ns(1234, a, b) == 1234, "nanoseconds stay as they are");
+#endif
+    }
+    // The recorder reads the frame threads at the window's first step and at its end: here a reader whose "game" thread did all
+    // of the process's work in the window and whose "render" thread half of it, so the fields hold that.
+    {
+        static std::vector<std::string> work_lines;
+        work_lines.clear();
+        galaxy::pacing::reset_for_test([](const std::string& text) { work_lines.push_back(text); });
+        galaxy::pacing::set_work_reader([](galaxy::ThreadCpuSample* out, std::size_t capacity) -> std::size_t {
+            if (capacity < 2 || !galaxy::process_cpu_known()) return 0;
+            const galaxy::ProcessCpuStamp now = galaxy::process_cpu_stamp();
+            out[0] = {"game", now.cycles};
+            out[1] = {"render", now.cycles / 2};
+            return 2;
+        });
+        const std::int64_t f = galaxy::qpc_frequency();
+        const std::int64_t base = galaxy::qpc_now();
+        for (int i = 0; i <= 601; ++i) {
+            if (i == 300) {  // some work in the window
+                const std::int64_t until = galaxy::qpc_now() + f / 1000 * 20;
+                volatile std::uint64_t sink = 0;
+                while (galaxy::qpc_now() < until) sink = sink + 1;
+            }
+            galaxy::pacing::step(base + static_cast<std::int64_t>(std::llround(i * static_cast<double>(f) / 60.0)));
+        }
+        ok &= expect(work_lines.size() == 1, "one window with the reader set");
+        if (!work_lines.empty()) {
+            const std::string& l = work_lines.front();
+            const auto value = [&l](const char* key) {
+                const std::string k = std::string(" ") + key + "=";
+                const std::size_t at = l.find(k);
+                return at == std::string::npos ? std::nan("") : std::strtod(l.c_str() + at + k.size(), nullptr);
+            };
+            if (galaxy::process_cpu_known()) {
+                const double game = value("cpu_game_us_per_step"), render = value("cpu_render_us_per_step"), sum = value("cpu_work_us_per_step");
+                ok &= expect(game > 0.0 && close_to(render, game / 2.0, game * 0.1) && close_to(sum, game + render, 0.31),
+                             "the reader's threads: game all of the window's work, render half of it, together the sum");
+                // The reader's "game" thread worked the whole process's window: only what it did since the window's first step counts.
+                const double whole = value("cpu_us_per_step");
+                ok &= expect(close_to(game, whole, whole * 0.2),
+                             "the window's start reading is taken off: game is the process's own figure, not the thread's total");
+                ok &= expect(l.find("cpu_work_us_per_step") < l.find("cpu_game_us_per_step") &&
+                                 l.find("cpu_game_us_per_step") < l.find("cpu_render_us_per_step"),
+                             "the fields in the order of the sum, game, render");
+            } else {
+                ok &= expect(std::isnan(value("cpu_work_us_per_step")), "no processor time known: no work fields");
+            }
+        }
+        galaxy::pacing::reset_for_test(nullptr);
+        // No reader: the line has no work fields.
+        work_lines.clear();
+        galaxy::pacing::reset_for_test([](const std::string& text) { work_lines.push_back(text); });
+        for (int i = 0; i <= 601; ++i) {
+            galaxy::pacing::step(base + static_cast<std::int64_t>(std::llround(i * static_cast<double>(f) / 60.0)));
+        }
+        ok &= expect(work_lines.size() == 1 && work_lines.front().find("cpu_work_us_per_step") == std::string::npos,
+                     "no reader: no cpu_work fields in the line");
+        galaxy::pacing::reset_for_test(nullptr);
+    }
     // The recorder: steps on a step clock, pictures described and presented, display reports as DXGI gives them (only
     // the latest shown, two presents behind), one window written after ten seconds of steps.
     {

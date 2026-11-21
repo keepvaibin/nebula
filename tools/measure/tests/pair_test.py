@@ -54,13 +54,22 @@ def stage_timeline(render_ms=2.0, gpu_ms=1.0, gap_ms=10.0, frames=5700):
     return records
 
 
-PACE = "[pace] seconds=10 steps=600 refresh_ms=8.333 missed=0 step_work_max_us=5000 render_avg_us=1000%s\n"
+PACE = "[pace] seconds=10 steps=600 pictures=1200 refresh_ms=8.333 missed=0 step_work_max_us=5000 render_avg_us=1000%s\n"
 
 
-def plant(folder, cpu_us=3000.0, render_ms=2.0, gpu_ms=1.0, gap_ms=10.0, mem_mb=300, windows=11, short=False, no_presents=False):
-    """One side's run folder under `folder` (runs/measure-pair/<renderer>/ is added by the caller's path)."""
+def plant(folder, cpu_us=3000.0, render_ms=2.0, gpu_ms=1.0, gap_ms=10.0, mem_mb=300, windows=11, short=False, no_presents=False,
+          game_us=None, render_us=None, whole_us=None, work=True):
+    """One side's run folder under `folder` (runs/measure-pair/<renderer>/ is added by the caller's path). cpu_us is the frame
+    threads' work per step, split 70 / 30 between the game and the render thread unless game_us and render_us say; whole_us is the
+    whole process's figure (the work and the waiting: cpu_us + 500 unless given); work=False: a game that writes no work fields."""
     folder.mkdir(parents=True)
-    extra = "" if cpu_us is None else " cpu_us_per_step=%.1f" % cpu_us
+    game_us = cpu_us * 0.7 if game_us is None and cpu_us is not None else game_us
+    render_us = cpu_us * 0.3 if render_us is None and cpu_us is not None else render_us
+    whole_us = (cpu_us + 500.0) if whole_us is None and cpu_us is not None else whole_us
+    extra = "" if cpu_us is None else " cpu_us_per_step=%.1f" % whole_us
+    if work and cpu_us is not None:
+        extra += " cpu_work_us_per_step=%.1f cpu_game_us_per_step=%.1f cpu_render_us_per_step=%.1f" % (
+            game_us + render_us, game_us, render_us)
     (folder / "run.log").write_text('[gpu] adapter="Card A" vram-mb=1\n[Renderer] internal resolution 1280x720 -> 3840x2160\n'
                                     "harness: frame 0 is game frame 10\n" + (PACE % extra) * windows, encoding="utf-8")
     (folder / "test.json").write_text(json.dumps({"name": "measure-pair", "stage": {"name": "HoneyBeeKingdomGalaxy", "scenario": 1}}),
@@ -120,7 +129,10 @@ def go(script, runs="d3d12", bands=None, accepted=None, **more):
         for renderer, b in bands.items():
             calibrate(calibration, renderer, **b)
     if accepted:
-        band.add_cells(calibration.parent / "pair-accepted.tsv", band.ACCEPTED_COLUMNS, accepted)
+        # In these scenarios the three cost figures (all together, game, render) move together: a line for "cpu_work_ms" stands for
+        # the three.
+        for figure in (("cpu_work_ms", "cpu_game_ms", "cpu_render_ms") if accepted["figure"] == "cpu_work_ms" else (accepted["figure"],)):
+            band.add_cells(calibration.parent / "pair-accepted.tsv", band.ACCEPTED_COLUMNS, dict(accepted, figure=figure))
     fake = Fake(script)
     args = args_for(folder / "work", calibration, runs, folder / "pending.tsv", **more)
     clock = iter(datetime.datetime(2026, 11, 21, 12, 0) + datetime.timedelta(seconds=90 * i) for i in range(1000))
@@ -130,13 +142,13 @@ def go(script, runs="d3d12", bands=None, accepted=None, **more):
     return code, said, fake, result, out.getvalue(), folder
 
 
-BANDS = {"cpu_ms": 0.04, "render_ms": 0.05, "gpu_ms": 0.05, "memory_mb": 0.02, "gap_p99_ms": 0.25, "late_per_min": 0.5}
+BANDS = {"cpu_work_ms": 0.04, "cpu_game_ms": 0.04, "cpu_render_ms": 0.04, "render_ms": 0.05, "gpu_ms": 0.05, "memory_mb": 0.02, "gap_p99_ms": 0.25, "late_per_min": 0.5}
 
 # ================= The ratio, with the floor =================
-check(band.pair_ratio(0.0, 0.0, "cpu_ms") == 1.0, "0 against 0 is 1")
-check(abs(band.pair_ratio(0.0, 0.01, "cpu_ms") - 3.0 / 2.0) < 1e-9, "a hundredth of a millisecond against 0: (0.01 + 0.02) / 0.02 = 1.5, "
-      "inside no band of 0.5 or more but never a division by 0: %s" % band.pair_ratio(0.0, 0.01, "cpu_ms"))
-check(abs(band.pair_ratio(3.21, 3.54, "cpu_ms") - (3.54 + 0.02) / (3.21 + 0.02)) < 1e-12, "the floor is added to both")
+check(band.pair_ratio(0.0, 0.0, "cpu_work_ms") == 1.0, "0 against 0 is 1")
+check(abs(band.pair_ratio(0.0, 0.01, "cpu_work_ms") - 3.0 / 2.0) < 1e-9, "a hundredth of a millisecond against 0: (0.01 + 0.02) / 0.02 = 1.5, "
+      "inside no band of 0.5 or more but never a division by 0: %s" % band.pair_ratio(0.0, 0.01, "cpu_work_ms"))
+check(abs(band.pair_ratio(3.21, 3.54, "cpu_work_ms") - (3.54 + 0.02) / (3.21 + 0.02)) < 1e-12, "the floor is added to both")
 check(abs(band.pair_ratio(10.0, 20.0, "memory_mb") - 52.0 / 42.0) < 1e-12, "memory's floor is 32 MB: 10 against 20 MB is 1.24, not 2")
 check(band.pair_ratio(0.0, 0.0, "unnamed") == 1.0 and band.pair_ratio(0.0, 1.0, "unnamed") == float("inf"),
       "a figure with no floor: 0 against 0 is 1, never an error")
@@ -145,10 +157,12 @@ check(band.pair_ratio(0.0, 0.0, "unnamed") == 1.0 and band.pair_ratio(0.0, 1.0, 
 check(band.pair_word(1.0401, 0.04) == "worse" and band.pair_word(1.04, 0.04) == "ok" and band.pair_word(0.96, 0.04) == "ok" and
       band.pair_word(0.9599, 0.04) == "better", "worse past 1 + band, better under 1 - band, else ok")
 check(band.pair_word(5.0, None) == "no-baseline", "no band: no-baseline, whatever the ratio")
-check(abs(band.pair_band([1.0, 1.01, 0.99, 1.02, 1.0], "cpu_ms") - 0.04) < 1e-12, "band = 2 x the largest |r - 1| when that is the most")
-check(band.pair_band([1.0, 1.001, 1.0, 1.0, 1.0], "cpu_ms") == 0.03, "band = the least (cpu_ms 0.03) when 2 x the spread is less")
-check({f: band.PAIR_LEAST[f] for f in band.JUDGED} == {"cpu_ms": 0.03, "render_ms": 0.05, "gpu_ms": 0.05, "memory_mb": 0.02,
-                                                      "gap_p99_ms": 0.25, "late_per_min": 0.50}, "the least band of each figure")
+check(abs(band.pair_band([1.0, 1.01, 0.99, 1.02, 1.0], "cpu_work_ms") - 0.04) < 1e-12, "band = 2 x the largest |r - 1| when that is the most")
+check(band.pair_band([1.0, 1.001, 1.0, 1.0, 1.0], "cpu_work_ms") == 0.03, "band = the least (cpu_ms 0.03) when 2 x the spread is less")
+check({f: band.PAIR_LEAST[f] for f in band.JUDGED} == {"cpu_work_ms": 0.03, "cpu_game_ms": 0.03, "cpu_render_ms": 0.03,
+                                                      "render_ms": 0.05, "gpu_ms": 0.05, "memory_mb": 0.02, "gap_p99_ms": 0.25,
+                                                      "late_per_min": 0.50}, "the least band of each figure")
+check("cpu_ms" not in band.JUDGED and "cpu_ms" in band.FIGURES, "the whole process's processor time is shown, not judged")
 
 # ================= One round: ok, and the order of starting =================
 code, said, fake, result, out, folder = go(lambda side, r, n, a: {}, bands={"d3d12": BANDS})
@@ -161,8 +175,8 @@ pending = band.read_cells(folder / "pending.tsv", m.PENDING_COLUMNS)
 check({r["figure"] for r in pending} == set(band.JUDGED) and all(r["state"] == "ok" and r["check"] == "measure/step/pc" and
                                                                r["renderer"] == "d3d12" for r in pending),
       "the pending file has a row for each figure: %s" % pending)
-check(any(r["figure"] == "cpu_ms" and r["line"].startswith("measure/step/pc d3d12 cpu_ms ok: base 3.000, candidate 3.000 (+0.0%; the band is 4.0%)")
-          for r in pending), "the line in plain words: %s" % [r["line"] for r in pending if r["figure"] == "cpu_ms"])
+check(any(r["figure"] == "cpu_work_ms" and r["line"].startswith("measure/step/pc d3d12 cpu_work_ms ok: base 3.000, candidate 3.000 (+0.0%; the band is 4.0%)")
+          for r in pending), "the line in plain words: %s" % [r["line"] for r in pending if r["figure"] == "cpu_work_ms"])
 rounds = band.read_cells(folder / "gate-runs" / "pairs.tsv", band.ROUNDS_COLUMNS)
 check(len(rounds) == len(band.JUDGED) and all(r["round"] == "1" and r["base_commit"] == "aaaaaaaaa" and
                                               r["cand_commit"] == "bbbbbbbbb" and r["word"] == "ok" for r in rounds),
@@ -172,7 +186,8 @@ check(m.PAIR_FORM == "hidden" or m.PAIR_FORM == "visible", "the form is one of t
 route = json.loads((folder / "work" / "route" / "test.json").read_text(encoding="utf-8"))
 original = json.loads((m.ROUTE / "test.json").read_text(encoding="utf-8"))
 check(route["visible"] is False and route["steps"][-1] == {"at": m.ROUTE_END, "end": True} and route["stage"] == original["stage"]
-      and route["settings"] == original["settings"] and len(route["steps"]) > 3 and all(s["at"] < m.ROUTE_END for s in route["steps"][:-1]),
+      and route["settings"] == [("GALAXY_VSYNC_INTERVAL=0" if s.startswith("GALAXY_VSYNC_INTERVAL=") else s) for s in original["settings"]]
+      and "GALAXY_VSYNC_INTERVAL=1" in original["settings"] and "GALAXY_MAX_FPS=120" in route["settings"] and len(route["steps"]) > 3 and all(s["at"] < m.ROUTE_END for s in route["steps"][:-1]),
       "the pair's route: hidden, the same stage and settings, ended at step %d: %s" % (m.ROUTE_END, route["steps"][-3:]))
 visible = m.pair_route(folder / "other", "visible")
 check(json.loads((visible / "test.json").read_text(encoding="utf-8"))["visible"] is True, "the visible form")
@@ -184,13 +199,13 @@ def slow_once(side, r, n, a):
 
 code, said, fake, result, out, folder = go(slow_once, bands={"d3d12": BANDS})
 check(code == 0 and result["runs"]["d3d12"]["state"] == "ok" and result["runs"]["d3d12"]["rounds"] == 2 and
-      result["runs"]["d3d12"]["figures"]["cpu_ms"]["verdict"] == "ok",
+      result["runs"]["d3d12"]["figures"]["cpu_work_ms"]["verdict"] == "ok",
       "worse in round 1 and ok in round 2 is ok, and two rounds ran: %s %s" % (code, result["runs"]["d3d12"]["state"]))
 check(fake.starts == [("base", 1, 1), ("cand", 1, 1), ("cand", 2, 1), ("base", 2, 1)],
       "round 2 starts the candidate first: %s" % fake.starts)
 rounds = band.read_cells(folder / "gate-runs" / "pairs.tsv", band.ROUNDS_COLUMNS)
-check([r["word"] for r in rounds if r["figure"] == "cpu_ms"] == ["worse", "ok"], "pairs.tsv holds both rounds: %s" % [
-    (r["round"], r["word"]) for r in rounds if r["figure"] == "cpu_ms"])
+check([r["word"] for r in rounds if r["figure"] == "cpu_work_ms"] == ["worse", "ok"], "pairs.tsv holds both rounds: %s" % [
+    (r["round"], r["word"]) for r in rounds if r["figure"] == "cpu_work_ms"])
 
 # ================= Worse three times: worse, exit 1, three rounds =================
 def slow_always(side, r, n, a):
@@ -199,16 +214,16 @@ def slow_always(side, r, n, a):
 
 code, said, fake, result, out, folder = go(slow_always, bands={"d3d12": BANDS})
 check(code == 1 and result["exit"] == 1 and result["verdict"] == "WORSE" and result["runs"]["d3d12"]["state"] == "worse" and
-      result["runs"]["d3d12"]["rounds"] == 3 and result["runs"]["d3d12"]["figures"]["cpu_ms"]["verdict"] == "worse",
+      result["runs"]["d3d12"]["rounds"] == 3 and result["runs"]["d3d12"]["figures"]["cpu_work_ms"]["verdict"] == "worse",
       "worse in all three rounds: worse, exit 1, three rounds: %s %s" % (code, result["runs"]["d3d12"]["state"]))
 check([s[0] for s in fake.starts] == ["base", "cand", "cand", "base", "base", "cand"],
       "the order: base first, candidate first, base first again: %s" % fake.starts)
-line = next(r["line"] for r in band.read_cells(folder / "pending.tsv", m.PENDING_COLUMNS) if r["figure"] == "cpu_ms")
-check(line == "measure/step/pc d3d12 cpu_ms worse: base 3.000, candidate 3.600 (+19.9%, +19.9%, +19.9% in three rounds; the band is 4.0%)",
+line = next(r["line"] for r in band.read_cells(folder / "pending.tsv", m.PENDING_COLUMNS) if r["figure"] == "cpu_work_ms")
+check(line == "measure/step/pc d3d12 cpu_work_ms worse: base 3.000, candidate 3.600 (+19.9%, +19.9%, +19.9% in three rounds; the band is 4.0%)",
       "the line of a worse figure: %s" % line)
-check(all(f["verdict"] == "ok" for n, f in result["runs"]["d3d12"]["figures"].items() if n != "cpu_ms"),
+check(all(f["verdict"] == "ok" for n, f in result["runs"]["d3d12"]["figures"].items() if not n.startswith("cpu_")),
       "the other figures stay ok: %s" % {n: f["verdict"] for n, f in result["runs"]["d3d12"]["figures"].items()})
-check(result["runs"]["d3d12"]["figures"]["cpu_ms"]["median"] == 3.0 and result["runs"]["d3d12"]["figures"]["cpu_ms"]["value"] == 3.6,
+check(result["runs"]["d3d12"]["figures"]["cpu_work_ms"]["median"] == 3.0 and result["runs"]["d3d12"]["figures"]["cpu_work_ms"]["value"] == 3.6,
       "result.json's figure: value the candidate's, median the base's")
 
 # Round 3 is for the figures worse in both of the first two: a figure worse in rounds 1 and 3 but not in 2 is ok (render_ms),
@@ -221,7 +236,7 @@ def slow_cpu_and_flicker(side, r, n, a):
 
 code, said, fake, result, out, folder = go(slow_cpu_and_flicker, bands={"d3d12": BANDS})
 figs = result["runs"]["d3d12"]["figures"]
-check(code == 1 and figs["cpu_ms"]["verdict"] == "worse" and figs["render_ms"]["verdict"] == "ok" and len(fake.starts) == 6,
+check(code == 1 and figs["cpu_work_ms"]["verdict"] == "worse" and figs["render_ms"]["verdict"] == "ok" and len(fake.starts) == 6,
       "a figure worse in rounds 1 and 3 and not in 2 is ok: %s" % {n: f["verdict"] for n, f in figs.items()})
 
 # Better is said from round 1 alone.
@@ -233,21 +248,21 @@ check(code == 0 and result["runs"]["d3d12"]["state"] == "better" and result["run
 code, said, fake, result, out, folder = go(slow_always)
 check(code == 0 and result["runs"]["d3d12"]["state"] == "no-baseline" and result["runs"]["d3d12"]["rounds"] == 1,
       "no calibration line: no-baseline, one round, exit 0: %s %s" % (code, result["runs"]["d3d12"]["state"]))
-line = next(r["line"] for r in band.read_cells(folder / "pending.tsv", m.PENDING_COLUMNS) if r["figure"] == "cpu_ms")
-check(line.startswith("measure/step/pc d3d12 cpu_ms no-baseline: ") and line.endswith("not calibrated on this PC)"), "and says so: %s" % line)
+line = next(r["line"] for r in band.read_cells(folder / "pending.tsv", m.PENDING_COLUMNS) if r["figure"] == "cpu_work_ms")
+check(line.startswith("measure/step/pc d3d12 cpu_work_ms no-baseline: ") and line.endswith("not calibrated on this PC)"), "and says so: %s" % line)
 # A calibration of another key (another renderer) is no line for this one.
 code, said, fake, result, out, folder = go(slow_always, bands={"vulkan": BANDS})
 check(result["runs"]["d3d12"]["state"] == "no-baseline", "a band of another renderer is not this key's")
 # A figure the calibration does not hold is no-baseline for that figure only.
 code, said, fake, result, out, folder = go(slow_always, bands={"d3d12": {"render_ms": 0.05}})
-check(result["runs"]["d3d12"]["figures"]["cpu_ms"]["verdict"] == "no-baseline" and result["runs"]["d3d12"]["figures"]["render_ms"]["verdict"] == "ok",
+check(result["runs"]["d3d12"]["figures"]["cpu_work_ms"]["verdict"] == "no-baseline" and result["runs"]["d3d12"]["figures"]["render_ms"]["verdict"] == "ok",
       "one figure without a band: %s" % {n: f["verdict"] for n, f in result["runs"]["d3d12"]["figures"].items()})
 
 # ================= An accepted slowdown passes =================
-accepted = {"commit": "bbbbbbbbb", "renderer": "d3d12", "figure": "cpu_ms", "reason": "the owner accepted it", "date": "2026-11-21"}
+accepted = {"commit": "bbbbbbbbb", "renderer": "d3d12", "figure": "cpu_work_ms", "reason": "the owner accepted it", "date": "2026-11-21"}
 code, said, fake, result, out, folder = go(slow_always, bands={"d3d12": BANDS}, accepted=accepted)
-line = next(r["line"] for r in band.read_cells(folder / "pending.tsv", m.PENDING_COLUMNS) if r["figure"] == "cpu_ms")
-check(code == 0 and result["runs"]["d3d12"]["state"] == "accepted" and result["runs"]["d3d12"]["figures"]["cpu_ms"]["verdict"] == "accepted"
+line = next(r["line"] for r in band.read_cells(folder / "pending.tsv", m.PENDING_COLUMNS) if r["figure"] == "cpu_work_ms")
+check(code == 0 and result["runs"]["d3d12"]["state"] == "accepted" and result["runs"]["d3d12"]["figures"]["cpu_work_ms"]["verdict"] == "accepted"
       and "accepted: the owner accepted it" in line and result["runs"]["d3d12"]["rounds"] == 3,
       "an accepted line for the candidate's commit: accepted, exit 0, still three rounds: %s %s" % (code, line))
 other = dict(accepted, commit="ddddddddd")
@@ -263,16 +278,16 @@ code, said, fake, result, out, folder = go(slow_always, bands={"d3d12": BANDS}, 
 check(code == 0 and result["runs"]["d3d12"]["state"] == "accepted", "a commit written longer or shorter than the candidate's name matches by its start")
 with contextlib.redirect_stdout(io.StringIO()):
     target = pathlib.Path(tempfile.mkdtemp()) / "pair-bands.tsv"
-    check(m.main(["pair-accept", "--commit", "bbbbbbbbb", "--renderer", "d3d12", "--figure", "cpu_ms", "--reason", "slower by design",
+    check(m.main(["pair-accept", "--commit", "bbbbbbbbb", "--renderer", "d3d12", "--figure", "cpu_work_ms", "--reason", "slower by design",
                   "--calibration", str(target)]) == 0, "pair-accept writes a line")
     check(m.main(["pair-accept", "--commit", "bbbbbbbbb", "--renderer", "d3d12", "--figure", "step_ms", "--reason", "x",
                   "--calibration", str(target)]) == 2, "pair-accept refuses a figure that is not judged")
-    check(m.main(["pair-accept", "--commit", "bbbbbbbbb", "--renderer", "d3d12", "--figure", "cpu_ms", "--reason", " ",
+    check(m.main(["pair-accept", "--commit", "bbbbbbbbb", "--renderer", "d3d12", "--figure", "cpu_work_ms", "--reason", " ",
                   "--calibration", str(target)]) == 2, "pair-accept refuses an empty reason")
 written = band.read_cells(target.parent / "pair-accepted.tsv", band.ACCEPTED_COLUMNS)
 check(len(written) == 1 and written[0]["commit"] == "bbbbbbbbb" and written[0]["reason"] == "slower by design" and
-      band.accepted_reason(target.parent / "pair-accepted.tsv", "bbbbbbbbb", "d3d12", "cpu_ms") == "slower by design" and
-      band.accepted_reason(target.parent / "pair-accepted.tsv", "bbbbbbbbb", "d3d11", "cpu_ms") is None,
+      band.accepted_reason(target.parent / "pair-accepted.tsv", "bbbbbbbbb", "d3d12", "cpu_work_ms") == "slower by design" and
+      band.accepted_reason(target.parent / "pair-accepted.tsv", "bbbbbbbbb", "d3d11", "cpu_work_ms") is None,
       "the accepted file's line, found by commit, renderer and figure: %s" % written)
 
 # ================= A round that did not run is made again once; twice is `tool` =================
@@ -301,8 +316,36 @@ def no_presents(side, r, n, a):
 
 code, said, fake, result, out, folder = go(no_presents, bands={"d3d12": BANDS})
 figs = result["runs"]["d3d12"]["figures"]
-check(code == 0 and "gap_p99_ms" not in figs and "cpu_ms" in figs and result["runs"]["d3d12"]["state"] == "ok",
+check(code == 0 and "gap_p99_ms" not in figs and "cpu_work_ms" in figs and result["runs"]["d3d12"]["state"] == "ok",
       "a renderer with no present events: a round that ran, judged on the figures it has: %s %s" % (code, sorted(figs)))
+# The cost is the frame threads' work, not the whole process's figure: a side whose whole-process time is far higher (waiting:
+# a spin, a present) and whose work is the same reads ok; work added in the game thread only is worse for the game thread and for
+# all together, ok for the render thread; in the render thread only, the other way round.
+code, said, fake, result, out, folder = go(lambda side, r, n, a: {"whole_us": 9000.0} if side == "cand" else {}, bands={"d3d12": BANDS})
+figs = result["runs"]["d3d12"]["figures"]
+check(code == 0 and result["runs"]["d3d12"]["rounds"] == 1 and not any(n == "cpu_ms" for n in figs),
+      "a whole-process time three times the base's with the same work: ok, one round, cpu_ms not judged: %s" % sorted(figs))
+code, said, fake, result, out, folder = go(lambda side, r, n, a: {"game_us": 2100.0 + 300.0} if side == "cand" else {}, bands={"d3d12": BANDS})
+figs = result["runs"]["d3d12"]["figures"]
+check(code == 1 and figs["cpu_game_ms"]["verdict"] == "worse" and figs["cpu_work_ms"]["verdict"] == "worse" and
+      figs["cpu_render_ms"]["verdict"] == "ok" and result["runs"]["d3d12"]["rounds"] == 3,
+      "0.3 ms more in the game thread: game and work worse, render ok, three rounds: %s" % {n: f["verdict"] for n, f in figs.items()})
+check(abs((figs["cpu_game_ms"]["value"] - figs["cpu_game_ms"]["median"]) - 0.3) < 1e-9,
+      "and by the amount: the candidate's cpu_game_ms is the base's plus 0.3 ms")
+code, said, fake, result, out, folder = go(lambda side, r, n, a: {"render_us": 900.0 + 300.0} if side == "cand" else {}, bands={"d3d12": BANDS})
+figs = result["runs"]["d3d12"]["figures"]
+check(code == 1 and figs["cpu_render_ms"]["verdict"] == "worse" and figs["cpu_work_ms"]["verdict"] == "worse" and
+      figs["cpu_game_ms"]["verdict"] == "ok", "0.3 ms more in the render thread: render and work worse, game ok: %s" %
+      {n: f["verdict"] for n, f in figs.items()})
+# A side from before the work fields (a base built earlier): the cost figures are not compared, the round ran.
+code, said, fake, result, out, folder = go(lambda side, r, n, a: {"work": False} if side == "base" else {}, bands={"d3d12": BANDS})
+figs = result["runs"]["d3d12"]["figures"]
+check(code == 0 and result["runs"]["d3d12"]["state"] == "ok" and not any(n.startswith("cpu_") for n in figs) and "gap_p99_ms" in figs,
+      "a base that writes no work fields: no cost figure is compared, the others are: %s" % sorted(figs))
+# What the pair says of its settings and the pictures a step.
+code, said, fake, result, out, folder = go(lambda side, r, n, a: {}, bands={"d3d12": BANDS})
+check(result["settings"] == {"GALAXY_MAX_FPS": "120", "GALAXY_VSYNC_INTERVAL": "0"} and result["runs"]["d3d12"]["pictures_per_step"] == 2.0,
+      "result.json says the frame cap, VSync off and the pictures a step: %s %s" % (result["settings"], result["runs"]["d3d12"]["pictures_per_step"]))
 # A tool fault in the second round (after a worse first) is the answer: tool.
 code, said, fake, result, out, folder = go(lambda side, r, n, a: ({"cpu_us": 3600.0} if side == "cand" else {}) if n == 1 else 9,
                                            bands={"d3d12": BANDS})
@@ -347,21 +390,21 @@ with contextlib.redirect_stdout(io.StringIO()) as out:
 bands = band.pair_bands(calibration, band.pair_key(CONTEXT, "d3d12", "120"))
 check(code == 0 and set(bands) == set(band.JUDGED) - {"late_per_min"} | {"late_per_min"}, "calibrate: a band for every judged figure: %s" % bands)
 ratios = band.read_cells(calibration, band.BANDS_COLUMNS)
-cpu = next(r for r in ratios if r["figure"] == "cpu_ms")
-check(len(cpu["ratios"].split(",")) == 5 and abs(bands["cpu_ms"] - 0.04) < 1e-3 and cpu["commit"] == "ccccccccc",
-      "five ratios, cpu_ms band = 2 x the largest |r - 1| (0.04): %s %s" % (cpu, bands["cpu_ms"]))
+cpu = next(r for r in ratios if r["figure"] == "cpu_work_ms")
+check(len(cpu["ratios"].split(",")) == 5 and abs(bands["cpu_work_ms"] - 0.04) < 1e-3 and cpu["commit"] == "ccccccccc",
+      "five ratios, cpu_work_ms band = 2 x the largest |r - 1| (0.04): %s %s" % (cpu, bands["cpu_work_ms"]))
 check(abs(bands["render_ms"] - 0.05) < 1e-9 and bands["gap_p99_ms"] == 0.25 and bands["late_per_min"] == 0.5 and bands["memory_mb"] == 0.02 and
       bands["gpu_ms"] == 0.05, "an even figure gets its least: %s" % bands)
 check(len(fake.starts) == 10 and [fake.starts[i][0] for i in (0, 2, 4, 6, 8)] == ["base", "cand", "base", "cand", "base"],
       "five rounds, the order of starting alternating: %s" % fake.starts)
 # A second calibration replaces the key's older lines; another key's lines stay.
-calibrate(calibration, "vulkan", cpu_ms=0.1)
+calibrate(calibration, "vulkan", cpu_work_ms=0.1)
 state["n"] = 0
 fake.starts.clear()
 with contextlib.redirect_stdout(io.StringIO()):
     m.calibrate_body(cargs, starter, TABLES, lambda: next(clock))
 rows = band.read_cells(calibration, band.BANDS_COLUMNS)
-check(len([r for r in rows if r["renderer"] == "d3d12" and r["figure"] == "cpu_ms"]) == 1 and
+check(len([r for r in rows if r["renderer"] == "d3d12" and r["figure"] == "cpu_work_ms"]) == 1 and
       [r["band"] for r in rows if r["renderer"] == "vulkan"] == ["0.1000"], "replaced for its key, the others kept: %s" % len(rows))
 # A round that cannot run ends that renderer's calibration with a tool fault and writes none of its lines.
 state["n"] = 0

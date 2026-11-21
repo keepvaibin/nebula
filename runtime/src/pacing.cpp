@@ -42,6 +42,7 @@ void Window::clear() {
     step_work_us_.clear();
     pictures_.clear();
     cpu_ns_ = -1;
+    threads_.clear();
 }
 
 Summary Window::summarize(std::int64_t refresh_qpc, std::int64_t frequency) const {
@@ -112,6 +113,14 @@ Summary Window::summarize(std::int64_t refresh_qpc, std::int64_t frequency) cons
     if (cpu_ns_ >= 0 && !steps_.empty()) {
         s.cpu_known = true;
         s.cpu_us_per_step = static_cast<double>(cpu_ns_) / 1000.0 / static_cast<double>(steps_.size());
+    }
+    if (!threads_.empty() && !steps_.empty()) {
+        s.work_known = true;
+        for (const ThreadWorkNs& t : threads_) {
+            const double us = static_cast<double>(t.ns) / 1000.0 / static_cast<double>(steps_.size());
+            s.thread_cpu.push_back({t.name, us});
+            s.cpu_work_us_per_step += us;
+        }
     }
     return s;
 }

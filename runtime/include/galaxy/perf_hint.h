@@ -8,7 +8,10 @@
 // how long the work took, as the API asks, so time blocked inside it (a lock, a GPU fence) counts and the time spent
 // waiting for the next step or slot does not (P-069). Hints are a no-op on other platforms and older Android releases.
 
+#include "galaxy/platform_time.h"
+
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 
@@ -43,6 +46,29 @@ private:
     std::int64_t busy_ns_ = 0;
 };
 
+// One thread's processor time while it works: the span of its own processor clock from a mark of work to the next mark of
+// waiting, added up (units of ProcessCpuStamp::cycles). Waiting, a timer's spin and a blocked call are not in it. One thread
+// marks; any thread reads the total.
+class WorkCpu {
+public:
+    // `now` is the thread's processor clock at the mark. A mark that changes nothing is ignored.
+    void mark(std::uint64_t now, bool on) noexcept {
+        if (on == working_) return;
+        if (on) {
+            since_ = now;
+        } else {
+            total_.store(total_.load(std::memory_order_relaxed) + (now > since_ ? now - since_ : 0), std::memory_order_relaxed);
+        }
+        working_ = on;
+    }
+    [[nodiscard]] std::uint64_t total() const noexcept { return total_.load(std::memory_order_relaxed); }
+
+private:
+    std::atomic<std::uint64_t> total_{0};
+    std::uint64_t since_ = 0;
+    bool working_ = false;
+};
+
 // The calling thread does frame work (call once, from the thread itself). name says which in the pacing line ("game",
 // "render"); it must outlive the process's threads (a string literal).
 void perf_hint_add_current_thread(const char* name) noexcept;
@@ -64,6 +90,11 @@ struct ThreadWork {
 // The frame threads' work in that window, in the order they were added, at most capacity of them. Returns how many it
 // wrote; 0 where threads' CPU times cannot be read (Windows). Any thread.
 std::size_t perf_hint_last_work(ThreadWork* out, std::size_t capacity) noexcept;
+// Each frame thread's processor time spent working (WorkCpu) since the thread was added, in the order they were added, at most
+// capacity of them; a span of work still going is not in it. Returns how many it wrote; 0 where processor times are not known
+// (platform_time.h process_cpu_known). Any thread, on every platform. The marks are the ones above: the game thread's work runs
+// from perf_hint_frame_done to its next perf_hint_busy(false), the render thread's from render_work_begins to render_work_ends.
+std::size_t perf_hint_work_cpu(galaxy::ThreadCpuSample* out, std::size_t capacity) noexcept;
 // Windows: the machine runs on its battery, looked at every two seconds from perf_hint_frame_done (a change is logged once).
 // Background threads that start on battery ask the OS for efficiency (windows_power.h lower_current_thread_priority); the
 // game and render threads never do. False elsewhere.

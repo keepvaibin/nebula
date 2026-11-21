@@ -46,18 +46,26 @@ also when the run fails; the player's game is never touched. It sets what 120 Hz
 smoothness adaptive) for the run and puts both back after it; no other setting of the tablet is touched. The
 quiet-machine checks are for the PC's runs: the tablet's figures do not depend on the PC's load.
 
-The figures, from the stage's first frame (the harness's "frame 0") to the run's end. Judged: cpu_ms, gap_p99_ms,
-late_per_min, render_ms, gpu_ms, memory_mb. Shown, never judged (one slow frame in three minutes is not a change in the
-game; step_ms and step_p99_ms hold the waits of a step as well as its work, which one build showed as 2.6 to 16.6 ms, so a
-step's cost is cpu_ms): gap_max_ms, step_ms, step_p99_ms, step_max_ms, steps_over_18.
+The figures, from the stage's first frame (the harness's "frame 0") to the run's end. Judged: cpu_work_ms, cpu_game_ms,
+cpu_render_ms, gap_p99_ms, late_per_min, render_ms, gpu_ms, memory_mb. Shown, never judged (one slow frame in three minutes is
+not a change in the game; step_ms and step_p99_ms hold the waits of a step as well as its work, and cpu_ms the processor time
+of the whole process, which holds waiting too): gap_max_ms, cpu_ms, step_ms, step_p99_ms, step_max_ms, steps_over_18,
+pictures_per_step and every cpu_<name>_ms of a frame thread other than game and render.
   rate            the pictures a second asked for; refresh_hz the display's refresh as the renderer reported it
   gap_max_ms      the longest time between two presents
   gap_p99_ms      the time between two presents that 99 of 100 stay under
   late_per_min    presents that missed their refresh (the [pace] lines' missed), per minute
-  cpu_ms          the processor time the whole process used (all threads) per game step: the median over the [pace]
-                  windows of cpu_us_per_step, which the game writes (platform_time.h process_cpu_stamp: on Windows the
-                  exact cycle count of QueryProcessCycleTime, as time by the time stamp counter's own rate; elsewhere
-                  CLOCK_PROCESS_CPUTIME_ID). A game or a machine that gives none: not measured (written -, never 0)
+  cpu_work_ms     the processor time the frame threads spent WORKING, per game step, all together: the median over the
+                  [pace] windows of cpu_work_us_per_step. Each frame thread (the game thread, the render thread) reads its own
+                  processor clock at its marks of work and of waiting (runtime/include/galaxy/perf_hint.h; on Windows
+                  QueryThreadCycleTime as time by the time stamp counter's rate, elsewhere CLOCK_THREAD_CPUTIME_ID) and the
+                  span from a mark of work to the next mark of waiting is added up, so a timer's spin and a present that
+                  blocks are not in it. cpu_game_ms and cpu_render_ms are the game thread's and the render thread's
+                  (cpu_game_us_per_step, cpu_render_us_per_step). A game or a machine that gives none: not measured (written -,
+                  never 0)
+  cpu_ms          the processor time the whole process used per game step (cpu_us_per_step; platform_time.h process_cpu_stamp).
+                  Shown, never judged: it holds waiting (the spin of PreciseWait, which grows with how late the timer wakes on a
+                  busy PC, and the time a present holds the threads), so one build read 1.3 ms and 3.4 ms a step
   step_ms         the median of a game step's time on the clock (step start to the step clock's wait: waits included)
   step_p99_ms     the 99th percentile of the same
   step_max_ms     the longest game step's work
@@ -108,7 +116,7 @@ THE PAIR (for a PC that is in use: the owner works on it, his own jobs use the p
       beside the calibration file, one line for every figure of every round in pairs.tsv. Exit: 0 ran and nothing worse,
       1 worse, 2 tool.
       pair-calibrate runs rounds of one build against itself (5, the order of starting alternating) and keeps, for each
-      judged figure, band = max(least, 2 x the largest |r - 1|) of the five ratios (least: cpu_ms 0.03, render_ms 0.05,
+      judged figure, band = max(least, 2 x the largest |r - 1|) of the five ratios (least: cpu_work_ms, cpu_game_ms and cpu_render_ms 0.03, render_ms 0.05,
       gpu_ms 0.05, memory_mb 0.02, gap_p99_ms 0.25, late_per_min 0.50) in the calibration file, replacing the key's older
       lines. pair-probe runs one build alone and lists its figures (the choice of the form: a hidden run of a build that
       gives every judged figure makes hidden the form).
@@ -272,10 +280,20 @@ def figures(run_folder, span_steps=None):
             if all(field in w for w in windows):
                 f[name] = statistics.median(w[field] for w in windows) / 1000.0
         # The processor time of the whole process per step (all threads, the game's own count: runtime/src/pacing_recorder.cpp),
-        # the median of the windows that have it. A game that does not write it, or a machine that cannot tell: not there.
+        # the median of the windows that have it, and of the frame threads' work (cpu_work_us_per_step and cpu_<name>_us_per_step:
+        # judged are all together, game and render; any other thread's is shown). A game that does not write a field, or a machine
+        # that cannot tell: not there.
         cpu = [w["cpu_us_per_step"] for w in windows if "cpu_us_per_step" in w]
         if cpu:
             f["cpu_ms"] = statistics.median(cpu) / 1000.0
+        for key in sorted({k for w in windows for k in w}):
+            m = re.fullmatch(r"cpu_([a-z0-9_]+)_us_per_step", key)
+            if m and m.group(1) != "us":
+                values = [w[key] for w in windows if key in w]
+                f["cpu_%s_ms" % m.group(1)] = statistics.median(values) / 1000.0
+        steps_total = sum(w.get("steps", 0.0) for w in windows)
+        if steps_total > 0:
+            f["pictures_per_step"] = sum(w.get("pictures", 0.0) for w in windows) / steps_total
     timeline = run_folder / "timeline.bin"
     if zero and timeline.is_file():
         f.update(timeline_figures(timeline, int(zero.group(1)), span_steps))
@@ -344,7 +362,8 @@ def history_row(f, commit, device, renderer, rate, run_folder, now=None, context
             "computer": context.get("computer", ""), "gpu": context.get("gpu", ""), "scene": context.get("scene", ""),
             "size": context.get("size", ""), "marks": band.format_marks(marks or {}),
             "step_ms": num("step_ms", "%.3f"), "step_p99_ms": num("step_p99_ms", "%.3f"), "anchor": "",
-            "cpu_ms": num("cpu_ms", "%.3f")}
+            "cpu_ms": num("cpu_ms", "%.3f"), "cpu_work_ms": num("cpu_work_ms", "%.3f"),
+            "cpu_game_ms": num("cpu_game_ms", "%.3f"), "cpu_render_ms": num("cpu_render_ms", "%.3f")}
 
 
 def history_line(f, commit, device, renderer, rate, run_folder, now=None, context=None, marks=None):
@@ -953,6 +972,7 @@ ROUTE_END = 6200           # the pair's route ends at this game step after frame
 HIDDEN, VISIBLE = "hidden", "visible"
 PAIR_FORM = HIDDEN         # the form of both sides (measure.py pair-probe chooses: see the head text)
 PAIR_RATE = "120"          # the rate of the route (its GALAXY_MAX_FPS)
+PAIR_VSYNC_INTERVAL = "0"  # a pair's pictures wait for nothing of the display
 CALIBRATION = HISTORY.parent / "pair-bands.tsv"
 PAIRS_FILE, ACCEPTED_FILE = "pairs.tsv", "pair-accepted.tsv"
 PAIR_CHECK = "measure/step/pc"
@@ -1075,11 +1095,15 @@ def start_process(command, env, log_path):
 def pair_route(work, form):
     """WORK/route/test.json: the route of the single measure cut at ROUTE_END game steps after frame 0 and in the form given
     (hidden: the harness starts the game with its window hidden; visible: shown, taking no focus, as the single measure's
-    is). Both sides of a pair run this one test. Returns the folder."""
+    is), with the pictures presented without waiting for the display (GALAXY_VSYNC_INTERVAL=0: how long a present of a hidden
+    window holds the threads is Windows' choice, and it differed between the two sides of a pair) and the frame cap the route
+    has (GALAXY_MAX_FPS). Both sides of a pair run this one test. Returns the folder."""
     test = json.loads((ROUTE / "test.json").read_text(encoding="utf-8"))
     steps = [s for s in test["steps"] if s.get("at", 0) < ROUTE_END and not s.get("end")]
     steps.append({"at": ROUTE_END, "end": True})
     test.update(name="measure-pair", steps=steps, visible=(form == VISIBLE))
+    test["settings"] = [("GALAXY_VSYNC_INTERVAL=%s" % PAIR_VSYNC_INTERVAL) if s.startswith("GALAXY_VSYNC_INTERVAL=") else s
+                        for s in test["settings"]]
     test["about"] = ("The play route cut at game step %d after the stage's first frame, for tools/measure/measure.py pair "
                      "(the file the tool writes beside the runs from tests/measure/route/test.json)." % ROUTE_END)
     folder = pathlib.Path(work) / "route"
@@ -1278,7 +1302,9 @@ def pair_renderer(pair, renderer, check):
     state = renderer_state(settled)
     lines = {f: figure_line(check, renderer, f, settled[f]) for f in band.JUDGED if f in settled}
     reason = "; ".join(lines[f] for f in lines if settled[f]["verdict"] in ("worse", "accepted"))
-    return {"state": state, "reason": reason, "figures": settled, "rounds": len(rounds), "lines": lines}
+    per_step = [r["figures"]["base"]["pictures_per_step"] for r in rounds if "pictures_per_step" in r["figures"]["base"]]
+    return {"state": state, "reason": reason, "figures": settled, "rounds": len(rounds), "lines": lines,
+            "pictures_per_step": statistics.median(per_step) if per_step else None}
 
 
 def pair_result(args, code, outcomes, processors, form, commits):
@@ -1287,13 +1313,14 @@ def pair_result(args, code, outcomes, processors, form, commits):
     runs = {}
     for renderer, o in outcomes.items():
         runs[renderer] = {"state": o["state"], "reason": o["reason"], "device": "pc", "renderer": renderer, "anchor": None,
-                          "rounds": o["rounds"],
+                          "rounds": o["rounds"], "pictures_per_step": o.get("pictures_per_step"),
                           "figures": {f: {"value": e["cand"], "median": e["base"], "band": e["band"], "judged": True,
                                           "verdict": e["verdict"], "anchor": None, "ratios": e["ratios"]}
                                       for f, e in o["figures"].items()}}
     names = {EXIT_RAN: "ok", EXIT_WORSE: "WORSE", EXIT_TOOL: "tool fault"}
     return {"commit": commits["cand"][:9], "base": commits["base"][:9], "pending": args.pending or None, "exit": code,
-            "verdict": names[code], "processors": processors, "form": form, "runs": runs}
+            "verdict": names[code], "processors": processors, "form": form,
+            "settings": {"GALAXY_MAX_FPS": PAIR_RATE, "GALAXY_VSYNC_INTERVAL": PAIR_VSYNC_INTERVAL}, "runs": runs}
 
 
 def pair_code(outcomes):

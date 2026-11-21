@@ -5,14 +5,17 @@
 #include "galaxy/platform_time.h"
 
 #include <cstdio>
+#include <cstring>
 #include <deque>
 #include <mutex>
+#include <vector>
 
 namespace galaxy::pacing {
 
 namespace {
 
 constexpr std::int64_t kWindowSeconds = 10;
+constexpr std::size_t kMaxFrameThreads = 8;
 // A picture whose display report has not come this long after its present is closed as unknown.
 constexpr std::int64_t kReportWaitMs = 1000;
 
@@ -35,6 +38,9 @@ struct Recorder {
     std::int64_t last_step = 0;             // game thread only: the moment of the step under way, 0 when done
     std::int64_t period_qpc = 0;            // the display's refresh period, from the latest report
     galaxy::ProcessCpuStamp cpu_from;       // the process's processor time at the window's first step
+    std::size_t (*work_reader)(galaxy::ThreadCpuSample*, std::size_t) = nullptr;
+    galaxy::ThreadCpuSample work_from[kMaxFrameThreads];  // the frame threads' work at the window's first step
+    std::size_t work_from_count = 0;
     std::deque<Waiting> waiting;            // presented, in present order, until reported or given up
     std::uint64_t last_id = 0;              // the newest id presented
     std::uint64_t newest_reported = 0;      // the newest id reported
@@ -61,6 +67,29 @@ struct Recorder {
         }
     }
 
+    std::size_t read_work(galaxy::ThreadCpuSample* out) const {
+        return work_reader != nullptr ? work_reader(out, kMaxFrameThreads) : 0;
+    }
+
+    // The frame threads' work processor time over the window, from its first step's reading to `to` (the stamps close the span
+    // for the cycle counter's rate): empty when not known.
+    std::vector<ThreadWorkNs> work_over(const galaxy::ThreadCpuSample* to, std::size_t count,
+                                        const galaxy::ProcessCpuStamp& stamp_to) const {
+        std::vector<ThreadWorkNs> out;
+        for (std::size_t i = 0; i < count; ++i) {
+            std::uint64_t before = 0;
+            for (std::size_t k = 0; k < work_from_count; ++k) {
+                if (work_from[k].name != nullptr && to[i].name != nullptr && std::strcmp(work_from[k].name, to[i].name) == 0) {
+                    before = work_from[k].units;
+                }
+            }
+            const std::int64_t ns = galaxy::cpu_units_to_ns(to[i].units >= before ? to[i].units - before : 0, cpu_from, stamp_to);
+            if (ns < 0) return {};
+            out.push_back({to[i].name != nullptr ? to[i].name : "thread", ns});
+        }
+        return out;
+    }
+
     Waiting* find(std::uint64_t id) {
         for (auto it = waiting.rbegin(); it != waiting.rend(); ++it) {
             if (it->id == id) return &*it;
@@ -77,6 +106,12 @@ Recorder& recorder() {
 
 }  // namespace
 
+void set_work_reader(std::size_t (*read)(galaxy::ThreadCpuSample*, std::size_t)) noexcept {
+    Recorder& r = recorder();
+    const std::lock_guard<std::mutex> lock(r.mutex);
+    r.work_reader = read;
+}
+
 void step(std::int64_t moment_qpc) noexcept {
     if (moment_qpc == 0) return;
     Recorder& r = recorder();
@@ -89,12 +124,18 @@ void step(std::int64_t moment_qpc) noexcept {
             // The processor time of the window: from its first step's stamp to this step's (the next window's first).
             const galaxy::ProcessCpuStamp cpu_to = galaxy::process_cpu_stamp();
             r.window.set_cpu_ns(galaxy::process_cpu_ns_between(r.cpu_from, cpu_to));
+            galaxy::ThreadCpuSample work_to[kMaxFrameThreads];
+            const std::size_t work_count = r.read_work(work_to);
+            r.window.set_thread_work(r.work_over(work_to, work_count, cpu_to));
             text = line(r.window.summarize(r.period_qpc, frequency));
             r.window.clear();
             r.cpu_from = cpu_to;
+            std::memcpy(r.work_from, work_to, sizeof(work_to));
+            r.work_from_count = work_count;
             ++r.windows;
         } else if (r.window.steps() == 0) {
             r.cpu_from = galaxy::process_cpu_stamp();
+            r.work_from_count = r.read_work(r.work_from);
         }
         if (r.window.steps() == 0) r.window_first_step = moment_qpc;
         r.window.add_step(moment_qpc);
@@ -202,7 +243,18 @@ std::string line(const Summary& s) {
     if (s.cpu_known && used > 0 && static_cast<std::size_t>(used) < sizeof(text)) {
         std::snprintf(text + used, sizeof(text) - static_cast<std::size_t>(used), " cpu_us_per_step=%.1f", s.cpu_us_per_step);
     }
-    return text;
+    std::string out = text;
+    // The frame threads' work: all together, then each by its name (the fields the cost of the game's work is judged by).
+    if (s.work_known) {
+        char field[96];
+        std::snprintf(field, sizeof(field), " cpu_work_us_per_step=%.1f", s.cpu_work_us_per_step);
+        out += field;
+        for (const Summary::ThreadUs& t : s.thread_cpu) {
+            std::snprintf(field, sizeof(field), " cpu_%s_us_per_step=%.1f", t.name.c_str(), t.us_per_step);
+            out += field;
+        }
+    }
+    return out;
 }
 
 std::uint64_t windows_written() noexcept {
@@ -217,6 +269,8 @@ void reset_for_test(void (*write)(const std::string& line)) noexcept {
     r.window.clear();
     r.window_first_step = 0;
     r.cpu_from = galaxy::ProcessCpuStamp{};
+    r.work_from_count = 0;
+    r.work_reader = nullptr;
     r.last_step = 0;
     r.period_qpc = 0;
     r.waiting.clear();

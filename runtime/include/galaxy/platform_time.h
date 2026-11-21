@@ -131,6 +131,45 @@ struct ProcessCpuStamp {
 #endif
 }
 
+// The calling thread's own processor time so far, in the units of ProcessCpuStamp::cycles (QueryThreadCycleTime on Windows
+// on x64, else CLOCK_THREAD_CPUTIME_ID in nanoseconds); false where process_cpu_known() is false. Waiting is not in it.
+[[nodiscard]] inline bool thread_cpu_units(std::uint64_t& units) noexcept {
+    if (!process_cpu_known()) return false;
+#if defined(GALAXY_PROCESS_CYCLES)
+    ULONG64 cycles = 0;
+    if (!QueryThreadCycleTime(GetCurrentThread(), &cycles)) return false;
+    units = cycles;
+    return true;
+#elif !defined(_WIN32)
+    timespec now{};
+    if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &now) != 0) return false;
+    units = static_cast<std::uint64_t>(now.tv_sec) * 1000000000u + static_cast<std::uint64_t>(now.tv_nsec);
+    return true;
+#else
+    (void)units;
+    return false;
+#endif
+}
+
+// One frame thread's work: its processor time spent between its marks of work and of waiting (perf_hint.h), in the units of
+// ProcessCpuStamp::cycles, from the thread's start.
+struct ThreadCpuSample {
+    const char* name = nullptr;
+    std::uint64_t units = 0;
+};
+
+// Processor-time units (a thread's, or a difference of them) as nanoseconds over the span the two stamps close: a cycle count
+// by the counter's rate over the span, a count of nanoseconds as it is. -1: not known.
+[[nodiscard]] inline std::int64_t cpu_units_to_ns(std::uint64_t units, const ProcessCpuStamp& from, const ProcessCpuStamp& to) noexcept {
+    if (!from.known || !to.known) return -1;
+#if defined(GALAXY_PROCESS_CYCLES)
+    if (to.counter <= from.counter) return -1;
+    return cycles_to_ns(units, to.counter - from.counter, to.qpc - from.qpc, qpc_frequency());
+#else
+    return static_cast<std::int64_t>(units);
+#endif
+}
+
 // Milliseconds since an arbitrary start (GetTickCount64 on Windows).
 [[nodiscard]] inline std::uint64_t steady_ms() noexcept {
 #if defined(_WIN32)

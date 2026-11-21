@@ -10,10 +10,14 @@
 //          refresh_ms=8.333 on_time=1197 missed=0 doubled=0 animation_within_1ms=1.0000 animation_p99_us=85.0
 //          delay_avg_us=24310.2 delay_p99_us=25120.0 render_avg_us=2950.1 render_p99_us=3400.0
 //          generated_render_avg_us=480.2 generated_render_p99_us=610.0 step_work_avg_us=3100.0
-//          step_work_p99_us=4200.0 step_work_max_us=5100.0 cpu_us_per_step=3350.5
+//          step_work_p99_us=4200.0 step_work_max_us=5100.0 cpu_us_per_step=3350.5 cpu_work_us_per_step=2500.0
+//          cpu_game_us_per_step=1900.0 cpu_render_us_per_step=600.0
 //
 // (one line; cpu_us_per_step, the processor time of the whole process in the window per step, is left out where the
-// machine gives none: platform_time.h process_cpu_stamp). tools/gate/pace.py and tools/measure/measure.py read these
+// machine gives none: platform_time.h process_cpu_stamp. It holds waiting: a timer's spin, a present that blocks. The cost of
+// the game's work is cpu_work_us_per_step, the processor time the frame threads spent between their marks of work and of
+// waiting (perf_hint.h), and the same for each of them, cpu_<name>_us_per_step, in the order the threads were added; they are
+// left out where the threads were not read). tools/gate/pace.py and tools/measure/measure.py read these
 // lines by key.
 //
 // Who calls what:
@@ -25,12 +29,21 @@
 //                   (any thread), or not_shown(id) when it learns it never did
 // A present the core did not describe (a black picture, the settings overlay's idle presents) is not recorded.
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
+
+namespace galaxy {
+struct ThreadCpuSample;
+}
 
 namespace galaxy::pacing {
 
 struct Summary;
+
+// Where the frame threads' work processor times come from (perf_hint.h perf_hint_work_cpu: the host sets it at its start); none: the
+// line has no cpu_work fields. Read at the first step and at each window's end.
+void set_work_reader(std::size_t (*read)(galaxy::ThreadCpuSample* out, std::size_t capacity)) noexcept;
 
 void step(std::int64_t moment_qpc) noexcept;
 // Game thread: the step that began at the last step() is done (the thread is back at the step clock).

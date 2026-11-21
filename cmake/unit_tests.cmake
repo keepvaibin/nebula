@@ -35,11 +35,13 @@ galaxy_test(galaxy_whole_lines_tests SOURCES ${rt}/whole_lines_tests.cpp ${rt}/w
 galaxy_test(galaxy_line_writer_tests SOURCES ${rt}/line_writer_tests.cpp)
 # The pacing measures (file 00 4.3) on synthetic runs, and the recorder that feeds them.
 galaxy_test(galaxy_pacing_tests SOURCES ${rt}/pacing_tests.cpp ${rt}/pacing.cpp ${rt}/pacing_recorder.cpp)
-# The frame threads' CPU time by thread (the pacing line). Windows reads no thread's CPU time there (perf_hint.cpp's
-# Windows half looks at the power state, which needs the Windows host's power code).
+# The frame threads' CPU time by thread (the pacing line's old figure). Windows reads no thread's CPU time there.
 if(NOT WIN32)
     galaxy_test(galaxy_perf_hint_tests SOURCES ${rt}/perf_hint_tests.cpp ${rt}/perf_hint.cpp)
 endif()
+# The frame threads' processor time spent working, between their marks (perf_hint_work_cpu: the cost the speed measure judges),
+# on every platform.
+galaxy_test(galaxy_work_cpu_tests SOURCES ${rt}/work_cpu_tests.cpp ${rt}/perf_hint.cpp)
 # The frame timeline (--diagnostics timeline): its clock, threads and file on every platform.
 galaxy_test(galaxy_frame_timeline_tests SOURCES ${rt}/frame_timeline_tests.cpp)
 # A frame thread's work as wall time between its marks (P-069), on every platform.
