@@ -378,3 +378,29 @@ under 300 GB free.
 its own work folder take no lock: no verdict depends on the clock, and the speed measure runs at night under `measure.lock`.
 The old rule that own work takes the gate lock, and its helper `lockrun.py`, are gone. The measure's build copies are kept while a
 measure uses them.
+
+**The machine (package T5).** A run that starts the game first asks the machine whether it can carry the run (`machine_ready` in
+`gate.py`, the readings in `tools/gate/machine.py`); a run of documents, builds and tools only never asks. The points come in
+this order, and the first one that cannot be met ends the run as ENV (not judged, never FAIL) with one plain line:
+
+1. Leftovers. A game process under `D:/NebulaWork/` whose parent is gone and that is older than ten minutes is ended and named in the
+   run's summary. A process a held lock (`gate.lock`, `long.lock`, `measure.lock`, `move.lock`) may own is never ended.
+2. Disk. Drive D: needs 30 GB free for a landing (and the quick gate), 80 GB for the full run (`--main`), 150 GB for the nightly run.
+   With less, the old run folders are thinned (the three newest passing and the three newest failing runs of each level stay whole;
+   of every other run only the files at its top level stay; a run still going or waiting for GitHub is left alone) and the drive is
+   looked at again.
+3. The tablet, when the run has a tablet part: it answers adb, it is authorised, and the test data on it (the test app's `game.pak`)
+   has this tree's store version (`runtime/include/galaxy/store_version.inc`); data of another version is pushed again
+   (`luma_test_android.py push-data`).
+4. The graphics card and the PC's memory. The card the game uses is the first one DXGI lists for high performance (what the game
+   itself takes; `LUMA_TEST_GPU` names another); its total is DXGI's dedicated memory and what every program holds of it is Windows'
+   counter `GPU Adapter Memory`, read by its English name through PDH (any maker's card, any language). One game copy takes what the
+   gate has seen: the largest use of any game process on the card in each of the last 20 runs, per renderer, kept in
+   `<plan>/native/machine.json` (3 GB until a run has shown it). The run plays as many copies at once as fit in 70% of the card's
+   free memory and in 70% of the PC's free memory at 2 GB a copy, at most what its lanes ask for. When other programs hold more than
+   half the card the summary says "card shared"; every result is judged as usual. When not even one copy fits the gate looks once a
+   minute, says so every ten, and after four hours ends the run as ENV.
+
+The gate puts itself in one Windows job object that ends everything in it when the gate ends or is killed, so every program a run
+starts, and theirs, goes with it. A program that must outlive the run (the play route measure, the long run a move starts, the
+tablet's adb server) is started with the leave-the-job flag (`machine.start_outliving`). Not on Windows nothing of this is done.
