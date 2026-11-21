@@ -9,9 +9,9 @@
    no soak; long has the soak, the sanitizer tour and mod tests, every disc on every renderer, and no GitHub; final has both.
    --only keeps a check and what it needs.
 4. The tablet's part is owed, not failed, when the tablet does not answer.
-5. GitHub (section 8, N-1047): every job of the candidate's run is required; a red, cancelled or skipped job ends the
-   wait at once and fails, a job planned.tsv names (github/<job>) does not count, a run not ended is waited for up to
-   120 minutes, and a failed question to GitHub is asked again, not taken for a red job.
+5. GitHub (section 8, N-1047, package T8a): every `must` job of the commit's runs is required; a red job ends the wait at
+   once and fails, a job planned.tsv names (github/<job>) does not count, jobs not ended or not in a run yet are waited for
+   up to 120 minutes (env at the limit), and a failed question to GitHub is asked again, not taken for a red job.
 6. Main moves only through the gate: in a scratch repository with the guard as its pre-push hook, a plain push to main
    and a deletion of main are refused, another branch's push goes, move_main moves main and writes MAIN-MOVED, a
    main that moved during the gate is not overwritten, a commit main already holds is a move done, and a candidate
@@ -192,41 +192,43 @@ def main():
         check([r["state"] for r in g3.results] == ["owed"] * len(whole)
               and [r["check"] for r in g3.results] == whole, "a tablet away owes its whole part")
 
-        # 5. GitHub: every job of the candidate's run (section 8).
+        # 5. GitHub: every `must` job of the commit's runs (section 8; the rule's own cases are github_rule_test.py).
         def job(name, state="completed", conclusion="success"):
-            return {"name": name, "status": state, "conclusion": conclusion}
+            return {"name": name, "status": state, "conclusion": conclusion, "databaseId": 1}
 
-        names = ["Windows (three renderers, unit tests)", "Linux", "Mac", "Android (x86_64)", "Android start check"]
-        green = [job(n) for n in names]
-        check(gate.judge_run("completed", green)[:2] == (True, True), "every job green")
-        check(gate.judge_run("in_progress", green[:-1] + [job(names[-1], "queued", None)])[:2] == (False, False),
-              "a job still queued is waited for")
-        check(gate.judge_run("in_progress", green[:3])[:2] == (False, False),
-              "a run not ended is waited for, whatever its jobs so far say")
-        done, ok, detail = gate.judge_run("in_progress", green[:-1] + [job(names[-1], conclusion="failure")])
-        check(done and not ok and "Android start check failure" in detail, "a red job ends the wait at once: %s" % detail)
-        check(gate.judge_run("completed", green[:-1] + [job(names[-1], conclusion="cancelled")])[:2] == (True, False),
-              "a cancelled job stops the move")
-        check(gate.judge_run("completed", green[:-1] + [job(names[-1], conclusion="skipped")])[:2] == (True, False),
-              "a skipped job stops the move")
-        check(gate.judge_run("completed", green[:-1] + [job(names[-1], conclusion="failure")],
-                             planned_jobs={names[-1]})[:2] == (True, True), "a job planned.tsv names does not count")
-        check(gate.judge_run(None, [])[:2] == (False, False), "no run yet is waited for")
-        check(gate.judge_run("completed", [])[:2] == (True, False), "a run with no job is not green")
-        check(gate.planned_jobs({"github/Mac": {}, "fuzz": {}}) == {"Mac"}, "planned.tsv's github/<job> lines")
+        musts = [n for n, c in gate.github_rule.read_table().items() if c == "must"]
+        green = [job(n) for n in musts]
+        classes = gate.github_rule.read_table()
         now = [0.0]
 
         def tick(seconds):
             now[0] += seconds
 
-        answers = iter([(None, []), ("in_progress", green[:2]), ("completed", green)])
-        ok, detail = gate.github_wait("gate/x", "abc", state_of=lambda b, c: next(answers), sleep=tick,
-                                      clock=lambda: now[0], log=t / "gh.log")
-        check(ok and now[0] == 120.0, "waits while the run goes, then green: %s after %s s" % (detail, now[0]))
+        def rule_of(runs_of, planned=()):
+            return gate.github_rule.Rule("abc", classes, runs_of, None, planned, clock=lambda: now[0], say=lambda s: None)
+
+        def one(jobs, planned=()):
+            """(kind, detail) of the rule's wait on one run with these jobs, a limit of 3 minutes."""
+            now[0] = 0.0
+            kind, detail, _ = rule_of(lambda sha: [{"id": 1, "branch": "gate/x", "jobs": jobs}], planned).wait(3, sleep=tick)
+            return kind, detail
+
+        check(one(green)[0] == "pass", "every must job green")
+        check(one(green[:-1] + [job(musts[-1], "queued", None)])[0] == "env", "a job still queued is waited for to the limit")
+        check(one(green[:3])[0] == "env", "jobs not in the run yet are waited for")
+        kind, detail = one(green[:-1] + [job(musts[-1], conclusion="failure")])
+        check(kind == "fail" and musts[-1] + " failure" in detail and now[0] == 0.0,
+              "a red job ends the wait at once: %s" % detail)
+        check(one(green[:-1] + [job(musts[-1], conclusion="failure")], planned={musts[-1]})[0] == "pass",
+              "a job planned.tsv names does not count")
+        check(gate.planned_jobs({"github/Mac": {}, "fuzz": {}}) == {"Mac"}, "planned.tsv's github/<job> lines")
+        answers = iter([[], [{"id": 1, "branch": "gate/x", "jobs": green[:2]}], [{"id": 1, "branch": "gate/x", "jobs": green}]])
         now[0] = 0.0
-        ok, detail = gate.github_wait("gate/x", "abc", state_of=lambda b, c: ("in_progress", green[:2]), sleep=tick,
-                                      clock=lambda: now[0], log=t / "gh2.log")
-        check(not ok and "120 minutes" in detail and now[0] >= 7200, "the wait has a limit: %s" % detail)
+        kind, detail, _ = rule_of(lambda sha: next(answers)).wait(120, sleep=tick)
+        check(kind == "pass" and now[0] == 120.0, "waits while the run goes, then green: %s after %s s" % (detail, now[0]))
+        now[0] = 0.0
+        kind, detail, _ = rule_of(lambda sha: [{"id": 1, "branch": "gate/x", "jobs": green[:2]}]).wait(120, sleep=tick)
+        check(kind == "env" and "120 minutes" in detail and now[0] >= 7200, "the wait has a limit: %s" % detail)
         # N-1070: the CPU-only checks run in a lane beside the game lanes, their programs at below-normal priority;
         # the unit tests and start checks stay before every lane.
         import inspect
@@ -270,19 +272,19 @@ def main():
         args = gate.parser().parse_args(["--main", "--move"])
         longer = gate.parser().parse_args(["--main", "--move", "--github-wait", "180"])             if "--github-wait" in gate.parser().format_help() else None
         check(longer is not None and args.github_wait == 120 and longer.github_wait == 180
-              and "wait_minutes=args.github_wait" in __import__("inspect").getsource(gate.main),
+              and "rule.wait(args.github_wait" in __import__("inspect").getsource(gate.main),
               "--github-wait sets the move's wait for GitHub, 120 minutes unless given")
         asked = [0]
 
-        def flaky(branch, commit):
+        def flaky(sha):
             asked[0] += 1
             if asked[0] == 1:
                 raise RuntimeError("gh run list: timeout")
-            return "completed", green
+            return [{"id": 1, "branch": "gate/x", "jobs": green}]
 
         now[0] = 0.0
-        ok, detail = gate.github_wait("gate/x", "abc", state_of=flaky, sleep=tick, clock=lambda: now[0], log=t / "gh3.log")
-        check(ok and asked[0] == 2, "a failed question is asked again: %s" % detail)
+        kind, detail, _ = rule_of(flaky).wait(120, sleep=tick)
+        check(kind == "pass" and asked[0] == 2, "a failed question is asked again: %s" % detail)
 
         # 6. Main moves only through the gate.
         git = gate.GIT

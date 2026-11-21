@@ -319,6 +319,14 @@ class Cases(unittest.TestCase):
         self.assertTrue(any("not the change's" in l for l in out), out)
         self.assertEqual(w.faults[0][2], "ENV")
 
+    def test_advisory_github_line_is_no_failure(self):
+        """An advisory GitHub job that ended red twice is told in one line (tools/gate/github_rule.py): it is no failure of the
+        batch and no tool fault; a job that could not run (env) and a red job (fail) are."""
+        lines = ["KIND env github/Android start check (x86_64 emulator) - :: red twice on GitHub; advisory, blocks nothing",
+                 "KIND env github/Mac - :: GitHub could not run Mac",
+                 "KIND fail github/Linux - :: Linux failure on gate/x; its log is x.log"]
+        self.assertEqual([c for c, _, _ in landing.failures_of_lines(lines)], ["github/Mac", "github/Linux"])
+
     def test_github_red_fails_the_batch(self):
         w = self.w
         w.github_red = True
@@ -456,7 +464,7 @@ class Cases(unittest.TestCase):
         w.branch("feat/game", {"native/g2.cpp": "g"})
         w.branch("feat/render", {"runtime/src/render/r.cpp": "r"})
         land(w, ["feat/doc", "feat/game", "feat/render"])
-        self.assertEqual(w.checker.calls[0]["groups"], "repo,build,unit,start,engine1,engine3,tour1,tour3")
+        self.assertEqual(w.checker.calls[0]["groups"], "repo,build,unit,start,engine1,engine3,tour1,tour3,github")
         w.branch("feat/odd", {"installer/x.ps1": "x"})
         land(w, ["feat/odd"])
         self.assertTrue(w.checker.calls[-1]["groups"].startswith("full"), "a file no row names")

@@ -380,6 +380,17 @@ class Result:
         self.run_folder, self.moved, self.why, self.why_kind = str(run_folder or ""), moved, why, why_kind
 
 
+ADVISORY_END = "advisory, blocks nothing"
+
+
+def not_failure(message):
+    """Whether a KIND line's message says its result does not count: a note (known, set aside, the owed tablet), or the line of a
+    GitHub job that is advisory and ended red twice (tools/gate/github_rule.py)."""
+    if message.endswith(ADVISORY_END):
+        return True
+    return message.endswith("]") and any(message.rpartition(" [")[2].startswith(n) for n in ("known (", "set aside", "owed"))
+
+
 def failures_of_lines(lines):
     """[(check, kind, message)] of the KIND lines that count as a failure of their kind: kind fail, tool or env, not the
     ones a note marks as not counting (known, set aside, owed)."""
@@ -391,7 +402,7 @@ def failures_of_lines(lines):
         kind, check, test, message = parsed
         if kind not in ("fail", "tool", "env"):
             continue
-        if message.endswith("]") and any(message.rpartition(" [")[2].startswith(n) for n in ("known (", "set aside", "owed")):
+        if not_failure(message):
             continue
         out.append((check, kind, message.partition(" [")[0] if message.endswith("]") else message))
     return out
@@ -610,8 +621,7 @@ class Landing:
         step = names[0][len("native/"):] if names and names[0].startswith("native/") else ""
         for line in result.lines:
             parsed = kinds.parse_kind_line(line)
-            if parsed and parsed[0] in ("tool", "env") and not (parsed[3].endswith("]") and any(
-                    parsed[3].rpartition(" [")[2].startswith(n) for n in ("known (", "set aside", "owed"))):
+            if parsed and parsed[0] in ("tool", "env") and not not_failure(parsed[3]):
                 kind, check, test, message = parsed
                 self.faults(agent, step, kind.upper(), check, test if test != "-" else "", message.partition(" [")[0], result.run_folder)
 

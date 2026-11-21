@@ -8,17 +8,20 @@ starts the game for a test goes through here.
          two stops of each other disc. Before asking for a main gate.
 --main   level 2, what moves main: everything deterministic. Every renderer's engine tests and 102-stop tour with
          pictures and step hashes, the other discs, the mod tests on every renderer, the Android build, the tablet's
-         short part (the 12 stops, their step hashes against the PC's at the tablet's screen size) and every job of
-         GitHub's Check run of the same commit (Linux, Linux unit tests, both sanitizer jobs, Mac, Mac (Intel), Android,
-         Rust-on-Linux and any job added later), planned.tsv's github/<job> lines aside.
+         short part (the 12 stops, their step hashes against the PC's at the tablet's screen size) and every `must` job of
+         GitHub's Check run of the same commit (tools/gate/github_jobs.tsv: Mac, Linux, Linux unit tests, both sanitizer
+         jobs, Rust on both systems, both Android builds; a job the table does not name counts as must), planned.tsv's
+         github/<job> lines aside.
          --move: main moves to this commit when it passes (section 5). It needs a whole quick gate of the commit
          passed, the branch pushed and main an ancestor of it; it takes the gate lock (or waits --wait minutes),
          and on a pass fast-forwards main and pushes it itself, writes MAIN-MOVED on the board and frees the lock.
-         With --move the commit is pushed first as gate/<run> (section 5): GitHub runs every job on it while the gate
-         runs, the gate frees gate.lock when its own checks pass, waits up to 120 minutes for every job of that run to
-         be green (planned.tsv's github/<job> lines aside), then moves main and deletes gate/<run>. GitHub's slow
-         jobs (OWED_JOBS: the Android cloud builds and the emulator's start check) are owed: main moves when every
-         other job is green, tools/gate/owed.py reads them after the move and writes OWED-GREEN or OWED-RED.
+         With --move, when the plan has the group `github` (tools/gate/scope.tsv; a run with no plan has it), the commit is
+         pushed first as gate/<run> (section 5): GitHub runs every job on it while the gate runs (a red `must` job stops the
+         run), the gate frees gate.lock when its own checks pass, waits up to 120 minutes for every `must` job to be green
+         for the commit (any push run of it; the newest result wins), then moves main and deletes gate/<run>. Main never
+         moves before they are green; a cancelled job is run again once, and the limit gives env (not judged). A plan
+         with no `github` pushes no candidate, reads nothing from GitHub and moves main when its own checks pass
+         (tools/gate/github_rule.py).
          A picture with no approved copy (kind new), or one the branch declares in PICTURES-CHANGE.txt, never fails a run:
          when the checks have passed and GitHub is green, the gate approves them before it moves main, as one commit on
          top of the tested one that touches only tests/pictures/approved.tsv (and removes PICTURES-CHANGE.txt), runs the
@@ -87,6 +90,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(TREE / "tools" / "verify"))
 import gate_tour  # noqa: E402
 import gamedata  # noqa: E402
+import github_rule  # noqa: E402
 import kinds  # noqa: E402
 import landing  # noqa: E402
 import pictures as picture_tool  # noqa: E402
@@ -95,7 +99,7 @@ import step_hash  # noqa: E402
 
 LEVELS = ("quick", "main", "long", "final")
 # A landing's own level (tools/gate/scope.py, gate.py land): the checks of the groups a change needs, the 12 quick stops of
-# a tour, no GitHub check of its own (the landing waits for GitHub as a move does). The parser has no flag for it: --scope
+# a tour, no GitHub check of its own (the landing waits for GitHub as a move does, when its plan has the group `github`). The parser has no flag for it: --scope
 # makes a --main run this level unless the change needs everything (then it is the main level).
 LAND_LEVEL = "land"
 SHORT_LEVELS = ("quick", LAND_LEVEL)
@@ -122,29 +126,16 @@ RENDERERS = ("d3d12", "vulkan", "d3d11")
 QUICK_FIRST = ("build/windows", "unit/windows", "start/d3d12", "engine/d3d12")
 # The checks of the tablet's part, in the order they run.
 TABLET_CHECKS = ("tablet/prepare", "android/tablet", "tour/tablet", "tablet/remove", "tour/tablet-pc", "replays/tablet")
-# GitHub's push workflow (.github/workflows/check.yml). A move needs every job of the candidate's run green (section 8),
-# waited for outside gate.lock for up to GITHUB_WAIT_MINUTES. A main gate without --move and the final check read
-# the commit's newest run as one of their checks, for up to GITHUB_CHECK_MINUTES.
+# GitHub's push workflow (.github/workflows/check.yml). A move whose plan has the group `github` needs every `must` job
+# (tools/gate/github_jobs.tsv) green for the commit (section 8), waited for outside gate.lock for up to GITHUB_WAIT_MINUTES.
+# A main gate without --move and the final check read the same jobs, for up to GITHUB_CHECK_MINUTES.
 WORKFLOW = "check.yml"
 GITHUB_WAIT_MINUTES = 120
-# The jobs owed at a move (07-BASE-FIRST, How the work flows 3): GitHub's slow ones (the two Android cloud builds, 54 and
-# 73 minutes in run 44350945925, and the emulator's start check that waits for them). Main moves once every other job
-# is green; these are read after the move (tools/gate/owed.py) within OWED_HOURS, and one that ends red is fixed first
-# or the landing is taken back. One already red before the move stops it as any red job does.
-OWED_JOBS = ("Android (arm64-v8a)", "Android (x86_64)", "Android start check (x86_64 emulator)")
-OWED_HOURS = 2.0
-
-
-class EveryJob:
-    """Every job's name (07, How the work flows 3, 11-18 15:20): the cloud never holds a move; a job not ended when the
-    local main gate passes is owed and read after the move."""
-
-    def __contains__(self, name):
-        return True
-
-
-EVERY_JOB = EveryJob()
 GITHUB_CHECK_MINUTES = 15
+# What the readings of GitHub wait with and read the time from (tests put fakes in these).
+GITHUB_SLEEP = time.sleep
+GITHUB_CLOCK = time.time
+WATCH_SECONDS = 60.0
 CANDIDATE_PREFIX = "gate/"
 # The two lists (section 4) and the ledger their lines name.
 KNOWN = HERE / "known-failures.tsv"
@@ -500,31 +491,11 @@ class Gate:
     def write(self):
         if not self.results:
             self.record("gate/none", "tool", 0.0, "no check ran")
-        self.verdict = kinds.verdict_of([r["records"] for r in self.results])
-        self.code = kinds.EXIT_OF[self.verdict]
         if not self.dry:
             self.new_pictures = picture_tool.gather(self.work, PICTURE_STORE)
+        out, path, head, aside_line, new_line = self._save()
         passed = self.verdict == "pass"
-        counts = self.counts()
-        seconds = round(time.time() - self.started, 1)
-        self.lines = kinds.kind_lines(self.results)
-        aside = sorted("%s %s" % k for k in self.aside)
-        out = {"gate": 2, "mode": self.level, "commit": self.commit, "dirty": self.dirty, "run": self.name,
-               "only": self.args.only or None,
-               "started": datetime.datetime.fromtimestamp(self.started).isoformat(timespec="seconds"),
-               "seconds": seconds, "passed": passed, "verdict": self.verdict, "counts": counts, "checks": self.results}
-        path = pathlib.Path(self.args.out) if self.args.out else self.work / "result.json"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
-        self.write_verdict()
-        head = "gate %s %s%s%s: %s (%d checks: %s; %.0f s)" % (
-            self.level, self.commit, " (uncommitted changes)" if self.dirty else "",
-            " only " + self.args.only if self.args.only else "", self.verdict.upper(), len(self.results),
-            ", ".join("%d %s" % (n, s if s != "fail" else "failed") for s, n in counts.items() if n), seconds)
-        aside_line = ["set aside (still run, do not count): " + ", ".join(aside)] if aside else []
-        new_line = [self.new_pictures_line()] if self.new_pictures else []
-        lines = aside_line + new_line + [head] + ["  %-34s %-7s %s" % (r["check"], r["state"], r["detail"]) for r in self.results]
-        path.with_suffix(".txt").write_text("\n".join(lines + self.lines) + "\n", encoding="utf-8")
+        seconds = out["seconds"]
         append_history(pathlib.Path(self.args.work) / "history.tsv", out)
         if passed and not self.args.keep_runs and not self.args.out:
             if self.new_pictures and getattr(self.args, "move", False):
@@ -550,6 +521,45 @@ class Gate:
         for line in self.lines:
             print(line)
         return passed
+
+    def _save(self):
+        """The verdict, the exit code, the KIND lines and the run's files (result.json, verdict.json, the text) from the rows as
+        they are now. Returns (the result as written, its path, the head line, the set-aside line, the new-pictures line)."""
+        self.verdict = kinds.verdict_of([r["records"] for r in self.results])
+        self.code = kinds.EXIT_OF[self.verdict]
+        passed = self.verdict == "pass"
+        counts = self.counts()
+        seconds = round(time.time() - self.started, 1)
+        self.lines = kinds.kind_lines(self.results)
+        aside = sorted("%s %s" % k for k in self.aside)
+        out = {"gate": 2, "mode": self.level, "commit": self.commit, "dirty": self.dirty, "run": self.name,
+               "only": self.args.only or None,
+               "started": datetime.datetime.fromtimestamp(self.started).isoformat(timespec="seconds"),
+               "seconds": seconds, "passed": passed, "verdict": self.verdict, "counts": counts, "checks": self.results}
+        path = pathlib.Path(self.args.out) if self.args.out else self.work / "result.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
+        self.write_verdict()
+        head = "gate %s %s%s%s: %s (%d checks: %s; %.0f s)" % (
+            self.level, self.commit, " (uncommitted changes)" if self.dirty else "",
+            " only " + self.args.only if self.args.only else "", self.verdict.upper(), len(self.results),
+            ", ".join("%d %s" % (n, s if s != "fail" else "failed") for s, n in counts.items() if n), seconds)
+        aside_line = ["set aside (still run, do not count): " + ", ".join(aside)] if aside else []
+        new_line = [self.new_pictures_line()] if self.new_pictures else []
+        lines = aside_line + new_line + [head] + ["  %-34s %-7s %s" % (r["check"], r["state"], r["detail"]) for r in self.results]
+        path.with_suffix(".txt").write_text("\n".join(lines + self.lines) + "\n", encoding="utf-8")
+        return out, path, head, aside_line, new_line
+
+    def late(self, name, state, detail, log=None, records=None):
+        """A check that ends after the run's files were written (GitHub's, after the local checks): its row joins the results;
+        once the run has been written the verdict, the exit code and the files follow, and the row's KIND lines are printed
+        (the run's own last lines name them again for the caller)."""
+        self.record(name, state, 0.0, detail, log, records)
+        if self.verdict is None:
+            return
+        self._save()
+        for line in kinds.kind_lines([self.results[-1]]):
+            print(line, flush=True)
 
     def prune_runs(self):
         """The passed tests' working files are not evidence once the run passed (N-1060): the drive keeps its room."""
@@ -1162,17 +1172,6 @@ def measure_route(g):
     return fn
 
 
-def start_owed(branch, sha, owed, args, popen=subprocess.Popen):
-    """After a move with owed jobs: tools/gate/owed.py reads them, detached, and writes their end on the board."""
-    log = pathlib.Path(args.work) / ("owed-%s.log" % sha[:9])
-    cmd = [sys.executable, "-X", "utf8", "-I", str(HERE / "owed.py"), "--branch", branch, "--sha", sha, "--board",
-           args.board, "--who", args.who, "--hours", str(OWED_HOURS)] + [a for name in owed for a in ("--job", name)]
-    detach = {"creationflags": 0x8 | 0x200} if os.name == "nt" else {"start_new_session": True}
-    with open(log, "ab") as out:
-        popen(cmd, cwd=str(TREE), stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, close_fds=True, **detach)
-    return "read by tools/gate/owed.py within %g hours (log %s)" % (OWED_HOURS, log)
-
-
 def copies_in_use(bins, measure_lock, alive=None):
     """The names of the measure's build copies a measure uses (N-1090): a copy whose in-use.txt names a process that is alive
     (the measure started on it, `pid N`), and the commit measure.lock's holder line names (`measure.py <commit> <work>`:
@@ -1659,6 +1658,9 @@ def last_line(text):
 
 
 # GitHub ----------------------------------------------------------------------------------------------------------
+# The rule itself (the jobs' classes, which run counts for a commit, the runs again, the limit) is tools/gate/github_rule.py
+# with tools/gate/github_jobs.tsv; this is the reading of GitHub (gh), the watch while the checks run, and the rows the
+# result becomes in a run.
 
 
 def gh_json(*args):
@@ -1668,24 +1670,33 @@ def gh_json(*args):
     return json.loads(r.stdout or "null")
 
 
-def run_state(runs):
-    """(status, jobs) of the newest of the push workflow's runs given ([{databaseId, status}], newest first)."""
-    if not runs:
-        return None, []
-    run = runs[0]
-    return run.get("status"), gh_json("run", "view", str(run["databaseId"]), "--json", "jobs").get("jobs", [])
+def commit_runs(sha):
+    """[{id, branch, jobs}] of every push run of the commit on GitHub, under any branch name, newest first."""
+    runs = gh_json("run", "list", "--commit", sha, "--workflow", WORKFLOW, "--event", "push", "--json",
+                   "databaseId,headBranch", "--limit", "20") or []
+    return [{"id": r["databaseId"], "branch": r.get("headBranch") or "?",
+             "jobs": gh_json("run", "view", str(r["databaseId"]), "--json", "jobs").get("jobs", [])} for r in runs]
 
 
-def candidate_state(branch, sha):
-    """(status, jobs) of the newest push run of the candidate branch at its commit."""
-    return run_state(gh_json("run", "list", "--branch", branch, "--commit", sha, "--workflow", WORKFLOW, "--event",
-                             "push", "--json", "databaseId,status", "--limit", "5") or [])
+def gh_rerun(run_id, job_id):
+    """(ok, what happened): the job run again (`gh run rerun RUN --job JOB`); where GitHub refuses that for the run's state,
+    the run's failed jobs (`--failed`). One request each; the caller asks again later when both are refused."""
+    said = ""
+    for extra in (["--job", str(job_id)], ["--failed"]):
+        r = subprocess.run(["gh", "run", "rerun", str(run_id), *extra], capture_output=True, text=True, cwd=TREE, timeout=120)
+        if r.returncode == 0:
+            return True, "gh run rerun %s %s" % (run_id, " ".join(extra))
+        said = (r.stderr or r.stdout).strip()[-150:]
+    return False, "refused (%s)" % said
 
 
-def commit_state(branch, sha):
-    """(status, jobs) of the newest push run on the commit, under any branch name (branch unused)."""
-    return run_state(gh_json("run", "list", "--commit", sha, "--workflow", WORKFLOW, "--event", "push", "--json",
-                             "databaseId,status", "--limit", "5") or [])
+def gh_log(job_id):
+    """The failed steps' log of a job (`gh run view --job JOB --log-failed`)."""
+    r = subprocess.run(["gh", "run", "view", "--job", str(job_id), "--log-failed"], capture_output=True, text=True,
+                       cwd=TREE, timeout=180, encoding="utf-8", errors="replace")
+    if r.returncode != 0:
+        raise RuntimeError("gh run view --log-failed: %s" % (r.stderr or r.stdout).strip()[-150:])
+    return r.stdout
 
 
 def planned_jobs(planned):
@@ -1695,108 +1706,53 @@ def planned_jobs(planned):
 
 def red_minute(job):
     """' at HH:MM' (this computer's time) of a job's end, from GitHub's completedAt; '' where it has none."""
-    when = job.get("completedAt") or ""
-    try:
-        moment = datetime.datetime.fromisoformat(when.replace("Z", "+00:00"))
-    except ValueError:
-        return ""
-    if moment.year < 2000:  # GitHub's zero time: not ended
-        return ""
-    return " at " + moment.astimezone().strftime("%H:%M")
+    return github_rule.minute_of(job)
 
 
-def judge_run(status, jobs, planned_jobs=(), owed_jobs=()):
-    """(done, green, detail) of a run (section 8): every job is required except the planned ones. A job that ended
-    other than green (failure, cancelled, skipped) ends it at once; otherwise it is done when the run has ended, or
-    when only owed jobs (owed_jobs) have not ended: the detail then names them ("owed: ...")."""
-    red, running, green, owed = [], 0, 0, []
-    for j in jobs:
-        name = j.get("name") or "?"
-        if name in planned_jobs:
-            continue
-        if name in owed_jobs and j.get("status") != "completed":
-            owed.append(name)
-            continue
-        if j.get("status") != "completed":
-            running += 1
-        elif j.get("conclusion") == "success":
-            green += 1
+class Notes:
+    """github.log of a run: the readings' notes with the time. Kept until the run's folder is known (`to`)."""
+
+    def __init__(self):
+        self.path, self.kept = None, []
+
+    def __call__(self, text):
+        line = "%s %s\n" % (datetime.datetime.now().strftime("%H:%M:%S"), text)
+        if self.path is None:
+            self.kept.append(line)
         else:
-            red.append("%s %s%s" % (name, j.get("conclusion") or "?", red_minute(j)))
-    if red:
-        return True, False, "red: " + "; ".join(red)
-    if status is None:
-        return False, False, "no run yet"
-    if running or (status != "completed" and not owed):
-        return False, False, "%d green, %d not ended" % (green, running)
-    if green == 0:
-        return True, False, "the run has no job"
-    return True, True, "%d of %d jobs green" % (green, green) + ("; owed: " + ", ".join(owed) if owed else "")
+            with open(self.path, "a", encoding="utf-8") as f:
+                f.write(line)
+
+    def to(self, path):
+        self.path = path
+        with open(path, "a", encoding="utf-8") as f:
+            f.write("".join(self.kept))
+        self.kept = []
 
 
-def owed_of(detail):
-    """The owed jobs a judged run's detail names ([] when none)."""
-    _, _, owed = detail.partition("; owed: ")
-    return [name for name in owed.split(", ") if name] if owed else []
+def make_rule(sha, classes, planned=(), notes=None):
+    """The rule for a commit, reading GitHub through gh (the tests put fakes in commit_runs, gh_rerun and GITHUB_CLOCK)."""
+    return github_rule.Rule(sha, classes, commit_runs, gh_rerun, planned, clock=GITHUB_CLOCK, note=notes)
 
 
-def github_wait(branch, sha, planned=(), wait_minutes=GITHUB_WAIT_MINUTES, state_of=candidate_state, sleep=time.sleep,
-                clock=time.time, log=None, owed=()):
-    """(green, detail): asks GitHub once a minute for the run of `branch` at `sha` until it is judged, or for at most
-    wait_minutes. A question that fails (gh, the network) is asked again the next minute: it is not a red job."""
-    deadline = clock() + 60.0 * wait_minutes
-    detail = "not asked"
-    while True:
-        try:
-            done, green, detail = judge_run(*state_of(branch, sha), planned_jobs=planned, owed_jobs=owed)
-        except (RuntimeError, OSError, ValueError, subprocess.SubprocessError) as e:
-            done, green, detail = False, False, "GitHub did not answer: %s" % e
-        if log:
-            with open(log, "a", encoding="utf-8") as f:
-                f.write("%s %s\n" % (datetime.datetime.now().strftime("%H:%M:%S"), detail))
-        if done:
-            return green, detail
-        if clock() >= deadline:
-            return False, detail + " (no result after %g minutes)" % wait_minutes
-        sleep(60.0)
-
-
-# The answers that count as red before a main gate starts (a cancelled run is another push's, not a fault).
-RED_CONCLUSIONS = ("failure", "timed_out", "startup_failure")
-
-
-def commit_runs(sha):
-    """[(branch, jobs)] of every push run of the commit on GitHub, under any branch name."""
-    runs = gh_json("run", "list", "--commit", sha, "--workflow", WORKFLOW, "--event", "push", "--json",
-                   "databaseId,headBranch", "--limit", "20") or []
-    return [(r.get("headBranch") or "?", gh_json("run", "view", str(r["databaseId"]), "--json", "jobs").get("jobs", []))
-            for r in runs]
-
-
-def red_on_github(sha, planned=(), runs_of=commit_runs):
-    """Why a main gate of `sha` would not move main, already known on GitHub (section 8: read before the checks
-    start): a job of any run of the commit that failed, with its branch and the minute it went red. None when none
-    did, or when GitHub does not answer (the run then starts, and its own wait reads GitHub again)."""
-    try:
-        runs = runs_of(sha)
-    except (RuntimeError, OSError, ValueError, subprocess.SubprocessError):
-        return None
-    red = ["%s %s on %s%s" % (j.get("name") or "?", j.get("conclusion"), branch, red_minute(j))
-           for branch, jobs in runs for j in jobs
-           if j.get("status") == "completed" and j.get("conclusion") in RED_CONCLUSIONS
-           and (j.get("name") or "?") not in planned]
-    return ("red on GitHub: " + "; ".join(red[:4]) + (" ..." if len(red) > 4 else "")) if red else None
+def red_on_github(sha, planned=(), runs_of=None, classes=None):
+    """Why a main gate of `sha` would not start, already known on GitHub (section 8: read before the checks start): a red
+    `must` job of any run of the commit, with its branch and the minute it went red. None when none is red, or when GitHub
+    does not answer (the run then starts, and its own wait reads GitHub again)."""
+    rule = github_rule.Rule(sha, classes or github_rule.read_table(), runs_of or commit_runs, None, planned)
+    return rule.red_before()
 
 
 class GithubWatch:
-    """Reads the candidate's run once a minute while the gate's checks run (section 8); at its first red job calls
-    on_red with why (the job and the minute it went red) and stops reading."""
+    """Reads GitHub once a minute while the gate's checks run (section 8); at the first red `must` job calls on_red with why (the
+    job and the minute it went red) and stops reading. A job that ended broken twice is kept in `envs` (the run is then
+    not judged, and does not wait). Its readings also run the cancelled jobs again."""
 
-    def __init__(self, branch, sha, planned=(), on_red=None, state_of=candidate_state, every=60.0):
-        self.branch, self.sha, self.planned = branch, sha, planned
+    def __init__(self, rule, branch="", on_red=None, every=None):
+        self.rule, self.branch = rule, branch
         self.on_red = on_red or stop_runs
-        self.state_of, self.every = state_of, every
-        self.red = None
+        self.every = WATCH_SECONDS if every is None else every
+        self.red, self.reds, self.envs = None, [], []
         self._end = threading.Event()
         self._thread = threading.Thread(target=self._loop, name="github-watch", daemon=True)
 
@@ -1811,20 +1767,68 @@ class GithubWatch:
     def _loop(self):
         while not self._end.wait(self.every):
             try:
-                done, green, detail = judge_run(*self.state_of(self.branch, self.sha), planned_jobs=self.planned)
-            except (RuntimeError, OSError, ValueError, subprocess.SubprocessError):
+                reading = self.rule.read()
+            except github_rule.ANSWER_ERRORS:
                 continue  # asked again the next minute
-            if done and not green:
-                self.red = "GitHub's jobs on %s: %s" % (self.branch, detail)
+            self.envs = reading.envs
+            if reading.reds:
+                self.reds = reading.reds
+                self.red = "GitHub's jobs on %s: %s" % (self.branch, reading.detail())
                 self.on_red(self.red)
                 return
 
 
-def github_check(g, wait_minutes=GITHUB_CHECK_MINUTES, state_of=commit_state, sleep=time.sleep, clock=time.time):
-    """The commit's newest run, every job (a main gate without --move, the final check): a check of the gate."""
-    def fn(log):
-        return github_wait("", git("rev-parse", "HEAD"), planned_jobs(g.planned), wait_minutes, state_of, sleep, clock, log)
-    return fn
+def github_rows(g, rule, kind, detail, reading, minutes, say=print):
+    """The result of the rule as rows of the run (Gate.late): one `github/<job>` row for each job that stopped it (a red job
+    with its log saved first: github-<job>.log in the run's folder, its first lines printed), `github` for a pass or for GitHub
+    not answering. The jobs the table does not know and the advisory ones that ended red twice are told once, as rows that
+    do not count (KIND tool / KIND env)."""
+    if kind == "pass":
+        g.late("github", "pass", detail)
+    elif kind == "fail":
+        for f in reading.reds:
+            github_rule.save_log(f, g.work, gh_log, say)
+            g.late("github/" + f.job, "fail", f.state.said(False) + ("; its log is %s" % f.log if f.log else ""), f.log)
+    elif reading is not None and reading.envs:
+        for f in reading.envs:
+            g.late("github/" + f.job, "env", f.text)
+    elif reading is not None and reading.pending:
+        for name in reading.pending:
+            g.late("github/" + name, "env", "not finished after %g minutes" % minutes)
+    else:
+        g.late("github", "env", detail)
+    github_notes(g, rule)
+
+
+def github_notes(g, rule):
+    """The warnings and advisory lines of the rule, once: a job the table does not know (kind tool) and an advisory job that
+    ended red twice (kind env). Neither counts: they change no verdict."""
+    done = rule.told_rows
+    for name, text in rule.warnings():
+        if ("warning", name) not in done:
+            done.add(("warning", name))
+            g.late("github/" + name, "pass", text, None, [kinds.record("-", "tool", text, counts=False, note="warning")])
+    for name, text in sorted(rule.advised.items()):
+        if ("advice", name) not in done:
+            done.add(("advice", name))
+            g.late("github/" + name, "pass", text, None, [kinds.record("-", "env", text, counts=False)])
+
+
+def github_part(g, wait_minutes=GITHUB_CHECK_MINUTES, rule=None, sleep=None):
+    """The commit's GitHub jobs as one of the gate's checks (a main gate without --move, the final check): every `must` job
+    green for HEAD, waited for up to wait_minutes."""
+    if not g.wanted("github") or g.dry:
+        return
+    try:
+        classes = github_rule.read_table()
+    except github_rule.TableError as e:
+        g.record("github", "tool", 0.0, "tools/gate/github_jobs.tsv: " + str(e).splitlines()[0])
+        return
+    notes = Notes()
+    notes.to(g.work / "github.log")
+    rule = rule or make_rule(git("rev-parse", "HEAD"), classes, planned_jobs(g.planned), notes)
+    kind, detail, reading = rule.wait(wait_minutes, sleep=sleep or GITHUB_SLEEP)
+    github_rows(g, rule, kind, detail, reading, wait_minutes)
 
 
 # The candidates that wait for GitHub (section 5.8): one line each in <work>/waiting.tsv, "sha<TAB>branch<TAB>pid".
@@ -1844,6 +1848,17 @@ def drop_waiting(work, sha):
     if path.exists():
         keep = [l for l in path.read_text(encoding="utf-8").splitlines() if l.split("\t")[0] != sha]
         path.write_text("".join(l + "\n" for l in keep), encoding="utf-8")
+
+
+def push_candidate(commit, candidate):
+    """The commit pushed as the candidate branch (section 5.3): None, or why it could not be."""
+    r = subprocess.run([GIT, "-C", str(TREE), "push", "origin", "%s:refs/heads/%s" % (commit, candidate)],
+                       capture_output=True, text=True)
+    return None if r.returncode == 0 else (r.stderr or r.stdout).strip()[-300:]
+
+
+def delete_candidate(candidate):
+    subprocess.run([GIT, "-C", str(TREE), "push", "origin", "--delete", candidate], capture_output=True, text=True)
 
 
 def unheld_candidates(work, sha, tree=None, alive=None):
@@ -2409,7 +2424,7 @@ def run_checks(args, known=None, planned=None, selected=None, dry=False):
         locked_part(g, "measure", lambda: g.check("measure/route", measure_route(g), DATA))
     if every and not getattr(g.args, "move", False):
         # With --move the gate waits for GitHub after its own checks, outside gate.lock (main()).
-        g.check("github", github_check(g))
+        github_part(g)
     g.plan_rows()
     if not dry:
         g.write()
@@ -2572,28 +2587,38 @@ def main(argv=None):
         if args.mode == "long" and commit != git("rev-parse", "origin/main"):
             return refuse("the long run is on main's newest commit (%s), this tree is at %s" % (
                 git("rev-parse", "--short", "origin/main"), commit[:9]))
-    candidate = None
+    # The GitHub part (section 8, package T8a): on for a plan that has the group `github`, and for a run with no plan; a plan
+    # without it pushes no candidate, starts no watch and waits for nothing from GitHub.
+    github = plan is None or plan.full or "github" in plan.groups
+    candidate = rule = notes = None
     if args.move:
         git("fetch", "origin", "main")
         if not git_ok("merge-base", "--is-ancestor", "origin/main", "HEAD"):
             return refuse("main (%s) is not an ancestor of this commit: rebase on it first" % git("rev-parse", "--short", "origin/main"))
         if git("status", "--porcelain"):
             return refuse("the tree has uncommitted changes")
-        red = red_on_github(commit, planned_jobs(planned))
-        if red:
-            board_line(args.board, "%s NOTICE: no main gate of %s: %s." % (args.who, commit[:9], red))
-            return refuse("main could not move to %s: %s" % (commit[:9], red))
+        if github:
+            try:
+                classes = github_rule.read_table()
+            except github_rule.TableError as error:
+                return refuse("tools/gate/github_jobs.tsv is wrong:\n  " + "\n  ".join(error.problems))
+            notes = Notes()
+            rule = make_rule(commit, classes, planned_jobs(planned), notes)
+            red = rule.red_before()
+            if red:
+                board_line(args.board, "%s NOTICE: no main gate of %s: %s." % (args.who, commit[:9], red))
+                return refuse("main could not move to %s: %s" % (commit[:9], red))
         unheld = unheld_candidates(args.work, commit)
         if unheld:
             return refuse("candidates still wait for GitHub that this commit does not hold (%s): rebase on the newest "
                           "of them, so main can reach both" % ", ".join(unheld))
         # The candidate under a name of its own (section 5.3): GitHub runs every job on it while the gate runs, and no
         # later push to a work branch cancels that run.
-        candidate = CANDIDATE_PREFIX + "%s-%s" % (datetime.datetime.now().strftime("%Y%m%d-%H%M%S"), commit[:9])
-        r = subprocess.run([GIT, "-C", str(TREE), "push", "origin", "%s:refs/heads/%s" % (commit, candidate)],
-                           capture_output=True, text=True)
-        if r.returncode != 0:
-            return refuse("the candidate could not be pushed as %s: %s" % (candidate, (r.stderr or r.stdout).strip()[-300:]))
+        if rule is not None:
+            candidate = CANDIDATE_PREFIX + "%s-%s" % (datetime.datetime.now().strftime("%Y%m%d-%H%M%S"), commit[:9])
+            pushed = push_candidate(commit, candidate)
+            if pushed is not None:
+                return refuse("the candidate could not be pushed as %s: %s" % (candidate, pushed))
     quick = None
     if args.mode in ("main", "final") and not patterns and plan is None:
         quick = quick_passed(args.work, git("rev-parse", "--short", "HEAD"), whole=True)
@@ -2626,13 +2651,20 @@ def main(argv=None):
             free_gate_lock(t, holder, args.board, args.who, "not run: " + why)
         return refuse("main could not move to %s: %s" % (commit[:9], why))
     code, summary, g, moved_line = 2, "it ended before writing a result", None, None
-    watch = GithubWatch(candidate, commit, planned_jobs(planned)).start() if args.move else None
+    watch = GithubWatch(rule, candidate).start() if rule is not None else None
     try:
         try:
             g = run_checks(args, known, planned, selected)
         finally:
             if watch is not None:
                 watch.stop()
+        if watch is not None:
+            notes.to(g.work / "github.log")
+            if watch.reds:
+                # A red `must` job stopped the checks: its log is saved in the run's folder and its first lines printed.
+                github_rows(g, rule, "fail", watch.red, github_rule.Reading.of(reds=watch.reds), args.github_wait)
+            elif watch.envs:
+                github_rows(g, rule, "env", watch.envs[0].text, github_rule.Reading.of(envs=watch.envs), args.github_wait)
         code = g.code
         summary = {0: "all checks passed", 1: "checks failed (exit 1)"}.get(code, "not judged (exit %d): a tool or the machine, not the change" % code)
         if watch is not None and watch.red:
@@ -2645,17 +2677,26 @@ def main(argv=None):
                        "commit first when the tablet is back (gate.py --main --only \"%s\")." % (
                            args.who, args.mode, g.name, commit[:9], ", ".join(owed), ",".join(owed)))
         if args.move and code == 0 and not (watch is not None and watch.red):
-            # The machine is free for the next gate from here (section 5.5); this process waits for GitHub alone.
+            # The machine is free for the next gate from here (section 5.5); this process waits for GitHub alone, when the
+            # plan has a GitHub part, and moves main once every `must` job is green for the commit.
             for lock in taken:
-                free_gate_lock(lock, holder, args.board, args.who, "its checks passed; it waits for GitHub's jobs on %s"
-                               % candidate)
+                free_gate_lock(lock, holder, args.board, args.who, ("its checks passed; it waits for GitHub's jobs on %s"
+                                                                    % candidate) if rule is not None else
+                               "its checks passed; the plan has no GitHub part")
             taken = []
-            add_waiting(args.work, commit, candidate, os.getpid())
+            if rule is not None:
+                add_waiting(args.work, commit, candidate, os.getpid())
             landed = commit  # the commit main moves to: the tested one, or on top of it the pictures' approval
+            why, detail = None, "the plan has no GitHub part"
             try:
-                green, detail = github_wait(candidate, commit, planned_jobs(planned), wait_minutes=args.github_wait,
-                                            log=str(g.work / "github.log"), owed=EVERY_JOB)
-                why = None if green else "GitHub's jobs on %s: %s" % (candidate, detail)
+                if rule is not None:
+                    kind, detail, reading = rule.wait(args.github_wait, sleep=GITHUB_SLEEP)
+                    github_rows(g, rule, kind, detail, reading, args.github_wait)
+                    code = g.code
+                    if kind == "fail":
+                        why = "GitHub's jobs on %s: %s" % (candidate, detail)
+                    elif kind == "env":
+                        why = detail
                 if why is None:
                     move_lock = str(pathlib.Path(args.gate_lock).with_name("move.lock"))
                     held = take_gate_lock(move_lock, holder, 10.0, "", args.who, poll=5.0)
@@ -2677,8 +2718,10 @@ def main(argv=None):
                         finally:
                             shutil.rmtree(move_lock, ignore_errors=True)
             finally:
-                drop_waiting(args.work, commit)
-            subprocess.run([GIT, "-C", str(TREE), "push", "origin", "--delete", candidate], capture_output=True, text=True)
+                if rule is not None:
+                    drop_waiting(args.work, commit)
+            if candidate is not None:
+                delete_candidate(candidate)
             if why is not None:
                 code, summary = (2 if code == 2 else 1), "passed, main not moved: " + why
                 print("gate.py: main not moved: " + why, file=sys.stderr)
@@ -2687,16 +2730,13 @@ def main(argv=None):
                     args.who, g.name, commit[:9], why))
             else:
                 moved_line = "MOVED %s" % landed
-                summary = "passed, GitHub green (%s), main moved to %s" % (detail, landed[:9])
+                summary = "passed, %s, main moved to %s" % (("GitHub green (%s)" % detail) if rule is not None else
+                                                              "no GitHub part in the plan", landed[:9])
                 # The build that moved main is kept (the two newest): a test that fails in a later change is run on it.
                 kept = kinds.keep_base(git("rev-parse", "HEAD"), g.bin, BASE_BINS)
                 if kept is not None:
                     print("gate.py: " + kept)
                     board_line(args.board, "%s NOTICE: %s." % (args.who, kept))
-                owed = owed_of(detail)
-                if owed:
-                    board_line(args.board, "%s OWED: main %s moved with GitHub's %s not ended; %s." % (
-                        args.who, commit[:9], ", ".join(owed), start_owed(candidate, commit, owed, args)))
                 # First the measure (it queues for the gate lock now), then the long run, whose parts queue behind it.
                 measured = start_measure(landed, g, args)
                 print("gate.py: measure: %s" % measured)
@@ -2720,7 +2760,9 @@ def main(argv=None):
                 print("gate.py: the status page was not written: %s: %s" % (type(e).__name__, e), file=sys.stderr)
     # The run's last word, and its last line: a pass only where main moved, or no move was asked and every check passed.
     verdict = {0: "pass", 1: "fail"}.get(code, "not-judged")
-    if g is not None and verdict != g.verdict:
+    if g is not None and rule is not None:
+        github_notes(g, rule)
+    if g is not None and (verdict != g.verdict or (moved_line or "").startswith("NOT-MOVED")):
         g.write_verdict(verdict, summary)
     if moved_line:
         print(moved_line, flush=True)
@@ -2733,8 +2775,10 @@ def not_moved_kind(why):
     (the batch fails), or another reason (a lock, the pictures' approval: not judged)."""
     if "main moved during the gate" in why:
         return "main-moved"
-    if why.startswith("GitHub's jobs"):
+    if why.startswith("GitHub's jobs on "):
         return "github"
+    if why.startswith("GitHub "):
+        return "env"      # GitHub did not finish or could not run a job: nothing was judged, the branch waits
     return "other"
 
 
