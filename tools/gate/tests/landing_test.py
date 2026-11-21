@@ -580,6 +580,13 @@ class Cases(unittest.TestCase):
         self.assertEqual((r.verdict, r.failures[0][1]), ("not-judged", "tool"))
         r = gate.parse_run_output(["NOT-MOVED github GitHub's jobs on gate/x: red\n", "VERDICT fail\n"], 1)
         self.assertEqual((r.verdict, r.why_kind, r.moved), ("pass", "github", ""))
+        # A pass that did not move main ends the run not-judged (exit 2) unless a job of GitHub is red: the NOT-MOVED line decides, so the
+        # landing's reading is the same whatever the run's own verdict and exit code were.
+        for kind, why in (("other", "the push of main failed: ! [rejected]"), ("main-moved", "main moved during the gate (now 1234)"),
+                          ("env", "GitHub could not be reached for the push of main (6 tries in 8 minutes): x")):
+            for verdict, code in (("not-judged", 2), ("fail", 1)):
+                r = gate.parse_run_output(["NOT-MOVED %s %s\n" % (kind, why), "VERDICT %s\n" % verdict], code)
+                self.assertEqual((r.verdict, r.why_kind, r.moved, r.why), ("pass", kind, "", why), (kind, verdict))
         r = gate.parse_run_output(["gate.py: no whole quick gate\n"], 2)
         self.assertEqual(r.verdict, "not-judged", "no VERDICT line: the tool broke")
         r = gate.parse_run_output(["VERDICT pass\n"], 7)

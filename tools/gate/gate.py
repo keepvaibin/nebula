@@ -81,7 +81,9 @@ It writes one result (JSON and text, side by side), verdict.json, one line in <w
 (tools/gate/status.py, --status). Its last lines: one `KIND <kind> <check> <test> :: <message>` for each result that
 is not a pass, then `VERDICT pass` (exit 0), `VERDICT fail` (a fail is left; exit 1) or `VERDICT not-judged` (no fail,
 but a tool or env; exit 2: the check is run again once the tool is fixed or the machine is fit). Exit 2 also when it
-could not start (bad options, a lock held, a rule of section 5 not met). Main moves only on VERDICT pass.
+could not start (bad options, a lock held, a rule of section 5 not met). Main moves only on VERDICT pass. A run whose checks
+passed and whose move of main did not happen ends `VERDICT fail` (exit 1) only when a job of GitHub is red; for every other reason (main
+moved, the push could not reach GitHub, a lock, GitHub not finishing) nothing was judged: `VERDICT not-judged`, exit 2.
 """
 import argparse
 import contextlib
@@ -2023,11 +2025,33 @@ def push_checks(sha, tree=TREE, guards=RATCHET):
     return None
 
 
-def move_main(sha, run_name, work, board, who, covers, tree=TREE):
+# The push of main is tried again when it did not reach GitHub (a network failure): the seconds to wait before each next try, so six
+# tries in all, about eight minutes. A refusal (the hook, GitHub's own answer) is never tried again.
+PUSH_WAITS = (15, 30, 60, 120, 240)
+# What git says when the network failed (lower case), and what it says when GitHub answered and refused.
+PUSH_NETWORK_TEXTS = ("unable to access", "could not resolve host", "connection was reset", "connection reset", "timed out",
+                      "failed to connect", "remote end hung up", "rpc failed", "early eof", "returned error: 5")
+PUSH_REFUSED_TEXTS = ("returned error: 4", "[rejected]", "[remote rejected]")
+
+
+def push_is_network(text):
+    """Whether git's text of a failed push is the network's (the push may not have arrived, and is worth trying again) and not an
+    answer of GitHub or of a hook (a refusal)."""
+    low = text.lower()
+    return any(k in low for k in PUSH_NETWORK_TEXTS) and not any(k in low for k in PUSH_REFUSED_TEXTS)
+
+
+def move_main(sha, run_name, work, board, who, covers, tree=TREE, sleep=time.sleep):
     """Fast-forwards origin's main to sha (section 5.5): main must still be its ancestor. The push carries a one-time
-    allowance the pre-push hook's guard (tools/gate/main_push_guard.py) reads. None when moved, else why not."""
+    allowance the pre-push hook's guard (tools/gate/main_push_guard.py) reads (written for each try, gone after it). A push that
+    failed is looked at: when origin's main holds sha the push arrived and only its answer was lost (a move); when main moved on,
+    that is said; when git's text is the network's the push is tried again after PUSH_WAITS (six tries); any other text is a
+    refusal and ends it. None when moved, else why not."""
     def tree_git(*args, env=None):
         return subprocess.run([GIT, "-C", str(tree), *args], capture_output=True, text=True, env=env)
+
+    def main_moved(now):
+        return "main moved during the gate (now %s): rebase on it and gate again" % now[:9]
 
     tree_git("fetch", "origin", "main")
     before = tree_git("rev-parse", "origin/main").stdout.strip()
@@ -2036,19 +2060,42 @@ def move_main(sha, run_name, work, board, who, covers, tree=TREE):
         board_line(board, "%s MAIN-MOVED: main already holds %s (main is %s); gate %s." % (who, sha[:9], before[:9], run_name))
         return None
     if tree_git("merge-base", "--is-ancestor", before, sha).returncode != 0:
-        return "main moved during the gate (now %s): rebase on it and gate again" % before[:9]
+        return main_moved(before)
     allowed = pathlib.Path(work) / "main-allowed.txt"
-    allowed.write_text("%s %s\n" % (sha, run_name), encoding="utf-8")
-    try:
-        r = tree_git("push", "origin", "%s:refs/heads/main" % sha, env=dict(os.environ, **{ALLOWED_ENV: str(allowed)}))
-    finally:
-        allowed.unlink(missing_ok=True)
-    if r.returncode != 0:
-        return "the push of main failed: %s" % (r.stderr or r.stdout).strip()[-300:]
+    tries = len(PUSH_WAITS) + 1
+    text, lost = "", False
+    for attempt in range(tries):
+        allowed.write_text("%s %s\n" % (sha, run_name), encoding="utf-8")
+        try:
+            r = tree_git("push", "origin", "%s:refs/heads/main" % sha, env=dict(os.environ, **{ALLOWED_ENV: str(allowed)}))
+        finally:
+            allowed.unlink(missing_ok=True)
+        if r.returncode == 0:
+            break
+        text = (r.stderr or r.stdout).strip()
+        # Did the push arrive, and only its answer get lost? Or did main move on? Look at origin before anything else.
+        if tree_git("fetch", "origin", "main").returncode == 0:
+            now = tree_git("rev-parse", "origin/main").stdout.strip()
+            if now and tree_git("merge-base", "--is-ancestor", sha, now).returncode == 0:
+                lost = True
+                break
+            if now and now != before:
+                return main_moved(now)
+        if not push_is_network(text):
+            return "the push of main failed: %s" % text[-300:]
+        if attempt == tries - 1:
+            return "GitHub could not be reached for the push of main (%d tries in %d minutes): %s" % (
+                tries, round(sum(PUSH_WAITS) / 60.0), text[-300:])
+        wait = PUSH_WAITS[attempt]
+        last = (text.splitlines() or [""])[-1].strip()
+        print("gate.py: the push of main did not reach GitHub (%s); trying again in %d s (try %d of %d)" % (
+            last, wait, attempt + 2, tries), file=sys.stderr, flush=True)
+        sleep(wait)
     tree_git("fetch", "origin", "main")
     count = tree_git("rev-list", "--count", "%s..%s" % (before, sha)).stdout.strip()
-    board_line(board, "%s MAIN-MOVED: main %s -> %s (%s commits)%s; gate %s." % (
-        who, before[:9], sha[:9], count, (": " + covers) if covers else "", run_name))
+    board_line(board, "%s MAIN-MOVED: main %s -> %s (%s commits)%s; gate %s.%s" % (
+        who, before[:9], sha[:9], count, (": " + covers) if covers else "", run_name,
+        " The answer of the push was lost; main holds it." if lost else ""))
     return None
 
 
@@ -3182,9 +3229,12 @@ def main(argv=None):
             if candidate is not None:
                 delete_candidate(candidate)
             if why is not None:
-                code, summary = (2 if code == 2 else 1), "passed, main not moved: " + why + ("; card shared" if g.card_shared else "")
+                # `fail` (exit 1) only where a job of GitHub is red: the change is at fault. Every other reason (main moved, the push, a
+                # lock, GitHub not finishing) judged nothing: not-judged, exit 2.
+                kind = not_moved_kind(why)
+                code, summary = (1 if kind == "github" else 2), "passed, main not moved: " + why + ("; card shared" if g.card_shared else "")
                 print("gate.py: main not moved: " + why, file=sys.stderr)
-                moved_line = "NOT-MOVED %s %s" % (not_moved_kind(why), why)
+                moved_line = "NOT-MOVED %s %s" % (kind, why)
                 board_line(args.board, "%s NOTICE: main gate %s on %s passed its checks; main not moved: %s." % (
                     args.who, g.name, commit[:9], why))
             else:
