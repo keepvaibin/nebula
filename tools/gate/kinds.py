@@ -4,9 +4,11 @@ Every check and every test ends as one kind:
   pass   it passed;
   fail   the game or the change is wrong (the only kind that fails a run);
   tool   the test tool broke: the runner or a script raised, a result file is missing or cannot be read, or a check ran
-         a different number of cases than it declares, or none;
+         a different number of cases than it declares, or none; a picture or report the game writes at its exit that never
+         came, the tablet's exit record that never came;
   env    the machine was not fit: the tablet away, the drive full, another graphics card than the approved pictures
-         name, a lock not had in time;
+         name, a lock not had in time, a test that was still taking steps when its time limit passed (no verdict depends on
+         how long something took: a game that completed no step for 120 s is fail, "hung");
   flake  failed, then passed when run again alone (tests/flakes: <plan>/native/flakes.tsv);
   main   failed again alone, and fails on main's build in the same way: main is at fault, not the change;
   new    a picture with no approved copy, or one that the change declares (PICTURES-CHANGE.txt): it never fails a run, the
