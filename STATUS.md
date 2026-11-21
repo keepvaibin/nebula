@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-21 01:45.
+Written 2026-11-21 10:07.
 
 Steps landed: 0 of 138 (0%).
 
@@ -38,6 +38,18 @@ In work now: Nothing started.
 ## Last 10 landings
 
 None yet.
+
+## Repairs
+
+0 open of kind fail, 1 in all.
+
+| Id | State | Kind | Check | Renderer | Traced to | Seen |
+| --- | --- | --- | --- | --- | --- | --- |
+| R-001 | open | stress | stress/tour/d3d11/2 | d3d11 | commit abc123 | 1 |
+
+## For the owner to check by hand
+
+Nothing is owed.
 
 ## Blocked
 
