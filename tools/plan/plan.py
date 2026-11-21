@@ -1300,6 +1300,17 @@ def holds_refusal(a, package, claims, stale):
     return ""
 
 
+BLOCKED_FILE = NATIVE + "/BLOCKED.md"
+
+
+def folder_changes(folder):
+    """The uncommitted changes of a work folder, as git status lines, except BLOCKED.md: `blocked` and `tool` write it in the
+    tree the tool runs in (a plain file the agent may commit), and when that is the agent's own folder it must not stop the next
+    start. It stays as it is when the branch changes."""
+    lines = git(folder, "status", "--porcelain").stdout.splitlines()
+    return [l for l in lines if l[3:].strip('"') != BLOCKED_FILE]
+
+
 def branch_exists(folder, ref):
     return git(folder, "rev-parse", "--verify", "--quiet", ref).returncode == 0
 
@@ -1317,7 +1328,7 @@ def begin_work(a, branch):
     if folder.exists():
         if not (folder / ".git").exists():
             return "%s exists and is not a work folder of this repository. Move it away, then run start again." % folder.as_posix()
-        if git_out(folder, "status", "--porcelain"):
+        if folder_changes(folder):
             return ("the work folder %s has uncommitted changes. Commit them (or throw away what you do not want), then run "
                     "start again." % folder.as_posix())
     fetched = git(folder if folder.exists() else a.tree, "fetch", "origin")
@@ -1462,7 +1473,7 @@ def work_folder_problem(a, folder, branch):
     the item's branch."""
     if not folder.is_dir():
         return "the work folder %s is missing" % folder.as_posix()
-    if git_out(folder, "status", "--porcelain"):
+    if folder_changes(folder):
         return "the work folder has uncommitted changes; commit them first"
     on = git_out(folder, "rev-parse", "--abbrev-ref", "HEAD")
     if on != branch:
@@ -1666,7 +1677,7 @@ def land_repair(a):
 def park_branch(a, folder, branch):
     """What `blocked` does for something in work: the folder must have no uncommitted change, and the branch goes to origin so
     that nothing is lost. Returns the refusal text, or None."""
-    if folder.exists() and git_out(folder, "status", "--porcelain"):
+    if folder.exists() and folder_changes(folder):
         return ("the work folder %s has uncommitted changes. Commit your unfinished work first (git add, git commit), then run "
                 "blocked again." % folder.as_posix())
     here = folder if folder.exists() else a.tree
