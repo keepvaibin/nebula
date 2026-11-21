@@ -2,7 +2,9 @@
 
     python -X utf8 -I tools/plan/plan.py next | status | page | rows [ID] | start ID | land ID [--github-again] | blocked ID "WHY"
                                          | claim PACKAGE [--take-stale] | tool "TEXT" | toolfault --last --could-not "TEXT"
-    (next, start, land, blocked, claim, tool, toolfault and status take --agent 1|2; 1 is the default)
+                                         | repair add --source S --kind K --check C ... | repair list
+    (next, start, land, blocked, claim, tool, toolfault and status take --agent 1|2; 1 is the default; ID is a step, or for
+     start, land and blocked a repair such as R-003)
     (--no-push, before the command, or NEBULA_PLAN_NO_PUSH=1 in the environment: the progress branch is not pushed)
 
 The plan is `docs/plan/native/`: `steps.tsv` (order, step, package, title, package_needs, card_file, state, commit),
@@ -23,9 +25,13 @@ next     The first step in file order whose state is `open`, whose needs are lan
          the list is done or nothing on it can start, `next --agent 2` says so and the helper stops. Neither agent is
          given a package whose needs are not landed, nor G2.1 to G2.7 while R7 is in work (or R7 while they are):
          both change the frame and present code. A claim with no commit on its branch for 48 hours is reported as stale.
-start    Branch `native/<id>` from main in `D:/NebulaWork/MarioGalaxyRecomp/N-<id>`; the step becomes `started` and its
-         package is claimed by the agent. Refuses while three steps of the agent are started and not landed, a step whose
-         needs are not landed, a package another agent holds, and for agent 2 a package that is not on its list.
+start    One work folder for each agent, kept: agent 1 works in `D:/NebulaWork/MarioGalaxyRecomp/Nebula-native`, agent 2 in
+         `Nebula-native-2`. `start` makes the folder the first time (git worktree add) and uses it every later time, so the
+         build beside it is kept and only changed files are compiled again. It refuses, with one line saying what to do,
+         when the folder has uncommitted changes or when the agent has something in work (a step or a repair that is
+         `started`: one thing at a time); then it fetches, makes the branch `native/<id>` from `origin/main` in that
+         folder, sets the step `started` and claims its package for the agent. Also refuses a step whose needs are not
+         landed, a package another agent holds, and for agent 2 a package that is not on its list.
 land     Refuses unless every ledger row the card closes whole is `fixed` with a proof that names a test, a search or a
          measure, and every row it only advances has a dated note written by this branch; checks the file and line
          references in the changed documents and the commit messages (tools/verify/doc_refs.py); then hands the branch
@@ -36,8 +42,10 @@ land     Refuses unless every ledger row the card closes whole is `fixed` with a
          landing. The gate stores a failure by signature (failures.py) and writes a TOOL or ENV result, at once, as a line
          of tool-faults.tsv (live.py); it prints the command that adds the agent's "could not" sentence. A `main` line is
          information, not a failure.
-blocked  Sets `blocked`; writes the reason and the failure's first line into BLOCKED.md. `next` then skips to
-         independent work.
+blocked  Refuses while the agent's work folder has uncommitted changes (commit the unfinished work first); pushes the
+         branch to origin so nothing is lost; sets `blocked`; writes the reason and the failure's first line into
+         BLOCKED.md. The folder is free for the next `start`; `next` skips to independent work. For a repair it sets
+         `set-aside` and writes the same into BLOCKED.md under "repairs".
 claim    Claims a package for the agent; a stale claim of the other agent is taken over with --take-stale (its branch is
          left as it is).
 tool     Writes a tool fault into BLOCKED.md under "tools" and into tool-faults.tsv. The step is not blocked.
@@ -55,6 +63,14 @@ page     Writes the progress files into the live folder (page.py), from steps.ts
          with no history in common with main; plumbing commands in the main repository, no work folder touched;
          message `Progress: N of M steps landed`). A failed push is one warning line. Nothing else is ever pushed.
 rows     What a card's "Rows." line means (closes whole / advances), for one step or all of them.
+repair   `repair add --source nightly|stress|measure --kind fail|stress|worse --check CHECK [--renderer R] [--step ID
+         --commit SHA] --evidence FOLDER [--row ROW] --note "TEXT"` writes a line of repairs.tsv (the live folder) and prints
+         its id; the same check and renderer already `open`, `started` or `set-aside` is not written twice: its `seen` count
+         goes up and the date is added to its note. `repair list` prints them, open ones first. `next` gives the oldest
+         open repair of kind `fail` before any step (stress and worse repairs never come first and never block);
+         `start R-003` makes the branch `native/repair-003` in the agent's folder; `land R-003` hands it to
+         `gate.py land --also <its check>` and on a pass sets the repair `landed` with the commit; `blocked R-003 "WHY"`
+         sets it `set-aside` and `next` goes on with the steps. Agent 1's work only.
 
 Exit codes: 0 done; 1 refused or failed; 2 the command was wrong; 3 the same failure three times; 4 a tool or
 machine fault only, or a branch that does not apply (the gate's "not judged": it does not count as a failure of the change).
@@ -94,7 +110,8 @@ WORK_ROOT = "D:/NebulaWork/MarioGalaxyRecomp"
 FAILURES = "D:/NebulaWork/plan/landing-failures.tsv"
 TABLET = "R52WA0FXE5J"
 TABLET_WAIT = 30
-MAX_STARTED = 3
+# One work folder for each agent, kept between steps (made by `start` the first time).
+AGENT_FOLDERS = {"1": "Nebula-native", "2": "Nebula-native-2"}
 LIVE = "D:/NebulaWork/plan/native"       # the live state: claims, started and blocked steps, tool faults, the page
 AGENT2_LIST = ("G6", "G7", "G8", "G9", "G1", "R10", "R9", "G4")   # the helper's packages, in this order, and no others
 # Two groups of steps that must not be in work at the same time (both change the renderers' frame and present code).
@@ -818,8 +835,9 @@ def tool_notes(tree):
     return out
 
 
-def work_folder(work_root, step_id):
-    return pathlib.Path(work_root) / ("N-" + step_id)
+def work_folder(work_root, agent=1):
+    """The agent's own work folder: the same one for every step and repair."""
+    return pathlib.Path(work_root) / AGENT_FOLDERS[str(agent)]
 
 
 def count_flakes(live):
@@ -854,10 +872,18 @@ def status_text(tree, work_root=WORK_ROOT, at=None, live=None):
     out = ["# Native plan: status", "", "Written %s by plan.py status. Run it at every start and after every context "
            "compaction." % at.isoformat(timespec="minutes"), "",
            "Steps landed: %d of %d." % (len(by["landed"]), len(steps)), ""]
-    out.append("## Started (%d, at most %d for one agent)" % (len(by["started"]), MAX_STARTED))
+    repairs = lv.read_repairs(live_dir(live))
+    state = lv.read_state(live_dir(live))
+    working = [r for r in repairs if r["state"] == "started"]
+    out.append("## In work (%d, one thing for each agent)" % (len(by["started"]) + len(working)))
     out.append("")
     out += ["- %s %s: agent %s, branch native/%s in %s" % (s["step"], s["title"], s["agent"] or "1", s["step"],
-                                                          work_folder(work_root, s["step"]).as_posix()) for s in by["started"]] or ["- none"]
+                                                          work_folder(work_root, s["agent"] or "1").as_posix()) for s in by["started"]]
+    out += ["- %s repair of %s: agent %s, branch native/repair-%s in %s" % (
+        r["id"], lv.repair_what(r), (state.get(r["id"]) or {}).get("agent", "1"), r["id"][2:],
+        work_folder(work_root, (state.get(r["id"]) or {}).get("agent", "1")).as_posix()) for r in working]
+    if not by["started"] and not working:
+        out.append("- none")
     out += ["", "## Blocked (%d)" % len(by["blocked"]), ""]
     out += ["- %s %s: %s" % (s["step"], s["title"], s["reason"] or reasons.get(s["step"], "(no reason written)"))
             for s in by["blocked"]] or ["- none"]
@@ -865,6 +891,10 @@ def status_text(tree, work_root=WORK_ROOT, at=None, live=None):
     out += ["- %s: agent %s since %s%s%s" % (c["package"], c["agent"], c["time"], ", branch " + c["branch"] if c["branch"] else "",
                                             " STALE (no commit for %d hours): plan.py claim %s --take-stale" % (lv.STALE_HOURS, c["package"])
                                             if c["package"] in stale else "") for c in claims] or ["- none"]
+    out += ["", "## Repairs (%d open of kind fail, %d in all)" % (
+        sum(1 for r in repairs if r["state"] == "open" and r["kind"] == "fail"), len(repairs)), ""]
+    out += ["- %s %s %s: %s, %s, seen %sx" % (r["id"], r["state"], r["kind"], lv.repair_what(r), lv.repair_traced(r), r["seen"])
+            for r in lv.repair_order(repairs)] or ["- none"]
     faults = lv.fault_groups(lv.read_faults(live_dir(live)))
     out += ["", "## Tool faults (%d kinds, %d events)" % (len(faults), sum(g["count"] for g in faults)), ""]
     out += ["- %dx %s %s: %s" % (g["count"], g["kind"], g["check"], g["first_error"][:100]) for g in faults[:5]] or ["- none"]
@@ -919,7 +949,7 @@ def page_data(tree, live=None, at=None):
     landings, events = lv.read_landings(d), lv.read_faults(d)
     return (page.make_static(steps),
             page.make_data(steps, landings, lv.read_state(d), claims, stale_of(tree, claims, at), lv.fault_groups(events),
-                           count_flakes(live), lv.stamp(at), read_set_aside(live)),
+                           count_flakes(live), lv.stamp(at), read_set_aside(live), lv.repair_order(lv.read_repairs(d))),
             landings, events)
 
 
@@ -1066,45 +1096,62 @@ def say_stale(a, claims, stale):
                                                                c["package"], agent_of(a)))
 
 
-def cmd_next(a):
-    steps = read_steps(a.tree, a.live)
-    claims = lv.read_claims(live_dir(a.live))
-    stale = stale_of(a.tree, claims)
-    landed = sum(1 for s in steps if s["state"] == "landed")
+REPAIR_ID = re.compile(r"^R-\d{3,}$")
+REPAIR_RULES = ("Read the evidence first. Find the cause and fix the game, not the test. If the test tool is at fault, do not "
+                "debug it: run plan.py toolfault and plan.py blocked for this repair.")
+
+
+def is_repair(item_id):
+    return bool(REPAIR_ID.match(item_id))
+
+
+def item_branch(item_id):
+    """The branch of a step (`native/<id>`) or of a repair (`native/repair-003` for R-003)."""
+    return "native/repair-" + item_id[2:] if is_repair(item_id) else "native/" + item_id
+
+
+def plan_path(a):
+    return (pathlib.Path(a.tree) / "tools" / "plan" / "plan.py").as_posix()
+
+
+def agent_flag(agent):
+    return " --agent 2" if agent == "2" else ""
+
+
+def in_work(a, steps):
+    """What the agent has in work: [("step", row) or ("repair", row)], the steps and repairs that are `started` by it. One
+    thing at a time: `start` gives nothing new while this is not empty."""
     agent = agent_of(a)
-    say_stale(a, claims, stale)
-    if agent == "2":
-        choice, report = choose_helper(steps, claims, stale)
-        if choice is None:
-            if all(why in ("is landed", "is not in the plan") for _, why in report):
-                say("Agent 2's list is finished: %s are all landed. Stop and report to agent 1. Do not take any other package." %
-                    ", ".join(AGENT2_LIST))
-            else:
-                say("Nothing on agent 2's list can start now. Stop and report to agent 1; do not take any other package.")
-                for pkg, why in report:
-                    say("  %s %s" % (pkg, why))
-            return 1
-    else:
-        choice = choose_next(steps, claims, stale)
-    if choice is None:
-        if landed == len(steps):
-            say("Every step is landed (%d of %d). Nothing is next." % (landed, len(steps)))
-            return 0
-        say("Nothing can start now. Landed %d of %d." % (landed, len(steps)))
-        for s in steps:
-            if s["state"] in ("started", "blocked"):
-                say("  %s %s: %s" % (s["step"], s["state"], s["title"]))
-        say("Land the started steps (plan.py land <id>) or take a blocked step up again (plan.py start <id>).")
-        return 1
-    s = choice.step
-    say("NEXT: %s  %s" % (s["step"], s["title"]))
+    out = [("step", s) for s in steps if s["state"] == "started" and (s["agent"] or "1") == agent]
+    state = lv.read_state(live_dir(a.live))
+    out += [("repair", r) for r in lv.read_repairs(live_dir(a.live))
+            if r["state"] == "started" and ((state.get(r["id"]) or {}).get("agent") or "1") == agent]
+    return out
+
+
+def in_work_line(a, work):
+    kind, first = work[0]
+    ident = first["step"] if kind == "step" else first["id"]
+    flag = agent_flag(agent_of(a))
+    return "you have %s in work. Land it (plan.py land %s%s) or block it (plan.py blocked %s \"<why>\"%s) first." % (
+        ident, ident, flag, ident, flag)
+
+
+def print_step(a, steps, s, notes=(), blocked_before=(), working=False):
+    """A step's card and what goes with it: the package's rows, what the landing needs in the ledger, the checks its changed
+    paths run, and the commands. `working`: the step is in work, so the commands are the ones that end it."""
+    landed = sum(1 for x in steps if x["state"] == "landed")
+    agent = agent_of(a)
+    say("%s: %s  %s" % ("IN WORK" if working else "NEXT", s["step"], s["title"]))
     say("Package %s; step %s of %d; %d landed so far." % (s["package"], s["order"], len(steps), landed))
-    for note in choice.notes:
+    if working:
+        say("This is in work: go on with it, then land it or block it. Nothing new is given while it is.")
+    for note in notes:
         say("NOTE: " + note)
-    for b in choice.blocked_before:
+    for b in blocked_before:
         why = b["reason"] or blocked_reasons(a.tree).get(b["step"], "(no reason written)")
         say("BLOCKED: %s %s: %s" % (b["step"], b["title"], why))
-    if choice.blocked_before:
+    if blocked_before:
         say("The step above is blocked, so the first later step that does not need its package is %s." % s["step"])
     say("Needs first: %s." % ("%s (all landed)" % s["package_needs"] if s["package_needs"] else "nothing outside its own package"))
     say()
@@ -1136,10 +1183,87 @@ def cmd_next(a):
         say("  " + c)
     say()
     say("=== COMMANDS ===")
-    plan = (pathlib.Path(a.tree) / "tools" / "plan" / "plan.py").as_posix()
-    who = " --agent 2" if agent == "2" else ""
-    say("start: python -X utf8 -I %s start %s%s" % (plan, s["step"], who))
+    plan = plan_path(a)
+    who = agent_flag(agent)
+    if not working:
+        say("start: python -X utf8 -I %s start %s%s" % (plan, s["step"], who))
     say("land:  python -X utf8 -I %s land %s%s" % (plan, s["step"], who))
+    if working:
+        say("block: python -X utf8 -I %s blocked %s \"<why>\"%s" % (plan, s["step"], who))
+
+
+def print_repair(a, r, working=False):
+    """A repair's card: what failed, where the evidence is, the landing it was traced to, the ledger row, the fixed lines, and
+    the commands."""
+    say("%s: %s  (%s, kind %s)" % ("IN WORK" if working else "REPAIR", r["id"], r["source"], r["kind"]))
+    if working:
+        say("This is in work: go on with it, then land it or block it. Nothing new is given while it is.")
+    say("What failed: %s" % lv.repair_what(r))
+    say("Seen: %s time%s; opened %s." % (r["seen"], "" if r["seen"] == "1" else "s", r["opened"]))
+    say("Evidence: %s" % (r["evidence"] if r["evidence"] not in ("", "-") else "none recorded"))
+    traced = lv.repair_traced(r)
+    say("Traced to: %s" % (traced[len("traced to "):] if traced.startswith("traced to ") else "no landing (not traced)"))
+    say("Ledger row: %s" % (r["row"] if r["row"] not in ("", "-") else "none"))
+    if r["note"] not in ("", "-"):
+        say("Note: %s" % r["note"])
+    say()
+    say(REPAIR_RULES)
+    say()
+    say("=== COMMANDS ===")
+    plan = plan_path(a)
+    who = agent_flag(agent_of(a))
+    if not working:
+        say("start: python -X utf8 -I %s start %s%s" % (plan, r["id"], who))
+    say("land:  python -X utf8 -I %s land %s%s" % (plan, r["id"], who))
+    say("block: python -X utf8 -I %s blocked %s \"<why>\"%s" % (plan, r["id"], who))
+
+
+def cmd_next(a):
+    steps = read_steps(a.tree, a.live)
+    claims = lv.read_claims(live_dir(a.live))
+    stale = stale_of(a.tree, claims)
+    landed = sum(1 for s in steps if s["state"] == "landed")
+    agent = agent_of(a)
+    say_stale(a, claims, stale)
+    work = in_work(a, steps)
+    if work:                                         # one thing at a time: it is shown again, nothing new is given
+        kind, first = work[0]
+        if kind == "step":
+            print_step(a, steps, first, working=True)
+        else:
+            print_repair(a, first, working=True)
+        for kind, other in work[1:]:
+            say("ALSO IN WORK: %s (land it or block it too)" % (other["step"] if kind == "step" else other["id"]))
+        return 0
+    if agent == "1":
+        repair = lv.oldest_open_fail(lv.read_repairs(live_dir(a.live)))
+        if repair:                                   # a fault found after a landing comes before any step
+            print_repair(a, repair)
+            return 0
+    if agent == "2":
+        choice, report = choose_helper(steps, claims, stale)
+        if choice is None:
+            if all(why in ("is landed", "is not in the plan") for _, why in report):
+                say("Agent 2's list is finished: %s are all landed. Stop and report to agent 1. Do not take any other package." %
+                    ", ".join(AGENT2_LIST))
+            else:
+                say("Nothing on agent 2's list can start now. Stop and report to agent 1; do not take any other package.")
+                for pkg, why in report:
+                    say("  %s %s" % (pkg, why))
+            return 1
+    else:
+        choice = choose_next(steps, claims, stale)
+    if choice is None:
+        if landed == len(steps):
+            say("Every step is landed (%d of %d). Nothing is next." % (landed, len(steps)))
+            return 0
+        say("Nothing can start now. Landed %d of %d." % (landed, len(steps)))
+        for s in steps:
+            if s["state"] in ("started", "blocked"):
+                say("  %s %s: %s" % (s["step"], s["state"], s["title"]))
+        say("Land the started steps (plan.py land <id>) or take a blocked step up again (plan.py start <id>).")
+        return 1
+    print_step(a, steps, choice.step, choice.notes, choice.blocked_before)
     return 0
 
 
@@ -1176,7 +1300,48 @@ def holds_refusal(a, package, claims, stale):
     return ""
 
 
+def branch_exists(folder, ref):
+    return git(folder, "rev-parse", "--verify", "--quiet", ref).returncode == 0
+
+
+def begin_work(a, branch):
+    """What `start` does after its own checks, for a step or a repair: the agent's folder is made the first time (git worktree
+    add) and used every later time; refuses (a line saying what to do) when something is in work or the folder has
+    uncommitted changes; then fetches and makes `branch` there (`git checkout -b`, from origin/main; a branch that exists
+    already, a blocked step's, is checked out as it is). Returns the refusal text, or None when the folder is on the branch."""
+    agent = agent_of(a)
+    folder = work_folder(a.work_root, agent)
+    work = in_work(a, read_steps(a.tree, a.live))
+    if work:
+        return in_work_line(a, work)
+    if folder.exists():
+        if not (folder / ".git").exists():
+            return "%s exists and is not a work folder of this repository. Move it away, then run start again." % folder.as_posix()
+        if git_out(folder, "status", "--porcelain"):
+            return ("the work folder %s has uncommitted changes. Commit them (or throw away what you do not want), then run "
+                    "start again." % folder.as_posix())
+    fetched = git(folder if folder.exists() else a.tree, "fetch", "origin")
+    if fetched.returncode != 0:
+        return "git fetch origin failed: %s" % fetched.stderr.strip()
+    here = folder if folder.exists() else a.tree
+    if branch_exists(here, "refs/heads/" + branch):
+        local, base = True, ""
+    else:
+        local, base = False, "origin/" + branch if branch_exists(here, "refs/remotes/origin/" + branch) else "origin/main"
+    if folder.exists():
+        made = git(folder, "checkout", *([branch] if local else ["--no-track", "-b", branch, base]))
+        what = "git checkout"
+    else:
+        made = git(a.tree, "worktree", "add", *([str(folder), branch] if local else ["--no-track", "-b", branch, str(folder), base]))
+        what = "git worktree add"
+    if made.returncode != 0:
+        return "%s failed: %s" % (what, (made.stderr or made.stdout).strip())
+    return None
+
+
 def cmd_start(a):
+    if is_repair(a.id):
+        return start_repair(a)
     steps = read_steps(a.tree, a.live)
     s = find(steps, a.id)
     agent = agent_of(a)
@@ -1192,10 +1357,6 @@ def cmd_start(a):
     if why:
         say("plan.py: " + why)
         return 1
-    mine = [x["step"] for x in steps if x["state"] == "started" and (x["agent"] or "1") == agent]
-    if len(mine) >= MAX_STARTED:
-        say("plan.py: %d steps are started and not landed (%s). Land one first (plan.py land <id>)." % (len(mine), ", ".join(mine)))
-        return 1
     waiting = unmet(s, steps)
     if waiting:
         say("plan.py: step %s needs first: %s" % (a.id, ", ".join("%s (%s)" % w for w in waiting)))
@@ -1204,24 +1365,40 @@ def cmd_start(a):
     if why:
         say("plan.py: step %s waits: %s" % (a.id, why))
         return 1
-    folder = work_folder(a.work_root, a.id)
+    folder = work_folder(a.work_root, agent)
     branch = "native/" + a.id
-    if folder.exists():
-        say("plan.py: the work folder %s exists already" % folder.as_posix())
-        return 1
-    fetched = git(a.tree, "fetch", "origin")
-    if fetched.returncode != 0:
-        say("plan.py: git fetch origin failed: %s" % fetched.stderr.strip())
-        return 1
-    have = git(a.tree, "rev-parse", "--verify", "--quiet", "refs/heads/" + branch).returncode == 0
-    made = git(a.tree, "worktree", "add", str(folder), *(([branch]) if have else ["-b", branch, "origin/main"]))
-    if made.returncode != 0:
-        say("plan.py: git worktree add failed: %s" % made.stderr.strip())
+    why = begin_work(a, branch)
+    if why:
+        say("plan.py: " + why)
         return 1
     set_state(a.tree, a.id, "started", agent=agent, live=a.live)
     lv.put_claim(live_dir(a.live), s["package"], agent, branch)
     refresh_page(a)
     say("started %s: branch %s in %s (package %s is claimed by agent %s)" % (a.id, branch, folder.as_posix(), s["package"], agent))
+    return 0
+
+
+def start_repair(a):
+    agent = agent_of(a)
+    if agent != "1":
+        say("plan.py: repairs are agent 1's work")
+        return 1
+    rep = next((r for r in lv.read_repairs(live_dir(a.live)) if r["id"] == a.id), None)
+    if rep is None:
+        say("plan.py: no repair %s (plan.py repair list)" % a.id)
+        return 1
+    if rep["state"] in ("started", "landed"):
+        say("plan.py: repair %s is already %s" % (a.id, rep["state"]))
+        return 1
+    branch = item_branch(a.id)
+    why = begin_work(a, branch)
+    if why:
+        say("plan.py: " + why)
+        return 1
+    lv.set_repair(live_dir(a.live), a.id, "started")
+    lv.set_state_entry(live_dir(a.live), a.id, "started", agent)
+    refresh_page(a)
+    say("started %s: branch %s in %s" % (a.id, branch, work_folder(a.work_root, agent).as_posix()))
     return 0
 
 
@@ -1280,7 +1457,69 @@ def record_faults(a, step_id, verdict):
     return rows
 
 
+def work_folder_problem(a, folder, branch):
+    """Why the agent's work folder cannot be landed from ("" when it can): it is missing, has uncommitted changes, or is not on
+    the item's branch."""
+    if not folder.is_dir():
+        return "the work folder %s is missing" % folder.as_posix()
+    if git_out(folder, "status", "--porcelain"):
+        return "the work folder has uncommitted changes; commit them first"
+    on = git_out(folder, "rev-parse", "--abbrev-ref", "HEAD")
+    if on != branch:
+        return "the work folder %s is on branch %s, not %s" % (folder.as_posix(), on, branch)
+    return ""
+
+
+def refs_problems(folder):
+    """The invented file and line references of the changed documents and the commit messages: [line]."""
+    allow = doc_refs.read_allow(folder / "tools" / "verify" / "doc_refs_allow.txt")
+    bad = doc_refs.check_files([folder / d for d in changed_documents(folder)], folder, allow)
+    bad += doc_refs.check_text("the commit messages", commit_messages(folder), folder, allow, message=True)
+    return bad
+
+
+def hand_to_gate(a, folder, branch, label, agent, extra, on_pass, undo):
+    """ONE call of the gate (LAND) for a step or a repair, and what follows: a pass calls `on_pass(verdict, seconds, summary)`
+    and returns its exit code; anything else calls `undo()` (a step takes its state commit off the branch), prints the verdict
+    and returns 1 (a failure), 3 (the same failure three times) or 4 (a tool or the machine: not judged)."""
+    started = time.time()
+    verdict = LAND(folder, branch, a.tablet, a.tablet_wait, gate_options(a, agent) + list(extra))
+    seconds = int(time.time() - started)
+    store = failures.Store(a.failures)
+    say()
+    summary = ", ".join("%d %s" % (n, k) for k, n in sorted(verdict.counts().items()))
+    if verdict.passed:
+        store.clear(branch)
+        return on_pass(verdict, seconds, summary)
+    undo()                                           # the next try makes it again
+    say("NOT LANDED: %s. Verdict by kind: %s." % (label, summary or "no check rows read"))
+    for check, kind, detail in verdict.failures:
+        say("  %-5s %s: %s" % (kind, check, detail))
+    if verdict.gate_recorded:
+        # `gate.py land` stored the failure's signature and wrote any tool or machine fault itself, and said what to do.
+        refresh_page(a)
+        if verdict.code == failures.STOP_CODE:
+            if not any(failures.STOP_TEXT in l for l in verdict.lines):
+                say(failures.STOP_TEXT)
+            return failures.STOP_CODE
+        return 1 if verdict.code == 1 else 4          # 2: not judged (a tool or the machine, a branch that does not apply)
+    written = record_faults(a, label, verdict)
+    outcome = store.record(branch, verdict.failures)
+    if written:
+        say("Written to %s (%d line%s)." % (live_dir(a.live).as_posix() + "/tool-faults.tsv", len(written), "" if len(written) == 1 else "s"))
+        say("Say what it stopped you from doing: plan.py toolfault --last --could-not \"<one sentence>\"" +
+            (" --agent %s" % agent if agent != "1" else ""))
+        refresh_page(a)
+    if outcome.message:
+        say(outcome.message)
+    elif outcome.counted:
+        say("This failure has now come %d time%s in a row (the third stops the retries)." % (outcome.count, "" if outcome.count == 1 else "s"))
+    return outcome.exit_code
+
+
 def cmd_land(a):
+    if is_repair(a.id):
+        return land_repair(a)
     steps = read_steps(a.tree, a.live)
     s = find(steps, a.id)
     agent = agent_of(a)
@@ -1298,13 +1537,11 @@ def cmd_land(a):
     if (s["agent"] or "1") != agent:
         say("plan.py: step %s was started by agent %s, not agent %s" % (a.id, s["agent"] or "1", agent))
         return 1
-    folder = work_folder(a.work_root, a.id)
+    folder = work_folder(a.work_root, agent)
     branch = "native/" + a.id
-    if not folder.is_dir():
-        say("plan.py: the work folder %s is missing" % folder.as_posix())
-        return 1
-    if git_out(folder, "status", "--porcelain"):
-        say("plan.py: the work folder has uncommitted changes; commit them first")
+    why = work_folder_problem(a, folder, branch)
+    if why:
+        say("plan.py: " + why)
         return 1
     # 1. The ledger.
     reading = card_rows(card_text(folder, s))
@@ -1323,9 +1560,7 @@ def cmd_land(a):
             say("  " + p)
         return 1
     # 2. Invented references in the changed documents and the commit messages.
-    allow = doc_refs.read_allow(folder / "tools" / "verify" / "doc_refs_allow.txt")
-    bad = doc_refs.check_files([folder / d for d in changed_documents(folder)], folder, allow)
-    bad += doc_refs.check_text("the commit messages", commit_messages(folder), folder, allow, message=True)
+    bad = refs_problems(folder)
     if bad:
         say("plan.py: a file or line named in the documents or the commit messages does not exist:")
         for l in bad:
@@ -1343,14 +1578,8 @@ def cmd_land(a):
         git(folder, "checkout", "--", "%s/steps.tsv" % NATIVE)
         say("plan.py: the state commit failed (a hook?):\n%s" % (committed.stdout + committed.stderr).strip())
         return 1
-    started = time.time()
-    verdict = LAND(folder, branch, a.tablet, a.tablet_wait, gate_options(a, agent))
-    seconds = int(time.time() - started)
-    store = failures.Store(a.failures)
-    say()
-    summary = ", ".join("%d %s" % (n, k) for k, n in sorted(verdict.counts().items()))
-    if verdict.passed:
-        store.clear(branch)
+
+    def passed(verdict, seconds, summary):
         set_state(a.tree, a.id, "landed", code_commit, live=a.live)
         lv.add_landing(live_dir(a.live), a.id, code_commit, seconds, agent)
         if all(x["state"] == "landed" or x["step"] == a.id for x in steps if x["package"] == s["package"]):
@@ -1363,33 +1592,95 @@ def cmd_land(a):
             summary or "no check rows read"))
         say("The progress files are made again (the page to open: %s)." % page_paths(a.live).html.as_posix())
         return 0
-    git(folder, "reset", "--hard", "HEAD~1")        # the state commit goes; the next try makes it again
-    say("NOT LANDED: %s. Verdict by kind: %s." % (a.id, summary or "no check rows read"))
-    for check, kind, detail in verdict.failures:
-        say("  %-5s %s: %s" % (kind, check, detail))
-    if verdict.gate_recorded:
-        # `gate.py land` stored the failure's signature and wrote any tool or machine fault itself, and said what to do.
+
+    return hand_to_gate(a, folder, branch, a.id, agent, (), passed, lambda: git(folder, "reset", "--hard", "HEAD~1"))
+
+
+def repair_ledger_problem(row_id, ledger):
+    """Why a repair that names a ledger row may not land ("" when it may): the row must be there, and be `fixed` with a proof
+    that names a test, a search or a measure, or have a dated note."""
+    row = ledger.get(row_id)
+    if row is None:
+        return "%s: the repair names this ledger row, and the ledger has no such row" % row_id
+    if row["state"] == "fixed" and PROOF_WORD.search(row["proof"]):
+        return ""
+    if DATE.search(row["note"]):
+        return ""
+    return ("%s: the repair names this ledger row: it must be fixed with a proof that names a test, a search or a measure, or its "
+            "note must have a date" % row_id)
+
+
+def land_repair(a):
+    agent = agent_of(a)
+    if agent != "1":
+        say("plan.py: repairs are agent 1's work")
+        return 1
+    rep = next((r for r in lv.read_repairs(live_dir(a.live)) if r["id"] == a.id), None)
+    if rep is None:
+        say("plan.py: no repair %s (plan.py repair list)" % a.id)
+        return 1
+    if rep["state"] != "started":
+        say("plan.py: repair %s is %s; only a started repair lands (plan.py start %s)" % (a.id, rep["state"], a.id))
+        return 1
+    if ((lv.read_state(live_dir(a.live)).get(a.id) or {}).get("agent") or "1") != agent:
+        say("plan.py: repair %s was started by another agent, not agent %s" % (a.id, agent))
+        return 1
+    folder = work_folder(a.work_root, agent)
+    branch = item_branch(a.id)
+    why = work_folder_problem(a, folder, branch)
+    if why:
+        say("plan.py: " + why)
+        return 1
+    # The ledger rules of a step do not apply; the row the repair names must have a dated note or be fixed with a proof.
+    if rep["row"] not in ("", "-"):
+        git(folder, "fetch", "origin")
+        problem = repair_ledger_problem(rep["row"], read_ledger((folder / LEDGER).read_bytes().decode("utf-8")))
+        if problem:
+            say("plan.py: repair %s does not land yet. The ledger (%s) must say:" % (a.id, LEDGER))
+            say("  " + problem)
+            return 1
+    bad = refs_problems(folder)
+    if bad:
+        say("plan.py: a file or line named in the documents or the commit messages does not exist:")
+        for l in bad:
+            say("  " + l)
+        return 1
+    code_commit = git_out(folder, "rev-parse", "--short=9", "HEAD")
+
+    def passed(verdict, seconds, summary):
+        closed = verdict.commit or code_commit
+        lv.set_repair(live_dir(a.live), a.id, "landed", closed)
+        lv.set_state_entry(live_dir(a.live), a.id, "landed", agent)
+        lv.add_landing(live_dir(a.live), a.id, closed, seconds, agent)
         refresh_page(a)
-        if verdict.code == failures.STOP_CODE:
-            if not any(failures.STOP_TEXT in l for l in verdict.lines):
-                say(failures.STOP_TEXT)
-            return failures.STOP_CODE
-        return 1 if verdict.code == 1 else 4          # 2: not judged (a tool or the machine, a branch that does not apply)
-    written = record_faults(a, a.id, verdict)
-    outcome = store.record(branch, verdict.failures)
-    if written:
-        say("Written to %s (%d line%s)." % (live_dir(a.live).as_posix() + "/tool-faults.tsv", len(written), "" if len(written) == 1 else "s"))
-        say("Say what it stopped you from doing: plan.py toolfault --last --could-not \"<one sentence>\"" +
-            (" --agent %s" % agent if agent != "1" else ""))
-        refresh_page(a)
-    if outcome.message:
-        say(outcome.message)
-    elif outcome.counted:
-        say("This failure has now come %d time%s in a row (the third stops the retries)." % (outcome.count, "" if outcome.count == 1 else "s"))
-    return outcome.exit_code
+        say("LANDED %s as %s%s in %d s. Verdict by kind: %s." % (
+            a.id, code_commit, (" (main has it as %s)" % verdict.commit) if verdict.commit else "", seconds,
+            summary or "no check rows read"))
+        say("The repair is landed (closed by %s). The progress files are made again (the page to open: %s)." % (
+            closed, page_paths(a.live).html.as_posix()))
+        return 0
+
+    return hand_to_gate(a, folder, branch, a.id, agent, ["--also", rep["check"]], passed, lambda: None)
+
+
+def park_branch(a, folder, branch):
+    """What `blocked` does for something in work: the folder must have no uncommitted change, and the branch goes to origin so
+    that nothing is lost. Returns the refusal text, or None."""
+    if folder.exists() and git_out(folder, "status", "--porcelain"):
+        return ("the work folder %s has uncommitted changes. Commit your unfinished work first (git add, git commit), then run "
+                "blocked again." % folder.as_posix())
+    here = folder if folder.exists() else a.tree
+    if branch_exists(here, "refs/heads/" + branch):
+        pushed = git(here, "push", "--force-with-lease", "origin", branch)
+        if pushed.returncode != 0:
+            return ("the branch %s could not be pushed to origin, so nothing is blocked yet: %s. Fix that and run blocked again." %
+                    (branch, (pushed.stderr.strip().splitlines() or ["push refused"])[-1]))
+    return None
 
 
 def cmd_blocked(a):
+    if is_repair(a.id):
+        return blocked_repair(a)
     steps = read_steps(a.tree, a.live)
     s = find(steps, a.id)
     if s is None:
@@ -1398,13 +1689,66 @@ def cmd_blocked(a):
     if s["state"] == "landed":
         say("plan.py: step %s is landed" % a.id)
         return 1
-    first = failures.Store(a.failures).last_line("native/" + a.id) or "(no failure recorded)"
+    branch = "native/" + a.id
+    if s["state"] == "started":                      # in work: its folder is left clean and its branch goes to origin
+        why = park_branch(a, work_folder(a.work_root, s["agent"] or "1"), branch)
+        if why:
+            say("plan.py: " + why)
+            return 1
+    first = failures.Store(a.failures).last_line(branch) or "(no failure recorded)"
     reason = " ".join(a.why.split())
     set_state(a.tree, a.id, "blocked", agent=agent_of(a), reason=reason, live=a.live)
     append_under(native(a.tree) / "BLOCKED.md", "steps", "- %s %s: %s | first failure line: %s" % (
         datetime.date.today().isoformat(), a.id, reason, first))
     refresh_page(a)
     say("blocked %s. Run plan.py next." % a.id)
+    return 0
+
+
+def blocked_repair(a):
+    rep = next((r for r in lv.read_repairs(live_dir(a.live)) if r["id"] == a.id), None)
+    if rep is None:
+        say("plan.py: no repair %s (plan.py repair list)" % a.id)
+        return 1
+    if rep["state"] == "landed":
+        say("plan.py: repair %s is landed" % a.id)
+        return 1
+    branch = item_branch(a.id)
+    if rep["state"] == "started":
+        owner = (lv.read_state(live_dir(a.live)).get(a.id) or {}).get("agent") or "1"
+        why = park_branch(a, work_folder(a.work_root, owner), branch)
+        if why:
+            say("plan.py: " + why)
+            return 1
+    first = failures.Store(a.failures).last_line(branch) or "(no failure recorded)"
+    reason = " ".join(a.why.split())
+    lv.set_repair(live_dir(a.live), a.id, "set-aside")
+    lv.set_state_entry(live_dir(a.live), a.id, "set-aside")
+    append_under(native(a.tree) / "BLOCKED.md", "repairs", "- %s %s: %s | first failure line: %s" % (
+        datetime.date.today().isoformat(), a.id, reason, first))
+    refresh_page(a)
+    say("set aside %s. Run plan.py next." % a.id)
+    return 0
+
+
+def cmd_repair(a):
+    live = live_dir(a.live)
+    if a.repair_cmd == "list":
+        rows = lv.repair_order(lv.read_repairs(live))
+        if not rows:
+            say("No repairs.")
+            return 0
+        say("%d repair%s; open ones of kind fail first (plan.py next gives the oldest of them):" % (len(rows), "" if len(rows) == 1 else "s"))
+        for r in rows:
+            say("%s  %-9s %-6s %s, %s, seen %s time%s, opened %s%s%s" % (
+                r["id"], r["state"], r["kind"], lv.repair_what(r), lv.repair_traced(r), r["seen"], "" if r["seen"] == "1" else "s",
+                r["opened"], ", ledger row " + r["row"] if r["row"] not in ("", "-") else "",
+                ", closed by " + r["closed"] if r["closed"] not in ("", "-") else ""))
+            say("      evidence: %s%s" % (r["evidence"], "; " + r["note"] if r["note"] not in ("", "-") else ""))
+        return 0
+    row, new = lv.add_repair(live, a.source, a.kind, a.check, a.renderer, a.step, a.commit, a.evidence, a.row, a.note)
+    refresh_page(a)
+    say(row["id"])                                   # the one line the nightly run reads: the repair's id, new or counted
     return 0
 
 
@@ -1507,6 +1851,21 @@ def parser():
     tf.add_argument("--last", action="store_true")
     tf.add_argument("--could-not", required=True)
     tf.set_defaults(fn=cmd_toolfault)
+    rp = sub.add_parser("repair", help="what is found wrong after a landing: add one, list them")
+    rsub = rp.add_subparsers(dest="repair_cmd", required=True)
+    ra = rsub.add_parser("add", help="write a repair (the nightly run calls this) and print its id")
+    ra.add_argument("--source", required=True, choices=lv.REPAIR_SOURCES)
+    ra.add_argument("--kind", required=True, choices=lv.REPAIR_KINDS)
+    ra.add_argument("--check", required=True, help="the check as the gate names it, for example tour/d3d11")
+    ra.add_argument("--renderer", default="-")
+    ra.add_argument("--step", default="-", help="the step of the landing the fault was traced to")
+    ra.add_argument("--commit", default="-", help="the commit of that landing")
+    ra.add_argument("--evidence", required=True, help="the folder with the evidence")
+    ra.add_argument("--row", default="-", help="the ledger row")
+    ra.add_argument("--note", required=True)
+    ra.set_defaults(fn=cmd_repair)
+    rl = rsub.add_parser("list", help="the repairs, open ones first")
+    rl.set_defaults(fn=cmd_repair)
     return p
 
 

@@ -8,6 +8,7 @@ landing step replaced by a fake: no game, no build, no network, not the real led
     python -X utf8 -I tools/gate/tests/plan_test.py [--work <folder>]
 """
 import contextlib
+import datetime
 import io
 import os
 import pathlib
@@ -317,12 +318,28 @@ class NextTest(unittest.TestCase):
     def test_next_with_nothing_to_do_says_what_is_in_progress(self):
         with Tree() as t:
             for sid in ("A.1", "C.1"):
-                plan.set_state(t.tree, sid, "started")
-            plan.set_state(t.tree, "A.2", "started")
+                plan.set_state(t.tree, sid, "started", agent=2)
+            plan.set_state(t.tree, "A.2", "started", agent=2)
             code, text = t.run(["next"])
             self.assertEqual(code, 1)
             self.assertIn("Nothing can start now", text)
             self.assertIn("A.1 started", text)
+
+    def test_next_with_something_in_work_shows_it_again_and_gives_nothing_new(self):
+        with Tree() as t:
+            t.run(["start", "A.1"], expect=0)
+            code, text = t.run(["next"])
+            self.assertEqual(code, 0)
+            self.assertEqual(text.splitlines()[0], "IN WORK: A.1  First step")
+            self.assertIn("This is in work: go on with it, then land it or block it. Nothing new is given while it is.", text)
+            self.assertIn("### A.1 First step", text, "its card again")
+            self.assertIn("| P-001 | one |", text, "its package's rows again")
+            self.assertNotIn("NEXT:", text)
+            self.assertNotIn("C.1", text, "no other step is offered")
+            self.assertIn("land:  python -X utf8 -I %s land A.1" % (t.tree / "tools" / "plan" / "plan.py").as_posix(), text)
+            self.assertIn('block: python -X utf8 -I %s blocked A.1 "<why>"' % (t.tree / "tools" / "plan" / "plan.py").as_posix(), text)
+            self.assertNotIn("start: python", text)
+            self.assertEqual(plan.find(plan.read_steps(t.tree), "C.1")["state"], "open", "next changes nothing")
 
     def test_next_after_everything_landed(self):
         with Tree() as t:
@@ -349,7 +366,7 @@ class StartTest(unittest.TestCase):
             code, text = t.run(["start", "A.1"], expect=0)
             self.assertIn("started A.1: branch native/A.1", text)
             folder = t.folder("A.1")
-            self.assertEqual(folder.name, "N-A.1")
+            self.assertEqual(folder.name, "Nebula-native")
             self.assertTrue((folder / "docs" / "plan" / "native" / "steps.tsv").is_file())
             self.assertEqual(t.git("rev-parse", "--abbrev-ref", "HEAD", cwd=folder), "native/A.1")
             self.assertEqual(t.git("rev-parse", "HEAD", cwd=folder), t.git("rev-parse", "origin/main"))
@@ -367,22 +384,56 @@ class StartTest(unittest.TestCase):
             t.run(["start", "A.1"], expect=0)
             self.assertTrue((t.folder("A.1") / "new.txt").is_file())
 
-    def test_start_refuses_the_fourth_started_step(self):
-        steps = [("S%d.1" % i, "P%d" % i) for i in range(1, 6)]
+    def test_the_folder_is_made_once_and_used_again(self):
         with Tree() as t:
-            n = plan.native(t.tree)
-            (n / "steps.tsv").write_text("\t".join(plan.STEP_COLUMNS) + "\n" + "".join(
-                "\t".join([str(i + 1), sid, pkg, "t", "", "03-X.md", "open", ""]) + "\n" for i, (sid, pkg) in enumerate(steps)),
-                encoding="utf-8")
-            for sid, _ in steps[:3]:
-                t.run(["start", sid], expect=0)
-            code, text = t.run(["start", "S4.1"])
+            t.run(["start", "A.1"], expect=0)
+            folder = t.folder()
+            git_file = (folder / ".git").read_text(encoding="utf-8")
+            # The build beside the sources is kept: a folder the repository ignores keeps what it holds.
+            (t.tree / ".git" / "info" / "exclude").write_text("build-here/\n", encoding="utf-8")
+            (folder / "build-here").mkdir()
+            (folder / "build-here" / "game.obj").write_text("compiled", encoding="utf-8")
+            t.commit("A.1")
+            t.run(["blocked", "A.1", "waiting"], expect=0)
+            code, text = t.run(["start", "C.1"], expect=0)
+            self.assertIn("started C.1: branch native/C.1 in %s" % folder.as_posix(), text)
+            self.assertEqual((folder / ".git").read_text(encoding="utf-8"), git_file, "the same worktree, not a new one")
+            self.assertEqual((folder / "build-here" / "game.obj").read_text(encoding="utf-8"), "compiled", "the build is kept")
+            self.assertEqual(t.git("rev-parse", "--abbrev-ref", "HEAD", cwd=folder), "native/C.1")
+            self.assertEqual(t.git("rev-parse", "HEAD", cwd=folder), t.git("rev-parse", "origin/main"), "cut from origin/main again")
+            listed = [l for l in t.git("worktree", "list", "--porcelain").splitlines() if l.startswith("worktree ")]
+            self.assertEqual(len(listed), 2, "the plan tree and the one work folder: %s" % listed)
+            self.assertEqual(sorted(p.name for p in t.work.iterdir()), ["Nebula-native"])
+
+    def test_start_refuses_a_folder_with_uncommitted_changes_and_says_what_to_do(self):
+        with Tree() as t:
+            t.run(["start", "A.1"], expect=0)
+            plan.set_state(t.tree, "A.1", "landed")                        # nothing is in work now
+            (t.folder() / "loose.txt").write_text("x", encoding="utf-8")
+            code, text = t.run(["start", "C.1"])
             self.assertEqual(code, 1)
-            self.assertIn("3 steps are started and not landed (S1.1, S2.1, S3.1)", text)
-            self.assertEqual(plan.find(plan.read_steps(t.tree), "S4.1")["state"], "open")
-            self.assertFalse(t.folder("S4.1").exists())
-            plan.set_state(t.tree, "S1.1", "landed")
-            t.run(["start", "S4.1"], expect=0)
+            self.assertIn("the work folder %s has uncommitted changes. Commit them (or throw away what you do not want), then run "
+                          "start again." % t.folder().as_posix(), text)
+            self.assertEqual(len(text.strip().splitlines()), 1, "one line")
+            self.assertEqual(plan.find(plan.read_steps(t.tree), "C.1")["state"], "open")
+            self.assertEqual(t.git("rev-parse", "--abbrev-ref", "HEAD", cwd=t.folder()), "native/A.1")
+            (t.folder() / "loose.txt").unlink()
+            (t.folder() / "runtime" / "src" / "render" / "a.cpp").write_text("changed\n", encoding="utf-8")   # a tracked file too
+            self.assertEqual(t.run(["start", "C.1"])[0], 1)
+            t.git("checkout", "--", "runtime", cwd=t.folder())
+            t.run(["start", "C.1"], expect=0)
+
+    def test_start_refuses_while_something_is_in_work(self):
+        with Tree() as t:
+            t.run(["start", "A.1"], expect=0)
+            code, text = t.run(["start", "C.1"])
+            self.assertEqual(code, 1)
+            self.assertEqual(text.strip(), 'plan.py: you have A.1 in work. Land it (plan.py land A.1) or block it '
+                                           '(plan.py blocked A.1 "<why>") first.')
+            self.assertEqual(plan.find(plan.read_steps(t.tree), "C.1")["state"], "open")
+            self.assertEqual(t.git("rev-parse", "--abbrev-ref", "HEAD", cwd=t.folder()), "native/A.1", "the folder was not touched")
+            plan.set_state(t.tree, "A.1", "landed")                        # landed: the folder is free
+            t.run(["start", "C.1"], expect=0)
 
     def test_start_refuses_a_step_whose_needs_are_not_landed(self):
         with Tree() as t:
@@ -723,6 +774,15 @@ class GateStepTest(unittest.TestCase):
         self.assertEqual(self.t.git("rev-parse", "native/A.1", cwd=self.t.origin), self.t.git("rev-parse", "HEAD", cwd=self.folder),
                          "the branch is on origin for the gate")
 
+    def test_a_repairs_check_goes_to_the_gate_as_also(self):
+        self.push()
+        with contextlib.redirect_stdout(io.StringIO()):
+            v = plan.land_with_gate(self.folder, "native/A.1", "SER", 30, ["--agent", "1", "--also", "tour/d3d11"])
+        self.assertTrue(v.passed)
+        self.assertEqual(self.calls.read_text().splitlines(),
+                         ["land native/A.1 --tablet SER --tablet-wait 30 --agent 1 --also tour/d3d11"],
+                         "the fake gate got the branch, the tablet and --also with the check")
+
     def test_a_fail_is_read_from_its_kind_lines_and_a_known_one_is_not_counted(self):
         self.mode.write_text("fail", encoding="utf-8")
         v = self.land()
@@ -817,6 +877,32 @@ class BlockedTest(unittest.TestCase):
             self.assertEqual(next_id(plan.read_steps(t.tree)), "C.1", "A.2 is in the blocked package, B.1 needs it")
             self.assertEqual(plan.blocked_reasons(t.tree)["A.1"][:20], "the replay differs a")
 
+    def test_blocked_pushes_the_branch_and_frees_the_folder(self):
+        with Tree() as t:
+            t.run(["start", "A.1"], expect=0)
+            sha = t.commit("A.1")
+            self.assertEqual(t.git("ls-remote", "origin", "refs/heads/native/A.1"), "", "not on origin before")
+            code, text = t.run(["blocked", "A.1", "stuck"], expect=0)
+            self.assertTrue(t.git("ls-remote", "origin", "refs/heads/native/A.1").startswith(
+                t.git("rev-parse", "native/A.1")), "the branch is on origin, as the folder has it")
+            self.assertTrue(t.git("rev-parse", "native/A.1").startswith(sha))
+            self.assertEqual(plan.find(plan.read_steps(t.tree), "A.1")["state"], "blocked")
+            t.run(["start", "C.1"], expect=0)                                   # the folder is free for the next start
+            self.assertEqual(t.git("rev-parse", "--abbrev-ref", "HEAD", cwd=t.folder()), "native/C.1")
+
+    def test_blocked_refuses_while_the_folder_has_uncommitted_changes(self):
+        with Tree() as t:
+            t.run(["start", "A.1"], expect=0)
+            (t.folder() / "unfinished.txt").write_text("x", encoding="utf-8")
+            code, text = t.run(["blocked", "A.1", "stuck"])
+            self.assertEqual(code, 1)
+            self.assertIn("has uncommitted changes. Commit your unfinished work first", text)
+            self.assertEqual(plan.find(plan.read_steps(t.tree), "A.1")["state"], "started", "nothing was changed")
+            self.assertEqual(t.git("ls-remote", "origin", "refs/heads/native/A.1"), "", "nothing was pushed")
+            self.assertFalse((plan.native(t.tree) / "BLOCKED.md").exists())
+            (t.folder() / "unfinished.txt").unlink()
+            t.run(["blocked", "A.1", "stuck"], expect=0)
+
     def test_blocked_with_no_failure_recorded(self):
         with Tree() as t:
             t.run(["blocked", "A.1", "why"], expect=0)
@@ -849,6 +935,328 @@ class BlockedTest(unittest.TestCase):
             self.assertEqual({s["state"] for s in plan.read_steps(t.tree)}, {"open"})
 
 
+# ---- repairs ------------------------------------------------------------------------------------------------
+
+def add_repair(t, check="tour/d3d11", renderer="d3d11", kind="fail", source="nightly", note="stop 025 differs", **more):
+    """`plan.py repair add` with the evidence folder given; returns the id it prints."""
+    args = ["repair", "add", "--source", source, "--kind", kind, "--check", check, "--renderer", renderer,
+            "--evidence", "D:/NebulaWork/build/gate-runs/20261121-nightly", "--note", note]
+    for key, value in more.items():
+        args += ["--" + key, value]
+    code, text = t.run(args, expect=0)
+    return text.strip()
+
+
+class RepairAddTest(unittest.TestCase):
+    def test_a_new_repair_is_one_line_in_the_live_folder_and_its_id_is_printed(self):
+        with Tree() as t:
+            self.assertEqual(add_repair(t, step="A.1", commit="abc123456", row="P-001"), "R-001", "only the id is printed")
+            path = t.live / "repairs.tsv"
+            lines = path.read_text(encoding="utf-8").splitlines()
+            self.assertEqual(lines[0], "id\topened\tsource\tkind\tcheck\trenderer\tstep\tcommit\tevidence\trow\tstate\tclosed\tseen\tnote")
+            self.assertEqual(len(lines), 2)
+            r = lv.read_repairs(t.live)[0]
+            self.assertRegex(r["opened"], r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d$")
+            self.assertEqual((r["id"], r["source"], r["kind"], r["check"], r["renderer"], r["step"], r["commit"], r["row"], r["state"],
+                              r["closed"], r["seen"], r["note"]),
+                             ("R-001", "nightly", "fail", "tour/d3d11", "d3d11", "A.1", "abc123456", "P-001", "open", "-", "1",
+                              "stop 025 differs"))
+            self.assertEqual(r["evidence"], "D:/NebulaWork/build/gate-runs/20261121-nightly")
+            self.assertEqual(add_repair(t, check="unit/game", renderer="-", kind="stress", source="stress"), "R-002")
+            second = lv.read_repairs(t.live)[1]
+            self.assertEqual((second["renderer"], second["step"], second["commit"], second["row"]), ("-", "-", "-", "-"),
+                             "what is not given is a dash")
+
+    def test_the_same_check_and_renderer_is_counted_and_not_written_twice(self):
+        with Tree() as t:
+            self.assertEqual(add_repair(t), "R-001")
+            self.assertEqual(add_repair(t, note="again"), "R-001", "the existing id is printed")
+            rows = lv.read_repairs(t.live)
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["seen"], "2")
+            self.assertIn("stop 025 differs; seen again %s" % datetime.date.today().isoformat(), rows[0]["note"])
+            self.assertEqual(add_repair(t), "R-001")
+            self.assertEqual(lv.read_repairs(t.live)[0]["seen"], "3")
+            self.assertEqual(add_repair(t, renderer="vulkan"), "R-002", "another renderer is another repair")
+            self.assertEqual(add_repair(t, check="tour/d3d12"), "R-003", "another check too")
+            for state in ("started", "set-aside"):                                  # still counted in these states
+                lv.set_repair(t.live, "R-001", state)
+                self.assertEqual(add_repair(t), "R-001", state)
+            self.assertEqual(lv.read_repairs(t.live)[0]["seen"], "5")
+            lv.set_repair(t.live, "R-001", "landed", "0123456789")                  # landed: the fault is back, a new repair
+            self.assertEqual(add_repair(t), "R-004")
+
+    def test_a_wrong_command_is_exit_2_and_a_note_with_a_tab_stays_one_line(self):
+        with Tree() as t:
+            with contextlib.redirect_stderr(io.StringIO()):
+                for args in (["repair", "add", "--source", "bad", "--kind", "fail", "--check", "c", "--evidence", "e", "--note", "n"],
+                             ["repair", "add", "--source", "nightly", "--kind", "bad", "--check", "c", "--evidence", "e", "--note", "n"],
+                             ["repair", "add", "--source", "nightly", "--kind", "fail", "--evidence", "e", "--note", "n"],
+                             ["repair"]):
+                    with self.assertRaises(SystemExit) as caught:
+                        t.run(args)
+                    self.assertEqual(caught.exception.code, 2, args)
+            add_repair(t, note="a\tb\nc")
+            self.assertEqual(len((t.live / "repairs.tsv").read_text(encoding="utf-8").splitlines()), 2)
+            self.assertEqual(lv.read_repairs(t.live)[0]["note"], "a b c")
+
+    def test_repair_list_prints_them_open_ones_first(self):
+        with Tree() as t:
+            self.assertIn("No repairs.", t.run(["repair", "list"], expect=0)[1])
+            add_repair(t, check="a/stress", kind="stress", source="stress")
+            add_repair(t, check="b/fail")
+            add_repair(t, check="c/landed")
+            add_repair(t, check="d/fail", step="A.1", commit="abc")
+            lv.set_repair(t.live, "R-003", "landed", "0123456789")
+            text = t.run(["repair", "list"], expect=0)[1]
+            order = [text.index(x) for x in ("R-002", "R-004", "R-001", "R-003")]
+            self.assertEqual(order, sorted(order), "open fail repairs, the other open ones, then landed: " + text)
+            self.assertIn("R-004  open", text)
+            self.assertIn("traced to step A.1 commit abc", text)
+            self.assertIn("closed by 0123456789", text)
+
+
+class RepairNextTest(unittest.TestCase):
+    def test_next_gives_the_oldest_open_fail_repair_before_any_step_and_prints_its_card(self):
+        with Tree() as t:
+            add_repair(t, check="tour/d3d11", renderer="d3d11", step="A.1", commit="abc123456", row="P-001")
+            add_repair(t, check="unit/game", renderer="-")
+            code, text = t.run(["next"])
+            self.assertEqual(code, 0)
+            plan_py = (t.tree / "tools" / "plan" / "plan.py").as_posix()
+            opened = lv.read_repairs(t.live)[0]["opened"]
+            self.assertEqual(text.splitlines(), [
+                "REPAIR: R-001  (nightly, kind fail)",
+                "What failed: tour/d3d11 on d3d11",
+                "Seen: 1 time; opened %s." % opened,
+                "Evidence: D:/NebulaWork/build/gate-runs/20261121-nightly",
+                "Traced to: step A.1 commit abc123456",
+                "Ledger row: P-001",
+                "Note: stop 025 differs",
+                "",
+                "Read the evidence first. Find the cause and fix the game, not the test. If the test tool is at fault, do not "
+                "debug it: run plan.py toolfault and plan.py blocked for this repair.",
+                "",
+                "=== COMMANDS ===",
+                "start: python -X utf8 -I %s start R-001" % plan_py,
+                "land:  python -X utf8 -I %s land R-001" % plan_py,
+                'block: python -X utf8 -I %s blocked R-001 "<why>"' % plan_py])
+            self.assertNotIn("NEXT:", text)
+
+    def test_the_oldest_comes_first_and_an_untraced_repair_says_so(self):
+        with Tree() as t:
+            add_repair(t, check="first/fail", renderer="-")
+            add_repair(t, check="second/fail", renderer="-")
+            text = t.run(["next"], expect=0)[1]
+            self.assertTrue(text.startswith("REPAIR: R-001"), text[:40])
+            self.assertIn("What failed: first/fail\n", text)
+            self.assertIn("Traced to: no landing (not traced)", text)
+            self.assertIn("Ledger row: none", text)
+            lv.set_repair(t.live, "R-001", "set-aside")
+            self.assertTrue(t.run(["next"], expect=0)[1].startswith("REPAIR: R-002"), "the next oldest open one")
+
+    def test_stress_and_worse_repairs_never_come_first_and_never_block(self):
+        with Tree() as t:
+            add_repair(t, check="soak", renderer="-", kind="stress", source="stress")
+            add_repair(t, check="measure/route", renderer="-", kind="worse", source="measure")
+            text = t.run(["next"], expect=0)[1]
+            self.assertTrue(text.startswith("NEXT: A.1"), "the steps go on: " + text[:40])
+            t.run(["start", "A.1"], expect=0)                               # and a step can be started with them open
+            self.assertTrue(t.run(["next"], expect=0)[1].startswith("IN WORK: A.1"))
+            plan.set_state(t.tree, "A.1", "landed")
+            add_repair(t, check="tour/d3d12", renderer="d3d12")
+            self.assertTrue(t.run(["next"], expect=0)[1].startswith("REPAIR: R-003"), "a fail repair, added later, comes first")
+
+    def test_agent_2_is_not_given_a_repair(self):
+        with Tree() as t:
+            add_repair(t)
+            self.assertNotIn("REPAIR:", t.run(["next", "--agent", "2"])[1])
+            code, text = t.run(["start", "R-001", "--agent", "2"])
+            self.assertEqual((code, text.strip()), (1, "plan.py: repairs are agent 1's work"))
+            self.assertEqual(lv.read_repairs(t.live)[0]["state"], "open")
+
+
+class RepairWorkTest(unittest.TestCase):
+    def setUp(self):
+        self.t = Tree().__enter__()
+        self.addCleanup(self.t.__exit__)
+        self.gate_calls = []
+        self.verdict = plan.Verdict(True, [("repo/code", "PASS", "ok"), ("tour/d3d11", "PASS", "ok")])
+        self.verdict.commit = "0123456789"
+        patcher = mock.patch.object(plan, "LAND", self.fake_land)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.assertEqual(add_repair(self.t), "R-001")
+
+    def fake_land(self, folder, branch, tablet, wait, *rest):
+        self.gate_calls.append({"folder": pathlib.Path(folder), "branch": branch, "options": list(rest[0]) if rest else []})
+        return self.verdict
+
+    def started(self):
+        self.t.run(["start", "R-001"], expect=0)
+        return self.t.commit("R-001", "the fix")
+
+    def test_start_makes_the_branch_for_the_repair_in_the_agents_folder(self):
+        code, text = self.t.run(["start", "R-001"], expect=0)
+        folder = self.t.folder()
+        self.assertEqual(text.strip(), "started R-001: branch native/repair-001 in %s" % folder.as_posix())
+        self.assertEqual(self.t.git("rev-parse", "--abbrev-ref", "HEAD", cwd=folder), "native/repair-001")
+        self.assertEqual(self.t.git("rev-parse", "HEAD", cwd=folder), self.t.git("rev-parse", "origin/main"))
+        self.assertEqual(lv.read_repairs(self.t.live)[0]["state"], "started")
+        self.assertEqual(lv.read_state(self.t.live)["R-001"]["agent"], "1")
+        again = self.t.run(["start", "R-001"])
+        self.assertEqual((again[0], again[1].strip()), (1, "plan.py: repair R-001 is already started"))
+        self.assertEqual(self.t.run(["start", "R-009"])[0], 1)
+        # one thing at a time: the repair is in work, so no step is started, and next shows the repair again
+        code, text = self.t.run(["start", "A.1"])
+        self.assertEqual(code, 1)
+        self.assertIn('you have R-001 in work. Land it (plan.py land R-001) or block it (plan.py blocked R-001 "<why>") first.', text)
+        again = self.t.run(["next"], expect=0)[1]
+        self.assertTrue(again.startswith("IN WORK: R-001"), again[:40])
+        self.assertIn("This is in work: go on with it, then land it or block it.", again)
+        self.assertIn("Read the evidence first.", again)
+        self.assertNotIn("start: python", again)
+
+    def test_land_hands_the_branch_to_the_gate_with_also_and_on_a_pass_sets_the_repair_landed(self):
+        code_commit = self.started()
+        code, text = self.t.run(["land", "R-001"], expect=0)
+        call = self.gate_calls[0]
+        self.assertEqual((call["folder"], call["branch"]), (self.t.folder(), "native/repair-001"))
+        self.assertEqual(call["options"][-2:], ["--also", "tour/d3d11"], "the repair's check goes to the gate as --also")
+        self.assertEqual(call["options"][:2], ["--agent", "1"])
+        self.assertIn("LANDED R-001 as %s (main has it as 0123456789)" % code_commit, text)
+        r = lv.read_repairs(self.t.live)[0]
+        self.assertEqual((r["state"], r["closed"]), ("landed", "0123456789"))
+        self.assertNotIn("R-001", lv.read_state(self.t.live), "no longer in work")
+        self.assertEqual(self.t.git("log", "-1", "--format=%s", cwd=self.t.folder()), "the fix", "no state commit for a repair")
+        self.assertEqual(lv.read_landings(self.t.live)[0]["step"], "R-001")
+        self.assertTrue(self.t.run(["next"], expect=0)[1].startswith("NEXT: A.1"), "the steps go on")
+        self.assertEqual({s["state"] for s in plan.read_steps(self.t.tree)}, {"open"}, "steps.tsv is not touched by a repair")
+
+    def test_the_closing_commit_is_the_branchs_when_the_gate_does_not_say_where_main_has_it(self):
+        code_commit = self.started()
+        self.verdict.commit = ""
+        self.t.run(["land", "R-001"], expect=0)
+        self.assertEqual(lv.read_repairs(self.t.live)[0]["closed"], code_commit)
+
+    def test_the_ledger_refusals_of_a_step_do_not_apply_to_a_repair(self):
+        self.started()
+        self.t.run(["land", "R-001"], expect=0)                              # no ledger row named: nothing to say in the ledger
+
+    def test_a_repair_that_names_a_ledger_row_needs_a_dated_note_or_a_fixed_row_with_a_proof(self):
+        add_repair(self.t, check="unit/game", renderer="-", row="P-001")
+        self.t.run(["start", "R-001"], expect=0)
+        self.t.run(["blocked", "R-001", "later"], expect=0)
+        self.t.run(["start", "R-002"], expect=0)
+        folder = self.t.folder()
+        for rows, wanted in (
+                ([ledger_row("P-001")], "must be fixed with a proof that names a test, a search or a measure, or its note must have a date"),
+                ([ledger_row("P-001", "fixed", "looked at it")], "must be fixed with a proof"),
+                ([ledger_row("P-009")], "the ledger has no such row")):
+            self.t.write_ledger(rows, tree=folder)
+            self.t.git("commit", "-am", "ledger", cwd=folder)
+            code, text = self.t.run(["land", "R-002"])
+            self.assertEqual(code, 1)
+            self.assertIn("repair R-002 does not land yet. The ledger (docs/plan/ledger.tsv) must say:", text)
+            self.assertIn(wanted, text)
+        self.assertEqual(self.gate_calls, [], "nothing reached the gate")
+        self.t.write_ledger([ledger_row("P-001", note="found 11-21: the seam differs")], tree=folder)
+        self.t.git("commit", "-am", "dated note", cwd=folder)
+        self.t.run(["land", "R-002"], expect=0)
+        self.assertEqual(self.gate_calls[0]["options"][-2:], ["--also", "unit/game"])
+
+    def test_a_fixed_row_with_a_proof_lets_it_land_too(self):
+        add_repair(self.t, check="unit/game", renderer="-", row="P-001")
+        self.t.run(["start", "R-001"], expect=0)
+        self.t.run(["blocked", "R-001", "later"], expect=0)
+        self.t.run(["start", "R-002"], expect=0)
+        self.t.write_ledger([ledger_row("P-001", "fixed", "tests/unit/seam_test fails before")], tree=self.t.folder())
+        self.t.git("commit", "-am", "fixed", cwd=self.t.folder())
+        self.t.run(["land", "R-002"], expect=0)
+
+    def test_a_failed_landing_leaves_the_repair_started_and_the_third_same_failure_stops(self):
+        self.started()
+        head = self.t.git("rev-parse", "HEAD", cwd=self.t.folder())
+        self.verdict = plan.Verdict(False, [("tour/d3d11", "FAIL", "stop 025 differs")], [("tour/d3d11", "FAIL", "stop 025 differs")])
+        code, text = self.t.run(["land", "R-001"])
+        self.assertEqual(code, 1)
+        self.assertIn("NOT LANDED: R-001.", text)
+        self.assertEqual(self.t.git("rev-parse", "HEAD", cwd=self.t.folder()), head, "no state commit was made, none taken off")
+        self.assertEqual(lv.read_repairs(self.t.live)[0]["state"], "started")
+        self.assertEqual(self.t.run(["land", "R-001"])[0], 1)
+        code, text = self.t.run(["land", "R-001"])
+        self.assertEqual(code, 3)
+        self.assertIn("Same failure three times. Stop retrying. Run plan.py blocked, then plan.py next.", text)
+        self.assertEqual(failures.Store(self.t.store).count("native/repair-001"), 3)
+
+    def test_a_tool_result_for_a_repair_is_a_tool_fault_and_exit_4(self):
+        self.started()
+        self.verdict = plan.Verdict(False, [("harness/self", "TOOL", "result.json is missing")], [("harness/self", "TOOL", "result.json is missing")])
+        code, text = self.t.run(["land", "R-001"])
+        self.assertEqual(code, 4)
+        self.assertEqual([(r["step"], r["kind"]) for r in lv.read_faults(self.t.live)], [("R-001", "TOOL")])
+
+    def test_land_refuses_a_repair_not_started_a_dirty_folder_and_another_branch(self):
+        self.assertEqual(self.t.run(["land", "R-001"])[0], 1, "not started")
+        self.assertEqual(self.t.run(["land", "R-009"])[0], 1, "no such repair")
+        self.started()
+        (self.t.folder() / "loose.txt").write_text("x", encoding="utf-8")
+        code, text = self.t.run(["land", "R-001"])
+        self.assertEqual(code, 1)
+        self.assertIn("uncommitted changes", text)
+        (self.t.folder() / "loose.txt").unlink()
+        self.t.git("checkout", "-b", "elsewhere", cwd=self.t.folder())
+        code, text = self.t.run(["land", "R-001"])
+        self.assertEqual(code, 1)
+        self.assertIn("is on branch elsewhere, not native/repair-001", text)
+        self.assertEqual(self.gate_calls, [])
+
+    def test_blocked_sets_the_repair_aside_writes_blocked_md_pushes_the_branch_and_next_goes_on_with_the_steps(self):
+        sha = self.started()
+        code, text = self.t.run(["blocked", "R-001", "the test tool is at fault: it\nreads the wrong pak"], expect=0)
+        self.assertEqual(text.strip(), "set aside R-001. Run plan.py next.")
+        r = lv.read_repairs(self.t.live)[0]
+        self.assertEqual(r["state"], "set-aside")
+        self.assertNotIn("R-001", lv.read_state(self.t.live))
+        blocked = (plan.native(self.t.tree) / "BLOCKED.md").read_text(encoding="utf-8")
+        self.assertRegex(blocked, r"## repairs\n- \d{4}-\d\d-\d\d R-001: the test tool is at fault: it reads the wrong pak \| first failure line: "
+                                  r"\(no failure recorded\)")
+        self.assertTrue(self.t.git("ls-remote", "origin", "refs/heads/native/repair-001").startswith(self.t.git("rev-parse", "native/repair-001")))
+        self.assertTrue(self.t.git("rev-parse", "native/repair-001").startswith(sha))
+        text = self.t.run(["next"], expect=0)[1]
+        self.assertTrue(text.startswith("NEXT: A.1"), "next goes on with the steps: " + text[:40])
+        # the same fault found again is counted on the set-aside repair, and does not come first again
+        self.assertEqual(add_repair(self.t), "R-001")
+        self.assertEqual(lv.read_repairs(self.t.live)[0]["seen"], "2")
+        self.assertTrue(self.t.run(["next"], expect=0)[1].startswith("NEXT: A.1"))
+
+    def test_blocked_refuses_a_repair_while_the_folder_has_uncommitted_changes(self):
+        self.started()
+        (self.t.folder() / "unfinished.txt").write_text("x", encoding="utf-8")
+        code, text = self.t.run(["blocked", "R-001", "why"])
+        self.assertEqual(code, 1)
+        self.assertIn("Commit your unfinished work first", text)
+        self.assertEqual(lv.read_repairs(self.t.live)[0]["state"], "started")
+        self.assertEqual(self.t.run(["blocked", "R-009", "why"])[0], 1)
+
+    def test_a_set_aside_repair_can_be_started_again(self):
+        self.started()
+        self.t.run(["blocked", "R-001", "why"], expect=0)
+        self.t.run(["start", "R-001"], expect=0)
+        self.assertEqual(lv.read_repairs(self.t.live)[0]["state"], "started")
+        self.assertEqual(self.t.git("log", "-1", "--format=%s", cwd=self.t.folder()), "the fix", "the branch keeps its commit")
+
+    def test_status_lists_a_started_repair_in_work_and_the_repairs_section(self):
+        add_repair(self.t, check="soak", renderer="-", kind="stress", source="stress")
+        self.started()
+        text = self.t.run(["status"], expect=0)[1]
+        self.assertIn("- R-001 repair of tour/d3d11 on d3d11: agent 1, branch native/repair-001 in %s" % self.t.folder().as_posix(), text)
+        self.assertIn("## Repairs (0 open of kind fail, 2 in all)", text)
+        self.assertIn("- R-001 started fail: tour/d3d11 on d3d11, not traced to a landing, seen 1x", text)
+        self.assertIn("- R-002 open stress: soak, not traced to a landing, seen 1x", text)
+
+
+
 class StatusTest(unittest.TestCase):
     def test_status_writes_the_file_and_prints_it(self):
         with Tree() as t:
@@ -861,7 +1269,7 @@ class StatusTest(unittest.TestCase):
             written = (plan.native(t.tree) / "STATUS.md").read_text(encoding="utf-8")
             self.assertEqual(written, text)
             self.assertIn("Steps landed: 1 of 5.", text)
-            self.assertIn("## Started (1, at most 3 for one agent)", text)
+            self.assertIn("## In work (1, one thing for each agent)", text)
             self.assertIn("- A.1 First step: agent 1, branch native/A.1 in %s" % t.folder("A.1").as_posix(), text)
             self.assertIn("- C.1 Free step: the card is wrong | first failure line: x", text)
             self.assertIn("- A.2: commit abc123def,", text)
