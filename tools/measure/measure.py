@@ -46,26 +46,72 @@ also when the run fails; the player's game is never touched. It sets what 120 Hz
 smoothness adaptive) for the run and puts both back after it; no other setting of the tablet is touched. The
 quiet-machine checks are for the PC's runs: the tablet's figures do not depend on the PC's load.
 
-The figures, from the stage's first frame (the harness's "frame 0") to the run's end. Judged: gap_p99_ms, late_per_min,
-render_ms, gpu_ms, memory_mb, step_ms, step_p99_ms. Shown, never judged (one slow frame in three minutes is not a change
-in the game): gap_max_ms, step_max_ms, steps_over_18.
+The figures, from the stage's first frame (the harness's "frame 0") to the run's end. Judged: cpu_ms, gap_p99_ms,
+late_per_min, render_ms, gpu_ms, memory_mb. Shown, never judged (one slow frame in three minutes is not a change in the
+game; step_ms and step_p99_ms hold the waits of a step as well as its work, which one build showed as 2.6 to 16.6 ms, so a
+step's cost is cpu_ms): gap_max_ms, step_ms, step_p99_ms, step_max_ms, steps_over_18.
   rate            the pictures a second asked for; refresh_hz the display's refresh as the renderer reported it
   gap_max_ms      the longest time between two presents
   gap_p99_ms      the time between two presents that 99 of 100 stay under
   late_per_min    presents that missed their refresh (the [pace] lines' missed), per minute
-  step_ms         the median of a game step's work (step start to the step clock's wait)
-  step_p99_ms     the 99th percentile of a game step's work
+  cpu_ms          the processor time the whole process used (all threads) per game step: the median over the [pace]
+                  windows of cpu_us_per_step, which the game writes (platform_time.h process_cpu_stamp: on Windows the
+                  exact cycle count of QueryProcessCycleTime, as time by the time stamp counter's own rate; elsewhere
+                  CLOCK_PROCESS_CPUTIME_ID). A game or a machine that gives none: not measured (written -, never 0)
+  step_ms         the median of a game step's time on the clock (step start to the step clock's wait: waits included)
+  step_p99_ms     the 99th percentile of the same
   step_max_ms     the longest game step's work
   steps_over_18   game steps whose work took over 18 ms
   render_ms       the render thread's work per picture (a list's walk), median
-  gpu_ms          the GPU's time per picture: its command lists' time over the presents. A renderer that records no
-                  GPU times in the timeline gives `not measured` (written -, never 0), compared with nothing
+  gpu_ms          the GPU's time per frame, the median of the frames' times (a frame's command lists added when it has
+                  more than one): an average would take in every moment another program held the graphics card. A
+                  renderer that records no GPU times in the timeline gives `not measured` (written -, never 0), compared
+                  with nothing
   memory_mb       the most memory the process held (the harness's process.memory facts)
 On the tablet the timeline has no game-frame and no step-wait events (the Android game does not write them): the stage's
 first frame is found by the render thread's content-time events, and the step figures are the [pace] lines' (step_ms the
 median of the windows' average step work, step_p99_ms the median of their 99th percentile).
 Every figure is better lower (band.py FIGURES names the bad side of each); each is compared on its own, with the band's
-floor (band.py FLOORS).
+floor (band.py FLOORS). A history line written before cpu_ms existed has that cell empty (never 0); it is no baseline for it.
+
+THE PAIR (for a PC that is in use: the owner works on it, his own jobs use the processors and the graphics card)
+  measure.py pair --base BIN --cand BIN --runs d3d12[,d3d11,vulkan] --work WORK --pending FILE [--calibration FILE]
+                  [--base-pak PAK --cand-pak PAK --base-commit SHA --cand-commit SHA --form hidden|visible]
+                  [--name measure/step/pc] [--gate-lock ... --board FILE --who NAME] [--lock measure.lock]
+  measure.py pair-calibrate --bin BIN --runs d3d12[,d3d11,vulkan] --pairs 5 --work WORK [--calibration FILE]
+  measure.py pair-accept --commit SHA --renderer R --figure F --reason TEXT [--calibration FILE]
+  measure.py pair-probe --bin BIN --renderer R --work WORK [--form hidden|visible]
+      The two builds run side by side, in the same minutes, on the same processors, each as the single measure runs one
+      (the harness, its own work folder, saves and app data, the same stage, size and rate, no sound), and only the ratio
+      of a figure is judged: whatever the PC is doing reaches both alike. Nothing is compared with another day, so the
+      trust rules of the single measure do not apply: the pair waits for no quiet minutes, reads no window watch and no
+      load of other programs, and the windows are hidden (the harness's hidden form, FORM below). It takes the measurement
+      lock; a build or a game of someone else's beside it is allowed.
+      A round starts both builds at once and waits for both (each in its own run folder, WORK/RENDERER/rN-aK/base and
+      cand). Both are held to one set of logical processors by the process affinity of the runner the tool starts (the
+      game inherits it): from the machine's own description (GetLogicalProcessorInformationEx), the processors of the
+      highest efficiency class and, of those, the ones that share the largest level-3 cache (several of that size: the
+      first); every processor: nothing is set. The set is printed. The measured span is the stage's first 5400 game
+      steps after its frame 0 (90 seconds), cut by the game frame numbers of the timeline, so both sides are measured over
+      the same moments of the game; the route (tests/measure/route) is cut at game step 6200 after frame 0.
+      The ratio of a judged figure that both sides have: r = (candidate + f) / (base + f), f the figure's floor (band.py
+      FLOORS). Its band comes from the calibration file (pair-bands.tsv beside the history; key: computer, graphics card,
+      renderer, scene, size, rate): r above 1 + band says worse, under 1 - band better, else ok; no line for the key:
+      no-baseline ("not calibrated on this PC"; it passes). A renderer with a figure worse in round 1 gets round 2 with
+      the order of starting swapped, and, worse again, round 3 (the order of round 1); worse in all three is WORSE (exit 1),
+      anything else ok. A round that did not run (a side ended early, the stage was not reached, a figure file is missing)
+      is made once more; twice is `tool` (exit 2, with the runner's last lines). A figure that is WORSE with a line for the
+      candidate's commit in pair-accepted.tsv (pair-accept writes one; the owner's word) is `accepted` and passes.
+      Writes the --pending file (one row for each renderer and figure: check, renderer, figure, state, the line in words;
+      the states are ok, better, no-baseline, worse, accepted and tool), WORK/result.json (the shape of the single measure's:
+      for each renderer its state, reason and figures, a figure's value the candidate's and its median the base's) and,
+      beside the calibration file, one line for every figure of every round in pairs.tsv. Exit: 0 ran and nothing worse,
+      1 worse, 2 tool.
+      pair-calibrate runs rounds of one build against itself (5, the order of starting alternating) and keeps, for each
+      judged figure, band = max(least, 2 x the largest |r - 1|) of the five ratios (least: cpu_ms 0.03, render_ms 0.05,
+      gpu_ms 0.05, memory_mb 0.02, gap_p99_ms 0.25, late_per_min 0.50) in the calibration file, replacing the key's older
+      lines. pair-probe runs one build alone and lists its figures (the choice of the form: a hidden run of a build that
+      gives every judged figure makes hidden the form).
 """
 import argparse
 import ctypes
@@ -122,23 +168,30 @@ def quantile(values, p):
     return v[min(len(v) - 1, int(p * (len(v) - 1) + 0.5))]
 
 
-def pace_windows(log_text):
-    """The [pace] windows written after frame 0, the first after it left out (it may have begun before)."""
-    out, after, seen = [], False, 0
+def pace_windows(log_text, span_steps=None):
+    """The [pace] windows written after frame 0, the first after it left out (it may have begun before). With span_steps, only
+    as many windows as hold that many steps together (a window of 600 steps is ten seconds): the pair's span."""
+    out, after, seen, steps = [], False, 0, 0
     for line in log_text.splitlines():
         if FRAME_ZERO.search(line):
-            after, seen = True, 0
+            after, seen, steps = True, 0, 0
             continue
         m = PACE.search(line)
         if m and after:
             seen += 1
             if seen > 1:
-                out.append({k: float(v) for k, v in re.findall(r"([a-z_0-9]+)=([-0-9.]+)", m.group(1))})
+                window = {k: float(v) for k, v in re.findall(r"([a-z_0-9]+)=([-0-9.]+)", m.group(1))}
+                if span_steps is not None and steps + window.get("steps", 0.0) > span_steps:
+                    break
+                steps += window.get("steps", 0.0)
+                out.append(window)
     return out
 
 
-def timeline_figures(path, first_frame):
-    """The timeline's figures from game frame first_frame on: present gaps, steps, walks and GPU times (ms)."""
+def timeline_figures(path, first_frame, span_steps=None):
+    """The timeline's figures from game frame first_frame on: present gaps, steps, walks and GPU times (ms). With span_steps,
+    up to the game frame first_frame + span_steps (the pair measures both builds over the same frames of the game); a
+    timeline that does not reach it gives no figures."""
     freq, records = load_timeline(path)
     ms = 1000.0 / freq
     # The stage's first frame in the timeline: the game's frame marker. The game writes it on Windows only (host_main.cpp);
@@ -149,6 +202,11 @@ def timeline_figures(path, first_frame):
     if start is None:
         return {}
     records = [r for r in records if r[0] >= start]
+    if span_steps is not None:
+        end = next((q for q, e, a, _b in records if e == marker and a >= first_frame + span_steps), None)
+        if end is None:
+            return {}
+        records = [r for r in records if r[0] < end]
     presents = [q for q, e, _a, _b in records if e == PRESENT_END]
     gaps = [(b - a) * ms for a, b in zip(presents, presents[1:])]
     # A step's work: from its wait's end (the step starts) to the next wait's start.
@@ -165,8 +223,16 @@ def timeline_figures(path, first_frame):
         elif e == WALK_END and walk is not None:
             walks.append((q - walk) * ms)
             walk = None
-    gpu_begin = {a: q for q, e, a, _b in records if e == GPU_BEGIN}
-    gpu = [(q - gpu_begin[a]) * ms for q, e, a, _b in records if e == GPU_END and a in gpu_begin and q > gpu_begin[a]]
+    # A frame's GPU time: its spans (one a fence) added when a frame has more than one.
+    gpu_open, gpu_frames = {}, {}
+    for q, e, a, _b in records:
+        if e == GPU_BEGIN:
+            gpu_open.setdefault(a, []).append(q)
+        elif e == GPU_END and gpu_open.get(a):
+            began = gpu_open[a].pop(0)
+            if q > began:
+                gpu_frames[a] = gpu_frames.get(a, 0.0) + (q - began) * ms
+    gpu = list(gpu_frames.values())
     f = {}
     if gaps:
         f["gap_max_ms"], f["gap_p99_ms"] = max(gaps), quantile(gaps, 0.99)
@@ -175,18 +241,22 @@ def timeline_figures(path, first_frame):
         f["step_ms"], f["step_p99_ms"] = statistics.median(steps), quantile(steps, 0.99)
     if walks:
         f["render_ms"] = statistics.median(walks)
-    if gpu and presents and sum(gpu) > 0:  # no GPU times, or all zero: not measured, never 0
-        f["gpu_ms"] = sum(gpu) / len(presents)
+    if gpu and sum(gpu) > 0:  # no GPU times, or all zero: not measured, never 0
+        # The median of the frames' times, not the sum over the presents: an average takes in every moment another program
+        # held the graphics card.
+        f["gpu_ms"] = statistics.median(gpu)
     return f
 
 
-def figures(run_folder):
-    """One run's figures: the timeline's, the [pace] lines' and the memory facts'. Missing ones are left out."""
+def figures(run_folder, span_steps=None):
+    """One run's figures: the timeline's, the [pace] lines' and the memory facts'. Missing ones are left out. With span_steps
+    (the pair), the first that many game steps after frame 0: the timeline up to that frame, the [pace] windows that hold that
+    many steps, the memory facts of those seconds (60 steps a second)."""
     run_folder = pathlib.Path(run_folder)
     log = (run_folder / "run.log").read_text(encoding="utf-8", errors="replace")
     zero = FRAME_ZERO.search(log)
     f = {}
-    windows = pace_windows(log)
+    windows = pace_windows(log, span_steps)
     if windows:
         seconds = sum(w.get("seconds", 0.0) for w in windows)
         f["late_per_min"] = 60.0 * sum(w.get("missed", 0.0) for w in windows) / seconds if seconds else 0.0
@@ -201,9 +271,14 @@ def figures(run_folder):
         for name, field in (("step_ms", "step_work_avg_us"), ("step_p99_ms", "step_work_p99_us")):
             if all(field in w for w in windows):
                 f[name] = statistics.median(w[field] for w in windows) / 1000.0
+        # The processor time of the whole process per step (all threads, the game's own count: runtime/src/pacing_recorder.cpp),
+        # the median of the windows that have it. A game that does not write it, or a machine that cannot tell: not there.
+        cpu = [w["cpu_us_per_step"] for w in windows if "cpu_us_per_step" in w]
+        if cpu:
+            f["cpu_ms"] = statistics.median(cpu) / 1000.0
     timeline = run_folder / "timeline.bin"
     if zero and timeline.is_file():
-        f.update(timeline_figures(timeline, int(zero.group(1))))
+        f.update(timeline_figures(timeline, int(zero.group(1)), span_steps))
     memory = []
     facts = run_folder / "facts.jsonl"
     if facts.is_file():
@@ -213,6 +288,9 @@ def figures(run_folder):
             except ValueError:
                 continue
             if fact.get("key") == "process.memory" and isinstance(fact.get("value"), dict):
+                seconds = fact["value"].get("seconds")
+                if span_steps is not None and isinstance(seconds, (int, float)) and seconds > span_steps / 60.0:
+                    continue
                 memory.append(fact["value"].get("bytes", 0))
     if memory:
         f["memory_mb"] = max(memory) / (1024.0 * 1024.0)
@@ -265,7 +343,8 @@ def history_row(f, commit, device, renderer, rate, run_folder, now=None, context
             "gpu_ms": num("gpu_ms", "%.3f"), "memory_mb": num("memory_mb", "%.0f"), "run": str(run_folder),
             "computer": context.get("computer", ""), "gpu": context.get("gpu", ""), "scene": context.get("scene", ""),
             "size": context.get("size", ""), "marks": band.format_marks(marks or {}),
-            "step_ms": num("step_ms", "%.3f"), "step_p99_ms": num("step_p99_ms", "%.3f"), "anchor": ""}
+            "step_ms": num("step_ms", "%.3f"), "step_p99_ms": num("step_p99_ms", "%.3f"), "anchor": "",
+            "cpu_ms": num("cpu_ms", "%.3f")}
 
 
 def history_line(f, commit, device, renderer, rate, run_folder, now=None, context=None, marks=None):
@@ -867,6 +946,506 @@ def keep_command(args):
     return EXIT_RAN
 
 
+# ---- The pair (measure.py pair, pair-calibrate, pair-accept, pair-probe) ----
+SPAN_STEPS = 5400          # the measured span: the stage's first 5400 game steps after its frame 0 (90 seconds)
+ROUTE_END = 6200           # the pair's route ends at this game step after frame 0: the span, the [pace] window left out
+                           # at the start (up to 600 steps) and the window that is written after the span's last one
+HIDDEN, VISIBLE = "hidden", "visible"
+PAIR_FORM = HIDDEN         # the form of both sides (measure.py pair-probe chooses: see the head text)
+PAIR_RATE = "120"          # the rate of the route (its GALAXY_MAX_FPS)
+CALIBRATION = HISTORY.parent / "pair-bands.tsv"
+PAIRS_FILE, ACCEPTED_FILE = "pairs.tsv", "pair-accepted.tsv"
+PAIR_CHECK = "measure/step/pc"
+PENDING_COLUMNS = ("check", "renderer", "figure", "state", "line")
+# What a side's figures hold when its timeline reached the span, on every PC renderer (the timeline's own: steps_over_18 comes
+# from the step waits, render_ms from the walks; Vulkan writes no present events, so it has no gap figures and Direct3D 11
+# and Vulkan no GPU times). A side without these did not reach the stage or lost its files.
+REQUIRED = ("steps_over_18", "render_ms")
+TAIL_LINES = 8
+RELATION_CORE, RELATION_CACHE, RELATION_ALL = 0, 2, 0xFFFF
+
+
+def parse_processor_information(buffer):
+    """(cores, caches) from the bytes GetLogicalProcessorInformationEx(RelationAll) returns: a core {mask, group,
+    efficiency} for each group mask of each core (the higher the efficiency class, the faster and the hungrier the core), a
+    cache {level, size, type, mask, group} for each group mask of each cache. Records of other relations are skipped."""
+    cores, caches, offset = [], [], 0
+    while offset + 8 <= len(buffer):
+        relationship, size = struct.unpack_from("<II", buffer, offset)
+        if size < 8 or offset + size > len(buffer):
+            break
+        body = offset + 8
+        if relationship == RELATION_CORE and size >= 40:
+            efficiency = buffer[body + 1]
+            for i in range(max(1, struct.unpack_from("<H", buffer, body + 22)[0])):
+                mask, group = struct.unpack_from("<QH", buffer, body + 24 + 16 * i)
+                cores.append({"mask": mask, "group": group, "efficiency": efficiency})
+        elif relationship == RELATION_CACHE and size >= 48:
+            level = buffer[body]
+            cache_size, kind = struct.unpack_from("<II", buffer, body + 4)
+            for i in range(max(1, struct.unpack_from("<H", buffer, body + 30)[0])):
+                mask, group = struct.unpack_from("<QH", buffer, body + 32 + 16 * i)
+                caches.append({"level": level, "size": cache_size, "type": kind, "mask": mask, "group": group})
+        offset += size
+    return cores, caches
+
+
+def machine_processor_tables():
+    """(cores, caches) of this machine as the system describes it, or None (not Windows, or the system did not answer)."""
+    if os.name != "nt":
+        return None
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    size = ctypes.c_ulong(0)
+    k32.GetLogicalProcessorInformationEx(RELATION_ALL, None, ctypes.byref(size))
+    if not size.value:
+        return None
+    buffer = ctypes.create_string_buffer(size.value)
+    if not k32.GetLogicalProcessorInformationEx(RELATION_ALL, buffer, ctypes.byref(size)):
+        return None
+    return parse_processor_information(buffer.raw[:size.value])
+
+
+def count_bits(mask):
+    return bin(mask).count("1")
+
+
+def choose_processors(cores, caches):
+    """(mask or None, text): the set of logical processors both sides of a pair are held to: those of the highest
+    efficiency class and, of those, the ones that share the largest level-3 cache (several of that size: the first). None
+    when that is every processor (nothing is set). Only the first processor group is used: a mask holds one group's."""
+    if not cores:
+        return None, "the system gave no processor table: nothing is set"
+    groups = sorted({c["group"] for c in cores})
+    group = groups[0]
+    mine = [c for c in cores if c["group"] == group]
+    every = 0
+    for c in mine:
+        every |= c["mask"]
+    top = max(c["efficiency"] for c in mine)
+    top_mask = 0
+    for c in mine:
+        if c["efficiency"] == top:
+            top_mask |= c["mask"]
+    chosen, why = top_mask, "efficiency class %d" % top
+    level3 = [c for c in caches if c["level"] == 3 and c["group"] == group and c["type"] in (0, 2) and c["mask"] & top_mask]
+    if level3:
+        best = max(level3, key=lambda c: (c["size"], -((c["mask"] & -c["mask"]).bit_length())))
+        chosen = best["mask"] & top_mask
+        why += ", sharing a level-3 cache of %d MB" % (best["size"] // (1 << 20))
+    if chosen == every and len(groups) == 1:
+        return None, "every logical processor (%d): nothing is set" % count_bits(every)
+    return chosen, "logical processors %#x (%d of %d), %s" % (chosen, count_bits(chosen), count_bits(every), why)
+
+
+def set_processor_mask(mask):
+    """Windows: this process's processor mask set to `mask` (its children inherit it); the old mask, to put back."""
+    if os.name != "nt" or not mask:
+        return None
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.GetCurrentProcess.restype = ctypes.c_void_p
+    process = ctypes.c_void_p(k32.GetCurrentProcess())
+    mine, system = ctypes.c_size_t(), ctypes.c_size_t()
+    k32.GetProcessAffinityMask(process, ctypes.byref(mine), ctypes.byref(system))
+    if not k32.SetProcessAffinityMask(process, ctypes.c_size_t(mask)):
+        raise SystemExit("measure.py: the processor mask %#x was refused" % mask)
+    return mine.value
+
+
+class Started:
+    """A game's runner started: wait() gives its exit code."""
+    def __init__(self, process, log):
+        self.process, self.log = process, log
+
+    def wait(self):
+        try:
+            return self.process.wait()
+        finally:
+            self.log.close()
+
+
+def start_process(command, env, log_path):
+    log = open(log_path, "wb")
+    try:
+        return Started(subprocess.Popen(command, env=env, stdout=log, stderr=subprocess.STDOUT), log)
+    except OSError:
+        log.close()
+        raise
+
+
+def pair_route(work, form):
+    """WORK/route/test.json: the route of the single measure cut at ROUTE_END game steps after frame 0 and in the form given
+    (hidden: the harness starts the game with its window hidden; visible: shown, taking no focus, as the single measure's
+    is). Both sides of a pair run this one test. Returns the folder."""
+    test = json.loads((ROUTE / "test.json").read_text(encoding="utf-8"))
+    steps = [s for s in test["steps"] if s.get("at", 0) < ROUTE_END and not s.get("end")]
+    steps.append({"at": ROUTE_END, "end": True})
+    test.update(name="measure-pair", steps=steps, visible=(form == VISIBLE))
+    test["about"] = ("The play route cut at game step %d after the stage's first frame, for tools/measure/measure.py pair "
+                     "(the file the tool writes beside the runs from tests/measure/route/test.json)." % ROUTE_END)
+    folder = pathlib.Path(work) / "route"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "test.json").write_text(json.dumps(test, indent=1) + "\n", encoding="utf-8", newline="\n")
+    return folder
+
+
+def tail_of(path, lines=TAIL_LINES):
+    try:
+        text = pathlib.Path(path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+    return " | ".join(l.strip() for l in text.splitlines()[-lines:] if l.strip())
+
+
+class Pair:
+    """What a pair's rounds share: the two builds, the work folder, how a game is started and what the files are."""
+
+    def __init__(self, args, starter=start_process, now=None):
+        self.args = args
+        self.work = pathlib.Path(args.work)
+        self.starter = starter
+        self.now = now or datetime.datetime.now
+        self.bins = {"base": getattr(args, "base", None) or getattr(args, "bin", ""),
+                     "cand": getattr(args, "cand", None) or getattr(args, "bin", "")}
+        self.paks = {"base": getattr(args, "base_pak", "") or "", "cand": getattr(args, "cand_pak", "") or ""}
+        self.commits = {"base": getattr(args, "base_commit", "unknown") or "unknown",
+                        "cand": getattr(args, "cand_commit", getattr(args, "commit", "unknown")) or "unknown"}
+        self.calibration = pathlib.Path(getattr(args, "calibration", "") or CALIBRATION)
+        self.route = pair_route(self.work, getattr(args, "form", PAIR_FORM))
+        self.seconds = []   # how long each round took, from its start to its figures
+
+    def command(self, side, renderer, folder, lock):
+        command = [sys.executable, "-X", "utf8", "-I", str(TREE / "tools/lumacore/luma_test.py"), "run", str(self.route),
+                   "--bin", str(self.bins[side]), "--work", str(folder), "--who", "measure pair", "--renderer", renderer,
+                   "--commit", self.commits[side], "--lock", str(lock)]
+        if self.paks[side]:
+            command += ["--pak", self.paks[side]]
+        return command
+
+    def round(self, renderer, number, attempt, first):
+        """One round for one renderer: both builds started at once (`first` starts first), waited for. {status `ran`: figures
+        {side: figures}, context, folders; status `no run`: why}."""
+        began = self.now()
+        tag = "r%d-a%d" % (number, attempt)
+        order = [first, "cand" if first == "base" else "base"]
+        env = dict(os.environ)
+        started, folders = {}, {}
+        for side in order:
+            folders[side] = self.work / renderer / tag / side
+            folders[side].mkdir(parents=True, exist_ok=True)
+            try:
+                started[side] = self.starter(self.command(side, renderer, folders[side], self.work / ("harness-%s-%s-%s.lock" % (
+                    renderer, tag, side))), env, folders[side] / "runner.log")
+            except OSError as e:
+                for other in started.values():
+                    other.wait()
+                return {"status": "no run", "why": "the %s side could not be started: %s" % (side, e)}
+        codes = {side: started[side].wait() for side in order}
+        found, out = {}, {"status": "ran", "figures": {}, "folders": {}, "first": first}
+        for side in ("base", "cand"):
+            run_folder = run_folder_of(folders[side], renderer)
+            tail = tail_of(folders[side] / "runner.log")
+            if codes[side] != 0 or run_folder is None:
+                return {"status": "no run", "why": "the %s side ended with exit %s%s" % (
+                    side, codes[side], (": " + tail) if tail else "")}
+            try:
+                figures_found = figures(run_folder, SPAN_STEPS)
+            except (OSError, ValueError, struct.error) as e:
+                return {"status": "no run", "why": "the %s side's results could not be read: %s: %s" % (
+                    side, type(e).__name__, e)}
+            lacking = [n for n in REQUIRED if n not in figures_found]
+            if lacking:
+                return {"status": "no run", "why": "the %s side did not give %s over its first %d steps (the stage was not "
+                        "reached, or a file is missing): %s" % (side, ", ".join(lacking), SPAN_STEPS, tail)}
+            out["figures"][side] = figures_found
+            out["folders"][side] = run_folder
+            found[side] = run_folder
+        out["context"] = run_context(found["base"], socket.gethostname())
+        self.seconds.append((self.now() - began).total_seconds())
+        return out
+
+    def made(self, renderer, number, first):
+        """A round; one that did not run is made once more, and a second failure is the answer (status `no run`)."""
+        result = None
+        for attempt in (1, 2):
+            result = self.round(renderer, number, attempt, first)
+            if result["status"] == "ran":
+                return result
+            print("measure.py pair: %s round %d, try %d did not run: %s" % (renderer, number, attempt, result["why"]), flush=True)
+        return result
+
+    def log_round(self, renderer, number, result, ratios, words):
+        for figure in sorted(ratios):
+            band.add_cells(self.calibration.parent / PAIRS_FILE, band.ROUNDS_COLUMNS, {
+                "time": self.now().strftime("%Y-%m-%d %H:%M:%S"), "base_commit": self.commits["base"],
+                "cand_commit": self.commits["cand"], "renderer": renderer, "round": number, "figure": figure,
+                "base": "%.4f" % result["figures"]["base"][figure], "cand": "%.4f" % result["figures"]["cand"][figure],
+                "ratio": "%.4f" % ratios[figure], "word": words[figure]})
+
+
+def round_ratios(result):
+    """{figure: ratio} for every judged figure that both sides gave."""
+    base, cand = result["figures"]["base"], result["figures"]["cand"]
+    return {f: band.pair_ratio(base[f], cand[f], f) for f in band.JUDGED if f in base and f in cand}
+
+
+def percent(ratio):
+    return "%+.1f%%" % ((ratio - 1.0) * 100.0)
+
+
+def number_word(n):
+    return {1: "one", 2: "two", 3: "three"}.get(n, str(n))
+
+
+def figure_line(check, renderer, figure, entry):
+    """The plain line of one figure: for example `measure/step/pc d3d12 cpu_ms worse: base 3.210, candidate 3.540 (+10.3%,
+    +9.8%, +10.9% in three rounds; the band is 4.0%)`."""
+    shown = ", ".join(percent(r) for r in entry["ratios"])
+    if len(entry["ratios"]) > 1:
+        shown += " in %s rounds" % number_word(len(entry["ratios"]))
+    if entry["band"] is None:
+        tail = "not calibrated on this PC"
+    else:
+        tail = "the band is %.1f%%" % (entry["band"] * 100.0)
+    if entry["verdict"] == "accepted":
+        tail += "; accepted: " + entry["reason"]
+    return "%s %s %s %s: base %.3f, candidate %.3f (%s; %s)" % (check, renderer, figure, entry["verdict"], entry["base"],
+                                                              entry["cand"], shown, tail)
+
+
+def settle_figures(rounds, calibration, accepted_file, cand_commit, renderer):
+    """{figure: entry} from a renderer's rounds (each a round's result): the words of round 1 stand, except that a figure that
+    was worse in round 1 is `worse` only when it was worse in every round that was made (three), else ok. entry: verdict, base,
+    cand (the medians over the rounds), ratios (each round's), band (round 1's key's), reason."""
+    out = {}
+    per_round = []
+    for result in rounds:
+        ratios = round_ratios(result)
+        bands = band.pair_bands(calibration, band.pair_key(result["context"], renderer, PAIR_RATE))
+        per_round.append((ratios, {f: band.pair_word(r, bands.get(f)) for f, r in ratios.items()}, bands))
+    for figure in per_round[0][0]:
+        words = [w[figure] for _r, w, _b in per_round if figure in w]
+        ratios = [r[figure] for r, _w, _b in per_round if figure in r]
+        first = words[0]
+        if first == "worse":
+            verdict = "worse" if len(words) == band.PAIR_ROUNDS and all(w == "worse" for w in words) else "ok"
+        else:
+            verdict = first
+        entry = {"verdict": verdict, "ratios": ratios, "band": per_round[0][2].get(figure), "reason": "",
+                 "base": statistics.median(r["figures"]["base"][figure] for r in rounds if figure in r["figures"]["base"]),
+                 "cand": statistics.median(r["figures"]["cand"][figure] for r in rounds if figure in r["figures"]["cand"])}
+        if verdict == "worse":
+            reason = band.accepted_reason(accepted_file, cand_commit, renderer, figure)
+            if reason is not None:
+                entry["verdict"], entry["reason"] = "accepted", reason
+        out[figure] = entry
+    return out
+
+
+def renderer_state(figures_settled):
+    """worse, accepted, better, ok or no-baseline, from the figures' verdicts."""
+    words = {e["verdict"] for e in figures_settled.values()}
+    for state in ("worse", "accepted", "better", "ok"):
+        if state in words:
+            return state
+    return "no-baseline"
+
+
+def pair_renderer(pair, renderer, check):
+    """One renderer's pair: round 1 (the base starts first), round 2 with the order swapped for figures worse in round 1,
+    round 3 (the order of round 1) for figures worse in both. {state, reason, figures, lines, rounds}."""
+    rounds, still, first = [], None, "base"
+    accepted = pair.calibration.parent / ACCEPTED_FILE
+    for number in range(1, band.PAIR_ROUNDS + 1):
+        result = pair.made(renderer, number, first)
+        if result["status"] != "ran":
+            why = result["why"]
+            return {"state": "tool", "reason": why, "figures": {}, "rounds": len(rounds),
+                    "lines": {"-": "%s %s tool: %s" % (check, renderer, why)}}
+        rounds.append(result)
+        ratios = round_ratios(result)
+        bands = band.pair_bands(pair.calibration, band.pair_key(result["context"], renderer, PAIR_RATE))
+        words = {f: band.pair_word(r, bands.get(f)) for f, r in ratios.items()}
+        pair.log_round(renderer, number, result, ratios, words)
+        print("measure.py pair: %s round %d (%s first, %.0f s): %s" % (
+            renderer, number, first, pair.seconds[-1], ", ".join("%s %s %s" % (f, percent(ratios[f]), words[f])
+                                                                   for f in sorted(ratios))), flush=True)
+        worse = {f for f, w in words.items() if w == "worse"}
+        still = worse if still is None else still & worse
+        if not still:
+            break
+        first = "cand" if first == "base" else "base"
+    settled = settle_figures(rounds, pair.calibration, accepted, pair.commits["cand"], renderer)
+    state = renderer_state(settled)
+    lines = {f: figure_line(check, renderer, f, settled[f]) for f in band.JUDGED if f in settled}
+    reason = "; ".join(lines[f] for f in lines if settled[f]["verdict"] in ("worse", "accepted"))
+    return {"state": state, "reason": reason, "figures": settled, "rounds": len(rounds), "lines": lines}
+
+
+def pair_result(args, code, outcomes, processors, form, commits):
+    """WORK/result.json: the single measure's shape (each run kind's state, reason, figures: a figure's `value` is the
+    candidate's, its `median` the base's), with the pair's own ratios, bands and rounds."""
+    runs = {}
+    for renderer, o in outcomes.items():
+        runs[renderer] = {"state": o["state"], "reason": o["reason"], "device": "pc", "renderer": renderer, "anchor": None,
+                          "rounds": o["rounds"],
+                          "figures": {f: {"value": e["cand"], "median": e["base"], "band": e["band"], "judged": True,
+                                          "verdict": e["verdict"], "anchor": None, "ratios": e["ratios"]}
+                                      for f, e in o["figures"].items()}}
+    names = {EXIT_RAN: "ok", EXIT_WORSE: "WORSE", EXIT_TOOL: "tool fault"}
+    return {"commit": commits["cand"][:9], "base": commits["base"][:9], "pending": args.pending or None, "exit": code,
+            "verdict": names[code], "processors": processors, "form": form, "runs": runs}
+
+
+def pair_code(outcomes):
+    states = [o["state"] for o in outcomes.values()]
+    return EXIT_TOOL if "tool" in states else EXIT_WORSE if "worse" in states else EXIT_RAN
+
+
+def pair_body(args, starter=start_process, tables=None, now=None):
+    """The pair's rounds for every renderer named, the files, and the exit code: (code, summary)."""
+    work = pathlib.Path(args.work)
+    mask, processors = choose_processors(*(tables if tables is not None else machine_processor_tables() or ([], [])))
+    print("measure.py pair: " + processors, flush=True)
+    old = set_processor_mask(mask)
+    try:
+        pair = Pair(args, starter, now)
+        outcomes = {}
+        for renderer in [r for r in args.runs.split(",") if r]:
+            outcomes[renderer] = pair_renderer(pair, renderer, args.name)
+            for line in outcomes[renderer]["lines"].values():
+                print(line, flush=True)
+    finally:
+        restore_mask(old)
+    code = pair_code(outcomes)
+    rows = []
+    for renderer, o in outcomes.items():
+        if o["state"] == "tool":
+            rows.append({"check": args.name, "renderer": renderer, "figure": "-", "state": "tool", "line": o["lines"]["-"]})
+        for figure, line in o["lines"].items():
+            if figure != "-":
+                rows.append({"check": args.name, "renderer": renderer, "figure": figure,
+                             "state": o["figures"][figure]["verdict"], "line": line})
+    if args.pending:
+        band.cells_file(args.pending, PENDING_COLUMNS, rows)
+    work.mkdir(parents=True, exist_ok=True)
+    result = pair_result(args, code, outcomes, processors, getattr(args, "form", PAIR_FORM), pair.commits)
+    (work / RESULT_FILE).write_text(json.dumps(result, indent=1) + "\n", encoding="utf-8", newline="\n")
+    return code, "; ".join("%s %s" % (r, o["state"]) for r, o in outcomes.items())
+
+
+def calibrate_body(args, starter=start_process, tables=None, now=None):
+    """Rounds of one build against itself for every renderer named; the band of each judged figure into the calibration file."""
+    mask, processors = choose_processors(*(tables if tables is not None else machine_processor_tables() or ([], [])))
+    print("measure.py pair-calibrate: " + processors, flush=True)
+    old = set_processor_mask(mask)
+    said, code = [], EXIT_RAN
+    try:
+        pair = Pair(args, starter, now)
+        for renderer in [r for r in args.runs.split(",") if r]:
+            rounds = []
+            for number in range(1, args.pairs + 1):
+                result = pair.made(renderer, number, "base" if number % 2 else "cand")
+                if result["status"] != "ran":
+                    print("measure.py pair-calibrate: %s: %s" % (renderer, result["why"]))
+                    said.append("%s tool (%s)" % (renderer, result["why"]))
+                    code = EXIT_TOOL
+                    break
+                rounds.append(result)
+            else:
+                ratios = {}
+                for result in rounds:
+                    for figure, r in round_ratios(result).items():
+                        ratios.setdefault(figure, []).append(r)
+                bands = {f: (band.pair_band(rs, f), rs) for f, rs in ratios.items() if len(rs) == args.pairs}
+                key = band.pair_key(rounds[0]["context"], renderer, PAIR_RATE)
+                band.write_pair_bands(pair.calibration, key, bands, pair.commits["cand"], pair.now().strftime("%Y-%m-%d %H:%M"))
+                print("measure.py pair-calibrate: %s, key %s" % (renderer, " / ".join(key)))
+                for figure in sorted(bands):
+                    print("  %-13s band %5.1f%%  ratios %s" % (figure, bands[figure][0] * 100.0, " ".join(
+                        "%.4f" % r for r in bands[figure][1])))
+                said.append("%s calibrated (%d figures)" % (renderer, len(bands)))
+    finally:
+        restore_mask(old)
+    return code, "; ".join(said)
+
+
+def probe_body(args, starter=start_process, tables=None, now=None):
+    """One build alone in the form given: its figures over the pair's span, and which judged figures are missing."""
+    mask, processors = choose_processors(*(tables if tables is not None else machine_processor_tables() or ([], [])))
+    print("measure.py pair-probe: " + processors, flush=True)
+    old = set_processor_mask(mask)
+    try:
+        pair = Pair(args, starter, now)
+        folder = pair.work / args.renderer / "probe"
+        folder.mkdir(parents=True, exist_ok=True)
+        command = pair.command("base", args.renderer, folder, pair.work / "harness-probe.lock")
+        code = starter(command, dict(os.environ), folder / "runner.log").wait()
+    finally:
+        restore_mask(old)
+    run_folder = run_folder_of(folder, args.renderer)
+    if code != 0 or run_folder is None:
+        print("measure.py pair-probe: the run ended with exit %s: %s" % (code, tail_of(folder / "runner.log")))
+        return EXIT_TOOL, "no run"
+    found = figures(run_folder, SPAN_STEPS)
+    for name in band.FIGURES:
+        print("  %-14s %s" % (name, say_number(found.get(name))))
+    missing = [n for n in band.JUDGED if n not in found]
+    print("measure.py pair-probe: %s form, %s: %s" % (getattr(args, "form", PAIR_FORM), args.renderer, (
+        "every judged figure is there" if not missing else "missing: " + ", ".join(missing))))
+    return (EXIT_RAN if not missing else EXIT_TOOL), ("no figure missing" if not missing else "missing " + ", ".join(missing))
+
+
+def pair_locked(args, label, body):
+    """A pair command inside the locks: the gate lock when --gate-lock is given (through its queue, as the single measure
+    takes it), then the measurement lock. No quiet minutes and no window watch: the ratio of two builds that ran side by side
+    does not depend on what else the PC was doing."""
+    work = pathlib.Path(args.work)
+    work.mkdir(parents=True, exist_ok=True)
+    os.environ["NEBULA_NO_MEASURE_WAIT"] = "1"
+    holder = "measure.py: the %s pid %d" % (label, os.getpid())
+    gate = gate_module() if args.gate_lock else None
+    if gate is not None:
+        why = gate.take_gate_lock(args.gate_lock, holder, args.wait, args.board, args.who)
+        if why is not None:
+            print("measure: no %s: %s" % (label, why))
+            return EXIT_TOOL
+    summary, code = "ended early", EXIT_TOOL
+    try:
+        try:
+            take_lock(args.lock, "measure.py %s %s" % (label, work))
+        except SystemExit as e:
+            print("measure: no %s: %s" % (label, e))
+            return EXIT_TOOL
+        try:
+            code, summary = body(args)
+        except Exception as e:  # the exit code 1 means WORSE: a fault of the tool is 2
+            import traceback
+            traceback.print_exc()
+            summary, code = "the %s stopped: %s: %s" % (label, type(e).__name__, e), EXIT_TOOL
+        finally:
+            shutil.rmtree(args.lock, ignore_errors=True)
+    finally:
+        if gate is not None:
+            gate.free_gate_lock(args.gate_lock, holder, args.board, args.who, "%s: %s" % (label, summary))
+    print("measure: " + summary)
+    return code
+
+
+def pair_accept_command(args):
+    path = pathlib.Path(args.calibration or CALIBRATION).parent / ACCEPTED_FILE
+    if args.figure not in band.JUDGED:
+        print("measure: pair-accept: %s is not a judged figure (%s)" % (args.figure, ", ".join(band.JUDGED)))
+        return EXIT_TOOL
+    if not args.reason.strip():
+        print("measure: pair-accept: give the reason")
+        return EXIT_TOOL
+    band.add_cells(path, band.ACCEPTED_COLUMNS, {"commit": args.commit, "renderer": args.renderer, "figure": args.figure,
+                                                 "reason": args.reason.replace(TAB, " ").replace("\n", " "),
+                                                 "date": datetime.date.today().isoformat()})
+    print("measure: accepted: %s %s %s in %s" % (args.commit, args.renderer, args.figure, path))
+    return EXIT_RAN
+
+
 def main(argv=None):
     # A self-test that starts this tool as a child process runs it under the live-state guard (tools/gate/selftest_guard.py).
     import pathlib as _pathlib
@@ -918,7 +1497,60 @@ def main(argv=None):
     d.add_argument("--commit", default="-")
     d.add_argument("--device", default="pc")
     d.add_argument("--history", default="")
+
+    def locks(parser):
+        parser.add_argument("--lock", default="D:/NebulaWork/plan/measure.lock")
+        parser.add_argument("--gate-lock", default="")
+        parser.add_argument("--board", default="")
+        parser.add_argument("--who", default="Agent 1")
+        parser.add_argument("--wait", type=float, default=240.0, help="minutes to wait for the gate lock")
+        parser.add_argument("--form", choices=(HIDDEN, VISIBLE), default=PAIR_FORM,
+                            help="the window of both sides: hidden, or shown without the focus (the single measure's)")
+    pr = sub.add_parser("pair", help="two builds side by side in the same minutes: only the ratio of a figure is judged")
+    pr.add_argument("--base", required=True, help="the folder of a built game: the base")
+    pr.add_argument("--cand", required=True, help="the folder of a built game: the candidate")
+    pr.add_argument("--runs", default="d3d12")
+    pr.add_argument("--work", required=True)
+    pr.add_argument("--pending", default="", help="write one row for each renderer and figure to FILE")
+    pr.add_argument("--calibration", default="", help="the bands (default: pair-bands.tsv beside the history)")
+    pr.add_argument("--base-pak", default="", help="the game.pak of the base (default: the one its folder's pak.path names)")
+    pr.add_argument("--cand-pak", default="", help="the game.pak of the candidate (default: its folder's pak.path's)")
+    pr.add_argument("--base-commit", default="unknown")
+    pr.add_argument("--cand-commit", default="unknown")
+    pr.add_argument("--name", default=PAIR_CHECK, help="the check's name in the lines")
+    locks(pr)
+    pc = sub.add_parser("pair-calibrate", help="rounds of one build against itself: the band of each figure")
+    pc.add_argument("--bin", required=True)
+    pc.add_argument("--runs", default="d3d12")
+    pc.add_argument("--pairs", type=int, default=5)
+    pc.add_argument("--work", required=True)
+    pc.add_argument("--calibration", default="")
+    pc.add_argument("--base-pak", default="")
+    pc.add_argument("--cand-pak", default="")
+    pc.add_argument("--commit", default="unknown")
+    locks(pc)
+    pa = sub.add_parser("pair-accept", help="a slowdown that was looked at and accepted (the owner's word)")
+    pa.add_argument("--commit", required=True, help="the candidate's commit")
+    pa.add_argument("--renderer", required=True)
+    pa.add_argument("--figure", required=True)
+    pa.add_argument("--reason", required=True)
+    pa.add_argument("--calibration", default="")
+    pp = sub.add_parser("pair-probe", help="one build alone: its figures over the pair's span")
+    pp.add_argument("--bin", required=True)
+    pp.add_argument("--renderer", default="d3d12")
+    pp.add_argument("--work", required=True)
+    pp.add_argument("--base-pak", default="")
+    pp.add_argument("--commit", default="unknown")
+    locks(pp)
     args = p.parse_args(argv)
+    if args.command == "pair":
+        return pair_locked(args, "pair", pair_body)
+    if args.command == "pair-calibrate":
+        return pair_locked(args, "pair-calibrate", calibrate_body)
+    if args.command == "pair-probe":
+        return pair_locked(args, "pair-probe", probe_body)
+    if args.command == "pair-accept":
+        return pair_accept_command(args)
     if args.command == "run":
         return run(args)
     if args.command == "accept":

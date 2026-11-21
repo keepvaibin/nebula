@@ -49,7 +49,7 @@ f = m.timeline_figures(work / "timeline.bin", 10)
 check(abs(f.get("gap_max_ms", 0) - 30.0) < 1e-6, "the longest present gap from frame 10 on: %s" % f)
 check(f.get("steps_over_18") == 1 and abs(f.get("step_max_ms", 0) - 20.0) < 1e-6, "steps over 18 ms: %s" % f)
 check(abs(f.get("render_ms", 0) - 3.0) < 1e-6, "the walks' median: %s" % f)
-check(abs(f.get("gpu_ms", 0) - 4.0 / 3.0) < 1e-6, "the GPU's time over the presents: %s" % f)
+check(abs(f.get("gpu_ms", 0) - 2.0) < 1e-6, "the GPU's time: the median of the frames' (3 and 1 ms): %s" % f)
 check(m.timeline_figures(work / "timeline.bin", 99) == {}, "no frame 99: no figures")
 # A renderer that writes no GPU events, or only empty ones: gpu_ms is not there (never 0).
 no_gpu = [r for r in records if r[1] not in (m.GPU_BEGIN, m.GPU_END)]

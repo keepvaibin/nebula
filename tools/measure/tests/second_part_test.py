@@ -127,7 +127,7 @@ def go(history, runs, spec, commit, machine=None, pending="", anchor_note=None):
 
 
 def steady(**over):
-    base = {"render_us": 1000, "steps": [4.0] * 200, "mem_mb": 300}
+    base = {"render_us": 1000, "steps": [4.0] * 200, "mem_mb": 300, "pace_extra": " cpu_us_per_step=4000.0"}
     base.update(over)
     return lambda renderer, n: dict(base)
 
@@ -146,13 +146,28 @@ f = m.figures(folder)
 check(abs(f["step_ms"] - 4.0) < 1e-9 and abs(f["step_p99_ms"] - 4.0) < 1e-9 and abs(f["step_max_ms"] - 300.0) < 1e-9
       and f["steps_over_18"] == 1, "step_ms is the median, step_p99_ms the 99th percentile of the steps' work: %s" % f)
 check(abs(f["gap_max_ms"] - 500.0) < 1e-9 and abs(f["gap_p99_ms"] - 10.0) < 1e-9, "the gap figures beside them: %s" % f)
-check(band.JUDGED == ("gap_p99_ms", "late_per_min", "render_ms", "gpu_ms", "memory_mb", "step_ms", "step_p99_ms")
+check(band.JUDGED == ("cpu_ms", "gap_p99_ms", "late_per_min", "render_ms", "gpu_ms", "memory_mb")
       and set(band.JUDGED) <= set(band.FIGURES) and set(band.FIGURES) - set(band.JUDGED) ==
-      {"gap_max_ms", "step_max_ms", "steps_over_18"}, "the judged figures are the brief's seven: %s" % (band.JUDGED,))
+      {"gap_max_ms", "step_ms", "step_p99_ms", "step_max_ms", "steps_over_18"},
+      "the judged figures are cpu_ms and five more; the step's time on the clock is shown only: %s" % (band.JUDGED,))
+check("cpu_ms" not in f, "a run whose [pace] lines have no cpu_us_per_step has no cpu_ms (not 0): %s" % f)
+folder_cpu = pathlib.Path(tempfile.mkdtemp()) / "run"
+write_run(folder_cpu, steps=[4.0] * 200, pace_extra=" cpu_us_per_step=3210.0")
+check(abs(m.figures(folder_cpu)["cpu_ms"] - 3.21) < 1e-9, "cpu_ms is cpu_us_per_step in ms: %s" % m.figures(folder_cpu))
+(folder_cpu / "run.log").write_text('[gpu] adapter="Card A" vram-mb=1\nharness: frame 0 is game frame 10\n'
+                                    + (PACE % (0, 1000, " cpu_us_per_step=1000.0")) + (PACE % (0, 1000, " cpu_us_per_step=9000.0"))
+                                    + (PACE % (0, 1000, " cpu_us_per_step=2000.0")) + (PACE % (0, 1000, " cpu_us_per_step=3000.0")),
+                                    encoding="utf-8")
+check(abs(m.figures(folder_cpu)["cpu_ms"] - 3.0) < 1e-9, "cpu_ms is the median of the windows after the first: 9, 2, 3 -> 3 ms")
+(folder_cpu / "run.log").write_text('[gpu] adapter="Card A" vram-mb=1\nharness: frame 0 is game frame 10\n'
+                                    + (PACE % (0, 1000, " cpu_us_per_step=1000.0")) + (PACE % (0, 1000, ""))
+                                    + (PACE % (0, 1000, " cpu_us_per_step=3000.0")), encoding="utf-8")
+check(abs(m.figures(folder_cpu)["cpu_ms"] - 3.0) < 1e-9, "a window with no cpu_us_per_step is left out of the median")
 row = m.history_row(f, "abc", "pc", "d3d12", "120", folder, context=CONTEXT)
-check(row["step_ms"] == "4.000" and row["step_p99_ms"] == "4.000" and band.COLUMNS[-3:] == ("step_ms", "step_p99_ms",
-                                                                                          "anchor"),
-      "the two figures are history columns, added at the end: %s" % (band.COLUMNS[-3:],))
+check(row["step_ms"] == "4.000" and row["step_p99_ms"] == "4.000" and band.COLUMNS[-4:] == ("step_ms", "step_p99_ms",
+                                                                                          "anchor", "cpu_ms"),
+      "cpu_ms is a history column, added at the end: %s" % (band.COLUMNS[-4:],))
+check(row["cpu_ms"] == "-", "a cpu_ms not measured is -: %s" % row["cpu_ms"])
 # An older history file (20 columns) keeps its lines in their places when the new columns come.
 old_history = pathlib.Path(tempfile.mkdtemp()) / "h.tsv"
 old_cells = ["old", "2026-11-20 10:00", "pc", "d3d12", "120", "240.0", "10.00", "9.00", "1.00", "5.00", "0", "0.100",
@@ -162,29 +177,39 @@ band.add_row(old_history, row)
 rows = band.read_history(old_history)
 check(len(rows) == 2 and rows[0]["marks"] == "render_ms=trusted" and rows[0]["step_ms"] == "" and rows[0]["anchor"] == ""
       and rows[0]["memory_mb"] == "300" and rows[1]["step_ms"] == "4.000", "an older file's lines keep their places: %s" % rows[0])
+check(rows[0]["cpu_ms"] == "" and band.trusted_values(rows, band.key_of(rows[0]), "cpu_ms") == [] and
+      band.anchor_values(rows, band.key_of(rows[0]), "cpu_ms") == [],
+      "a line written before cpu_ms reads it as empty and counts it for no baseline, never as 0: %s" % rows[0]["cpu_ms"])
+rows[0]["marks"] = "cpu_ms=trusted"
+check(band.trusted_values(rows, band.key_of(rows[0]), "cpu_ms") == [], "even marked trusted, an empty cell is no number")
 check(old_history.read_text(encoding="utf-8").splitlines()[0] == "\t".join(band.COLUMNS), "the file takes the new header")
 
-# A step figure past its band is worse, twice: WORSE, naming both new figures (exit 1).
+# The processor time past its band is worse, twice: WORSE (exit 1). The step's time on the clock is not judged any more: six
+# milliseconds a step against four holds.
 history = new_history()
+code, said, calls, result, out = go(history, "d3d12", steady(pace_extra=" cpu_us_per_step=6000.0"), "%09d" % 7)
+check(code == 1 and said == ["d3d12 WORSE: cpu_ms"] and len(calls) == 2, "cpu_ms is judged: %s %s" % (code, said))
 code, said, calls, result, out = go(history, "d3d12", steady(steps=[6.0] * 200), "%09d" % 7)
-check(code == 1 and said == ["d3d12 WORSE: step_ms, step_p99_ms"] and len(calls) == 2,
-      "step_ms and step_p99_ms are judged: %s %s" % (code, said))
+check(code == 0 and said == ["d3d12 holds"] and len(calls) == 1 and
+      result["runs"]["d3d12"]["figures"]["step_ms"]["value"] == 6.0, "step_ms 6 against 4 is shown and not judged: %s %s" % (code, said))
 # The shown figures are never judged: the longest step, the slow steps and the longest gap far outside any band change
 # nothing (no second measure, exit 0) and still go to the history.
 code, said, calls, result, out = go(history, "d3d12", steady(steps=[4.0] * 200 + [300.0], gap_spike=500), "%09d" % 8)
 fig = result["runs"]["d3d12"]["figures"]
 check(code == 0 and len(calls) == 1 and said == ["d3d12 holds"],
       "a slow step and a long gap alone are not worse: %s %s" % (code, said))
-check(all(fig[n]["verdict"] == "not judged" and fig[n]["judged"] is False for n in ("gap_max_ms", "step_max_ms", "steps_over_18"))
-      and fig["step_max_ms"]["value"] == 300.0 and fig["step_ms"]["judged"] is True, "they are shown, not judged: %s" % fig)
+check(all(fig[n]["verdict"] == "not judged" and fig[n]["judged"] is False for n in
+          ("gap_max_ms", "step_ms", "step_p99_ms", "step_max_ms", "steps_over_18"))
+      and fig["step_max_ms"]["value"] == 300.0 and fig["cpu_ms"]["judged"] is True, "they are shown, not judged: %s" % fig)
 last = [r for r in band.read_history(history)][-1]
 check(last["step_max_ms"] == "300.00" and band.parse_marks(last["marks"]).get("step_max_ms") == "trusted",
       "and kept in the history: %s" % last["marks"])
 
 # ================= 2. The floor of each figure's band =================
 check(band.FLOORS == {"gap_max_ms": 0.25, "gap_p99_ms": 0.25, "step_ms": 0.02, "step_p99_ms": 0.02, "render_ms": 0.02,
-                      "gpu_ms": 0.02, "late_per_min": 2.0, "memory_mb": 32.0}, "the floors are the brief's: %s" % band.FLOORS)
-for name, floor in (("gap_p99_ms", 0.25), ("step_ms", 0.02), ("step_p99_ms", 0.02), ("render_ms", 0.02), ("gpu_ms", 0.02),
+                      "gpu_ms": 0.02, "late_per_min": 2.0, "memory_mb": 32.0, "cpu_ms": 0.02},
+      "the floors are the brief's: %s" % band.FLOORS)
+for name, floor in (("gap_p99_ms", 0.25), ("cpu_ms", 0.02), ("render_ms", 0.02), ("gpu_ms", 0.02),
                     ("late_per_min", 2.0), ("memory_mb", 32.0)):
     zero = [0.0] * 6
     f_ = band.FLOORS[name]
@@ -245,7 +270,7 @@ check(m.quiet.CPU_LIMIT == 10.0, "the limit is 10 %")
 # The second measure may be the one that was not trusted: the first (worse) is not written.
 h3 = new_history()
 size = len(band.read_history(h3))
-code, said, calls, result, out = go(h3, "d3d12", lambda r, n: dict(steady(steps=[6.0] * 200)(r, n)), "%09d" % 7,
+code, said, calls, result, out = go(h3, "d3d12", lambda r, n: dict(steady(pace_extra=" cpu_us_per_step=6000.0")(r, n)), "%09d" % 7,
                                     Machine(cpu=[(0.0, "x"), (30.0, "other programs use the processors 30.0%")]))
 check(code == 3 and len(calls) == 2 and len(band.read_history(h3)) == size
       and result["runs"]["d3d12"]["state"] == "not-trusted" and "second measure" in result["runs"]["d3d12"]["reason"],
@@ -404,7 +429,7 @@ check(set(result) == {"commit", "history", "pending", "exit", "verdict", "runs"}
       "result.json's top: %s" % sorted(result))
 check(run_["state"] == "ok" and run_["reason"] == "" and run_["device"] == "pc" and run_["renderer"] == "d3d12",
       "an ordinary run is ok: %s" % {k: v for k, v in run_.items() if k != "figures"})
-step = run_["figures"]["step_ms"]
+step = run_["figures"]["cpu_ms"]
 check(set(step) == {"value", "median", "band", "judged", "verdict", "anchor"} and step["value"] == 4.0 and
       step["median"] == 4.0 and abs(step["band"] - 0.2) < 1e-9 and step["judged"] is True and step["verdict"] == "holds",
       "a figure's value, median, band, judged and verdict: %s" % step)
@@ -412,16 +437,16 @@ check(set(run_["figures"]) == set(band.FIGURES), "every figure is in it: %s" % s
 check(run_["figures"]["gpu_ms"]["verdict"] == "not measured" and run_["figures"]["gpu_ms"]["value"] is None,
       "a figure not measured says so")
 # Each state.
-code, said, calls, result, out = go(history, "d3d12", steady(steps=[2.0] * 200), "%09d" % 8)
-check(result["runs"]["d3d12"]["state"] == "better" and "step_ms" in result["runs"]["d3d12"]["reason"] and code == 0,
+code, said, calls, result, out = go(history, "d3d12", steady(pace_extra=" cpu_us_per_step=2000.0"), "%09d" % 8)
+check(result["runs"]["d3d12"]["state"] == "better" and "cpu_ms" in result["runs"]["d3d12"]["reason"] and code == 0,
       "better: %s" % result["runs"]["d3d12"]["reason"])
 code, said, calls, result, out = go(pathlib.Path(tempfile.mkdtemp()) / "new.tsv", "d3d12", steady(), "%09d" % 1)
 check(result["runs"]["d3d12"]["state"] == "no-baseline" and code == 0, "no baseline yet: %s" % result["runs"]["d3d12"]["state"])
-code, said, calls, result, out = go(history, "d3d12", steady(steps=[6.0] * 200), "%09d" % 9)
+code, said, calls, result, out = go(history, "d3d12", steady(pace_extra=" cpu_us_per_step=6000.0"), "%09d" % 9)
 run_ = result["runs"]["d3d12"]
 check(code == 1 and result["exit"] == 1 and result["verdict"] == "WORSE" and run_["state"] == "worse" and
-      run_["reason"].startswith("worse twice: step_ms 6 (median 4, band 0.2)") and
-      run_["figures"]["step_ms"]["verdict"] == "worse", "worse twice: the figure, its median and its band: %s" % run_["reason"])
+      run_["reason"].startswith("worse twice: cpu_ms 6 (median 4, band 0.2)") and
+      run_["figures"]["cpu_ms"]["verdict"] == "worse", "worse twice: the figure, its median and its band: %s" % run_["reason"])
 code, said, calls, result, out = go(history, "d3d12", worse_then_fine, "%09d" % 10)
 check(code == 0 and result["runs"]["d3d12"]["state"] == "ok" and
       result["runs"]["d3d12"]["reason"] == "worse in render_ms once, fine when measured again", "ok after a second measure")
@@ -495,7 +520,7 @@ check(fig["anchor"]["verdict"] == "slower" and abs(fig["anchor"]["percent"] - 90
 check("render_ms: slower than at the start of the native work by 90%" in out and result["runs"]["d3d12"]["anchor"] ==
       {"state": "ok", "lines": 5}, "and it is printed: %s" % out)
 check(result["exit"] == 0 and code == 0 and said == ["d3d12 holds"], "the comparison never changes the exit code")
-step = result["runs"]["d3d12"]["figures"]["step_ms"]["anchor"]
+step = result["runs"]["d3d12"]["figures"]["cpu_ms"]["anchor"]
 check(step["verdict"] == "not enough lines" and step["lines"] == 0, "a figure with no anchor values compares nothing: %s" % step)
 check(result["runs"]["d3d12"]["figures"]["step_max_ms"]["anchor"] is None, "a figure that is not judged is not compared")
 # Inside the band against the anchor: nothing is said.

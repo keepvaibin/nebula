@@ -34,6 +34,7 @@ struct Recorder {
     std::int64_t window_first_step = 0;
     std::int64_t last_step = 0;             // game thread only: the moment of the step under way, 0 when done
     std::int64_t period_qpc = 0;            // the display's refresh period, from the latest report
+    galaxy::ProcessCpuStamp cpu_from;       // the process's processor time at the window's first step
     std::deque<Waiting> waiting;            // presented, in present order, until reported or given up
     std::uint64_t last_id = 0;              // the newest id presented
     std::uint64_t newest_reported = 0;      // the newest id reported
@@ -85,9 +86,15 @@ void step(std::int64_t moment_qpc) noexcept {
         const std::int64_t frequency = galaxy::qpc_frequency();
         if (r.window.steps() != 0 && moment_qpc - r.window_first_step >= kWindowSeconds * frequency) {
             r.settle(galaxy::qpc_now());
+            // The processor time of the window: from its first step's stamp to this step's (the next window's first).
+            const galaxy::ProcessCpuStamp cpu_to = galaxy::process_cpu_stamp();
+            r.window.set_cpu_ns(galaxy::process_cpu_ns_between(r.cpu_from, cpu_to));
             text = line(r.window.summarize(r.period_qpc, frequency));
             r.window.clear();
+            r.cpu_from = cpu_to;
             ++r.windows;
+        } else if (r.window.steps() == 0) {
+            r.cpu_from = galaxy::process_cpu_stamp();
         }
         if (r.window.steps() == 0) r.window_first_step = moment_qpc;
         r.window.add_step(moment_qpc);
@@ -178,8 +185,8 @@ void not_shown(std::uint64_t id) noexcept {
 }
 
 std::string line(const Summary& s) {
-    char text[768];
-    std::snprintf(text, sizeof(text),
+    char text[832];
+    int used = std::snprintf(text, sizeof(text),
                   "[pace] seconds=%.6f steps=%llu steps_per_second=%.4f pictures=%llu displayed=%llu generated=%llu "
                   "refresh_ms=%.3f on_time=%llu missed=%llu doubled=%llu animation_within_1ms=%.4f animation_p99_us=%.1f "
                   "delay_avg_us=%.1f delay_p99_us=%.1f render_avg_us=%.1f render_p99_us=%.1f generated_render_avg_us=%.1f "
@@ -191,6 +198,10 @@ std::string line(const Summary& s) {
                   s.animation_within_1ms, s.animation_p99_us, s.delay_avg_us, s.delay_p99_us, s.render_avg_us,
                   s.render_p99_us, s.generated_render_avg_us, s.generated_render_p99_us, s.step_work_avg_us,
                   s.step_work_p99_us, s.step_work_max_us);
+    // The processor time of the whole process per step: left out, never 0, when it is not known.
+    if (s.cpu_known && used > 0 && static_cast<std::size_t>(used) < sizeof(text)) {
+        std::snprintf(text + used, sizeof(text) - static_cast<std::size_t>(used), " cpu_us_per_step=%.1f", s.cpu_us_per_step);
+    }
     return text;
 }
 
@@ -205,6 +216,7 @@ void reset_for_test(void (*write)(const std::string& line)) noexcept {
     const std::lock_guard<std::mutex> lock(r.mutex);
     r.window.clear();
     r.window_first_step = 0;
+    r.cpu_from = galaxy::ProcessCpuStamp{};
     r.last_step = 0;
     r.period_qpc = 0;
     r.waiting.clear();
