@@ -1,6 +1,7 @@
 """luma_test_android.py: the proof harness on an Android device, over adb.
 
     python -X utf8 -I tools/lumacore/luma_test_android.py prepare --device SERIAL --apk <test apk> --pak <game.pak>
+    python -X utf8 -I tools/lumacore/luma_test_android.py push-data --device SERIAL --pak <game.pak>
     python -X utf8 -I tools/lumacore/luma_test_android.py remove  --device SERIAL
     python -X utf8 -I tools/lumacore/luma_test_android.py start-check --device SERIAL [--apk <test apk>] [--frames N]
     python -X utf8 -I tools/lumacore/luma_test.py run <suite.json | test> --device SERIAL --bin <test-bin-ABI> ...
@@ -11,7 +12,8 @@ build.gradle.kts), installed beside the player's game and never in its place. No
 prepare installs the test app (platform/android/build_apk.ps1 -Debuggable -Harness ...: Nebula.apk) and streams a
 game.pak into its private storage (files/game/game.pak), where the game screen reads it; the pak holds no platform's
 data, so the importer's on any computer serves. remove uninstalls the test app, its data with it; do it when a run of
-work is over.
+work is over. push-data pushes the game.pak again into a test app that is already installed (the gate does it when the
+store version of the data on the tablet is not its tree's).
 
 A run (luma_test.py --device) is luma_test.py's on this platform: the runner reads each test, lays out the run's
 folder, writes the plan and judges the files that come back; this module only moves the folder and starts the game:
@@ -384,25 +386,47 @@ def prepare(args):
             # The APK is not the test app (a build without -Debuggable is dev.nebula.galaxy): it went nowhere, as
             # adb installs by the APK's own id; nothing of the player's game was touched.
             raise SystemExit("the test app %s is not on the device after the install" % PACKAGE)
-        pak = pathlib.Path(args.pak)
-        size = pak.stat().st_size
-        # adb push (checked by size below), then copied in as the app: the app's own files take nothing from adb
-        # directly. Streaming through `adb exec-in` stopped after 61 MB of 4 GB on Windows with exit 0.
-        pushed = "/data/local/tmp/luma-game.pak"
-        r = device.adb("push", str(pak), pushed, timeout=3600)
-        if r.returncode != 0:
-            device.shell("rm -f " + pushed)
-            raise SystemExit("the pak did not reach the device: %s" % r.stderr.decode("utf-8", "replace").strip()[:200])
-        device.shell("chmod 644 " + pushed)
-        code, out = device.run_as("mkdir -p files/game && cp %s files/game/game.pak.part && "
-                                  "mv files/game/game.pak.part files/game/game.pak" % pushed, timeout=1800)
+        push_pak(device, args.pak)
+    finally:
+        release_lock(args.device_lock)
+    return 0
+
+
+def push_pak(device, pak):
+    """The game.pak into the test app's files/game, checked by size (SystemExit with the reason when it did not get there)."""
+    pak = pathlib.Path(pak)
+    size = pak.stat().st_size
+    # adb push (checked by size below), then copied in as the app: the app's own files take nothing from adb
+    # directly. Streaming through `adb exec-in` stopped after 61 MB of 4 GB on Windows with exit 0.
+    pushed = "/data/local/tmp/luma-game.pak"
+    r = device.adb("push", str(pak), pushed, timeout=3600)
+    if r.returncode != 0:
         device.shell("rm -f " + pushed)
-        if code != 0:
-            raise SystemExit("the pak could not be copied into the app's files: %s" % out.strip()[:200])
-        code, out = device.run_as("stat -c %s files/game/game.pak")
-        if out.strip() != str(size):
-            raise SystemExit("the device's game.pak is %s bytes, the pak %d" % (out.strip() or "no", size))
-        print("pak: %s (%d bytes) in %s's files/game" % (pak, size, PACKAGE))
+        raise SystemExit("the pak did not reach the device: %s" % r.stderr.decode("utf-8", "replace").strip()[:200])
+    device.shell("chmod 644 " + pushed)
+    code, out = device.run_as("mkdir -p files/game && cp %s files/game/game.pak.part && "
+                              "mv files/game/game.pak.part files/game/game.pak" % pushed, timeout=1800)
+    device.shell("rm -f " + pushed)
+    if code != 0:
+        raise SystemExit("the pak could not be copied into the app's files: %s" % out.strip()[:200])
+    code, out = device.run_as("stat -c %s files/game/game.pak")
+    if out.strip() != str(size):
+        raise SystemExit("the device's game.pak is %s bytes, the pak %d" % (out.strip() or "no", size))
+    print("pak: %s (%d bytes) in %s's files/game" % (pak, size, PACKAGE))
+
+
+def push_data(args):
+    """Pushes the game.pak again into the test app that is already installed (the gate's check of the tablet's data, N-1079)."""
+    device = Device(args.device)
+    if not device.answers():
+        raise SystemExit("%s does not answer adb" % args.device)
+    taken = device_lock(args.device_lock, args.who)
+    if taken is not None:
+        raise SystemExit("the device's lock %s is held: %s" % (args.device_lock, taken))
+    try:
+        if not device.installed():
+            raise SystemExit("%s is not installed: there is no app to push the data into" % PACKAGE)
+        push_pak(device, args.pak)
     finally:
         release_lock(args.device_lock)
     return 0
@@ -453,6 +477,11 @@ def main():
     p.add_argument("--pak", required=True)
     p.add_argument("--who", default="?")
     p.add_argument("--device-lock", default=os.environ.get("LUMA_TEST_DEVICE_LOCK"))
+    d = sub.add_parser("push-data")
+    d.add_argument("--device", required=True)
+    d.add_argument("--pak", required=True)
+    d.add_argument("--who", default="?")
+    d.add_argument("--device-lock", default=os.environ.get("LUMA_TEST_DEVICE_LOCK"))
     r = sub.add_parser("remove")
     r.add_argument("--device", required=True)
     s = sub.add_parser("start-check")
@@ -463,7 +492,8 @@ def main():
     s.add_argument("--who", default="?")
     s.add_argument("--device-lock", default=os.environ.get("LUMA_TEST_DEVICE_LOCK"))
     args = parser.parse_args()
-    return {"prepare": prepare, "remove": remove, "start-check": start_check_command}[args.command](args)
+    return {"prepare": prepare, "push-data": push_data, "remove": remove,
+            "start-check": start_check_command}[args.command](args)
 
 
 if __name__ == "__main__":

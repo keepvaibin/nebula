@@ -47,6 +47,13 @@ land BRANCH [BRANCH ...] | land --queue: the landing queue (tools/gate/landing.p
 data list | adopt | path DISC | make DISC | clean: the game data by key (tools/gate/gamedata.py).
 --serial: the parts that start the game one after another; by default they run side by side (section 7).
 
+The machine (tools/gate/machine.py, docs/plan/04-GATE-AND-MAIN.md section 15): the gate is in one Windows job object that ends everything
+it started when it ends. A run that starts the game first checks the machine (machine_ready): leftover game processes ended, drive D:
+has the room the level needs (old run folders thinned first), the tablet answers and holds this tree's test data, the graphics card and
+the PC have room for at least one game copy. What cannot be met is env (a row machine/<point>); the run plays as many game copies at
+once as fit (70% of the card's free memory and of the PC's, at most what the lanes ask for) and says "card shared" when other programs
+hold more than half the card.
+
 Every check and every test ends as one kind (tools/gate/kinds.py; docs/plan/04-GATE-AND-MAIN.md section 9):
   pass   it passed;
   fail   the game or the change is wrong: the only kind that fails a run;
@@ -77,6 +84,7 @@ but a tool or env; exit 2: the check is run again once the tool is fixed or the 
 could not start (bad options, a lock held, a rule of section 5 not met). Main moves only on VERDICT pass.
 """
 import argparse
+import contextlib
 import ctypes
 import datetime
 import fnmatch
@@ -100,6 +108,7 @@ import gamedata  # noqa: E402
 import github_rule  # noqa: E402
 import kinds  # noqa: E402
 import landing  # noqa: E402
+import machine  # noqa: E402
 import pictures as picture_tool  # noqa: E402
 import scope  # noqa: E402
 import step_hash  # noqa: E402
@@ -158,6 +167,7 @@ RUNNER = TREE / "tools" / "lumacore" / "luma_test.py"
 NATIVE = pathlib.Path("D:/NebulaWork/plan/native")
 FLAKES = NATIVE / "flakes.tsv"
 SET_ASIDE = NATIVE / "set-aside.tsv"
+MACHINE_JSON = NATIVE / "machine.json"
 BASE_BINS = pathlib.Path("D:/NebulaWork/build/base-bins")
 MAIN_REF = "origin/main"
 # The picture store (the approved pictures' files, outside the repository): tests of this file put their own in it.
@@ -337,6 +347,18 @@ class Gate:
         self.android_bin = str(pathlib.Path(args.build_root) / "android" / "test-bin-arm64-v8a")
         self.lock = threading.Lock()
         self.local = threading.local()
+        # The machine (machine_ready): what the run's summary says of it, how many game copies run at once (None: no limit set), and
+        # the thread that reads what the game processes hold of the card.
+        self.machine_notes = []
+        self.card_shared = False
+        self.slots = None
+        self.sampler = None
+        self.lanes_seen = 0
+
+    def game_slot(self, weight=1):
+        """A game copy's place among the copies that may run at once (machine_ready): `with g.game_slot(): ...` around a program
+        that starts the game on this computer. No limit before machine_ready has set one."""
+        return contextlib.nullcontext() if self.slots is None else self.slots.holding(weight)
 
     @property
     def pak(self):
@@ -358,7 +380,8 @@ class Gate:
         """Runs each lane (a function that runs its checks in order) side by side, each in a thread of its own; the
         checks are programs, so they run at once. Their rows join the results in the lanes' order, so a result reads the
         same however the lanes interleaved. --serial runs them one after another (for the proof that both give the same
-        pictures and step hashes, section 7)."""
+        pictures and step hashes, section 7). lanes_seen is the most game copies the lanes of one call ask for at once."""
+        self.lanes_seen = max(self.lanes_seen, sum(getattr(lane, "copies", 1) for lane in lanes))
         if self.dry or self.args.serial or len(lanes) < 2:
             for lane in lanes:
                 lane()
@@ -498,6 +521,7 @@ class Gate:
         if not self.results:
             self.record("gate/none", "tool", 0.0, "no check ran")
         if not self.dry:
+            machine_learn(self)
             self.new_pictures = picture_tool.gather(self.work, PICTURE_STORE)
         out, path, head, aside_line, new_line = self._save()
         passed = self.verdict == "pass"
@@ -522,6 +546,8 @@ class Gate:
             print("gate.py: " + line)
         for text in self.open_rows:
             print("gate.py: ledger row to open: " + text)
+        for text in self.machine_notes:
+            print("gate.py: machine: " + text)
         print(head)
         print("result:", path)
         for line in self.lines:
@@ -542,6 +568,8 @@ class Gate:
                "only": self.args.only or None,
                "started": datetime.datetime.fromtimestamp(self.started).isoformat(timespec="seconds"),
                "seconds": seconds, "passed": passed, "verdict": self.verdict, "counts": counts, "checks": self.results}
+        if self.machine_notes:
+            out["machine"] = list(self.machine_notes)
         path = pathlib.Path(self.args.out) if self.args.out else self.work / "result.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
@@ -552,7 +580,8 @@ class Gate:
             ", ".join("%d %s" % (n, s if s != "fail" else "failed") for s, n in counts.items() if n), seconds)
         aside_line = ["set aside (still run, do not count): " + ", ".join(aside)] if aside else []
         new_line = [self.new_pictures_line()] if self.new_pictures else []
-        lines = aside_line + new_line + [head] + ["  %-34s %-7s %s" % (r["check"], r["state"], r["detail"]) for r in self.results]
+        lines = aside_line + new_line + [head] + ["  machine: " + n for n in self.machine_notes] + [
+            "  %-34s %-7s %s" % (r["check"], r["state"], r["detail"]) for r in self.results]
         path.with_suffix(".txt").write_text("\n".join(lines + self.lines) + "\n", encoding="utf-8")
         return out, path, head, aside_line, new_line
 
@@ -589,7 +618,7 @@ class Gate:
         results = [dict(check=r["check"], **rec) for r in self.results for rec in r["records"]]
         body = {"verdict": verdict or self.verdict, "checks_verdict": self.verdict, "why": why, "run": self.name,
                 "level": self.level, "commit": self.commit, "exit": kinds.EXIT_OF[verdict or self.verdict],
-                "lines": self.lines, "results": results,
+                "lines": self.lines, "results": results, "machine": list(self.machine_notes),
                 "set_aside": sorted("%s %s" % k for k in self.aside), "open_rows": self.open_rows,
                 "new_pictures": {"count": len(self.new_pictures), "list": str(self.work / "new-pictures.tsv"),
                                  "sheet": str(self.work / "new-pictures" / "sheet" / "review.html")}
@@ -923,7 +952,7 @@ def start_check(g, renderer):
             info.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             info.wShowWindow = 0  # SW_HIDE: a test's start
             hidden = {"startupinfo": info}
-        with open(log, "wb") as f:
+        with open(log, "wb") as f, game_slot(g):
             try:
                 code = subprocess.run([str(pathlib.Path(g.bin) / EXES[renderer]), "--start-check", "300",
                                        "--data", str(out / "data"), "--settings", str(out / "settings"),
@@ -952,6 +981,11 @@ def scripts(g, paths, extra=()):
             return False, "no script to run: nothing ran", None, "tool"
         return not bad, detail + ("; not: " + ", ".join(bad) if bad else "")
     return fn
+
+
+def game_slot(g, weight=1):
+    """g.game_slot(weight): a game copy's place among those machine_ready allowed (no limit for a stand-in run object)."""
+    return g.game_slot(weight) if hasattr(g, "game_slot") else contextlib.nullcontext()
 
 
 # The harness's own tests (the runner and the host half, without the game).
@@ -1021,9 +1055,11 @@ class HarnessSource:
         evidence: removed so the drive does not fill."""
         g = self.g
         pathlib.Path(log).parent.mkdir(parents=True, exist_ok=True)
-        code = run(self.command(work, bin_dir, names, lock), log,
-                   env=watch_env(self.renderer, dict(self.env or {}, LUMA_TEST_PAKS=g.paks_text())),
-                   cwd=g.args.build_root)
+        # A game on this computer takes one of the places machine_ready allowed (a tablet's runs take none: they do not use this card).
+        with contextlib.nullcontext() if self.device else game_slot(g):
+            code = run(self.command(work, bin_dir, names, lock), log,
+                       env=watch_env(self.renderer, dict(self.env or {}, LUMA_TEST_PAKS=g.paks_text())),
+                       cwd=g.args.build_root)
         for d in pathlib.Path(work).rglob("bin"):
             if d.is_dir():
                 shutil.rmtree(d, ignore_errors=True)
@@ -1229,10 +1265,11 @@ def start_measure(sha, g, args, popen=subprocess.Popen, bins=MEASURE_BINS, alive
                           g.paks_text() if hasattr(g, "paks_text") else None)
     cmd += ["--gate-lock", args.gate_lock, "--board", args.board]
     log = pathlib.Path(args.work) / ("measure-%s.log" % sha[:9])
+    # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP, and out of the run's job object (machine.start_outliving): the measure outlives the run.
     detach = {"creationflags": 0x8 | 0x200} if os.name == "nt" else {"start_new_session": True}
     with open(log, "ab") as out:
-        process = popen(cmd, cwd=str(TREE), stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, close_fds=True,
-                        **detach)
+        process = machine.start_outliving(popen, cmd, cwd=str(TREE), stdin=subprocess.DEVNULL, stdout=out,
+                                          stderr=subprocess.STDOUT, close_fds=True, **detach)
     pid = getattr(process, "pid", None)
     if isinstance(pid, int):
         (copy / "in-use.txt").write_text("pid %d\n" % pid, encoding="utf-8")
@@ -1627,7 +1664,8 @@ def mod_tests(g, renderer, bin_dir=None, label="mods", more_env=None):
                "--parallel", str(g.args.mod_parallel)]
         if g.level in SHORT_LEVELS or g.mods == "short":
             cmd += ["--set", "quick"]
-        code = run(cmd, log, env=env, cwd=g.args.build_root)
+        with game_slot(g, g.args.mod_parallel):
+            code = run(cmd, log, env=env, cwd=g.args.build_root)
         for d in work.rglob("bin"):
             if d.is_dir():
                 shutil.rmtree(d, ignore_errors=True)
@@ -2068,10 +2106,12 @@ def start_long(sha, args, tree=LONG_TREE, source=TREE, popen=subprocess.Popen, n
     cmd = long_command(sha, args, tree)
     log = pathlib.Path(args.work) / ("long-%s.log" % sha[:9])
     log.parent.mkdir(parents=True, exist_ok=True)
-    # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | BELOW_NORMAL_PRIORITY_CLASS: the run outlives the mover's gate.
+    # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | BELOW_NORMAL_PRIORITY_CLASS, and out of the mover's job object
+    # (machine.start_outliving): the run outlives the mover's gate.
     detach = {"creationflags": 0x8 | 0x200 | 0x4000} if os.name == "nt" else {"start_new_session": True}
     with open(log, "ab") as out:
-        popen(cmd, cwd=str(tree), stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, close_fds=True, **detach)
+        machine.start_outliving(popen, cmd, cwd=str(tree), stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,
+                                close_fds=True, **detach)
     (pathlib.Path(args.work) / "long-started.txt").write_text(
         "%s %s\n" % ((now or datetime.datetime.now()).isoformat(timespec="seconds"), sha), encoding="utf-8")
     return cmd, "the long run of main %s started in %s (log %s)" % (sha[:9], tree, log)
@@ -2117,7 +2157,10 @@ def tablet_part(g, stops, device=None):
         for n in wanted:
             g.missing(n, "the Android build failed")
         return
-    device = device or android_module().Device(g.args.tablet)
+    if device is None:
+        # Before the first adb call of the run: an adb server of its own, out of the run's job (machine.ensure_adb_server).
+        machine.ensure_adb_server(android_module().Device("").adb_path)
+        device = android_module().Device(g.args.tablet)
 
     def owe_rest(why):
         for n in wanted:
@@ -2172,6 +2215,242 @@ def tablet_part(g, stops, device=None):
     g.check("replays/tablet", replays(g, "tour-tablet", "vulkan", ("tour-tablet-pc", "d3d12")))
 
 
+# The machine (tools/gate/machine.py, package T5) ----------------------------------------------------------------------------
+
+# The checks of a run that start the game (on this computer or the tablet), and those that never do: a run whose checks are all of
+# the second kind (documents, tools, builds) asks nothing of the machine. A test pins that every check of every level is in one.
+GAME_CHECKS = ("start/", "engine/", "tour", "mods", "soak", "coverage", "android/", "tablet/", "measure/")
+NO_GAME_CHECKS = ("repo/", "build/", "data/", "unit/", "rust", "lumalink", "import/", "harness/", "description/", "pictures/",
+                  "replays/", "github", "part/", "lane/", "gate/")
+# The locks a held gate, long run or measure keeps: a game process that one of them may own is never ended as a leftover.
+MACHINE_LOCKS = ("gate.lock", "long.lock", "measure.lock", "move.lock")
+
+
+def starts_game(name):
+    """Whether a check starts the game."""
+    return any(name.startswith(p) for p in GAME_CHECKS)
+
+
+def run_starts_game(selected):
+    """Whether a run starts the game: every check of its level (no selection) does, else one whose selection names such a check."""
+    return True if selected is None else any(starts_game(n) for n in selected)
+
+
+def run_has_tablet_part(args, level, selected):
+    """Whether the run has a tablet part: a tablet is named and the level (or the selection) has one."""
+    if not args.tablet:
+        return False
+    if selected is not None:
+        return any(n in TABLET_NAMES for n in selected)
+    return level != "quick"
+
+
+def lanes_asked(g):
+    """The game copies the lanes of this run ask to run at once, at most (run_checks builds the lanes; a test keeps the two
+    equal): a lane of each renderer's engine and tour tests, a lane of each other disc, each mods lane's --mod-parallel games, the
+    Android lane (its PC run beside the tablet's) and, at the final check, the sanitizer and coverage lanes. The long run plays
+    its parts one after another: the biggest part. --serial runs them in turn."""
+    level = g.level
+    if g.args.serial:
+        return 1
+    renderers = 1 if level == "quick" else len(RENDERERS)
+    regions = 0 if level == LAND_LEVEL else len(REGION_DISCS)
+    tablet = 0 if level == "quick" else 1
+    if level == "long":
+        return max(renderers + regions, tablet, 1)
+    mods = renderers * g.args.mod_parallel if mods_on(g) else 0
+    return renderers + regions + mods + tablet + (2 if level == "final" else 0)
+
+
+def renderers_of(level):
+    """The renderers a level's runs play on."""
+    return ("d3d12",) if level == "quick" else RENDERERS
+
+
+class RealTablet:
+    """The gate's tablet, as machine_ready asks about it (tests put a fake in its place)."""
+
+    def __init__(self, g, device=None):
+        self.g = g
+        self.serial = g.args.tablet
+        self.device = device or android_module().Device(self.serial)
+
+    def state(self):
+        """What adb says of the tablet: device (it answers and is authorised), unauthorized, offline, or absent (not listed)."""
+        r = subprocess.run([self.device.adb_path, "devices"], capture_output=True, env=self.device.env, timeout=60)
+        for line in r.stdout.decode("utf-8", "replace").splitlines():
+            parts = line.split()
+            if len(parts) >= 2 and parts[0] == self.serial:
+                return parts[1]
+        return "absent"
+
+    def data(self):
+        """(whether the test app is on the tablet, the store version of its game.pak or None when it has none)."""
+        if not self.device.installed():
+            return False, None
+        head = self.device.pak_header()
+        if len(head) >= 12 and head[:8] == b"NBSTORE\0":
+            return True, int.from_bytes(head[8:12], "little")
+        return True, None
+
+    def push(self, pak):
+        """The test data pushed again (luma_test_android.py push-data): (ok, what it said)."""
+        log = self.g.work / "machine-push-data.log"
+        code = run([sys.executable, "-X", "utf8", "-I", TREE / "tools" / "lumacore" / "luma_test_android.py", "push-data",
+                    "--device", self.serial, "--pak", pak, "--who", "gate", "--device-lock", self.g.args.tablet_lock], log,
+                   timeout=3600)
+        return code == 0, last_line(pathlib.Path(log).read_text(encoding="utf-8", errors="replace"))
+
+
+class GateProbes(machine.Probes):
+    """machine.Probes with the gate's own parts: the tablet, the tree's store version, the data a push would use."""
+
+    def adb_server(self, g):
+        machine.ensure_adb_server(android_module().Device("").adb_path)
+
+    def tablet(self, g):
+        return RealTablet(g)
+
+    def tree_store_version(self):
+        return gamedata.tree_store_version(TREE)
+
+    def data_pak(self, g, want):
+        """(a game.pak of store version `want` that a push could use or None, a problem or ""): --pak when it is given (a wrong
+        version is the problem), else the data found by key (None while it is not made: the run makes it and pushes it itself)."""
+        if g.args.pak:
+            try:
+                version = gamedata.read_header(g.args.pak)[0]
+            except ValueError as error:
+                return None, "the game data --pak names does not open: %s" % error
+            if version != want:
+                return None, "the game data --pak names (%s) is store version %d, this tree's is %d" % (g.args.pak, version, want)
+            return g.args.pak, ""
+        try:
+            pak = gamedata.GameData().lookup(gamedata.key_of(US_DISC, want, gamedata.importer_tree_hash(GIT, TREE)))
+            return (str(pak) if pak else None), ""
+        except (OSError, ValueError) as error:
+            return None, "the game data could not be looked up: %s" % error
+
+
+def machine_ready(g, asked, tablet, soak=0, probes=None, learned=None):
+    """Before a run that starts the game: can this machine carry it? In this order, each a row of kind env with one plain line when
+    it cannot be met (the run then ends not judged; nothing else runs): leftover game processes ended; drive D: has the room the
+    level needs, old run folders thinned first; the tablet answers, is authorised and holds this tree's test data (pushed again
+    when it does not); the graphics card and the PC's memory have room for at least one copy of the game (waited for up to four
+    hours). Sets how many copies run at once (g.slots: what fits, at most `asked`, a place kept for the soak), and starts the
+    thread that reads the game processes' use of the card. What it did is in g.machine_notes, for the run's summary. True when the
+    run goes on."""
+    import prune_runs
+    probes = probes or GateProbes()
+    notes = g.machine_notes
+
+    def say(text):
+        print(text, flush=True)
+
+    def fail(name, text):
+        g.record(name, "env", 0.0, text)
+        return False
+
+    # 1. Leftovers.
+    procs = probes.processes()
+    holders = machine.read_holders([pathlib.Path(g.args.gate_lock).with_name(n) for n in MACHINE_LOCKS], procs)
+    leftovers, kept = machine.find_leftovers(procs, probes.clock(), holders)
+    for proc, why in kept:
+        notes.append("a game process left from an earlier run was not ended, %s: %s (process %d)" % (why, proc.path, proc.pid))
+    if leftovers:
+        for proc in leftovers:
+            probes.end(proc.pid)
+        alive = {p.pid for p in probes.processes()}
+        stuck = [p for p in leftovers if p.pid in alive]
+        if stuck:
+            return fail("machine/leftovers", "a game process left from an earlier run could not be ended: %s (process %d)" % (
+                stuck[0].path, stuck[0].pid))
+        notes.append("ended %d game process%s left from earlier runs (their parents were gone, older than ten minutes): %s" % (
+            len(leftovers), "" if len(leftovers) == 1 else "es", "; ".join("%s, process %d, started %s" % (
+                p.path, p.pid, datetime.datetime.fromtimestamp(p.started).strftime("%m-%d %H:%M")) for p in leftovers)))
+
+    # 2. Disk.
+    need = machine.disk_need(g.level)
+    free = probes.free_disk(str(g.args.work))
+    if free < need:
+        runs, freed = machine.thin_runs(g.args.work, held=prune_runs.waiting(g.args.work))
+        after = probes.free_disk(str(g.args.work))
+        notes.append("drive D: had %s free and a %s run needs %d GB: %d old run folders thinned (%s freed), now %s free" % (
+            machine.gb(free), g.level, need // machine.GB, runs, machine.gb(freed), machine.gb(after)))
+        free = after
+        if free < need:
+            return fail("machine/disk", "drive D: has %s free, a %s run needs %d GB, and thinning the old run folders did not free "
+                        "enough (%d thinned, %s freed)" % (machine.gb(free), g.level, need // machine.GB, runs, machine.gb(freed)))
+
+    # 3. The tablet.
+    if tablet:
+        probes.adb_server(g)
+        device = probes.tablet(g)
+        state = device.state()
+        if state == "unauthorized":
+            return fail("machine/tablet", "the tablet %s is not authorised for this computer: unlock it and accept the USB "
+                        "debugging question" % g.args.tablet)
+        if state != "device":
+            return fail("machine/tablet", "the tablet %s does not answer adb (%s)" % (
+                g.args.tablet, "not listed: not plugged in, or its USB is off" if state == "absent" else state))
+        want = probes.tree_store_version()
+        installed, have = device.data()
+        if installed and have != want:
+            pak, problem = probes.data_pak(g, want)
+            if problem:
+                return fail("machine/tablet", problem)
+            on_it = "none it can read" if have is None else "store version %d" % have
+            if pak is None:
+                notes.append("the test data on the tablet is %s, this tree's is %d; the data is not made yet, the run pushes it" % (
+                    on_it, want))
+            else:
+                ok, said = device.push(pak)
+                if not ok:
+                    return fail("machine/tablet", "the test data on the tablet is %s, this tree's is store version %d, and pushing "
+                                "it again failed: %s" % (on_it, want, said))
+                notes.append("the test data on the tablet was %s, this tree's is %d: pushed again" % (on_it, want))
+        elif not installed:
+            notes.append("the test app is not on the tablet: the run installs it and pushes the data")
+
+    # 4. The graphics card and the PC's memory.
+    learned = learned or machine.Learned(MACHINE_JSON)
+    shown = learned.read()
+    one_copy = learned.need(renderers_of(g.level))
+    room = machine.wait_for_room(probes, one_copy, asked + soak, say)
+    if room.card_error:
+        notes.append("the graphics card could not be read (%s): the card sets no limit" % room.card_error)
+    if room.env:
+        return fail("machine/graphics-card" if room.by_card < 1 and room.card is not None else "machine/memory", room.env)
+    copies = max(1, room.copies - soak) if room.copies > 1 else room.copies
+    g.slots = machine.Slots(copies)
+    g.card_shared = room.shared
+    card = room.card
+    notes.append("%d game cop%s at once (the lanes ask for %d%s): %s; the PC has %s free; a copy takes %s of the card%s" % (
+        copies, "y" if copies == 1 else "ies", asked, ", the soak keeps one" if soak else "",
+        "no reading of the card" if card is None else "%s has %s free of %s, other programs hold %s" % (
+            card.name, machine.gb(card.free), machine.gb(card.total), machine.gb(card.used)),
+        "no reading" if room.memory is None else machine.gb(room.memory), machine.gb(one_copy),
+        "" if any(shown.get(r) for r in renderers_of(g.level)) else " (assumed: no run has shown it yet)"))
+    if room.shared:
+        notes.append("card shared: other programs hold %s, more than half of the card's %s; every result is judged as usual" % (
+            machine.gb(card.used), machine.gb(card.total)))
+    g.sampler = probes.sampler(g.work, None if card is None else card.luids, say)
+    g.sampler.start()
+    return True
+
+
+def machine_learn(g, learned=None):
+    """At the end of a run: stops the thread that read the game processes' use of the card and adds what it saw (the largest for each
+    renderer) to machine.json. Never fails the run."""
+    sampler, g.sampler = g.sampler, None
+    if sampler is None:
+        return
+    try:
+        (learned or machine.Learned(MACHINE_JSON)).add(sampler.stop())
+    except Exception as error:  # noqa: BLE001 - a record of use must never fail a run
+        print("gate.py: tool: %s was not updated: %s: %s" % (MACHINE_JSON, type(error).__name__, error), flush=True)
+
+
 # The levels ----------------------------------------------------------------------------------------------------------
 
 
@@ -2224,6 +2503,7 @@ def cpu_lane(g, discs_proved):
                     ("build/windows",))
         finally:
             LANE.below_normal = False
+    lane.copies = 0      # it starts no game
     return lane
 
 
@@ -2258,6 +2538,7 @@ def picture_part(g):
 def mods_lane(g, r):
     def lane():
         g.check("mods/%s" % r, mod_tests(g, r), DATA)
+    lane.copies = g.args.mod_parallel     # each mods lane plays --mod-parallel games at once
     return lane
 
 
@@ -2410,6 +2691,11 @@ def run_checks(args, known=None, planned=None, selected=None, dry=False):
     Gate (its names and needs) without running any."""
     g = Gate(args, dry=dry, known=known, planned=planned, selected=selected)
     level = args.mode
+    if not dry and run_starts_game(selected):
+        soak = 1 if level in ("long", "final") and (selected is None or "soak" in selected) else 0
+        if not machine_ready(g, lanes_asked(g), run_has_tablet_part(args, level, selected), soak):
+            g.write()
+            return g
     if not locked_part(g, "build", lambda: build_part(g)):
         g.write()
         return g
@@ -2632,6 +2918,9 @@ def parser(land=False):
 
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else list(argv)
+    # The run's job object (machine.py): every program the gate starts, and theirs, ends with it, however it ends. Once a process.
+    if machine.RUN_JOB[0] is None:
+        machine.join_new_job(lambda text: print(text, file=sys.stderr, flush=True))
     if argv and argv[0] == "land":
         return land_main(argv[1:])
     if argv and argv[0] == "data":
@@ -2790,6 +3079,8 @@ def main(argv=None):
                 github_rows(g, rule, "env", watch.envs[0].text, github_rule.Reading.of(envs=watch.envs), args.github_wait)
         code = g.code
         summary = {0: "all checks passed", 1: "checks failed (exit 1)"}.get(code, "not judged (exit %d): a tool or the machine, not the change" % code)
+        if g.card_shared:
+            summary += "; card shared"
         if watch is not None and watch.red:
             code, summary = 1, "stopped: " + watch.red
             board_line(args.board, "%s NOTICE: main gate %s on %s stopped: %s." % (args.who, g.name, commit[:9],
@@ -2846,7 +3137,7 @@ def main(argv=None):
             if candidate is not None:
                 delete_candidate(candidate)
             if why is not None:
-                code, summary = (2 if code == 2 else 1), "passed, main not moved: " + why
+                code, summary = (2 if code == 2 else 1), "passed, main not moved: " + why + ("; card shared" if g.card_shared else "")
                 print("gate.py: main not moved: " + why, file=sys.stderr)
                 moved_line = "NOT-MOVED %s %s" % (not_moved_kind(why), why)
                 board_line(args.board, "%s NOTICE: main gate %s on %s passed its checks; main not moved: %s." % (
@@ -2854,7 +3145,8 @@ def main(argv=None):
             else:
                 moved_line = "MOVED %s" % landed
                 summary = "passed, %s, main moved to %s" % (("GitHub green (%s)" % detail) if rule is not None else
-                                                              "no GitHub part in the plan", landed[:9])
+                                                              "no GitHub part in the plan", landed[:9]) + (
+                                                                  "; card shared" if g.card_shared else "")
                 # The build that moved main is kept (the two newest): a test that fails in a later change is run on it.
                 kept = kinds.keep_base(git("rev-parse", "HEAD"), g.bin, BASE_BINS)
                 if kept is not None:
