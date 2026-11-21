@@ -80,6 +80,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(TREE / "tools" / "verify"))
 import gate_tour  # noqa: E402
 import kinds  # noqa: E402
+import landing  # noqa: E402
 import pictures as picture_tool  # noqa: E402
 import scope  # noqa: E402
 import step_hash  # noqa: E402
@@ -2337,9 +2338,20 @@ def select(names_needs, patterns):
     return chosen
 
 
-def parser():
-    p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    mode = p.add_mutually_exclusive_group(required=True)
+def parser(land=False):
+    """The options of a run. `land`: for `gate.py land`, whose options are a run's besides the branches (no level flag)."""
+    p = argparse.ArgumentParser(prog="gate.py land" if land else None, description=__doc__.split("\n")[0])
+    if land:
+        p.add_argument("branches", nargs="*", help="the branches to land (put in the queue, in this order)")
+        p.add_argument("--queue", action="store_true", help="run what waits in the queue and take no branch")
+        p.add_argument("--agent", default=os.environ.get("NEBULA_AGENT", "1"), help="who asks, for the queue and the fault record")
+        p.add_argument("--queue-file", default=str(landing.QUEUE))
+        p.add_argument("--landing-tree", default=str(landing.LANDING_TREE), help="the work folder the gate owns for batches")
+        p.add_argument("--failures", default=str(landing.FAILURES), help="the store of the same failure three times")
+        p.add_argument("--live", default=os.environ.get("NEBULA_LIVE", "D:/NebulaWork/plan/native"),
+                       help="the folder of tool-faults.tsv (the step tool's live folder)")
+        p.add_argument("--wait-minutes", type=float, default=600.0, help="how long a caller waits for another runner")
+    mode = p.add_mutually_exclusive_group(required=not land)
     for level in LEVELS:
         mode.add_argument("--" + level, dest="mode", action="store_const", const=level)
     p.add_argument("--move", action="store_true", help="--main: move main to this commit when it passes (section 5)")
@@ -2406,6 +2418,9 @@ def parser():
 
 
 def main(argv=None):
+    argv = sys.argv[1:] if argv is None else list(argv)
+    if argv and argv[0] == "land":
+        return land_main(argv[1:])
     args = parser().parse_args(argv)
     patterns = [s.strip() for s in args.only.split(",") if s.strip()]
 
@@ -2516,7 +2531,7 @@ def main(argv=None):
         for t in taken:
             free_gate_lock(t, holder, args.board, args.who, "not run: " + why)
         return refuse("main could not move to %s: %s" % (commit[:9], why))
-    code, summary, g = 2, "it ended before writing a result", None
+    code, summary, g, moved_line = 2, "it ended before writing a result", None, None
     watch = GithubWatch(candidate, commit, planned_jobs(planned)).start() if args.move else None
     try:
         try:
@@ -2573,9 +2588,11 @@ def main(argv=None):
             if why is not None:
                 code, summary = (2 if code == 2 else 1), "passed, main not moved: " + why
                 print("gate.py: main not moved: " + why, file=sys.stderr)
+                moved_line = "NOT-MOVED %s %s" % (not_moved_kind(why), why)
                 board_line(args.board, "%s NOTICE: main gate %s on %s passed its checks; main not moved: %s." % (
                     args.who, g.name, commit[:9], why))
             else:
+                moved_line = "MOVED %s" % landed
                 summary = "passed, GitHub green (%s), main moved to %s" % (detail, landed[:9])
                 # The build that moved main is kept (the two newest): a test that fails in a later change is run on it.
                 kept = kinds.keep_base(git("rev-parse", "HEAD"), g.bin, BASE_BINS)
@@ -2611,8 +2628,124 @@ def main(argv=None):
     verdict = {0: "pass", 1: "fail"}.get(code, "not-judged")
     if g is not None and verdict != g.verdict:
         g.write_verdict(verdict, summary)
+    if moved_line:
+        print(moved_line, flush=True)
     print(kinds.verdict_line(verdict), flush=True)
     return code
+
+
+def not_moved_kind(why):
+    """Why a pass did not move main, for gate.py land: main moved during the run (nothing was judged), a red job of GitHub
+    (the batch fails), or another reason (a lock, the pictures' approval: not judged)."""
+    if "main moved during the gate" in why:
+        return "main-moved"
+    if why.startswith("GitHub's jobs"):
+        return "github"
+    return "other"
+
+
+# gate.py land -------------------------------------------------------------------------------------------------------------
+
+
+def parse_run_output(lines, code):
+    """The landing.Result of one run of `gate.py --main --move --scope ...` from its output lines and exit code: its KIND
+    lines, `MOVED <sha>` when main moved, `NOT-MOVED <kind> <why>` when the checks passed and main did not move, the run's
+    folder from its `result:` line, and VERDICT. A run that wrote no VERDICT or exited with another code than 0, 1, 2 is not
+    judged (the tool broke)."""
+    kind_lines, moved, not_moved, folder, verdict, why = [], "", None, "", None, ""
+    for raw in lines:
+        line = raw.rstrip("\r\n")
+        if line.startswith("KIND "):
+            kind_lines.append(line)
+        elif line.startswith("MOVED "):
+            moved = line.split()[1]
+        elif line.startswith("NOT-MOVED "):
+            parts = line.split(" ", 2)
+            not_moved = (parts[1], parts[2] if len(parts) > 2 else "")
+        elif line.startswith("result: "):
+            folder = str(pathlib.Path(line[len("result: "):].strip()).parent)
+        elif line.startswith("VERDICT "):
+            verdict = line.split()[1]
+        elif line.startswith("gate.py: ") and not why:
+            why = line[len("gate.py: "):]
+    failures_ = landing.failures_of_lines(kind_lines)
+    if verdict is None or code not in (0, 1, 2) or (code == 0 and verdict != "pass"):
+        return landing.Result("not-judged", kind_lines, failures_ or [("gate.py", "tool", "exited %s with no usable verdict" % code)],
+                              folder, why=why or "gate.py exited %s with no usable verdict" % code)
+    if not_moved is not None:
+        return landing.Result("pass", kind_lines, failures_, folder, "", not_moved[1], not_moved[0])
+    if verdict == "pass" and not moved:
+        return landing.Result("pass", kind_lines, failures_, folder, "", "the run passed and did not say that main moved", "other")
+    return landing.Result(verdict, kind_lines, failures_, folder, moved, why if verdict == "not-judged" else "")
+
+
+class GateChecker:
+    """The checks of a batch (landing.Landing's checker): `gate.py --main --move --scope GROUPS` of the landing tree at the
+    tip, run as a program of its own, so the tip's own tools run on the tip's own files. `popen` is replaced by tests."""
+
+    def __init__(self, args, say=print, popen=subprocess.Popen):
+        self.args, self.say, self.popen = args, say, popen
+
+    def command(self, tree, names, groups_text):
+        a = self.args
+        scope_text = "full" if groups_text.startswith("full") else groups_text
+        cmd = [sys.executable, "-X", "utf8", "-I", str(pathlib.Path(tree) / "tools" / "gate" / "gate.py"), "--main", "--move",
+               "--scope", scope_text, "--who", a.who, "--covers", ", ".join(names), "--work", a.work, "--board", a.board,
+               "--status", a.status, "--gate-lock", a.gate_lock, "--long-lock", a.long_lock, "--tablet-lock", a.tablet_lock,
+               "--tablet-wait", str(a.tablet_wait), "--paks", a.paks, "--discs", a.discs, "--jobs", a.jobs,
+               "--wait", str(a.wait), "--github-wait", str(a.github_wait)]
+        if a.pak:
+            cmd += ["--pak", a.pak]
+        if a.tablet:
+            cmd += ["--tablet", a.tablet]
+        if a.mods:
+            cmd += ["--mods", a.mods]
+        return cmd
+
+    def run(self, tree, tip, names, groups_text):
+        cmd = self.command(tree, names, groups_text)
+        lines = []
+        env = dict(os.environ, PYTHONIOENCODING="utf-8")
+        try:
+            with self.popen(cmd, cwd=str(tree), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, text=True,
+                            encoding="utf-8", errors="replace") as p:
+                for line in p.stdout:
+                    lines.append(line)
+                    self.say(line.rstrip("\r\n"))
+                code = p.wait()
+        except OSError as error:
+            return landing.Result("not-judged", [], [("gate.py", "tool", "could not be started: %s" % error)],
+                                  why="gate.py could not be started: %s" % error)
+        return parse_run_output(lines, code)
+
+
+def fault_writer(live_folder):
+    """landing.Landing's `faults`: one line of tool-faults.tsv at once (tools/plan/live.py), never through a landing."""
+    def write(agent, step, kind, check, test, message, run_folder):
+        sys.path.insert(0, str(TREE / "tools" / "plan"))
+        import live  # noqa: E402 - tools/plan, beside the step tool that shows the table
+        pathlib.Path(live_folder).mkdir(parents=True, exist_ok=True)
+        live.append_fault(live_folder, agent, step, kind, check, message, test=test, run_folder=run_folder)
+    return write
+
+
+def land_main(argv):
+    """gate.py land BRANCH [BRANCH ...] | gate.py land --queue: tools/gate/landing.py's queue and batches."""
+    args = parser(land=True).parse_args(argv)
+    args.mode = "main"
+    args.move = True
+    if bool(args.branches) == bool(args.queue):
+        print("gate.py: land takes branches to put in the queue, or --queue to run what waits: one of the two", file=sys.stderr)
+        print(kinds.verdict_line("not-judged"), flush=True)
+        return landing.EXIT_NOT_JUDGED
+    sys.path.insert(0, str(TREE / "tools" / "plan"))
+    import failures  # noqa: E402 - tools/plan/failures.py: the step tool's rule, in one place
+    queue = landing.Queue(args.queue_file)
+    runner = landing.Landing(queue, GateChecker(args), landing.Repo(GIT), source=TREE, tree=args.landing_tree,
+                             store=failures.Store(args.failures), faults=fault_writer(args.live))
+    if args.queue:
+        return runner.run_only_queue()
+    return runner.land(args.branches, args.agent, args.wait_minutes)
 
 
 def below_normal():
