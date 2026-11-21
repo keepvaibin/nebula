@@ -641,7 +641,8 @@ class Cases(unittest.TestCase):
         try:
             with contextlib.redirect_stdout(buf):
                 code = gate.main(["land", "docs/x", "--queue-file", str(w.plan / "q.tsv"), "--landing-tree", str(w.tree),
-                                  "--failures", str(w.plan / "f.tsv"), "--live", str(w.plan / "live"), "--agent", "2"])
+                                  "--failures", str(w.plan / "f.tsv"), "--live", str(w.plan / "live"), "--agent", "2",
+                                  "--runner-lock", str(w.plan / "runner.lock")])
         finally:
             gate.GateChecker, gate.TREE = saved
         self.assertEqual(code, 0, buf.getvalue())
@@ -731,7 +732,7 @@ class AlsoTest(unittest.TestCase):
         try:
             code, out, err = self.refused(["land", "docs/x", "--also", "tour/d3d12,tour/nowhere", "--queue-file", str(plan_dir / "q.tsv"),
                                            "--landing-tree", str(plan_dir / "tree"), "--failures", str(plan_dir / "f.tsv"),
-                                           "--live", str(plan_dir / "live")])
+                                           "--live", str(plan_dir / "live"), "--runner-lock", str(plan_dir / "runner.lock")])
         finally:
             gate.GateChecker = saved
         self.assertEqual(code, 2)
@@ -752,7 +753,7 @@ class AlsoTest(unittest.TestCase):
         try:
             code, out, err = self.refused(["land", "docs/x", "--also", "tour/d3d11,unit/game", "--queue-file", str(w.plan / "q.tsv"),
                                            "--landing-tree", str(w.tree), "--failures", str(w.plan / "f.tsv"),
-                                           "--live", str(w.plan / "live")])
+                                           "--live", str(w.plan / "live"), "--runner-lock", str(w.plan / "runner.lock")])
         finally:
             gate.GateChecker, gate.TREE = saved
         self.assertEqual(code, 0, out + err)

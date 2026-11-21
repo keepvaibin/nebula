@@ -62,6 +62,16 @@ def powershell_faults(files):
 
 
 def main():
+    # A self-test that starts this tool as a child process runs it under the live-state guard (tools/gate/selftest_guard.py).
+    import pathlib as _pathlib
+    import sys as _sys
+    _gate = str(_pathlib.Path(__file__).resolve().parents[1] / "gate")
+    _sys.path.insert(0, _gate)
+    try:
+        import selftest_guard
+    finally:
+        _sys.path.remove(_gate)
+    selftest_guard.install_if_asked()
     p = argparse.ArgumentParser()
     p.add_argument("--tree", default=str(pathlib.Path(__file__).resolve().parent.parent.parent))
     p.add_argument("files", nargs="*")

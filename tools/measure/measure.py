@@ -412,6 +412,16 @@ def run(args):
 
 
 def main(argv=None):
+    # A self-test that starts this tool as a child process runs it under the live-state guard (tools/gate/selftest_guard.py).
+    import pathlib as _pathlib
+    import sys as _sys
+    _gate = str(_pathlib.Path(__file__).resolve().parents[1] / "gate")
+    _sys.path.insert(0, _gate)
+    try:
+        import selftest_guard
+    finally:
+        _sys.path.remove(_gate)
+    selftest_guard.install_if_asked()
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = p.add_subparsers(dest="command", required=True)
     r = sub.add_parser("run")

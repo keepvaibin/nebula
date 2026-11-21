@@ -1031,20 +1031,34 @@ def start_check(g, renderer):
     return fn
 
 
+GUARDED = HERE / "tests" / "guarded.py"
+GUARD_LOG = "guard-%s.log"      # beside the script's work folder (a script may remove its own folder, with the log in it)
+
+
 def scripts(g, paths, extra=()):
-    """Python self-tests without the game, each with its own work folder: passes when every one exits 0."""
+    """Python self-tests without the game, each with its own work folder: passes when every one exits 0 and none reached the live
+    state. Each script starts through tests/guarded.py with NEBULA_SELF_TEST=1 and a log file of its own (selftest_guard.py): a
+    script whose log is not empty fails whatever its exit code, and the detail names the script and the first path."""
     def fn(log):
-        bad = []
+        bad, reached = [], []
         for path in paths:
             out = g.work / ("self-" + path.stem)
             out.mkdir(parents=True, exist_ok=True)
+            guard_log = g.work / (GUARD_LOG % path.stem)
+            guard_log.write_text("", encoding="utf-8")
             args = [a.replace("{out}", str(out)) for a in extra]
-            if run([sys.executable, "-X", "utf8", "-I", path, *args], log, cwd=TREE, timeout=900) != 0:
+            code = run([sys.executable, "-X", "utf8", "-I", GUARDED, path, *args], log, cwd=TREE, timeout=900,
+                       env={"NEBULA_SELF_TEST": "1", "NEBULA_SELF_TEST_LOG": str(guard_log)})
+            touched = next((l.strip() for l in guard_log.read_text(encoding="utf-8", errors="replace").splitlines() if l.strip()), "")
+            if touched:
+                reached.append("%s reached the live state: %s" % (path.stem, touched))
+                bad.append(path.stem)
+            elif code != 0:
                 bad.append(path.stem)
         detail = "%d of %d pass" % (len(paths) - len(bad), len(paths))
         if not paths:
             return False, "no script to run: nothing ran", None, "tool"
-        return not bad, detail + ("; not: " + ", ".join(bad) if bad else "")
+        return not bad, detail + ("; not: " + ", ".join(bad) if bad else "") + ("; " + "; ".join(reached) if reached else "")
     return fn
 
 
@@ -2841,6 +2855,7 @@ def parser(land=False):
         p.add_argument("--queue", action="store_true", help="run what waits in the queue and take no branch")
         p.add_argument("--agent", default=os.environ.get("NEBULA_AGENT", "1"), help="who asks, for the queue and the fault record")
         p.add_argument("--queue-file", default=str(landing.QUEUE))
+        p.add_argument("--runner-lock", default=str(landing.RUNNER_LOCK), help="the lock folder of the landing runner (one at a time)")
         p.add_argument("--landing-tree", default=str(landing.LANDING_TREE), help="the work folder the gate owns for batches")
         p.add_argument("--failures", default=str(landing.FAILURES), help="the store of the same failure three times")
         p.add_argument("--live", default=os.environ.get("NEBULA_LIVE", "D:/NebulaWork/plan/native"),
@@ -2936,6 +2951,16 @@ def unbuffer_output():
 
 
 def main(argv=None):
+    # A self-test that starts this tool as a child process runs it under the live-state guard (tools/gate/selftest_guard.py).
+    import pathlib as _pathlib
+    import sys as _sys
+    _gate = str(_pathlib.Path(__file__).resolve().parents[1] / "gate")
+    _sys.path.insert(0, _gate)
+    try:
+        import selftest_guard
+    finally:
+        _sys.path.remove(_gate)
+    selftest_guard.install_if_asked()
     argv = sys.argv[1:] if argv is None else list(argv)
     unbuffer_output()
     # The run's job object (machine.py): every program the gate starts, and theirs, ends with it, however it ends. Once a process.
@@ -3329,7 +3354,8 @@ def land_main(argv):
     import failures  # noqa: E402 - tools/plan/failures.py: the step tool's rule, in one place
     queue = landing.Queue(args.queue_file)
     runner = landing.Landing(queue, GateChecker(args), landing.Repo(GIT), source=TREE, tree=args.landing_tree,
-                             store=failures.Store(args.failures), faults=fault_writer(args.live))
+                             store=failures.Store(args.failures), faults=fault_writer(args.live),
+                             runner=landing.FolderLock(args.runner_lock))
     if args.queue:
         return runner.run_only_queue()
     return runner.land(args.branches, args.agent, args.wait_minutes, also=",".join(also))
