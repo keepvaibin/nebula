@@ -1,4 +1,6 @@
-"""measure_test.py: tools/measure/measure.py without the game (N-1043).
+"""measure_test.py: tools/measure/measure.py without the game (N-1043): the figures, the history's lines, the runs with
+a fake harness, the tablet's run. The band, the run-again and accept are band_test.py's; the quiet machine is
+quiet_test.py's.
 
 python -X utf8 -I tools/measure/tests/measure_test.py
 """
@@ -14,9 +16,11 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 import measure as m  # noqa: E402
 
 failures = []
+checks = [0]
 
 
 def check(ok, what):
+    checks[0] += 1
     if not ok:
         failures.append(what)
 
@@ -47,6 +51,13 @@ check(f.get("steps_over_18") == 1 and abs(f.get("step_max_ms", 0) - 20.0) < 1e-6
 check(abs(f.get("render_ms", 0) - 3.0) < 1e-6, "the walks' median: %s" % f)
 check(abs(f.get("gpu_ms", 0) - 4.0 / 3.0) < 1e-6, "the GPU's time over the presents: %s" % f)
 check(m.timeline_figures(work / "timeline.bin", 99) == {}, "no frame 99: no figures")
+# A renderer that writes no GPU events, or only empty ones: gpu_ms is not there (never 0).
+no_gpu = [r for r in records if r[1] not in (m.GPU_BEGIN, m.GPU_END)]
+timeline(work / "nogpu.bin", no_gpu)
+check("gpu_ms" not in m.timeline_figures(work / "nogpu.bin", 10), "no GPU events: gpu_ms is left out, not 0")
+zero_gpu = no_gpu + [(110, m.GPU_BEGIN, 7, 0), (110, m.GPU_END, 7, 0)]
+timeline(work / "zerogpu.bin", zero_gpu)
+check("gpu_ms" not in m.timeline_figures(work / "zerogpu.bin", 10), "GPU events of no length: gpu_ms is left out, not 0")
 
 # A run folder: [pace] lines after frame 0 (the first left out), memory facts, the timeline.
 run = work / "runs" / "measure-route" / "d3d12"
@@ -69,22 +80,46 @@ f = m.figures(run)
 check(abs(f.get("step_max_ms", 0) - 7.0) < 1e-6 and abs(f.get("render_ms", 0) - 1.0) < 1e-6 and "gap_max_ms" not in f,
       "with no timeline, the [pace] lines' step and render figures: %s" % f)
 
-# The history and the comparison.
+# The history's lines (the comparison itself is band_test.py's): a figure not measured is -, the key's parts and the
+# marks are the last columns, an old line (15 columns) still reads and never counts for a baseline.
 history = work / "history.tsv"
-line = m.history_line({"gap_max_ms": 10.0, "memory_mb": 300.0}, "abc", "pc", "d3d12", "120", run)
-check(line.split("\t")[m.COLUMNS.index("gpu_ms")] == "-", "a figure not measured is -")
-check(all(v[3] in ("no spread", "not measured") for v in m.compare(line, [])), "no spread with no earlier lines")
-for gap in (9.0, 11.0, 10.0):
-    m.add_history(history, m.history_line({"gap_max_ms": gap, "memory_mb": 300.0}, "old", "pc", "d3d12", "120", run))
-m.add_history(history, m.history_line({"gap_max_ms": 99.0}, "old", "tablet", "vulkan", "120", run))
+ctx = {"computer": "PC1", "gpu": "Card A", "scene": "Stage:1", "size": "3840x2160"}
+line = m.history_line({"gap_max_ms": 10.0, "memory_mb": 300.0}, "abc", "pc", "d3d12", "120", run, context=ctx,
+                      marks={"gap_max_ms": "trusted"})
+cells = line.split("\t")
+check(cells[m.COLUMNS.index("gpu_ms")] == "-", "a figure not measured is -")
+check(cells[m.COLUMNS.index("computer")] == "PC1" and cells[m.COLUMNS.index("marks")] == "gap_max_ms=trusted",
+      "the key's parts and the marks are written: %s" % cells)
+old = "\t".join(["old", "2026-11-19 10:00", "pc", "d3d12", "120", "240.0", "10.00", "9.00", "1.00", "5.00", "0",
+                "0.100", "-", "300", "R"])
+history.write_text("\t".join(m.COLUMNS[:15]) + "\n" + old + "\n", encoding="utf-8")  # a file of the old kind
+m.add_history(history, line)
 rows = m.read_history(history)
-check(len(rows) == 4 and history.read_text(encoding="utf-8").startswith("commit\ttime"), "the history's lines: %d" % len(rows))
-verdicts = {v[0]: v[3] for v in m.compare(line, rows)}
-check(verdicts["gap_max_ms"] == "holds" and verdicts["memory_mb"] == "holds", "within the spread holds: %s" % verdicts)
-worse = m.history_line({"gap_max_ms": 11.5, "memory_mb": 300.0}, "new", "pc", "d3d12", "120", run)
-check({v[0]: v[3] for v in m.compare(worse, rows)}["gap_max_ms"] == "worse", "above every earlier line is worse")
-other = m.history_line({"gap_max_ms": 11.5}, "new", "pc-4cores", "d3d12", "120", run)
-check({v[0]: v[3] for v in m.compare(other, rows)}["gap_max_ms"] == "no spread", "another device has its own spread")
+check(len(rows) == 2 and rows[0]["commit"] == "old" and rows[0]["marks"] == "" and rows[1]["computer"] == "PC1",
+      "an old file keeps its line and takes the new header: %s" % rows)
+check(history.read_text(encoding="utf-8").splitlines()[0] == "\t".join(m.COLUMNS), "the header is the new one")
+check(m.band.trusted_values(rows, m.band.key_of(rows[0]), "gap_max_ms") == [], "an old line is never a baseline")
+check(m.scene_of(work / "nothing") == "unknown", "no test.json: scene unknown")
+(run / "test.json").write_text(json.dumps({"name": "measure-route", "stage": {"name": "HoneyBeeKingdomGalaxy",
+                                                                           "scenario": 1}}), encoding="utf-8")
+log_before = (run / "run.log").read_text(encoding="utf-8")
+(run / "run.log").write_text('[gpu] adapter="Card A" vram-mb=1\n[Renderer] internal resolution 1280x720 -> 3840x2160\n'
+                             '[Renderer] internal resolution 1280x720 -> 2800x1752\n', encoding="utf-8")
+check(m.run_context(run, "PC1") == {"computer": "PC1", "gpu": "Card A", "scene": "HoneyBeeKingdomGalaxy:1",
+                                    "size": "2800x1752"}, "the key's parts from the run folder: %s" % m.run_context(run, "PC1"))
+(run / "run.log").write_text(log_before, encoding="utf-8")
+
+
+class QuietMachine:
+    """A machine that is quiet and whose card nobody else uses."""
+    def wait_quiet(self):
+        return True, ""
+
+    def card_use(self):
+        return 0.0, "other programs use the card 0.0%"
+
+
+machine = QuietMachine()
 
 
 # The tablet's two settings: set for the run, put back after, a setting that had no value deleted again.
@@ -115,7 +150,7 @@ check(device.values == {"global low_power": "1"}, "put back, the unset one delet
 check(all(c.split()[2] in ("global", "secure") and c.split()[3] in ("low_power", "refresh_rate_mode")
           for c in device.commands), "no other setting is touched: %s" % device.commands)
 
-# The runs: a fake harness writes a run folder; the line lands in the history; a missing run fails.
+# The runs: a fake harness writes a run folder; the line lands in the history; a missing run is a tool fault (exit 2).
 args = argparse.Namespace(runs="d3d12,tablet", bin="B", android_bin="", apk="", pak="", device="", device_lock="",
                           paks="", commit="0123456789ab", history=str(work / "runs-history.tsv"))
 
@@ -134,16 +169,17 @@ def runner(command, env=None, check=False):
     return Done()
 
 
-failed, said = m.measure_runs(args, work / "measure", runner)
+failed, said = m.measure_runs(args, work / "measure", runner, machine=machine)
 check(commands and all("--lock" in c for c in commands),
       "the harness gets a run lock (luma_test.py run refuses a run without one): %s" % commands)
 lines = m.read_history(args.history)
-check(not failed and len(lines) == 1 and lines[0]["commit"] == "012345678" and lines[0]["device"] == "pc",
+check(failed == 0 and len(lines) == 1 and lines[0]["commit"] == "012345678" and lines[0]["device"] == "pc",
       "one line for the d3d12 run: %s %s" % (said, lines))
 check(any(s.startswith("tablet left out") for s in said), "no device: the tablet is left out, said: %s" % said)
 args.runs = "vulkan"
-failed, said = m.measure_runs(args, work / "measure2", lambda *a, **k: type("D", (), {"returncode": 1})())
-check(failed and said == ["vulkan no run (harness exit 1)"], "a run with no folder fails: %s" % said)
+failed, said = m.measure_runs(args, work / "measure2", lambda *a, **k: type("D", (), {"returncode": 1})(),
+                              machine=machine)
+check(failed == 2 and said == ["vulkan no run (harness exit 1)"], "a run with no folder is a tool fault, exit 2: %s" % said)
 check(m.processor_mask(0) is None, "no cores asked: the mask is left alone")
 
 
@@ -158,10 +194,11 @@ def disturbed_runner(command, env=None, check=False):
 # P-328: a run whose window the player's desktop reached is not compared and adds no history line.
 args.runs = "d3d12"
 before = len(m.read_history(args.history))
-failed, said = m.measure_runs(args, work / "measure3", disturbed_runner)
-check(not failed and said == ["d3d12 not trusted (window: active first at 12.0 s, 40 of the quarter seconds)"] and
+failed, said = m.measure_runs(args, work / "measure3", disturbed_runner, machine=machine)
+check(failed == 3 and said == ["d3d12 not trusted (window: active first at 12.0 s, 40 of the quarter seconds)"] and
       len(m.read_history(args.history)) == before, "a reached window: not trusted, no line: %s" % said)
 check(m.window_disturbed(work / "measure") is None, "no watch file: nothing reached")
+
 
 # The tablet's run stands alone (P-321): inside the device's lock, the test app prepared before the run and removed
 # after it, also when the run or the install fails; the steps take no lock of their own.
@@ -206,7 +243,7 @@ def tablet_runs(prepare_code=0, run_code=0, held=None, answers=True):
     gate = FakeGate(held)
     os.environ["LUMA_TEST_DEVICE_LOCK"] = "elsewhere.lock"
     try:
-        failed, said = m.measure_runs(targs, pathlib.Path(tempfile.mkdtemp()), fake, FakeTablet(answers), gate)
+        failed, said = m.measure_runs(targs, pathlib.Path(tempfile.mkdtemp()), fake, FakeTablet(answers), gate, machine)
     finally:
         del os.environ["LUMA_TEST_DEVICE_LOCK"]
     return failed, said, steps, gate, lock
@@ -214,7 +251,7 @@ def tablet_runs(prepare_code=0, run_code=0, held=None, answers=True):
 
 failed, said, steps, gate, lock = tablet_runs()
 names = [s[0] for s in steps]
-check(names == ["prepare", "run", "remove"] and not failed, "prepare, the run, remove: %s %s" % (names, said))
+check(names == ["prepare", "run", "remove"] and failed == 0, "prepare, the run, remove: %s %s" % (names, said))
 prepare = steps[0][2] if steps else []
 check("--apk" in prepare and prepare[prepare.index("--apk") + 1] == "T.apk" and prepare[prepare.index("--pak") + 1] ==
       "G.pak", "the test app installed with the pak: %s" % prepare)
@@ -224,11 +261,11 @@ check(not any(s[1] for s in steps) and not any("--device-lock" in s[2] for s in 
 failed, said, steps, gate, lock = tablet_runs(run_code=1)
 check([s[0] for s in steps] == ["prepare", "run", "remove"], "a failed run still removes the test app: %s" % steps)
 failed, said, steps, gate, lock = tablet_runs(prepare_code=1)
-check([s[0] for s in steps] == ["prepare", "remove"] and failed and said == ["tablet no run (the test app was not "
-                                                                             "prepared (exit 1))"],
+check([s[0] for s in steps] == ["prepare", "remove"] and failed == 2 and said == ["tablet no run (the test app was not "
+                                                                                  "prepared (exit 1))"],
       "a failed install: no run, the test app removed: %s %s" % ([s[0] for s in steps], said))
 failed, said, steps, gate, lock = tablet_runs(held="gate 20261119 tablet")
-check(steps == [] and failed and "lock stayed held 5 minutes: gate 20261119 tablet" in said[0],
+check(steps == [] and failed == 2 and "lock stayed held 5 minutes: gate 20261119 tablet" in said[0],
       "a held tablet: nothing runs, the holder said: %s" % said)
 failed, said, steps, gate, lock = tablet_runs(answers=False)
 check(steps == [] and gate.taken == [] and said == ["tablet no run (SERIAL does not answer adb)"],
@@ -237,4 +274,4 @@ check(steps == [] and gate.taken == [] and said == ["tablet no run (SERIAL does 
 if failures:
     print("measure_test.py: FAILED:\n  " + "\n  ".join(failures))
     sys.exit(1)
-print("measure_test.py: pass")
+print("measure_test.py: pass (%d checks)" % checks[0])
