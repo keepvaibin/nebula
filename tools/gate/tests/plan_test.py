@@ -21,36 +21,29 @@ from unittest import mock
 
 HERE = pathlib.Path(__file__).resolve().parent
 TREE = HERE.parents[2]
+sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(TREE / "tools" / "plan"))
 sys.path.insert(0, str(TREE / "tools" / "verify"))
 import failures  # noqa: E402
+import live as lv  # noqa: E402
 import plan  # noqa: E402
+from plan_fixture import (CARDS, TEMPLATE, Tree, git_run, ledger_row, ledger_text, plan_of, rmtree_force,  # noqa: E402
+                          run, setup_module, step, teardown_module)
 
 
 # ---- helpers ------------------------------------------------------------------------------------------------
-
-def step(step_id, package, needs="", state="open", order=0, title="t"):
-    return {"order": str(order), "step": step_id, "package": package, "title": title, "package_needs": needs,
-            "card_file": "03-X.md", "state": state, "commit": ""}
-
-
-def plan_of(*rows):
-    return [dict(r, order=str(i + 1)) for i, r in enumerate(rows)]
-
 
 def next_id(steps):
     choice = plan.choose_next(steps)
     return choice.step["step"] if choice else None
 
 
-def run(args, tree, work_root, store, expect=None):
-    """plan.py's main with its output caught: (exit code, text)."""
-    out = io.StringIO()
-    with contextlib.redirect_stdout(out):
-        code = plan.main(["--tree", str(tree), "--work-root", str(work_root), "--failures", str(store), *args])
-    if expect is not None:
-        assert code == expect, "exit %r, wanted %r:\n%s" % (code, expect, out.getvalue())
-    return code, out.getvalue()
+def setUpModule():
+    setup_module()
+
+
+def tearDownModule():
+    teardown_module()
 
 
 # ---- the plan's real files ----------------------------------------------------------------------------------
@@ -348,161 +341,6 @@ class NextTest(unittest.TestCase):
             self.assertIn("state 'opn' is none of", text)
 
 
-# ---- the temporary tree ------------------------------------------------------------------------------------
-
-CARDS = textwrap.dedent("""\
-    # Cards
-
-    ## A Package A
-
-    ### A.1 First step
-
-    - **Where.** `runtime/src/render/a.cpp`, `docs/plan/ledger.tsv`, `rows/branch`
-    - **Rows.** P-001: whole. P-002 (part): the half.
-    - **Proof.** a test.
-
-    ### A.2 Second step
-
-    - **Rows.** P-003 whole.
-
-    ### Rows of this package
-
-    | Row | Today |
-    | --- | --- |
-    | P-001 | one |
-
-    ---
-
-    ## B Package B
-
-    ### B.1 Other step
-
-    - **Rows.** none of this package's rows.
-
-    ### C.1 Free step
-
-    - **Rows.** P-004 whole.
-
-    ### Rows of this package
-
-    | Row | Today |
-    | --- | --- |
-    | P-004 | four |
-    """)
-
-LEDGER_HEAD = "id\tagent\tpackage\tstate\tproof\ttitle\tnote"
-
-
-def ledger_text(rows):
-    lines = [LEDGER_HEAD] + ["\t".join(r) for r in rows]
-    return "\r\n".join(lines) + "\r\n"
-
-
-def ledger_row(rid, state="open", proof="", note=""):
-    return (rid, "1", "E0", state, proof, "title of " + rid, note)
-
-
-def rmtree_force(path):
-    """shutil.rmtree that also removes git's read-only object files (Windows)."""
-    def unlock(func, p, _exc):
-        os.chmod(p, 0o700)
-        func(p)
-    shutil.rmtree(path, onerror=unlock)
-
-
-TEMPLATE = {}
-
-
-def git_env(config):
-    return {"GIT_CONFIG_GLOBAL": str(config), "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
-            "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"}
-
-
-def git_run(*args, cwd=None):
-    exe = plan.GIT if pathlib.Path(plan.GIT).exists() else "git"
-    return subprocess.run([exe, *args], cwd=cwd, check=True, capture_output=True, text=True)
-
-
-def setUpModule():
-    """The temporary tree is made once (a bare origin and a clone with a small plan, a ledger and a source file, one
-    commit pushed) and copied for every test: git is slow to start here."""
-    root = pathlib.Path(tempfile.mkdtemp(prefix="plan-test-template-")).resolve()
-    TEMPLATE["root"] = root
-    config = root / "gitconfig"
-    config.write_text("", encoding="utf-8")
-    TEMPLATE["config"] = config
-    with mock.patch.dict(os.environ, git_env(config)):
-        git_run("init", "--bare", "-b", "main", str(root / "origin.git"))
-        git_run("clone", str(root / "origin.git"), str(root / "tree"))
-        tree = root / "tree"
-        git_run("checkout", "-b", "main", cwd=str(tree))
-        n = plan.native(tree)
-        n.mkdir(parents=True)
-        steps = [("1", "A.1", "A", "First step", "", "03-X.md", "open", ""), ("2", "A.2", "A", "Second step", "", "03-X.md", "open", ""),
-                 ("3", "B.1", "B", "Other step", "A", "03-X.md", "open", ""), ("4", "C.1", "C", "Free step", "", "03-X.md", "open", ""),
-                 ("5", "D.1", "D", "Last step", "everything", "03-X.md", "open", "")]
-        (n / "steps.tsv").write_text("\t".join(plan.STEP_COLUMNS) + "\n" + "".join("\t".join(r) + "\n" for r in steps), encoding="utf-8")
-        (n / "03-X.md").write_text(CARDS + "\n### D.1 Last step\n\n- **Rows.** None.\n", encoding="utf-8")
-        (tree / "docs" / "plan").mkdir(parents=True, exist_ok=True)
-        (tree / plan.LEDGER).write_bytes(ledger_text([ledger_row("P-001"), ledger_row("P-002", note="old 11-01"), ledger_row("P-003"),
-                                                       ledger_row("P-004")]).encode("utf-8"))
-        (tree / "runtime" / "src" / "render").mkdir(parents=True)
-        (tree / "runtime" / "src" / "render" / "a.cpp").write_text("a\nb\nc\n", encoding="utf-8")
-        (tree / "tools" / "verify").mkdir(parents=True)
-        (tree / "tools" / "verify" / "doc_refs_allow.txt").write_text("", encoding="utf-8")
-        git_run("add", "-A", cwd=str(tree))
-        git_run("commit", "-m", "start", cwd=str(tree))
-        git_run("push", "origin", "main", cwd=str(tree))
-
-
-def tearDownModule():
-    rmtree_force(TEMPLATE["root"])
-
-
-class Tree:
-    """A copy of the template: a bare origin, a plan tree (a clone of it, on main) and a work root, in a temporary folder."""
-
-    def __init__(self):
-        self.dir = pathlib.Path(tempfile.mkdtemp(prefix="plan-test-")).resolve()
-        self.origin = self.dir / "origin.git"
-        self.tree = self.dir / "tree"
-        self.work = self.dir / "work"
-        self.store = self.dir / "failures.tsv"
-        self.env = mock.patch.dict(os.environ, git_env(TEMPLATE["config"]))
-
-    def __enter__(self):
-        self.env.start()
-        shutil.copytree(TEMPLATE["root"] / "origin.git", self.origin)
-        shutil.copytree(TEMPLATE["root"] / "tree", self.tree)
-        self.work.mkdir()
-        git_run("remote", "set-url", "origin", str(self.origin), cwd=str(self.tree))
-        self.git = lambda *a, cwd=None: git_run(*a, cwd=str(cwd or self.tree)).stdout.strip()
-        return self
-
-    def __exit__(self, *exc):
-        self.env.stop()
-        rmtree_force(self.dir)
-
-    def write_ledger(self, rows, tree=None):
-        (pathlib.Path(tree or self.tree) / plan.LEDGER).write_bytes(ledger_text(rows).encode("utf-8"))
-
-    def run(self, args, expect=None):
-        return run(args, self.tree, self.work, self.store, expect)
-
-    def folder(self, step_id):
-        return plan.work_folder(self.work, step_id)
-
-    def commit(self, step_id, message="work", files=None):
-        """A commit in the step's work folder (an edit of runtime/src/render/a.cpp unless `files` says what to write)."""
-        folder = self.folder(step_id)
-        for name, text in (files or {"runtime/src/render/a.cpp": "a\nb\nc\nd\n"}).items():
-            (folder / name).parent.mkdir(parents=True, exist_ok=True)
-            (folder / name).write_text(text, encoding="utf-8")
-        self.git("add", "-A", cwd=folder)
-        self.git("commit", "-m", message, cwd=folder)
-        return self.git("rev-parse", "--short=9", "HEAD", cwd=folder)
-
-
 # ---- start --------------------------------------------------------------------------------------------------
 
 class StartTest(unittest.TestCase):
@@ -611,7 +449,8 @@ class LandTest(unittest.TestCase):
         self.assertEqual(self.t.git("show", "HEAD", "--name-only", "--format=", cwd=folder), "docs/plan/native/steps.tsv")
         tree_row = plan.find(plan.read_steps(self.t.tree), "A.1")
         self.assertEqual((tree_row["state"], tree_row["commit"]), ("landed", code_commit))
-        self.assertEqual(plan.read_landings(self.t.tree)[0][:2], ["A.1", code_commit])
+        landing = lv.read_landings(self.t.live)[0]
+        self.assertEqual((landing["step"], landing["commit"], landing["agent"]), ("A.1", code_commit, "1"))
 
     def test_the_landing_message_has_no_attribution(self):
         self.ready()
@@ -724,9 +563,9 @@ class LandTest(unittest.TestCase):
         self.assertIn("1 time in a row", text)
         folder = self.t.folder("A.1")
         self.assertEqual(self.t.git("rev-parse", "--short=9", "HEAD", cwd=folder), code_commit, "the state commit is gone")
-        self.assertEqual(plan.find(plan.read_steps(folder), "A.1")["state"], "open", "the branch is as it was cut from main")
+        self.assertEqual(plan.find(plan.read_base(folder), "A.1")["state"], "open", "the branch is as it was cut from main")
         self.assertEqual(plan.find(plan.read_steps(self.t.tree), "A.1")["state"], "started")
-        self.assertEqual(plan.read_landings(self.t.tree), [])
+        self.assertEqual(lv.read_landings(self.t.live), [])
         self.assertEqual(failures.Store(self.t.store).count("native/A.1"), 1)
 
     def test_the_third_same_failure_exits_with_code_three_and_the_stop_sentence(self):
@@ -906,7 +745,7 @@ class BlockedTest(unittest.TestCase):
             self.assertGreater(text.index("A.1: one"), steps_at)
             self.assertGreater(text.index("C.1: two"), text.index("A.1: one"))
             self.assertEqual(plan.find(plan.read_steps(t.tree), "A.1")["state"], "blocked")
-            self.assertEqual(len(plan.tool_faults(t.tree)), 2)
+            self.assertEqual(len(plan.tool_notes(t.tree)), 2)
 
     def test_a_tool_fault_does_not_block_the_step(self):
         with Tree() as t:
@@ -921,13 +760,13 @@ class StatusTest(unittest.TestCase):
             plan.set_state(t.tree, "C.1", "blocked")
             plan.append_under(plan.native(t.tree) / "BLOCKED.md", "steps", "- 2026-11-20 C.1: the card is wrong | first failure line: x")
             plan.set_state(t.tree, "A.2", "landed", "abc123def")
-            plan.add_landing(t.tree, "A.2", "abc123def", 600)
+            lv.add_landing(t.live, "A.2", "abc123def", 600)
             code, text = t.run(["status"], expect=0)
             written = (plan.native(t.tree) / "STATUS.md").read_text(encoding="utf-8")
             self.assertEqual(written, text)
             self.assertIn("Steps landed: 1 of 5.", text)
-            self.assertIn("## Started (1 of 3 allowed)", text)
-            self.assertIn("- A.1 First step: branch native/A.1 in %s" % t.folder("A.1").as_posix(), text)
+            self.assertIn("## Started (1, at most 3 for one agent)", text)
+            self.assertIn("- A.1 First step: agent 1, branch native/A.1 in %s" % t.folder("A.1").as_posix(), text)
             self.assertIn("- C.1 Free step: the card is wrong | first failure line: x", text)
             self.assertIn("- A.2: commit abc123def,", text)
             self.assertIn(", 600 s", text)
@@ -944,7 +783,7 @@ class StatusTest(unittest.TestCase):
     def test_only_the_last_five_landings_are_listed_newest_first(self):
         with Tree() as t:
             for i in range(7):
-                plan.add_landing(t.tree, "S%d" % i, "c%d" % i, i)
+                lv.add_landing(t.live, "S%d" % i, "c%d" % i, i)
             text = t.run(["status"], expect=0)[1]
             listed = [l for l in text.splitlines() if l.startswith("- S")]
             self.assertEqual([l.split(":")[0] for l in listed], ["- S6", "- S5", "- S4", "- S3", "- S2"])
@@ -963,29 +802,40 @@ class StatusTest(unittest.TestCase):
 
 
 class StateFilesTest(unittest.TestCase):
-    def test_started_and_blocked_stay_out_of_steps_tsv_so_the_plan_tree_can_follow_main(self):
+    def test_started_and_blocked_are_in_the_live_folder_not_in_steps_tsv_or_the_work_tree(self):
         with Tree() as t:
             before = (plan.native(t.tree) / "steps.tsv").read_bytes()
-            plan.set_state(t.tree, "A.1", "started")
-            plan.set_state(t.tree, "C.1", "blocked")
+            plan.set_state(t.tree, "A.1", "started", agent=2)
+            plan.set_state(t.tree, "C.1", "blocked", reason="the card is wrong")
             self.assertEqual((plan.native(t.tree) / "steps.tsv").read_bytes(), before)
             self.assertEqual({s["step"]: s["state"] for s in plan.read_steps(t.tree)},
                              {"A.1": "started", "A.2": "open", "B.1": "open", "C.1": "blocked", "D.1": "open"})
-            self.assertEqual(plan.read_local(t.tree), {"A.1": "started", "C.1": "blocked"})
-            self.assertEqual(t.git("status", "--short"), "?? docs/plan/native/state.tsv", "the file is a new one beside steps.tsv")
+            state = lv.read_state(t.live)
+            self.assertEqual((state["A.1"]["state"], state["A.1"]["agent"]), ("started", "2"))
+            self.assertEqual((state["C.1"]["agent"], state["C.1"]["reason"]), ("1", "the card is wrong"))
+            self.assertEqual(t.git("status", "--short"), "", "the work tree has nothing new in it")
+            self.assertTrue((t.live / "state.tsv").is_file())
+            by = {s["step"]: s for s in plan.read_steps(t.tree)}
+            self.assertEqual((by["A.1"]["agent"], by["C.1"]["reason"], by["A.2"]["agent"]), ("2", "the card is wrong", ""))
             plan.set_state(t.tree, "A.1", "open")
-            self.assertEqual(plan.read_local(t.tree), {"C.1": "blocked"})
+            self.assertEqual(sorted(lv.read_state(t.live)), ["C.1"])
 
-    def test_landed_goes_into_steps_tsv_with_the_commit_and_leaves_the_local_state(self):
+    def test_landed_goes_into_steps_tsv_with_the_commit_and_leaves_the_live_state(self):
         with Tree() as t:
             plan.set_state(t.tree, "A.1", "started")
             plan.set_state(t.tree, "A.1", "landed", "abcdef123")
             row = plan.find(plan.read_base(t.tree), "A.1")
             self.assertEqual((row["state"], row["commit"]), ("landed", "abcdef123"))
-            self.assertEqual(plan.read_local(t.tree), {})
+            self.assertEqual(lv.read_state(t.live), {})
             self.assertIn("A.1\tA\tFirst step\t\t03-X.md\tlanded\tabcdef123\n", (plan.native(t.tree) / "steps.tsv").read_text())
 
-    def test_a_local_state_never_hides_a_landed_step(self):
+    def test_the_work_folders_state_commit_leaves_the_live_folder_alone(self):
+        with Tree() as t:
+            plan.set_state(t.tree, "A.1", "started")
+            plan.set_state(t.tree, "A.1", "landed", "abcdef123", track=False)
+            self.assertEqual(list(lv.read_state(t.live)), ["A.1"])
+
+    def test_a_live_state_never_hides_a_landed_step(self):
         with Tree() as t:
             plan.set_state(t.tree, "A.1", "started")
             path = plan.native(t.tree) / "steps.tsv"
@@ -997,11 +847,18 @@ class StateFilesTest(unittest.TestCase):
             with self.assertRaises(KeyError):
                 plan.set_state(t.tree, "Q.9", "started")
 
-    def test_the_repository_ignores_the_tools_own_state_files(self):
+    def test_two_work_folders_see_the_same_state(self):
+        with Tree() as t:
+            second = t.dir / "tree2"
+            shutil.copytree(t.tree, second)
+            plan.set_state(t.tree, "A.1", "started", agent=1)
+            self.assertEqual(plan.find(plan.read_steps(second), "A.1")["state"], "started")
+
+    def test_the_repository_ignores_the_status_page_and_nothing_else_of_it(self):
         text = (TREE / ".gitignore").read_text(encoding="utf-8")
-        for name in ("state.tsv", "STATUS.md", "landings.tsv"):
-            self.assertIn("/docs/plan/native/" + name, text)
-        self.assertNotIn("BLOCKED.md", text)
+        self.assertIn("/docs/plan/native/STATUS.md", text)
+        for name in ("state.tsv", "landings.tsv", "BLOCKED.md"):
+            self.assertNotIn(name, text)
 
 
 # ---- the checks a step's paths will run ---------------------------------------------------------------------

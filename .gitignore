@@ -23,7 +23,5 @@ runtime/include/galaxy/diag_endpoint_local.h
 # Wrangler's local state (tools/telemetry/worker): the account it signed in with, its cache.
 .wrangler/
 
-# The native plan tool's own state (tools/plan/plan.py): started and blocked steps, the status page, the landing times
-/docs/plan/native/state.tsv
+# The native plan tool's own state (tools/plan/plan.py): the status page (the live state is in D:/NebulaWork/plan/native)
 /docs/plan/native/STATUS.md
-/docs/plan/native/landings.tsv
