@@ -47,13 +47,14 @@ def make_static(steps):
             "steps": [{"id": s["step"], "package": s["package"], "title": s["title"]} for s in steps]}
 
 
-def make_data(steps, landings, state, claims, stale, faults, flakes, now, set_aside=(), repairs=(), owed=()):
+def make_data(steps, landings, state, claims, stale, faults, flakes, now, set_aside=(), repairs=(), owed=(), note=""):
     """What changes. `steps`: plan.read_steps (state, commit, agent). `landings`: live.read_landings. `state`:
     live.read_state. `claims`: live.read_claims. `stale`: set of stale package names. `faults`: live.fault_groups.
     `flakes`: a count. `now`: the time of writing (text). `set_aside`: [{test, renderer, since, why}] of the tests the gate
     has set aside (its flakes.tsv and set-aside.tsv are in the live folder). `repairs`: [dict] of repairs.tsv, in the order
     to show (live.repair_order: open ones of kind fail first). `owed`: [dict] of owed.tsv (what only a person or other
-    hardware can check), oldest first.
+    hardware can check), oldest first. `note`: the line the planner leaves for the page (plan.read_note), under the count; no key
+    "note" in the data when there is none.
 
     "steps" is keyed by step id and has no entry for a step still open; an entry has `state`, and `agent` (a started or
     blocked step), `commit` (the code's commit on the step's branch), `main` (the commit main moved to, when the tool knows it) and
@@ -78,7 +79,7 @@ def make_data(steps, landings, state, claims, stale, faults, flakes, now, set_as
             if when.get(s["step"]):
                 e["time"] = when[s["step"]]
         by_step[s["step"]] = e
-    return {
+    data = {
         "generated": now,
         "steps": by_step,
         "blocked": [{"step": s["step"], "agent": s.get("agent") or "1",
@@ -93,6 +94,9 @@ def make_data(steps, landings, state, claims, stale, faults, flakes, now, set_as
         "repairs": [{k: r.get(k, "") for k in REPAIR_FIELDS} for r in repairs],
         "owed": [{k: r.get(k, "") for k in OWED_FIELDS} for r in owed],
     }
+    if note:
+        data["note"] = note
+    return data
 
 
 def compact(data):
@@ -142,6 +146,7 @@ h2 { font-size: 1.05rem; margin: 28px 0 10px; }
 .muted { color: var(--muted); font-size: 0.875rem; }
 .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin: 0 0 10px; }
 .big { font-size: 2rem; font-weight: 650; line-height: 1.1; }
+.now { margin: 8px 0 2px; font-weight: 600; }
 .bar { height: 12px; background: var(--track); border-radius: 6px; overflow: hidden; display: flex; }
 .bar > span { display: block; height: 100%; }
 .bar .landed { background: var(--landed); }
@@ -221,6 +226,7 @@ h2 { font-size: 1.05rem; margin: 28px 0 10px; }
     var top = el("div", "card");
     top.appendChild(el("div", "big", n.landed + " of " + S.total));
     top.appendChild(el("div", "muted", "steps landed"));
+    if (d.note) top.appendChild(el("div", "now", "Now: " + d.note));
     top.appendChild(bar([["landed", n.landed], ["started", n.started], ["blocked", n.blocked]], S.total));
     app.appendChild(top);
 
@@ -447,6 +453,8 @@ def make_status(static, data, landings, faults, now):
     started = [s for s in static["steps"] if state(s["id"]) == "started"]
     out = ["# Nebula native plan: status", "", "Written %s." % minute(now), "",
            "Steps landed: %d of %d (%d%%)." % (landed, total, round(100.0 * landed / total) if total else 0), ""]
+    if data.get("note"):
+        out += ["Now: " + data["note"], ""]
     if started:
         out += ["In work now:"] + ["- %s %s (agent %s)" % (s["id"], s["title"], by[s["id"]].get("agent", "1")) for s in started]
     else:

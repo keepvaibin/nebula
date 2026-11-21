@@ -519,11 +519,11 @@ class StepChecksTest(RerunBase):
         path = plan.native(tree or self.t.tree) / plan.STEP_CHECKS_FILE
         path.write_text("step\tcheck\tserves\n" + "".join(l + "\n" for l in lines), encoding="utf-8")
 
-    def test_the_real_table_names_real_steps_and_the_four_checks(self):
+    def test_the_real_table_names_real_steps_and_the_known_checks(self):
         table = plan.read_step_checks(TREE)
         ids = {s["step"] for s in plan.read_base(TREE)}
         self.assertGreaterEqual(len(table), 8)
-        self.assertEqual(set(plan.ALSO_CHECKS), {"stress", "sanitizer/tour", "soak", "replays/software"})
+        self.assertEqual(set(plan.ALSO_CHECKS), {"stress", "sanitizer/tour", "soak", "soak/long", "replays/software"})
         for step_id, items in table.items():
             self.assertIn(step_id, ids)
             for check, serves in items:
@@ -565,7 +565,7 @@ class StepChecksTest(RerunBase):
         self.table("A.1\ttour/d3d12\tproof 1: x")
         code, text = self.t.run(["next"])
         self.assertEqual(code, 2)
-        self.assertIn("check 'tour/d3d12' is none of stress, sanitizer/tour, soak, replays/software", text)
+        self.assertIn("check 'tour/d3d12' is none of stress, sanitizer/tour, soak, soak/long, replays/software", text)
 
 
 # ---- C: the replay guard -----------------------------------------------------------------------------------------------

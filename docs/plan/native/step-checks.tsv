@@ -16,9 +16,9 @@ G3.6	sanitizer/tour	proof 2: the sanitizer clean over the tour
 G3.6	soak	proof 2: both soaks clean
 G3.7	stress	proof 2: the step hash at play's first step equal on a fast and a slowed machine
 G3.7	sanitizer/tour	proof 3: the sanitizer clean over the tour
-G3.7	soak	proof 3: both soaks clean
+G3.7	soak/long	proof 3: both soaks clean
 G4.0	sanitizer/tour	proof 3: tour stop 059 run again with the sanitizer build mended
 G5.2	soak	proof 3: both soaks stay green with the switch on
-G5.5	soak	proof 2: every tour stop and both soaks green
+G5.5	soak/long	proof 2: every tour stop and both soaks green
 Z.2	stress	proof 3: the same recorded play gives the same game, also under load
 Z.2	replays/software	proof 3: the same recorded play on a software device
