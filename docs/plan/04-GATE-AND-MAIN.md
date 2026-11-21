@@ -322,3 +322,50 @@ first move.
 Whoever moves main starts it, if none is running and the last one started six hours ago or more. One at a time, under
 `D:\NebulaWork\plan\long.lock`. It takes `tablet.lock` for its tablet part and `measure.lock` for its last 15 minutes.
 A main gate may run beside it; they share the tablet through its lock.
+
+---
+
+## 15. Checks by what changed, the landing queue, game data by key and locks (package T4)
+
+This section is what the tools do now. Where it differs from an older section above, this section is right.
+
+**Checks by what changed.** `tools/gate/scope.tsv` maps path patterns to groups of checks (`tools/gate/scope.py` names the
+groups once: `repo`, `tools`, `build`, `unit`, `start`, `engine1`, `engine3`, `tour1`, `tour3`, `import`, `android`, `tablet12`).
+Every row a changed file matches adds its groups; a landing runs the union over all changed files (`git diff --name-only` from the
+merge base with `origin/main`). A change of documents only runs `repo`, with no build, so it lands in minutes. A change to the
+game runs the build, the unit tests, a start on each renderer and the 12-stop tour on Direct3D 12 with its pictures and replays.
+A change to the renderers runs the engine tests and the tour on all three. A file that no row names makes the run `full`:
+everything the main gate runs on the native game (every renderer's engine tests and 102-stop tour, the other discs, the Android
+build and the tablet's short part). The full set on three renderers, three discs and the tablet is also the nightly run's first
+part. `python -X utf8 -I tools/gate/scope.py --base origin/main` prints the groups and the checks of the branch you are in.
+
+**The mod suites are off.** The owner set all mod work aside until the native rewrite is done. The line `mods = off` at the top of
+`scope.tsv` keeps the mod suites and LumaLink's own check out of every landing, the main level and the nightly run. `short` (the
+quick mod set) or `full` bring them back; `gate.py --mods short|full` does it for one run. The test driver is itself a mod
+(`tools/test_driver/luma_test/luma_test.c`) and every tour and replay loads it, so a driver that does not load is a failure.
+
+**Landing.** `gate.py land BRANCH [BRANCH ...]` puts the branches in the queue (`D:/NebulaWork/plan/landing-queue.tsv`, changed only
+under a lock folder beside it) and, when no queue runner is alive, becomes the runner; otherwise it waits for its own branches.
+The runner takes every waiting branch in queue order, replays each branch's own commits on a temporary branch at `origin/main` in
+`D:/NebulaWork/MarioGalaxyRecomp/Nebula-landing` (a branch that does not apply is `conflict`: not judged, the others go on), runs
+the union's checks once on the tip, and on a pass approves new pictures, reads GitHub as a move always did, and moves main. On a
+fail it halves the batch to find the branches at fault, lands the rest and names the ones it removed with their `KIND` lines. A
+tool or machine fault lands nothing: every branch waits again. `gate.py land --queue` runs what waits. Exit codes: 0 landed, 1 fail,
+2 not judged, 3 the same failure three times. The failure's signature (the first failing check and its first error line) is kept
+for the branch (`tools/plan/failures.py`); the third in a row stops the retries. A tool or machine fault never counts toward it,
+and is written to `D:/NebulaWork/plan/native/tool-faults.tsv` at once. `plan.py land` makes this one call. `--quick` and `--main`
+still work unchanged until package T10 removes them.
+
+**Game data by key.** `D:/NebulaWork/build/game-data/` holds one folder per disc, store version and importer
+(`<disc>-<store>-<first 12 characters of the git tree hash of crates/nebula-import>`). The gate asks for a disc's data by that
+key (the check `data/RMGE01`, and `data/RMGP01` and `data/RMGJ01` for the other discs): found, it is used; not found, it is made
+there with the tree's own importer from the disc's image (the US data from `D:/NebulaWork/testimg/SMG-rebuilt.iso`, never from a
+Downloads folder). The build refuses nothing for a wrong data version: it names no data, and the gate writes `pak.path`.
+`python -X utf8 -I tools/gate/gate.py data adopt` registers the older folders (`us-pak-37` and the others) under their keys by
+reading their headers; nothing is moved or deleted. Folders the gate made that no run used for 14 days are removed when D: has
+under 300 GB free.
+
+**Locks.** One gate run at a time: `gate.lock` is the queue runner's (and a run's by hand). An agent's own build and unit tests in
+its own work folder take no lock: no verdict depends on the clock, and the speed measure runs at night under `measure.lock`.
+The old rule that own work takes the gate lock, and its helper `lockrun.py`, are gone. The measure's build copies are kept while a
+measure uses them.

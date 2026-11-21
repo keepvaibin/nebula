@@ -76,11 +76,10 @@ def main():
     kept = set()
     if os.path.exists(OUT):
         with open(OUT, encoding="ascii") as f:
-            kept = set()
-        for line in f:
-            if line.strip():
-                raw = bytes.fromhex(line.strip())
-                kept.add(from_fixed(raw) if len(raw) == FIXED_RECORD else raw)
+            for line in f:
+                if line.strip():
+                    raw = bytes.fromhex(line.strip())
+                    kept.add(from_fixed(raw) if len(raw) == FIXED_RECORD else raw)
     cooked = records(sys.argv[1]) - kept
     for path in sys.argv[2:]:
         kept |= records(path) - cooked

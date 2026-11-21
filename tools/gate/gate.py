@@ -28,6 +28,13 @@ starts the game for a test goes through here.
          against the PC's, a sanitizer build's tour, the soak, every disc on every renderer.
 --final  level 4: the main and long levels on one commit. "Done" needs it passed with no check planned or known.
 --only CHECK[,CHECK]: only the checks those shell patterns name, and the checks they need (for tracing a red main).
+land BRANCH [BRANCH ...] | land --queue: the landing queue (tools/gate/landing.py, docs/plan/04-GATE-AND-MAIN.md section 15): the
+         branches wait in D:/NebulaWork/plan/landing-queue.tsv, the runner replays them on origin/main in the gate's own work
+         folder, runs the checks of the groups the union of their changed files needs (tools/gate/scope.tsv) once, moves main, and
+         halves the batch to find the branch at fault. Exit 0 landed, 1 fail, 2 not judged, 3 the same failure three times.
+--scope GROUPS|auto|full: with --main (--move too), only the checks of these groups; what `land` runs on the batch's tip.
+--mods off|short|full: the mod suites and LumaLink's check; off in tools/gate/scope.tsv (they run in no landing and no nightly).
+data list | adopt | path DISC | make DISC | clean: the game data by key (tools/gate/gamedata.py).
 --serial: the parts that start the game one after another; by default they run side by side (section 7).
 
 Every check and every test ends as one kind (tools/gate/kinds.py; docs/plan/04-GATE-AND-MAIN.md section 9):
@@ -1166,13 +1173,38 @@ def start_owed(branch, sha, owed, args, popen=subprocess.Popen):
     return "read by tools/gate/owed.py within %g hours (log %s)" % (OWED_HOURS, log)
 
 
-def start_measure(sha, g, args, popen=subprocess.Popen, bins=MEASURE_BINS):
-    """After a move: the moved commit's build copied (MEASURE_BINS/<sha>, the two before it kept), then the measure
-    started there, detached; it takes the gate lock through the queue, so the gates and long run parts behind it wait
-    and nothing runs beside it. Returns what happened, for the board."""
+def copies_in_use(bins, measure_lock, alive=None):
+    """The names of the measure's build copies a measure uses (N-1090): a copy whose in-use.txt names a process that is alive
+    (the measure started on it, `pid N`), and the commit measure.lock's holder line names (`measure.py <commit> <work>`:
+    the measure that has the lock now). A move prunes none of these."""
+    alive = alive or process_alive
+    used = set()
+    for d in (p for p in pathlib.Path(bins).iterdir() if p.is_dir()):
+        try:
+            words = (d / "in-use.txt").read_text(encoding="utf-8").split()
+        except OSError:
+            continue
+        if len(words) >= 2 and words[0] == "pid" and words[1].isdigit() and alive(int(words[1])):
+            used.add(d.name)
+    try:
+        words = (pathlib.Path(measure_lock) / "holder.txt").read_text(encoding="utf-8").split()
+    except OSError:
+        words = []
+    if len(words) >= 2 and words[0] == "measure.py":
+        used.add(words[1])
+    return used
+
+
+def start_measure(sha, g, args, popen=subprocess.Popen, bins=MEASURE_BINS, alive=None):
+    """After a move: the moved commit's build copied (MEASURE_BINS/<sha>, the two before it kept, and any a measure uses:
+    copies_in_use), then the measure started there, detached; it takes the gate lock through the queue, so the gates and long
+    run parts behind it wait and nothing runs beside it. The copy names the process of its measure (in-use.txt). Returns what
+    happened, for the board."""
     bins.mkdir(parents=True, exist_ok=True)
+    used = copies_in_use(bins, pathlib.Path(args.gate_lock).with_name("measure.lock"), alive)
     for old in sorted((p for p in bins.iterdir() if p.is_dir()), key=lambda p: p.stat().st_mtime)[:-2]:
-        shutil.rmtree(old, ignore_errors=True)
+        if old.name not in used:
+            shutil.rmtree(old, ignore_errors=True)
     copy = bins / sha[:9]
     try:
         shutil.rmtree(copy, ignore_errors=True)
@@ -1192,7 +1224,11 @@ def start_measure(sha, g, args, popen=subprocess.Popen, bins=MEASURE_BINS):
     log = pathlib.Path(args.work) / ("measure-%s.log" % sha[:9])
     detach = {"creationflags": 0x8 | 0x200} if os.name == "nt" else {"start_new_session": True}
     with open(log, "ab") as out:
-        popen(cmd, cwd=str(TREE), stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, close_fds=True, **detach)
+        process = popen(cmd, cwd=str(TREE), stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, close_fds=True,
+                        **detach)
+    pid = getattr(process, "pid", None)
+    if isinstance(pid, int):
+        (copy / "in-use.txt").write_text("pid %d\n" % pid, encoding="utf-8")
     return "the play route measure of main %s started (log %s)" % (sha[:9], log)
 
 

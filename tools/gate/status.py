@@ -126,6 +126,7 @@ def build(work, board, tree=TREE, now=None):
            "- Commit: %s; last moved: %s" % (main, when),
            "- %s%s" % (state, (" (" + colour.strip() + ")") if colour else " (no MAIN-RED on the board)"),
            "- Last main gate: " + run_line(runs.get("main")),
+           "- Last landing: " + run_line(runs.get("land")),
            "- Last long run: " + run_line(runs.get("long")),
            "- Last quick gate: " + run_line(runs.get("quick")), "",
            "## Ledger (from %s)" % ledger_from, "",

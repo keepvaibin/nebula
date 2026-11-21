@@ -46,6 +46,34 @@ def option(flag, default=None):
     return default
 
 
+# The units the build names (P-329): the instrumented copies' lists (.types, .rows, .numbers, .globals) of a reused build
+# folder include those of a source the build no longer has, and the merges below read every list there. NAMED is the set of
+# copies the compile commands name (normalized paths), None to read every list: commands that name no copy of the folder
+# (a fixture's) leave nothing out.
+NAMED = None
+
+
+def _norm(path):
+    return os.path.normcase(os.path.abspath(str(path)))
+
+
+def name_units(commands, folder):
+    """Sets NAMED from the compile commands: the copies of `folder` that the build compiles."""
+    global NAMED
+    prefix = _norm(folder) + os.sep
+    named = {_norm(pathlib.Path(e.get("directory") or ".") / e["file"]) for e in commands}
+    NAMED = named if any(n.startswith(prefix) for n in named) else None
+
+
+def unit_files(folder, pattern):
+    """The files of `pattern` ('*.types') in the folder of the instrumented copies, in order, for the units the build names."""
+    found = sorted(pathlib.Path(folder).rglob(pattern))
+    if NAMED is None:
+        return found
+    suffix = pattern[1:]
+    return [f for f in found if _norm(str(f)[:-len(suffix)]) in NAMED]
+
+
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 GAME_INCLUDES = [ROOT / "native" / "petari" / "include", ROOT / "native" / "math" / "include", ROOT / "native" / "include"]
 GAME_TREES = [ROOT / "native" / "petari", ROOT / "native" / "math", ROOT / "native" / "include"]
@@ -219,6 +247,8 @@ def main():
     if option("--needs"):
         NEEDS_TABLE = pathlib.Path(option("--needs")).resolve()
     commands = json.loads(pathlib.Path(option("--commands")).read_text(encoding="utf-8"))
+    if DEFINED is not None:
+        name_units(commands, DEFINED)
     wanted = option("--entry")
 
     def is_game(entry):
@@ -1105,7 +1135,7 @@ class Reader:
         twice = {}  # alias name -> {record: file}
         named_once = {}  # an instance only .cpp files name -> the first such file
         clashes = []  # a record or global defined twice: all of them are said, then the build stops
-        for part in sorted(pathlib.Path(folder).rglob("*.types")):
+        for part in unit_files(folder, "*.types"):
             data = json.loads(part.read_text(encoding="utf-8"))
             for key, table, mine in (("records", records, self.records), ("globals", globals_, self.globals)):
                 for row in data[key]:
@@ -1520,7 +1550,7 @@ def merge_functions(folder, records, left_records):
     what is wrong). Each unit's facts are its .rows, row for row; an owner is a record row or a record left out; each
     override has a name, and says whether it is a function row (`row`)."""
     functions, wrong = [], []
-    for rows_file in sorted(pathlib.Path(folder).rglob("*.rows")):
+    for rows_file in unit_files(folder, "*.rows"):
         source = rows_file.relative_to(folder).as_posix()[:-len(".rows")]
         rows = [tuple(line.split("\t")[:2]) for line in rows_file.read_text(encoding="utf-8").splitlines() if line]
         facts_file = rows_file.with_suffix(".functions")
@@ -1573,7 +1603,7 @@ def merge_needs(folder, functions, table_path):
     wrong = []
     by_key = {(f["name"], f["signature"]): f for f in functions}
     facts = {}
-    for rows_file in sorted(pathlib.Path(folder).rglob("*.rows")):
+    for rows_file in unit_files(folder, "*.rows"):
         source = rows_file.relative_to(folder).as_posix()[:-len(".rows")]
         rows = [tuple(line.split("\t")[:2]) for line in rows_file.read_text(encoding="utf-8").splitlines() if line]
         needs_file = rows_file.with_suffix(".needs")
@@ -1726,7 +1756,7 @@ def merge_numbers(folder, rows):
     tables, tables_skipped, table_names = [], {}, set()
     uses = 0
     seen = set()
-    for listed in sorted(pathlib.Path(folder).rglob("*.numbers")):
+    for listed in unit_files(folder, "*.numbers"):
         unit = listed.relative_to(folder).as_posix()[:-len(".numbers")]
         part = json.loads(listed.read_text(encoding="utf-8"))
         uses += part["uses"]
@@ -1760,7 +1790,7 @@ def defined_symbols(folder):
     if folder is None:
         return None
     out = set()
-    for listed in pathlib.Path(folder).rglob("*.globals"):
+    for listed in unit_files(folder, "*.globals"):
         out.update(line for line in listed.read_text(encoding="utf-8").splitlines() if line)
     return out
 
