@@ -272,4 +272,6 @@ class Output(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main(verbosity=1)
+    result = unittest.main(argv=[sys.argv[0]], exit=False, verbosity=1).result       # --work FOLDER is the gate's, and not needed
+    print("build_steps_test: %s (%d tests)" % ("pass" if result.wasSuccessful() else "FAIL", result.testsRun))
+    sys.exit(0 if result.wasSuccessful() else 1)
