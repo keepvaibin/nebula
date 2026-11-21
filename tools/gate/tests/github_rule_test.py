@@ -8,6 +8,9 @@ Every reading of GitHub here is a fake: a function that returns the push runs of
   must_running_waits_then_passes     one `must` job still running: the wait asks again, and passes when it turns green
   nightly_changes_nothing            a `nightly` job red, cancelled or running changes nothing
   unknown_job_is_must_with_warning   a job the table does not name counts as must, and a warning line of kind tool names it once
+  skipped_matrix_name_is_no_job      a job no table row names that every run skipped (the branch push's `Android (${{ matrix.abi }})`) is left
+                                     out; one that is green, red or running anywhere still counts as must; a must job skipped in
+                                     the newest run is green from an older one, and not finished when only ever skipped
   red_must_refuses_before_checks     a red `must` job of any run of the commit refuses the start; a cancelled one, an advisory
                                      one, a nightly one, a planned one and GitHub not answering do not
   red_must_is_fail_in_the_wait       a red `must` job in the wait is `fail`, and its log is saved under the right name
@@ -155,6 +158,36 @@ class Rule(unittest.TestCase):
         self.assertIn("github_jobs.tsv", r.warnings()[0][1])
         r2, _ = make(lambda sha: [run(1, "gate/x", all_green() + [job("Mac (Intel)", conclusion="failure")])])
         self.assertIn("Mac (Intel) failure", r2.red_before(), "a red unknown job refuses like a must job")
+
+    def test_skipped_matrix_name_is_no_job(self):
+        # The real reading of commit 5bfafecc4: the candidate's 12 jobs green, the branch push's Windows, Windows game
+        # modules, Android (unexpanded name) and start check skipped.
+        unexpanded = "Android (${{ matrix.abi }})"
+        branch = [job(n) for n in MUSTS[:6]] + [
+            job("Windows (three renderers, unit tests)", conclusion="skipped"), job("Windows game modules", conclusion="skipped"),
+            job(unexpanded, conclusion="skipped"), job("Android start check (x86_64 emulator)", conclusion="skipped")]
+        r, c = make(lambda sha: [run(44901217388, "gate/x", all_green()), run(44896266079, "test/t8a-github", branch)])
+        kind, detail, reading = r.wait(120, sleep=c.sleep)
+        self.assertEqual((kind, c.slept), ("pass", 0), detail)
+        self.assertEqual(len(reading.green), 7)
+        self.assertEqual((reading.pending, r.unknown, r.warnings()), ([], [], []))
+        r2, c2 = make(lambda sha: [run(2, "test/t8a-github", branch)])
+        self.assertEqual(r2.read().pending, [MUSTS[6]], "the skipped name is not what is waited for")
+
+    def test_unknown_job_that_ran_still_counts(self):
+        for state in (job("Mac (Intel)"), job("Mac (Intel)", conclusion="failure"), running("Mac (Intel)")):
+            skipped = job("Mac (Intel)", conclusion="skipped")
+            r, _ = make(lambda sha: [run(3, "work/a", [skipped]), run(4, "gate/x", all_green() + [state])])
+            reading = r.read()
+            self.assertEqual([n for n, _ in r.warnings()], ["Mac (Intel)"])
+            counted = reading.green + reading.pending + [f.job for f in reading.reds]
+            self.assertIn("Mac (Intel)", counted, "an unknown job that ran or runs anywhere is a must job: %s" % state)
+
+    def test_must_skipped_newest_green_older(self):
+        r, _ = make(lambda sha: [run(9, "work/a", [job("Mac", conclusion="skipped")]), run(8, "gate/x", all_green())])
+        self.assertIn("Mac", r.read().green)
+        r2, _ = make(lambda sha: [run(9, "work/a", [job("Mac", conclusion="skipped")]), run(8, "gate/x", rest("Mac"))])
+        self.assertIn("Mac", r2.read().pending, "a must job only ever skipped is not finished")
 
     def test_red_must_refuses_before_checks(self):
         ended = "2026-11-21T08:30:12Z"

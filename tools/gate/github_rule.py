@@ -316,6 +316,10 @@ def judge(runs, classes, planned=(), setup=None):
         klass = classes.get(name)
         if klass == NIGHTLY or name in planned:
             continue
+        # A matrix job that a branch push skips shows under its unexpanded name (`Android (${{ matrix.abi }})`); a job no
+        # table row names that was skipped in every run that lists it never ran anywhere, so it is no job of the rule.
+        if klass is None and all(job_state(job) == "skipped" for _, job in entries[name]):
+            continue
         state, run, job = effective(entries.get(name, []), setup)
         out[name] = State(name, klass or MUST, state, (run or {}).get("id"), (job or {}).get("databaseId"),
                           (run or {}).get("branch") or "?", job)
