@@ -147,8 +147,8 @@ def main():
             lock.mkdir()
             (lock / "holder.txt").write_text("quick gate by hand (Agent 3) 2026-11-18 04:00:00\n", encoding="utf-8")
             check(locked_part(g, "tablet", lambda: seen.append("ran")) is None and seen == [True]
-                  and g.rows and g.rows[-1][0] == "part/tablet" and g.rows[-1][1] == "fail",
-                  "a part that cannot have the lock does not run and fails as part/<name>")
+                  and g.rows and g.rows[-1][0] == "part/tablet" and g.rows[-1][1] == "env",
+                  "a part that cannot have the lock does not run and is env (the machine was not fit) as part/<name>")
             shutil.rmtree(lock, ignore_errors=True)
             Args.mode = "main"
             check(locked_part(g, "x", lambda: lock.exists()) is False, "at the other levels a part takes no lock of its own")

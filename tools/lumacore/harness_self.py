@@ -24,7 +24,7 @@ import subprocess
 
 # Every result.json has these (docs/modding/lumalink/test-harness.md, section 5).
 RESULT_KEYS = ("harness", "test", "proves", "renderer", "platform", "os", "gpu", "commit", "module", "verdict",
-               "reason", "checks", "setup", "frames", "seconds", "pictures")
+               "kind", "reason", "checks", "setup", "frames", "seconds", "pictures")
 
 
 def fact_rows(folder: pathlib.Path):

@@ -325,7 +325,9 @@ Each test and renderer leaves a folder in the work folder, `TEST/RENDERER/`:
 | `timeout` | The run reached `limit_seconds`. |
 | `harness-error` | The test file is wrong, or the runner had a problem. Never the mod's fault. |
 
-`lumalink test` prints one line for each test and renderer, and exits with 0 when every verdict is `pass`.
+`result.json` also says the kind of the result, `"kind"`: `pass`; `fail` (the game or the mod is wrong: `fail`, `crashed`, `timeout`); `tool` (the test tool is wrong: `harness-error`, `setup-failed`); or `env` (the machine was not fit: `not-run`, a device that left, a drive with no room). Only `fail` says something about the game.
+
+`lumalink test` prints one line for each test and renderer, and exits with 0 when every verdict is `pass`. The runner itself ends with 3, and writes no result, when the machine is not fit to start (the run lock is held, the device does not answer).
 
 ## Further reading
 

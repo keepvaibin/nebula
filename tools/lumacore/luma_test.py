@@ -7,8 +7,9 @@
 
 `run` reads each test strictly, gives it a private run folder, installs the game half first and then the test's mods,
 starts the game hidden and silent with the plan for the host half (tools/test_driver/extension/harness.cpp), waits,
-checks the run's files against the test's `expect` and the checks every test has, and writes result.json. One line per
-test and renderer; exit 0 only when every verdict is `pass`. A test with a "disc" (RMGE01, RMGP01 or RMGJ01: one that
+checks the run's files against the test's `expect` and the checks every test has, and writes result.json (its "kind":
+pass, fail, tool or env, kind_of below). One line per test and renderer; exit 0 only when every verdict is `pass`, 3 when
+the machine is not fit to start (the run lock is held, the device does not answer) and no result is written. A test with a "disc" (RMGE01, RMGP01 or RMGJ01: one that
 needs that release's languages or files) runs on --pak when that pak is of its disc, else on the pak --pak-for (or
 LUMA_TEST_PAKS, DISC=path joined by the path separator) names for it, else its verdict is `not-run`, naming the disc.
 
@@ -44,6 +45,7 @@ import struct
 import subprocess
 import sys
 import time
+import traceback
 import zlib
 
 RUNNER_VERSION = "1.0"
@@ -113,6 +115,36 @@ OBJECT_REF = re.compile(r"(object:[^\s#]+|class:[^\s#]+)#\d+")
 
 class HarnessError(Exception):
     """The runner's own problem or a malformed test: verdict `harness-error`."""
+
+
+# The kind of result each verdict is (docs/plan/04-GATE-AND-MAIN.md section 9), the one place a test's kind is decided:
+#   fail  the game or the change is wrong: everything seen once the game has started (a crash, frames that stopped, an exit
+#         code other than 0, a check of the test that did not hold), and a game half's own stop (harness.stop) other than pass;
+#   tool  the test tool broke: a test or file the runner itself must provide could not be read (harness-error), a run it
+#         could not set up or start (setup-failed), an exception of the runner's own;
+#   env   the machine was not fit: the disc's game not given, the device gone, the drive full (not-run, device-lost).
+# result.json carries it as "kind"; the gate reads it from there (tools/gate/kinds.py). The gate may change a fail to
+# flake or main afterwards; it never changes pass, tool or env.
+KINDS = {"pass": "pass", "fail": "fail", "crashed": "fail", "timeout": "fail", "harness-error": "tool",
+         "setup-failed": "tool", "not-run": "env", "device-lost": "env"}
+
+
+def kind_of(verdict):
+    return KINDS.get(verdict, "fail")
+
+
+class EnvRefused(Exception):
+    """The run could not start because the machine is not fit (the device does not answer, a lock is held): the runner
+    ends with exit code ENV_EXIT and writes no result; the gate reads that as kind env."""
+
+
+# Exit codes of `run`: 0 every test passed, 1 a test did not, ENV_EXIT the machine was not fit.
+ENV_EXIT = 3
+
+
+def drive_full(error):
+    """Whether an OSError says the drive has no room (ENOSPC, or Windows' ERROR_DISK_FULL and ERROR_HANDLE_DISK_FULL)."""
+    return isinstance(error, OSError) and (error.errno == 28 or getattr(error, "winerror", None) in (39, 112))
 
 
 # --- Reading a test strictly ------------------------------------------------------------------------------------------
@@ -1740,7 +1772,13 @@ def run_one(test, renderer, args, run_folder, previous):
         command += ["--hidden", "1"]
     began = time.time()
     with (run_folder / "run.log").open("wb") as log:
-        with subprocess.Popen(command, env=env, stdout=log, stderr=subprocess.STDOUT, **hidden) as process:
+        try:
+            process = subprocess.Popen(command, env=env, stdout=log, stderr=subprocess.STDOUT, **hidden)
+        except OSError as error:
+            if drive_full(error):
+                raise
+            raise HarnessError("the game could not be started: %s" % error) from error
+        with process:
             code, starts, unwatched = watch_run(process, run_folder, exe.name, test["limit"] + 60)
     seconds = time.time() - began
     return {"code": code, "seconds": seconds, "frozen": frozen, "mods": mod_ids, "exe": exe.name, "starts": starts,
@@ -2451,7 +2489,7 @@ def run_tests(args):
         raise SystemExit("--limit-scale is at least 1")
     lock = pathlib.Path(args.lock)
     if lock.exists():
-        raise SystemExit("run.lock held: " + lock.read_text(encoding="utf-8", errors="replace").strip())
+        raise EnvRefused("run.lock held: " + lock.read_text(encoding="utf-8", errors="replace").strip())
     global CLASSES, GPU, HOST, EXES, HOST_SYSTEM, run_one
     device = None
     if args.device:
@@ -2463,7 +2501,7 @@ def run_tests(args):
         spec.loader.exec_module(android)
         device = android.Device(args.device)
         if not device.answers():
-            raise SystemExit("%s does not answer adb" % args.device)
+            raise EnvRefused("%s does not answer adb" % args.device)
         if not device.installed():
             raise SystemExit("the test app %s is not on %s: luma_test_android.py prepare" % (android.PACKAGE, args.device))
         HOST = android.host_for(device.abi())
@@ -2473,7 +2511,7 @@ def run_tests(args):
         run_one = lambda test, renderer, a, run_folder, previous: android.run_one(this, device, test, a, run_folder, previous)  # noqa: E731
         taken = android.device_lock(args.device_lock, args.who)
         if taken is not None:
-            raise SystemExit("the device's lock %s is held: %s" % (args.device_lock, taken))
+            raise EnvRefused("the device's lock %s is held: %s" % (args.device_lock, taken))
     if args.gpu is not None and not re.fullmatch(r"[0-9a-f]{4}:[0-9a-f]{4}:[0-9a-f]{8}", args.gpu):
         raise SystemExit("--gpu: vendor:device:subsystem in lowercase hex, as the game's config.ini gpu (10de:2b85:89ef1043)")
     GPU = args.gpu
@@ -2491,9 +2529,10 @@ def run_tests(args):
                 # scaled alike; steps and their timeouts count frames and stay as written.
                 test["limit"] = test["limit"] * args.limit_scale
                 renderers = [args.renderer] if args.renderer else test["renderers"]
-            except HarnessError as error:
+            except Exception as error:  # noqa: BLE001 - a test the runner cannot read is the tool's, whatever raised
                 all_pass = False
-                report(work / "runs" / suite_name / folder.name / "-", folder.name, [], "-", "harness-error", str(error), [], args, {})
+                said = str(error) if isinstance(error, HarnessError) else "the runner raised %s: %s" % (type(error).__name__, error)
+                report(work / "runs" / suite_name / folder.name / "-", folder.name, [], "-", "harness-error", said, [], args, {})
                 continue
             for renderer in renderers:
                 run_folder = work / "runs" / suite_name / test["name"] / renderer
@@ -2521,6 +2560,14 @@ def run_tests(args):
                 except DeviceLost as error:
                     verdict, reason, checks, facts, pictures, ran = "device-lost", str(error), [], [], [], {}
                     lost = str(error)
+                except Exception as error:  # noqa: BLE001 - the runner's own fault for this test, said in its result
+                    if drive_full(error):
+                        verdict, reason = "not-run", "the drive is full: %s" % error
+                    else:
+                        verdict, reason = "harness-error", "the runner raised %s: %s" % (type(error).__name__, error)
+                        run_folder.mkdir(parents=True, exist_ok=True)
+                        (run_folder / "runner-error.txt").write_text(traceback.format_exc(), encoding="utf-8")
+                    checks, facts, pictures, ran = [], [], [], {}
                 if verdict == "pass":
                     passed[(test["name"], renderer)] = run_folder
                 else:
@@ -2575,7 +2622,8 @@ def report(run_folder, name, proves, renderer, verdict, reason, checks, args, ex
     result = {"harness": HARNESS, "runner": RUNNER_VERSION, "test": name, "proves": proves, "renderer": renderer,
               "platform": HOST["platform"], "os": os_line(), "gpu": gpu_line(log_lines),
               "driver": next((l.split("=", 1)[1].strip() for l in log_lines if l.startswith("[gpu] driver=")), ""),
-              "commit": args.commit, "module": args.module, "verdict": verdict, "reason": reason, "checks": checks}
+              "commit": args.commit, "module": args.module, "verdict": verdict, "kind": kind_of(verdict), "reason": reason,
+              "checks": checks}
     test_json = extra.pop("test_json", None)
     result.update(extra)
     # Every result has the same fields; a test refused before it ran has them empty.
@@ -2656,7 +2704,11 @@ def main():
     refs.add_argument("--looked", action="store_true")
     args = parser.parse_args()
     if args.command == "run":
-        return run_tests(args)
+        try:
+            return run_tests(args)
+        except EnvRefused as error:
+            print("luma_test.py: env: %s" % error, file=sys.stderr)
+            return ENV_EXIT
     return write_refs(args)
 
 
