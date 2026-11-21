@@ -206,6 +206,17 @@ class Rule(unittest.TestCase):
         self.assertEqual(lines[-1], "VERDICT pass")
         self.assertTrue(any(l.startswith("github ") and "green" in l for l in lines), "the run shows the GitHub row")
 
+    def test_the_last_summary_line_on_the_screen_is_the_one_in_result_txt(self):
+        world = World(runs_of(green()))
+        code, lines, work = drive(self, world)
+        self.assertEqual(code, 0, "\n".join(lines))
+        heads = [l for l in lines if l.startswith("gate ")]
+        written = next(p for p in work.rglob("result.txt"))
+        in_file = next(l for l in written.read_text(encoding="utf-8").splitlines() if l.startswith("gate "))
+        self.assertEqual(heads[-1], in_file, "the same checks and seconds: %s" % heads)
+        self.assertIn("(2 checks:", in_file, "the GitHub row is counted")
+        self.assertNotEqual(heads[0], in_file, "the first line was written before the GitHub row")
+
     def test_must_running_waits_then_moves(self):
         def turn(world):
             if world.slept == 2:
@@ -214,6 +225,9 @@ class Rule(unittest.TestCase):
         code, lines, _ = drive(self, world)
         self.assertEqual(code, 0, "\n".join(lines))
         self.assertEqual((world.moved, world.moved_after), ([SHA], 2), "it moved only after Mac turned green")
+        shown = [l for l in lines if l.startswith("gate.py: GitHub: ")]
+        self.assertTrue(any("not finished: Mac" in l for l in shown) and shown[-1].endswith("must jobs green"),
+                        "the wait prints what it reads: %s" % shown)
 
     def test_nightly_changes_nothing(self):
         jobs = green("Windows (three renderers, unit tests)", "Windows game modules") + [
@@ -227,9 +241,15 @@ class Rule(unittest.TestCase):
         def turn(world):
             world.runs = runs_of(green() + [job("Mac (Intel)")])
         world = World(runs_of(green() + [job("Mac (Intel)", "in_progress")]), hook=turn)
-        code, lines, _ = drive(self, world)
+        code, lines, work = drive(self, world)
         self.assertEqual(code, 0, "\n".join(lines))
         self.assertEqual(world.moved_after, 1, "waited for like a must job")
+        told = [l for l in lines if l.startswith("gate.py: GitHub job Mac (Intel) is not in tools/gate/github_jobs.tsv")]
+        self.assertEqual(len(told), 1, "named on the screen at the first reading: %s" % lines)
+        self.assertIn("Add a line for it", told[0])
+        self.assertLess(lines.index(told[0]), next(i for i, l in enumerate(lines) if l.startswith("KIND tool github/Mac (Intel)")))
+        log = next(p for p in work.rglob("github.log")).read_text(encoding="utf-8")
+        self.assertEqual(len([l for l in log.splitlines() if "Mac (Intel) is not in tools/gate/github_jobs.tsv" in l]), 1, log)
         warn = [l for l in kind_lines(lines) if l.startswith("KIND tool github/Mac (Intel) - :: ")]
         self.assertEqual(len(warn), 1, "one warning line of kind tool: %s" % kind_lines(lines))
         self.assertEqual(lines[-1], "VERDICT pass", "a warning changes no verdict")

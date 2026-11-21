@@ -42,6 +42,8 @@ SKIPPED_CONCLUSIONS = ("skipped",)
 RERUN_GRACE_SECONDS = 180.0
 LOG_KEEP, LOG_SHOW = 200, 20
 POLL_SECONDS = 60.0
+# While the gate waits for GitHub it prints a line when the reading's text changes, and at least one this often.
+SCREEN_EVERY_SECONDS = 300.0
 # What a question to GitHub can fail with: asked again the next minute, it is not a red job.
 ANSWER_ERRORS = (RuntimeError, OSError, ValueError, subprocess.SubprocessError)
 
@@ -379,6 +381,7 @@ class Rule:
         self.unknown = []         # job names the table does not know, in the order seen
         self.advised = {}         # advisory job name -> the line told once
         self.told_rows = set()    # the warnings and advisory lines already made rows of the run (gate.py)
+        self.shown = (None, None)  # (the text, the clock) of the last reading's line printed on the screen
         self.lock = threading.Lock()
 
     def read(self):
@@ -390,8 +393,7 @@ class Rule:
     def judge(self, runs):
         reading = Reading()
         for name, st in sorted(judge(runs, self.classes, self.planned, self.setup).items()):
-            if name not in self.classes and name not in self.unknown:
-                self.unknown.append(name)
+            self.see_unknown(name)
             if st.klass == ADVISORY:
                 if st.state in ("red", "broken") and not self.just_rerun(st):
                     self.advise(st)
@@ -456,9 +458,28 @@ class Rule:
             return
         self.advised[st.name] = "red twice on GitHub; advisory, blocks nothing"
 
+    def see_unknown(self, name):
+        """A job the table does not know, at the first reading that sees it: one line on the screen and in github.log that
+        names the job and says what to do (the end of the run says it again as a row of kind tool)."""
+        if name in self.classes or name in self.unknown:
+            return
+        self.unknown.append(name)
+        text = unknown_text(name)
+        self.note(text)
+        self.say("gate.py: " + text)
+
     def warnings(self):
         """[(job, text)]: one line of kind tool for each job the table does not know."""
-        return [(n, "the job is not in tools/gate/github_jobs.tsv: it counts as must; add its line") for n in self.unknown]
+        return [(n, unknown_text(n)) for n in self.unknown]
+
+    def show(self, text):
+        """One line on the screen with the reading's words (the same text as github.log): when the text changed since the line
+        last printed, and at least every SCREEN_EVERY_SECONDS."""
+        said, when = self.shown
+        now = self.clock()
+        if said is None or text != said or now - when >= SCREEN_EVERY_SECONDS:
+            self.shown = (text, now)
+            self.say("gate.py: GitHub: " + text)
 
     def red_before(self):
         """Why a main gate would not start (rule 5): the red must jobs of the commit, `Mac failure on gate/x at 10:34`, or
@@ -470,8 +491,7 @@ class Rule:
         with self.lock:
             states = [s for s in judge(runs, self.classes, self.planned, self.setup).values() if s.klass == MUST]
             for s in states:
-                if s.name not in self.classes and s.name not in self.unknown:
-                    self.unknown.append(s.name)
+                self.see_unknown(s.name)
             self.last_reds = [s for s in states if s.state == "red" and not self.just_rerun(s)]
         red = [s.said() for s in self.last_reds]
         return ("red on GitHub: " + "; ".join(red[:4]) + (" ..." if len(red) > 4 else "")) if red else None
@@ -487,6 +507,7 @@ class Rule:
             except ANSWER_ERRORS as e:
                 reading, detail = None, "GitHub did not answer: %s" % e
             self.note(detail)
+            self.show(detail)
             if reading is not None:
                 if reading.reds:
                     return "fail", detail, reading
@@ -501,6 +522,12 @@ class Rule:
 
 
 # The log of a red job ------------------------------------------------------------------------------------------------
+
+
+def unknown_text(name):
+    """What is said of a job no row of tools/gate/github_jobs.tsv names: that it is waited for like a must job, and the way out."""
+    return ("GitHub job %s is not in tools/gate/github_jobs.tsv: it is waited for like a must job. Add a line for it to that file "
+            "(class must, advisory or nightly)" % name)
 
 
 def advice(job):

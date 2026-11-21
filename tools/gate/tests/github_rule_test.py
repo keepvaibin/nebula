@@ -94,9 +94,9 @@ class Clock:
         self.slept += 1
 
 
-def make(runs_of, rerun=None, planned=(), clock=None, notes=None):
+def make(runs_of, rerun=None, planned=(), clock=None, notes=None, said=None):
     clock = clock or Clock()
-    return rule.Rule("abc", CLASSES, runs_of, rerun, planned, clock=clock, say=lambda text: None,
+    return rule.Rule("abc", CLASSES, runs_of, rerun, planned, clock=clock, say=(said.append if said is not None else (lambda text: None)),
                      note=(notes.append if notes is not None else None)), clock
 
 
@@ -158,6 +158,49 @@ class Rule(unittest.TestCase):
         self.assertIn("github_jobs.tsv", r.warnings()[0][1])
         r2, _ = make(lambda sha: [run(1, "gate/x", all_green() + [job("Mac (Intel)", conclusion="failure")])])
         self.assertIn("Mac (Intel) failure", r2.red_before(), "a red unknown job refuses like a must job")
+
+    def test_the_wait_prints_a_line_when_the_text_changes_and_every_five_minutes(self):
+        waiting = [job(n) for n in CLASSES if n != "Mac"] + [running("Mac")]
+        answers = [[run(1, "gate/x", waiting)]] * 12 + [[run(1, "gate/x", all_green())]]
+        notes, said = [], []
+        r, c = make(sequence(*answers), notes=notes, said=said)
+        kind, detail, _ = r.wait(120, sleep=c.sleep)
+        self.assertEqual((kind, c.slept), ("pass", 12), detail)
+        self.assertEqual(len(notes), 13, "github.log has a line for every reading")
+        shown = [s[len("gate.py: GitHub: "):] for s in said if s.startswith("gate.py: GitHub: ")]
+        self.assertEqual(len(shown), 4, "the first reading, one every five minutes while it does not change (minutes 5 and 10), "
+                                        "and the change at minute 12: %s" % said)
+        self.assertEqual(shown[0], notes[0])
+        self.assertEqual(shown[-1], notes[-1], "the same words as github.log")
+        self.assertIn("not finished: Mac", shown[0])
+        self.assertEqual(shown[-1], "%d must jobs green" % len(MUSTS))
+
+    def test_a_changing_text_is_printed_every_time(self):
+        a = [job(n) for n in CLASSES if n not in ("Mac", "Linux")] + [running("Mac"), running("Linux")]
+        b = [job(n) for n in CLASSES if n != "Mac"] + [running("Mac")]
+        said = []
+        r, c = make(sequence([run(1, "gate/x", a)], [run(1, "gate/x", b)], [run(1, "gate/x", all_green())]), said=said)
+        r.wait(120, sleep=c.sleep)
+        self.assertEqual(len([s for s in said if s.startswith("gate.py: GitHub: ")]), 3, said)
+
+    def test_an_unknown_job_is_named_with_the_way_out_at_the_first_reading_that_sees_it(self):
+        jobs = all_green() + [running("Mac (Intel)")]
+        notes, said = [], []
+        r, c = make(sequence(*([[run(1, "gate/x", jobs)]] * 3 + [[run(1, "gate/x", all_green() + [job("Mac (Intel)")])]])), notes=notes, said=said)
+        r.wait(120, sleep=c.sleep)
+        told = [s for s in said if "Mac (Intel)" in s and "github_jobs.tsv" in s]
+        self.assertEqual(len(told), 1, "once, however many readings see it: %s" % said)
+        self.assertEqual(said.index(told[0]), 0, "before the first reading's own line")
+        self.assertIn("Add a line for it to that file", told[0], "it says what to do")
+        self.assertEqual(len([n for n in notes if "Mac (Intel)" in n and "github_jobs.tsv" in n]), 1, "github.log has it once")
+        self.assertEqual(told[0], "gate.py: " + notes[0], "the same words on the screen and in github.log")
+        self.assertEqual(r.warnings()[0][1], notes[0], "and the end of the run's row")
+
+    def test_an_unknown_job_is_named_by_the_check_before_the_start_too(self):
+        said = []
+        r, _ = make(lambda sha: [run(1, "gate/x", all_green() + [job("Mac (Intel)")])], said=said)
+        r.red_before()
+        self.assertEqual(len([s for s in said if "Mac (Intel)" in s]), 1, said)
 
     def test_skipped_matrix_name_is_no_job(self):
         # The real reading of commit 5bfafecc4: the candidate's 12 jobs green, the branch push's Windows, Windows game
