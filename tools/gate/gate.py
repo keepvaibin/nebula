@@ -49,7 +49,7 @@ data list | adopt | path DISC | make DISC | clean: the game data by key (tools/g
 
 The machine (tools/gate/machine.py, docs/plan/04-GATE-AND-MAIN.md section 15): the gate is in one Windows job object that ends everything
 it started when it ends. A run that starts the game first checks the machine (machine_ready): leftover game processes ended, drive D:
-has the room the level needs (old run folders thinned first), the tablet answers and holds this tree's test data, the graphics card and
+has the room the level needs (old run folders thinned first), an answering tablet holds this tree's test data (a tablet away is owed, not a stop), the graphics card and
 the PC have room for at least one game copy. What cannot be met is env (a row machine/<point>); the run plays as many game copies at
 once as fit (70% of the card's free memory and of the PC's, at most what the lanes ask for) and says "card shared" when other programs
 hold more than half the card.
@@ -791,6 +791,7 @@ def build_windows(g, root=None, bin_dir=None, sanitize="", coverage=False):
     root, bin_dir = root or g.args.build_root, bin_dir or g.bin
 
     def fn(log):
+        machine.ensure_sccache_server()     # the compiler cache's server, out of the run's job (shared with other builds)
         seed = ["-SeedFrom", g.args.seed_from] if g.args.seed_from else []
         # The build refuses no data any more: with --pak it names that pak, else it names none and the data check (data/RMGE01)
         # asks for the right data by key and writes the bin folder's pak.path.
@@ -2335,11 +2336,11 @@ class GateProbes(machine.Probes):
 def machine_ready(g, asked, tablet, soak=0, probes=None, learned=None):
     """Before a run that starts the game: can this machine carry it? In this order, each a row of kind env with one plain line when
     it cannot be met (the run then ends not judged; nothing else runs): leftover game processes ended; drive D: has the room the
-    level needs, old run folders thinned first; the tablet answers, is authorised and holds this tree's test data (pushed again
-    when it does not); the graphics card and the PC's memory have room for at least one copy of the game (waited for up to four
+    level needs, old run folders thinned first; the tablet, when it answers, holds this tree's test data (pushed again when it does
+    not; a tablet that does not answer is not a stop, its part is owed); the graphics card and the PC's memory have room for at least one copy of the game (waited for up to four
     hours). Sets how many copies run at once (g.slots: what fits, at most `asked`, a place kept for the soak), and starts the
     thread that reads the game processes' use of the card. What it did is in g.machine_notes, for the run's summary. True when the
-    run goes on."""
+    run goes on. A tablet that does not answer or is not authorised is no point of these: its part is owed (tablet_part)."""
     import prune_runs
     probes = probes or GateProbes()
     notes = g.machine_notes
@@ -2387,14 +2388,18 @@ def machine_ready(g, asked, tablet, soak=0, probes=None, learned=None):
         probes.adb_server(g)
         device = probes.tablet(g)
         state = device.state()
-        if state == "unauthorized":
-            return fail("machine/tablet", "the tablet %s is not authorised for this computer: unlock it and accept the USB "
-                        "debugging question" % g.args.tablet)
         if state != "device":
-            return fail("machine/tablet", "the tablet %s does not answer adb (%s)" % (
-                g.args.tablet, "not listed: not plugged in, or its USB is off" if state == "absent" else state))
-        want = probes.tree_store_version()
-        installed, have = device.data()
+            # Not an env stop: the tablet may be away for a day and the run is judged without it. Its part is owed by the existing
+            # mechanism (tablet_part: the tablet does not answer adb).
+            notes.append("the tablet %s %s: its part is owed and the rest of the run is judged" % (
+                g.args.tablet, "is not authorised for this computer (unlock it and accept the USB debugging question)"
+                if state == "unauthorized" else "does not answer adb (%s)" % (
+                    "not listed: not plugged in, or its USB is off" if state == "absent" else state)))
+            device = None
+        installed, have, want = False, None, None
+        if device is not None:
+            want = probes.tree_store_version()
+            installed, have = device.data()
         if installed and have != want:
             pak, problem = probes.data_pak(g, want)
             if problem:
@@ -2409,7 +2414,7 @@ def machine_ready(g, asked, tablet, soak=0, probes=None, learned=None):
                     return fail("machine/tablet", "the test data on the tablet is %s, this tree's is store version %d, and pushing "
                                 "it again failed: %s" % (on_it, want, said))
                 notes.append("the test data on the tablet was %s, this tree's is %d: pushed again" % (on_it, want))
-        elif not installed:
+        elif device is not None and not installed:
             notes.append("the test app is not on the tablet: the run installs it and pushes the data")
 
     # 4. The graphics card and the PC's memory.
