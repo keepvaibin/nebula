@@ -8,6 +8,7 @@
 # pushed and the move waits for the `must` jobs of tools/gate/github_jobs.tsv. A landing whose plan has no `github` (documents, tools,
 # test data, pictures) pushes no candidate and waits for nothing: main moves when its own checks pass. A file no row names makes
 # the run full, and the full run has it.
+# `cmake/unit_tests.cmake` is the list of the unit-test programs: the root CMakeLists.txt and tests/unit/CMakeLists.txt include it, the Android build does not.
 #
 # `android` (the Android build only; `tablet12` is the tablet's part) is on every row whose folders platform/android/build_apk.ps1
 # compiles the app from: the game modules (native/), the SDL host and its renderer (platform/sdl, whose CMake takes runtime/src and
@@ -47,6 +48,7 @@ tests/engine/**	repo,build,engine3
 tests/android/**	repo,android,tablet12,github
 tests/replays/**	repo,build,tour1
 tests/unit/**	repo,build,unit,github
+cmake/unit_tests.cmake	repo,build,unit,github
 tests/pictures/**	repo
 tests/measure/**	repo
 tests/pace/**	repo

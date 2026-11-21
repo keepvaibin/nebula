@@ -63,6 +63,8 @@ class Rows(unittest.TestCase):
             (("tests/engine/boot/test.json",), ["repo", "build", "engine3"]),
             (("tests/android/walk/test.json",), ["repo", "android", "tablet12", "github"]),
             (("tests/replays/stage.txt",), ["repo", "build", "tour1"]),
+            # The list of the unit-test programs: the unit tests and the build, no game group, not full (no Android build).
+            (("cmake/unit_tests.cmake",), ["repo", "build", "unit", "github"]),
             (("tests/mods/anim/test.json",), ["repo"]),
             (("tools/test_driver/luma_test/luma_test.c",), ["repo", "tools", "build", "unit", "start", "engine1", "tour1", "android", "github"]),
             (("tools/lumacore/luma_test.py",), ["repo", "tools", "engine1", "tour1"]),
