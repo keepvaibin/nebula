@@ -98,9 +98,10 @@ def drive(test, world, scope_text="repo,github", checks=None, extra=(), allow_gi
     tmp = pathlib.Path(tempfile.mkdtemp())
     test.addCleanup(lambda: __import__("shutil").rmtree(tmp, ignore_errors=True))
     names = ("fault_writer", "git", "git_ok", "read_lists", "run_checks", "push_checks", "push_candidate", "delete_candidate", "commit_runs",
-             "gh_rerun", "gh_log", "move_main", "approve_pictures", "start_measure", "start_long", "GITHUB_SLEEP", "GITHUB_CLOCK",
+             "gh_rerun", "gh_log", "move_main", "approve_pictures", "start_long", "GITHUB_SLEEP", "GITHUB_CLOCK",
              "WATCH_SECONDS", "GithubWatch", "FLAKES", "SET_ASIDE", "BASE_BINS", "make_rule")
     saved = {n: getattr(gate, n) for n in names}
+    measure_before = gate.__dict__.get("start_measure", None)
     saved_keep = kinds.keep_base
 
     def fake_git(*a):
@@ -143,7 +144,9 @@ def drive(test, world, scope_text="repo,github", checks=None, extra=(), allow_gi
         gate.gh_rerun, gate.gh_log = world.rerun, world.gh_log
         gate.move_main = move_main
         gate.approve_pictures = lambda g, commit, say=print: (commit, None)
-        gate.start_measure = lambda sha, g, args: "no measure in a test"
+        # A move starts no speed measure (package T13c): a stand-in that records a call, which the tests check is none.
+        gate.start_measure = lambda sha, g, args: test.measure_calls.append(sha) or "a measure was started"
+        test.measure_calls = []
         gate.start_long = lambda sha, args: (None, "no long run in a test")
         kinds.keep_base = lambda *a, **k: None
         gate.GITHUB_SLEEP, gate.GITHUB_CLOCK, gate.WATCH_SECONDS = world.sleep, (lambda: world.now), 0.02
@@ -164,9 +167,17 @@ def drive(test, world, scope_text="repo,github", checks=None, extra=(), allow_gi
         for n, v in saved.items():
             setattr(gate, n, v)
         kinds.keep_base = saved_keep
+        if measure_before is None:
+            gate.__dict__.pop("start_measure", None)
+        else:
+            gate.start_measure = measure_before
         gate.STOPPED.clear()
         gate.STOPPED_WHY[0] = ""
     return code, out.getvalue().splitlines(), tmp / "work"
+
+
+def test_measures(test):
+    return test.measure_calls
 
 
 def kind_lines(lines):
@@ -181,6 +192,8 @@ class Rule(unittest.TestCase):
         self.assertEqual((world.pushed, world.deleted, world.reads, world.slept), ([], [], 0, 0))
         self.assertEqual(world.moved, [SHA], "main moves when its own checks pass")
         self.assertIn("MOVED " + SHA, lines)
+        self.assertEqual(test_measures(self), [], "a move starts no speed measure")
+        self.assertFalse(any("measure" in l.lower() for l in lines), "and says nothing of one: %s" % lines)
         self.assertEqual(lines[-1], "VERDICT pass")
 
     def test_every_must_green_moves(self):

@@ -10,7 +10,7 @@
   job_failure_is_one_tool_line     where the job cannot be made or joined the run goes on and one `tool` line says so; where
                                   the leave flag is refused the program is started without it, with one line
   nothing_off_windows              not on Windows nothing is done and nothing is said
-  detached_starts_leave_the_job    the speed measure's and the nightly run's detached starts carry the flag, and no detached
+  detached_starts_leave_the_job    the nightly run's detached start carries the flag, and no detached
                                   start in the tools is made without start_outliving
   adb_server_started_by_the_gate   no server running: the gate starts it with the flag (an adb program is never run here: a stand-in
                                   is); a server running: nothing is started
@@ -222,10 +222,6 @@ class JobTests(unittest.TestCase):
             t = pathlib.Path(tmp)
             args = gate.parser().parse_args(["--main", "--tablet", "T", "--work", str(t), "--gate-lock", str(t / "gate.lock"),
                                              "--long-lock", str(t / "long.lock"), "--board", "", "--status", ""])
-            g = gate.Gate(args, dry=True)
-            (t / "bin").mkdir()
-            g.bin = str(t / "bin")
-            gate.start_measure("a" * 40, g, args, popen=popen, bins=t / "bins", alive=lambda pid: False)
             tree = t / "Nebula-long"
             tree.mkdir()
             sha = "b" * 40
@@ -238,7 +234,7 @@ class JobTests(unittest.TestCase):
                 gate.long_due, gate.long_tree_at = saved
         flagged = [kw.get("creationflags", 0) & machine.CREATE_BREAKAWAY_FROM_JOB for c, kw in seen]
         if machine.NT:
-            self.assertEqual(len(seen), 2, "the measure and the long run were started")
+            self.assertEqual(len(seen), 1, "the long run was started")
             self.assertTrue(all(flagged), "each carries the leave-the-job flag: %s" % [hex(kw.get("creationflags", 0)) for c, kw in seen])
         # No detached start (DETACHED_PROCESS | NEW_PROCESS_GROUP) in the tools goes without start_outliving.
         bad = []

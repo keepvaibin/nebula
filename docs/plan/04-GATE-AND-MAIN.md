@@ -319,7 +319,7 @@ first move.
 
 ## 14. Who starts the long run
 
-Whoever moves main starts it, if none is running and the last one started six hours ago or more. One at a time, under
+Whoever moves main starts it, if none is running and the last one started twenty hours ago or more. A move starts no speed measure: the measure is a part of the nightly run only. One at a time, under
 `D:\NebulaWork\plan\long.lock`. It takes `tablet.lock` for its tablet part and `measure.lock` for its last 15 minutes.
 A main gate may run beside it; they share the tablet through its lock.
 
@@ -376,8 +376,7 @@ under 300 GB free.
 
 **Locks.** One gate run at a time: `gate.lock` is the queue runner's (and a run's by hand). An agent's own build and unit tests in
 its own work folder take no lock: no verdict depends on the clock, and the speed measure runs at night under `measure.lock`.
-The old rule that own work takes the gate lock, and its helper `lockrun.py`, are gone. The measure's build copies are kept while a
-measure uses them.
+The old rule that own work takes the gate lock, and its helper `lockrun.py`, are gone.
 
 **The machine (package T5).** A run that starts the game first asks the machine whether it can carry the run (`machine_ready` in
 `gate.py`, the readings in `tools/gate/machine.py`); a run of documents, builds and tools only never asks. The points come in
@@ -403,7 +402,7 @@ this order, and the first of points 1, 2 and 4 that cannot be met, or a failed p
    minute, says so every ten, and after four hours ends the run as ENV.
 
 The gate puts itself in one Windows job object that ends everything in it when the gate ends or is killed, so every program a run
-starts, and theirs, goes with it. A program that must outlive the run (the play route measure, the long run a move starts, the
+starts, and theirs, goes with it. A program that must outlive the run (the long run a move starts, the
 tablet's adb server) is started with the leave-the-job flag (`machine.start_outliving`). So are the servers that other builds
 share: the gate starts the adb server before its first adb call and the compiler cache's server (sccache, port 4227, the build
 script's settings) before its Windows build, when none runs, so neither is ever inside a run's job. The Android build calls Gradle

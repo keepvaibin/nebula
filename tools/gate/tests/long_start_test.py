@@ -3,12 +3,12 @@
 python -X utf8 -I tools/gate/tests/long_start_test.py
 
 In a scratch repository (a tree and a remote), with a stand-in for starting the process:
-- a move with no long run in 6 hours makes the long run's tree (git worktree add, detached at the moved commit) and
+- a move with no long run in 20 hours makes the long run's tree (git worktree add, detached at the moved commit) and
   starts gate.py --long of that tree there with the mover's folders, locks and tablet, its output in
   <work>/long-<sha>.log, and writes long-started.txt;
 - a second move 2 hours later starts none (the run's history line comes only at its end), nor does one while the long
   lock is held by a live process; one held by an ended process does not stop it;
-- a move 7 hours later brings the same tree to the new commit, detached, reset and cleaned (a file changed and a file
+- a move 19 hours later starts none, one 21 hours later brings the same tree to the new commit, detached, reset and cleaned (a file changed and a file
   added there by hand are gone), and starts the run again;
 - a history line of a long run 3 hours ago stops a start.
 Exit 0 when every case holds.
@@ -82,12 +82,15 @@ if start is not None:
 
         c2 = commit("c2")
         cmd, what = start(c2, args, tree=long_tree, source=source, popen=popen, now=now + datetime.timedelta(hours=2))
-        check(cmd is None and len(started) == 1 and "within 6 hours" in what, "a second move 2 hours later starts none: %s" % what)
+        check(cmd is None and len(started) == 1 and "no long run is due: the last one started less than 20 hours ago" in what,
+              "a second move 2 hours later starts none: %s" % what)
+        cmd, what = start(c2, args, tree=long_tree, source=source, popen=popen, now=now + datetime.timedelta(hours=19))
+        check(cmd is None and len(started) == 1 and "less than 20 hours ago" in what, "a move 19 hours later starts none: %s" % what)
 
         lock = t / "long.lock"
         lock.mkdir()
         (lock / "holder.txt").write_text("long gate of Nebula-long@x pid %d" % os.getpid(), encoding="utf-8")
-        later = now + datetime.timedelta(hours=7)
+        later = now + datetime.timedelta(hours=21)
         cmd, what = start(c2, args, tree=long_tree, source=source, popen=popen, now=later)
         check(cmd is None and "long lock is held" in what, "a held long lock stops a start: %s" % what)
         (lock / "holder.txt").write_text("long gate of Nebula-long@x pid 999999", encoding="utf-8")
@@ -97,7 +100,7 @@ if start is not None:
         head = sh(git, "-C", str(long_tree), "rev-parse", "HEAD").stdout.strip()
         check(cmd is not None and len(started) == 2 and head == c2
               and (long_tree / "f.txt").read_text(encoding="utf-8") == "c2" and not (long_tree / "extra.txt").exists(),
-              "a move 7 hours later, the lock's process ended, brings the tree to the new commit, reset and cleaned: %s" % what)
+              "a move 21 hours later, the lock's process ended, brings the tree to the new commit, reset and cleaned: %s" % what)
 
         (work / "long-started.txt").unlink()
         history = work / "history.tsv"
@@ -107,46 +110,22 @@ if start is not None:
         check(cmd is None and len(started) == 2, "a long run in history 3 hours ago stops a start: %s" % what)
         sh(git, "-C", str(source), "worktree", "remove", "--force", str(long_tree))
 
-# After a move, the measure: the moved build copied (two copies before it kept), then measure.py started detached on
-# the copy with the gate lock, the board and the tablet (07-BASE-FIRST stage 1 item 1).
+# The play route measure's command (the long run's measure part, N-1043 and P-321): the PC's renderers, the tablet with the
+# test app and the pak when the gate has built the app. No measure is started by a move (package T13c): there is no start_measure.
 with tempfile.TemporaryDirectory() as m:
     m = pathlib.Path(m)
-    (m / "bins").mkdir()
-    (m / "bins" / "Nebula.exe").write_text("x", encoding="utf-8")
-    (m / "android" / "test-bin").mkdir(parents=True)
-    (m / "android" / "test-bin" / "libgame.so").write_text("y", encoding="utf-8")
-    (m / "android" / "Nebula.apk").write_text("z", encoding="utf-8")
-    store = m / "measure-bins"
-    for i, old in enumerate(("aaa", "bbb", "ccc")):
-        (store / old).mkdir(parents=True)
-        os.utime(store / old, (1000 + i, 1000 + i))
-    g = type("G", (), {"bin": str(m / "bins"), "android_bin": str(m / "android" / "test-bin"), "name": "run-9"})()
     margs = type("A", (), {"work": str(m / "work"), "paks": "P", "who": "Agent 1", "tablet": "SERIAL",
-                           "tablet_lock": "T.lock", "gate_lock": "G.lock", "board": "B.md", "build_root": str(m),
-                           "pak": "US.pak"})()
-    (m / "work").mkdir()
-    started = []
-    what = gate.start_measure("0123456789abcdef", g, margs, popen=lambda cmd, **k: started.append(cmd), bins=store)
-    copy = store / "012345678"
-    check(len(started) == 1 and (copy / "bin" / "Nebula.exe").is_file() and (copy / "android" / "libgame.so").is_file()
-          and (copy / "Nebula.apk").is_file(), "the build, the Android bins and the test app copied, one start: %s %s"
-          % (what, started))
-    cmd = started[0] if started else []
-    check(str(gate.MEASURE) in cmd and cmd[cmd.index("--bin") + 1] == str(copy / "bin")
-          and cmd[cmd.index("--gate-lock") + 1] == "G.lock" and cmd[cmd.index("--board") + 1] == "B.md"
+                           "tablet_lock": "T.lock", "pak": "US.pak"})()
+    cmd = gate.measure_command("0123456789abcdef", m / "bin", m / "android", m / "Nebula.apk", m / "w", margs)
+    check(str(gate.MEASURE) in cmd and cmd[cmd.index("--bin") + 1] == str(m / "bin")
           and cmd[cmd.index("--runs") + 1].endswith(",tablet") and cmd[cmd.index("--device") + 1] == "SERIAL",
-          "measure.py on the copy, with the gate lock, the board and the tablet: %s" % cmd)
-    # P-321: the tablet's run installs the copied test app with the gate's pak, inside the tablet's lock.
-    check("--apk" in cmd and cmd[cmd.index("--apk") + 1] == str(copy / "Nebula.apk") and cmd[cmd.index("--pak") + 1]
-          == "US.pak" and cmd[cmd.index("--device-lock") + 1] == "T.lock",
-          "the test app and the pak handed to the tablet's run: %s" % cmd)
-    (m / "android" / "Nebula.apk").unlink()
-    started.clear()
-    gate.start_measure("fedcba9876543210", g, margs, popen=lambda cmd, **k: started.append(cmd), bins=store)
-    cmd = started[0] if started else []
-    check(cmd and not cmd[cmd.index("--runs") + 1].endswith(",tablet") and "--device" not in cmd,
+          "measure.py on the build, with the tablet: %s" % cmd)
+    check(cmd[cmd.index("--apk") + 1] == str(m / "Nebula.apk") and cmd[cmd.index("--pak") + 1] == "US.pak"
+          and cmd[cmd.index("--device-lock") + 1] == "T.lock", "the test app and the pak handed to the tablet's run: %s" % cmd)
+    cmd = gate.measure_command("fedcba9876543210", m / "bin", m / "android", None, m / "w", margs)
+    check(not cmd[cmd.index("--runs") + 1].endswith(",tablet") and "--device" not in cmd,
           "no test app built: the tablet is left out: %s" % cmd)
-    check(sorted(p.name for p in store.iterdir()) == ["012345678", "ccc", "fedcba987"], "the two copies before it kept")
+check(not hasattr(gate, "start_measure"), "a move starts no speed measure: gate.start_measure is gone")
 
 if failures:
     print("long_start_test.py: FAILED:\n  " + "\n  ".join(failures))
