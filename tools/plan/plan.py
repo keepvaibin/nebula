@@ -1,6 +1,7 @@
 """plan.py: the step tool of the native plan (package T13). The coding agent reads, codes and proves; this says what is next.
 
-    python -X utf8 -I tools/plan/plan.py next | status | page | rows [ID] | start ID | land ID [--github-again] | blocked ID "WHY"
+    python -X utf8 -I tools/plan/plan.py next | status | page | card ID | rows [ID] | start ID | land ID [--github-again] | blocked ID "WHY"
+                                         | owed ID "TEXT"
                                          | claim PACKAGE [--take-stale] | tool "TEXT" | toolfault --last --could-not "TEXT"
                                          | repair add --source S --kind K --check C ... | repair list
     (next, start, land, blocked, claim, tool, toolfault and status take --agent 1|2; 1 is the default; ID is a step, or for
@@ -38,7 +39,14 @@ start    One work folder for each agent, kept: agent 1 works in `D:/NebulaWork/M
          `started`: one thing at a time); then it fetches, makes the branch `native/<id>` from `origin/main` in that
          folder, sets the step `started` and claims its package for the agent. Also refuses a step whose needs are not
          landed, a package another agent holds, and for agent 2 a package that is not on its list.
-land     Refuses unless every ledger row the card closes whole is `fixed` with a proof that names a test, a search or a
+land     Can be run again at any time and never resets the work folder. The tool's own commit (`Plan: step X landed`, only
+         steps.tsv) is made once: a tip that already is it is handed over as it is, and fix commits on top of one get a second
+         that names the newer code commit. A landing record (live folder, `landing-<agent>.tsv`) stands while the gate has the
+         branch: `land` then joins ("joined the landing of X, in the queue since HH:MM"), `status` and `next` begin with
+         "LANDING RUNNING: ...", `start` refuses. When origin/main already holds the step: "LANDED (found on main)". A branch that
+         changes tests/replays/ lands only if the card says the replay changes, and a commit message says "replay reference".
+         The extra checks of docs/plan/native/step-checks.tsv go to the gate as --also. Otherwise:
+         Refuses unless every ledger row the card closes whole is `fixed` with a proof that names a test, a search or a
          measure, and every row it only advances has a dated note written by this branch; checks the file and line
          references in the changed documents and the commit messages (tools/verify/doc_refs.py); then hands the branch
          to the gate: ONE call, `gate.py land native/<id>` (the landing queue of tools/gate/landing.py: it runs the checks
@@ -68,6 +76,9 @@ page     Writes the progress files into the live folder (page.py), from steps.ts
          Then, when STATUS.md changed, one commit that holds exactly STATUS.md goes to origin as `progress` (a branch
          with no history in common with main; plumbing commands in the main repository, no work folder touched;
          message `Progress: N of M steps landed`). A failed push is one warning line. Nothing else is ever pushed.
+card     `card ID`: any step's card, its package's rows and the checks it needs (a repair's card); changes nothing, no --agent.
+owed     `owed ID "TEXT"`: what only a person or other hardware can check, appended to owed.tsv (live folder) and listed by
+         status, STATUS.md and the page; it blocks nothing.
 rows     What a card's "Rows." line means (closes whole / advances), for one step or all of them.
 repair   `repair add --source nightly|stress|measure --kind fail|stress|worse --check CHECK [--renderer R] [--step ID
          --commit SHA] --evidence FOLDER [--row ROW] --note "TEXT"` writes a line of repairs.tsv (the live folder) and prints
@@ -122,6 +133,24 @@ LIVE = "D:/NebulaWork/plan/native"       # the live state: claims, started and b
 AGENT2_LIST = ("G6", "G7", "G8", "G9", "G1", "R10", "R9", "G4")   # the helper's packages, in this order, and no others
 # Two groups of steps that must not be in work at the same time (both change the renderers' frame and present code).
 PAIRS = ((("G2a",), ("R7",)),)
+
+QUEUE_FILE = str(landing.QUEUE)          # the gate's landing queue (a landing record is read against it); tests give their own
+alive = landing.process_alive            # whether a process of this id runs; tests put their own in here
+JOIN_POLL = 5.0                          # seconds between two looks while a landing that is no longer in the queue is finishing
+STATE_COMMIT = "Plan: step %s landed"    # the subject of the tool's own commit: the step's row is `landed`, with the code's commit
+
+# The extra checks a step's proof asks for (docs/plan/native/step-checks.tsv): the nightly's parts, which `gate.py land --also` takes.
+STEP_CHECKS_FILE = "step-checks.tsv"
+ALSO_CHECKS = ("stress", "sanitizer/tour", "soak", "replays/software")
+
+# A replay reference (tests/replays/*.tsv) changes only where the card says so (T14 item 5).
+REPLAY_DIR = "tests/replays/"
+REPLAY_ALLOWED = re.compile(r"re-?record|recorded again|replay changes|new reference", re.I)
+REPLAY_REFUSAL = "the replay differs and this step's card does not say it may: the change altered the game; find why"
+REPLAY_WORDS = "replay reference"
+# How a replay reference is recorded: step_hash.py's `record` takes the work folder of a luma_test.py run in which the tour played
+# every recorded stop with the hash on, and writes one tests/replays/<stop>.tsv for each. T10 proves this command by a real run.
+REPLAY_RECORD = "python -X utf8 -I tools/verify/step_hash.py record <work folder of the tour run> --out tests/replays"
 
 STEP_COLUMNS = ["order", "step", "package", "title", "package_needs", "card_file", "state", "commit"]
 STATES = ("open", "started", "blocked", "landed")
@@ -192,19 +221,28 @@ def now():
 atomic_write = lv.atomic_write
 
 
-# The steps `origin/main`'s steps.tsv has as landed (step -> commit), filled by fetch_main_landed for the commands that read
-# it; empty otherwise, so a read from any other caller is what the tree's file says.
+# The steps `origin/main`'s steps.tsv has as landed (step -> commit), filled for the commands that read it. MAIN_READ is True when
+# that file could be read (after the fetch, or from the last fetched copy): then it alone says what is landed. When it could
+# not be read at all (a tree with no such ref) both are empty and the tree's own file is believed.
 MAIN_LANDED = {}
+MAIN_READ = []
 
 
 def read_steps(tree, live=None):
-    """The steps, in file order, with their state: what `steps.tsv` says (`open` or `landed`, with the commit), a step
-    `origin/main` has as landed (MAIN_LANDED) is landed too, and for an open step the live state (`started`, `blocked`, with
-    `agent` and `reason`). Every row has `agent` and `reason`."""
+    """The steps, in file order, with their state: `landed` (with the commit) when `origin/main`'s steps.tsv says so (MAIN_LANDED);
+    a step that the tree's own steps.tsv has as landed and `origin/main` does not is one whose landing has not passed, so it is
+    not landed: it is open, and the live state makes it `started`. Only when `origin/main` could not be read at all is the
+    tree's file believed. For an open step the live state (`started`, `blocked`, with `agent` and `reason`). Every row has `agent`
+    and `reason`."""
     steps = read_base(tree)
     local = lv.read_state(live_dir(live))
     for s in steps:
-        if s["state"] == "open" and s["step"] in MAIN_LANDED:
+        if MAIN_READ:
+            if s["step"] in MAIN_LANDED:
+                s["state"], s["commit"] = "landed", MAIN_LANDED[s["step"]]
+            elif s["state"] == "landed":
+                s["state"], s["commit"] = "open", ""
+        elif s["state"] == "open" and s["step"] in MAIN_LANDED:
             s["state"], s["commit"] = "landed", MAIN_LANDED[s["step"]]
     for s in steps:
         s["agent"], s["reason"] = "", ""
@@ -693,6 +731,44 @@ def card_paths(card, tree):
     return out
 
 
+# ---- the extra checks a step's proof asks for ----------------------------------------------------------------------
+
+def read_step_checks(tree):
+    """{step: [(check, serves)]} from docs/plan/native/step-checks.tsv (columns step, check, serves). A check that is not one of
+    ALSO_CHECKS is refused (ValueError): the gate takes no other name as an `--also` of a step. A tree with no such file has none."""
+    path = native(tree) / STEP_CHECKS_FILE
+    out = {}
+    if not path.is_file():
+        return out
+    lines = path.read_text(encoding="utf-8").splitlines()
+    if not lines or lines[0].split("\t") != ["step", "check", "serves"]:
+        raise ValueError("%s: the first line must be step, check, serves separated by tabs" % path)
+    for n, line in enumerate(lines[1:], 2):
+        if not line.strip():
+            continue
+        cells = line.split("\t")
+        if len(cells) != 3 or not all(c.strip() for c in cells):
+            raise ValueError("%s:%d: want step, check and serves" % (path, n))
+        if cells[1] not in ALSO_CHECKS:
+            raise ValueError("%s:%d: check %r is none of %s" % (path, n, cells[1], ", ".join(ALSO_CHECKS)))
+        out.setdefault(cells[0], []).append((cells[1], cells[2]))
+    return out
+
+
+def also_names(tree, step_id):
+    """The extra checks of a step, each once, in the table's order."""
+    names = []
+    for check, _ in read_step_checks(tree).get(step_id, []):
+        if check not in names:
+            names.append(check)
+    return names
+
+
+def also_lines(tree, step_id):
+    return ["and, because this step's proof asks for it: %s (%s)" % (check, serves)
+            for check, serves in read_step_checks(tree).get(step_id, [])]
+
+
 # ---- the gate ------------------------------------------------------------------------------------------------
 
 GATE_ROW = re.compile(r"^(\S+)\s+(pass|known|planned|owed|FAIL|TOOL|ENV|FLAKE|NEW)\s+(\d+(?:\.\d+)?) s\s*(.*)$")
@@ -780,16 +856,16 @@ def run_gate(folder, args, out=None, branch=""):
     return read_land_output(lines, code, branch)
 
 
-def land_with_gate(folder, branch, tablet=TABLET, tablet_wait=TABLET_WAIT, extra=(), out=None):
+def land_with_gate(folder, branch, tablet=TABLET, tablet_wait=TABLET_WAIT, extra=(), out=None, push=True):
     """THE LANDING STEP: the branch pushed (a backup on origin, and the one the gate's queue reads), then ONE call of
     `gate.py land` from the step's work folder, which queues it, runs the checks its changed paths need, and moves main.
     Reads the gate's KIND and VERDICT lines and its exit code (0 landed, 1 fail, 2 not judged, 3 the same failure three
-    times). `extra`: more options for the gate (--agent, --live, --failures)."""
+    times). `extra`: more options for the gate (--agent, --live, --failures, --also). `push` False (a landing that is joined: the gate
+    has the branch in its queue): nothing is pushed."""
     out = out or sys.stdout
-    # --force-with-lease: a failed try took its state commit off the branch again (cmd_land), so the next push is not a
-    # fast-forward of what origin has. The branch is this step's own.
-    pushed = git(folder, "push", "--force-with-lease", "origin", branch)
-    if pushed.returncode != 0:
+    # --force-with-lease: the branch is this step's own, and a try that went before may have left origin's copy of it behind.
+    pushed = git(folder, "push", "--force-with-lease", "origin", branch) if push else None
+    if pushed is not None and pushed.returncode != 0:
         return Verdict(False, [], [("git/push", "FAIL", (pushed.stderr.strip().splitlines() or ["push refused"])[-1])])
     return run_gate(folder, ["land", branch, "--tablet", tablet, "--tablet-wait", str(tablet_wait), *extra], out, branch)
 
@@ -800,6 +876,8 @@ LAND = land_with_gate            # tests put their own in here
 def gate_options(a, agent):
     """The options `gate.py land` gets from this tool: who asks, where the faults and the failures are kept."""
     options = ["--agent", agent, "--live", live_dir(a.live).as_posix(), "--failures", str(a.failures)]
+    if str(getattr(a, "queue_file", QUEUE_FILE)) != QUEUE_FILE:
+        options += ["--queue-file", str(a.queue_file)]      # a queue of its own (a test); the gate's own is the default
     if getattr(a, "github_again", False):
         options.append("--github-again")      # a red GitHub job is run again once before the landing judges (gate.py --github-again)
     return options
@@ -881,16 +959,19 @@ def read_set_aside(live):
     return out
 
 
-def status_text(tree, work_root=WORK_ROOT, at=None, live=None):
+def status_text(tree, work_root=WORK_ROOT, at=None, live=None, agent="1", queue_file=None):
     steps = read_steps(tree, live)
     by = {s: [x for x in steps if x["state"] == s] for s in STATES}
     reasons = blocked_reasons(tree)
     at = at or now()
     claims = lv.read_claims(live_dir(live))
     stale = stale_of(tree, claims, at)
-    out = ["# Native plan: status", "", "Written %s by plan.py status. Run it at every start and after every context "
-           "compaction." % at.isoformat(timespec="minutes"), "",
-           "Steps landed: %d of %d." % (len(by["landed"]), len(steps)), ""]
+    out = ["# Native plan: status", ""]
+    running = active_landing(live, agent, queue_file)
+    if running:
+        out += [landing_running_line(running, agent), ""]
+    out += ["Written %s by plan.py status. Run it at every start and after every context compaction." % at.isoformat(timespec="minutes"),
+            "", "Steps landed: %d of %d." % (len(by["landed"]), len(steps)), ""]
     repairs = lv.read_repairs(live_dir(live))
     state = lv.read_state(live_dir(live))
     working = [r for r in repairs if r["state"] == "started"]
@@ -919,7 +1000,11 @@ def status_text(tree, work_root=WORK_ROOT, at=None, live=None):
     out += ["- %dx %s %s: %s" % (g["count"], g["kind"], g["check"], g["first_error"][:100]) for g in faults[:5]] or ["- none"]
     out += ["", "## Last five landings", ""]
     last = lv.read_landings(live_dir(live))[-5:]
-    out += ["- %s: commit %s, %s, %s s" % (c["step"], c["commit"], c["finished"], c["seconds"]) for c in reversed(last)] or ["- none yet"]
+    out += ["- %s: commit %s, main %s, %s, %s s" % (c["step"], c["commit"], lv.main_of(c), c["finished"], c["seconds"])
+            for c in reversed(last)] or ["- none yet"]
+    owed = lv.read_owed(live_dir(live))
+    out += ["", "## For the owner to check by hand (%d)" % len(owed), ""]
+    out += ["- %s: %s (agent %s, %s)" % (o["step"], " ".join(o["text"].split()), o["agent"], page.minute(o["time"])) for o in owed] or ["- none"]
     choice = choose_next(steps, claims, stale)
     out += ["", "## Next (agent 1)", ""]
     if choice:
@@ -968,7 +1053,8 @@ def page_data(tree, live=None, at=None):
     landings, events = lv.read_landings(d), lv.read_faults(d)
     return (page.make_static(steps),
             page.make_data(steps, landings, lv.read_state(d), claims, stale_of(tree, claims, at), lv.fault_groups(events),
-                           count_flakes(live), lv.stamp(at), read_set_aside(live), lv.repair_order(lv.read_repairs(d))),
+                           count_flakes(live), lv.stamp(at), read_set_aside(live), lv.repair_order(lv.read_repairs(d)),
+                           lv.read_owed(d)),
             landings, events)
 
 
@@ -1078,6 +1164,7 @@ def regenerate(a, say_result=False):
     """After a change of state (and for `page`): every progress file is made again, then the progress branch is pushed when
     STATUS.md changed. Never a reason to fail the command: a failure is one warning line (a failed push is its own line)."""
     try:
+        read_main_quietly(a)
         written = write_page(a.tree, a.live)
     except Exception as e:  # noqa: BLE001 - the files are a report; the command's own result stands without them
         say("plan.py: warning: the progress files were not made again: %s: %s" % (type(e).__name__, " ".join(str(e).split())[:200]))
@@ -1121,30 +1208,56 @@ def own_copy_refusal(agent, tree=None, work_root=None):
     return None
 
 
-def fetch_main_landed(a):
-    """Fetches origin and reads `steps.tsv` of `origin/main` into MAIN_LANDED (what landed there is landed for every agent,
-    wherever it was landed from). When the fetch or the read fails the tree's file alone is used and one line says so."""
+def load_main_landed(tree):
+    """Reads `steps.tsv` of the last fetched `origin/main` (no network) into MAIN_LANDED and MAIN_READ. Returns "" or why not."""
     MAIN_LANDED.clear()
-    why = ""
+    del MAIN_READ[:]
+    try:
+        shown = git(tree, "show", "origin/main:%s/steps.tsv" % NATIVE)
+        if shown.returncode != 0:
+            return "origin/main has no %s/steps.tsv" % NATIVE
+        for s in parse_base(shown.stdout, "origin/main:%s/steps.tsv" % NATIVE):
+            if s["state"] == "landed":
+                MAIN_LANDED[s["step"]] = s["commit"]
+        MAIN_READ.append(True)
+    except (OSError, ValueError, subprocess.SubprocessError) as e:
+        MAIN_LANDED.clear()
+        return "%s: %s" % (type(e).__name__, " ".join(str(e).split())[:150])
+    return ""
+
+
+def fetch_main_landed(a, say_failure=True):
+    """Fetches origin and reads `steps.tsv` of `origin/main` into MAIN_LANDED (what landed there is landed for every agent,
+    wherever it was landed from). When the fetch fails, the last fetched copy is read and one line says so; when `origin/main`
+    cannot be read at all, the tree's file alone is used and one line says so. Done once for each call of the tool."""
+    if getattr(a, "main_fetched", False):
+        return
+    a.main_fetched = True
+    why, fetch_failed = "", ""
     try:
         exe = GIT if pathlib.Path(GIT).exists() else "git"
         got = subprocess.run([exe, "-C", str(a.tree), "fetch", "-q", "origin"], capture_output=True, text=True, encoding="utf-8",
                              errors="replace", timeout=GIT_WAIT)
         if got.returncode != 0:
-            why = "the fetch of origin failed: " + ((got.stderr or got.stdout).strip().splitlines() or ["exit %d" % got.returncode])[-1]
-        else:
-            shown = git(a.tree, "show", "origin/main:%s/steps.tsv" % NATIVE)
-            if shown.returncode != 0:
-                why = "origin/main has no %s/steps.tsv" % NATIVE
-            else:
-                for s in parse_base(shown.stdout, "origin/main:%s/steps.tsv" % NATIVE):
-                    if s["state"] == "landed":
-                        MAIN_LANDED[s["step"]] = s["commit"]
-    except (OSError, ValueError, subprocess.SubprocessError) as e:
-        MAIN_LANDED.clear()
-        why = "%s: %s" % (type(e).__name__, " ".join(str(e).split())[:150])
+            fetch_failed = ((got.stderr or got.stdout).strip().splitlines() or ["exit %d" % got.returncode])[-1]
+    except (OSError, subprocess.SubprocessError) as e:
+        fetch_failed = "%s: %s" % (type(e).__name__, " ".join(str(e).split())[:150])
+    why = load_main_landed(a.tree)
+    if not say_failure:
+        return
     if why:
-        say("plan.py: origin/main's steps.tsv could not be read (%s); what is landed is read from this folder's file alone." % why)
+        say("plan.py: origin/main's steps.tsv could not be read (%s%s); what is landed is read from this folder's file alone." % (
+            "the fetch of origin failed: %s; " % fetch_failed if fetch_failed else "", why))
+    elif fetch_failed:
+        say("plan.py: the fetch of origin failed (%s); what is landed is read from the last fetched copy of origin/main." % fetch_failed)
+
+
+def read_main_quietly(a):
+    """For the commands that only change the live state or the page: what is landed, from the last fetched origin/main, with no
+    fetch and no line."""
+    if not getattr(a, "main_fetched", False):
+        a.main_fetched = True
+        load_main_landed(a.tree)
 
 
 def say_stale(a, claims, stale):
@@ -1198,24 +1311,56 @@ def in_work_line(a, work):
         ident, ident, flag, ident, flag)
 
 
-def print_step(a, steps, s, notes=(), blocked_before=(), working=False):
+# ---- a landing in the gate's hands ---------------------------------------------------------------------------------
+
+def hhmm(text):
+    when = lv.parse_stamp(text)
+    return when.strftime("%H:%M") if when else (text or "?")
+
+
+def active_landing(live, agent, queue_file=None):
+    """The landing of `agent` that is in the gate's hands, from its landing record (written just before the gate is called, removed
+    when the gate has answered): the record, with `queue_time` when its queue row waits or runs, or `finishing` when the row has
+    ended but the process that handed it over still runs. None when there is none. A record whose queue row has ended and whose
+    process is gone is stale: it is dropped, with no line."""
+    rec = lv.read_record(live_dir(live), agent)
+    if rec is None:
+        return None
+    row = None
+    try:
+        row = landing.Queue(queue_file or QUEUE_FILE).row(rec["branch"])
+    except (OSError, RuntimeError):
+        row = None
+    if row is not None and not landing.ended(row):
+        rec["queue_time"] = row["time"]
+        return rec
+    if rec["pid"].isdigit() and alive(int(rec["pid"])):
+        rec["finishing"] = "1"
+        return rec
+    lv.drop_record(live_dir(live), agent, rec["step"])
+    return None
+
+
+def landing_running_line(rec, agent):
+    return "LANDING RUNNING: %s since %s. Run `plan.py land %s%s` to wait for its end." % (
+        rec["step"], hhmm(rec["time"]), rec["step"], agent_flag(agent))
+
+
+def landing_of(a):
+    """The agent's landing that is in the gate's hands (active_landing), or None."""
+    return active_landing(a.live, agent_of(a), getattr(a, "queue_file", None))
+
+
+def say_landing_running(a):
+    rec = landing_of(a)
+    if rec:
+        say(landing_running_line(rec, agent_of(a)))
+    return rec
+
+
+def print_step_body(a, s):
     """A step's card and what goes with it: the package's rows, what the landing needs in the ledger, the checks its changed
-    paths run, and the commands. `working`: the step is in work, so the commands are the ones that end it."""
-    landed = sum(1 for x in steps if x["state"] == "landed")
-    agent = agent_of(a)
-    say("%s: %s  %s" % ("IN WORK" if working else "NEXT", s["step"], s["title"]))
-    say("Package %s; step %s of %d; %d landed so far." % (s["package"], s["order"], len(steps), landed))
-    if working:
-        say("This is in work: go on with it, then land it or block it. Nothing new is given while it is.")
-    for note in notes:
-        say("NOTE: " + note)
-    for b in blocked_before:
-        why = b["reason"] or blocked_reasons(a.tree).get(b["step"], "(no reason written)")
-        say("BLOCKED: %s %s: %s" % (b["step"], b["title"], why))
-    if blocked_before:
-        say("The step above is blocked, so the first later step that does not need its package is %s." % s["step"])
-    say("Needs first: %s." % ("%s (all landed)" % s["package_needs"] if s["package_needs"] else "nothing outside its own package"))
-    say()
+    paths run and the extra checks its proof asks for. Changes nothing."""
     lines = card_lines(a.tree, s)
     card = cut_card(lines, s["step"])
     say("=== THE CARD ===")
@@ -1242,6 +1387,47 @@ def print_step(a, steps, s, notes=(), blocked_before=(), working=False):
     say("Paths on the card: %s" % (", ".join(paths) if paths else "none in the tree"))
     for c in checks_for(paths, read_scope(a.tree)):
         say("  " + c)
+    for line in also_lines(a.tree, s["step"]):
+        say("  " + line)
+
+
+def following(a, steps, done):
+    """The step the tool would give next once `done` (a step row, or None) is landed: what `next` names after the one it gives."""
+    copy = [dict(x) for x in steps]
+    for x in copy:
+        if done is not None and x["step"] == done["step"]:
+            x["state"] = "landed"
+    claims = lv.read_claims(live_dir(a.live))
+    stale = stale_of(a.tree, claims)
+    choice = choose_helper(copy, claims, stale)[0] if agent_of(a) == "2" else choose_next(copy, claims, stale)
+    return choice.step if choice else None
+
+
+def say_after(a, steps, done):
+    nxt = following(a, steps, done)
+    if nxt is not None:
+        say("after it: %s %s; read it with `plan.py card %s`" % (nxt["step"], nxt["title"], nxt["step"]))
+
+
+def print_step(a, steps, s, notes=(), blocked_before=(), working=False):
+    """A step's card and what goes with it (print_step_body), and the commands. `working`: the step is in work, so the commands
+    are the ones that end it."""
+    landed = sum(1 for x in steps if x["state"] == "landed")
+    agent = agent_of(a)
+    say("%s: %s  %s" % ("IN WORK" if working else "NEXT", s["step"], s["title"]))
+    say("Package %s; step %s of %d; %d landed so far." % (s["package"], s["order"], len(steps), landed))
+    if working:
+        say("This is in work: go on with it, then land it or block it. Nothing new is given while it is.")
+    for note in notes:
+        say("NOTE: " + note)
+    for b in blocked_before:
+        why = b["reason"] or blocked_reasons(a.tree).get(b["step"], "(no reason written)")
+        say("BLOCKED: %s %s: %s" % (b["step"], b["title"], why))
+    if blocked_before:
+        say("The step above is blocked, so the first later step that does not need its package is %s." % s["step"])
+    say("Needs first: %s." % ("%s (all landed)" % s["package_needs"] if s["package_needs"] else "nothing outside its own package"))
+    say()
+    print_step_body(a, s)
     say()
     say("=== COMMANDS ===")
     plan = plan_path(a)
@@ -1253,7 +1439,7 @@ def print_step(a, steps, s, notes=(), blocked_before=(), working=False):
         say("block: python -X utf8 -I %s blocked %s \"<why>\"%s" % (plan, s["step"], who))
 
 
-def print_repair(a, r, working=False):
+def print_repair(a, r, working=False, commands=True):
     """A repair's card: what failed, where the evidence is, the landing it was traced to, the ledger row, the fixed lines, and
     the commands."""
     say("%s: %s  (%s, kind %s)" % ("IN WORK" if working else "REPAIR", r["id"], r["source"], r["kind"]))
@@ -1269,6 +1455,8 @@ def print_repair(a, r, working=False):
         say("Note: %s" % r["note"])
     say()
     say(REPAIR_RULES)
+    if not commands:
+        return
     say()
     say("=== COMMANDS ===")
     plan = plan_path(a)
@@ -1286,21 +1474,24 @@ def cmd_next(a):
     stale = stale_of(a.tree, claims)
     landed = sum(1 for s in steps if s["state"] == "landed")
     agent = agent_of(a)
+    say_landing_running(a)
     say_stale(a, claims, stale)
     work = in_work(a, steps)
     if work:                                         # one thing at a time: it is shown again, nothing new is given
-        kind, first = work[0]
-        if kind == "step":
+        first_kind, first = work[0]
+        if first_kind == "step":
             print_step(a, steps, first, working=True)
         else:
             print_repair(a, first, working=True)
         for kind, other in work[1:]:
             say("ALSO IN WORK: %s (land it or block it too)" % (other["step"] if kind == "step" else other["id"]))
+        say_after(a, steps, first if first_kind == "step" else None)
         return 0
     if agent == "1":
         repair = lv.oldest_open_fail(lv.read_repairs(live_dir(a.live)))
         if repair:                                   # a fault found after a landing comes before any step
             print_repair(a, repair)
+            say_after(a, steps, None)
             return 0
     if agent == "2":
         choice, report = choose_helper(steps, claims, stale)
@@ -1326,6 +1517,48 @@ def cmd_next(a):
         say("Land the started steps (plan.py land <id>) or take a blocked step up again (plan.py start <id>).")
         return 1
     print_step(a, steps, choice.step, choice.notes, choice.blocked_before)
+    say_after(a, steps, choice.step)
+    return 0
+
+
+def cmd_card(a):
+    """Any step's card, its package's rows and the checks it needs, or a repair's card. Changes nothing, needs no --agent."""
+    if is_repair(a.id):
+        rep = next((r for r in lv.read_repairs(live_dir(a.live)) if r["id"] == a.id), None)
+        if rep is None:
+            say("plan.py: no repair %s (plan.py repair list)" % a.id)
+            return 1
+        print_repair(a, rep, commands=False)
+        return 0
+    steps = read_base(a.tree)
+    s = find(steps, a.id)
+    if s is None:
+        say("plan.py: no step %s" % a.id)
+        return 1
+    say("CARD: %s  %s" % (s["step"], s["title"]))
+    say("Package %s; step %s of %d. (Only the card: what is landed, started or blocked is in plan.py status.)" % (
+        s["package"], s["order"], len(steps)))
+    say("Needs first: %s." % (s["package_needs"] if s["package_needs"] else "nothing outside its own package"))
+    say()
+    print_step_body(a, s)
+    return 0
+
+
+def cmd_owed(a):
+    """Writes what only a person or other hardware can check. It never blocks a landing and never changes steps.tsv."""
+    text = " ".join(a.text.split())
+    if not text:
+        say("plan.py: owed needs the words of what must be checked and how")
+        return 1
+    known = find(read_base(a.tree), a.id) is not None or any(r["id"] == a.id for r in lv.read_repairs(live_dir(a.live)))
+    if not known:
+        say("plan.py: no step or repair %s" % a.id)
+        return 1
+    lv.add_owed(live_dir(a.live), agent_of(a), a.id, text)
+    refresh_page(a)
+    say("owed: %s: %s" % (a.id, text))
+    say("Written to %s/owed.tsv and listed under 'For the owner to check by hand'. It blocks nothing; say in the ledger row's note "
+        "what was not done." % live_dir(a.live).as_posix())
     return 0
 
 
@@ -1414,6 +1647,10 @@ def begin_work(a, branch):
 
 def cmd_start(a):
     fetch_main_landed(a)
+    rec = landing_of(a)
+    if rec:                                          # a landing of this agent is in the gate's hands: nothing new meanwhile
+        say("plan.py: " + landing_running_line(rec, agent_of(a)))
+        return 1
     if is_repair(a.id):
         return start_repair(a)
     steps = read_steps(a.tree, a.live)
@@ -1449,6 +1686,10 @@ def cmd_start(a):
     lv.put_claim(live_dir(a.live), s["package"], agent, branch)
     refresh_page(a)
     say("started %s: branch %s in %s (package %s is claimed by agent %s)" % (a.id, branch, folder.as_posix(), s["package"], agent))
+    if replay_allowed(card_text(a.tree, s)):
+        say("This step's card says its replay reference may change. Once the change is made and the tour has played every recorded "
+            "stop, record the reference with: %s" % REPLAY_RECORD)
+        say("A commit message of the landing must contain the words \"%s\"." % REPLAY_WORDS)
     return 0
 
 
@@ -1552,12 +1793,25 @@ def refs_problems(folder):
     return bad
 
 
-def hand_to_gate(a, folder, branch, label, agent, extra, on_pass, undo):
+def hand_to_gate(a, folder, branch, label, agent, extra, on_pass, join=False):
     """ONE call of the gate (LAND) for a step or a repair, and what follows: a pass calls `on_pass(verdict, seconds, summary)`
-    and returns its exit code; anything else calls `undo()` (a step takes its state commit off the branch), prints the verdict
-    and returns 1 (a failure), 3 (the same failure three times) or 4 (a tool or the machine: not judged)."""
+    and returns its exit code; anything else prints the verdict and returns 1 (a failure), 3 (the same failure three times) or
+    4 (a tool or the machine: not judged). Nothing is undone: a state commit made before stays on the branch.
+
+    The landing record (live.write_record) is written just before the gate is called and removed when it has answered. `join`:
+    the gate already has this branch in its queue (an earlier call, cut): its record is left as it is, nothing is pushed, and the
+    gate's own call attaches to the row and waits for its end."""
     started = time.time()
-    verdict = LAND(folder, branch, a.tablet, a.tablet_wait, gate_options(a, agent) + list(extra))
+    options = gate_options(a, agent) + list(extra)
+    if join:
+        run = lambda: LAND(folder, branch, a.tablet, a.tablet_wait, options, push=False)
+    else:
+        lv.write_record(live_dir(a.live), agent, label, branch, git_out(folder, "rev-parse", "HEAD"), os.getpid())
+        run = lambda: LAND(folder, branch, a.tablet, a.tablet_wait, options)
+    try:
+        verdict = run()
+    finally:
+        lv.drop_record(live_dir(a.live), agent, label)
     seconds = int(time.time() - started)
     store = failures.Store(a.failures)
     say()
@@ -1565,7 +1819,6 @@ def hand_to_gate(a, folder, branch, label, agent, extra, on_pass, undo):
     if verdict.passed:
         store.clear(branch)
         return on_pass(verdict, seconds, summary)
-    undo()                                           # the next try makes it again
     say("NOT LANDED: %s. Verdict by kind: %s." % (label, summary or "no check rows read"))
     for check, kind, detail in verdict.failures:
         say("  %-5s %s: %s" % (kind, check, detail))
@@ -1591,6 +1844,85 @@ def hand_to_gate(a, folder, branch, label, agent, extra, on_pass, undo):
     return outcome.exit_code
 
 
+def is_state_commit(folder, tip, step_id):
+    """Whether `tip` is the tool's own state commit for the step: its subject starts `Plan: step <ID> landed` and it changes
+    steps.tsv and nothing else."""
+    subject = git(folder, "log", "-1", "--format=%s", tip).stdout.strip()
+    if not subject.startswith(STATE_COMMIT % step_id):
+        return False
+    changed = [l for l in git(folder, "show", "--name-only", "--format=", tip).stdout.splitlines() if l.strip()]
+    return changed == ["%s/steps.tsv" % NATIVE]
+
+
+def code_commit_at(folder, tip, step_id):
+    """The code commit the step's row names in steps.tsv as `tip` has it ("" when it has none)."""
+    shown = git(folder, "show", "%s:%s/steps.tsv" % (tip, NATIVE))
+    if shown.returncode != 0:
+        return ""
+    try:
+        row = find(parse_base(shown.stdout, tip), step_id)
+    except ValueError:
+        return ""
+    return row["commit"] if row and row["state"] == "landed" else ""
+
+
+def later_commits(folder, tip):
+    """[`sha subject`] of the commits of the branch after `tip`."""
+    return git(folder, "log", "--format=%h %s", "%s..HEAD" % tip).stdout.strip().splitlines()
+
+
+def replay_allowed(card):
+    return bool(card and REPLAY_ALLOWED.search(card))
+
+
+def replay_problems(folder, allowed):
+    """Why a branch that changes a reference under tests/replays/ may not land ([text], empty when it may): the card must say the
+    replay changes (`allowed`), and a commit message of the landing must contain the words "replay reference"."""
+    names = git(folder, "diff", "--name-only", "origin/main...HEAD").stdout.splitlines()
+    files = [n for n in names if n.startswith(REPLAY_DIR)]
+    if not files:
+        return []
+    if not allowed:
+        return [REPLAY_REFUSAL] + ["  changed: " + f for f in files]
+    if REPLAY_WORDS not in commit_messages(folder).lower():
+        return ["the branch changes the replay reference (%s), and no commit message of the landing contains the words \"%s\"" % (
+            ", ".join(files), REPLAY_WORDS)]
+    return []
+
+
+def settle_claim(a, steps, s, agent, renew):
+    """After a pass: the package's claim goes when every step of it is landed; else, with `renew`, it is renewed."""
+    if all(x["state"] == "landed" or x["step"] == s["step"] for x in steps if x["package"] == s["package"]):
+        lv.drop_claim(live_dir(a.live), s["package"])
+    elif renew:
+        lv.put_claim(live_dir(a.live), s["package"], agent)
+
+
+def found_on_main(a, steps, s):
+    """`land` for a step `origin/main` already holds (the gate finished without the tool): what follows a pass is done now if it was
+    not done (the live state, the landings list, the claim, the page: each once, by step id)."""
+    agent = agent_of(a)
+    code_commit = MAIN_LANDED.get(a.id) or "-"
+    lv.set_state_entry(live_dir(a.live), a.id, "landed", agent)
+    lv.add_landing(live_dir(a.live), a.id, code_commit, 0, agent)
+    lv.drop_record(live_dir(a.live), agent, a.id)
+    settle_claim(a, steps, s, agent, renew=False)
+    refresh_page(a)
+    say("LANDED (found on main): %s as %s. The gate finished without this tool; what follows a pass is done now." % (a.id, code_commit))
+    say("The progress files are made again (the page to open: %s)." % page_paths(a.live).html.as_posix())
+    return 0
+
+
+def wait_for_process(pid, limit=1800.0):
+    """Waits while process `pid` runs (up to `limit` seconds). True when it ended."""
+    end = time.time() + limit
+    while alive(pid):
+        if time.time() > end:
+            return False
+        time.sleep(JOIN_POLL)
+    return True
+
+
 def cmd_land(a):
     fetch_main_landed(a)
     if is_repair(a.id):
@@ -1601,6 +1933,8 @@ def cmd_land(a):
     if s is None:
         say("plan.py: no step %s" % a.id)
         return 1
+    if s["state"] == "landed" and a.id in MAIN_LANDED:
+        return found_on_main(a, steps, s)
     if s["state"] != "started":
         say("plan.py: step %s is %s; only a started step lands (plan.py start %s)" % (a.id, s["state"], a.id))
         return 1
@@ -1614,10 +1948,88 @@ def cmd_land(a):
         return 1
     folder = work_folder(a.work_root, agent)
     branch = "native/" + a.id
+    rec = landing_of(a)
+    if rec and rec["step"] != a.id:
+        say("plan.py: " + landing_running_line(rec, agent))
+        return 1
+    if rec:
+        return join_landing(a, s, folder, branch, rec)
     why = work_folder_problem(a, folder, branch)
     if why:
         say("plan.py: " + why)
         return 1
+    return begin_landing(a, s, folder, branch)
+
+
+def join_landing(a, s, folder, branch, rec):
+    """`land` called while this step's landing is in the gate's hands (the agent was compacted and no longer knows, or its command
+    was cut): it joins, waits, and ends with the gate's verdict and exit code, the same as the call that started it. Nothing is
+    checked again and nothing is committed or pushed. When the landing that ran judged an older commit than the folder's tip
+    now: if it failed, the present tip is landed in the same call; if it passed, the later commits are named as not on main."""
+    agent = agent_of(a)
+    if not folder.is_dir() or git(folder, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip() != branch:
+        say("plan.py: the work folder %s is not on branch %s, so the landing of %s cannot be joined from it" % (folder.as_posix(), branch, a.id))
+        return 1
+    if rec.get("finishing"):
+        # The queue row has ended and the process that handed it over still runs: it is making the bookkeeping. Wait for it.
+        say("joined the landing of %s: its row in the queue has ended and process %s is finishing; waiting for it" % (a.id, rec["pid"]))
+        if not wait_for_process(int(rec["pid"])):
+            say("plan.py: process %s is still running after 30 minutes; run land again later" % rec["pid"])
+            return 1
+        a.main_fetched = False
+        return cmd_land(a)
+    tip = rec["tip"]
+    if git(folder, "rev-parse", "--verify", "--quiet", tip + "^{commit}").returncode != 0:
+        lv.drop_record(live_dir(a.live), agent, a.id)             # a record naming no commit of this repository is no landing
+        return cmd_land(a)
+    say("joined the landing of %s, in the queue since %s" % (a.id, hhmm(rec["queue_time"])))
+    code_commit = code_commit_at(folder, tip, a.id) or tip[:9]
+
+    def passed(verdict, seconds, summary):
+        later = later_commits(folder, tip)
+        code = finish_landing(a, s, code_commit, verdict, seconds, summary)
+        if later:
+            say("NOTE: the landing judged %s. These later commits of the branch are not on main: %s" % (tip[:9], "; ".join(later)))
+        return code
+
+    code = hand_to_gate(a, folder, branch, a.id, agent, also_options(a, a.id), passed, join=True)
+    here = git_out(folder, "rev-parse", "HEAD")
+    if code in (1, 4) and here != tip:
+        say("the landing that was running judged an older commit (%s); landing the present one (%s) now" % (tip[:9], here[:9]))
+        why = work_folder_problem(a, folder, branch)
+        if why:
+            say("plan.py: " + why)
+            return 1
+        return begin_landing(a, find(read_steps(a.tree, a.live), a.id) or s, folder, branch)
+    return code
+
+
+def also_options(a, step_id):
+    """`--also` for the extra checks the step's proof asks for (docs/plan/native/step-checks.tsv): none, or two words."""
+    names = also_names(a.tree, step_id)
+    return ["--also", ",".join(names)] if names else []
+
+
+def finish_landing(a, s, code_commit, verdict, seconds, summary):
+    """What follows a pass: the step is landed in the plan tree's file and in what the tool reads, the landings list, the claim and
+    the page. The landings list takes a step id once, so whoever does this second adds nothing."""
+    agent = agent_of(a)
+    MAIN_LANDED[a.id] = code_commit
+    set_state(a.tree, a.id, "landed", code_commit, live=a.live)
+    lv.add_landing(live_dir(a.live), a.id, code_commit, seconds, agent, main=verdict.commit or "-")
+    settle_claim(a, read_steps(a.tree, a.live), s, agent, renew=True)
+    refresh_page(a)
+    say("LANDED %s as %s%s in %d s. Verdict by kind: %s." % (
+        a.id, code_commit, (" (main has it as %s)" % verdict.commit) if verdict.commit else "", seconds,
+        summary or "no check rows read"))
+    say("The progress files are made again (the page to open: %s)." % page_paths(a.live).html.as_posix())
+    return 0
+
+
+def begin_landing(a, s, folder, branch):
+    """The landing of the folder's present tip: the ledger, the references, the replay reference; the state commit (made once: a
+    tip that is already the tool's state commit for this step is handed over as it is); then the gate."""
+    agent = agent_of(a)
     # 1. The ledger.
     reading = card_rows(card_text(folder, s))
     if not reading.ok:
@@ -1641,34 +2053,36 @@ def cmd_land(a):
         for l in bad:
             say("  " + l)
         return 1
-    # 3. The landing's own commit: the step is landed, with the code's commit.
-    code_commit = git_out(folder, "rev-parse", "--short=9", "HEAD")
-    set_state(folder, a.id, "landed", code_commit, track=False)
-    with tempfile.TemporaryDirectory() as t:
-        msg = pathlib.Path(t) / "message.txt"
-        msg.write_text("Plan: step %s landed\n\nThe step's code is %s.\n" % (a.id, code_commit), encoding="utf-8")
-        git(folder, "add", "%s/steps.tsv" % NATIVE, check=True)
-        committed = git(folder, "commit", "-F", str(msg))
-    if committed.returncode != 0:
-        git(folder, "checkout", "--", "%s/steps.tsv" % NATIVE)
-        say("plan.py: the state commit failed (a hook?):\n%s" % (committed.stdout + committed.stderr).strip())
+    # 3. A replay reference changes only where the card says so.
+    bad = replay_problems(folder, replay_allowed(card_text(folder, s)))
+    if bad:
+        say("plan.py: " + bad[0])
+        for l in bad[1:]:
+            say(l)
         return 1
+    # 4. The landing's own commit: the step is landed, with the code's commit. Made once: when the tip is already this step's
+    # state commit (an earlier try made it) nothing is committed; fix commits on top of one get a second state commit, whose
+    # code commit is the newer tip. Nothing is ever undone.
+    tip = git_out(folder, "rev-parse", "HEAD")
+    if is_state_commit(folder, tip, a.id) and code_commit_at(folder, tip, a.id):
+        code_commit = code_commit_at(folder, tip, a.id)
+    else:
+        code_commit = tip[:9]
+        set_state(folder, a.id, "landed", code_commit, track=False)
+        with tempfile.TemporaryDirectory() as t:
+            msg = pathlib.Path(t) / "message.txt"
+            msg.write_text(STATE_COMMIT % a.id + "\n\nThe step's code is %s.\n" % code_commit, encoding="utf-8")
+            git(folder, "add", "%s/steps.tsv" % NATIVE, check=True)
+            committed = git(folder, "commit", "-F", str(msg))
+        if committed.returncode != 0:
+            git(folder, "checkout", "--", "%s/steps.tsv" % NATIVE)
+            say("plan.py: the state commit failed (a hook?):\n%s" % (committed.stdout + committed.stderr).strip())
+            return 1
 
     def passed(verdict, seconds, summary):
-        set_state(a.tree, a.id, "landed", code_commit, live=a.live)
-        lv.add_landing(live_dir(a.live), a.id, code_commit, seconds, agent)
-        if all(x["state"] == "landed" or x["step"] == a.id for x in steps if x["package"] == s["package"]):
-            lv.drop_claim(live_dir(a.live), s["package"])
-        else:
-            lv.put_claim(live_dir(a.live), s["package"], agent)
-        refresh_page(a)
-        say("LANDED %s as %s%s in %d s. Verdict by kind: %s." % (
-            a.id, code_commit, (" (main has it as %s)" % verdict.commit) if verdict.commit else "", seconds,
-            summary or "no check rows read"))
-        say("The progress files are made again (the page to open: %s)." % page_paths(a.live).html.as_posix())
-        return 0
+        return finish_landing(a, s, code_commit, verdict, seconds, summary)
 
-    return hand_to_gate(a, folder, branch, a.id, agent, (), passed, lambda: git(folder, "reset", "--hard", "HEAD~1"))
+    return hand_to_gate(a, folder, branch, a.id, agent, also_options(a, a.id), passed)
 
 
 def repair_ledger_problem(row_id, ledger):
@@ -1702,31 +2116,52 @@ def land_repair(a):
         return 1
     folder = work_folder(a.work_root, agent)
     branch = item_branch(a.id)
-    why = work_folder_problem(a, folder, branch)
-    if why:
-        say("plan.py: " + why)
+    rec = landing_of(a)
+    if rec and rec["step"] != a.id:
+        say("plan.py: " + landing_running_line(rec, agent))
         return 1
+    if rec and rec.get("finishing"):
+        say("joined the landing of %s: its row in the queue has ended and process %s is finishing; waiting for it" % (a.id, rec["pid"]))
+        if not wait_for_process(int(rec["pid"])):
+            say("plan.py: process %s is still running after 30 minutes; run land again later" % rec["pid"])
+            return 1
+        a.main_fetched = False
+        return cmd_land(a)
+    if not rec:
+        why = work_folder_problem(a, folder, branch)
+        if why:
+            say("plan.py: " + why)
+            return 1
     # The ledger rules of a step do not apply; the row the repair names must have a dated note or be fixed with a proof.
-    if rep["row"] not in ("", "-"):
+    if rep["row"] not in ("", "-") and not rec:
         git(folder, "fetch", "origin")
         problem = repair_ledger_problem(rep["row"], read_ledger((folder / LEDGER).read_bytes().decode("utf-8")))
         if problem:
             say("plan.py: repair %s does not land yet. The ledger (%s) must say:" % (a.id, LEDGER))
             say("  " + problem)
             return 1
-    bad = refs_problems(folder)
-    if bad:
-        say("plan.py: a file or line named in the documents or the commit messages does not exist:")
-        for l in bad:
-            say("  " + l)
-        return 1
-    code_commit = git_out(folder, "rev-parse", "--short=9", "HEAD")
+    if not rec:
+        bad = refs_problems(folder)
+        if bad:
+            say("plan.py: a file or line named in the documents or the commit messages does not exist:")
+            for l in bad:
+                say("  " + l)
+            return 1
+        # A repair may change a replay reference only if its card names a step whose card says the replay changes.
+        named = find(read_base(folder), rep["step"]) if rep["step"] not in ("", "-") else None
+        bad = replay_problems(folder, bool(named and replay_allowed(card_text(folder, named))))
+        if bad:
+            say("plan.py: " + bad[0])
+            for l in bad[1:]:
+                say(l)
+            return 1
+    code_commit = (rec["tip"] if rec else git_out(folder, "rev-parse", "HEAD"))[:9]
 
     def passed(verdict, seconds, summary):
         closed = verdict.commit or code_commit
         lv.set_repair(live_dir(a.live), a.id, "landed", closed)
         lv.set_state_entry(live_dir(a.live), a.id, "landed", agent)
-        lv.add_landing(live_dir(a.live), a.id, closed, seconds, agent)
+        lv.add_landing(live_dir(a.live), a.id, code_commit, seconds, agent, main=verdict.commit or "-")
         refresh_page(a)
         say("LANDED %s as %s%s in %d s. Verdict by kind: %s." % (
             a.id, code_commit, (" (main has it as %s)" % verdict.commit) if verdict.commit else "", seconds,
@@ -1735,7 +2170,9 @@ def land_repair(a):
             closed, page_paths(a.live).html.as_posix()))
         return 0
 
-    return hand_to_gate(a, folder, branch, a.id, agent, ["--also", rep["check"]], passed, lambda: None)
+    if rec:
+        say("joined the landing of %s, in the queue since %s" % (a.id, hhmm(rec["queue_time"])))
+    return hand_to_gate(a, folder, branch, a.id, agent, ["--also", rep["check"]], passed, join=bool(rec))
 
 
 def park_branch(a, folder, branch):
@@ -1851,7 +2288,7 @@ def cmd_toolfault(a):
 
 def cmd_status(a):
     fetch_main_landed(a)
-    text = status_text(a.tree, a.work_root, live=a.live)
+    text = status_text(a.tree, a.work_root, live=a.live, agent=agent_of(a), queue_file=getattr(a, "queue_file", None))
     atomic_write(native(a.tree) / "STATUS.md", text)
     sys.stdout.write(text)
     url = page_paths(a.live).url
@@ -1861,6 +2298,7 @@ def cmd_status(a):
 
 
 def cmd_page(a):
+    read_main_quietly(a)
     written = write_page(a.tree, a.live)
     p, data = written.paths, written.data
     steps = data["steps"]
@@ -1892,6 +2330,7 @@ def parser():
     p.add_argument("--work-root", default=WORK_ROOT)
     p.add_argument("--live", default=LIVE, help="the live folder (claims, state, tool faults, the page)")
     p.add_argument("--failures", default=FAILURES, help="the three-failure store")
+    p.add_argument("--queue-file", default=QUEUE_FILE, help="the gate's landing queue (a landing record is read against it)")
     p.add_argument("--no-push", action="store_true", help="do not push STATUS.md to the progress branch (also: %s=1)" % PUSH_OFF)
     p.add_argument("--tablet", default=TABLET)
     p.add_argument("--tablet-wait", type=float, default=TABLET_WAIT)
@@ -1901,6 +2340,13 @@ def parser():
     sub.add_parser("next", parents=[who]).set_defaults(fn=cmd_next)
     sub.add_parser("status", parents=[who]).set_defaults(fn=cmd_status)
     sub.add_parser("page").set_defaults(fn=cmd_page)
+    cd = sub.add_parser("card", help="any step's card, its package's rows and the checks it needs; changes nothing")
+    cd.add_argument("id")
+    cd.set_defaults(fn=cmd_card)
+    ow = sub.add_parser("owed", parents=[who], help="what only a person or other hardware can check")
+    ow.add_argument("id")
+    ow.add_argument("text")
+    ow.set_defaults(fn=cmd_owed)
     r = sub.add_parser("rows")
     r.add_argument("id", nargs="?")
     r.set_defaults(fn=cmd_rows)
@@ -1958,11 +2404,14 @@ def main(argv=None):
     selftest_guard.install_if_asked()
     a = parser().parse_args(argv)
     MAIN_LANDED.clear()
+    del MAIN_READ[:]
     if getattr(a, "agent", None) is not None:
         why = own_copy_refusal(a.agent, TREE, a.work_root)
         if why:
             say(why)
             return 2
+    if a.cmd not in ("next", "start", "land", "status", "card"):
+        read_main_quietly(a)           # the others read what is landed from the last fetched origin/main, with no fetch and no line
     try:
         return a.fn(a)
     except (ValueError, OSError, RuntimeError, KeyError) as e:
@@ -1970,6 +2419,7 @@ def main(argv=None):
         return 2
     finally:
         MAIN_LANDED.clear()
+        del MAIN_READ[:]
 
 
 if __name__ == "__main__":

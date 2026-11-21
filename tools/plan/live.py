@@ -6,7 +6,10 @@ it a temporary folder), never in an untracked file inside one work folder:
     state.tsv         step, state, agent, reason, time   the started and blocked steps (`landed` is in the repository)
     claims.tsv        package, agent, time, branch       who holds which package
     tool-faults.tsv   time, agent, step, kind, check, test, first_error, run_folder, could_not
-    landings.tsv      step, commit, finished, seconds, agent
+    landings.tsv      step, commit, finished, seconds, agent, main   (commit: the code's commit on the step's branch; main:
+                      the commit main moved to, `-` where it is not known)
+    landing-<agent>.tsv   step, branch, tip, time, pid   the landing handed to the gate and not yet answered (one file for each agent)
+    owed.tsv          time, agent, step, text            what only a person or other hardware can check
     repairs.tsv       id, opened, source, kind, check, renderer, step, commit, evidence, row, state, closed, seen, note
     progress.html, STATUS.md, publish/index.html, publish/progress-data.json, progress-url.txt  (page.py and plan.py page)
 
@@ -27,7 +30,9 @@ import failures
 STATE_COLUMNS = ["step", "state", "agent", "reason", "time"]
 CLAIM_COLUMNS = ["package", "agent", "time", "branch"]
 FAULT_COLUMNS = ["time", "agent", "step", "kind", "check", "test", "first_error", "run_folder", "could_not"]
-LANDING_COLUMNS = ["step", "commit", "finished", "seconds", "agent"]
+LANDING_COLUMNS = ["step", "commit", "finished", "seconds", "agent", "main"]
+RECORD_COLUMNS = ["step", "branch", "tip", "time", "pid"]
+OWED_COLUMNS = ["time", "agent", "step", "text"]
 REPAIR_COLUMNS = ["id", "opened", "source", "kind", "check", "renderer", "step", "commit", "evidence", "row", "state", "closed",
                   "seen", "note"]
 REPAIR_SOURCES = ("nightly", "stress", "measure")
@@ -250,12 +255,72 @@ def read_landings(live):
     return read_rows(pathlib.Path(live) / "landings.tsv", LANDING_COLUMNS)
 
 
-def add_landing(live, step, commit, seconds, agent=1, now=None):
+def add_landing(live, step, commit, seconds, agent=1, now=None, main="-"):
+    """One line for each step id: a step already in the list is left as it is (what follows a pass is done once, whoever does
+    it), except that a main commit that was not known (`-`) is filled in. Returns True when a line was added."""
     path = pathlib.Path(live) / "landings.tsv"
+    main = clean(main) or "-"
     with locked(live):
         rows = read_rows(path, LANDING_COLUMNS)
-        rows.append({"step": step, "commit": commit, "finished": stamp(now), "seconds": str(int(seconds)), "agent": str(agent)})
+        old = next((r for r in rows if r["step"] == step), None)
+        if old is not None:
+            if main != "-" and old["main"] in ("", "-"):
+                old["main"] = main
+                write_rows(path, LANDING_COLUMNS, rows)
+            return False
+        rows.append({"step": step, "commit": commit, "finished": stamp(now), "seconds": str(int(seconds)), "agent": str(agent),
+                     "main": main})
         write_rows(path, LANDING_COLUMNS, rows)
+        return True
+
+
+def main_of(row):
+    """The commit main moved to for a landing line, or `-`."""
+    return row.get("main") or "-"
+
+
+# ---- the landing record -----------------------------------------------------------------------------------------------
+# Written just before the gate is called, removed when the gate has answered: it says that a landing of this agent is in
+# the gate's hands, which commit was handed over, and which process handed it over.
+
+def record_path(live, agent):
+    return pathlib.Path(live) / ("landing-%s.tsv" % agent)
+
+
+def read_record(live, agent):
+    rows = read_rows(record_path(live, agent), RECORD_COLUMNS)
+    return rows[0] if rows else None
+
+
+def write_record(live, agent, step, branch, tip, pid, now=None):
+    with locked(live):
+        write_rows(record_path(live, agent), RECORD_COLUMNS,
+                   [{"step": step, "branch": branch, "tip": tip, "time": stamp(now), "pid": str(pid)}])
+
+
+def drop_record(live, agent, step=None):
+    """Removes the agent's record (only when it is for `step`, if one is given)."""
+    with locked(live):
+        old = read_record(live, agent)
+        if old is not None and (step is None or old["step"] == step):
+            record_path(live, agent).unlink(missing_ok=True)
+
+
+# ---- what only a person can check ---------------------------------------------------------------------------------------
+
+def read_owed(live):
+    return read_rows(pathlib.Path(live) / "owed.tsv", OWED_COLUMNS)
+
+
+def add_owed(live, agent, step, text, now=None):
+    """One line appended: time, agent, step, the words of what must be checked and how. Returns the row."""
+    path = pathlib.Path(live) / "owed.tsv"
+    row = {"time": stamp(now), "agent": str(agent), "step": step, "text": text}
+    with locked(live):
+        rows = read_rows(path, OWED_COLUMNS)
+        rows.append(row)
+        write_rows(path, OWED_COLUMNS, rows)
+    return {k: clean(v) for k, v in row.items()}
 
 
 # ---- repairs ------------------------------------------------------------------------------------------------------

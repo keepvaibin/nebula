@@ -23,7 +23,7 @@ sys.path.insert(0, str(TREE / "tools" / "plan"))
 import failures  # noqa: E402
 import live as lv  # noqa: E402
 import plan  # noqa: E402
-from plan_fixture import Tree, git_run, plan_of, ready_a1, setup_module, step, teardown_module, write_steps  # noqa: E402
+from plan_fixture import Tree, git_run, moving_land, plan_of, ready_a1, setup_module, step, teardown_module, write_steps  # noqa: E402
 
 
 def setUpModule():
@@ -320,7 +320,7 @@ class CommandsTest(unittest.TestCase):
         self.assertEqual(self.t.git("rev-parse", "--abbrev-ref", "HEAD", cwd=one), "native/A.1")
         self.assertEqual(self.t.git("rev-parse", "--abbrev-ref", "HEAD", cwd=two), "native/G6.1")
         (one / "loose.txt").write_text("x", encoding="utf-8")             # agent 1's loose file does not stop agent 2's folder
-        plan.set_state(self.t.tree, "G6.1", "landed")
+        self.t.landed("G6.1")
         self.t.run(["start", "G6.2", "--agent", "2"], expect=0)
         self.assertEqual(sorted(p.name for p in self.t.work.iterdir()), ["Nebula-native", "Nebula-native-2"], "two folders, no more")
         self.assertEqual(self.t.git("rev-parse", "--abbrev-ref", "HEAD", cwd=two), "native/G6.2")
@@ -356,7 +356,7 @@ class CommandsTest(unittest.TestCase):
         self.t.git("commit", "-m", "cards with no rows")
         self.t.git("push", "origin", "main")
         self.t.run(["start", "A.1"], expect=0)
-        with mock.patch.object(plan, "LAND", lambda *a: plan.Verdict(True, [("c", "PASS", "ok")])):
+        with mock.patch.object(plan, "LAND", moving_land()):
             self.t.run(["land", "A.1"], expect=0)
             self.assertEqual(lv.claim_of(lv.read_claims(self.t.live), "A")["agent"], "1", "A.2 is left: the claim is renewed")
             self.t.run(["start", "A.2"], expect=0)
@@ -427,10 +427,10 @@ class LandedOnMainTest(unittest.TestCase):
     def test_land_reads_it_too(self):
         self.landed_by_the_other_agent("A.1")
         code, text = self.t.run(["land", "A.1"])
-        self.assertEqual(code, 1)
-        self.assertIn("step A.1 is landed; only a started step lands", text)
+        self.assertEqual(code, 0)
+        self.assertIn("LANDED (found on main): A.1 as abcdef123", text)
 
-    def test_a_step_the_tree_has_as_landed_keeps_its_own_commit(self):
+    def test_a_step_both_files_have_as_landed_has_the_commit_main_has(self):
         self.landed_by_the_other_agent("A.1")
         path = plan.native(self.t.tree) / "steps.tsv"
         rows = [l.split("\t") for l in path.read_text(encoding="utf-8").splitlines()]
@@ -442,16 +442,30 @@ class LandedOnMainTest(unittest.TestCase):
             row = plan.find(plan.read_steps(self.t.tree, self.t.live), "A.1")
         finally:
             plan.MAIN_LANDED.clear()
-        self.assertEqual((row["state"], row["commit"]), ("landed", "1111111"))
+            del plan.MAIN_READ[:]
+        self.assertEqual((row["state"], row["commit"]), ("landed", "abcdef123"), "origin/main says it, with its commit")
 
-    def test_a_failed_fetch_still_gives_an_answer_and_one_line(self):
+    def test_a_failed_fetch_reads_the_last_fetched_copy_of_main_and_says_so_in_one_line(self):
+        self.t.landed("A.1")
         git_run("remote", "set-url", "origin", str(self.t.dir / "no-such-origin.git"), cwd=str(self.t.tree))
+        code, text = self.t.run(["next"])
+        self.assertEqual(code, 0, text)
+        said = [l for l in text.splitlines() if "the fetch of origin failed" in l]
+        self.assertEqual(len(said), 1, text)
+        self.assertIn("read from the last fetched copy of origin/main", said[0])
+        self.assertNotIn("could not be read", text)
+        self.assertIn("NEXT: A.2", text, "A.1 is landed on the copy of main that was fetched before")
+
+    def test_a_failed_fetch_and_no_copy_of_main_at_all_believes_the_folders_file_with_one_line(self):
+        self.t.landed("A.1")
+        git_run("remote", "set-url", "origin", str(self.t.dir / "no-such-origin.git"), cwd=str(self.t.tree))
+        git_run("update-ref", "-d", "refs/remotes/origin/main", cwd=str(self.t.tree))
         code, text = self.t.run(["next"])
         self.assertEqual(code, 0, text)
         said = [l for l in text.splitlines() if "could not be read" in l]
         self.assertEqual(len(said), 1, text)
         self.assertIn("read from this folder's file alone", said[0])
-        self.assertIn("NEXT: A.1", text, "the tree's file alone is used")
+        self.assertIn("NEXT: A.2", text, "the folder's own file says A.1 is landed, and nothing says otherwise")
 
     def test_a_missing_file_on_main_is_the_same_one_line(self):
         clone = self.t.dir / "other-clone"

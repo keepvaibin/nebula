@@ -71,13 +71,14 @@ class DataTest(unittest.TestCase):
         steps = plan_of(step("A.1", "A", state="landed"), step("A.2", "A", state="started", agent="2"), step("B.1", "B", state="blocked"),
                         step("B.2", "B"), step("C.1", "C", state="landed"))
         steps[0]["commit"] = "abc123"
-        landings = [{"step": "A.1", "commit": "abc123", "finished": "2026-11-20T10:00:00", "seconds": "5", "agent": "1"}]
+        landings = [{"step": "A.1", "commit": "abc123", "finished": "2026-11-20T10:00:00", "seconds": "5", "agent": "1",
+                     "main": "0123456789"}]
         d = self.data(steps, landings)
-        self.assertEqual(d["steps"], {"A.1": {"state": "landed", "commit": "abc123", "time": "2026-11-20T10:00:00"},
+        self.assertEqual(d["steps"], {"A.1": {"state": "landed", "commit": "abc123", "main": "0123456789", "time": "2026-11-20T10:00:00"},
                                       "A.2": {"state": "started", "agent": "2"}, "B.1": {"state": "blocked", "agent": "1"},
                                       "C.1": {"state": "landed"}})
         self.assertNotIn("B.2", d["steps"])
-        self.assertEqual(sorted(d), ["blocked", "claims", "flakes", "generated", "repairs", "set_aside", "steps", "tool_faults"])
+        self.assertEqual(sorted(d), ["blocked", "claims", "flakes", "generated", "owed", "repairs", "set_aside", "steps", "tool_faults"])
 
     def test_the_repairs_are_in_the_data_in_the_order_given_with_every_field(self):
         rows = [{"id": "R-002", "opened": "2026-11-21T01:00:00", "source": "nightly", "kind": "fail", "check": "tour/d3d11",
@@ -491,8 +492,8 @@ class StatusTextTest(unittest.TestCase):
         self.assertEqual(len(rows), 10)
         self.assertTrue(rows[0].startswith("| 2026-11-20 10:11 |"), rows[0])
         self.assertTrue(rows[-1].startswith("| 2026-11-20 10:02 |"), rows[-1])
-        self.assertIn("| 2026-11-20 10:05 | S2.1 | Step number 5 | c05 |", rows)
-        self.assertEqual(text.splitlines()[text.splitlines().index("| When | Step | Title | Commit |") - 2], "## Last 10 landings")
+        self.assertIn("| 2026-11-20 10:05 | S2.1 | Step number 5 | c05 | - |", rows)
+        self.assertEqual(text.splitlines()[text.splitlines().index("| When | Step | Title | Code commit | Main commit |") - 2], "## Last 10 landings")
 
     def test_the_last_twenty_tool_faults_newest_first_with_all_five_columns(self):
         text, _, _ = self.text(faults=25)
@@ -528,14 +529,18 @@ class StatusTextTest(unittest.TestCase):
             "",
             "## Last 10 landings",
             "",
-            "| When | Step | Title | Commit |",
-            "| --- | --- | --- | --- |",
-            "| 2026-11-20 10:01 | S0.1 | Step number 1 | c01 |",
-            "| 2026-11-20 10:00 | S0.0 | Step number 0 | c00 |",
+            "| When | Step | Title | Code commit | Main commit |",
+            "| --- | --- | --- | --- | --- |",
+            "| 2026-11-20 10:01 | S0.1 | Step number 1 | c01 | - |",
+            "| 2026-11-20 10:00 | S0.0 | Step number 0 | c00 | - |",
             "",
             "## Repairs",
             "",
             "No repair recorded.",
+            "",
+            "## For the owner to check by hand",
+            "",
+            "Nothing is owed.",
             "",
             "## Blocked",
             "",

@@ -343,8 +343,7 @@ class NextTest(unittest.TestCase):
 
     def test_next_after_everything_landed(self):
         with Tree() as t:
-            for s in plan.read_steps(t.tree):
-                plan.set_state(t.tree, s["step"], "landed")
+            t.landed(*[s["step"] for s in plan.read_steps(t.tree)])
             code, text = t.run(["next"])
             self.assertEqual(code, 0)
             self.assertIn("Every step is landed (5 of 5)", text)
@@ -630,7 +629,7 @@ class LandTest(LandBase):
         self.assertIn("could not be read", text)
         self.assertIn("plan.py tool", text)
 
-    def test_a_failed_landing_is_not_landed_takes_its_state_commit_back_and_is_counted(self):
+    def test_a_failed_landing_is_not_landed_keeps_its_state_commit_and_is_counted(self):
         code_commit = self.ready()
         self.verdict = plan.Verdict(False, [("repo/code", "PASS", "ok"), ("tour/d3d12", "FAIL", "replay step 0 differs")],
                                     [("tour/d3d12", "FAIL", "replay step 0 differs")])
@@ -640,8 +639,8 @@ class LandTest(LandBase):
         self.assertIn("FAIL  tour/d3d12: replay step 0 differs", text)
         self.assertIn("1 time in a row", text)
         folder = self.t.folder("A.1")
-        self.assertEqual(self.t.git("rev-parse", "--short=9", "HEAD", cwd=folder), code_commit, "the state commit is gone")
-        self.assertEqual(plan.find(plan.read_base(folder), "A.1")["state"], "open", "the branch is as it was cut from main")
+        self.assertEqual(self.t.git("rev-parse", "--short=9", "HEAD~1", cwd=folder), code_commit, "nothing is undone: the state commit stays")
+        self.assertEqual(plan.find(plan.read_base(folder), "A.1")["state"], "landed", "the branch holds the state commit")
         self.assertEqual(plan.find(plan.read_steps(self.t.tree), "A.1")["state"], "started")
         self.assertEqual(lv.read_landings(self.t.live), [])
         self.assertEqual(failures.Store(self.t.store).count("native/A.1"), 1)
@@ -927,7 +926,7 @@ class BlockedTest(unittest.TestCase):
     def test_blocked_refuses_an_unknown_and_a_landed_step(self):
         with Tree() as t:
             self.assertEqual(t.run(["blocked", "Q.1", "x"])[0], 1)
-            plan.set_state(t.tree, "A.1", "landed")
+            t.landed("A.1")
             self.assertEqual(t.run(["blocked", "A.1", "x"])[0], 1)
 
     def test_two_blocked_steps_and_a_tool_fault_go_in_their_own_sections(self):
@@ -1056,7 +1055,8 @@ class RepairNextTest(unittest.TestCase):
                 "=== COMMANDS ===",
                 "start: python -X utf8 -I %s start R-001" % plan_py,
                 "land:  python -X utf8 -I %s land R-001" % plan_py,
-                'block: python -X utf8 -I %s blocked R-001 "<why>"' % plan_py])
+                'block: python -X utf8 -I %s blocked R-001 "<why>"' % plan_py,
+                "after it: A.1 First step; read it with `plan.py card A.1`"])
             self.assertNotIn("NEXT:", text)
 
     def test_the_oldest_comes_first_and_an_untraced_repair_says_so(self):
@@ -1279,7 +1279,7 @@ class StatusTest(unittest.TestCase):
             t.run(["start", "A.1"], expect=0)
             plan.set_state(t.tree, "C.1", "blocked")
             plan.append_under(plan.native(t.tree) / "BLOCKED.md", "steps", "- 2026-11-20 C.1: the card is wrong | first failure line: x")
-            plan.set_state(t.tree, "A.2", "landed", "abc123def")
+            t.landed("A.2", commit="abc123def")
             lv.add_landing(t.live, "A.2", "abc123def", 600)
             code, text = t.run(["status"], expect=0)
             written = (plan.native(t.tree) / "STATUS.md").read_text(encoding="utf-8")

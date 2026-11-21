@@ -12,6 +12,7 @@ in the items file (`06-NATIVE-ITEMS-PLAIN.md`, kept with the plan's author, not 
 
 The order of the steps is `docs/plan/native/steps.tsv`; the tool `tools/plan/plan.py` reads it (`next`, `start`, `land`,
 `blocked`, `status`). The repository's copy of this folder is the only one read.
+The `commit` column of `steps.tsv` holds the code's commit on the step's branch; the commit main has for the landing is another one (the queue replays the branch's commits), and `landings.tsv` in the live folder, the page and `STATUS.md` show it as `main`. `step-checks.tsv` lists the extra checks a step's proof asks for (step, check, the proof item it serves); `plan.py next` and `plan.py card` print them and `plan.py land` sends them to the gate as `--also`.
 
 ## 1. Where the game stands
 

@@ -13,9 +13,10 @@ What is published on the web (the `publish` folder beside them):
                                or the plan's step list changes, never because progress changed. It fetches
                                `progress-data.json` from beside it; when that cannot be loaded, within three seconds it
                                says so in place of "Loading...".
-  publish/progress-data.json   only what changes: per step its state, agent, commit and landing time (keyed by step id; a
-                               step still open is not in it), the blocked list with reasons, the claims, the tool-fault
-                               table, the flake count, a generated-at time. Compact JSON.
+  publish/progress-data.json   only what changes: per step its state, agent, code commit, main's commit and landing time (keyed by
+                               step id; a step still open is not in it), the blocked list with reasons, the claims, the
+                               tool-fault table, what is owed to a person's check, the flake count, a generated-at time.
+                               Compact JSON.
 
 One self-contained file each: no outside script, font or style, no address of any kind. Light and dark by
 prefers-color-scheme, colours as tokens on :root, system fonts, readable at phone width with no sideways scroll.
@@ -29,6 +30,7 @@ LAST_FAULTS = 20
 # What the published page says in place of "Loading..." when its data cannot be loaded, and how long it waits at most.
 NO_DATA = "The progress data could not be loaded. On the PC, open progress.html in the folder above this one."
 WAIT_SECONDS = 3
+OWED_FIELDS = ("time", "agent", "step", "text")
 REPAIR_FIELDS = ("id", "opened", "source", "kind", "check", "renderer", "step", "commit", "evidence", "row", "state", "closed",
                  "seen", "note")
 
@@ -45,18 +47,22 @@ def make_static(steps):
             "steps": [{"id": s["step"], "package": s["package"], "title": s["title"]} for s in steps]}
 
 
-def make_data(steps, landings, state, claims, stale, faults, flakes, now, set_aside=(), repairs=()):
+def make_data(steps, landings, state, claims, stale, faults, flakes, now, set_aside=(), repairs=(), owed=()):
     """What changes. `steps`: plan.read_steps (state, commit, agent). `landings`: live.read_landings. `state`:
     live.read_state. `claims`: live.read_claims. `stale`: set of stale package names. `faults`: live.fault_groups.
     `flakes`: a count. `now`: the time of writing (text). `set_aside`: [{test, renderer, since, why}] of the tests the gate
     has set aside (its flakes.tsv and set-aside.tsv are in the live folder). `repairs`: [dict] of repairs.tsv, in the order
-    to show (live.repair_order: open ones of kind fail first).
+    to show (live.repair_order: open ones of kind fail first). `owed`: [dict] of owed.tsv (what only a person or other
+    hardware can check), oldest first.
 
     "steps" is keyed by step id and has no entry for a step still open; an entry has `state`, and `agent` (a started or
-    blocked step), `commit` and `time` (a landed step; the time is the landing's, when the tool recorded it)."""
-    when = {}
+    blocked step), `commit` (the code's commit on the step's branch), `main` (the commit main moved to, when the tool knows it) and
+    `time` (a landed step; the time is the landing's, when the tool recorded it)."""
+    when, on_main = {}, {}
     for r in landings:
         when[r["step"]] = r["finished"]
+        if r.get("main") not in (None, "", "-"):
+            on_main[r["step"]] = r["main"]
     by_step = {}
     for s in steps:
         if s["state"] == "open":
@@ -67,6 +73,8 @@ def make_data(steps, landings, state, claims, stale, faults, flakes, now, set_as
         if s["state"] == "landed":
             if s["commit"]:
                 e["commit"] = s["commit"]
+            if on_main.get(s["step"]):
+                e["main"] = on_main[s["step"]]
             if when.get(s["step"]):
                 e["time"] = when[s["step"]]
         by_step[s["step"]] = e
@@ -83,6 +91,7 @@ def make_data(steps, landings, state, claims, stale, faults, flakes, now, set_as
         "flakes": flakes,
         "set_aside": [dict(a) for a in set_aside],
         "repairs": [{k: r.get(k, "") for k in REPAIR_FIELDS} for r in repairs],
+        "owed": [{k: r.get(k, "") for k in OWED_FIELDS} for r in owed],
     }
 
 
@@ -257,7 +266,8 @@ h2 { font-size: 1.05rem; margin: 28px 0 10px; }
     landed.slice(0, 10).forEach(function (s) {
       var c = el("div", "card");
       head(c, s.id);
-      c.appendChild(el("div", "muted", st[s.id].time + (st[s.id].commit ? "  commit " + st[s.id].commit : "")));
+      c.appendChild(el("div", "muted", st[s.id].time + (st[s.id].commit ? "  commit " + st[s.id].commit : "") +
+                       (st[s.id].main ? "  main " + st[s.id].main : "")));
       app.appendChild(c);
     });
 
@@ -328,6 +338,17 @@ h2 { font-size: 1.05rem; margin: 28px 0 10px; }
       kv(c, [["First error", f.first_error, "err"], ["Test", f.test], ["Step", f.step], ["Agent", f.agent],
              ["First seen", f.first_seen], ["Last seen", f.last_seen], ["Could not", f.could_not],
              ["Run folder", f.run_folder, "err"]]);
+      app.appendChild(c);
+    });
+
+    var owed = d.owed || [];
+    section("For the owner to check by hand (" + owed.length + ")");
+    if (!owed.length) none("Nothing is owed.");
+    owed.forEach(function (o) {
+      var c = el("div", "card");
+      head(c, o.step, [el("span", "tag", "agent " + o.agent)]);
+      c.appendChild(el("div", null, o.text));
+      c.appendChild(el("div", "muted", o.time));
       app.appendChild(c);
     });
 
@@ -438,8 +459,9 @@ def make_status(static, data, landings, faults, now):
     out += table(["Package", "Landed", "Of"], rows)
     last = list(landings)[-LAST_LANDINGS:][::-1]
     out += ["", "## Last %d landings" % LAST_LANDINGS, ""]
-    out += table(["When", "Step", "Title", "Commit"], [(minute(r["finished"]), r["step"], title.get(r["step"], ""), r["commit"])
-                                                       for r in last]) if last else ["None yet."]
+    out += table(["When", "Step", "Title", "Code commit", "Main commit"],
+                 [(minute(r["finished"]), r["step"], title.get(r["step"], ""), r["commit"], r.get("main") or "-")
+                  for r in last]) if last else ["None yet."]
     repairs = data.get("repairs", [])
     out += ["", "## Repairs", ""]
     out += ["%d open of kind fail, %d in all." % (sum(1 for r in repairs if r["state"] == "open" and r["kind"] == "fail"),
@@ -450,6 +472,10 @@ def make_status(static, data, landings, faults, now):
                               " ".join(x for x in ("step " + r["step"] if r["step"] not in ("", "-") else "",
                                                    "commit " + r["commit"] if r["commit"] not in ("", "-") else "") if x) or "not traced",
                               r["seen"]) for r in repairs])
+    owed = data.get("owed", [])
+    out += ["", "## For the owner to check by hand", ""]
+    out += ["- %s %s: %s (agent %s, %s)" % (o["step"], title.get(o["step"], ""), " ".join(o["text"].split()), o["agent"], minute(o["time"]))
+            for o in owed] or ["Nothing is owed."]
     out += ["", "## Blocked", ""]
     out += ["- %s %s: %s" % (b["step"], title.get(b["step"], ""), " ".join((b["reason"] or "(no reason written)").split()))
             for b in data["blocked"]] or ["Nothing is blocked."]

@@ -115,7 +115,7 @@ class FilesTest(LiveTest):
         self.assertEqual(first("claims.tsv"), "package\tagent\ttime\tbranch")
         self.assertEqual(first("tool-faults.tsv"), "time\tagent\tstep\tkind\tcheck\ttest\tfirst_error\trun_folder\tcould_not")
         self.assertEqual(first("state.tsv"), "step\tstate\tagent\treason\ttime")
-        self.assertEqual(first("landings.tsv"), "step\tcommit\tfinished\tseconds\tagent")
+        self.assertEqual(first("landings.tsv"), "step\tcommit\tfinished\tseconds\tagent\tmain")
 
     def test_state_entries(self):
         lv.set_state_entry(self.live, "A.1", "started", 2, now=NOW)
@@ -135,7 +135,43 @@ class FilesTest(LiveTest):
     def test_landings(self):
         lv.add_landing(self.live, "A.1", "abc123", 61.7, 2, NOW)
         self.assertEqual(lv.read_landings(self.live), [{"step": "A.1", "commit": "abc123", "finished": "2026-11-20T12:00:00",
-                                                         "seconds": "61", "agent": "2"}])
+                                                         "seconds": "61", "agent": "2", "main": "-"}])
+
+    def test_a_landing_is_listed_once_for_each_step_and_main_is_filled_in_when_it_becomes_known(self):
+        self.assertTrue(lv.add_landing(self.live, "A.1", "abc123", 61, 1, NOW))
+        self.assertFalse(lv.add_landing(self.live, "A.1", "zzz999", 5, 1, NOW), "a second line for the step is not made")
+        rows = lv.read_landings(self.live)
+        self.assertEqual([(r["step"], r["commit"], r["main"]) for r in rows], [("A.1", "abc123", "-")])
+        lv.add_landing(self.live, "A.1", "abc123", 5, 1, NOW, main="0123456789")
+        self.assertEqual([r["main"] for r in lv.read_landings(self.live)], ["0123456789"])
+        lv.add_landing(self.live, "A.1", "abc123", 5, 1, NOW, main="ffffffffff")
+        self.assertEqual([r["main"] for r in lv.read_landings(self.live)], ["0123456789"], "a known main commit is kept")
+
+    def test_a_landings_file_written_before_the_column_main_is_read_with_a_dash(self):
+        self.live.mkdir(parents=True)
+        (self.live / "landings.tsv").write_text("step\tcommit\tfinished\tseconds\tagent\nA.1\tabc\t2026-11-20T12:00:00\t5\t1\n", encoding="utf-8")
+        self.assertEqual(lv.main_of(lv.read_landings(self.live)[0]), "-")
+
+    def test_the_landing_record_is_one_file_for_each_agent_and_goes_when_dropped(self):
+        lv.write_record(self.live, 1, "A.1", "native/A.1", "f" * 40, 4242, NOW)
+        lv.write_record(self.live, 2, "G6.1", "native/G6.1", "e" * 40, 77, NOW)
+        self.assertEqual(lv.read_record(self.live, 1), {"step": "A.1", "branch": "native/A.1", "tip": "f" * 40,
+                                                        "time": "2026-11-20T12:00:00", "pid": "4242"})
+        self.assertEqual(lv.read_record(self.live, 2)["step"], "G6.1")
+        self.assertEqual(sorted(p.name for p in self.live.glob("landing-*.tsv")), ["landing-1.tsv", "landing-2.tsv"])
+        lv.drop_record(self.live, 1, "OTHER")
+        self.assertIsNotNone(lv.read_record(self.live, 1), "a record for another step is not dropped")
+        lv.drop_record(self.live, 1, "A.1")
+        self.assertIsNone(lv.read_record(self.live, 1))
+        self.assertIsNotNone(lv.read_record(self.live, 2))
+
+    def test_owed_lines_are_appended_in_order(self):
+        self.assertEqual(lv.read_owed(self.live), [])
+        lv.add_owed(self.live, 1, "G3.1", "film the clap frame", NOW)
+        lv.add_owed(self.live, 2, "G6.2", "a Bluetooth pad", NOW)
+        self.assertEqual([(o["agent"], o["step"], o["text"]) for o in lv.read_owed(self.live)],
+                         [("1", "G3.1", "film the clap frame"), ("2", "G6.2", "a Bluetooth pad")])
+        self.assertEqual((self.live / "owed.tsv").read_text(encoding="utf-8").splitlines()[0], "time\tagent\tstep\ttext")
 
     def test_no_temporary_file_is_left(self):
         lv.put_claim(self.live, "G6", 1, "b", NOW)

@@ -192,6 +192,20 @@ class Tree:
         """The agent's work folder: the same one for every step (the id is only there to read well)."""
         return plan.work_folder(self.work, agent)
 
+    def push_plan_files(self, message="plan"):
+        """Commits what changed in the plan tree and pushes it to origin's main: what a landing that passed leaves there."""
+        self.git("add", "-A")
+        if self.git("status", "--porcelain"):
+            self.git("commit", "-q", "-m", message)
+        self.git("push", "-q", "origin", "main")
+
+    def landed(self, *ids, commit="abc123def"):
+        """These steps are landed: in the tree's steps.tsv, off the live state, and on origin's main (a step is landed only when
+        origin/main says so)."""
+        for step_id in ids:
+            plan.set_state(self.tree, step_id, "landed", commit)
+        self.push_plan_files("Plan: %s landed" % ", ".join(ids))
+
     def commit(self, step_id, message="work", files=None):
         """A commit in the step's work folder (an edit of runtime/src/render/a.cpp unless `files` says what to write)."""
         folder = self.folder(step_id)
@@ -241,3 +255,17 @@ def write_steps(t, rows):
     for i, (sid, pkg, needs, state) in enumerate(rows, 1):
         lines.append("\t".join([str(i), sid, pkg, "Title of " + sid, needs, "03-X.md", state, "abc" if state == "landed" else ""]))
     (n / "steps.tsv").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    t.push_plan_files("steps")                    # origin/main has them too: it alone says what is landed
+
+
+def moving_land(verdict=None, commit="0123456789"):
+    """A fake of plan.LAND that moves origin's main the way a pass of the gate does (the branch is pushed to main, a fast
+    forward: the folder's branch was cut from it) and answers with `verdict` (a pass by default, with main's commit)."""
+    def land(folder, branch, tablet, wait, options=(), **kw):
+        git_run("push", "-q", "origin", "%s:main" % branch, cwd=str(folder))
+        if verdict is not None:
+            return verdict
+        v = plan.Verdict(True, [("c", "PASS", "ok")])
+        v.code, v.commit, v.gate_recorded = 0, commit, True
+        return v
+    return land
