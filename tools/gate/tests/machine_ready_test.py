@@ -14,7 +14,8 @@ what a test made.
   thinning_keeps_the_right_folders      the three newest passing and the three newest failing runs of each level stay whole, the
                                         others keep their top-level files; a run still going, one waiting for GitHub and what is
                                         not a run are left alone
-  tablet_not_answering_is_env           not listed, not authorised and offline are env; an answering tablet passes
+  tablet_not_answering_its_part_is_owed_the_run_is_judged   not listed, not authorised or offline is no stop and no row: a note
+                                        says its part is owed (tablet_part) and the run goes on; an answering tablet passes
   wrong_data_on_tablet_is_pushed_again  the data of another store version is pushed again; a failed push, a wrong --pak is env; no
                                         test app on it is left to the run
   copies_formula                        the card's limit wins; the memory's wins; the lanes' win; exactly one fits; none fits
@@ -352,15 +353,17 @@ class Disk(Base):
 
 
 class Tablet(Base):
-    def test_tablet_not_answering_is_env(self):
+    def test_tablet_not_answering_its_part_is_owed_the_run_is_judged(self):
         for state, words in (("absent", "does not answer adb"), ("offline", "offline"), ("unauthorized", "not authorised")):
             g = self.make_gate("main")
-            probes = FakeProbes(tablet=FakeTablet(state=state))
-            self.assertFalse(self.ready(g, probes, tablet=True), state)
-            row = g.results[0]
-            self.assertEqual((row["check"], row["state"]), ("machine/tablet", "env"))
-            self.assertIn(words, row["detail"])
-            self.assertNotIn("card", probes.calls, "the card is not looked at: the run stops at the first point it cannot meet")
+            tablet = FakeTablet(state=state)
+            probes = FakeProbes(tablet=tablet)
+            self.assertTrue(self.ready(g, probes, tablet=True), state)
+            self.assertEqual(g.results, [], "no row, no stop: the tablet may be away for a day")
+            self.assertTrue(any("its part is owed" in n and words in n for n in g.machine_notes), g.machine_notes)
+            self.assertIn("card", probes.calls, "the run goes on to the card")
+            self.assertEqual(tablet.pushed, [], "nothing is pushed to a tablet that does not answer")
+            self.assertIsNotNone(g.slots, "and its copies are set as usual")
         # An answering tablet with the right data passes; the adb server is made sure of first; a run with no tablet part asks nothing.
         g = self.make_gate("main")
         probes = FakeProbes(tablet=FakeTablet())

@@ -14,11 +14,15 @@
                                   start in the tools is made without start_outliving
   adb_server_started_by_the_gate   no server running: the gate starts it with the flag (an adb program is never run here: a stand-in
                                   is); a server running: nothing is started
+  sccache_server_started_by_the_gate   the compiler cache's server is started by the gate with the flag and the build's settings
+                                  (a stand-in for sccache), only when the cache is in use and no server answers; the settings equal
+                                  build_windows.ps1's; the gate's Windows build asks for it first
 Exit 0 when every case holds.
 """
 import os
 import pathlib
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -278,6 +282,72 @@ class JobTests(unittest.TestCase):
         self.assertFalse(machine.ensure_adb_server("adb-here", said.append, up=lambda: False, popen=lambda *a, **k: Process(),
                                                    wait=lambda s: None))
         machine._ADB_READY[0] = False
+
+    def test_sccache_server_started_by_the_gate(self):
+        machine._SCCACHE_READY[0] = False
+        started, said = [], []
+
+        class Process:
+            def wait(self, timeout=None):
+                return 0
+        state = {"up": False}
+
+        def popen(command, **kw):
+            started.append((command, kw))
+            state["up"] = True
+            return Process()
+        env = {"PATH": "x", "SCCACHE_BASEDIRS": "C:/other"}
+        up = lambda: state["up"]   # noqa: E731
+        self.assertTrue(machine.ensure_sccache_server("sccache-here", said.append, exists=lambda p: True, up=up, popen=popen,
+                                                      wait=lambda s: None, env=env))
+        self.assertEqual(len(started), 1)
+        command, kw = started[0]
+        self.assertEqual(command, ["sccache-here", "--start-server"])
+        self.assertEqual(kw["env"]["SCCACHE_SERVER_PORT"], "4227")
+        self.assertEqual(kw["env"]["SCCACHE_CACHE_SIZE"], "60G")
+        self.assertNotIn("SCCACHE_BASEDIRS", kw["env"], "the build takes no path out of what it hashes")
+        if machine.NT:
+            self.assertTrue(kw["creationflags"] & machine.CREATE_BREAKAWAY_FROM_JOB, "with the leave-the-job flag")
+        # Once a process; a server already running; the cache not in use: nothing is started.
+        started.clear()
+        self.assertTrue(machine.ensure_sccache_server("sccache-here", said.append, exists=lambda p: True, up=up, popen=popen))
+        machine._SCCACHE_READY[0] = False
+        self.assertTrue(machine.ensure_sccache_server("sccache-here", said.append, exists=lambda p: True, up=lambda: True, popen=popen))
+        machine._SCCACHE_READY[0] = False
+        self.assertTrue(machine.ensure_sccache_server("none", said.append, exists=lambda p: False, up=lambda: False, popen=popen))
+        self.assertEqual(started, [])
+        # A server that does not come up is False, one line when it cannot be started.
+        machine._SCCACHE_READY[0] = False
+        self.assertFalse(machine.ensure_sccache_server("sccache-here", said.append, exists=lambda p: True, up=lambda: False,
+                                                       popen=lambda *a, **k: Process(), wait=lambda s: None))
+        def broken(*a, **k):
+            raise OSError(2, "no such file")
+        self.assertFalse(machine.ensure_sccache_server("sccache-here", said.append, exists=lambda p: True, up=lambda: False, popen=broken))
+        self.assertTrue(said and said[-1].startswith("gate.py: tool:"))
+        machine._SCCACHE_READY[0] = False
+        # What the gate starts it with is what the build script would: the same program, folder, size and port.
+        text = (GATE_DIR / "build_windows.ps1").read_text(encoding="utf-8")
+        self.assertIn('[string]$Sccache = "%s"' % machine.SCCACHE_PROGRAM, text)
+        self.assertIn('[string]$SccacheDir = "%s"' % machine.SCCACHE_ENV["SCCACHE_DIR"], text)
+        self.assertIn('$env:SCCACHE_CACHE_SIZE = "%s"' % machine.SCCACHE_ENV["SCCACHE_CACHE_SIZE"], text)
+        self.assertIn('$env:SCCACHE_SERVER_PORT = "%d"' % machine.SCCACHE_PORT, text)
+        # The gate's Windows build asks for the server before the build starts.
+        order = []
+        saved = machine.ensure_sccache_server, gate.run
+        machine.ensure_sccache_server = lambda *a, **k: order.append("server") or True
+        gate.run = lambda cmd, log, **k: order.append("build") or 0
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                t = pathlib.Path(tmp)
+                args = gate.parser().parse_args(["--quick", "--work", str(t), "--build-root", str(t / "b"), "--status", "", "--board", ""])
+                g = gate.Gate(args, dry=True)
+                log = t / "build.log"
+                log.write_text("", encoding="utf-8")
+                gate.build_windows(g)(log)
+                shutil.rmtree(g.work, ignore_errors=True)
+        finally:
+            machine.ensure_sccache_server, gate.run = saved
+        self.assertEqual(order, ["server", "build"])
 
 
 def main():

@@ -216,6 +216,49 @@ def ensure_adb_server(adb_path, say=print, up=adb_server_up, popen=subprocess.Po
     return False
 
 
+# The compiler cache's server ----------------------------------------------------------------------------------------------------
+
+# What tools/gate/build_windows.ps1 gives the cache (its defaults and the environment it sets); a test keeps the two equal. The
+# server reads these when it starts, so the one the gate starts here is the one the build would have started.
+SCCACHE_PROGRAM = "D:/NebulaWork/tools/sccache/sccache.exe"
+SCCACHE_PORT = 4227
+SCCACHE_ENV = {"SCCACHE_DIR": "D:/NebulaWork/sccache", "SCCACHE_CACHE_SIZE": "60G", "SCCACHE_SERVER_PORT": str(SCCACHE_PORT)}
+_SCCACHE_READY = [False]
+
+
+def ensure_sccache_server(program=SCCACHE_PROGRAM, say=print, exists=os.path.exists, up=None, popen=subprocess.Popen,
+                          wait=time.sleep, env=None):
+    """Before the gate's Windows build: when the compiler cache is in use (its program is there) and no server answers on the
+    build's port, the gate starts the server itself with the leave-the-job flag, so it is never inside a run's job: a build of
+    another folder using it is not cut off when this run ends. Once a process. Returns True when a server answers (or the cache is
+    not in use)."""
+    if _SCCACHE_READY[0] or not exists(program):
+        return True
+    up = up or (lambda: adb_server_up(SCCACHE_PORT))
+    if up():
+        _SCCACHE_READY[0] = True
+        return True
+    environment = dict(os.environ if env is None else env)
+    environment.update(SCCACHE_ENV)
+    environment.pop("SCCACHE_BASEDIRS", None)
+    try:
+        process = start_outliving(popen, [program, "--start-server"], say, env=environment, stdin=subprocess.DEVNULL,
+                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=0x08000000 if NT else 0)
+        try:
+            process.wait(timeout=60)
+        except subprocess.TimeoutExpired:
+            pass
+    except OSError as error:
+        say("gate.py: tool: the compiler cache's server could not be started: %s" % error)
+        return False
+    for _ in range(20):
+        if up():
+            _SCCACHE_READY[0] = True
+            return True
+        wait(0.5)
+    return False
+
+
 # Processes ------------------------------------------------------------------------------------------------------------------------
 
 
