@@ -4,7 +4,7 @@ name: Check
 # Direct3D 12, Direct3D 11, Linux (Vulkan), Mac (Metal) and Android (Vulkan, on an x86_64 emulator) programs start
 # without game data (--start-check). What needs
 # a real GPU, the game's data or the tablet runs in the local gate (tools/gate/gate.py), whose results are kept in
-# docs/plan/gate-runs.
+# docs/plan/gate-runs. The compiler caches (.github/actions/compiler-cache) are restored by every run and saved by main only.
 on:
   push:
     branches: ['**']
@@ -37,6 +37,7 @@ jobs:
         uses: ./.github/actions/compiler-cache
         with:
           name: windows
+          size: 1024M
       - name: Repository audit (no game content, build outputs, oversized files or credentials)
         shell: pwsh
         run: |
@@ -87,6 +88,7 @@ jobs:
         uses: ./.github/actions/compiler-cache
         with:
           name: windows-game
+          size: 640M
       - name: LLVM
         shell: bash
         run: |
@@ -145,6 +147,7 @@ jobs:
         uses: ./.github/actions/compiler-cache
         with:
           name: linux-unit
+          size: 512M
       # The code checks gate.py runs as repo/code (P-043): the console census, cast_check and byte_order_check.
       - name: Code checks
         run: |
@@ -213,6 +216,7 @@ jobs:
         with:
           # A cache key holds no comma: 'address,undefined' is named address-undefined (N-1045).
           name: sanitizers-${{ matrix.sanitize == 'thread' && 'thread' || 'address-undefined' }}
+          size: 512M
       - name: LLVM
         run: |
           sudo apt-get update
@@ -260,6 +264,7 @@ jobs:
         uses: ./.github/actions/compiler-cache
         with:
           name: linux
+          size: 1536M
       - name: Build tools and SDL's system libraries
         run: |
           sudo apt-get update
@@ -311,6 +316,7 @@ jobs:
         uses: ./.github/actions/compiler-cache
         with:
           name: macos
+          size: 1536M
       - name: Build tools
         run: |
           echo "TOOLS=$HOME/nebula-tools" >> "$GITHUB_ENV"
@@ -389,6 +395,7 @@ jobs:
         uses: ./.github/actions/compiler-cache
         with:
           name: android-${{ matrix.abi }}
+          size: 2560M
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
