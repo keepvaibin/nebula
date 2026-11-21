@@ -9,6 +9,11 @@
 # test data, pictures) pushes no candidate and waits for nothing: main moves when its own checks pass. A file no row names makes
 # the run full, and the full run has it.
 #
+# `android` (the Android build only; `tablet12` is the tablet's part) is on every row whose folders platform/android/build_apk.ps1
+# compiles the app from: the game modules (native/), the SDL host and its renderer (platform/sdl, whose CMake takes runtime/src and
+# runtime/include), the importer (crates/nebula-import) and, in the test build, the test driver (tools/test_driver). GitHub's own two
+# Android builds are `nightly` (tools/gate/github_jobs.tsv): this machine proves the build.
+#
 # The mod suites (tests/mods, 546 tests on three renderers) and LumaLink's own check (380 tests) are in no group while the
 # mods line below says off. The owner set all mod work aside until the native rewrite is done (11-20). `short` adds the
 # quick mod set and LumaLink's check to the full run, `full` every mod suite; `gate.py --mods short|full` overrides it for
@@ -24,18 +29,18 @@ docs/plan/ledger.tsv	repo
 tests/pictures/approved.tsv	repo
 PICTURES-CHANGE.txt	repo
 tools/**	repo,tools
-tools/test_driver/**	build,unit,start,engine1,tour1,github
+tools/test_driver/**	build,unit,start,engine1,tour1,android,github
 tools/lumacore/luma_test.py	engine1,tour1
 tools/lumacore/luma_test_android.py	engine1,tour1
 tools/gate/gate_tour.py	tour1
 tools/verify/step_hash.py	tour1
 tools/verify/tours/**	tour1
-native/**	repo,build,unit,start,engine1,tour1,github
-runtime/src/render/**	repo,build,unit,start,engine3,tour3,github
-runtime/include/galaxy/render/**	repo,build,unit,start,engine3,tour3,github
-runtime/**	repo,build,unit,start,engine1,tour1,github
-platform/sdl/**	repo,build,unit,start,engine1,tour1,github
-crates/nebula-import/**	repo,import,github
+native/**	repo,build,unit,start,engine1,tour1,android,github
+runtime/src/render/**	repo,build,unit,start,engine3,tour3,android,github
+runtime/include/galaxy/render/**	repo,build,unit,start,engine3,tour3,android,github
+runtime/**	repo,build,unit,start,engine1,tour1,android,github
+platform/sdl/**	repo,build,unit,start,engine1,tour1,android,github
+crates/nebula-import/**	repo,import,android,github
 platform/android/**	android,tablet12,github
 runtime/src/render/vk/**	android,tablet12,github
 tests/engine/**	repo,build,engine3

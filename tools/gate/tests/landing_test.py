@@ -464,7 +464,7 @@ class Cases(unittest.TestCase):
         w.branch("feat/game", {"native/g2.cpp": "g"})
         w.branch("feat/render", {"runtime/src/render/r.cpp": "r"})
         land(w, ["feat/doc", "feat/game", "feat/render"])
-        self.assertEqual(w.checker.calls[0]["groups"], "repo,build,unit,start,engine1,engine3,tour1,tour3,github")
+        self.assertEqual(w.checker.calls[0]["groups"], "repo,build,unit,start,engine1,engine3,tour1,tour3,android,github")
         w.branch("feat/odd", {"installer/x.ps1": "x"})
         land(w, ["feat/odd"])
         self.assertTrue(w.checker.calls[-1]["groups"].startswith("full"), "a file no row names")

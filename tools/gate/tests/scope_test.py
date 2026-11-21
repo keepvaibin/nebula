@@ -51,12 +51,12 @@ class Rows(unittest.TestCase):
             (("tests/pictures/approved.tsv",), ["repo"]),
             (("PICTURES-CHANGE.txt",), ["repo"]),
             (("tools/plan/plan.py", "tools/gate/gate.py"), ["repo", "tools"]),
-            (("native/petari/src/Game/Foo.cpp",), ["repo", "build", "unit", "start", "engine1", "tour1", "github"]),
-            (("runtime/src/render/renderer_common.cpp",), ["repo", "build", "unit", "start", "engine1", "engine3", "tour1", "tour3", "github"]),
-            (("runtime/include/galaxy/render/renderer.h",), ["repo", "build", "unit", "start", "engine1", "engine3", "tour1", "tour3", "github"]),
-            (("runtime/src/audio/mixer.cpp",), ["repo", "build", "unit", "start", "engine1", "tour1", "github"]),
-            (("platform/sdl/host.cpp",), ["repo", "build", "unit", "start", "engine1", "tour1", "github"]),
-            (("crates/nebula-import/src/lib.rs",), ["repo", "import", "github"]),
+            (("native/petari/src/Game/Foo.cpp",), ["repo", "build", "unit", "start", "engine1", "tour1", "android", "github"]),
+            (("runtime/src/render/renderer_common.cpp",), ["repo", "build", "unit", "start", "engine1", "engine3", "tour1", "tour3", "android", "github"]),
+            (("runtime/include/galaxy/render/renderer.h",), ["repo", "build", "unit", "start", "engine1", "engine3", "tour1", "tour3", "android", "github"]),
+            (("runtime/src/audio/mixer.cpp",), ["repo", "build", "unit", "start", "engine1", "tour1", "android", "github"]),
+            (("platform/sdl/host.cpp",), ["repo", "build", "unit", "start", "engine1", "tour1", "android", "github"]),
+            (("crates/nebula-import/src/lib.rs",), ["repo", "import", "android", "github"]),
             (("platform/android/app/build.gradle",), ["repo", "android", "tablet12", "github"]),   # repo: in every run (scope.ALWAYS)
             (("runtime/src/render/vk/renderer_vk.cpp",), ["repo", "build", "unit", "start", "engine1", "engine3", "tour1", "tour3",
                                                           "android", "tablet12", "github"]),
@@ -64,7 +64,7 @@ class Rows(unittest.TestCase):
             (("tests/android/walk/test.json",), ["repo", "android", "tablet12", "github"]),
             (("tests/replays/stage.txt",), ["repo", "build", "tour1"]),
             (("tests/mods/anim/test.json",), ["repo"]),
-            (("tools/test_driver/luma_test/luma_test.c",), ["repo", "tools", "build", "unit", "start", "engine1", "tour1", "github"]),
+            (("tools/test_driver/luma_test/luma_test.c",), ["repo", "tools", "build", "unit", "start", "engine1", "tour1", "android", "github"]),
             (("tools/lumacore/luma_test.py",), ["repo", "tools", "engine1", "tour1"]),
         ]
         for paths, want in cases:
@@ -93,6 +93,30 @@ class Rows(unittest.TestCase):
         self.assertIn("github", groups, "the full run has it")
         self.assertEqual(scope.groups_from_text("repo,github"), (["repo", "github"], False))
         self.assertEqual(scope.groups_from_text("repo"), (["repo"], False))
+
+    def test_android_group_is_the_build_only(self):
+        # The Android app is compiled from the folders platform/android/build_apk.ps1 and the CMake of platform/sdl name; each of
+        # them has the group `android` (the build), and none of them brings the tablet's part with it. GitHub's two Android
+        # builds are nightly, so this machine proves the build.
+        script = (pathlib.Path(scope.__file__).resolve().parents[2] / "platform" / "android" / "build_apk.ps1").read_text(encoding="utf-8")
+        cmake = (pathlib.Path(scope.__file__).resolve().parents[2] / "platform" / "sdl" / "CMakeLists.txt").read_text(encoding="utf-8")
+        for folder in ("$root/native", "$root/platform/sdl", "crates/nebula-import"):
+            self.assertIn(folder, script, "build_apk.ps1 builds from " + folder)
+        self.assertIn('"${nebula_root}/runtime/src/', cmake, "platform/sdl's CMake compiles runtime/src")
+        self.assertIn('"${nebula_root}/runtime/include"', cmake, "and takes runtime/include")
+        self.assertIn("$driver/luma_test/luma_test.c", script, "the test build compiles the test driver")
+        for paths in (("native/a.cpp",), ("platform/sdl/a.cpp",), ("runtime/src/audio/a.cpp",), ("runtime/include/galaxy/a.h",),
+                      ("runtime/src/render/a.cpp",), ("runtime/include/galaxy/render/a.h",), ("tools/test_driver/luma_test/a.c",),
+                      ("crates/nebula-import/src/a.rs",)):
+            groups = plan(*paths).groups
+            self.assertIn("android", groups, paths)
+            if paths[0] not in ("runtime/src/render/vk/a.cpp",):
+                self.assertNotIn("tablet12", groups, "the build only, not the tablet: %s" % (paths,))
+        for paths in (("docs/a.md",), ("tools/gate/gate.py",), ("tests/unit/a.cpp",), ("tests/engine/a/test.json",),
+                      ("tools/lumacore/luma_test.py",)):
+            self.assertNotIn("android", plan(*paths).groups, paths)
+        # What a plan with the build and no tablet runs: the build, not the tablet's part.
+        self.assertEqual(scope.check_patterns(["android"]), ["build/android"])
 
     def test_union_of_rows(self):
         paths = ["docs/a.md", "crates/nebula-import/src/x.rs", "runtime/src/audio/a.cpp", "platform/android/app/a.kt"]

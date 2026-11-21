@@ -423,6 +423,7 @@ class LandBase(unittest.TestCase):
 
     def fake_land(self, folder, branch, tablet, wait, *rest):
         self.calls.append((pathlib.Path(folder), branch, tablet, wait))
+        self.options = list(rest[0]) if rest else []
         return self.verdict
 
     def ready(self, p001=("fixed", "tests/render/a_test 1-9 fails before"), p002_note="advanced 11-20: half done"):
@@ -435,6 +436,15 @@ class LandBase(unittest.TestCase):
         return self.t.run(["land", "A.1"], expect)
 
 class LandTest(LandBase):
+    def test_github_again_is_handed_to_the_gate_only_when_asked(self):
+        self.ready()
+        self.verdict = plan.Verdict(False, [], [("tour/d3d12", "FAIL", "replay differs")])   # a failed landing can be asked again
+        self.t.run(["land", "A.1"], None)
+        self.assertNotIn("--github-again", self.options, "without the switch nothing changes")
+        self.t.run(["land", "A.1", "--github-again"], None)
+        self.assertIn("--github-again", self.options)
+        self.assertEqual(plan.gate_options(type("A", (), dict(live="L", failures="F", github_again=True))(), "1")[-1], "--github-again")
+
     def test_a_ready_step_lands_and_marks_itself_landed_in_its_own_commit(self):
         code_commit = self.ready()
         code, text = self.land(expect=0)
@@ -964,7 +974,7 @@ class ScopeTest(unittest.TestCase):
 
     def test_the_union_of_several_rows(self):
         out = self.checks("native/petari/a.cpp", "runtime/src/render/a.cpp", "crates/nebula-import/src/x.rs")
-        self.assertEqual([l.split(":")[0] for l in out[:-1]], ["repo", "build", "unit", "start", "engine1", "engine3", "tour1", "tour3", "import", "github"])
+        self.assertEqual([l.split(":")[0] for l in out[:-1]], ["repo", "build", "unit", "start", "engine1", "engine3", "tour1", "tour3", "import", "android", "github"])
         self.assertIn("tour/vulkan", out[-1])
 
     def test_a_path_no_row_names_runs_everything(self):

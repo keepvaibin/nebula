@@ -5,7 +5,8 @@
 #
 #   must      the move waits until it is green for the commit (any push run of that commit, the newest result wins); a red one
 #             stops the run. A job this table does not name counts as must, and the run says so in a line of kind tool.
-#   nightly   left out of every rule: this machine builds and tests Windows itself.
+#   nightly   left out of every rule: this machine builds and tests Windows and Android itself (a landing whose plan has
+#             the group `android` runs the Android build here; GitHub's two Android builds take about 50 minutes each).
 #   advisory  never blocks: a red or cancelled one is run again once; red again, it is told in one line.
 #
 # A change whose scope (tools/gate/scope.tsv) has no `github` group does not push a candidate and waits for none of them.
@@ -17,8 +18,8 @@ Linux sanitizers (address,undefined)	must
 Linux sanitizers (thread)	must
 Rust tests (ubuntu-24.04)	must
 Rust tests (windows-2022)	must
-Android (arm64-v8a)	must
-Android (x86_64)	must
+Android (arm64-v8a)	nightly
+Android (x86_64)	nightly
 Windows (three renderers, unit tests)	nightly
 Windows game modules	nightly
 Android start check (x86_64 emulator)	advisory
