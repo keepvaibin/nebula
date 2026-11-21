@@ -109,7 +109,7 @@ class RealPlanTest(unittest.TestCase):
         self.assertIn("Closes whole (state fixed, proof naming a test, a search or a measure): P-022", text)
         self.assertIn("start: python -X utf8 -I", text)
         self.assertIn("plan.py land S0.1.1", text)
-        self.assertIn("build, unit, start, engine and tour (12 stops) on three renderers", text)   # the checks of its paths
+        self.assertIn("tour3: the 12-stop tour on the three renderers", text)   # the checks of its paths
         self.assertNotIn("### S0.1.2", text, "the card stops at its own end")
         self.assertEqual(self.steps[0]["state"], "open", "next changes nothing")
 
@@ -864,71 +864,42 @@ class StateFilesTest(unittest.TestCase):
 # ---- the checks a step's paths will run ---------------------------------------------------------------------
 
 class ScopeTest(unittest.TestCase):
-    scope = plan.SCOPE_BUILTIN
+    """The checks a step's paths run: tools/gate/scope.tsv (scope_test.py tests the table itself); here, how the plan tool
+    prints them."""
+    table = plan.scope.read_table()
 
     def checks(self, *paths):
-        return plan.checks_for(list(paths), self.scope)
+        return plan.checks_for(list(paths), self.table)
 
     def test_documents_only(self):
-        self.assertEqual(self.checks("docs/plan/ledger.tsv", "README.md", "docs/x/y.md"), ["repo/*"])
+        out = self.checks("docs/plan/ledger.tsv", "README.md", "docs/x/y.md")
+        self.assertEqual(out[0][:5], "repo:")
+        self.assertEqual(out[-1], "checks: repo/*")
 
-    def test_tools_only(self):
-        self.assertEqual(self.checks("tools/plan/plan.py"), ["repo/*, harness/self, description/self"])
-
-    def test_game_paths_run_the_game_row(self):
-        out = self.checks("native/petari/src/Game/A.cpp")
-        self.assertEqual(len(out), 1)
-        self.assertIn("tour (12 stops) on Direct3D 12 with its pictures and replays", out[0])
-
-    def test_render_paths_run_three_renderers_and_not_the_plain_runtime_row_as_well(self):
-        out = self.checks("runtime/src/render/renderer_common.cpp", "runtime/include/galaxy/render/renderer_common.h")
-        self.assertEqual(len(out), 1)
-        self.assertIn("three renderers", out[0])
-
-    def test_other_runtime_paths_run_direct3d_12_only(self):
-        out = self.checks("runtime/src/audio/a.cpp", "platform/sdl/host.cpp")
-        self.assertEqual(len(out), 1)
-        self.assertTrue(out[0].endswith("on Direct3D 12"))
-
-    def test_the_vulkan_folder_runs_the_render_row_and_the_android_row(self):
-        out = self.checks("runtime/src/render/vk/renderer_vk.cpp")
-        self.assertEqual(len(out), 2)
-        self.assertIn("three renderers", out[0])
-        self.assertIn("Android build", out[1])
-
-    def test_the_union_of_several_rows_without_repeats(self):
-        out = self.checks("native/petari/a.cpp", "runtime/src/render/a.cpp", "crates/nebula-import/src/x.rs", "native/b.cpp")
-        self.assertEqual(len(out), 3)
-
-    def test_documents_beside_code_add_nothing_of_their_own(self):
-        self.assertEqual(self.checks("runtime/src/render/a.cpp", "docs/plan/ledger.tsv"), self.checks("runtime/src/render/a.cpp"))
+    def test_the_union_of_several_rows(self):
+        out = self.checks("native/petari/a.cpp", "runtime/src/render/a.cpp", "crates/nebula-import/src/x.rs")
+        self.assertEqual([l.split(":")[0] for l in out[:-1]], ["repo", "build", "unit", "start", "engine1", "engine3", "tour1", "tour3", "import"])
+        self.assertIn("tour/vulkan", out[-1])
 
     def test_a_path_no_row_names_runs_everything(self):
         out = self.checks("installer/build.ps1")
+        self.assertTrue(out[0].startswith("full: everything the main gate runs today"))
+        self.assertIn("installer/build.ps1", out[0])
         self.assertEqual(len(out), 1)
-        self.assertTrue(out[0].startswith("everything the main gate runs today"))
-        self.assertEqual(self.checks("native/a.cpp", "installer/b.ps1")[-1][:10], "everything")
 
     def test_no_path_runs_everything(self):
-        self.assertTrue(self.checks()[0].startswith("everything"))
+        self.assertIn("the card names no path", self.checks()[0])
 
-    def test_patterns(self):
-        self.assertTrue(plan.path_matches("docs/a/b/c.md", ["docs/**"]))
-        self.assertTrue(plan.path_matches("a/b/c.md", ["*.md"]), "a pattern with no folder matches the name anywhere")
-        self.assertFalse(plan.path_matches("a/b/c.mdx", ["*.md"]))
-        self.assertFalse(plan.path_matches("docsx/a.md", ["docs/**"]))
-        self.assertTrue(plan.path_matches("docs/plan/ledger.tsv", ["docs/plan/ledger.tsv"]))
-        self.assertFalse(plan.path_matches("runtime/src/render/a.cpp", ["runtime/*"]), "one star stays in one folder")
-
-    def test_the_gate_scope_file_is_used_when_it_is_there_and_the_built_in_one_when_it_is_not(self):
+    def test_the_gate_scope_file_is_read_from_the_plan_tree_and_this_trees_when_it_is_not_there(self):
         with tempfile.TemporaryDirectory() as d:
-            self.assertEqual(plan.read_scope(d), plan.SCOPE_BUILTIN)
+            self.assertEqual(len(plan.read_scope(d).rows), len(self.table.rows))
             (pathlib.Path(d) / "tools" / "gate").mkdir(parents=True)
-            scope = pathlib.Path(d) / "tools" / "gate" / "scope.tsv"
-            scope.write_text("patterns\tchecks\tkind\nx/**\tcheck-x\tfirst\ny/**\tcheck-y\tadd\n", encoding="utf-8")
-            self.assertEqual(plan.read_scope(d), [("x/**", "first", "check-x"), ("y/**", "add", "check-y")])
-            scope.write_text("nonsense\n", encoding="utf-8")
-            self.assertEqual(plan.read_scope(d), plan.SCOPE_BUILTIN)
+            scope_file = pathlib.Path(d) / "tools" / "gate" / "scope.tsv"
+            scope_file.write_text("mods = off" + chr(10) + "pattern" + chr(9) + "groups" + chr(10) + "x/**" + chr(9) + "tools" + chr(10), encoding="utf-8")
+            self.assertEqual([r[:2] for r in plan.read_scope(d).rows], [("x/**", ("tools",))])
+            scope_file.write_text("nonsense" + chr(10), encoding="utf-8")
+            with self.assertRaises(plan.scope.ScopeError):
+                plan.read_scope(d)
 
     def test_a_cards_paths_are_the_ones_in_the_tree(self):
         with Tree() as t:

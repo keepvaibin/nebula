@@ -81,9 +81,15 @@ sys.path.insert(0, str(TREE / "tools" / "verify"))
 import gate_tour  # noqa: E402
 import kinds  # noqa: E402
 import pictures as picture_tool  # noqa: E402
+import scope  # noqa: E402
 import step_hash  # noqa: E402
 
 LEVELS = ("quick", "main", "long", "final")
+# A landing's own level (tools/gate/scope.py, gate.py land): the checks of the groups a change needs, the 12 quick stops of
+# a tour, no GitHub check of its own (the landing waits for GitHub as a move does). The parser has no flag for it: --scope
+# makes a --main run this level unless the change needs everything (then it is the main level).
+LAND_LEVEL = "land"
+SHORT_LEVELS = ("quick", LAND_LEVEL)
 # The twelve stops --quick plays, and the tablet's short part: one per kind of stage (a hub, water, gravity, a boss,
 # sand, ice, lava, a 2D stage, a race, the fleet, the heaviest stop of the tour, the factory). Names as
 # tools/verify/tours/tour_enterable.txt lists them.
@@ -276,6 +282,14 @@ def default_records(state, detail):
     return []
 
 
+def table_mods():
+    """`mods = off | short | full` of tools/gate/scope.tsv ('off' when the table cannot be read: the table's own check says so)."""
+    try:
+        return scope.read_table().mods
+    except scope.ScopeError:
+        return "off"
+
+
 class Gate:
     """One run: its checks' results. A dry run (dry=True) runs no check: it learns the level's check names and what
     each needs, for --only."""
@@ -295,6 +309,7 @@ class Gate:
         self.new_pictures = []
         self.runs_held = False
         self.tree = TREE
+        self.mods = getattr(args, "mods", None) or table_mods()
         self.main_ref = MAIN_REF
         self.open_rows = []
         self.aside = kinds.read_aside(SET_ASIDE)
@@ -1153,7 +1168,7 @@ def replays(g, label, renderer, against=None):
     def fn(log):
         work = g.work / ("runs-%s-%s" % (label, renderer))
         other = None if against is None else g.work / ("runs-%s-%s" % against)
-        ok, lines = step_hash.check(work, other, some=g.level == "quick")
+        ok, lines = step_hash.check(work, other, some=g.level in SHORT_LEVELS)
         pathlib.Path(log).write_text("\n".join(lines) + "\n", encoding="utf-8")
         # Not one run compared is no proof: tool. A step hash that differs is a fail.
         return ok, lines[-1], None, "tool" if lines[-1].startswith("0 of 0 the same") else "fail"
@@ -1262,7 +1277,7 @@ def board_line(board, text):
 # Who goes first among the lock's waiters (07-BASE-FIRST, How the work flows: the long run does not take the lock
 # while a landing waits): a landing's gate (quick or main) before the work that waits for no one (the long run's
 # parts, the measure, queued loops), otherwise first come. gate.py keeps the order, not the agents.
-LANDING_GATES = ("quick gate ", "main gate ")
+LANDING_GATES = ("quick gate ", "main gate ", "land gate ")
 
 
 def queue_rank(holder):
@@ -1294,7 +1309,7 @@ def queue_order(lock, alive):
 def locks_for(mode, patterns, gate_lock, long_lock):
     """The locks a gate of this level takes: the gate lock at every level but the long run (--only runs too), the long
     lock for the long and final runs of all their checks."""
-    locks = [gate_lock] if mode in ("quick", "main", "final") else []
+    locks = [gate_lock] if mode in ("quick", "main", "final", LAND_LEVEL) else []
     if mode in ("long", "final") and not patterns:
         locks.append(long_lock)
     return locks
@@ -1404,7 +1419,7 @@ def picture_result(g, label, renderer, place, log, keep_new=True):
     cmd = [sys.executable, "-X", "utf8", "-I", HERE / "pictures.py", "check", "--runs", work, "--renderer", renderer,
            "--place", place, "--manifest", pathlib.Path(g.tree) / picture_tool.MANIFEST_NAME, "--store", PICTURE_STORE,
            "--changes", pathlib.Path(g.tree) / picture_tool.CHANGES_NAME]
-    if g.level != "quick":
+    if g.level not in SHORT_LEVELS:
         cmd.append("--complete")
     if keep_new:
         cmd += ["--new-out", g.work / "new-pictures" / tag]
@@ -1493,6 +1508,12 @@ def approve_pictures(g, commit, say=print):
 MOD_TESTS = TREE / "tools" / "lumacore" / "mod_tests.py"
 
 
+def mods_on(g):
+    """Whether this run has the mod suites and LumaLink's own check: the mods switch (tools/gate/scope.tsv, or --mods) is not
+    off, and the mod tests are in the tree."""
+    return getattr(g, "mods", "off") != "off" and MOD_TESTS.exists()
+
+
 def mod_tests(g, renderer, bin_dir=None, label="mods", more_env=None):
     """The mod tests on one renderer, through the mods' own entry point (it builds the test mods with LumaLink, then
     runs them side by side, --mod-parallel at a time, each game in its own folder): every suite of tests/mods and of
@@ -1514,7 +1535,7 @@ def mod_tests(g, renderer, bin_dir=None, label="mods", more_env=None):
         cmd = [sys.executable, "-X", "utf8", "-I", MOD_TESTS, "--bin", bin_dir or g.bin, "--work", work, "--renderer",
                renderer, "--lock", g.work / ("harness-%s-%s.lock" % (label, renderer)), "--commit", g.commit, "--jobs", g.args.jobs,
                "--parallel", str(g.args.mod_parallel)]
-        if g.level == "quick":
+        if g.level in SHORT_LEVELS or g.mods == "short":
             cmd += ["--set", "quick"]
         code = run(cmd, log, env=env, cwd=g.args.build_root)
         for d in work.rglob("bin"):
@@ -1937,7 +1958,7 @@ def tablet_part(g, stops, device=None):
              "replays/tablet": ("tour/tablet", "tour/tablet-pc"), "pictures/tablet": ("tour/tablet",)}
     # The tablet's pictures have rows of their own (place tablet, N-1040) for the main level's twelve stops; the long run's tour
     # takes more.
-    checks = TABLET_CHECKS + (("pictures/tablet",) if g.level == "main" else ())
+    checks = TABLET_CHECKS + (("pictures/tablet",) if g.level in ("main", LAND_LEVEL) else ())
     wanted = [n for n in checks if g.wanted(n, needs[n])]
     if g.dry or not wanted:
         return
@@ -2030,7 +2051,8 @@ def cpu_lane(g, discs_proved):
         LANE.below_normal = True
         try:
             g.check("rust", rust_tests(g))
-            g.check("lumalink", lumalink_tests(g), ("build/windows",))
+            if mods_on(g):
+                g.check("lumalink", lumalink_tests(g), ("build/windows",))
             # The cooked collision against each disc's (P-169).
             discs = disc_images(g.args.discs)
             for disc in discs_proved:
@@ -2070,7 +2092,7 @@ def picture_part(g):
     jobs = sorted(g.picture_jobs, key=lambda job: job[0])
     for name, label, r, needs in jobs:
         g.check(name, pictures(g, label, r), needs)
-    if g.level in ("main", "final"):
+    if g.level in ("main", "final", LAND_LEVEL):
         # A declared change that names no picture is stale; only a level that takes every picture can tell.
         g.check("pictures/declared", declared_check(g), tuple(j[0] for j in jobs))
 
@@ -2119,7 +2141,7 @@ def sanitizer_part(g):
     report. The mod tests reach the game's code from mods (calls, hooks, events) that the tour never does (N-1041)."""
     root = pathlib.Path(g.args.build_root) / "asan"
     asan_bin = str(root / "bins")
-    mods = MOD_TESTS.exists()
+    mods = mods_on(g)
     if g.check("build/windows-asan", build_windows(g, root=root, bin_dir=asan_bin, sanitize="address")) is False:
         g.missing("tour-asan/d3d12", "the sanitizer build failed", ("build/windows-asan",))
         if mods:
@@ -2171,7 +2193,7 @@ def coverage_check(g, bin_dir, tour):
         runs = [("engine", harness(g, TREE / "tests" / "engine" / "suite.json", "d3d12", "engine-coverage",
                                    bin_dir=bin_dir, env=env)),
                 ("tour", harness(g, tour, "d3d12", "tour-coverage", bin_dir=bin_dir, env=env))]
-        if MOD_TESTS.exists():
+        if mods_on(g):
             runs.append(("mods", mod_tests(g, "d3d12", bin_dir=bin_dir, label="mods-coverage", more_env=env)))
         said = []
         for name, part in runs:
@@ -2234,34 +2256,37 @@ def run_checks(args, known=None, planned=None, selected=None, dry=False):
         g.write()
         return g
     quick = level == "quick"
+    short = level in SHORT_LEVELS
     every = level in ("main", "final")
+    # A landing's checks are picked by name (--scope), so it registers every renderer and the selection leaves out what
+    # its groups do not name.
     renderers = ("d3d12",) if quick else RENDERERS
     if level != "long":
         unit_part(g)
-    if level != "long" and not MOD_TESTS.exists():
+    if level != "long" and g.mods != "off" and not MOD_TESTS.exists():
         g.missing("mods", "the mod tests are not in the tree (tools/lumacore/mod_tests.py, mods M0)")
     soak = start_soak(g) if level in ("long", "final") and not g.dry and g.wanted("soak", ("build/windows",)) else None
-    tours = write_tours(g, QUICK_STOPS if quick else None, QUICK_REGION_STOPS if quick else None)
+    tours = write_tours(g, QUICK_STOPS if short else None, QUICK_REGION_STOPS if short else None)
     # Region discs: Direct3D 12 at the quick and main levels; every renderer in the long run and the final check.
     region_renderers = RENDERERS if level in ("long", "final") else ("d3d12",)
     # The CPU-only checks first in the list, so their rows read where they always did.
-    lanes = [cpu_lane(g, ("RMGE01",) if quick else ("RMGE01",) + REGION_DISCS)] if level != "long" else []
+    lanes = [cpu_lane(g, ("RMGE01",) if short else ("RMGE01",) + REGION_DISCS)] if level != "long" else []
     for r in renderers:
         def renderer_lane(r=r):
             if level != "long":
                 engine_lane(g, r)()
             tour_lane(g, tours["tour"], "tour", r)()
         lanes.append(renderer_lane)
-    for disc in REGION_DISCS:
+    for disc in REGION_DISCS if level != LAND_LEVEL else ():
         def region_lane(disc=disc):
             for r in region_renderers:
                 tour_lane(g, tours["tour-%s" % disc], "tour-%s" % disc, r)()
         lanes.append(region_lane)
-    if level != "long" and MOD_TESTS.exists():
+    if level != "long" and mods_on(g):
         lanes += [mods_lane(g, r) for r in renderers]
     if not quick:
         # The main level's tablet part is the twelve quick stops; the long run's (and the final check's) all of them.
-        lanes.append(android_lane(g, QUICK_STOPS if level == "main" else None))
+        lanes.append(android_lane(g, QUICK_STOPS if level in ("main", LAND_LEVEL) else None))
     if level in ("long", "final"):
         lanes += [sanitizer_lane(g), coverage_lane(g)]
     if level == "long":
@@ -2323,6 +2348,13 @@ def parser():
                         "whose compiler cache is cold (Planner 11-18 03:49); --covers says why, and the board's LOCK "
                         "line shows the wait")
     p.add_argument("--only", default="", help="only these checks (shell patterns, comma-separated) and what they need")
+    p.add_argument("--scope", default="",
+                   help="--main: only the checks of the groups a change needs (tools/gate/scope.py): GROUP[,GROUP...], 'auto' "
+                        "for the groups of the files changed from the merge base with origin/main, or 'full'; what a "
+                        "landing runs (gate.py land). With --move the run lands the commit the way a main gate does")
+    p.add_argument("--mods", choices=scope.MODS_VALUES, default=None,
+                   help="the mod suites and LumaLink's own check: off, short (the quick mod set) or full; the default is the "
+                        "`mods =` line of tools/gate/scope.tsv (off: they run in no landing and no nightly run)")
     p.add_argument("--build-root", default=os.environ.get("NEBULA_GATE_BUILD", "D:/NebulaWork/build/gate-%s" % TREE.name),
                    help="where the builds go (kept between runs, so builds are incremental)")
     p.add_argument("--pak", default=os.environ.get("NEBULA_GATE_PAK", "D:/NebulaWork/build/us-pak-37/game.pak"))
@@ -2382,14 +2414,43 @@ def main(argv=None):
         print(kinds.verdict_line("not-judged"), flush=True)
         return 2
 
-    if args.move and (args.mode != "main" or patterns or args.no_build):
+    plan = None
+    if args.scope:
+        if args.mode != "main" or patterns:
+            return refuse("--scope goes with --main alone: the checks of the groups a change needs")
+        try:
+            if args.scope == "auto":
+                paths, why = scope.changed_paths(GIT, TREE, MAIN_REF)
+                if why:
+                    return refuse(why)
+                plan = scope.plan_for(paths, scope.read_table())
+            else:
+                groups, full = scope.groups_from_text(args.scope)
+                plan = scope.Plan(groups, full, [], {})
+        except scope.ScopeError as error:
+            return refuse("tools/gate/scope.tsv or --scope is wrong:\n  " + "\n  ".join(error.problems))
+        print("gate.py: scope: " + "; ".join(scope.describe(plan)), flush=True)
+        if not plan.full:
+            args.mode = LAND_LEVEL
+    if args.move and (args.mode not in ("main", LAND_LEVEL) or patterns or args.no_build):
         return refuse("--move goes with --main alone: the whole main gate, built here")
-    if args.mode != "quick" and not args.tablet:
+    if plan is not None and not plan.full:
+        needs_tablet = "tablet12" in plan.groups or "android" in plan.groups
+    else:
+        needs_tablet = args.mode != "quick"
+    if needs_tablet and not args.tablet:
         return refuse("--%s needs the tablet's serial (--tablet): its part is owed when the tablet is away" % args.mode)
     known, planned, problems = read_lists()
     if problems:
         return refuse("the lists are wrong:\n  " + "\n  ".join(problems))
     selected = None
+    if plan is not None and not plan.full:
+        dry = run_checks(args, known, planned, dry=True)
+        shutil.rmtree(dry.work, ignore_errors=True)
+        selected = scope.select(dry.needs, plan.groups)
+        if not selected:
+            return refuse("the groups %s name no check of this tree" % ",".join(plan.groups))
+        print("gate.py: the landing runs %d checks: %s" % (len(selected), ", ".join(sorted(selected))), flush=True)
     if patterns:
         dry = run_checks(args, known, planned, dry=True)
         shutil.rmtree(dry.work, ignore_errors=True)
@@ -2425,7 +2486,7 @@ def main(argv=None):
         if r.returncode != 0:
             return refuse("the candidate could not be pushed as %s: %s" % (candidate, (r.stderr or r.stdout).strip()[-300:]))
     quick = None
-    if args.mode in ("main", "final") and not patterns:
+    if args.mode in ("main", "final") and not patterns and plan is None:
         quick = quick_passed(args.work, git("rev-parse", "--short", "HEAD"), whole=True)
         if quick is None and (args.move or not args.without_quick):
             return refuse("no whole quick gate of %s passed in %s: run --quick first" % (commit[:9], args.work))

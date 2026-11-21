@@ -57,7 +57,6 @@ plain file the agent may commit.
 """
 import argparse
 import datetime
-import fnmatch
 import os
 import pathlib
 import re
@@ -70,11 +69,13 @@ HERE = pathlib.Path(__file__).resolve().parent
 TREE = HERE.parent.parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(TREE / "tools" / "verify"))
+sys.path.insert(0, str(TREE / "tools" / "gate"))
 
 import failures  # noqa: E402
 import doc_refs  # noqa: E402
 import live as lv  # noqa: E402
 import page  # noqa: E402
+import scope  # noqa: E402
 
 GIT = "C:/Program Files/Git/cmd/git.exe"
 NATIVE = "docs/plan/native"
@@ -603,105 +604,29 @@ def ledger_problems(reading, ledger, base=None):
 
 # ---- which checks the changed paths run ----------------------------------------------------------------------
 
-# tools/gate/scope.tsv (package T4) is read when it exists; this is the table the plan was written with. Kinds: `only`
-# (the row applies to a path no other row names), `first` (the first of these rows that names the path), `add` (every one
-# that names it, on top).
-SCOPE_BUILTIN = [
-    ("docs/**,*.md,docs/plan/ledger.tsv", "only", "repo/*"),
-    ("tools/**", "only", "repo/*, harness/self, description/self"),
-    ("native/**", "first", "build, unit, start on three renderers, tour (12 stops) on Direct3D 12 with its pictures and replays"),
-    ("runtime/src/render/**,runtime/include/galaxy/render/**", "first",
-     "build, unit, start, engine and tour (12 stops) on three renderers with pictures and replays"),
-    ("runtime/**,platform/sdl/**", "first", "build, unit, start, engine and tour (12 stops) on Direct3D 12"),
-    ("crates/nebula-import/**", "first",
-     "rust, collision proof on the US disc, the US data made again, tour (12 stops) on Direct3D 12 with pictures"),
-    ("platform/android/**,runtime/src/render/vk/**", "add",
-     "the Android build and its unit tests, the tablet's short set (12 stops) if the tablet answers, else owed"),
-]
-SCOPE_EVERYTHING = "everything the main gate runs today"
-
-
-def glob_regex(pattern):
-    out, i = [], 0
-    while i < len(pattern):
-        if pattern.startswith("**", i):
-            out.append(".*")
-            i += 2
-        elif pattern[i] == "*":
-            out.append("[^/]*")
-            i += 1
-        elif pattern[i] == "?":
-            out.append("[^/]")
-            i += 1
-        else:
-            out.append(re.escape(pattern[i]))
-            i += 1
-    return re.compile("^" + "".join(out) + "$")
-
-
-def path_matches(path, patterns):
-    """True when `path` matches one of the shell patterns (`**` any folders, `*` within a name; a pattern with no
-    folder, `*.md`, matches the file's name anywhere)."""
-    for p in patterns:
-        p = p.strip()
-        if not p:
-            continue
-        if "/" not in p:
-            if fnmatch.fnmatchcase(path.rsplit("/", 1)[-1], p):
-                return True
-        elif glob_regex(p).match(path):
-            return True
-    return False
+# tools/gate/scope.tsv (package T4) says it: every row a path matches adds its groups, the landing runs the union, and a path
+# no row names makes it full. The groups and the checks each stands for are tools/gate/scope.py's.
 
 
 def read_scope(tree):
-    """The scope table: tools/gate/scope.tsv when it is there and readable (columns: patterns, checks, kind), else the
-    built-in one."""
-    path = pathlib.Path(tree) / "tools" / "gate" / "scope.tsv"
-    rows = []
-    if path.is_file():
-        for line in path.read_text(encoding="utf-8").splitlines():
-            cells = line.split("\t")
-            if len(cells) >= 2 and not line.startswith("#") and cells[0].strip().lower() not in (
-                    "paths", "pattern", "patterns", "changed paths"):
-                kind = (cells[2].strip().lower() if len(cells) > 2 else "first")
-                rows.append((cells[0], kind if kind in ("only", "first", "add") else "first", cells[1]))
-    return rows if len(rows) >= 2 else list(SCOPE_BUILTIN)
+    """The scope table of the plan tree (tools/gate/scope.tsv), else this file's tree's own."""
+    for base in (pathlib.Path(tree), TREE):
+        path = base / "tools" / "gate" / "scope.tsv"
+        if path.is_file():
+            return scope.read_table(path)
+    raise scope.ScopeError(["tools/gate/scope.tsv is not in %s" % tree])
 
 
-def checks_for(paths, scope):
-    """The checks that the union of the rows `paths` match runs: [text], in table order. A path takes the first
-    `first` row that names it and every `add` row; with none of those, the `only` rows that name it; a path no row
-    names runs everything."""
-    paths = [p for p in paths if p]
+def checks_for(paths, table):
+    """What the landing of a change of `paths` runs, as lines: the groups, each with what it stands for, and the names of
+    the checks. A path no row names runs everything (the main gate's checks on the native game)."""
+    found = scope.plan_for(paths, table)
+    lines = scope.describe(found)
     if not paths:
-        return [SCOPE_EVERYTHING + " (the card names no path of the tree)"]
-    chosen, only_chosen, everything = set(), set(), False
-    for path in paths:
-        hit = False
-        first_done = False
-        for i, (pats, kind, _) in enumerate(scope):
-            if kind == "first" and not first_done and path_matches(path, pats.split(",")):
-                chosen.add(i)
-                first_done = hit = True
-            elif kind == "add" and path_matches(path, pats.split(",")):
-                chosen.add(i)
-                hit = True
-        if not hit:
-            for i, (pats, kind, _) in enumerate(scope):
-                if kind == "only" and path_matches(path, pats.split(",")):
-                    only_chosen.add(i)
-                    hit = True
-        everything = everything or not hit
-    out = []
-    if not chosen:                        # an `only` row is for a change that is only that: code beside it wins
-        chosen = only_chosen
-    for i in sorted(chosen):
-        if scope[i][2] not in out:
-            out.append(scope[i][2])
-    if everything:
-        out.append(SCOPE_EVERYTHING + " (for a path no row names)")
-    return out
+        lines[0] += " (the card names no path of the tree)"
+    if not found.full:
+        lines.append("checks: " + ", ".join(scope.check_patterns(found.groups)))
+    return lines
 
 
 def card_paths(card, tree):

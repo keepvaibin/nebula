@@ -155,11 +155,19 @@ def main():
         check({"tour/vulkan", "tour/d3d11", "replays/tablet", "tour/tablet-pc", "github", "build/android",
                "tour-RMGP01/d3d12", "pictures/tablet"} <= m and "soak" not in m and "tour-RMGP01/vulkan" not in m,
               "main: %s" % sorted(m))
-        check({"soak", "tour-asan/d3d12", "mods-asan/d3d12", "tour-RMGJ01/vulkan", "tour-RMGP01/d3d11", "tour/tablet", "coverage", "measure/route"} <= lg
+        check({"soak", "tour-asan/d3d12", "tour-RMGJ01/vulkan", "tour-RMGP01/d3d11", "tour/tablet", "coverage", "measure/route"} <= lg
               and "github" not in lg and "unit/windows" not in lg and "pictures/tablet" not in lg, "long: %s" % sorted(lg))
-        # The sanitizer build runs the mod tests too (N-1041): a check of its own after that build, not a planned one.
-        check(tuple(long_needs.get("mods-asan/d3d12", ())) == ("build/windows-asan",),
-              "long: the mod tests on the sanitizer build: %s" % (long_needs.get("mods-asan/d3d12"),))
+        # The mod suites and LumaLink's own check run in no level while the table says mods = off (package T4).
+        check(not any(n.startswith("mods") or n == "lumalink" for n in q | m | lg | f if n not in planned),
+              "mods = off: no mod check at any level: %s" % sorted(n for n in q | m | lg | f if n.startswith("mods") or n == "lumalink"))
+        # Behind the switch the sanitizer build runs the mod tests too (N-1041): a check of its own after that build.
+        long_mods = gate.run_checks(args_for("--long", "--tablet", "T", "--work", str(work), "--mods", "full"), known, planned, dry=True)
+        check(tuple(long_mods.needs.get("mods-asan/d3d12", ())) == ("build/windows-asan",) and "lumalink" not in long_mods.needs
+              and "mods/d3d12" not in long_mods.needs,
+              "mods = full: the mod tests on the sanitizer build: %s" % (long_mods.needs.get("mods-asan/d3d12"),))
+        main_mods = gate.run_checks(args_for("--main", "--tablet", "T", "--work", str(work), "--mods", "short"), known, planned, dry=True)
+        check({"lumalink", "mods/d3d12", "mods/vulkan", "mods/d3d11"} <= set(main_mods.needs),
+              "mods = short: LumaLink's check and the mod tests of every renderer are back in the main level")
         # The play route measure runs at the long run's end (N-1043): a check of its own, not a planned one.
         check(tuple(long_needs.get("coverage", ())) == ("build/windows-coverage",) and "build/windows-coverage" in lg,
               "long: the coverage build's report runs: %s" % (long_needs.get("coverage"),))
@@ -243,9 +251,9 @@ def main():
                     seen.append((name, getattr(gate.LANE, "below_normal", False)))
 
             cpu_lane(CpuGate(), ("RMGE01",))()
-            check([n for n, _ in seen] == ["rust", "lumalink", "import/collision/RMGE01", "harness/self", "description/self"]
+            check([n for n, _ in seen] == ["rust", "import/collision/RMGE01", "harness/self", "description/self"]
                   and all(low for _, low in seen) and not getattr(gate.LANE, "below_normal", False),
-                  "the lane's checks run in order at below-normal priority, and the lane gives the flag back")
+                  "the lane's checks run in order at below-normal priority, and the lane gives the flag back (no LumaLink: mods = off)")
             if os.name == "nt":
                 out = t / "priority.log"
                 gate.LANE.below_normal = True
