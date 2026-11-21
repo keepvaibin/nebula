@@ -107,20 +107,29 @@ class Ticker(threading.Event):
         return self.looks < 0
 
 
-def watched(folder, scripted):
+def watched(folder, scripted, pointer=None):
+    """The file the watch writes for a script of looks (each the windows' list); `pointer`: the pointer's position at each look
+    and the process under it (default: still, over nothing of the run's)."""
     folder.mkdir(parents=True, exist_ok=True)
     ticker = Ticker(len(scripted))
     looks = iter(scripted)
+    spots = iter(pointer or [((0, 0), 0)] * len(scripted))
+    state = {}
 
     class Scripted:
         def foreground_pid(self):
             return 0
 
+        def pointer_at(self):
+            state["pos"], state["pid"] = next(spots)
+            return state["pos"]
+
         def pointer_pid(self):
-            return 0
+            return state["pid"]
 
         def windows(self):
             return next(looks)
+
     luma_test.watch_window(folder, 100, ticker, Scripted(), lambda: ME, now=lambda: ticker.t, every=0.25)
     path = folder / "window-watch.txt"
     return path.read_text(encoding="utf-8") if path.exists() else None
@@ -133,6 +142,18 @@ text = watched(work / "covered", [clear, clear, cover, cover, cover, clear])
 check(text == "covered first at 3.0 s, 3 of the quarter seconds\n", "a covered window: the first time and the count: %r" % text)
 check(watched(work / "minimized", [clear, [win(100, GAME, minimized=True)]]) == "minimized first at 2.0 s, 1 of the quarter seconds\n",
       "the old kinds still written in the same form")
+
+# A pointer that rests under the window reaches nothing; one that moves over it does (the owner's pointer sits where the window
+# comes up: all four renderers' first real runs were "not trusted" for it, 732 of 743 looks).
+rest = [((1351, 1156), 100)] * 6
+check(watched(work / "resting", [clear] * 6, rest) is None, "a pointer that does not move under the window: nothing written")
+move = [((10, 10), 100), ((11, 10), 100), ((11, 10), 100), ((12, 11), 100), ((12, 11), 100), ((12, 11), 100)]
+text = watched(work / "moving", [clear] * 6, move)
+check(text == "pointer first at 2.0 s, 2 of the quarter seconds\n", "a pointer that moves over the window: written: %r" % text)
+elsewhere = [((10, 10), 7), ((11, 10), 7), ((12, 10), 7), ((13, 10), 7), ((14, 10), 7), ((15, 10), 7)]
+check(watched(work / "elsewhere", [clear] * 6, elsewhere) is None, "a pointer that moves over another program's window: nothing")
+check(luma_test.window_kinds(Desktop([win(100, GAME)], pointer=100), ME, pointer_moved=False) == [], "window_kinds: a pointer that did not move")
+check(luma_test.window_kinds(Desktop([win(100, GAME)], pointer=100), ME, pointer_moved=True) == ["pointer"], "window_kinds: one that did")
 
 # ---- The command line of every game the runner starts carries --no-focus 1 ----
 source = (HERE.parent / "luma_test.py").read_text(encoding="utf-8")

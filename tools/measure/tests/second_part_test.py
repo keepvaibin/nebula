@@ -219,7 +219,7 @@ for kind, text in (("covered", "covered first at 3.0 s, 80 of the quarter second
     code, said, calls, result, out = go(h, "d3d12", steady(watch=text), "%09d" % 1)
     reason = result["runs"]["d3d12"]["reason"]
     plain = {"covered": "the window was covered by other windows", "minimized": "the window was minimized",
-             "active": "the window had the keyboard focus", "pointer": "the pointer was over the window"}[kind]
+             "active": "the window had the keyboard focus", "pointer": "the pointer moved over the window"}[kind]
     check(code == 3 and result["runs"]["d3d12"]["state"] == "not-trusted" and plain in reason and not h.exists()
           and said == ["d3d12 not trusted (%s)" % reason] and "3.0 s, 80 of the quarter seconds" in reason,
           "a window %s: not trusted with its own plain reason, no line: %s %s" % (kind, code, reason))
@@ -227,7 +227,7 @@ check(m.window_disturbed(folder) is None, "a folder with no watch file: nothing 
 (folder / "window-watch.txt").write_text("covered first at 1.0 s, 4 of the quarter seconds\npointer first at 2.0 s, 9 of the "
                                          "quarter seconds\nsomething new first at 5 s\n", encoding="utf-8")
 check(m.window_disturbed(folder) == "the window was covered by other windows, first at 1.0 s, 4 of the quarter seconds; the "
-      "pointer was over the window, first at 2.0 s, 9 of the quarter seconds; something new first at 5 s",
+      "pointer moved over the window, first at 2.0 s, 9 of the quarter seconds; something new first at 5 s",
       "each line of the watch is its own reason: %s" % m.window_disturbed(folder))
 # Other programs used the processors: more than 10 % is not trusted, exactly 10 % is trusted, not read is trusted and said.
 h = pathlib.Path(tempfile.mkdtemp()) / "h.tsv"
