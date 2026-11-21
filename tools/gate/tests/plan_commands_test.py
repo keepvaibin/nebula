@@ -11,6 +11,8 @@ The commands (AGENT_COMMANDS in tools/plan/plan.py):
   agent_two_is_filled_in              --agent 2: its folder Nebula-native-2 and its build folder, none of agent 1's
   every_path_exists                   each file a command names under the work folder is in the tree, and each option of a command is
                                       one its program or script offers (agent_tour.py, luma_test.py, step_hash.py, the .ps1 parameters)
+  the_runners_lock_file_sits_in_a_folder_the_build_made   the engine command's --lock is in the build folder itself (a lock inside
+                                      runs/ stopped the first real run: the runner writes it before it makes its work folder)
   no_game_data_says_how_to_make_it    the line that tells how to make the game data stands in place of the pak path
   the_tour_command_runs_the_gate_calls  agent_tour.py writes the quick tour with the hash on and starts luma_test.py run with the pak, the
                                       hidden-window runner, the renderer and the HEAD commit; `recorded` plays the 20 stops of the references
@@ -123,6 +125,13 @@ class Commands(Base):
                 self.assertTrue(given, program)
                 for option in given:
                     self.assertIn(option.lstrip("-").lower(), {o.lstrip("-") for o in offered}, "%s: %s of %s" % (key, option, program))
+
+    def test_the_runners_lock_file_sits_in_a_folder_the_build_made(self):
+        # The runner writes its lock file before it makes its work folder: a lock file inside runs/ (a folder nothing has made yet in a
+        # fresh build folder) stopped the first engine test of a real run with FileNotFoundError.
+        engine = next(c for c in plan.AGENT_COMMANDS if c[0] == "engine")[2]
+        lock = re.search(r"--lock (\S+)", engine).group(1)
+        self.assertEqual(lock.rsplit("/", 1)[0], "{build}")
 
     def test_no_game_data_says_how_to_make_it(self):
         with mock.patch.object(plan, "PAK_OF", lambda tree: None):
