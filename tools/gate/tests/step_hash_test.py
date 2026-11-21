@@ -88,6 +88,29 @@ def main():
         check(sorted(p.name for p in (t / "rec").iterdir()) == sorted([one + ".tsv", two + ".tsv"]),
               "record keeps one file a stop")
         check("a build of c0ffee" in (t / "rec" / (one + ".tsv")).read_text(encoding="utf-8"), "the file names its build")
+        # A file whose hash lines are the same is left untouched whatever build the run names; one that differs is written.
+        before = {p.name: p.read_bytes() for p in (t / "rec").iterdir()}
+        again = tour("source3", {one: (good, "pass"), two: (good, "pass")})
+        for test in (one, two):
+            r = again / "runs" / "tour" / test / "d3d12" / "result.json"
+            r.write_text(json.dumps({"verdict": "pass", "commit": "deadbee"}), encoding="utf-8")
+        said = io.StringIO()
+        with contextlib.redirect_stdout(said):
+            step_hash.record(again, t / "rec")
+        check({p.name: p.read_bytes() for p in (t / "rec").iterdir()} == before, "the same hashes from another build: no file touched")
+        check("2 files left as they were, 0 written" in said.getvalue(), "it says how many it left and wrote: %s" % said.getvalue())
+        changed = tour("source4", {one: (good, "pass"), two: (["r1", "r2", "z3"], "pass")})
+        for test in (one, two):
+            r = changed / "runs" / "tour" / test / "d3d12" / "result.json"
+            r.write_text(json.dumps({"verdict": "pass", "commit": "deadbee"}), encoding="utf-8")
+        said = io.StringIO()
+        with contextlib.redirect_stdout(said):
+            step_hash.record(changed, t / "rec")
+        check("1 files left as they were, 1 written" in said.getvalue(), "one hash changed: one file written: %s" % said.getvalue())
+        check((t / "rec" / (one + ".tsv")).read_bytes() == before[one + ".tsv"], "the file that did not change is as it was")
+        check("a build of deadbee" in (t / "rec" / (two + ".tsv")).read_text(encoding="utf-8")
+              and "z3" in (t / "rec" / (two + ".tsv")).read_text(encoding="utf-8"), "the file that changed names its new build")
+        step_hash.record(source, t / "rec")            # back to the first recording for the checks below
         short = tour("short2", {one: (["r1", "r2"], "pass"), two: (good, "pass")})
         try:
             step_hash.record(short, t / "rec-short")

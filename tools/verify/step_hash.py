@@ -252,10 +252,18 @@ def same_steps(a, b, what):
     return True, "the same over %d steps" % len(a)
 
 
+def hash_lines(text):
+    """The lines of a recording that hold a step's hash (the comment line that names the build is not one)."""
+    return [l for l in text.splitlines() if l and not l.startswith("#")]
+
+
 def record(work, out):
+    """Writes one file for each recorded stop. A file whose hash lines are the ones the run gives is left as it is: the build it names
+    in its first line is not a change by itself. Prints how many files were left and how many written."""
     runs = runs_by_test(work)
     out = pathlib.Path(out)
     out.mkdir(parents=True, exist_ok=True)
+    left = written = 0
     for name in recorded_tests():
         run = runs.get(name)
         if run is None or not passed(run):
@@ -266,8 +274,18 @@ def record(work, out):
         commit = json.loads((run / "result.json").read_text(encoding="utf-8")).get("commit", "unknown")
         lines = ["# %s: the hash of every live actor after each step (step_hash.py record, a build of %s)" % (name, commit)]
         lines += ["%d\t%s\t%d" % (f, h, n) for f, (h, n) in sorted(steps.items())]
-        (out / (name + ".tsv")).write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print("step_hash: %d stops recorded in %s" % (len(RECORDED_STOPS), out))
+        text = "\n".join(lines) + "\n"
+        path = out / (name + ".tsv")
+        try:
+            same = hash_lines(path.read_text(encoding="utf-8")) == hash_lines(text)
+        except OSError:
+            same = False
+        if same:
+            left += 1
+        else:
+            path.write_text(text, encoding="utf-8")
+            written += 1
+    print("step_hash: %d stops recorded in %s: %d files left as they were, %d written" % (len(RECORDED_STOPS), out, left, written))
     return 0
 
 
