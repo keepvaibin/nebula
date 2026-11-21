@@ -8,7 +8,7 @@ first actor in it, say where it does.
         their place (runs/<suite>/<test>/<renderer>). Prints, per pair, the steps compared and the first that differs,
         with the first actor that differs where both runs wrote hash.actor facts at that step.
     python -X utf8 -I tools/verify/step_hash.py replay --bin-a BIN --bin-b BIN --work WORK [--renderer d3d12]
-                                                       [--stops "Stage N" ...] [--paks PAKS]
+                                                       [--stops "Stage N" ...] [--paks PAKS] [--software-device 1]
         Writes the tour (tools/gate/gate_tour.py; every stop, or the ones named) with the hash on from its first step,
         plays it on both builds, and compares. Where a stop differs, both builds play it again with "hash detail" at
         the first step that differs, to name the actor.
@@ -166,22 +166,26 @@ def with_hash(suite_folder, detail=None):
         path.write_text(json.dumps(test, indent=2) + "\n", encoding="utf-8")
 
 
-def play(suite, bin_folder, work, renderer, paks):
+def play(suite, bin_folder, work, renderer, paks, software_device=0):
     env = dict(os.environ)
     if paks:
         env["LUMA_TEST_PAKS"] = paks
     work.mkdir(parents=True, exist_ok=True)
-    subprocess.run([sys.executable, "-X", "utf8", "-I", str(TREE / "tools" / "lumacore" / "luma_test.py"), "run",
-                    str(suite), "--bin", str(bin_folder), "--work", str(work), "--who", "step-hash",
-                    "--renderer", renderer, "--lock", str(work.parent / "lock")], env=env, check=False)
+    command = [sys.executable, "-X", "utf8", "-I", str(TREE / "tools" / "lumacore" / "luma_test.py"), "run",
+               str(suite), "--bin", str(bin_folder), "--work", str(work), "--who", "step-hash",
+               "--renderer", renderer, "--lock", str(work.parent / "lock")]
+    if software_device:
+        # The software graphics device (luma_test.py --software-device): both builds play on it.
+        command += ["--software-device", "1"]
+    subprocess.run(command, env=env, check=False)
 
 
 def replay(args):
     work = pathlib.Path(args.work)
     suite = gate_tour.write(work / "tour", args.stops or None)
     with_hash(suite.parent)
-    play(suite, args.bin_a, work / "a", args.renderer, args.paks)
-    play(suite, args.bin_b, work / "b", args.renderer, args.paks)
+    play(suite, args.bin_a, work / "a", args.renderer, args.paks, args.software_device)
+    play(suite, args.bin_b, work / "b", args.renderer, args.paks, args.software_device)
     code, failed = compare(work / "a", work / "b")
     if failed:
         # Again with the actors' detail at each differing stop's first differing step.
@@ -197,8 +201,8 @@ def replay(args):
             again = work / "tour-detail"
             suite = gate_tour.write(again, [" ".join(n.split("-")[-2:]) for n in detail])
             with_hash(again, detail)
-            play(suite, args.bin_a, work / "a-detail", args.renderer, args.paks)
-            play(suite, args.bin_b, work / "b-detail", args.renderer, args.paks)
+            play(suite, args.bin_a, work / "a-detail", args.renderer, args.paks, args.software_device)
+            play(suite, args.bin_b, work / "b-detail", args.renderer, args.paks, args.software_device)
             print("with each actor at the first step that differs:")
             compare(work / "a-detail", work / "b-detail")
     return code
@@ -348,6 +352,8 @@ def main():
     r.add_argument("--renderer", default="d3d12")
     r.add_argument("--stops", nargs="*", default=[])
     r.add_argument("--paks", default=os.environ.get("LUMA_TEST_PAKS", ""))
+    r.add_argument("--software-device", type=int, choices=(0, 1), default=0,
+                   help="1: both builds play on the software graphics device (the runner's --software-device)")
     w = sub.add_parser("record")
     w.add_argument("work")
     w.add_argument("--out", default=str(RECORDINGS))

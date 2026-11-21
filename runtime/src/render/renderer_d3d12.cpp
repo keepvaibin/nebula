@@ -2222,7 +2222,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
         // creates a D3D12 device is kept (entry zero may not). Legacy enumeration
         // covers systems without IDXGIFactory6 or a failed preferred enumeration.
         // A software adapter is selected only by the start check (launch_args.h start_check), on a computer without a
-        // graphics card.
+        // graphics card, or by --software-device, which takes no other (renderer_choice.h adapter_allowed).
         ComPtr<IDXGIAdapter1> adapter;
         DXGI_ADAPTER_DESC1 adapter_desc{};
         std::string refused;  // the last adapter passed over for what the renderer needs, and why
@@ -2230,7 +2230,8 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             DXGI_ADAPTER_DESC1 description{};
             if (candidate == nullptr ||
                 FAILED(candidate->GetDesc1(&description)) ||
-                ((description.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0u && ::galaxy::launch_args().start_check == 0u) ||
+                !adapter_allowed((description.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0u, ::galaxy::launch_args().software_device,
+                                 ::galaxy::launch_args().start_check != 0u) ||
                 (same_card_only_ && (description.AdapterLuid.LowPart != card_.LowPart ||
                                      description.AdapterLuid.HighPart != card_.HighPart))) {
                 return false;
@@ -2311,6 +2312,10 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             }
             record_gpu_choices(std::move(choices));
         }
+        // --software-device: no card is used, so no card's DLSS starts.
+        if (::galaxy::launch_args().software_device) {
+            expect_rtx = false;
+        }
         const bool frame_generation = get_render_config().frame_generation != 0u;
         std::thread streamline_start;
         if (expect_rtx) {
@@ -2370,6 +2375,12 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             streamline_start.join();
         }
         if (!adapter || !device_) {
+            if (::galaxy::launch_args().software_device) {
+                // Said at the start, and no other renderer is tried in its place.
+                const std::string missing = software_device_missing_line(RendererKind::kD3D12);
+                std::cout << missing << '\n';
+                throw std::runtime_error(missing.substr(std::string("[gpu] ").size()));
+            }
             if (!same_card_only_) note_no_device();
             throw std::runtime_error(refused.empty() ? std::string("No hardware D3D12 adapter supports feature level 11_0")
                                                      : "No hardware D3D12 adapter can run the renderer (" + refused + ")");

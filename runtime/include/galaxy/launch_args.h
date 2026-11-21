@@ -129,6 +129,10 @@ struct LaunchArgs {
     // --start-check N: the program's start without the game's files (host_main.cpp run_start_check): the window and the
     // renderer, which may take a software adapter when no graphics card runs it, then N frames drawn and shown.
     unsigned start_check = 0u;
+    // --software-device 1: the renderer takes only a software device (Direct3D 12 and 11: Microsoft's software adapter; Vulkan: a device of
+    // the processor type); where there is none, the game ends at its start (renderer_choice.h adapter_allowed). A test's run on a computer
+    // with no graphics card slot to spare. Without it a software adapter is taken only by the start check.
+    bool software_device = false;
     unsigned gpu_start_retry = 0u;      // --gpu-start-retry: starts so far that found no graphics memory free
     unsigned started_again = 0u;        // --started-again: starts this run made again before this one
     // --start-again-of <id>-<time> (Windows): the process this start takes over from, by its id and creation time.

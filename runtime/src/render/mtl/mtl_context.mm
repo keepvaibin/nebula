@@ -3,7 +3,9 @@
 #include "galaxy/render/mtl/mtl_context.h"
 #include "galaxy/render/mtl/command_buffer_failure.h"
 
+#include "galaxy/launch_args.h"
 #include "galaxy/render/render_config.h"
+#include "galaxy/render/renderer_choice.h"
 
 #import <Foundation/Foundation.h>
 #import <Metal/Metal.h>
@@ -205,6 +207,13 @@ bool Context::initialize(const std::string& chosen_gpu) {
         return true;
     }
     failure_.clear();
+    if (::galaxy::launch_args().software_device) {
+        // Metal has no software device: said at the start (renderer_choice.h).
+        const std::string missing = software_device_missing_line(RendererKind::kMetal);
+        std::printf("%s\n", missing.c_str());
+        failure_ = missing.substr(std::string("[gpu] ").size());
+        return false;
+    }
     @autoreleasepool {
         id<MTLDevice> device = nil;
 #if TARGET_OS_OSX

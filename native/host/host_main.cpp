@@ -5793,6 +5793,8 @@ void read_launch_args(int argc, char** argv) {
             args.timed = std::atof(argv[i + 1]) > 0.0;
         } else if (key == "--start-check") {
             args.start_check = static_cast<unsigned>(std::strtoul(argv[i + 1], nullptr, 10));
+        } else if (key == "--software-device") {
+            args.software_device = argv[i + 1][0] == '1';
         } else if (key == "--diagnostics") {
             std::string_view unknown;
             unsigned what = 0u;
@@ -6074,7 +6076,8 @@ int main(int argc, char** argv) {
                    key == "--gpu-start-retry" || key == "--extension" || key == "--import" || key == "--imports-taken" ||
                    key == "--safe-start" || key == "--shipped-mods" || key == "--mod-dev" || key == "--renderer" || key == "--started-again" ||
                    key == "--start-again-of" || key == "--hidden" || key == "--no-focus" || key == "--gpu-driver" || key == "--gpu-driver-library" ||
-                   key == "--gpu-driver-hooks" || key == "--start-check") {
+                   key == "--gpu-driver-hooks" || key == "--start-check" ||
+                   key == "--software-device") {
             // Read above, before anything uses them.
         } else if (key == "--seconds") {
             seconds = std::atof(argv[i + 1]);

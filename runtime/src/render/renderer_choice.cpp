@@ -231,4 +231,21 @@ bool found_no_device() noexcept {
     return s_found_no_device.load(std::memory_order_acquire);
 }
 
+bool adapter_allowed(bool software_adapter, bool software_only, bool start_check) noexcept {
+    if (software_only) return software_adapter;
+    return !software_adapter || start_check;
+}
+
+std::optional<std::size_t> first_allowed_adapter(const std::vector<bool>& software_adapters, bool software_only,
+                                                 bool start_check) noexcept {
+    for (std::size_t i = 0u; i < software_adapters.size(); ++i) {
+        if (adapter_allowed(software_adapters[i], software_only, start_check)) return i;
+    }
+    return std::nullopt;
+}
+
+std::string software_device_missing_line(RendererKind kind) {
+    return std::string("[gpu] --software-device: no software device for ") + renderer_key(kind);
+}
+
 }  // namespace galaxy::render

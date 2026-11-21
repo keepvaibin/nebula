@@ -433,7 +433,7 @@ landing besides what the changed files need. NAMES are comma-separated: the nigh
 | `sanitizer/tour` | the tour on the sanitizer build, in the build's own kept folder |
 | `soak` | both soak plans side by side for 30 minutes |
 | `soak/long` | the same for the long run's time (`--soak-minutes`, 120) |
-| `replays/software` | the step hashes on a software device (T9): not on main yet, so the name is refused with `--also replays/software: this check is not built yet` |
+| `replays/software` | the recorded plays (`tests/replays`) on Microsoft's software graphics device, Direct3D 12 and 11 (`tools/gate/replays_software.py`, with the game's software-device launch option), as many copies at once as the PC's memory and processors hold and with no graphics-card slot; every step hash is compared with the recording |
 
 They run after the checks the groups need have passed (a landing that failed runs none), before `measure/step/pc`, one after another,
 each under its usual rules of kind, and the landing's printed plan names them ("and, asked for by name: ..."). A name of the table whose

@@ -110,9 +110,11 @@ bool Context::initialize(const std::string& chosen_gpu, bool debug_layer) {
     std::string refused;
     for (const ComPtr<IDXGIAdapter1>& adapter : adapters) {
         DXGI_ADAPTER_DESC1 desc{};
-        // A software adapter is taken only by the start check (launch_args.h start_check), after every hardware one.
+        // A software adapter is taken only by the start check (launch_args.h start_check), after every hardware one, or by
+        // --software-device, which takes no other (renderer_choice.h adapter_allowed).
         if (FAILED(adapter->GetDesc1(&desc)) ||
-            ((desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0u && ::galaxy::launch_args().start_check == 0u)) {
+            !adapter_allowed((desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0u, ::galaxy::launch_args().software_device,
+                             ::galaxy::launch_args().start_check != 0u)) {
             continue;
         }
         const std::string name = narrow(desc.Description);
@@ -169,6 +171,14 @@ bool Context::initialize(const std::string& chosen_gpu, bool debug_layer) {
         }
         std::cout << "[gpu] d3d11 debug-layer=" << (info_queue_ != nullptr ? 1 : 0) << '\n';
         break;
+    }
+    if (device_ == nullptr && ::galaxy::launch_args().software_device) {
+        // Said at the start, and no other renderer is tried in its place.
+        const std::string missing = software_device_missing_line(RendererKind::kD3D11);
+        std::cout << missing << '\n';
+        failure_ = missing.substr(std::string("[gpu] ").size());
+        factory_.Reset();
+        return false;
     }
     if (device_ == nullptr) {
         note_no_device();

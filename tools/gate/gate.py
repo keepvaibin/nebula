@@ -124,6 +124,7 @@ import kinds  # noqa: E402
 import landing  # noqa: E402
 import machine  # noqa: E402
 import pictures as picture_tool  # noqa: E402
+import replays_software  # noqa: E402
 import scope  # noqa: E402
 import step_hash  # noqa: E402
 import judged  # noqa: E402
@@ -3195,6 +3196,30 @@ def soak_part(g, name, minutes):
     g.check(name, soak_result(process, log), DATA)
 
 
+def replays_software_part(g):
+    """The recorded plays on Microsoft's software graphics device (tools/gate/replays_software.py, T9), after the other checks: one check
+    `replays/software`. It takes no graphics-card slot, so no lane's place is held for it."""
+    if not g.wanted("replays/software", DATA) or g.dry:
+        return
+    g.check("replays/software", replays_software_check(g), DATA)
+
+
+def replays_software_check(g):
+    """The script plays the recorded stops on both Direct3D renderers (and Vulkan where a software device is) as many copies at once as the
+    PC holds, and ends with its KIND lines and a VERDICT; its result.json names every play, which become this check's tests."""
+    def fn(log):
+        out = g.work / "replays-software"
+        shutil.rmtree(out, ignore_errors=True)
+        code = run([sys.executable, "-X", "utf8", "-I", HERE / "replays_software.py", "run", "--bin", g.bin, "--work", out, "--who", "gate",
+                    "--commit", g.commit], log, env={"LUMA_TEST_PAKS": g.paks_text()}, cwd=g.args.build_root)
+        found = replays_software.cases_of(out)
+        if found is None:
+            return False, "no result.json: %s" % last_line(pathlib.Path(log).read_text(encoding="utf-8", errors="replace")), None, "tool"
+        results, detail = found
+        return code == 0, detail, kinds.Cases(results)
+    return fn
+
+
 class AlsoPart:
     def __init__(self, run, checks):
         self.run, self.checks = run, checks
@@ -3205,8 +3230,7 @@ ALSO_PARTS = {
     "sanitizer/tour": AlsoPart(lambda g: sanitizer_part(g), ("build/windows-asan", "tour-asan/*", "mods-asan/*")),
     "soak": AlsoPart(lambda g: soak_part(g, "soak", SOAK_SHORT_MINUTES), ("soak",)),
     "soak/long": AlsoPart(lambda g: soak_part(g, "soak/long", g.args.soak_minutes), ("soak/long",)),
-    # tools/gate/replays_software.py (T9) is not on main: the name is refused as not built.
-    "replays/software": AlsoPart(None, ("replays/software",)),
+    "replays/software": AlsoPart(lambda g: replays_software_part(g), ("replays/software",)),
 }
 # Two lengths of one soak: they share a work folder and a log, so a landing asks for one.
 ALSO_ONE_OF = ("soak", "soak/long")
