@@ -185,9 +185,10 @@ Each run leaves a folder, `TEST/RENDERER/`, in the work folder. By default, the 
 | `setup-failed` | The start did not take. The reason names the item, such as a stage name the game does not have. |
 | `not-run` | The test needs another disc's game (`disc`). Set `LUMA_TEST_PAKS`. |
 | `crashed` | The game crashed. The result names the crash dump and the last lines of the log. |
-| `timeout` | The run took longer than `limit_seconds` and the game took no step in its last 120 seconds. A step's `after` may never have held. |
+| `timeout` | The run took longer than `limit_seconds` and the game never took a step. |
 | `hung` | The game completed no step for 120 seconds. |
-| `too-slow` | The run took longer than `limit_seconds` but the game was still taking steps: the machine was slow. Run it again, or raise `limit_seconds`. |
+| `not-reached` | The run took longer than `limit_seconds` with the game stepping at full speed: the end step was not reached. Look at the steps and facts before it. |
+| `too-slow` | The run took longer than `limit_seconds` with the game stepping at under 80% of full speed: the machine was busy. Run it again alone, or raise `limit_seconds`. |
 | `harness-error` | The test file is wrong. The reason names the key and its place. |
 
 ## The test kit

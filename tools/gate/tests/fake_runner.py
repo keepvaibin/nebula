@@ -10,6 +10,7 @@ run of that test leaves, by the phase it is in: the first run (any other work fo
   "pass"            a pass
   "fail:MESSAGE"    a fail with that reason (verdict fail)
   "tool"            verdict harness-error (kind tool); "env": verdict not-run (kind env)
+  "slow:PCT"        verdict too-slow (kind env): the time limit passed with the game at PCT% of full speed
   "none"            no result at all, as if the runner had raised before it
   "garbage"         a result.json that is not JSON;  "no-verdict": one that names no verdict
 A test the scenario does not name passes. "exit" overrides the exit code (the real one: 0 when all passed, else 1);
@@ -62,6 +63,10 @@ def main():
             verdict, kind, reason = "harness-error", "tool", "the test could not be read"
         elif outcome == "env":
             verdict, kind, reason = "not-run", "env", "needs disc RMGP01"
+        elif outcome.startswith("slow"):
+            verdict, kind = "too-slow", "env"
+            reason = ("too slow on this machine now: still moving when its time limit of 240 s passed "
+                      "(the game ran at %s%% of full speed)" % outcome.partition(":")[2])
         if outcome == "none":
             bad += 1
             continue

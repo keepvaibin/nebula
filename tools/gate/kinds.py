@@ -7,8 +7,9 @@ Every check and every test ends as one kind:
          a different number of cases than it declares, or none; a picture or report the game writes at its exit that never
          came, the tablet's exit record that never came;
   env    the machine was not fit: the tablet away, the drive full, another graphics card than the approved pictures
-         name, a lock not had in time, a test that was still taking steps when its time limit passed (no verdict depends on
-         how long something took: a game that completed no step for 120 s is fail, "hung");
+         name, a lock not had in time, a test that reached its time limit with the game stepping at under 80% of full speed
+         ("too-slow"; the gate runs it again alone, like a fail: alone it passes (flake), or it is a fail; a game that
+         completed no step for 120 s is fail, "hung"; at 80% or more it is fail, "not-reached");
   flake  failed, then passed when run again alone (tests/flakes: <plan>/native/flakes.tsv);
   main   failed again alone, and fails on main's build in the same way: main is at fault, not the change;
   new    a picture with no approved copy, or one that the change declares (PICTURES-CHANGE.txt): it never fails a run, the
@@ -28,6 +29,7 @@ that can run some of its tests again (alone, or on main's build). Nothing here s
 import datetime
 import json
 import pathlib
+import re
 import subprocess
 
 # The order a check's kind is the worst of its tests' (known, the list of tests expected to fail, and new, a picture to
@@ -38,12 +40,27 @@ RANK = {k: i for i, k in enumerate(ORDER)}
 RESULT_KINDS = ("pass", "fail", "tool", "env")
 FLAKE_DAYS = 7
 FLAKES_TO_SET_ASIDE = 3
+# A test that reached its time limit while the game ran at under 80% of full speed is env, verdict too-slow (luma_test.py
+# evaluate), and its message begins so: the gate runs it again alone, as it does a fail.
+SLOW_VERDICT = "too-slow"
+SLOW_SPEED = re.compile(r"ran at (\d+)% of full speed")
 
 
 def drive_full(error):
     """Whether an exception says the drive has no room (ENOSPC, or Windows' ERROR_DISK_FULL and ERROR_HANDLE_DISK_FULL):
     the machine was not fit, so env, not the tool's fault. (luma_test.py has its own copy: the runner stands alone.)"""
     return isinstance(error, OSError) and (error.errno == 28 or getattr(error, "winerror", None) in (39, 112))
+
+
+def is_slow(r):
+    """Whether a record is a test that was too slow when it ran with others (kind env, verdict too-slow), not yet run alone."""
+    return (r["kind"] == "env" and r["counts"] and r["test"] != "-" and not r["final"]
+            and r["message"].startswith(SLOW_VERDICT + ":"))
+
+
+def needs_second_run(r):
+    """Whether a record is run again alone: a fail, or a test that was too slow."""
+    return (r["kind"] == "fail" and r["counts"] and r["test"] != "-" and not r["final"]) or is_slow(r)
 
 
 def worst(kinds):
@@ -312,7 +329,10 @@ def append_line(path, cells):
 
 class Settler:
     """After every lane has ended: each test that is fail is run once more alone; a pass is flake; one that still fails
-    is run alone on main's build, and failing there in the same way is main. A source (Cases.source) does the runs:
+    is run alone on main's build, and failing there in the same way is main. A test that was too slow (env, verdict
+    too-slow) is run alone too: a pass is flake (the machine was busy); too slow again, or a fail, is a fail ("too slow even
+    alone: the game ran at N% of full speed": the change made the game slow); it is not run on main's build. A source
+    (Cases.source) does the runs:
 
       alone(names) -> {name: (kind, message)}        the same build, nothing else running, a fresh folder;
       adopt(name)                                    a flake's second run takes the place of its first, for the checks
@@ -333,16 +353,19 @@ class Settler:
     def settle(self, check, cases, records):
         """Records after the second run and the check against main."""
         failing = [r for r in records if r["kind"] == "fail" and r["counts"] and r["test"] != "-" and not r["final"]]
-        if not failing or cases.source is None:
+        slow = [r for r in records if is_slow(r)]
+        if not (failing or slow) or cases.source is None:
             return records
-        names = [r["test"] for r in failing]
-        self.say("%s: %d test%s failed, run again alone: %s" % (check, len(names), "" if len(names) == 1 else "s",
-                                                                  ", ".join(names[:6]) + (" ..." if len(names) > 6 else "")))
+        names = [r["test"] for r in failing + slow]
+        self.say("%s: %d test%s failed or were too slow, run again alone: %s" % (
+            check, len(names), "" if len(names) == 1 else "s", ", ".join(names[:6]) + (" ..." if len(names) > 6 else "")))
         try:
             again = cases.source.alone(names)
         except Exception as error:  # noqa: BLE001 - a second run that breaks leaves the first result standing
             again = {}
             self.say("%s: the second run broke (%s: %s); the first result stands" % (check, type(error).__name__, error))
+        for r in slow:
+            self.settle_slow(check, cases, r, again.get(r["test"], ("tool", "the second run reported nothing")))
         still = []
         for r in failing:
             kind, message = again.get(r["test"], ("tool", "the second run reported nothing"))
@@ -357,6 +380,27 @@ class Settler:
         if still:
             self.against_main(check, cases, still)
         return records
+
+    def settle_slow(self, check, cases, r, second):
+        """A test too slow in the crowd, after its run alone: a pass is flake; too slow again is fail, with its speed; a fail is
+        fail; a second run that is tool or env (the machine not fit, nothing reported) leaves it env, as it was."""
+        kind, message = second
+        if kind == "pass":
+            first = r["message"]
+            r.update(kind="flake", counts=False, note="too slow with others, passed alone")
+            cases.source.adopt(r["test"])
+            self.flake(check, cases, r["test"], first)
+            return
+        speed = SLOW_SPEED.search(message)
+        if kind == "env" and message.startswith(SLOW_VERDICT + ":") and speed:
+            r.update(kind="fail", message="too slow even alone: the game ran at %s%% of full speed" % speed.group(1), final=True)
+            self.say("%s: %s is too slow even alone (%s%% of full speed): fail" % (check, r["test"], speed.group(1)))
+        elif kind == "fail":
+            r.update(message="too slow with others, then failed alone: %s" % first_line(message), kind="fail", final=True)
+            self.say("%s: %s was too slow with others and failed alone: fail" % (check, r["test"]))
+        else:
+            r["again"] = second
+            r["note"] = "second run: %s" % first_line(message)
 
     def flake(self, check, cases, test, first_message):
         append_line(self.flakes, (self.now().isoformat(timespec="seconds"), test, cases.renderer, self.commit, first_message))

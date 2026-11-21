@@ -14,6 +14,8 @@ Each case below plants one situation and reads the kind back:
   fails_on_main_differently the same test failing on main in another way stays fail
   main_check_skipped        the check against main is skipped when the test's folder changed, when it is new, or when
                             no build of main is kept; the test stays fail
+  slow_passes_alone         a test too slow in the crowd (env, verdict too-slow) is run again alone like a fail; passing alone it is flake
+  slow_again_alone          too slow again alone, or failing alone, it is fail ("too slow even alone: the game ran at N% of full speed")
   runner_exception          a test the runner left no result for is tool (exit 2), and is not run again
   unreadable_result         a result.json that is not JSON, or names no verdict, is tool
   count_differs / zero_cases  a check that ran another number of cases than it declares, or none, is tool
@@ -500,6 +502,47 @@ def settle_rules(s, check):
     check(records[0]["kind"] == "fail" and any("skipped: no build" in t for t in said), "skipped on main: said, stays fail")
 
 
+def slow_passes_alone(s, check):
+    """A test too slow in the crowd (env, verdict too-slow) is run again alone like a fail; alone it passes: flake."""
+    s.keep_main()
+    s.plan({"a": {"first": "slow:45", "again": "pass"}})
+    g = s.run()
+    r = record_of(g, "a")
+    check(r["kind"] == "flake" and not r["counts"] and row(g)["state"] == "flake",
+          "too slow in the crowd, alone it passes: flake, as a fail that passes alone: %s" % r)
+    check(g.verdict == "pass" and g.code == 0, "the run passes: %s %s" % (g.verdict, g.code))
+    lines = s.flake_lines()
+    check(len(lines) == 1 and lines[0][1] == "a" and "too slow" in lines[0][4], "a line in flakes.tsv: %s" % lines)
+    check(phase_of(s, g, "a") == "again", "the second run takes the first's place")
+    check(not (g.work / "main").exists(), "it is not run on main's build")
+
+
+def slow_again_alone(s, check):
+    """Too slow in the crowd and too slow alone: fail, with the speed alone; and never env twice."""
+    s.keep_main()
+    s.plan({"a": {"first": "slow:45", "again": "slow:38", "main": "pass"}})
+    g = s.run()
+    r = record_of(g, "a")
+    check(r["kind"] == "fail" and r["counts"] and r["message"] == "too slow even alone: the game ran at 38% of full speed",
+          "too slow again alone: fail with the speed alone: %s" % r)
+    check(g.verdict == "fail" and g.code == 1, "the run fails: %s %s" % (g.verdict, g.code))
+    check(not s.flake_lines() and not (g.work / "main").exists(), "no flake line, and not run on main's build")
+    # A fail alone, after a slow run in the crowd, is a fail too.
+    s.plan({"a": {"first": "slow:45", "again": "fail:boom"}})
+    g = s.run(g=s.gate())
+    r = record_of(g, "a")
+    check(r["kind"] == "fail" and r["counts"] and "failed alone" in r["message"] and "boom" in r["message"],
+          "a fail alone after too slow: fail: %s" % r)
+    # A second run that gives nothing (the machine not fit) leaves it env: not judged, never a pass.
+    s.plan({"a": {"first": "slow:45", "again": "env"}})
+    g = s.run(g=s.gate())
+    r = record_of(g, "a")
+    check(r["kind"] == "env" and g.verdict == "not-judged", "a second run that is env leaves env: %s %s" % (r, g.verdict))
+    # A source-less check cannot run it again: it stays env.
+    check(kinds.is_slow(kinds.record("a", "env", "too-slow: x")) and not kinds.is_slow(kinds.record("a", "env", "not-run: x"))
+          and not kinds.is_slow(kinds.record("a", "fail", "too-slow: x")), "is_slow names only a too-slow env result")
+
+
 def kinds_order_and_exit_codes(s, check):
     check(kinds.worst(["pass", "main", "flake", "env", "tool", "fail"]) == "fail", "the worst of the kinds: fail")
     check([kinds.worst(p) for p in (["pass", "main"], ["main", "flake"], ["flake", "env"], ["env", "tool"], ["known", "pass"], [])]
@@ -552,7 +595,7 @@ def pictures_and_replays_read_the_settled_runs(s, check):
 CASES = [always_fails, fails_once, third_flake_sets_aside, fails_on_main_too, fails_on_main_differently, main_check_skipped,
          runner_exception, unreadable_result, count_differs, zero_cases, tablet_away, runner_refused, lock_not_had,
          other_graphics_card, lines_and_verdict_json, known_and_planned_still_work, device_is_not_run_again, settle_rules,
-         kinds_order_and_exit_codes, base_builds_kept, pictures_and_replays_read_the_settled_runs]
+         slow_passes_alone, slow_again_alone, kinds_order_and_exit_codes, base_builds_kept, pictures_and_replays_read_the_settled_runs]
 
 
 def main():

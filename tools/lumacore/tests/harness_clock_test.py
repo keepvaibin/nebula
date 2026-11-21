@@ -7,7 +7,12 @@ The runner sees a running game's progress in the host's step lines in run.log ("
 second while the game steps). A stand-in game writes the same lines: a small Python process (the real-process cases) or a
 scripted process on a fake clock (the 120-second and 30-second cases, which no test waits for). Each case is named:
 
-  slow but moving past its limit is env, not fail       a run still stepping when its limit passed; real stand-in process
+  a hang in a test with a 30 s limit is fail, not env   the limit passes in a pause: nothing is decided, the hang is waited for
+  a pause at the limit that ends leads to the speed rule  steps come again after the limit: judged then, not before
+  moving at full speed past the limit is fail            "its end was not reached in N s although the game ran at full speed"
+  moving at half speed past the limit is too slow        env for now; the gate runs it again alone (kinds.Settler)
+  too slow in the crowd, passes alone                    the final kind of a fail that passes alone: flake
+  too slow in the crowd, too slow again alone            fail, "too slow even alone: the game ran at N% of full speed"
   no step for 120 s is fail, and the dump step is called  a scripted game on the fake clock; and a real one, hang_after set by
                                                           this test (never by the environment)
   a game that never stepped is fail at its limit          nothing to call slow
@@ -25,6 +30,7 @@ Exit 0 when every case holds.
 import argparse
 import io
 import json
+import re
 import pathlib
 import subprocess
 import sys
@@ -35,7 +41,9 @@ from contextlib import redirect_stdout
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[1] / "gate"))
 import importlib.util  # noqa: E402
+import kinds  # noqa: E402
 import luma_test  # noqa: E402
 
 spec = importlib.util.spec_from_file_location("luma_test_android", HERE.parent / "luma_test_android.py")
@@ -73,7 +81,8 @@ LOSS_LINE = "[loss] draws-no-material=0 draws-no-pipeline=0 textures-blank=0 sou
 
 class Game:
     """The stand-in game on a fake clock: a process object (wait, kill) that writes run.log as the host does. `plan` is a
-    list of segments in seconds since the start: ("steps", a, b) a step line every second from a to b; ("restart", t) the
+    list of segments in seconds since the start: ("steps", a, b[, n]) a step line every second from a to b, n steps a line
+    (60 by default: the game's full speed); ("restart", t) the
     game starting again (a "boot: main at" line, the host's clock starting from 0); ("end", t) the loss report, the end
     fact and exit 0. The host's time in a line is the time since the last start."""
 
@@ -85,8 +94,9 @@ class Game:
         for seg in plan:
             if seg[0] == "steps":
                 t = float(seg[1])
+                per_line = seg[3] if len(seg) > 3 else 60  # steps a line: 60 a second is full speed
                 while t <= seg[2] + 1e-9:
-                    frame += 60
+                    frame += per_line
                     self.events.append((t, "step", (t - origin, frame)))
                     t += 1.0
             elif seg[0] == "restart":
@@ -153,7 +163,7 @@ def play(work, name, plan, limit=180, hang_after=luma_test.HANG_SECONDS, dump=No
         luma_test.platform = types.SimpleNamespace(system=lambda: "Linux")
     try:
         code, starts, unwatched, steps = luma_test.watch_run(
-            game, run, "game.exe", test["limit"] + 60, clock=clock, hang_after=hang_after,
+            game, run, "game.exe", test["limit"], clock=clock, hang_after=hang_after,
             dump=dump or (lambda folder, process: []))
     finally:
         luma_test.platform = real_platform
@@ -198,11 +208,15 @@ def main():
 
     # The limit passes at 1.5 s while the game still takes a step every 0.1 s. hang_after is shortened by this call.
     verdict, reason, ran, process = real_game("slow-moving", "moving", 1.5, hang_after=1.0)
-    check(verdict == "too-slow" and luma_test.kind_of(verdict) == "env"
-          and reason == "too slow on this machine now: still moving when its time limit of 1.5 s passed",
-          "slow but moving past its limit is env, not fail: %s: %s" % (verdict, reason))
-    check(ran["code"] is None and ran["hung"] is None and ran["stepped"] and process.poll() is not None,
+    said = re.fullmatch(r"too slow on this machine now: still moving when its time limit of 1.5 s passed "
+                        r"\(the game ran at (\d+)% of full speed\)", reason)
+    check(verdict == "too-slow" and luma_test.kind_of(verdict) == "env" and said and 45 <= int(said.group(1)) <= 70,
+          "a real stand-in game at half speed past its limit is too slow (env): %s: %s" % (verdict, reason))
+    check(ran["code"] is None and ran["hung"] is None and ran["stepped"] and ran["limit_hit"] and process.poll() is not None,
           "the game is ended at its limit, and is not called hung: %s" % ran)
+    verdict, reason, ran, process = real_game("fast-moving", "fast", 1.5, hang_after=1.0)
+    check(verdict == "not-reached" and reason == "its end was not reached in 1.5 s although the game ran at full speed",
+          "a real stand-in game at full speed past its limit is fail: %s: %s" % (verdict, reason))
 
     # --- no step for 120 s is fail, and the dump step is called -----------------------------------------------------------
     dumped = []
@@ -234,7 +248,7 @@ def main():
     finally:
         process.kill()
         process.wait()
-    check(code is None and steps["hung"] is not None and steps["hung"]["frame"] == 180 and len(dumped) == before + 1,
+    check(code is None and steps["hung"] is not None and steps["hung"]["frame"] == 18 and len(dumped) == before + 1,
           "a real game that stops stepping is ended as hung, dump step called: %s" % steps)
 
     # --- a game that never stepped is fail at its limit -------------------------------------------------------------------
@@ -244,6 +258,8 @@ def main():
     # A limit that passes with the last step 130 s before it is fail too (the game is at least hung, whatever ended it).
     verdict, reason, kind, ran, run, clock = play(work, "quiet-end", [("steps", 1, 5)], limit=400)
     check(verdict == "hung" and kind == "fail", "a game quiet for 120 s is hung before any limit: %s" % verdict)
+
+    test_limit_rule(work, dump)
 
     # --- a 30 s pause is a stall line and the test passes; the stall count; a 5 s pause is nothing -----------------------------
     verdict, reason, kind, ran, run, clock = play(work, "pause30", [("steps", 1, 5), ("steps", 35, 40), ("end", 41)])
@@ -272,7 +288,7 @@ def main():
         run_folder.mkdir(parents=True, exist_ok=True)
         game = Game(clock, run_folder, plans[test["name"]])
         try:
-            code, starts, unwatched, steps = luma_test.watch_run(game, run_folder, "game.exe", test["limit"] + 60, clock=clock)
+            code, starts, unwatched, steps = luma_test.watch_run(game, run_folder, "game.exe", test["limit"], clock=clock)
         finally:
             game.close()
         return {"code": code, "seconds": 5.0, "frozen": {}, "mods": [], "exe": "game.exe", "starts": starts,
@@ -319,6 +335,90 @@ def main():
     return 1 if failed else 0
 
 
+def test_limit_rule(work, dump):
+    """What a test that reaches its time limit is judged by: the game's pause, then its speed (docs section 16)."""
+    # A hang in a test with a 30 s limit: the limit passes in the pause (steps stopped at 5 s), nothing is decided, and the
+    # hang comes 120 s after the last step. Never env.
+    dumped = []
+    verdict, reason, kind, ran, run, clock = play(work, "hang30", [("steps", 1, 5)], limit=30,
+                                                  dump=lambda folder, process: dumped.append(folder) or [])
+    waited = clock.now - 1000.0
+    check(verdict == "hung" and kind == "fail" and ran["hung"] and not ran["limit_hit"] and 124 <= waited <= 126.5 and len(dumped) == 1,
+          "a hang in a test with a 30 s limit is fail, not env, with the dump step: %s %s after %.1f s, dump %s"
+          % (verdict, kind, waited, dumped))
+
+    # A pause that is on at the limit (steps from 1 to 5 s, again from 40 s; the limit is 30 s): not decided at 30 s, judged
+    # when the steps come again, by the speed over the whole run (360 steps by 40 s: 15% of full speed).
+    verdict, reason, kind, ran, run, clock = play(work, "pause-at-limit", [("steps", 1, 5), ("steps", 40, 60)], limit=30)
+    waited = clock.now - 1000.0
+    check(ran["limit_hit"] and 39.9 <= waited <= 41 and verdict == "too-slow" and "ran at 15% of full speed" in reason,
+          "a pause at the limit that ends leads to the speed rule, judged when steps come again: %s %s after %.1f s: %s"
+          % (verdict, kind, waited, reason))
+    # Moving at full speed past the limit: fail, and the machine was not the reason.
+    verdict, reason, kind, ran, run, clock = play(work, "full-speed", [("steps", 1, 100)], limit=50)
+    check(verdict == "not-reached" and kind == "fail"
+          and reason == "its end was not reached in 50 s although the game ran at full speed",
+          "moving at full speed past the limit is fail, with its line: %s %s %s" % (verdict, kind, reason))
+    # The edge: 80% of 60 is 48 steps a second.
+    verdict, reason, kind, ran, run, clock = play(work, "speed-48", [("steps", 1, 100, 48)], limit=50)
+    check(verdict == "not-reached", "48 steps a second is full speed enough: %s" % verdict)
+    verdict, reason, kind, ran, run, clock = play(work, "speed-47", [("steps", 1, 100, 47)], limit=50)
+    check(verdict == "too-slow" and kind == "env" and "ran at 78% of full speed" in reason,
+          "47 steps a second is too slow: %s %s" % (verdict, reason))
+
+    # Half speed past the limit: too slow, env for now.
+    verdict, reason, kind, ran, run, clock = play(work, "half-speed", [("steps", 1, 100, 30)], limit=50)
+    check(verdict == "too-slow" and kind == "env" and ran["limit_hit"]
+          and reason == ("too slow on this machine now: still moving when its time limit of 50 s passed "
+                         "(the game ran at 50% of full speed)"), "moving at half speed past the limit is too slow (env): %s: %s"
+          % (verdict, reason))
+
+    # The gate then runs it again alone (kinds.Settler): the message the runner wrote is the one it reads.
+    def crowd_result(name, plan, limit=50):
+        folder = work / ("crowd-" + name)
+        folder.mkdir()
+        verdict, reason, kind, ran, run, clock = play(work, "slowrun-" + name, plan, limit=limit)
+        report_args = argparse.Namespace(commit="0123456789ab", module="hooks")
+        with redirect_stdout(io.StringIO()):
+            luma_test.report(folder, "slow-test", [], "d3d12", verdict, reason, [], report_args, {})
+        return kinds.read_result(folder / "result.json", luma_test.kind_of)
+
+    class Source:
+        def __init__(self, again):
+            self.again, self.adopted = again, []
+
+        def alone(self, names):
+            return {n: self.again for n in names}
+
+        def adopt(self, name):
+            self.adopted.append(name)
+
+        def on_main(self, names):
+            raise AssertionError("a test that was too slow is not run on main's build")
+
+    def settle(again):
+        first = crowd_result("first" + str(len(failed)) + again[0] + again[1][:4], [("steps", 1, 100, 30)])
+        source = Source(again)
+        cases = kinds.Cases({"slow-test": first}, 1, None, "d3d12", source)
+        records, _ = kinds.judge_cases(cases)
+        said = []
+        flakes = work / ("flakes-%s.tsv" % (again[0] + str(len(failed))))
+        settler = kinds.Settler(flakes, work / "aside.tsv", "abc", say=said.append)
+        return first, settler.settle("tour/d3d12", cases, records), source, flakes
+
+    first, records, source, flakes = settle(("env", "too-slow: too slow on this machine now: still moving when its time limit of 50 s "
+                                             "passed (the game ran at 31% of full speed)"))
+    r = records[0]
+    check(first[0] == "env" and first[1].startswith("too-slow:"), "the runner's too-slow result is env, and says so: %s" % (first,))
+    check(r["kind"] == "fail" and r["counts"] and r["message"] == "too slow even alone: the game ran at 31% of full speed",
+          "alone it is slow again: fail with the percentage: %s" % r)
+    first, records, source, flakes = settle(("pass", ""))
+    r = records[0]
+    check(r["kind"] == "flake" and not r["counts"] and source.adopted == ["slow-test"] and kinds.worst([r["kind"]]) == "flake"
+          and len(kinds.read_lines(flakes)) == 1,
+          "alone it passes: the final kind of a crowd fail that passes alone (flake), its second run adopted: %s" % r)
+
+
 def run_suite(suite, work, bin_folder, fake_run_one):
     """luma_test.run_tests on a suite whose games are the stand-in's; what it printed."""
     real = luma_test.run_one
@@ -346,21 +446,23 @@ log = open(run / "run.log", "a", buffering=1, encoding="utf-8", newline="\\n")
 began = time.time()
 
 
-def step(n):
+def step(n, per):
     log.write("[%9.3f] host: frame %d, file reads 70, save ops 6, sound blocks 1, sound subframes 1, renderer frames %d\\n"
-              % (time.time() - began, n * 60, n * 120))
+              % (time.time() - began, n * per, n * per * 2))
     log.flush()
 
 
-if mode == "moving":
+# A step every 0.1 s: 3 steps a step line is 30 a second (half of full speed), 6 is 60 (full speed).
+if mode in ("moving", "fast"):
+    per = 3 if mode == "moving" else 6
     n = 0
     while True:
         n += 1
-        step(n)
+        step(n, per)
         time.sleep(0.1)
 elif mode == "freezes":
     for n in range(1, 4):
-        step(n)
+        step(n, 6)
         time.sleep(0.1)
     time.sleep(60)
 '''
@@ -378,9 +480,10 @@ class Tablet(android.Device):
     it writes a step line a second while `steps_until` allows; Android's exit record appears `record_after` seconds after the
     process is gone (None: never). Every adb call the runner makes on it is answered as the device would."""
 
-    def __init__(self, clock, steps_until, ends, record_after):
+    def __init__(self, clock, steps_until, ends, record_after, per_step=60):
         super().__init__("fake")
         self.clock, self.steps_until, self.ends, self.record_after = clock, steps_until, ends, record_after
+        self.per_step = per_step  # steps a line, a line a second: 60 is full speed
         self.started = None
         self.folder = None
         self.calls = []
@@ -393,7 +496,8 @@ class Tablet(android.Device):
         return t is not None and t >= 1.0 and (self.ends is None or t < self.ends)
 
     def log_lines(self, upto):
-        lines = ["[%9.3f] host: frame %d, file reads 70\n" % (n + 0.5, n * 60) for n in range(1, int(min(upto, self.steps_until)) + 1)]
+        lines = ["[%9.3f] host: frame %d, file reads 70\n" % (n + 0.5, n * self.per_step)
+                 for n in range(1, int(min(upto, self.steps_until)) + 1)]
         if self.ends is not None and upto >= self.ends:
             lines.append(LOSS_LINE)
         return lines
@@ -504,9 +608,16 @@ def test_android(work):
     check(verdict == "hung" and kind == "fail" and ran["hung"] is not None and 120 <= ran["hung"]["seconds"] <= 130,
           "a tablet game with no step for 120 s is hung: %s %s %s" % (verdict, kind, ran.get("hung")))
     clock = FakeClock()
-    verdict, kind, reason, ran = tablet_run(work, "tablet-slow", Tablet(clock, 10 ** 6, None, None), clock, limit=100)
-    check(verdict == "too-slow" and kind == "env" and "time limit of 100 s" in reason,
-          "a tablet game still stepping at its limit is env: %s %s %s" % (verdict, kind, reason))
+    verdict, kind, reason, ran = tablet_run(work, "tablet-slow", Tablet(clock, 10 ** 6, None, None, 30), clock, limit=100)
+    check(verdict == "too-slow" and kind == "env" and "time limit of 100 s" in reason and "ran at 50% of full speed" in reason,
+          "a tablet game at half speed at its limit is too slow (env): %s %s %s" % (verdict, kind, reason))
+    clock = FakeClock()
+    verdict, kind, reason, ran = tablet_run(work, "tablet-full", Tablet(clock, 10 ** 6, None, None), clock, limit=100)
+    check(verdict == "not-reached" and kind == "fail", "a tablet game at full speed at its limit is fail: %s %s" % (verdict, kind))
+    # A hang in a test with a short limit on the tablet is hung too: the limit passes in a pause, the runner waits on.
+    clock = FakeClock()
+    verdict, kind, reason, ran = tablet_run(work, "tablet-hung-short", Tablet(clock, 10, None, None), clock, limit=30)
+    check(verdict == "hung" and kind == "fail", "a tablet hang in a test with a 30 s limit is fail: %s %s" % (verdict, kind))
 
 
 # --- what the game writes at its exit ----------------------------------------------------------------------------------------

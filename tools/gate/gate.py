@@ -453,8 +453,7 @@ class Gate:
         if name in self.planned:
             state, detail = "fail", "it runs, so its line in planned.tsv must go; " + detail
             records = [kinds.record("-", "fail", detail)]
-        pending = (cases is not None and cases.source is not None
-                   and any(r["kind"] == "fail" and r["counts"] and r["test"] != "-" and not r["final"] for r in records))
+        pending = (cases is not None and cases.source is not None and any(kinds.needs_second_run(r) for r in records))
         if pending:
             self.cases[name] = cases
         self.record(name, state, round(time.time() - t0, 1), detail, log, records, pending=pending)

@@ -322,14 +322,15 @@ Each test and renderer leaves a folder in the work folder, `TEST/RENDERER/`:
 | `setup-failed` | A setup item did not take. The test shows nothing either way. |
 | `not-run` | The test needs another disc's game (`disc`) and none was given. The run does not pass. |
 | `crashed` | The game crashed. The result names the dump and the last lines of the log. |
-| `timeout` | The run reached `limit_seconds` and the game had taken no step in the last 120 seconds. |
+| `timeout` | The run reached `limit_seconds` and the game had never taken a step. |
 | `hung` | The game's process was alive and it completed no step for 120 seconds. The result names the step it stood at and the dump the game wrote, if any. |
-| `too-slow` | The run reached `limit_seconds` while the game was still taking steps: the machine was slow, the game is not shown wrong. |
+| `not-reached` | The run reached `limit_seconds` with the game stepping at 80% of full speed or more (48 steps a second), and its end step was not reached. The machine was not the reason. |
+| `too-slow` | The run reached `limit_seconds` with the game stepping at under 80% of full speed. The gate runs it again alone: it passes there (a flake), or it is `fail`. |
 | `output-missing` | The game ended, and a picture a step asked for, or the loss report, was still not there 60 seconds later. |
 | `no-exit-record` | On a device: Android's record of how the game's process ended never came. |
 | `harness-error` | The test file is wrong, or the runner had a problem. Never the mod's fault. |
 
-`result.json` also says the kind of the result, `"kind"`: `pass`; `fail` (the game or the mod is wrong: `fail`, `crashed`, `timeout`, `hung`); `tool` (the test tool is wrong: `harness-error`, `setup-failed`, `output-missing`, `no-exit-record`); or `env` (the machine was not fit: `not-run`, a device that left, a drive with no room, `too-slow`). Only `fail` says something about the game.
+`result.json` also says the kind of the result, `"kind"`: `pass`; `fail` (the game or the mod is wrong: `fail`, `crashed`, `timeout`, `hung`, `not-reached`); `tool` (the test tool is wrong: `harness-error`, `setup-failed`, `output-missing`, `no-exit-record`); or `env` (the machine was not fit: `not-run`, a device that left, a drive with no room, `too-slow`). Only `fail` says something about the game.
 
 `lumalink test` prints one line for each test and renderer, and exits with 0 when every verdict is `pass`. The runner itself ends with 3, and writes no result, when the machine is not fit to start (the run lock is held, the device does not answer).
 
