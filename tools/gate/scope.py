@@ -53,6 +53,11 @@ GROUPS = {
     "tablet12": ("the tablet's 12 stops with pictures and replays (owed when the tablet does not answer)",
                  ["tablet/prepare", "android/tablet", "tour/tablet", "tablet/remove", "tour/tablet-pc", "replays/tablet",
                   "pictures/tablet"]),
+    # No local check: it switches GitHub's part of a move on (package T8a, tools/gate/github_rule.py). A landing whose
+    # plan has it pushes the candidate branch and waits for GitHub's `must` jobs (tools/gate/github_jobs.tsv); one without
+    # it pushes nothing, starts no watcher and waits for nothing.
+    "github": ("GitHub's push workflow on the candidate: the move waits for its must jobs",
+               []),
 }
 GROUP_NAMES = tuple(GROUPS)
 # A pseudo-group a row may name: it makes the run full, as a file no row names does.

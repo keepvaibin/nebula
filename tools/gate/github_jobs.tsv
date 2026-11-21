@@ -1,0 +1,24 @@
+# The jobs of .github/workflows/check.yml and what each one means for a landing or a move (package T8a; tools/gate/github_rule.py).
+# The names are exactly the ones `gh run view <id> --json jobs` gives, a matrix leg with its own name. A self-test
+# (tools/gate/tests/github_rule_test.py) compares this table with the workflow file: a job renamed, added or removed there
+# fails the tools check until this table follows.
+#
+#   must      the move waits until it is green for the commit (any push run of that commit, the newest result wins); a red one
+#             stops the run. A job this table does not name counts as must, and the run says so in a line of kind tool.
+#   nightly   left out of every rule: this machine builds and tests Windows itself.
+#   advisory  never blocks: a red or cancelled one is run again once; red again, it is told in one line.
+#
+# A change whose scope (tools/gate/scope.tsv) has no `github` group does not push a candidate and waits for none of them.
+job	class
+Mac	must
+Linux	must
+Linux unit tests	must
+Linux sanitizers (address,undefined)	must
+Linux sanitizers (thread)	must
+Rust tests (ubuntu-24.04)	must
+Rust tests (windows-2022)	must
+Android (arm64-v8a)	must
+Android (x86_64)	must
+Windows (three renderers, unit tests)	nightly
+Windows game modules	nightly
+Android start check (x86_64 emulator)	advisory

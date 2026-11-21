@@ -7,6 +7,9 @@ graphics card or a tablet.
   repo_in_every_run         the repository checks are in every plan, whatever a row names (scope.ALWAYS)
   repo_group_is_in_every_run  the repository checks are in every plan, whatever a row names (scope.ALWAYS)
   union_of_rows             a change of several files runs the union of every row each file matches, whatever the order
+  github_group              the group `github` (no local check) is on the rows of code, the test driver, the renderers, the importer,
+                            Android and the unit tests, on `.github/**` and in the full run; documents, tools, test data and pictures
+                            have none
   outside_every_row_is_full a file no row names makes the run full (and so does a change with no file)
   mods_off_in_full          mods = off keeps the mod suites and LumaLink's check out of the full run (the main level) and out
                             of the nightly's; --mods short or full brings them back, and one switch does it for both
@@ -48,20 +51,20 @@ class Rows(unittest.TestCase):
             (("tests/pictures/approved.tsv",), ["repo"]),
             (("PICTURES-CHANGE.txt",), ["repo"]),
             (("tools/plan/plan.py", "tools/gate/gate.py"), ["repo", "tools"]),
-            (("native/petari/src/Game/Foo.cpp",), ["repo", "build", "unit", "start", "engine1", "tour1"]),
-            (("runtime/src/render/renderer_common.cpp",), ["repo", "build", "unit", "start", "engine1", "engine3", "tour1", "tour3"]),
-            (("runtime/include/galaxy/render/renderer.h",), ["repo", "build", "unit", "start", "engine1", "engine3", "tour1", "tour3"]),
-            (("runtime/src/audio/mixer.cpp",), ["repo", "build", "unit", "start", "engine1", "tour1"]),
-            (("platform/sdl/host.cpp",), ["repo", "build", "unit", "start", "engine1", "tour1"]),
-            (("crates/nebula-import/src/lib.rs",), ["repo", "import"]),
-            (("platform/android/app/build.gradle",), ["repo", "android", "tablet12"]),   # repo: in every run (scope.ALWAYS)
+            (("native/petari/src/Game/Foo.cpp",), ["repo", "build", "unit", "start", "engine1", "tour1", "github"]),
+            (("runtime/src/render/renderer_common.cpp",), ["repo", "build", "unit", "start", "engine1", "engine3", "tour1", "tour3", "github"]),
+            (("runtime/include/galaxy/render/renderer.h",), ["repo", "build", "unit", "start", "engine1", "engine3", "tour1", "tour3", "github"]),
+            (("runtime/src/audio/mixer.cpp",), ["repo", "build", "unit", "start", "engine1", "tour1", "github"]),
+            (("platform/sdl/host.cpp",), ["repo", "build", "unit", "start", "engine1", "tour1", "github"]),
+            (("crates/nebula-import/src/lib.rs",), ["repo", "import", "github"]),
+            (("platform/android/app/build.gradle",), ["repo", "android", "tablet12", "github"]),   # repo: in every run (scope.ALWAYS)
             (("runtime/src/render/vk/renderer_vk.cpp",), ["repo", "build", "unit", "start", "engine1", "engine3", "tour1", "tour3",
-                                                          "android", "tablet12"]),
+                                                          "android", "tablet12", "github"]),
             (("tests/engine/boot/test.json",), ["repo", "build", "engine3"]),
-            (("tests/android/walk/test.json",), ["repo", "android", "tablet12"]),
+            (("tests/android/walk/test.json",), ["repo", "android", "tablet12", "github"]),
             (("tests/replays/stage.txt",), ["repo", "build", "tour1"]),
             (("tests/mods/anim/test.json",), ["repo"]),
-            (("tools/test_driver/luma_test/luma_test.c",), ["repo", "tools", "build", "unit", "start", "engine1", "tour1"]),
+            (("tools/test_driver/luma_test/luma_test.c",), ["repo", "tools", "build", "unit", "start", "engine1", "tour1", "github"]),
             (("tools/lumacore/luma_test.py",), ["repo", "tools", "engine1", "tour1"]),
         ]
         for paths, want in cases:
@@ -69,11 +72,33 @@ class Rows(unittest.TestCase):
             self.assertFalse(p.full, paths)
             self.assertEqual(p.groups, [g for g in scope.GROUP_NAMES if g in want], paths)
 
+    def test_github_group(self):
+        # The group `github` switches GitHub's part of a landing on (package T8a); it stands for no local check.
+        self.assertIn("github", scope.GROUP_NAMES)
+        self.assertEqual(scope.check_patterns(["github"]), [], "no local check")
+        for paths in (("docs/a.md",), ("README.md",), ("tools/gate/gate.py", "tools/plan/plan.py"), ("tests/pictures/approved.tsv",),
+                      ("tests/engine/boot/test.json",), ("tests/replays/stage.txt",), ("tests/mods/a/test.json",),
+                      ("tests/measure/a.json",), ("tests/pace/a.json",), ("tools/lumacore/luma_test.py",), ("PICTURES-CHANGE.txt",)):
+            self.assertNotIn("github", plan(*paths).groups, paths)
+        for paths in (("tools/test_driver/a.c",), ("native/a.cpp",), ("runtime/src/render/a.cpp",), ("runtime/include/galaxy/render/a.h",),
+                      ("runtime/src/audio/a.cpp",), ("platform/sdl/a.cpp",), ("crates/nebula-import/a.rs",), ("platform/android/a.kt",),
+                      ("runtime/src/render/vk/a.cpp",), ("tests/unit/a.cpp",), ("tests/android/a.json",),
+                      (".github/workflows/check.yml",), (".github/actions/compiler-cache/action.yml",)):
+            self.assertIn("github", plan(*paths).groups, paths)
+        self.assertEqual(plan(".github/workflows/check.yml").groups, ["repo", "github"])
+        full = plan("somewhere/no/row/names.bin")
+        self.assertTrue(full.full)
+        groups, is_full = scope.groups_from_text(full.text())
+        self.assertTrue(is_full)
+        self.assertIn("github", groups, "the full run has it")
+        self.assertEqual(scope.groups_from_text("repo,github"), (["repo", "github"], False))
+        self.assertEqual(scope.groups_from_text("repo"), (["repo"], False))
+
     def test_union_of_rows(self):
         paths = ["docs/a.md", "crates/nebula-import/src/x.rs", "runtime/src/audio/a.cpp", "platform/android/app/a.kt"]
         a = plan(*paths)
         self.assertEqual(a.groups, [g for g in scope.GROUP_NAMES if g in (
-            "repo", "build", "unit", "start", "engine1", "tour1", "import", "android", "tablet12")])
+            "repo", "build", "unit", "start", "engine1", "tour1", "import", "android", "tablet12", "github")])
         self.assertEqual(plan(*reversed(paths)).groups, a.groups)
         self.assertEqual(plan("docs/a.md", "native/b.cpp").groups, plan("native/b.cpp").groups,
                          "a document beside code adds nothing of its own")
