@@ -28,10 +28,13 @@ start    Branch `native/<id>` from main in `D:/NebulaWork/MarioGalaxyRecomp/N-<i
 land     Refuses unless every ledger row the card closes whole is `fixed` with a proof that names a test, a search or a
          measure, and every row it only advances has a dated note written by this branch; checks the file and line
          references in the changed documents and the commit messages (tools/verify/doc_refs.py); then hands the branch
-         to the gate (`land_with_gate`, below). A pass sets `landed` and the commit in the same landing. A failure is
-         stored by signature (failures.py): the third time in a row the same one comes back it exits with code 3.
-         A TOOL or ENV result is also written, at once, as a line of tool-faults.tsv (live.py), and the command that adds
-         the agent's "could not" sentence is printed.
+         to the gate: ONE call, `gate.py land native/<id>` (the landing queue of tools/gate/landing.py: it runs the checks
+         the changed paths need, in a batch with whatever else waits, and moves main). Reads the gate's `KIND` and
+         `VERDICT` lines and its exit code: 0 landed, 1 fail, 2 not judged (a tool or the machine, a branch that does
+         not apply: never "refused"), 3 the same failure three times. A pass sets `landed` and the commit in the same
+         landing. The gate stores a failure by signature (failures.py) and writes a TOOL or ENV result, at once, as a line
+         of tool-faults.tsv (live.py); it prints the command that adds the agent's "could not" sentence. A `main` line is
+         information, not a failure.
 blocked  Sets `blocked`; writes the reason and the failure's first line into BLOCKED.md. `next` then skips to
          independent work.
 claim    Claims a package for the agent; a stale claim of the other agent is taken over with --take-stale (its branch is
@@ -41,13 +44,13 @@ toolfault --last --could-not "TEXT": the sentence on what the agent's last tool 
 status   Writes STATUS.md and prints it: steps landed, started, blocked, claims, the last five landings, the next step.
          The agent runs it at every start and after every context compaction; it is the only memory it needs.
 page     Writes three files into the live folder (page.py), from steps.tsv, the live state, the tool faults and
-         tests/flakes.tsv: progress.html (static, rewritten only when the tool or the step list changes),
+         the gate's flakes.tsv and set-aside.tsv (in the live folder): progress.html (static, rewritten only when the tool or the step list changes),
          progress-data.json (only what changes) and progress-local.html (the data embedded, for opening from disk).
          Publish the first two. land, start, blocked and toolfault do it too, so the page is never behind.
 rows     What a card's "Rows." line means (closes whole / advances), for one step or all of them.
 
 Exit codes: 0 done; 1 refused or failed; 2 the command was wrong; 3 the same failure three times; 4 a tool or
-machine fault only (it does not count as a failure of the change).
+machine fault only, or a branch that does not apply (the gate's "not judged": it does not count as a failure of the change).
 
 State. `landed` and the commit are in steps.tsv (the repository) and travel with the landing's own commit; after a pass
 they are written into the plan tree too. Everything that more than one agent, or the progress page, must see is in the
@@ -74,6 +77,7 @@ sys.path.insert(0, str(TREE / "tools" / "gate"))
 import failures  # noqa: E402
 import doc_refs  # noqa: E402
 import live as lv  # noqa: E402
+import landing  # noqa: E402
 import page  # noqa: E402
 import scope  # noqa: E402
 
@@ -655,10 +659,14 @@ KIND_OF = {"pass": "PASS", "known": "PASS", "planned": "PASS", "owed": "ENV", "F
 
 class Verdict:
     """The landing's result: `passed`; `rows` [(check, kind, detail)] (every check the gate printed); `failures`
-    [(check, kind, first_error_line)]: what did not pass; `lines`: the gate's output."""
+    [(check, kind, first_error_line)]: what did not pass; `lines`: the gate's output. Set by the gate's own protocol
+    (`gate.py land`): `code` its exit code (0 landed, 1 fail, 2 not judged, 3 the same failure three times), `commit` the
+    commit main has the branch as, and `gate_recorded`: the gate has stored the failure's signature and written any tool or
+    machine fault itself, so the step tool does neither."""
 
     def __init__(self, passed, rows=(), failures_=(), lines=()):
         self.passed, self.rows, self.failures, self.lines = passed, list(rows), list(failures_), list(lines)
+        self.code, self.commit, self.gate_recorded = None, "", False
 
     def counts(self):
         out = {}
@@ -677,7 +685,39 @@ def read_gate_output(lines):
     return rows
 
 
-def run_gate(folder, args, out=None):
+def read_land_output(lines, code, branch=""):
+    """The Verdict of one `gate.py land` from its output and exit code. The gate's last lines are `KIND <kind> <check> <test> ::
+    <message>` for each result of its runs that is not a pass and `VERDICT pass | fail | not-judged`; before them a `LAND
+    <branch> <state> <detail>` line for each branch. Its exit code: 0 landed, 1 fail, 2 not judged (a tool or machine fault, a
+    branch that does not apply: never "refused"), 3 the same failure three times. A `main` KIND line is information, not a
+    failure; a flake is not one either."""
+    lines = [l.rstrip("\r\n") for l in lines]
+    rows = [(c, k, d) for c, k, d, _ in read_gate_output(lines)]
+    kind_lines = [l for l in lines if l.startswith("KIND ")]
+    counted = [(c, k.upper(), m) for c, k, m in landing.failures_of_lines(kind_lines)]
+    verdict = next((l.split()[1] for l in reversed(lines) if l.startswith("VERDICT ")), None)
+    mine = next((l.split(" ", 3) for l in lines if l.startswith("LAND %s " % branch)), None) if branch else None
+    v = None
+    if verdict is None or code not in (0, 1, 2, 3):
+        why = next((l.split("gate.py:", 1)[1].strip() for l in lines if l.startswith("gate.py:")), "")
+        v = Verdict(False, rows, counted or [("gate.py", "TOOL", why or "exited %s with no VERDICT line" % code)], lines)
+        v.code = 2
+        return v
+    if code == 0:
+        v = Verdict(True, rows, [], lines)
+    elif code in (1, 3):
+        v = Verdict(False, rows, [f for f in counted if f[1] == "FAIL"] or counted or
+                    [("gate.py", "FAIL", (mine[3] if mine and len(mine) > 3 else "failed with no KIND line"))], lines)
+    else:
+        why = (mine[2] + " " + mine[3]) if mine and len(mine) > 3 else "not judged"
+        v = Verdict(False, rows, counted or [("land", "NOT-JUDGED", why.strip())], lines)
+    v.code, v.gate_recorded = code, True
+    if mine and len(mine) > 3 and mine[2] == "landed":
+        v.commit = mine[3].replace("main now has it as ", "").split()[0]
+    return v
+
+
+def run_gate(folder, args, out=None, branch=""):
     """One gate.py run from the step's work folder. Returns a Verdict. The gate's own words go to `out` as they come."""
     out = out or sys.stdout
     cmd = [sys.executable, "-X", "utf8", "-I", str(pathlib.Path(folder) / "tools" / "gate" / "gate.py"), *args]
@@ -694,40 +734,29 @@ def run_gate(folder, args, out=None):
             code = p.wait()
     except OSError as e:
         return Verdict(False, [], [("gate.py", "TOOL", "could not be started: %s" % e)], lines)
-    read = read_gate_output(lines)
-    rows = [(c, k, d) for c, k, d, _ in read]
-    # An `owed` check (the tablet is away) is a pass for the gate: it is a kind ENV in the counts and not a failure.
-    bad = [(c, k, d) for c, k, d, state in read if state in ("FAIL", "TOOL", "ENV")]
-    if code == 0:
-        return Verdict(True, rows, [], lines)
-    if code == 2:
-        why = next((l.split("gate.py:", 1)[1].strip() for l in lines if l.startswith("gate.py:")), "refused")
-        return Verdict(False, rows, bad or [("gate.py", "FAIL", why)], lines)
-    if not bad:
-        return Verdict(False, rows, [("gate.py", "TOOL", "exited %d with no failing check in its output" % code)], lines)
-    return Verdict(False, rows, bad, lines)
+    return read_land_output(lines, code, branch)
 
 
-def land_with_gate(folder, branch, tablet=TABLET, tablet_wait=TABLET_WAIT, out=None):
-    """THE LANDING STEP. Today: the quick gate, then the main gate with the move, from the step's work folder, the
-    branch pushed first (the gate wants it on origin). When `gate.py land` exists (a later package), this body becomes
-    one call, `run_gate(folder, ["land", branch], out)`, and nothing else in this file changes: it returns the same
-    Verdict, and the three-failure store (failures.py) is called the same way by both."""
+def land_with_gate(folder, branch, tablet=TABLET, tablet_wait=TABLET_WAIT, extra=(), out=None):
+    """THE LANDING STEP: the branch pushed (a backup on origin, and the one the gate's queue reads), then ONE call of
+    `gate.py land` from the step's work folder, which queues it, runs the checks its changed paths need, and moves main.
+    Reads the gate's KIND and VERDICT lines and its exit code (0 landed, 1 fail, 2 not judged, 3 the same failure three
+    times). `extra`: more options for the gate (--agent, --live, --failures)."""
     out = out or sys.stdout
     # --force-with-lease: a failed try took its state commit off the branch again (cmd_land), so the next push is not a
     # fast-forward of what origin has. The branch is this step's own.
     pushed = git(folder, "push", "--force-with-lease", "origin", branch)
     if pushed.returncode != 0:
         return Verdict(False, [], [("git/push", "FAIL", (pushed.stderr.strip().splitlines() or ["push refused"])[-1])])
-    quick = run_gate(folder, ["--quick"], out)
-    if not quick.passed:
-        return quick
-    main = run_gate(folder, ["--main", "--move", "--tablet", tablet, "--tablet-wait", str(tablet_wait)], out)
-    main.rows = quick.rows + main.rows
-    return main
+    return run_gate(folder, ["land", branch, "--tablet", tablet, "--tablet-wait", str(tablet_wait), *extra], out, branch)
 
 
 LAND = land_with_gate            # tests put their own in here
+
+
+def gate_options(a, agent):
+    """The options `gate.py land` gets from this tool: who asks, where the faults and the failures are kept."""
+    return ["--agent", agent, "--live", live_dir(a.live).as_posix(), "--failures", str(a.failures)]
 
 
 # ---- BLOCKED.md, STATUS.md, landings.tsv ---------------------------------------------------------------------
@@ -783,13 +812,26 @@ def work_folder(work_root, step_id):
     return pathlib.Path(work_root) / ("N-" + step_id)
 
 
-def count_flakes(tree):
-    """The number of lines in tests/flakes.tsv (the header, if it has one, not counted); 0 when there is no file."""
-    path = pathlib.Path(tree) / "tests" / "flakes.tsv"
+def count_flakes(live):
+    """The number of lines in the gate's flakes.tsv, which it writes in the live folder (D:/NebulaWork/plan/native: time,
+    test, renderer, commit, the first failure's message); 0 when there is no file."""
+    path = live_dir(live) / "flakes.tsv"
     if not path.exists():
         return 0
-    lines = [l for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
-    return len(lines) - (1 if lines and lines[0].lower().startswith(("date", "time")) else 0)
+    lines = [l for l in path.read_text(encoding="utf-8").splitlines() if l.strip() and not l.startswith("#")]
+    return len(lines) - (1 if lines and lines[0].lower().startswith(("date", "time\t")) else 0)
+
+
+def read_set_aside(live):
+    """[{test, renderer, since, why}] of the gate's set-aside.tsv (time, test, renderer, why): the tests that flaked three times
+    in seven days. They still run and are reported; their failure does not count."""
+    path = live_dir(live) / "set-aside.tsv"
+    out = []
+    for line in path.read_text(encoding="utf-8").splitlines() if path.exists() else []:
+        c = line.split("\t")
+        if len(c) >= 3 and line.strip() and not line.startswith("#"):
+            out.append({"since": c[0], "test": c[1], "renderer": c[2], "why": c[3] if len(c) > 3 else ""})
+    return out
 
 
 def status_text(tree, work_root=WORK_ROOT, at=None, live=None):
@@ -853,7 +895,8 @@ def page_data(tree, live=None, at=None):
     claims = lv.read_claims(d)
     at = at or now()
     return page.make_static(steps), page.make_data(steps, lv.read_landings(d), lv.read_state(d), claims, stale_of(tree, claims, at),
-                                                   lv.fault_groups(lv.read_faults(d)), count_flakes(tree), lv.stamp(at))
+                                                   lv.fault_groups(lv.read_faults(d)), count_flakes(live), lv.stamp(at),
+                                                   read_set_aside(live))
 
 
 def write_page(tree, live=None, at=None):
@@ -1173,7 +1216,7 @@ def cmd_land(a):
         say("plan.py: the state commit failed (a hook?):\n%s" % (committed.stdout + committed.stderr).strip())
         return 1
     started = time.time()
-    verdict = LAND(folder, branch, a.tablet, a.tablet_wait)
+    verdict = LAND(folder, branch, a.tablet, a.tablet_wait, gate_options(a, agent))
     seconds = int(time.time() - started)
     store = failures.Store(a.failures)
     say()
@@ -1187,13 +1230,23 @@ def cmd_land(a):
         else:
             lv.put_claim(live_dir(a.live), s["package"], agent)
         refresh_page(a)
-        say("LANDED %s as %s in %d s. Verdict by kind: %s." % (a.id, code_commit, seconds, summary or "no check rows read"))
+        say("LANDED %s as %s%s in %d s. Verdict by kind: %s." % (
+            a.id, code_commit, (" (main has it as %s)" % verdict.commit) if verdict.commit else "", seconds,
+            summary or "no check rows read"))
         say("Publish the page again: progress.html with progress-data.json, to the address in %s." % page_paths(a.live)[2].as_posix())
         return 0
     git(folder, "reset", "--hard", "HEAD~1")        # the state commit goes; the next try makes it again
     say("NOT LANDED: %s. Verdict by kind: %s." % (a.id, summary or "no check rows read"))
     for check, kind, detail in verdict.failures:
         say("  %-5s %s: %s" % (kind, check, detail))
+    if verdict.gate_recorded:
+        # `gate.py land` stored the failure's signature and wrote any tool or machine fault itself, and said what to do.
+        refresh_page(a)
+        if verdict.code == failures.STOP_CODE:
+            if not any(failures.STOP_TEXT in l for l in verdict.lines):
+                say(failures.STOP_TEXT)
+            return failures.STOP_CODE
+        return 1 if verdict.code == 1 else 4          # 2: not judged (a tool or the machine, a branch that does not apply)
     written = record_faults(a, a.id, verdict)
     outcome = store.record(branch, verdict.failures)
     if written:

@@ -410,7 +410,7 @@ class StartTest(unittest.TestCase):
 
 # ---- land ---------------------------------------------------------------------------------------------------
 
-class LandTest(unittest.TestCase):
+class LandBase(unittest.TestCase):
     def setUp(self):
         self.t = Tree().__enter__()
         self.addCleanup(self.t.__exit__)
@@ -421,7 +421,7 @@ class LandTest(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    def fake_land(self, folder, branch, tablet, wait):
+    def fake_land(self, folder, branch, tablet, wait, *rest):
         self.calls.append((pathlib.Path(folder), branch, tablet, wait))
         return self.verdict
 
@@ -434,6 +434,7 @@ class LandTest(unittest.TestCase):
     def land(self, expect=None):
         return self.t.run(["land", "A.1"], expect)
 
+class LandTest(LandBase):
     def test_a_ready_step_lands_and_marks_itself_landed_in_its_own_commit(self):
         code_commit = self.ready()
         code, text = self.land(expect=0)
@@ -631,21 +632,46 @@ FAKE_GATE = textwrap.dedent('''\
     log = pathlib.Path(__file__).with_name("calls.txt")
     log.write_text((log.read_text() if log.exists() else "") + " ".join(args) + "\\n")
     mode = pathlib.Path(__file__).with_name("mode.txt").read_text().strip()
-    if args[0] == "--quick" and mode == "quick-fails":
-        print("repo/code                          pass        1.0 s  ok")
-        print("tour/d3d12                         FAIL       41.5 s  replay step 0: 0873f048 against 521573f1")
-        print("gate quick abc: FAIL")
-        sys.exit(1)
-    if mode == "refused" and args[0] == "--main":
-        print("gate.py: main (abc) is not an ancestor of this commit: rebase on it first", file=sys.stderr)
-        sys.exit(2)
+    assert args[0] == "land", args
+    branch = args[1]
     if mode == "crash":
         sys.exit(7)
+    if mode == "silent":
+        sys.exit(0)
+    if mode == "usage":
+        print("gate.py: land takes branches to put in the queue, or --queue to run what waits: one of the two", file=sys.stderr)
+        print("VERDICT not-judged")
+        sys.exit(2)
+    print("gate.py: run 1 on %s: repo,build (abc)" % branch)
     print("repo/code                          pass        1.0 s  ok")
-    print("tablet/short                       owed        0.0 s  the tablet is away")
-    print("unit                               known       2.0 s  1 known failure")
-    print("tour/d3d12                         pass       41.5 s  12 stops")
-    sys.exit(0)
+    if mode == "ok":
+        print("tablet/prepare                     owed        0.0 s  the tablet is away")
+        print("unit                               known       2.0 s  1 known failure")
+        print("tour/d3d12                         pass       41.5 s  12 stops")
+        print("LAND %s landed main now has it as 0123456789" % branch)
+        print("KIND env tablet/prepare - :: the tablet does not answer adb [owed]")
+        print("KIND main tour/d3d12 001-a :: fails on main's build too")
+        print("KIND flake tour/d3d12 002-b :: once")
+        print("VERDICT pass")
+        sys.exit(0)
+    if mode in ("fail", "stop"):
+        print("tour/d3d12                         FAIL       41.5 s  replay step 0: 0873f048 against 521573f1")
+        print("LAND %s failed tour/d3d12: replay step 0: 0873f048 against 521573f1" % branch)
+        print("Same failure three times. Stop retrying. Run plan.py blocked, then plan.py next.") if mode == "stop" else None
+        print("KIND fail tour/d3d12 025-EggStarGalaxy-4 :: replay step 0: 0873f048 against 521573f1")
+        print("KIND fail unit/game - :: known one [known (P-9)]")
+        print("VERDICT fail")
+        sys.exit(1 if mode == "fail" else 3)
+    if mode == "tool":
+        print("LAND %s waiting not judged: tool tour/d3d12: result.json is missing" % branch)
+        print("KIND tool harness/self - :: result.json is missing")
+        print("KIND env start/d3d11 - :: D: is under its floor")
+        print("VERDICT not-judged")
+        sys.exit(2)
+    if mode == "conflict":
+        print("LAND %s conflict does not apply on origin/main: runtime/src/a.cpp" % branch)
+        print("VERDICT not-judged")
+        sys.exit(2)
     ''')
 
 
@@ -664,7 +690,10 @@ class GateStepTest(unittest.TestCase):
 
     def land(self):
         with contextlib.redirect_stdout(io.StringIO()):
-            return plan.land_with_gate(self.folder, "native/A.1", "SER", 30)
+            return plan.land_with_gate(self.folder, "native/A.1", "SER", 30, ["--agent", "2"])
+
+    def push(self):
+        self.t.git("commit", "--allow-empty", "-m", "c", cwd=self.folder)
 
     def test_the_gate_rows_are_read_by_kind(self):
         rows = plan.read_gate_output(["repo/code   pass   1.0 s  ok\n", "x  FAIL  2.5 s  boom: first line\n", "t  owed  0.0 s  away\n",
@@ -672,39 +701,96 @@ class GateStepTest(unittest.TestCase):
         self.assertEqual([(c, k) for c, k, _, _ in rows], [("repo/code", "PASS"), ("x", "FAIL"), ("t", "ENV"), ("p", "NEW"), ("f", "FLAKE")])
         self.assertEqual(rows[1][2], "boom: first line")
 
-    def test_quick_then_main_with_the_move_and_the_tablet(self):
-        self.t.git("commit", "--allow-empty", "-m", "c", cwd=self.folder)
+    def test_one_call_of_gate_land_with_the_tablet_and_the_options(self):
+        self.push()
         v = self.land()
         self.assertTrue(v.passed)
-        self.assertEqual(self.calls.read_text().splitlines(), ["--quick", "--main --move --tablet SER --tablet-wait 30"])
-        self.assertEqual(v.counts(), {"PASS": 6, "ENV": 2})
-        self.assertEqual(v.failures, [], "an owed check is not a failure")
+        self.assertEqual(self.calls.read_text().splitlines(), ["land native/A.1 --tablet SER --tablet-wait 30 --agent 2"],
+                         "one call, in place of the quick gate and the main gate")
+        self.assertEqual(v.counts(), {"PASS": 3, "ENV": 1})
+        self.assertEqual(v.failures, [], "an owed check, a main line and a flake are not failures")
+        self.assertEqual((v.code, v.commit, v.gate_recorded), (0, "0123456789", True))
         self.assertEqual(self.t.git("rev-parse", "native/A.1", cwd=self.t.origin), self.t.git("rev-parse", "HEAD", cwd=self.folder),
                          "the branch is on origin for the gate")
 
-    def test_the_main_gate_is_not_started_when_quick_fails(self):
-        self.mode.write_text("quick-fails", encoding="utf-8")
+    def test_a_fail_is_read_from_its_kind_lines_and_a_known_one_is_not_counted(self):
+        self.mode.write_text("fail", encoding="utf-8")
         v = self.land()
         self.assertFalse(v.passed)
-        self.assertEqual(self.calls.read_text().splitlines(), ["--quick"])
+        self.assertEqual(v.code, 1)
         self.assertEqual(v.failures, [("tour/d3d12", "FAIL", "replay step 0: 0873f048 against 521573f1")])
 
-    def test_a_refusal_of_the_gate_is_a_failure_with_its_words(self):
-        self.mode.write_text("refused", encoding="utf-8")
+    def test_exit_code_three_is_the_stop(self):
+        self.mode.write_text("stop", encoding="utf-8")
         v = self.land()
-        self.assertEqual(v.failures, [("gate.py", "FAIL", "main (abc) is not an ancestor of this commit: rebase on it first")])
+        self.assertEqual((v.passed, v.code), (False, 3))
 
-    def test_a_gate_that_dies_without_a_failing_check_is_a_tool_fault(self):
-        self.mode.write_text("crash", encoding="utf-8")
+    def test_not_judged_is_kind_tool_or_env_and_never_refused(self):
+        self.mode.write_text("tool", encoding="utf-8")
         v = self.land()
-        self.assertEqual(v.failures, [("gate.py", "TOOL", "exited 7 with no failing check in its output")])
-        outcome = failures.Store(self.t.store).record("native/A.1", v.failures)
-        self.assertEqual((outcome.counted, outcome.exit_code), (False, 4))
+        self.assertEqual((v.passed, v.code), (False, 2))
+        self.assertEqual(v.failures, [("harness/self", "TOOL", "result.json is missing"), ("start/d3d11", "ENV", "D: is under its floor")])
+
+    def test_a_branch_that_does_not_apply_is_not_judged(self):
+        self.mode.write_text("conflict", encoding="utf-8")
+        v = self.land()
+        self.assertEqual(v.code, 2)
+        self.assertEqual(v.failures, [("land", "NOT-JUDGED", "conflict does not apply on origin/main: runtime/src/a.cpp")])
+
+    def test_a_usage_refusal_of_the_gate_is_not_judged_with_its_words(self):
+        self.mode.write_text("usage", encoding="utf-8")
+        v = self.land()
+        self.assertEqual(v.code, 2)
+        self.assertEqual(v.failures[0][0], "land")
+
+    def test_a_gate_that_dies_or_says_nothing_is_a_tool_fault(self):
+        for mode, word in (("crash", "exited 7"), ("silent", "exited 0")):
+            self.mode.write_text(mode, encoding="utf-8")
+            v = self.land()
+            self.assertEqual(v.failures, [("gate.py", "TOOL", "%s with no VERDICT line" % word)], mode)
+            self.assertEqual(v.code, 2)
+            outcome = failures.Store(self.t.store).record("native/A.1", v.failures)
+            self.assertEqual((outcome.counted, outcome.exit_code), (False, 4))
 
     def test_a_branch_origin_refuses_is_a_failure_not_a_crash(self):
         shutil.rmtree(self.t.origin, ignore_errors=True)
         v = self.land()
         self.assertEqual((v.passed, v.failures[0][:2]), (False, ("git/push", "FAIL")))
+
+
+class GateRecordedTest(LandBase):
+    """What the step tool does when the gate stored the failure and wrote the faults itself (gate.py land's exit codes)."""
+
+    def verdict_of(self, code, failures_):
+        v = plan.Verdict(code == 0, [], failures_)
+        v.code, v.gate_recorded = code, True
+        return v
+
+    def test_a_failed_landing_is_not_counted_twice(self):
+        self.ready()
+        self.verdict = self.verdict_of(1, [("tour/d3d12", "FAIL", "replay differs")])
+        self.assertEqual(self.land()[0], 1)
+        self.assertEqual(failures.Store(self.t.store).count("native/A.1"), 0, "the gate stores it, not the step tool")
+
+    def test_exit_three_is_three_and_not_judged_is_four(self):
+        self.ready()
+        self.verdict = self.verdict_of(3, [("tour/d3d12", "FAIL", "replay differs")])
+        code, text = self.land()
+        self.assertEqual(code, 3)
+        self.assertIn("Same failure three times. Stop retrying.", text)
+        self.verdict = self.verdict_of(2, [("harness/self", "TOOL", "result.json is missing")])
+        code, text = self.land()
+        self.assertEqual(code, 4)
+        self.assertEqual(lv.read_faults(self.t.live), [], "the gate wrote the fault line, not this tool")
+        self.verdict = self.verdict_of(2, [("land", "NOT-JUDGED", "conflict does not apply on origin/main: a.cpp")])
+        self.assertEqual(self.land()[0], 4)
+
+    def test_the_commit_main_has_is_printed(self):
+        self.ready()
+        v = plan.Verdict(True, [("c", "PASS", "ok")])
+        v.code, v.commit, v.gate_recorded = 0, "0123456789", True
+        self.verdict = v
+        self.assertIn("(main has it as 0123456789)", self.land(expect=0)[1])
 
 
 # ---- blocked, tool, status ----------------------------------------------------------------------------------

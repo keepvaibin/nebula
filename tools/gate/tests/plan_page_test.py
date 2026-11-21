@@ -1,7 +1,7 @@
 """plan_page_test.py: the progress page (package T13, item 6), three files: progress.html (static: layout, script and the
 step list, rewritten only when the tool or the step list changes), progress-data.json (only what changes) and
 progress-local.html (the data embedded, for opening from disk). The data matches steps.tsv, the live state, BLOCKED.md,
-tool-faults.tsv and tests/flakes.tsv; no file names an outside address; the page's script draws the data (run by node when
+tool-faults.tsv and the gate's flakes.tsv and set-aside.tsv (in the live folder); no file names an outside address; the page's script draws the data (run by node when
 node is installed). A temporary live folder each: no game, no build, no network, nothing of D:/NebulaWork.
 
     python -X utf8 -I tools/gate/tests/plan_page_test.py [--work <folder>]
@@ -72,7 +72,7 @@ class DataTest(unittest.TestCase):
                                       "A.2": {"state": "started", "agent": "2"}, "B.1": {"state": "blocked", "agent": "1"},
                                       "C.1": {"state": "landed"}})
         self.assertNotIn("B.2", d["steps"])
-        self.assertEqual(sorted(d), ["blocked", "claims", "flakes", "generated", "steps", "tool_faults"])
+        self.assertEqual(sorted(d), ["blocked", "claims", "flakes", "generated", "set_aside", "steps", "tool_faults"])
 
     def test_blocked_steps_carry_their_reason_and_agent(self):
         steps = plan_of(step("A.1", "A", state="blocked", agent="2"))
@@ -179,10 +179,22 @@ class PageFilesTest(unittest.TestCase):
         self.t.run(["start", "A.1"], expect=0)
         self.t.run(["blocked", "A.1", "stuck"], expect=0)
         self.t.run(["tool", "the runner broke"], expect=0)
-        (self.t.tree / "tests").mkdir(exist_ok=True)
-        (self.t.tree / "tests" / "flakes.tsv").write_text("date\ttest\n2026-11-19\tt1\n", encoding="utf-8")
+        self.t.live.mkdir(parents=True, exist_ok=True)
+        (self.t.live / "flakes.tsv").write_text("date\ttest\n2026-11-19\tt1\n", encoding="utf-8")
         self.page()
         self.assertEqual(self.files()[0].read_bytes(), before)
+
+    def test_the_flake_count_and_the_set_aside_tests_are_the_gates_files_in_the_live_folder(self):
+        """T2 writes flakes.tsv (no header) and set-aside.tsv in D:/NebulaWork/plan/native, the live folder."""
+        self.t.live.mkdir(parents=True, exist_ok=True)
+        (self.t.live / "flakes.tsv").write_text("2026-11-20T10:00:00\td3d11_depth\td3d11\tabc\tfirst message\n"
+                                                "2026-11-20T11:00:00\td3d11_depth\td3d11\tdef\tsecond\n", encoding="utf-8")
+        (self.t.live / "set-aside.tsv").write_text("2026-11-20T12:00:00\td3d11_depth\td3d11\t3 flakes in 7 days\n", encoding="utf-8")
+        data, html, local, _ = self.page()
+        self.assertEqual(data["flakes"], 2)
+        self.assertEqual(data["set_aside"], [{"since": "2026-11-20T12:00:00", "test": "d3d11_depth", "renderer": "d3d11",
+                                              "why": "3 flakes in 7 days"}])
+        self.assertIn("Set aside", html, "the page's script draws the set-aside tests")
 
     def test_the_data_matches_the_plan_files(self):
         write_steps(self.t, [("A.1", "A", "", "landed"), ("A.2", "A", "", "open"), ("B.1", "B", "A", "open"), ("C.1", "C", "", "open"),
@@ -194,8 +206,8 @@ class PageFilesTest(unittest.TestCase):
         for _ in range(2):
             lv.append_fault(self.t.live, 1, "A.2", "TOOL", "harness/self", "result.json is missing", now=NOW)
         lv.append_fault(self.t.live, 2, "G6.1", "ENV", "start/vk", "no device", run_folder="D:/runs/9", now=NOW)
-        (self.t.tree / "tests").mkdir(exist_ok=True)
-        (self.t.tree / "tests" / "flakes.tsv").write_text("date\ttest\trenderer\tcommit\tmessage\n2026-11-19\tt1\td3d11\tabc\tx\n"
+        self.t.live.mkdir(parents=True, exist_ok=True)
+        (self.t.live / "flakes.tsv").write_text("date\ttest\trenderer\tcommit\tmessage\n2026-11-19\tt1\td3d11\tabc\tx\n"
                                                            "2026-11-20\tt2\tvk\tabc\ty\n", encoding="utf-8")
         data, html, local, _ = self.page()
         base = plan.read_base(self.t.tree)
@@ -211,6 +223,7 @@ class PageFilesTest(unittest.TestCase):
         self.assertEqual([(f["count"], f["check"], f["agent"]) for f in data["tool_faults"]], [(2, "harness/self", "1"), (1, "start/vk", "2")])
         self.assertEqual(data["tool_faults"][1]["run_folder"], "D:/runs/9")
         self.assertEqual(data["flakes"], 2)
+        self.assertEqual(data["set_aside"], [], "no test is set aside")
         self.assertEqual(data["generated"], "2026-11-20T12:00:00")
         self.assertEqual(embedded(local, "embedded-data"), data, "the local page embeds the same data")
         self.assertEqual(embedded(local, "plan-static"), static)

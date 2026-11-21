@@ -34,10 +34,11 @@ def make_static(steps):
             "steps": [{"id": s["step"], "package": s["package"], "title": s["title"]} for s in steps]}
 
 
-def make_data(steps, landings, state, claims, stale, faults, flakes, now):
+def make_data(steps, landings, state, claims, stale, faults, flakes, now, set_aside=()):
     """What changes. `steps`: plan.read_steps (state, commit, agent). `landings`: live.read_landings. `state`:
     live.read_state. `claims`: live.read_claims. `stale`: set of stale package names. `faults`: live.fault_groups.
-    `flakes`: a count. `now`: the time of writing (text).
+    `flakes`: a count. `now`: the time of writing (text). `set_aside`: [{test, renderer, since, why}] of the tests the gate
+    has set aside (its flakes.tsv and set-aside.tsv are in the live folder).
 
     "steps" is keyed by step id and has no entry for a step still open; an entry has `state`, and `agent` (a started or
     blocked step), `commit` and `time` (a landed step; the time is the landing's, when the tool recorded it)."""
@@ -68,6 +69,7 @@ def make_data(steps, landings, state, claims, stale, faults, flakes, now):
         "tool_faults": [{k: g[k] for k in ("signature", "count", "first_seen", "last_seen", "step", "agent", "kind", "check",
                                             "test", "first_error", "could_not", "run_folder")} for g in faults],
         "flakes": flakes,
+        "set_aside": [dict(a) for a in set_aside],
     }
 
 
@@ -299,6 +301,11 @@ h2 { font-size: 1.05rem; margin: 28px 0 10px; }
 
     section("Flakes");
     app.appendChild(el("div", "card", d.flakes + (d.flakes === 1 ? " flake recorded" : " flakes recorded")));
+    (d.set_aside || []).forEach(function (a) {
+      var c = el("div", "card");
+      kv(c, [["Set aside", a.test + " on " + a.renderer], ["Since", a.since], ["Why", a.why]]);
+      app.appendChild(c);
+    });
   }
 
   function embedded() {
