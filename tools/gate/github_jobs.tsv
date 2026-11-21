@@ -3,13 +3,14 @@
 # (tools/gate/tests/github_rule_test.py) compares this table with the workflow file: a job renamed, added or removed there
 # fails the tools check until this table follows.
 #
-#   must      the move waits until it is green for the commit (any push run of that commit, the newest result wins); a red one
-#             stops the run. A job this table does not name counts as must, and the run says so in a line of kind tool.
+#   must      a landing with the group `github-first` waits for it to be green before main moves (any push run of that commit, the
+#             newest result wins); one with `github` alone reads it after the move (a red one opens a repair); a red one stops the run. A job this table does not name counts as must, and the run says so in a line of kind tool.
 #   nightly   left out of every rule: this machine builds and tests Windows and Android itself (a landing whose plan has
 #             the group `android` runs the Android build here; GitHub's two Android builds take about 50 minutes each).
 #   advisory  never blocks: a red or cancelled one is run again once; red again, it is told in one line.
 #
-# A change whose scope (tools/gate/scope.tsv) has no `github` group does not push a candidate and waits for none of them.
+# A change whose scope (tools/gate/scope.tsv) has neither `github` nor `github-first` does not push a candidate and reads none of them.
+# check.yml runs a nightly job only on main and by hand, not on a candidate (gate/**); a self-test (github_after_test.py) compares the classes with the jobs' conditions.
 job	class
 Mac	must
 Linux	must

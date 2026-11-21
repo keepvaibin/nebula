@@ -770,9 +770,16 @@ class AlsoTest(unittest.TestCase):
         code, out, err = self.refused(["--main", "--also", "tour/d3d12", "--tablet", "T"])
         self.assertEqual(code, 2)
         self.assertIn("--also goes with --scope", err)
-        code, out, err = self.refused(["--main", "--move", "--scope", "repo", "--also", "tour/tablet"])
+        lock = pathlib.Path(self.tmp.name) / "runner.lock"      # the runner's mark: this process stands in for the runner
+        lock.mkdir(exist_ok=True)
+        (lock / "holder.txt").write_text("landing runner pid %d 2026-11-21T11:00:00" % os.getpid() + chr(10), encoding="utf-8")
+        code, out, err = self.refused(["--main", "--move", "--scope", "repo", "--also", "tour/tablet",
+                                       "--landing-runner", str(os.getpid()), "--runner-lock", str(lock)])
         self.assertEqual(code, 2)
         self.assertIn("needs the tablet's serial", err)
+        code, out, err = self.refused(["--main", "--move", "--scope", "repo", "--also", "tour/tablet"])
+        self.assertEqual(code, 2)
+        self.assertIn("main moves only through gate.py land <branch>", err, "by hand it is refused first")
         code, out, err = self.refused(["land", "--queue", "--also", "tour/d3d12", "--queue-file", str(pathlib.Path(self.tmp.name) / "q2.tsv")])
         self.assertEqual(code, 2)
         self.assertIn("--also goes with branches", err)

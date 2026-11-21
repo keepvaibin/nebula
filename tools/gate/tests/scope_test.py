@@ -7,9 +7,10 @@ graphics card or a tablet.
   repo_in_every_run         the repository checks are in every plan, whatever a row names (scope.ALWAYS)
   repo_group_is_in_every_run  the repository checks are in every plan, whatever a row names (scope.ALWAYS)
   union_of_rows             a change of several files runs the union of every row each file matches, whatever the order
-  github_group              the group `github` (no local check) is on the rows of code, the test driver, the renderers, the importer,
-                            Android and the unit tests, on `.github/**` and in the full run; documents, tools, test data and pictures
-                            have none
+  github_group              the group `github` (no local check: read after the move) is on the rows of code, the test driver, the
+                            renderers, the importer, Android and the unit tests, and `github-first` (waited for before the move) on
+                            `.github/**` and in the full run; documents, tools, test data and pictures have neither (the forms and
+                            the rows of the real tree are in github_after_test.py)
   outside_every_row_is_full a file no row names makes the run full (and so does a change with no file)
   mods_off_in_full          mods = off keeps the mod suites and LumaLink's check out of the full run (the main level) and out
                             of the nightly's; --mods short or full brings them back, and one switch does it for both
@@ -64,7 +65,7 @@ class Rows(unittest.TestCase):
             (("tests/android/walk/test.json",), ["repo", "android", "tablet12", "github"]),
             (("tests/replays/stage.txt",), ["repo", "build", "tour1"]),
             # The list of the unit-test programs: the unit tests and the build, no game group, not full (no Android build).
-            (("cmake/unit_tests.cmake",), ["repo", "build", "unit", "github"]),
+            (("cmake/unit_tests.cmake",), ["repo", "build", "unit", "github-first"]),
             (("tests/mods/anim/test.json",), ["repo"]),
             (("tools/test_driver/luma_test/luma_test.c",), ["repo", "tools", "build", "unit", "start", "engine1", "tour1", "android", "github"]),
             (("tools/lumacore/luma_test.py",), ["repo", "tools", "engine1", "tour1"]),
@@ -86,10 +87,12 @@ class Rows(unittest.TestCase):
             self.assertNotIn("github", plan(*paths).groups, paths)
         for paths in (("tools/test_driver/a.c",), ("native/a.cpp",), ("runtime/src/render/a.cpp",), ("runtime/include/galaxy/render/a.h",),
                       ("runtime/src/audio/a.cpp",), ("platform/sdl/a.cpp",), ("crates/nebula-import/a.rs",), ("platform/android/a.kt",),
-                      ("runtime/src/render/vk/a.cpp",), ("tests/unit/a.cpp",), ("tests/android/a.json",),
-                      (".github/workflows/check.yml",), (".github/actions/compiler-cache/action.yml",)):
+                      ("runtime/src/render/vk/a.cpp",), ("tests/unit/a.cpp",), ("tests/android/a.json",)):
             self.assertIn("github", plan(*paths).groups, paths)
-        self.assertEqual(plan(".github/workflows/check.yml").groups, ["repo", "github"])
+            self.assertNotIn("github-first", plan(*paths).groups, "these wait for nothing: %s" % (paths,))
+        for paths in ((".github/workflows/check.yml",), (".github/actions/compiler-cache/action.yml",)):
+            self.assertIn("github-first", plan(*paths).groups, paths)
+        self.assertEqual(plan(".github/workflows/check.yml").groups, ["repo", "github-first"])
         full = plan("somewhere/no/row/names.bin")
         self.assertTrue(full.full)
         groups, is_full = scope.groups_from_text(full.text())

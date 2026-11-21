@@ -15,6 +15,10 @@ action, a cache, an upload; setup_classifier), is not a red: it is run again onc
 ending that way a second time makes the run env ("GitHub could not run <job>"). A failed `run:` step stays a red. A job the table does not know counts as
 must, and the run says so in one line of kind tool.
 
+A landing that moves main before GitHub's jobs ended (the plan has `github`, not `github-first`: tools/gate/scope.py github_form)
+leaves one line in the live folder's github-pending.tsv; `settle_pending` reads those lines later, one question for each, and
+either removes the line (green), opens a repair (a red `must` job) or lets it stay (not finished, up to 120 minutes).
+
 `Rule` holds what is remembered between two readings (which jobs were run again); gate.py gives it the readers of GitHub
 (`runs_of`, `rerun`, `logs_of`), the tests give it fakes. Nothing here starts a process of its own.
 """
@@ -22,6 +26,7 @@ import datetime
 import pathlib
 import re
 import subprocess
+import sys
 import threading
 import time
 
@@ -496,6 +501,21 @@ class Rule:
         red = [s.said() for s in self.last_reds]
         return ("red on GitHub: " + "; ".join(red[:4]) + (" ..." if len(red) > 4 else "")) if red else None
 
+    def look(self):
+        """(kind, detail, reading) from ONE reading, no waiting: `pass` (every must job green), `fail` (one is red), `env` (one
+        ended broken twice), `pending` (not all ended, or GitHub did not answer: the reading is None then)."""
+        try:
+            reading = self.read()
+        except ANSWER_ERRORS as e:
+            return "pending", "GitHub did not answer: %s" % e, None
+        detail = reading.detail()
+        self.note(detail)
+        if reading.reds:
+            return "fail", detail, reading
+        if reading.envs:
+            return "env", detail, reading
+        return ("pass" if reading.done else "pending"), detail, reading
+
     def wait(self, minutes, sleep=time.sleep, log=None):
         """(kind, detail, reading): asks GitHub once a minute until every must job is green (pass), one is red (fail) or ended
         broken twice (env), or `minutes` have passed (env, naming the jobs not finished). Not answering is asked again."""
@@ -565,3 +585,144 @@ def _save_log(finding, folder, logs_of, say):
     for line in lines[:LOG_SHOW]:
         say("  " + line)
     return path
+
+
+# The commits whose jobs are read after the move ---------------------------------------------------------------------
+
+PENDING_MINUTES = 120
+
+
+def first_log_line(text):
+    """The first line of what save_log keeps of a log (its last LOG_KEEP lines) that has a word: what the gate calls the first
+    error line of a red job (--github-again takes it the same way)."""
+    return next((l.strip() for l in (text or "").splitlines()[-LOG_KEEP:] if l.strip()), "")
+
+
+def _live():
+    """tools/plan/live.py, the one writer of the repairs, the faults and the pending file."""
+    folder = str(HERE.parent / "plan")
+    if folder not in sys.path:
+        sys.path.insert(0, folder)
+    import live
+    return live
+
+
+def encode_reruns(reruns):
+    """{job: (job id, when)} as the pending file keeps it: `id@epoch@name|id@epoch@name`."""
+    return "|".join("%s@%d@%s" % (job_id, when, name) for name, (job_id, when) in sorted(reruns.items())) or "-"
+
+
+def decode_reruns(text):
+    out = {}
+    for item in (text or "").split("|"):
+        parts = item.split("@", 2)
+        if len(parts) == 3 and parts[1].isdigit():
+            out[parts[2]] = (int(parts[0]) if parts[0].isdigit() else parts[0], float(parts[1]))
+    return out
+
+
+def repair_text(state, sha, branches, first):
+    """The text of the repair of a red job: what is red, where it landed from, and the first error line of its log."""
+    return "GitHub's job %s is red on %s, landed from %s: %s" % (state.name, sha[:9], branches or "?", first or "(no log line)")
+
+
+def repair_note(state, sha, branches, first):
+    """The repair's note: the text, the job's page and the command that prints the failed part of its log."""
+    page = state.job.get("url") or "(GitHub gave no address for the job)"
+    return "%s | page: %s | log: gh run view %s --log-failed --job %s" % (
+        repair_text(state, sha, branches, first), page, state.run_id, state.job_id)
+
+
+def settle_pending(live, rule_for, delete_candidate, logs_of, say=print, now=None, limit_minutes=PENDING_MINUTES):
+    """Reads the commits that moved main before GitHub's jobs ended (the lines of <live>/github-pending.tsv): one reading for each,
+    no waiting. Returns what happened [(commit, what, text)], `what` one of green, red, kept, none, away.
+
+      every `must` job green        the line is removed, the candidate branch deleted; `GitHub: <sha> green, N minutes after the move`
+                                    is printed and added to github.log of the landing's run folder
+      a `must` job red              the line is removed, the candidate deleted, and a repair opened for each red job (kind fail, check
+                                    github/<job>, source github): live.add_repair, the one `plan.py repair add` writes with; a job whose
+                                    repair is open adds a line to that repair (the commit and the branches) and opens nothing
+      not finished, < 120 minutes   the line stays
+      not finished, >= 120 minutes  the line is removed, the candidate deleted, and `GitHub gave no result for <sha> in 120 minutes`
+                                    is a line of tool-faults.tsv (kind ENV)
+      GitHub cannot be reached      nothing changes, one printed line, the rest wait for the next call
+
+    `rule_for(sha)` is a Rule of the commit (its runs_of and rerun read GitHub); `delete_candidate(branch)`; `logs_of(job id)`
+    the failed steps' log of a job. It never raises."""
+    out = []
+    try:
+        lv = _live()
+        rows = lv.read_pending(live)
+        when = now or datetime.datetime.now()
+        for row in rows:
+            try:
+                out.append(_settle_one(lv, live, row, rule_for, delete_candidate, logs_of, say, when, limit_minutes))
+            except ANSWER_ERRORS as e:
+                said = str(e).splitlines()[0] if str(e) else type(e).__name__
+                say("gate.py: GitHub cannot be reached (%s); %s stays pending" % (said, row["commit"][:9]))
+                out.append((row["commit"], "away", str(e)))
+                break      # the next line would meet the same answer
+    except Exception as e:  # noqa: BLE001 - what comes after a move is a report: it never fails the caller
+        say("gate.py: the pending GitHub results could not be read (%s: %s)" % (type(e).__name__, e))
+    return out
+
+
+def _settle_one(lv, live, row, rule_for, delete_candidate, logs_of, say, now, limit_minutes):
+    sha, branches = row["commit"], row["branches"]
+    moved = datetime.datetime.fromisoformat(row["time"]) if row["time"] else now
+    minutes = max(0, int((now - moved).total_seconds() // 60))
+    rule = rule_for(sha)
+    rule.reruns = decode_reruns(row.get("rerun"))
+    before = encode_reruns(rule.reruns)
+    reading = rule.read()
+    after = encode_reruns(rule.reruns)
+    if after != before:
+        lv.set_pending_rerun(live, sha, None if after == "-" else after)
+    folder = pathlib.Path(row["run_folder"]) if row.get("run_folder") not in (None, "", "-") else None
+
+    def note(text):
+        if folder is not None and folder.is_dir():
+            try:
+                with open(folder / "github.log", "a", encoding="utf-8") as f:
+                    f.write("%s %s\n" % (datetime.datetime.now().strftime("%H:%M:%S"), text))
+            except OSError:
+                pass
+
+    def done():
+        lv.drop_pending(live, sha)
+        if row.get("candidate") not in (None, "", "-"):
+            delete_candidate(row["candidate"])
+
+    if reading.reds:
+        told = []
+        for finding in reading.reds:
+            first = ""
+            try:
+                first = first_log_line(logs_of(finding.job_id))
+            except (*ANSWER_ERRORS, KeyError):
+                pass
+            step = next((b.split("/", 1)[1] for b in branches.replace(",", " ").split() if b.startswith("native/")), "-")
+            repair, new = lv.add_repair(
+                live, "github", "fail", "github/" + finding.job, "-", step, sha, str(folder or "-"), "-",
+                repair_note(finding.state, sha, branches, first),
+                seen_note="red again on %s, landed from %s" % (sha[:9], branches or "?"))
+            told.append("%s (%s %s)" % (finding.job, "repair" if new else "added to repair", repair["id"]))
+        done()
+        text = "GitHub: %s red, %d minutes after the move: %s" % (sha[:9], minutes, "; ".join(told))
+        say("gate.py: " + text)
+        note(text)
+        return sha, "red", text
+    if reading.done:
+        done()
+        text = "GitHub: %s green, %d minutes after the move" % (sha[:9], minutes)
+        say(text)
+        note(text)
+        return sha, "green", text
+    if minutes >= limit_minutes:
+        text = "GitHub gave no result for %s in %d minutes" % (sha[:9], limit_minutes)
+        lv.append_fault(live, "1", "", "ENV", "github/after", text, run_folder=str(folder or ""))
+        done()
+        say("gate.py: " + text)
+        note(text)
+        return sha, "none", text
+    return sha, "kept", "not finished, %d minutes after the move: %s" % (minutes, ", ".join(reading.pending) or "GitHub's jobs")

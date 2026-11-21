@@ -32,6 +32,13 @@ next     The first step in file order whose state is `open`, whose needs are lan
          the list is done or nothing on it can start, `next --agent 2` says so and the helper stops. Neither agent is
          given a package whose needs are not landed, nor G2.1 to G2.7 while R7 is in work (or R7 while they are):
          both change the frame and present code. A claim with no commit on its branch for 48 hours is reported as stale.
+         `next`, `status` and `land` first read GitHub's jobs of the landings that moved main before they ended (live folder,
+         github-pending.tsv; one question for each line, no waiting): green is one line, a red job opens a repair (source
+         github, check github/<job>) that `next` gives before any step, even when a step is in work: it says the step is kept on
+         its branch; `start R-nnn` then keeps the step (its work must be committed: the branch goes to origin, the step is blocked
+         with the reason "kept on its branch for repair R-nnn") and starts the repair, which `land` hands to the gate with
+         `--github first` (main moves only after GitHub's jobs are green); once the repair has landed `next` offers the kept step
+         and `start <step>` puts its branch on top of the new main (a rebase; a conflict leaves the branch as it was).
 start    One work folder for each agent, kept: agent 1 works in `D:/NebulaWork/MarioGalaxyRecomp/Nebula-native`, agent 2 in
          `Nebula-native-2`. `start` makes the folder the first time (git worktree add) and uses it every later time, so the
          build beside it is kept and only changed files are compiled again. It refuses, with one line saying what to do,
@@ -80,7 +87,7 @@ card     `card ID`: any step's card, its package's rows and the checks it needs 
 owed     `owed ID "TEXT"`: what only a person or other hardware can check, appended to owed.tsv (live folder) and listed by
          status, STATUS.md and the page; it blocks nothing.
 rows     What a card's "Rows." line means (closes whole / advances), for one step or all of them.
-repair   `repair add --source nightly|stress|measure --kind fail|stress|worse --check CHECK [--renderer R] [--step ID
+repair   `repair add --source nightly|stress|measure|github --kind fail|stress|worse --check CHECK [--renderer R] [--step ID
          --commit SHA] --evidence FOLDER [--row ROW] --note "TEXT"` writes a line of repairs.tsv (the live folder) and prints
          its id; the same check and renderer already `open`, `started` or `set-aside` is not written twice: its `seen` count
          goes up and the date is added to its note. `repair list` prints them, open ones first. `next` gives the oldest
@@ -1270,6 +1277,49 @@ def say_stale(a, claims, stale):
                                                                c["package"], agent_of(a)))
 
 
+# A step kept on its branch while a repair of a red job of GitHub is landed: `blocked` in the live state with this reason (`next` offers
+# it again once nothing else comes first, `start` puts its branch on top of the new main).
+KEPT_PREFIX = "kept on its branch for repair"
+
+
+def kept_reason(repair_id):
+    return "%s %s" % (KEPT_PREFIX, repair_id)
+
+
+def is_kept(s):
+    return s["state"] == "blocked" and (s["reason"] or "").startswith(KEPT_PREFIX)
+
+
+def settle_github(a):
+    """The GitHub jobs of the landings that moved main before they ended, read now (tools/gate/github_rule.py settle_pending): one
+    question for each, no waiting; a red job opens a repair. It never fails the command. Tests put their own in SETTLE."""
+    try:
+        events = SETTLE(live_dir(a.live).as_posix())
+    except Exception as e:  # noqa: BLE001 - a report after a move: the command goes on
+        say("plan.py: GitHub's pending results could not be read (%s: %s)" % (type(e).__name__, e))
+        return []
+    for commit, what, text in events:
+        if what == "kept":
+            say("GitHub: %s %s" % (commit[:9], text))
+    if any(what == "red" for _, what, _ in events):
+        refresh_page(a)
+    return events
+
+
+def _gate_settle(live):
+    import gate  # noqa: E402 - tools/gate/gate.py (on the path): its readers of GitHub
+    return gate.settle_github_pending(live, say=say)
+
+
+SETTLE = _gate_settle                    # tests put their own in here
+
+
+def github_repair_open(a):
+    """The oldest open repair of kind fail that GitHub's red job opened (source github), or None."""
+    return next((r for r in lv.read_repairs(live_dir(a.live))
+                 if r["state"] == "open" and r["kind"] == "fail" and r["source"] == "github"), None)
+
+
 REPAIR_ID = re.compile(r"^R-\d{3,}$")
 REPAIR_RULES = ("Read the evidence first. Find the cause and fix the game, not the test. If the test tool is at fault, do not "
                 "debug it: run plan.py toolfault and plan.py blocked for this repair.")
@@ -1469,6 +1519,7 @@ def print_repair(a, r, working=False, commands=True):
 
 def cmd_next(a):
     fetch_main_landed(a)
+    settle_github(a)
     steps = read_steps(a.tree, a.live)
     claims = lv.read_claims(live_dir(a.live))
     stale = stale_of(a.tree, claims)
@@ -1477,6 +1528,16 @@ def cmd_next(a):
     say_landing_running(a)
     say_stale(a, claims, stale)
     work = in_work(a, steps)
+    if work and agent == "1" and all(k == "step" for k, _ in work):
+        repair = github_repair_open(a)
+        if repair:                                   # a red job of GitHub on a landed commit comes before the step in work
+            print_repair(a, repair)
+            say()
+            for _, s in work:
+                say("KEPT: step %s is in work on branch native/%s. `plan.py start %s` keeps it on that branch (commit its work first; "
+                    "nothing is lost) and starts the repair. When the repair has landed, `plan.py start %s` goes on with the step on its "
+                    "own branch, on top of the new main." % (s["step"], s["step"], repair["id"], s["step"]))
+            return 0
     if work:                                         # one thing at a time: it is shown again, nothing new is given
         first_kind, first = work[0]
         if first_kind == "step":
@@ -1492,6 +1553,13 @@ def cmd_next(a):
         if repair:                                   # a fault found after a landing comes before any step
             print_repair(a, repair)
             say_after(a, steps, None)
+            return 0
+    if agent == "1":
+        kept = next((s for s in steps if is_kept(s)), None)
+        if kept:                                     # its repair has landed (or been set aside): it goes on first
+            print_step(a, steps, kept, ["it is kept on its branch native/%s (%s); `start` puts the branch on top of main's newest "
+                                        "commit and goes on with it" % (kept["step"], kept["reason"])])
+            say_after(a, steps, kept)
             return 0
     if agent == "2":
         choice, report = choose_helper(steps, claims, stale)
@@ -1610,7 +1678,7 @@ def branch_exists(folder, ref):
     return git(folder, "rev-parse", "--verify", "--quiet", ref).returncode == 0
 
 
-def begin_work(a, branch):
+def begin_work(a, branch, on_main=False):
     """What `start` does after its own checks, for a step or a repair: the agent's folder is made the first time (git worktree
     add) and used every later time; refuses (a line saying what to do) when something is in work or the folder has
     uncommitted changes; then fetches and makes `branch` there (`git checkout -b`, from origin/main; a branch that exists
@@ -1642,6 +1710,18 @@ def begin_work(a, branch):
         what = "git worktree add"
     if made.returncode != 0:
         return "%s failed: %s" % (what, (made.stderr or made.stdout).strip())
+    if on_main and local:
+        # A step that was kept on its branch while other landings moved main: its commits go on top of origin/main (nothing is lost;
+        # when they do not apply the branch is left as it is and one line says so).
+        where = work_folder(a.work_root, agent)
+        if git(where, "merge-base", "--is-ancestor", "origin/main", "HEAD").returncode != 0:
+            rebased = git(where, "rebase", "origin/main")
+            if rebased.returncode != 0:
+                git(where, "rebase", "--abort")
+                said = (rebased.stdout + rebased.stderr).strip().splitlines()
+                return ("the commits of %s do not apply on top of origin/main (%s). The branch is as it was; put it on main by hand "
+                        "(git rebase origin/main, resolve, git rebase --continue), then run start again." % (
+                            branch, said[-1] if said else "conflict"))
     return None
 
 
@@ -1678,7 +1758,7 @@ def cmd_start(a):
         return 1
     folder = work_folder(a.work_root, agent)
     branch = "native/" + a.id
-    why = begin_work(a, branch)
+    why = begin_work(a, branch, on_main=is_kept(s))
     if why:
         say("plan.py: " + why)
         return 1
@@ -1706,6 +1786,17 @@ def start_repair(a):
         say("plan.py: repair %s is already %s" % (a.id, rep["state"]))
         return 1
     branch = item_branch(a.id)
+    work = in_work(a, read_steps(a.tree, a.live))
+    if work and rep["source"] == "github" and all(k == "step" for k, _ in work):
+        for _, s in work:                            # the step is kept on its branch, its work committed there
+            why = park_branch(a, work_folder(a.work_root, s["agent"] or "1"), "native/" + s["step"])
+            if why:
+                say("plan.py: " + why)
+                return 1
+        for _, s in work:
+            set_state(a.tree, s["step"], "blocked", agent=agent, reason=kept_reason(a.id), live=a.live)
+            say("kept %s on its branch native/%s (pushed to origin). `plan.py start %s` goes on with it after repair %s has landed." % (
+                s["step"], s["step"], s["step"], a.id))
     why = begin_work(a, branch)
     if why:
         say("plan.py: " + why)
@@ -1924,6 +2015,14 @@ def wait_for_process(pid, limit=1800.0):
 
 
 def cmd_land(a):
+    """`land` with the pending GitHub results read at its start and again after its landing ended (settle_github)."""
+    settle_github(a)
+    code = land_item(a)
+    settle_github(a)
+    return code
+
+
+def land_item(a):
     fetch_main_landed(a)
     if is_repair(a.id):
         return land_repair(a)
@@ -1977,11 +2076,11 @@ def join_landing(a, s, folder, branch, rec):
             say("plan.py: process %s is still running after 30 minutes; run land again later" % rec["pid"])
             return 1
         a.main_fetched = False
-        return cmd_land(a)
+        return land_item(a)
     tip = rec["tip"]
     if git(folder, "rev-parse", "--verify", "--quiet", tip + "^{commit}").returncode != 0:
         lv.drop_record(live_dir(a.live), agent, a.id)             # a record naming no commit of this repository is no landing
-        return cmd_land(a)
+        return land_item(a)
     say("joined the landing of %s, in the queue since %s" % (a.id, hhmm(rec["queue_time"])))
     code_commit = code_commit_at(folder, tip, a.id) or tip[:9]
 
@@ -2126,7 +2225,7 @@ def land_repair(a):
             say("plan.py: process %s is still running after 30 minutes; run land again later" % rec["pid"])
             return 1
         a.main_fetched = False
-        return cmd_land(a)
+        return land_item(a)
     if not rec:
         why = work_folder_problem(a, folder, branch)
         if why:
@@ -2172,7 +2271,9 @@ def land_repair(a):
 
     if rec:
         say("joined the landing of %s, in the queue since %s" % (a.id, hhmm(rec["queue_time"])))
-    return hand_to_gate(a, folder, branch, a.id, agent, ["--also", rep["check"]], passed, join=bool(rec))
+    # A repair of a red job of GitHub is proven there before main moves (`--github first`); another repair runs its own check.
+    extra = ["--github", "first"] if rep["source"] == "github" else ["--also", rep["check"]]
+    return hand_to_gate(a, folder, branch, a.id, agent, extra, passed, join=bool(rec))
 
 
 def park_branch(a, folder, branch):
@@ -2288,6 +2389,7 @@ def cmd_toolfault(a):
 
 def cmd_status(a):
     fetch_main_landed(a)
+    settle_github(a)
     text = status_text(a.tree, a.work_root, live=a.live, agent=agent_of(a), queue_file=getattr(a, "queue_file", None))
     atomic_write(native(a.tree) / "STATUS.md", text)
     sys.stdout.write(text)

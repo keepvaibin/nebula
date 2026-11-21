@@ -4,10 +4,16 @@
 # level: every renderer's engine tests and 102-stop tour with pictures and replays, the other discs, the Android build and
 # the tablet's short part). `**` is any folders, `*` stays in a name; a pattern with no `/` names a file anywhere.
 #
-# `github` stands for no local check: it switches on the GitHub part of a landing (tools/gate/github_rule.py): the candidate is
-# pushed and the move waits for the `must` jobs of tools/gate/github_jobs.tsv. A landing whose plan has no `github` (documents, tools,
-# test data, pictures) pushes no candidate and waits for nothing: main moves when its own checks pass. A file no row names makes
-# the run full, and the full run has it.
+# `github` and `github-first` stand for no local check: they switch on the GitHub part of a landing (tools/gate/github_rule.py).
+# With `github` the candidate is pushed, main moves when this machine's checks pass and the `must` jobs of
+# tools/gate/github_jobs.tsv are read after the move: a red one opens a repair that comes before the next step. With
+# `github-first` (a file this machine builds neither for Windows nor for Android, but a `must` job does: the Metal renderer, the
+# Apple and Linux parts, the CMake files, the workflow) or a full run, the move waits for every `must` job. A landing whose plan
+# has neither (documents, tools, test data, pictures) pushes no candidate and waits for nothing: main moves when its own checks
+# pass. A file no row names makes the run full, and the full run has `github-first`.
+#
+# A pattern that starts with `/` names a file of the top folder only. A group `-full` on a row takes away the `full` that
+# another row brought for the files that row matches (a narrow row for one file of a folder whose other rows make the run full).
 # `cmake/unit_tests.cmake` is the list of the unit-test programs: the root CMakeLists.txt and tests/unit/CMakeLists.txt include it, the Android build does not.
 #
 # `android` (the Android build only; `tablet12` is the tablet's part) is on every row whose folders platform/android/build_apk.ps1
@@ -48,9 +54,28 @@ tests/engine/**	repo,build,engine3
 tests/android/**	repo,android,tablet12,github
 tests/replays/**	repo,build,tour1
 tests/unit/**	repo,build,unit,github
-cmake/unit_tests.cmake	repo,build,unit,github
+cmake/unit_tests.cmake	repo,build,unit,github-first,-full
 tests/pictures/**	repo
 tests/measure/**	repo
 tests/pace/**	repo
 tests/mods/**	repo
-.github/**	repo,github
+.github/**	repo,github-first
+# The build of every platform is described by the CMake files; the Metal renderer, the Apple and the Linux parts are built by
+# GitHub's Mac and Linux jobs only (the unit tests that only Linux builds too). Their other groups are what each file had before.
+/CMakeLists.txt	full,github-first
+CMakeLists.txt	github-first
+cmake/**	full,github-first
+third_party/**	full
+platform/apple/**	full,github-first
+platform/linux/**	full,github-first
+installer/linux/**	full,github-first
+runtime/src/render/mtl/**	github-first
+runtime/include/galaxy/render/mtl/**	github-first
+runtime/src/update/*linux*	github-first
+runtime/src/update/*macos*	github-first
+runtime/src/update/*apple*	github-first
+runtime/src/update/*curl*	github-first
+runtime/src/update/*posix*	github-first
+runtime/src/perf_hint_tests.cpp	github-first
+*.mm	github-first
+*.m	github-first

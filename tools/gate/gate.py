@@ -13,17 +13,23 @@ starts the game for a test goes through here.
          jobs, Rust on both systems; a job the table does not name counts as must; the Android builds are nightly: a plan with
          the group `android` builds the app here), planned.tsv's
          github/<job> lines aside.
-         --move: main moves to this commit when it passes (section 5). It needs a whole quick gate of the commit
-         passed, the branch pushed and main an ancestor of it; it takes the gate lock (or waits --wait minutes),
+         --move: main moves to this commit when it passes (section 5). It is the landing runner's own call (gate.py land) and carries
+         the runner's mark; given by hand it is refused: main moves only through gate.py land <branch>. It needs a whole quick gate of the
+         commit passed, the branch pushed and main an ancestor of it; it takes the gate lock (or waits --wait minutes),
          and on a pass fast-forwards main and pushes it itself, writes MAIN-MOVED on the board and frees the lock.
-         With --move, when the plan has the group `github` (tools/gate/scope.tsv; a run with no plan has it), the commit is
-         pushed first as gate/<run> (section 5): GitHub runs every job on it while the gate runs (a red `must` job stops the
-         run), the gate frees gate.lock when its own checks pass, waits up to 120 minutes for every `must` job to be green
-         for the commit (any push run of it; the newest result wins), then moves main and deletes gate/<run>. Main never
-         moves before they are green; a cancelled job, or one red at a set-up (`uses:`) step, is run again once, and the limit gives env
-         (not judged). --github-again: every red `must` job is run again once before the start check, each a tool-fault line (ENV). A plan
-         with no `github` pushes no candidate, reads nothing from GitHub and moves main when its own checks pass
-         (tools/gate/github_rule.py).
+         With --move, when the plan has the group `github` or `github-first` (tools/gate/scope.tsv; a full run has `github-first`), the commit
+         is pushed first as gate/<run> (section 5): GitHub runs every job on it while the gate runs (a red `must` job stops the run),
+         and the gate frees gate.lock when its own checks pass. With `github-first` (files this machine cannot build: the Metal renderer,
+         the Apple and Linux parts, the CMake files, the workflow) it waits up to 120 minutes for every `must` job to be green for the
+         commit (any push run of it; the newest result wins), then moves main and deletes gate/<run>. With `github` alone it reads GitHub
+         once: a job with its end is judged now (red: main does not move); when some still run it prints "GitHub's jobs for <sha> are read
+         after the move", moves main, and leaves a line in <live>/github-pending.tsv; gate/<run> stays until settle_github_pending (called by
+         gate.py land and by the step tool's next, status and land) has read the jobs: green removes the line, a red `must` job opens a
+         repair, 120 minutes with no result is a line of tool-faults.tsv. A cancelled job, or one red at a set-up (`uses:`) step, is run
+         again once, and the limit gives env (not judged). --github-again: every red `must` job is run again once before the start check,
+         each a tool-fault line (ENV). `land --github first` waits for GitHub in a landing whose plan has only `github` (the step tool
+         does it for a repair of a red job). A plan with neither pushes no candidate, reads nothing from GitHub and moves main when its own
+         checks pass (tools/gate/github_rule.py).
          A picture with no approved copy (kind new), or one the branch declares in PICTURES-CHANGE.txt, never fails a run:
          when the checks have passed and GitHub is green, the gate approves them before it moves main, as one commit on
          top of the tested one that touches only tests/pictures/approved.tsv (and removes PICTURES-CHANGE.txt), runs the
@@ -340,6 +346,7 @@ class Gate:
         self.open_rows = []
         self.aside = kinds.read_aside(SET_ASIDE)
         self.verdict = None
+        self.github = getattr(args, "github_form", None)   # how a landing meets GitHub: "first" (waited), "after" (read after the move)
         self.printed_head = None      # the summary line last printed on the screen (late rows print it again)
         self.lines = []
         self.started = time.time()
@@ -581,6 +588,8 @@ class Gate:
                "seconds": seconds, "passed": passed, "verdict": self.verdict, "counts": counts, "checks": self.results}
         if self.machine_notes:
             out["machine"] = list(self.machine_notes)
+        if self.github:
+            out["github"] = self.github
         path = pathlib.Path(self.args.out) if self.args.out else self.work / "result.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
@@ -655,7 +664,8 @@ def append_history(path, out):
     cells = (out["started"], out["run"], out["mode"], out["commit"] + ("+" if out["dirty"] else ""),
              out["verdict"], "%.0f" % out["seconds"], c["pass"], c["known"], c["planned"],
              c["owed"], c["fail"], out["only"] or "-",
-             " ".join("%s=%s/%.0f" % (r["check"], r["state"], r.get("seconds", 0.0)) for r in out["checks"]))
+             " ".join((["github-form=" + out["github"]] if out.get("github") else []) +
+                      ["%s=%s/%.0f" % (r["check"], r["state"], r.get("seconds", 0.0)) for r in out["checks"]]))
     with open(path, "a", encoding="utf-8") as f:
         if new:
             f.write("\t".join(HISTORY_COLUMNS) + "\n")
@@ -1850,9 +1860,7 @@ def github_again(rule, args, commit, say=print, faults=None):
         folder.mkdir(parents=True, exist_ok=True)
         finding = github_rule.Finding(st, st.said())
         github_rule.save_log(finding, folder, gh_log, say=lambda line: None, advise=False)
-        first = ""
-        if finding.log is not None:
-            first = next((l.strip() for l in finding.log.read_text(encoding="utf-8").splitlines() if l.strip()), "")
+        first = github_rule.first_log_line(finding.log.read_text(encoding="utf-8")) if finding.log is not None else ""
         message = "%s run again once on GitHub (--github-again); first line of its log: %s" % (st.said(False), first or "(no log)")
         say("gate.py: --github-again: " + message)
         rule.note(message)
@@ -1961,6 +1969,21 @@ def github_part(g, wait_minutes=None, rule=None, sleep=None):
     rule = rule or make_rule(git("rev-parse", "HEAD"), classes, planned_jobs(g.planned), notes)
     kind, detail, reading = rule.wait(wait_minutes, sleep=sleep or GITHUB_SLEEP)
     github_rows(g, rule, kind, detail, reading, wait_minutes)
+
+
+def settle_github_pending(live, say=print):
+    """Reads the GitHub jobs of the landings that moved main before they ended (github_rule.settle_pending): one reading for each
+    line of <live>/github-pending.tsv, no waiting. Called at the start of `gate.py land` and by the step tool's next, status and
+    land. It never raises. Returns [(commit, what, text)]."""
+    try:
+        if not github_rule._live().read_pending(live):
+            return []      # nothing is pending: no table to read, nothing to ask
+        classes = github_rule.read_table()
+        planned = planned_jobs(read_lists()[1])
+    except Exception as e:  # noqa: BLE001 - the table or the lists are wrong: the lines stay, and the run says so once
+        say("gate.py: GitHub's pending results were not read (%s: %s)" % (type(e).__name__, e))
+        return []
+    return github_rule.settle_pending(live, lambda sha: make_rule(sha, classes, planned), delete_candidate, gh_log, say)
 
 
 # The candidates that wait for GitHub (section 5.8): one line each in <work>/waiting.tsv, "sha<TAB>branch<TAB>pid".
@@ -3102,10 +3125,18 @@ def parser(land=False):
                    help="--move: before the start check, every `must` job that is red for the commit is run again once on "
                         "GitHub (each written to the tool-fault record as ENV with the first line of its log), and the run "
                         "judges by the new result. For a red whose log shows a download or an install failing, not the game")
+    if land:
+        p.add_argument("--github", choices=("first",), default=None,
+                       help="`first`: this landing waits for GitHub's `must` jobs before main moves (the step tool uses it for a "
+                            "repair of a red job of GitHub, so the fix is proven there first)")
     if not land:
         p.add_argument("--live", default=os.environ.get("NEBULA_LIVE", "D:/NebulaWork/plan/native"),
                        help="the folder of tool-faults.tsv (the step tool's live folder)")
         p.add_argument("--agent", default=os.environ.get("NEBULA_AGENT", "1"), help="who asks, for the fault record")
+        # The mark of the landing runner's own call (main moves only through gate.py land): the runner's process id, checked
+        # against the holder of the runner's lock. Not for a person: a --move without it is refused.
+        p.add_argument("--landing-runner", type=int, default=0, help=argparse.SUPPRESS)
+        p.add_argument("--runner-lock", default=str(landing.RUNNER_LOCK), help=argparse.SUPPRESS)
     p.add_argument("--only", default="", help="only these checks (shell patterns, comma-separated) and what they need")
     p.add_argument("--scope", default="",
                    help="--main: only the checks of the groups a change needs (tools/gate/scope.py): GROUP[,GROUP...], 'auto' "
@@ -3210,6 +3241,11 @@ def main(argv=None):
         print(kinds.verdict_line("not-judged"), flush=True)
         return 2
 
+    # Main moves in one way only: the landing runner's own call carries its mark (the runner's process id, which must be the holder
+    # of the runner's lock). Refused before anything runs: no lock is taken and no run folder is made.
+    if args.move and not landing.called_by_runner(args.landing_runner, args.runner_lock):
+        return refuse("main moves only through gate.py land <branch>")
+
     also = landing.also_names(args.also)
     if also and not args.scope:
         return refuse("--also goes with --scope: it adds checks to a landing's")
@@ -3267,9 +3303,13 @@ def main(argv=None):
         if args.mode == "long" and commit != git("rev-parse", "origin/main"):
             return refuse("the long run is on main's newest commit (%s), this tree is at %s" % (
                 git("rev-parse", "--short", "origin/main"), commit[:9]))
-    # The GitHub part (section 8, package T8a): on for a plan that has the group `github`, and for a run with no plan; a plan
-    # without it pushes no candidate, starts no watch and waits for nothing from GitHub.
-    github = plan is None or plan.full or "github" in plan.groups
+    # The GitHub part (section 8, package T8a): `first` (the move waits for the `must` jobs) for a plan with the group `github-first`,
+    # for a full plan and for a run with no plan; `after` for a plan with `github` alone (main moves when this machine's checks
+    # pass, the jobs are read after the move: settle_github_pending); None for a plan with neither: no candidate, no watch,
+    # nothing from GitHub.
+    form = scope.github_form(plan)
+    github = form is not None
+    args.github_form = form if args.move else None    # the run's record says which form it was (result.json, history.tsv)
     candidate = rule = notes = None
     if args.move:
         git("fetch", "origin", "main")
@@ -3375,14 +3415,23 @@ def main(argv=None):
                                                                     % candidate) if rule is not None else
                                "its checks passed; the plan has no GitHub part")
             taken = []
-            if rule is not None:
+            if rule is not None and form == "first":
                 add_waiting(args.work, commit, candidate, os.getpid())
             landed = commit  # the commit main moves to: the tested one, or on top of it the pictures' approval
-            why, detail = None, "the plan has no GitHub part"
+            why, detail, pending_after = None, "the plan has no GitHub part", False
             try:
                 if rule is not None:
-                    kind, detail, reading = rule.wait(args.github_wait, sleep=GITHUB_SLEEP)
-                    github_rows(g, rule, kind, detail, reading, args.github_wait)
+                    if form == "first":
+                        kind, detail, reading = rule.wait(args.github_wait, sleep=GITHUB_SLEEP)
+                    else:
+                        # One reading, no waiting: every `must` job that has its end is judged now (green: move; red: main does
+                        # not move); when some are still running main moves and the commit's jobs are read after the move.
+                        kind, detail, reading = rule.look()
+                        pending_after = kind == "pending"
+                        if pending_after:
+                            print("GitHub's jobs for %s are read after the move" % commit[:9], flush=True)
+                    if not pending_after:
+                        github_rows(g, rule, kind, detail, reading, args.github_wait)
                     code = g.code
                     if kind == "fail":
                         why = "GitHub's jobs on %s: %s" % (candidate, detail)
@@ -3409,9 +3458,21 @@ def main(argv=None):
                         finally:
                             shutil.rmtree(move_lock, ignore_errors=True)
             finally:
-                if rule is not None:
+                if rule is not None and form == "first":
                     drop_waiting(args.work, commit)
-            if candidate is not None:
+            keep_candidate = False
+            if pending_after and why is None:
+                # Main moved with GitHub's jobs not finished: one line in the live folder; the candidate stays on GitHub until
+                # settle_github_pending has read the jobs (it deletes the candidate then).
+                try:
+                    github_rule._live().add_pending(args.live, commit, args.covers, candidate, g.work)
+                    keep_candidate = True
+                except Exception as e:  # noqa: BLE001 - main has moved; the candidate is not left behind without a line to settle it
+                    print("gate.py: the pending line for %s could not be written (%s: %s); GitHub's jobs are not read for it" % (
+                        commit[:9], type(e).__name__, e), file=sys.stderr)
+            if keep_candidate:
+                g.late("github/after", "pass", "its jobs are read after the move (github-pending.tsv in the live folder)")
+            if candidate is not None and not keep_candidate:
                 delete_candidate(candidate)
             if why is not None:
                 # `fail` (exit 1) only where a job of GitHub is red: the change is at fault. Every other reason (main moved, the push, a
@@ -3424,8 +3485,9 @@ def main(argv=None):
                     args.who, g.name, commit[:9], why))
             else:
                 moved_line = "MOVED %s" % landed
-                summary = "passed, %s, main moved to %s" % (("GitHub green (%s)" % detail) if rule is not None else
-                                                              "no GitHub part in the plan", landed[:9]) + (
+                summary = "passed, %s, main moved to %s" % (
+                    "GitHub's jobs are read after the move" if pending_after else
+                    ("GitHub green (%s)" % detail) if rule is not None else "no GitHub part in the plan", landed[:9]) + (
                                                                   "; card shared" if g.card_shared else "")
                 # The build that moved main is kept (the two newest): a test that fails in a later change is run on it.
                 kept = kinds.keep_base(git("rev-parse", "HEAD"), g.bin, BASE_BINS)
@@ -3523,7 +3585,8 @@ class GateChecker:
                "--scope", scope_text, "--who", a.who, "--covers", ", ".join(names), "--work", a.work, "--board", a.board,
                "--status", a.status, "--gate-lock", a.gate_lock, "--long-lock", a.long_lock, "--tablet-lock", a.tablet_lock,
                "--tablet-wait", str(a.tablet_wait), "--paks", a.paks, "--discs", a.discs, "--jobs", a.jobs,
-               "--wait", str(a.wait), "--github-wait", str(a.github_wait)]
+               "--wait", str(a.wait), "--github-wait", str(a.github_wait),
+               "--landing-runner", str(os.getpid()), "--runner-lock", str(getattr(a, "runner_lock", landing.RUNNER_LOCK))]
         if a.pak:
             cmd += ["--pak", a.pak]
         if a.tablet:
@@ -3568,6 +3631,7 @@ def land_main(argv):
     args = parser(land=True).parse_args(argv)
     args.mode = "main"
     args.move = True
+    settle_github_pending(args.live)     # the jobs of landings that moved main before GitHub finished: read now, never waited for
     if bool(args.branches) == bool(args.queue):
         print("gate.py: land takes branches to put in the queue, or --queue to run what waits: one of the two", file=sys.stderr)
         print(kinds.verdict_line("not-judged"), flush=True)
@@ -3585,6 +3649,8 @@ def land_main(argv):
             print("gate.py: " + why, file=sys.stderr)
             print(kinds.verdict_line("not-judged"), flush=True)
             return landing.EXIT_NOT_JUDGED
+    if args.github == "first":
+        also.append(landing.GITHUB_FIRST)      # the queue keeps it with the branch: the batch is run with `github-first`
     sys.path.insert(0, str(TREE / "tools" / "plan"))
     import failures  # noqa: E402 - tools/plan/failures.py: the step tool's rule, in one place
     queue = landing.Queue(args.queue_file)

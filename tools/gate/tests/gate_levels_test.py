@@ -351,9 +351,13 @@ def main():
 
         # 7. main()'s rules.
         quiet = ["--work", str(work), "--board", "", "--status", ""]
+        # The runner's mark (main moves only through gate.py land): this process stands in for the runner holding its lock.
+        (t / "runner.lock").mkdir()
+        (t / "runner.lock" / "holder.txt").write_text("landing runner pid %d 2026-11-21T11:00:00\n" % os.getpid(), encoding="utf-8")
+        mark = ["--landing-runner", str(os.getpid()), "--runner-lock", str(t / "runner.lock")]
         check(gate.main(["--main"] + quiet) == 2, "the main level needs the tablet named")
-        check(gate.main(["--main", "--move", "--only", "rust", "--tablet", "T"] + quiet) == 2, "--move with --only is refused")
-        check(gate.main(["--quick", "--move"] + quiet) == 2, "--move with --quick is refused")
+        check(gate.main(["--main", "--move", "--only", "rust", "--tablet", "T"] + quiet + mark) == 2, "--move with --only is refused")
+        check(gate.main(["--quick", "--move"] + quiet + mark) == 2, "--move with --quick is refused")
 
         # 8. The status page.
         board.write_text("2026-11-17 18:00 Agent 1 MAIN-MOVED: main a -> b\n2026-11-17 19:00 Planner MAIN-RED: long run\n"

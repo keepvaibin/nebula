@@ -29,6 +29,7 @@ Exit 0 when every case holds.
 """
 import contextlib
 import io
+import os
 import pathlib
 import sys
 import tempfile
@@ -93,7 +94,7 @@ def runs_of(*jobs_lists):
     return [{"id": 100 - i, "branch": "gate/x" if i == 0 else "work/x", "jobs": jobs} for i, jobs in enumerate(jobs_lists)]
 
 
-def drive(test, world, scope_text="repo,github", checks=None, extra=(), allow_github=True, move_why=None):
+def drive(test, world, scope_text="repo,github-first", checks=None, extra=(), allow_github=True, move_why=None):
     """main() of `--main --move --scope scope_text` with the fakes: (exit code, the output's lines, the work folder)."""
     tmp = pathlib.Path(tempfile.mkdtemp())
     test.addCleanup(lambda: __import__("shutil").rmtree(tmp, ignore_errors=True))
@@ -157,9 +158,13 @@ def drive(test, world, scope_text="repo,github", checks=None, extra=(), allow_gi
             gate.commit_runs = no_github
             gate.GithubWatch = no_github
             gate.make_rule = no_github
+        # The runner's mark (main moves only through gate.py land): this process stands in for the runner holding its lock.
+        (tmp / "runner.lock").mkdir()
+        (tmp / "runner.lock" / "holder.txt").write_text("landing runner pid %d 2026-11-21T11:00:00\n" % os.getpid(), encoding="utf-8")
         argv = ["--main", "--move", "--scope", scope_text, "--work", str(tmp / "work"), "--board", "", "--status", "",
                 "--gate-lock", str(tmp / "gate.lock"), "--long-lock", str(tmp / "long.lock"), "--wait", "0",
-                "--build-root", str(tmp / "build")] + list(extra)
+                "--build-root", str(tmp / "build"), "--live", str(tmp / "live"),
+                "--landing-runner", str(os.getpid()), "--runner-lock", str(tmp / "runner.lock")] + list(extra)
         out = io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
             code = gate.main(argv)

@@ -11,6 +11,8 @@ it a temporary folder), never in an untracked file inside one work folder:
     landing-<agent>.tsv   step, branch, tip, time, pid   the landing handed to the gate and not yet answered (one file for each agent)
     owed.tsv          time, agent, step, text            what only a person or other hardware can check
     repairs.tsv       id, opened, source, kind, check, renderer, step, commit, evidence, row, state, closed, seen, note
+    github-pending.tsv  time, commit, branches, candidate, run_folder, rerun   (a landing that moved main before GitHub's jobs
+                      ended: tools/gate/github_rule.py settle_pending reads them afterwards)
     progress.html, STATUS.md, publish/index.html, publish/progress-data.json, progress-url.txt  (page.py and plan.py page)
 
 Every change is made under one lock folder (`lock`, made with mkdir, which is atomic) and written as a whole file
@@ -35,7 +37,8 @@ RECORD_COLUMNS = ["step", "branch", "tip", "time", "pid"]
 OWED_COLUMNS = ["time", "agent", "step", "text"]
 REPAIR_COLUMNS = ["id", "opened", "source", "kind", "check", "renderer", "step", "commit", "evidence", "row", "state", "closed",
                   "seen", "note"]
-REPAIR_SOURCES = ("nightly", "stress", "measure")
+PENDING_COLUMNS = ["time", "commit", "branches", "candidate", "run_folder", "rerun"]
+REPAIR_SOURCES = ("nightly", "stress", "measure", "github")
 REPAIR_KINDS = ("fail", "stress", "worse")
 REPAIR_STATES = ("open", "started", "landed", "set-aside")
 STALE_HOURS = 48
@@ -340,9 +343,11 @@ def next_repair_id(rows):
     return "R-%03d" % (top + 1)
 
 
-def add_repair(live, source, kind, check, renderer="-", step="-", commit="-", evidence="", row="-", note="", now=None):
+def add_repair(live, source, kind, check, renderer="-", step="-", commit="-", evidence="", row="-", note="", now=None,
+               seen_note=None):
     """Appends a repair, or counts the one already there: a repair with the same check and renderer that is `open`, `started`
-    or `set-aside` gets its `seen` one higher and the date added to its note (no new line). Returns (row, new)."""
+    or `set-aside` gets its `seen` one higher and the date added to its note (no new line); `seen_note` is what is added there
+    instead of the date. Returns (row, new)."""
     path = pathlib.Path(live) / "repairs.tsv"
     when = now or datetime.datetime.now()
     renderer = clean(renderer) or "-"
@@ -351,7 +356,7 @@ def add_repair(live, source, kind, check, renderer="-", step="-", commit="-", ev
         for r in rows:
             if r["check"] == clean(check) and r["renderer"] == renderer and r["state"] in ("open", "started", "set-aside"):
                 r["seen"] = str(int(r["seen"] or "1") + 1)
-                r["note"] = clean("%s; seen again %s" % (r["note"], when.date().isoformat()))
+                r["note"] = clean("%s; %s" % (r["note"], seen_note or "seen again %s" % when.date().isoformat()))
                 write_rows(path, REPAIR_COLUMNS, rows)
                 return {k: clean(v) for k, v in r.items()}, False
         row_new = {"id": next_repair_id(rows), "opened": stamp(when), "source": source, "kind": kind, "check": check,
@@ -361,6 +366,46 @@ def add_repair(live, source, kind, check, renderer="-", step="-", commit="-", ev
         rows.append(row_new)
         write_rows(path, REPAIR_COLUMNS, rows)
         return {k: clean(v) for k, v in row_new.items()}, True
+
+
+# ---- landings whose GitHub jobs are read after the move --------------------------------------------------------
+
+def read_pending(live):
+    return read_rows(pathlib.Path(live) / "github-pending.tsv", PENDING_COLUMNS)
+
+
+def add_pending(live, commit, branches, candidate, run_folder, now=None):
+    """One line: main moved to `commit` at `now`, the landing covered `branches`, its candidate branch is still on GitHub."""
+    path = pathlib.Path(live) / "github-pending.tsv"
+    with locked(live):
+        rows = [r for r in read_pending(live) if r["commit"] != commit]
+        rows.append({"time": stamp(now), "commit": commit, "branches": branches or "-", "candidate": candidate,
+                     "run_folder": str(run_folder), "rerun": "-"})
+        write_rows(path, PENDING_COLUMNS, rows)
+
+
+def drop_pending(live, commit):
+    """The line of `commit` is settled and goes. True when there was one."""
+    path = pathlib.Path(live) / "github-pending.tsv"
+    with locked(live):
+        rows = read_pending(live)
+        kept = [r for r in rows if r["commit"] != commit]
+        if len(kept) != len(rows):
+            write_rows(path, PENDING_COLUMNS, kept)
+        return len(kept) != len(rows)
+
+
+def set_pending_rerun(live, commit, text):
+    """What was run again on GitHub for this line (`job=jobid@epoch;...`), so that a later reading does not ask again."""
+    path = pathlib.Path(live) / "github-pending.tsv"
+    with locked(live):
+        rows = read_pending(live)
+        for r in rows:
+            if r["commit"] == commit:
+                r["rerun"] = text or "-"
+                write_rows(path, PENDING_COLUMNS, rows)
+                return True
+    return False
 
 
 def set_repair(live, repair_id, state, closed=None):

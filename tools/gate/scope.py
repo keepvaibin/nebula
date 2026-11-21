@@ -56,15 +56,24 @@ GROUPS = {
     "tablet12": ("the tablet's 12 stops with pictures and replays (owed when the tablet does not answer)",
                  ["tablet/prepare", "android/tablet", "tour/tablet", "tablet/remove", "tour/tablet-pc", "replays/tablet",
                   "pictures/tablet"]),
-    # No local check: it switches GitHub's part of a move on (package T8a, tools/gate/github_rule.py). A landing whose
-    # plan has it pushes the candidate branch and waits for GitHub's `must` jobs (tools/gate/github_jobs.tsv); one without
-    # it pushes nothing, starts no watcher and waits for nothing.
-    "github": ("GitHub's push workflow on the candidate: the move waits for its must jobs",
+    # No local check: they switch GitHub's part of a landing on (package T8a, tools/gate/github_rule.py). A landing whose
+    # plan has either pushes the candidate branch (GitHub runs its jobs, tools/gate/github_jobs.tsv). With `github` alone
+    # main moves when this machine's checks pass and the jobs are read after the move (a red one opens a repair); with
+    # `github-first` too (or a full run) the move waits for every `must` job. One without both pushes nothing, starts no
+    # watcher and reads nothing.
+    "github": ("GitHub's jobs on the candidate, read after the move (a red one opens a repair)",
                []),
+    "github-first": ("GitHub's jobs on the candidate, waited for before the move: files this machine cannot build",
+                     []),
 }
 GROUP_NAMES = tuple(GROUPS)
 # A pseudo-group a row may name: it makes the run full, as a file no row names does.
 FULL = "full"
+# A row may also name `-full`: for the files that row matches, a `full` that another row brought is taken away (a narrow row for
+# one file of a folder whose other rows make the run full).
+NOT_FULL = "-full"
+# The groups that switch GitHub's part on, and the one that makes the move wait for it.
+GITHUB, GITHUB_FIRST = "github", "github-first"
 # The groups every run has, whatever the table says: the cheap repository checks (the audit, the code checks, the scripts).
 ALWAYS = ("repo",)
 # Checks that are taken with a group whose pictures they read; the checks they name as needs are not pulled in by them.
@@ -127,7 +136,7 @@ def parse(text, name="scope.tsv"):
             continue
         groups = [g.strip() for g in cells[1].split(",") if g.strip()]
         for g in groups:
-            if g not in GROUPS and g != FULL:
+            if g not in GROUPS and g not in (FULL, NOT_FULL):
                 problems.append("%s:%d: %r is not a group (%s)" % (name, n, g, ", ".join(GROUP_NAMES)))
         rows.append((cells[0], tuple(groups), n))
     if mods is None:
@@ -175,6 +184,8 @@ def path_matches(path, pattern):
     pattern = pattern.strip()
     if not pattern:
         return False
+    if pattern.startswith("/"):      # anchored at the top folder: `/CMakeLists.txt` is the root's file only
+        return bool(glob_regex(pattern[1:]).match(path))
     if "/" not in pattern:
         return fnmatch.fnmatchcase(path.rsplit("/", 1)[-1], pattern)
     return bool(glob_regex(pattern).match(path))
@@ -194,12 +205,28 @@ def plan_for(paths, table):
         if not brought:
             unmatched.append(path)
             full = True
-        if FULL in brought:
+        if FULL in brought and NOT_FULL not in brought:
             full = True
-        wanted.update(g for g in brought if g != FULL)
+        wanted.update(g for g in brought if g not in (FULL, NOT_FULL))
         why[path] = brought
     ordered = [g for g in GROUP_NAMES if g in wanted]
     return Plan(ordered, full, unmatched, why)
+
+
+def with_group(plan, name):
+    """The plan with the group `name` added (a full plan has every group already)."""
+    if plan.full or name in plan.groups:
+        return plan
+    return Plan([g for g in GROUP_NAMES if g in set(plan.groups) | {name}], False, plan.unmatched, plan.why)
+
+
+def github_form(plan):
+    """How a landing of this plan meets GitHub: None (no candidate, nothing read), `after` (the candidate is pushed and main
+    moves when this machine's checks pass; the jobs are read after the move) or `first` (the move waits for every `must` job:
+    the plan has `github-first`, or the run is full, which may hold any file). `plan` None is a run with no plan: `first`."""
+    if plan is None or plan.full or GITHUB_FIRST in plan.groups:
+        return "first"
+    return "after" if GITHUB in plan.groups else None
 
 
 def groups_from_text(text):

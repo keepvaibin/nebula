@@ -1,21 +1,22 @@
 name: Check
 
-# Every push and pull request: every platform builds, the unit tests run on Windows and Linux, the Rust tests run, and the
-# Direct3D 12, Direct3D 11, Linux (Vulkan), Mac (Metal) and Android (Vulkan, on an x86_64 emulator) programs start
-# without game data (--start-check). What needs
+# A push to main or to a candidate (gate/*, pushed by gate.py land), a pull request, and a start by hand: every platform builds,
+# the unit tests run on Windows and Linux, the Rust tests run, and the Direct3D 12, Direct3D 11, Linux (Vulkan), Mac (Metal) and
+# Android (Vulkan, on an x86_64 emulator) programs start without game data (--start-check). A push to a work branch starts
+# nothing: the landing's candidate is the one run of a commit that is read. What needs
 # a real GPU, the game's data or the tablet runs in the local gate (tools/gate/gate.py), whose results are kept in
 # docs/plan/gate-runs. The compiler caches (.github/actions/compiler-cache) are restored by every run and saved by main only.
 on:
   push:
-    branches: ['**']
+    branches: [main, 'gate/**']
   pull_request:
-  # The Windows and Android jobs of a work branch, started by hand.
+  # The Windows and Android jobs (the nightly class of tools/gate/github_jobs.tsv) run on main and when started by hand.
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# A work branch's new push cancels its old run; a run of main or of a candidate (gate/*) keeps its results.
+# A new push to the same ref cancels the old run, except for main and a candidate (gate/*), which keep their results.
 concurrency:
   group: check-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/heads/gate/') }}
@@ -27,8 +28,9 @@ env:
 jobs:
   windows:
     name: Windows (three renderers, unit tests)
-    # Main, candidates and a start by hand (file 04, 8): this machine builds and tests Windows and Android itself.
-    if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'workflow_dispatch' }}
+    # Main and a start by hand, not a candidate (file 04, 8): this machine builds and tests Windows and Android itself, and a
+    # landing reads only the jobs of the class must.
+    if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
     runs-on: windows-2022
     timeout-minutes: 240
     steps:
@@ -78,8 +80,9 @@ jobs:
 
   windows-game:
     name: Windows game modules
-    # Main, candidates and a start by hand (file 04, 8): this machine builds and tests Windows and Android itself.
-    if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'workflow_dispatch' }}
+    # Main and a start by hand, not a candidate (file 04, 8): this machine builds and tests Windows and Android itself, and a
+    # landing reads only the jobs of the class must.
+    if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
     runs-on: windows-2022
     timeout-minutes: 240
     steps:
@@ -381,8 +384,9 @@ jobs:
 
   android:
     name: Android (${{ matrix.abi }})
-    # Main, candidates and a start by hand (file 04, 8): this machine builds and tests Windows and Android itself.
-    if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'workflow_dispatch' }}
+    # Main and a start by hand, not a candidate (file 04, 8): this machine builds and tests Windows and Android itself, and a
+    # landing reads only the jobs of the class must.
+    if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
     runs-on: windows-2022
     timeout-minutes: 300
     strategy:
@@ -475,6 +479,8 @@ jobs:
   android-start:
     name: Android start check (x86_64 emulator)
     needs: android
+    # Needs an Android build, so it runs where those do.
+    if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:

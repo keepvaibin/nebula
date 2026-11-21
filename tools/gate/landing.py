@@ -112,6 +112,20 @@ def also_text(*texts):
     return ",".join(also_names(*texts))
 
 
+# `gate.py land --github first` travels in the queue's `also` cell as this word (the queue file keeps its columns): the batch it
+# is in is run with the group `github-first`, so the move waits for GitHub's `must` jobs. It names no check.
+GITHUB_FIRST = "@github-first"
+
+
+def called_by_runner(pid, lock_path=RUNNER_LOCK, alive=process_alive):
+    """Whether `pid` is the holder of the landing runner's lock and runs: the mark `gate.py --main --move` must carry (the runner's
+    own call; main moves only through gate.py land). A pid that is not the holder, or no pid, is not the runner."""
+    if not pid:
+        return False
+    holder = FolderLock(lock_path, alive).holder()[1]
+    return holder == pid and bool(alive(pid))
+
+
 # The lock folders ------------------------------------------------------------------------------------------------------
 
 
@@ -612,9 +626,14 @@ class Landing:
         else:
             plan = scope.plan_for(paths, self.table or self.tip_table(tree))
         self.runs += 1
-        also = also_text(*[getattr(self, "alsos", {}).get(b, "") for b in prep.order])
+        also_all = also_names(*[getattr(self, "alsos", {}).get(b, "") for b in prep.order])
+        first = GITHUB_FIRST in also_all
+        also = ",".join(n for n in also_all if n != GITHUB_FIRST)
+        if first:
+            plan = scope.with_group(plan, scope.GITHUB_FIRST)
         self.say("gate.py: run %d on %s: %s%s (%s)" % (self.runs, ", ".join(prep.order), plan.text(),
-                                                      " and also %s" % also if also else "", prep.tip[:9]))
+                                                      " and also %s" % also if also else "", prep.tip[:9]) +
+                 ("; GitHub first (asked for)" if first else ""))
         result = self.checker.run(tree, prep.tip, list(prep.order), plan.text(), **({"also": also} if also else {}))
         for b in prep.order:
             self.last[b] = result
