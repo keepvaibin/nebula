@@ -23,7 +23,7 @@ sys.path.insert(0, str(TREE / "tools" / "plan"))
 import failures  # noqa: E402
 import live as lv  # noqa: E402
 import plan  # noqa: E402
-from plan_fixture import Tree, plan_of, ready_a1, setup_module, step, teardown_module, write_steps  # noqa: E402
+from plan_fixture import Tree, git_run, plan_of, ready_a1, setup_module, step, teardown_module, write_steps  # noqa: E402
 
 
 def setUpModule():
@@ -381,6 +381,142 @@ class CommandsTest(unittest.TestCase):
 
 
 # ---- the tool-fault record ------------------------------------------------------------------------------------
+
+# ---- what is landed is the same for both agents; each agent runs its own copy ---------------------------------------
+
+class LandedOnMainTest(unittest.TestCase):
+    """T13c: `next`, `start`, `status` and `land` read steps.tsv of origin/main as well as the tree's own."""
+
+    def setUp(self):
+        self.t = Tree().__enter__()
+        self.addCleanup(self.t.__exit__)
+
+    def landed_by_the_other_agent(self, *ids):
+        """What agent 2's landing leaves: a commit on origin/main that sets these steps landed, made in another clone (the
+        agent 1's tree is not touched and has not fetched)."""
+        clone = self.t.dir / "other-clone"
+        git_run("clone", "-q", str(self.t.origin), str(clone))
+        path = plan.native(clone) / "steps.tsv"
+        lines = path.read_text(encoding="utf-8").splitlines()
+        out = [lines[0]]
+        for line in lines[1:]:
+            cells = line.split("\t")
+            if cells[1] in ids:
+                cells[6], cells[7] = "landed", "abcdef123"
+            out.append("\t".join(cells))
+        path.write_text("\n".join(out) + "\n", encoding="utf-8")
+        git_run("commit", "-q", "-am", "Plan: landed", cwd=str(clone))
+        git_run("push", "-q", "origin", "HEAD:main", cwd=str(clone))
+
+    def test_next_sees_a_landing_of_the_other_agent_before_anything_new_is_started(self):
+        self.landed_by_the_other_agent("A.1", "A.2")
+        self.assertEqual(plan.find(plan.read_steps(self.t.tree), "A.1")["state"], "open", "the tree's own file says open")
+        code, text = self.t.run(["next"])
+        self.assertEqual(code, 0, text)
+        self.assertTrue(text.startswith("NEXT: B.1"), "package A is landed on main, so B.1 (needs A) is next: " + text[:80])
+        self.assertNotIn("could not be read", text)
+
+    def test_start_and_status_read_it_too(self):
+        self.landed_by_the_other_agent("A.1")
+        code, text = self.t.run(["start", "A.1"])
+        self.assertEqual(code, 1)
+        self.assertIn("step A.1 is already landed", text)
+        code, text = self.t.run(["status"], expect=0)
+        self.assertIn("Steps landed: 1 of 5.", text)
+
+    def test_land_reads_it_too(self):
+        self.landed_by_the_other_agent("A.1")
+        code, text = self.t.run(["land", "A.1"])
+        self.assertEqual(code, 1)
+        self.assertIn("step A.1 is landed; only a started step lands", text)
+
+    def test_a_step_the_tree_has_as_landed_keeps_its_own_commit(self):
+        self.landed_by_the_other_agent("A.1")
+        path = plan.native(self.t.tree) / "steps.tsv"
+        rows = [l.split("\t") for l in path.read_text(encoding="utf-8").splitlines()]
+        rows[1][6], rows[1][7] = "landed", "1111111"
+        path.write_text("\n".join("\t".join(r) for r in rows) + "\n", encoding="utf-8")
+        self.t.run(["next"], expect=0)
+        plan.fetch_main_landed(type("A", (), {"tree": self.t.tree})())
+        try:
+            row = plan.find(plan.read_steps(self.t.tree, self.t.live), "A.1")
+        finally:
+            plan.MAIN_LANDED.clear()
+        self.assertEqual((row["state"], row["commit"]), ("landed", "1111111"))
+
+    def test_a_failed_fetch_still_gives_an_answer_and_one_line(self):
+        git_run("remote", "set-url", "origin", str(self.t.dir / "no-such-origin.git"), cwd=str(self.t.tree))
+        code, text = self.t.run(["next"])
+        self.assertEqual(code, 0, text)
+        said = [l for l in text.splitlines() if "could not be read" in l]
+        self.assertEqual(len(said), 1, text)
+        self.assertIn("read from this folder's file alone", said[0])
+        self.assertIn("NEXT: A.1", text, "the tree's file alone is used")
+
+    def test_a_missing_file_on_main_is_the_same_one_line(self):
+        clone = self.t.dir / "other-clone"
+        git_run("clone", "-q", str(self.t.origin), str(clone))
+        git_run("rm", "-q", "-r", "docs/plan/native/steps.tsv", cwd=str(clone))
+        git_run("commit", "-q", "-m", "gone", cwd=str(clone))
+        git_run("push", "-q", "origin", "HEAD:main", cwd=str(clone))
+        code, text = self.t.run(["next"])
+        self.assertEqual(code, 0, text)
+        self.assertEqual(len([l for l in text.splitlines() if "could not be read" in l]), 1, text)
+
+    def test_the_other_commands_read_the_tree_alone(self):
+        self.landed_by_the_other_agent("A.1", "A.2")
+        code, text = self.t.run(["rows", "A.1"])
+        self.assertNotIn("could not be read", text)
+        self.assertEqual(plan.MAIN_LANDED, {}, "no fetch, nothing kept from an earlier command")
+
+
+class OwnCopyTest(unittest.TestCase):
+    """T13c: each agent runs the copy in its own work folder."""
+
+    def setUp(self):
+        self.t = Tree().__enter__()
+        self.addCleanup(self.t.__exit__)
+
+    def from_folder(self, name, args):
+        """Runs the command as if plan.py were the file of that work folder (its tools/gate/scope.tsv is a copy of this one's)."""
+        folder = self.t.work / name
+        if not (folder / "tools" / "gate").is_dir():
+            (folder / "tools" / "gate").mkdir(parents=True)
+            (folder / "tools" / "gate" / "scope.tsv").write_bytes((TREE / "tools" / "gate" / "scope.tsv").read_bytes())
+        with mock.patch.object(plan, "TREE", folder):
+            return self.t.run(args)
+
+    def test_the_other_agents_copy_is_refused_with_one_line_naming_the_right_file(self):
+        right_for_1 = (self.t.work / "Nebula-native" / "tools" / "plan" / "plan.py").as_posix()
+        right_for_2 = (self.t.work / "Nebula-native-2" / "tools" / "plan" / "plan.py").as_posix()
+        for args, right in ((["next", "--agent", "1"], right_for_1), (["next"], right_for_1), (["status", "--agent", "1"], right_for_1)):
+            code, text = self.from_folder("Nebula-native-2", args)
+            self.assertEqual(code, 2, text)
+            self.assertEqual(len(text.strip().splitlines()), 1, text)
+            self.assertIn(right, text)
+        code, text = self.from_folder("Nebula-native", ["start", "A.1", "--agent", "2"])
+        self.assertEqual(code, 2, text)
+        self.assertEqual(len(text.strip().splitlines()), 1, text)
+        self.assertIn(right_for_2, text)
+        self.assertFalse((self.t.work / "Nebula-native-2" / ".git").exists(), "nothing was started")
+
+    def test_its_own_copy_runs(self):
+        self.assertEqual(self.from_folder("Nebula-native", ["next", "--agent", "1"])[0], 0)
+        self.assertEqual(self.from_folder("Nebula-native", ["next"])[0], 0)
+        self.assertEqual(self.from_folder("Nebula-native-2", ["next", "--agent", "2"])[0], 1, "agent 2 has nothing on its list here, "
+                                                                                           "but it is not refused")
+
+    def test_any_other_tree_runs_as_before(self):
+        for agent in ("1", "2"):
+            code, text = self.t.run(["next", "--agent", agent])
+            self.assertNotIn("copy", text)
+        self.assertIsNone(plan.own_copy_refusal(2, self.t.tree, self.t.work))
+        self.assertIsNone(plan.own_copy_refusal(1, self.t.work / "Nebula-native-3", self.t.work))
+
+    def test_commands_with_no_agent_are_not_asked(self):
+        code, text = self.from_folder("Nebula-native-2", ["rows", "A.1"])
+        self.assertEqual(code, 0, text)
+
 
 class FaultRecordTest(unittest.TestCase):
     def setUp(self):

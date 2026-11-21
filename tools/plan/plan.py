@@ -6,10 +6,16 @@
     (next, start, land, blocked, claim, tool, toolfault and status take --agent 1|2; 1 is the default; ID is a step, or for
      start, land and blocked a repair such as R-003)
     (--no-push, before the command, or NEBULA_PLAN_NO_PUSH=1 in the environment: the progress branch is not pushed)
+    Each agent runs the copy in its own work folder: `D:/NebulaWork/MarioGalaxyRecomp/Nebula-native/tools/plan/plan.py` for agent 1,
+    `.../Nebula-native-2/tools/plan/plan.py` for agent 2. A command with an --agent that does not match the folder its file is in
+    (when that folder is one of those two) is refused with one line that names the right file. From any other tree (the tests, a
+    planner's look) it works as it does without this rule.
 
 The plan is `docs/plan/native/`: `steps.tsv` (order, step, package, title, package_needs, card_file, state, commit),
-the step cards in the three card files, the package row tables, `rows/<package>.tsv`. The repository's copy is the
-only one read. Python standard library only.
+the step cards in the three card files, the package row tables, `rows/<package>.tsv`. What is `landed` is the same for both
+agents: `next`, `start`, `status` and `land` fetch origin first and read `steps.tsv` from `origin/main` as well as from the tree
+the file is in; a step is `landed`, with its commit, when either says so (so agent 2's landing is seen by agent 1 at once). When
+the fetch or the read fails, the tree's file alone is used and one line says so. Python standard library only.
 
 next     The first step in file order whose state is `open`, whose needs are landed, and whose package-mates before it
          are landed (the cards stack a package's steps, and `start` cuts the branch from main, so the code of an
@@ -76,7 +82,7 @@ Exit codes: 0 done; 1 refused or failed; 2 the command was wrong; 3 the same fai
 machine fault only, or a branch that does not apply (the gate's "not judged": it does not count as a failure of the change).
 
 State. `landed` and the commit are in steps.tsv (the repository) and travel with the landing's own commit; after a pass
-they are written into the plan tree too. Everything that more than one agent, or the progress page, must see is in the
+they are written into the plan tree too (and `origin/main` has them from the landing, which is what the other agent reads). Everything that more than one agent, or the progress page, must see is in the
 live folder (LIVE below; `--live` for tests): started and blocked steps, claims, tool faults, the landings' times, the
 page. It is never kept in a file inside one work folder. STATUS.md is the plan tree's own, untracked; BLOCKED.md is a
 plain file the agent may commit.
@@ -151,7 +157,11 @@ def native(tree):
 def read_base(tree):
     """The steps as `steps.tsv` has them, in file order: [dict]. Raises ValueError for a file that is not the plan's."""
     path = native(tree) / "steps.tsv"
-    lines = path.read_text(encoding="utf-8").splitlines()
+    return parse_base(path.read_text(encoding="utf-8"), path)
+
+
+def parse_base(text, path):
+    lines = text.splitlines()
     if not lines or lines[0].split("\t") != STEP_COLUMNS:
         raise ValueError("%s: the first line must be %s" % (path, "\t".join(STEP_COLUMNS)))
     steps = []
@@ -182,11 +192,20 @@ def now():
 atomic_write = lv.atomic_write
 
 
+# The steps `origin/main`'s steps.tsv has as landed (step -> commit), filled by fetch_main_landed for the commands that read
+# it; empty otherwise, so a read from any other caller is what the tree's file says.
+MAIN_LANDED = {}
+
+
 def read_steps(tree, live=None):
-    """The steps, in file order, with their state: what `steps.tsv` says (`open` or `landed`, with the commit), and for an
-    open step the live state (`started`, `blocked`, with `agent` and `reason`). Every row has `agent` and `reason`."""
+    """The steps, in file order, with their state: what `steps.tsv` says (`open` or `landed`, with the commit), a step
+    `origin/main` has as landed (MAIN_LANDED) is landed too, and for an open step the live state (`started`, `blocked`, with
+    `agent` and `reason`). Every row has `agent` and `reason`."""
     steps = read_base(tree)
     local = lv.read_state(live_dir(live))
+    for s in steps:
+        if s["state"] == "open" and s["step"] in MAIN_LANDED:
+            s["state"], s["commit"] = "landed", MAIN_LANDED[s["step"]]
     for s in steps:
         s["agent"], s["reason"] = "", ""
         if s["state"] == "open" and s["step"] in local:
@@ -1086,6 +1105,48 @@ def agent_of(a):
     return str(getattr(a, "agent", 1))
 
 
+def own_copy_refusal(agent, tree=None, work_root=None):
+    """The one line that refuses a command run from the other agent's copy of this tool, or None. Each agent runs the copy in
+    its own work folder; from any other tree (the tests, a planner's look) there is nothing to refuse."""
+    tree = os.path.normcase(os.path.abspath(str(tree or TREE)))
+    root = pathlib.Path(work_root or WORK_ROOT)
+    agent = str(agent)
+    for number, name in AGENT_FOLDERS.items():
+        if tree == os.path.normcase(os.path.abspath(str(root / name))):
+            if number == agent:
+                return None
+            right = (root / AGENT_FOLDERS.get(agent, "?") / "tools" / "plan" / "plan.py").as_posix()
+            return ("plan.py: this is agent %s's copy (%s); agent %s runs its own: python -X utf8 -I %s" % (
+                number, (root / name).as_posix(), agent, right))
+    return None
+
+
+def fetch_main_landed(a):
+    """Fetches origin and reads `steps.tsv` of `origin/main` into MAIN_LANDED (what landed there is landed for every agent,
+    wherever it was landed from). When the fetch or the read fails the tree's file alone is used and one line says so."""
+    MAIN_LANDED.clear()
+    why = ""
+    try:
+        exe = GIT if pathlib.Path(GIT).exists() else "git"
+        got = subprocess.run([exe, "-C", str(a.tree), "fetch", "-q", "origin"], capture_output=True, text=True, encoding="utf-8",
+                             errors="replace", timeout=GIT_WAIT)
+        if got.returncode != 0:
+            why = "the fetch of origin failed: " + ((got.stderr or got.stdout).strip().splitlines() or ["exit %d" % got.returncode])[-1]
+        else:
+            shown = git(a.tree, "show", "origin/main:%s/steps.tsv" % NATIVE)
+            if shown.returncode != 0:
+                why = "origin/main has no %s/steps.tsv" % NATIVE
+            else:
+                for s in parse_base(shown.stdout, "origin/main:%s/steps.tsv" % NATIVE):
+                    if s["state"] == "landed":
+                        MAIN_LANDED[s["step"]] = s["commit"]
+    except (OSError, ValueError, subprocess.SubprocessError) as e:
+        MAIN_LANDED.clear()
+        why = "%s: %s" % (type(e).__name__, " ".join(str(e).split())[:150])
+    if why:
+        say("plan.py: origin/main's steps.tsv could not be read (%s); what is landed is read from this folder's file alone." % why)
+
+
 def say_stale(a, claims, stale):
     at = now()
     for c in claims:
@@ -1219,6 +1280,7 @@ def print_repair(a, r, working=False):
 
 
 def cmd_next(a):
+    fetch_main_landed(a)
     steps = read_steps(a.tree, a.live)
     claims = lv.read_claims(live_dir(a.live))
     stale = stale_of(a.tree, claims)
@@ -1351,6 +1413,7 @@ def begin_work(a, branch):
 
 
 def cmd_start(a):
+    fetch_main_landed(a)
     if is_repair(a.id):
         return start_repair(a)
     steps = read_steps(a.tree, a.live)
@@ -1529,6 +1592,7 @@ def hand_to_gate(a, folder, branch, label, agent, extra, on_pass, undo):
 
 
 def cmd_land(a):
+    fetch_main_landed(a)
     if is_repair(a.id):
         return land_repair(a)
     steps = read_steps(a.tree, a.live)
@@ -1786,6 +1850,7 @@ def cmd_toolfault(a):
 
 
 def cmd_status(a):
+    fetch_main_landed(a)
     text = status_text(a.tree, a.work_root, live=a.live)
     atomic_write(native(a.tree) / "STATUS.md", text)
     sys.stdout.write(text)
@@ -1882,11 +1947,19 @@ def parser():
 
 def main(argv=None):
     a = parser().parse_args(argv)
+    MAIN_LANDED.clear()
+    if getattr(a, "agent", None) is not None:
+        why = own_copy_refusal(a.agent, TREE, a.work_root)
+        if why:
+            say(why)
+            return 2
     try:
         return a.fn(a)
     except (ValueError, OSError, RuntimeError, KeyError) as e:
         say("plan.py: %s: %s" % (type(e).__name__, e))
         return 2
+    finally:
+        MAIN_LANDED.clear()
 
 
 if __name__ == "__main__":
