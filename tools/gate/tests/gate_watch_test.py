@@ -45,6 +45,8 @@ def main():
             g = types.SimpleNamespace(work=t, commit="0123456789", bin=t / "bin", level="main", android_bin=t / "abin",
                                       args=types.SimpleNamespace(paks="paks", build_root=t, lumalink="lumalink",
                                                                  jobs="4", mod_parallel=2))
+            g.paks_text = lambda: g.args.paks    # gate.Gate.paks_text: --paks as given
+            g.mods = "full"    # the mod lane runs (mods = off would leave it out)
             for renderer in gate.RENDERERS:
                 caught.clear()
                 gate.harness(g, t / "suite.json", renderer, "engine")(t / ("harness-%s.log" % renderer))
