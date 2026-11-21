@@ -31,7 +31,7 @@ PICTURES-CHANGE.txt	repo
 tools/**	repo,tools
 tools/test_driver/**	build,unit,start,engine1,tour1,android,github
 tools/lumacore/luma_test.py	engine1,tour1
-tools/lumacore/luma_test_android.py	engine1,tour1
+tools/lumacore/luma_test_android.py	android,tablet12
 tools/gate/gate_tour.py	tour1
 tools/verify/step_hash.py	tour1
 tools/verify/tours/**	tour1
