@@ -28,7 +28,7 @@ starts the game for a test goes through here.
          when the checks have passed and GitHub is green, the gate approves them before it moves main, as one commit on
          top of the tested one that touches only tests/pictures/approved.tsv (and removes PICTURES-CHANGE.txt), runs the
          picture checks again on the same runs (all must pass, else nothing moves: tool), and moves main to that commit.
-         After the move the play route measure (tools/measure) starts on a copy of the build, then the long run.
+         After the move the long run starts if none started in the last 20 hours. No speed measure starts at a move: it is part of the nightly run.
 --long   level 3, on main's newest commit, under the long lock, at below-normal priority: the tablet's 102 stops
          against the PC's, a sanitizer build's tour, the soak, every disc on every renderer.
 --final  level 4: the main and long levels on one commit. "Done" needs it passed with no check planned or known.
@@ -1178,9 +1178,6 @@ def start_soak(g):
 
 
 MEASURE = TREE / "tools" / "measure" / "measure.py"
-# Where a move's measure runs from: a copy of the moved commit's build, so a later gate's build of the same folder
-# never changes what is measured.
-MEASURE_BINS = pathlib.Path("D:/NebulaWork/build/measure-bins")
 
 
 def measure_command(sha, bin_dir, android_bin, apk, work, args, pak=None, paks=None):
@@ -1214,66 +1211,6 @@ def measure_route(g):
         said = next((l for l in reversed(text.splitlines()) if l.startswith("measure: ")), "measure: no summary")
         return code == 0, said[len("measure: "):]
     return fn
-
-
-def copies_in_use(bins, measure_lock, alive=None):
-    """The names of the measure's build copies a measure uses (N-1090): a copy whose in-use.txt names a process that is alive
-    (the measure started on it, `pid N`), and the commit measure.lock's holder line names (`measure.py <commit> <work>`:
-    the measure that has the lock now). A move prunes none of these."""
-    alive = alive or process_alive
-    used = set()
-    for d in (p for p in pathlib.Path(bins).iterdir() if p.is_dir()):
-        try:
-            words = (d / "in-use.txt").read_text(encoding="utf-8").split()
-        except OSError:
-            continue
-        if len(words) >= 2 and words[0] == "pid" and words[1].isdigit() and alive(int(words[1])):
-            used.add(d.name)
-    try:
-        words = (pathlib.Path(measure_lock) / "holder.txt").read_text(encoding="utf-8").split()
-    except OSError:
-        words = []
-    if len(words) >= 2 and words[0] == "measure.py":
-        used.add(words[1])
-    return used
-
-
-def start_measure(sha, g, args, popen=subprocess.Popen, bins=MEASURE_BINS, alive=None):
-    """After a move: the moved commit's build copied (MEASURE_BINS/<sha>, the two before it kept, and any a measure uses:
-    copies_in_use), then the measure started there, detached; it takes the gate lock through the queue, so the gates and long
-    run parts behind it wait and nothing runs beside it. The copy names the process of its measure (in-use.txt). Returns what
-    happened, for the board."""
-    bins.mkdir(parents=True, exist_ok=True)
-    used = copies_in_use(bins, pathlib.Path(args.gate_lock).with_name("measure.lock"), alive)
-    for old in sorted((p for p in bins.iterdir() if p.is_dir()), key=lambda p: p.stat().st_mtime)[:-2]:
-        if old.name not in used:
-            shutil.rmtree(old, ignore_errors=True)
-    copy = bins / sha[:9]
-    try:
-        shutil.rmtree(copy, ignore_errors=True)
-        shutil.copytree(g.bin, copy / "bin")
-        android = apk = None
-        if args.tablet and pathlib.Path(g.android_bin).is_dir() and test_apk(args).is_file():
-            # The test app with its bins: the tablet's run installs it (P-321), as the gate's tablet part did.
-            android = copy / "android"
-            shutil.copytree(g.android_bin, android)
-            apk = copy / "Nebula.apk"
-            shutil.copy2(test_apk(args), apk)
-    except OSError as e:
-        return "no measure: the build could not be copied: %s" % e
-    cmd = measure_command(sha, copy / "bin", android, apk, pathlib.Path(args.work) / ("%s-measure" % g.name), args, getattr(g, "pak", "") or None,
-                          g.paks_text() if hasattr(g, "paks_text") else None)
-    cmd += ["--gate-lock", args.gate_lock, "--board", args.board]
-    log = pathlib.Path(args.work) / ("measure-%s.log" % sha[:9])
-    # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP, and out of the run's job object (machine.start_outliving): the measure outlives the run.
-    detach = {"creationflags": 0x8 | 0x200} if os.name == "nt" else {"start_new_session": True}
-    with open(log, "ab") as out:
-        process = machine.start_outliving(popen, cmd, cwd=str(TREE), stdin=subprocess.DEVNULL, stdout=out,
-                                          stderr=subprocess.STDOUT, close_fds=True, **detach)
-    pid = getattr(process, "pid", None)
-    if isinstance(pid, int):
-        (copy / "in-use.txt").write_text("pid %d\n" % pid, encoding="utf-8")
-    return "the play route measure of main %s started (log %s)" % (sha[:9], log)
 
 
 def soak_result(process, soak_log):
@@ -2036,7 +1973,10 @@ def move_main(sha, run_name, work, board, who, covers, tree=TREE):
     return None
 
 
-def long_due(work, hours=6.0, now=None):
+LONG_EVERY_HOURS = 20.0
+
+
+def long_due(work, hours=LONG_EVERY_HOURS, now=None):
     """Whether a long run is due (section 14): none in history.tsv and none started by a move (long-started.txt, the
     run's history line comes only at its end) within `hours`."""
     path = pathlib.Path(work) / "history.tsv"
@@ -2097,7 +2037,7 @@ def start_long(sha, args, tree=LONG_TREE, source=TREE, popen=subprocess.Popen, n
     the run there, detached and below normal priority (it lowers itself too, below_normal), its output in
     <work>/long-<sha>.log. Returns (command or None, what happened) for the board."""
     if not long_due(args.work, now=now):
-        return None, "a long run started within 6 hours"
+        return None, "no long run is due: the last one started less than %d hours ago" % LONG_EVERY_HOURS
     if not long_lock_free(args.long_lock):
         return None, "the long lock is held (%s)" % lock_holder(args.long_lock)[0]
     why = long_tree_at(sha, tree, source)
@@ -3156,14 +3096,11 @@ def main(argv=None):
                 if kept is not None:
                     print("gate.py: " + kept)
                     board_line(args.board, "%s NOTICE: %s." % (args.who, kept))
-                # First the measure (it queues for the gate lock now), then the long run, whose parts queue behind it.
-                measured = start_measure(landed, g, args)
-                print("gate.py: measure: %s" % measured)
-                board_line(args.board, "%s MEASURE: %s." % (args.who, measured))
+                # No speed measure starts at a move: it is a part of the nightly run.
                 started, what = start_long(landed, args)
                 print("gate.py: long run: %s" % what)
                 if started is not None:
-                    board_line(args.board, "%s LONG: %s; none had started in 6 hours (section 14, N-1046)." % (args.who, what))
+                    board_line(args.board, "%s LONG: %s; none had started in %d hours (section 14, N-1046)." % (args.who, what, LONG_EVERY_HOURS))
                 elif what.startswith("its tree"):
                     board_line(args.board, "%s NOTICE: main moved to %s; no long run started: %s." % (args.who, landed[:9], what))
     finally:

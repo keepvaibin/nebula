@@ -1,4 +1,4 @@
-"""small_faults_test.py: three small faults of the test and build tools that package T4 fixes (P-329, P-308, N-1090), and the
+"""small_faults_test.py: two small faults of the test and build tools that package T4 fixes (P-329, P-308), and the
 lock rule, without the game, a build or a graphics card.
 
     python -X utf8 -I tools/gate/tests/small_faults_test.py [--work FOLDER]
@@ -8,8 +8,6 @@ lock rule, without the game, a build or a graphics card.
                                             no longer has left in a reused build folder
   site_pipelines_keeps_an_existing_list     P-308: tools/dev/site_pipelines.py reads the kept list inside its `with` block: a merge
                                             into a list that exists no longer stops on a closed file, and keeps what the list holds
-  measure_copies_kept_while_used            N-1090: a move prunes the measure's build copies but not one a measure uses (a live
-                                            process named in its in-use.txt, or the commit measure.lock names)
   no_lock_for_own_work                      the rule "own work takes the gate lock" is gone from the code: nothing in tools/ asks
                                             for lockrun.py, and a run of the gate's own checks takes only gate.lock
 Exit 0 when every case holds.
@@ -98,60 +96,6 @@ class SitePipelines(unittest.TestCase):
                     site.main()
             self.assertEqual(kept.read_text(encoding="ascii").split(), [record.hex()], "the list that was there is kept")
             self.assertIn("others 1", out.getvalue())
-
-
-class MeasureCopies(unittest.TestCase):
-    def world(self, t, markers=None):
-        t = pathlib.Path(t)
-        bins = t / "measure-bins"
-        for i, name in enumerate(("aaaaaaaaa", "bbbbbbbbb", "ccccccccc", "ddddddddd")):
-            (bins / name / "bin").mkdir(parents=True)
-            (bins / name / "bin" / "Nebula.exe").write_text(name, encoding="utf-8")
-            if name in (markers or {}):
-                (bins / name / "in-use.txt").write_text(markers[name], encoding="utf-8")
-            os.utime(bins / name, (1000 + i, 1000 + i))      # after the markers: a write into a folder changes its time
-        build = t / "build"
-        (build / "bins").mkdir(parents=True)
-        (build / "bins" / "Nebula.exe").write_text("x", encoding="utf-8")
-        (t / "work").mkdir()
-        g = type("G", (), {"bin": str(build / "bins"), "android_bin": str(build / "android"), "name": "run"})()
-        args = type("A", (), {"work": str(t / "work"), "paks": "P", "who": "A", "tablet": "", "tablet_lock": "T.lock",
-                              "gate_lock": str(t / "gate.lock"), "board": "B.md", "build_root": str(build), "pak": "US.pak"})()
-        return bins, g, args
-
-    def start(self, bins, g, args, sha="eeeeeeeee0123456", alive=lambda pid: False):
-        started = []
-
-        class Process:
-            pid = 4711
-        gate.start_measure(sha, g, args, popen=lambda cmd, **k: (started.append(cmd), Process())[1], bins=bins, alive=alive)
-        return started
-
-    def test_the_old_copies_go_and_the_two_newest_stay(self):
-        with tempfile.TemporaryDirectory() as t:
-            bins, g, args = self.world(t)
-            self.start(bins, g, args)
-            self.assertEqual(sorted(p.name for p in bins.iterdir()), ["ccccccccc", "ddddddddd", "eeeeeeeee"])
-
-    def test_a_copy_a_live_measure_uses_is_kept(self):
-        with tempfile.TemporaryDirectory() as t:
-            bins, g, args = self.world(t, {"aaaaaaaaa": "pid 4242\n", "bbbbbbbbb": "pid 4343\n"})
-            self.start(bins, g, args, alive=lambda pid: pid == 4242)
-            self.assertEqual(sorted(p.name for p in bins.iterdir()), ["aaaaaaaaa", "ccccccccc", "ddddddddd", "eeeeeeeee"],
-                             "a's measure is alive and keeps its copy; b's process has ended, its copy goes")
-            self.assertEqual((bins / "eeeeeeeee" / "in-use.txt").read_text(encoding="utf-8").split(), ["pid", "4711"],
-                             "the new copy names the measure that was started on it")
-
-    def test_a_copy_the_measure_lock_names_is_kept(self):
-        with tempfile.TemporaryDirectory() as t:
-            bins, g, args = self.world(t)
-            lock = pathlib.Path(t) / "measure.lock"
-            lock.mkdir()
-            (lock / "holder.txt").write_text("measure.py bbbbbbbbb D:/NebulaWork/build/gate-runs/x 2026-11-21 00:00:00\n", encoding="utf-8")
-            args.gate_lock = str(pathlib.Path(t) / "gate.lock")      # measure.lock is beside it
-            self.start(bins, g, args)
-            self.assertIn("bbbbbbbbb", sorted(p.name for p in bins.iterdir()), "the lock names its commit: its copy stays")
-            self.assertNotIn("aaaaaaaaa", sorted(p.name for p in bins.iterdir()))
 
 
 class NoLockForOwnWork(unittest.TestCase):
