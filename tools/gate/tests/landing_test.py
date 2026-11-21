@@ -63,9 +63,9 @@ class FakeChecker:
         self.entered = threading.Event()
         self.threads = []
 
-    def run(self, tree, tip, names, groups_text):
+    def run(self, tree, tip, names, groups_text, also=""):
         w = self.world
-        self.calls.append({"names": list(names), "groups": groups_text, "tip": tip, "tree": str(tree)})
+        self.calls.append({"names": list(names), "groups": groups_text, "tip": tip, "tree": str(tree), "also": also})
         self.threads.append(threading.current_thread().name)
         self.entered.set()
         if self.hold is not None:
@@ -478,7 +478,7 @@ class Cases(unittest.TestCase):
         self.assertEqual([(r["branch"], r["agent"], r["state"], r["commit"]) for r in q.read()],
                          [("x", "2", "waiting", "c0ffee"), ("y", "2", "waiting", "c0ffee")])
         header = (w.plan / "landing-queue.tsv").read_text(encoding="utf-8").splitlines()[0]
-        self.assertEqual(header.split("\t"), ["time", "branch", "agent", "state", "commit", "run folder", "note"])
+        self.assertEqual(header.split("\t"), ["time", "branch", "agent", "state", "commit", "run folder", "note", "also"])
         q.add(["x"], "1", lambda b: "other")
         self.assertEqual(q.row("x")["agent"], "2", "a branch already waiting stays as it is")
         claimed = q.claim()
@@ -504,6 +504,67 @@ class Cases(unittest.TestCase):
         q2 = landing.Queue(w.plan / "landing-queue.tsv", alive=lambda p: False)
         q2.add(["w"], "1", lambda b: "")
         self.assertIsNotNone(q2.row("w"))
+
+    def test_the_also_of_a_branch_is_in_the_queue_and_a_file_of_seven_columns_is_read(self):
+        w = self.w
+        q = landing.Queue(w.plan / "landing-queue.tsv")
+        q.add(["x"], "1", lambda b: "c0", also="tour/d3d11, unit/game")
+        self.assertEqual(q.row("x")["also"], "tour/d3d11,unit/game")
+        q.add(["x"], "1", lambda b: "c0", also="unit/game,tour/vulkan")
+        self.assertEqual(q.row("x")["also"], "tour/d3d11,unit/game,tour/vulkan", "a waiting branch takes the new names in, once each")
+        self.assertEqual(q.claim()[0]["also"], "tour/d3d11,unit/game,tour/vulkan")
+        old = w.plan / "old-queue.tsv"
+        old.write_text("time\tbranch\tagent\tstate\tcommit\trun folder\tnote\n2026-11-20T10:00:00\tb\t1\twaiting\tabc\t\t\n",
+                       encoding="utf-8")
+        q2 = landing.Queue(old)
+        self.assertEqual([(r["branch"], r["state"], r["also"]) for r in q2.read()], [("b", "waiting", "")], "written before `also`")
+        q2.add(["c"], "1", lambda b: "")
+        self.assertEqual(old.read_text(encoding="utf-8").splitlines()[0].split("\t")[-1], "also", "the column is added when it writes")
+        self.assertEqual(len(q2.read()), 2)
+
+    def test_a_landing_with_also_gives_the_checker_the_names_and_without_also_it_does_not(self):
+        w = self.w
+        w.branch("feat/a", {"docs/a.md": "a"})
+        w.branch("feat/b", {"docs/b.md": "b"})
+        code, out, _ = land(w, ["feat/a"], )
+        self.assertEqual((code, w.checker.calls[-1]["also"]), (0, ""))
+        L = w.landing()
+        self.assertEqual(L.land(["feat/b"], also="tour/d3d11,unit/game"), 0)
+        self.assertEqual(w.checker.calls[-1]["also"], "tour/d3d11,unit/game")
+        self.assertTrue(any("and also tour/d3d11,unit/game" in l for l in L.out), L.out)
+
+    def test_the_also_of_a_waiting_caller_reaches_the_run_of_the_caller_that_is_the_runner(self):
+        w = self.w
+        w.branch("feat/a", {"docs/a.md": "a"})
+        w.branch("feat/b", {"docs/b.md": "b"})
+        w.checker.hold = threading.Event()
+        first, second = w.landing(pid=1001), w.landing(pid=1002)
+        results = {}
+        t1 = threading.Thread(target=lambda: results.update(a=first.land(["feat/a"])), name="caller-a")
+        t1.start()
+        self.assertTrue(w.checker.entered.wait(30))
+        t2 = threading.Thread(target=lambda: results.update(b=second.land(["feat/b"], also="tour/vulkan")), name="caller-b")
+        t2.start()
+        deadline = time.time() + 30
+        while w.rows().get("feat/b") is None and time.time() < deadline:
+            time.sleep(0.01)
+        w.checker.hold.set()
+        t1.join(60)
+        t2.join(60)
+        self.assertEqual(results, {"a": 0, "b": 0})
+        self.assertEqual(set(w.checker.threads), {"caller-a"}, "the second caller only waited")
+        self.assertEqual([(c["names"], c["also"]) for c in w.checker.calls], [(["feat/a"], ""), (["feat/b"], "tour/vulkan")])
+
+    def test_one_batch_runs_the_union_of_its_branches_also(self):
+        w = self.w
+        w.branch("feat/a", {"docs/a.md": "a"})
+        w.branch("feat/b", {"docs/b.md": "b"})
+        q = landing.Queue(w.plan / "landing-queue.tsv")
+        q.add(["feat/a"], "1", lambda b: "", also="tour/d3d11")
+        q.add(["feat/b"], "1", lambda b: "", also="tour/d3d11,unit/game")
+        L = w.landing()
+        self.assertEqual(L.land(["feat/a", "feat/b"]), 0)
+        self.assertEqual([(c["names"], c["also"]) for c in w.checker.calls], [(["feat/a", "feat/b"], "tour/d3d11,unit/game")])
 
     # --- what gate.py prints and reads ----------------------------------------------------------------------------
 
@@ -556,6 +617,16 @@ class Cases(unittest.TestCase):
         full = checker.command(self.tmp.name, ["b"], "full (no row names: x)")
         self.assertEqual(full[full.index("--scope") + 1], "full")
 
+    def test_the_checker_gives_the_landing_trees_gate_also_when_it_has_names(self):
+        args = gate.parser(land=True).parse_args(["b", "--tablet", "T"])
+        args.mode = "main"
+        checker = gate.GateChecker(args, say=lambda l: None)
+        cmd = checker.command(self.tmp.name, ["b"], "repo,build", "tour/d3d11,unit/game")
+        self.assertEqual(cmd[cmd.index("--also") + 1], "tour/d3d11,unit/game")
+        self.assertEqual(cmd[cmd.index("--scope") + 1], "repo,build")
+        self.assertNotIn("--also", checker.command(self.tmp.name, ["b"], "repo,build"))
+        self.assertNotIn("--also", checker.command(self.tmp.name, ["b"], "repo,build", ""))
+
     def test_gate_land_is_a_command_of_gate_py(self):
         w = self.w
         w.branch("docs/x", {"docs/x.md": "x\n"})
@@ -581,6 +652,122 @@ class Cases(unittest.TestCase):
             with contextlib.redirect_stderr(err):
                 self.assertEqual(gate.main(["land"]), 2)
         self.assertIn("one of the two", err.getvalue())
+
+
+def args_for(*argv):
+    return gate.parser().parse_args(list(argv))
+
+
+class AlsoTest(unittest.TestCase):
+    """`--also` in gate.py: the names are checked against the gate's own, a known one is added to a landing's checks, an unknown one
+    refuses the landing before anything runs."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        cls.known, cls.planned, problems = gate.read_lists()
+        assert not problems, problems
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def args(self, mode="main"):
+        a = args_for("--main", "--tablet", "T", "--work", self.tmp.name)
+        a.mode = mode
+        return a
+
+    def test_a_known_name_adds_its_checks_and_what_they_need_to_the_landings_checks(self):
+        plan = scope.Plan(["repo"], False, [], {})
+        plain = gate.landing_selection(self.args(gate.LAND_LEVEL), plan, [], self.known, self.planned)
+        self.assertIn("repo/code", plain)
+        self.assertNotIn("tour/vulkan", plain, "the groups of the plan name no tour")
+        more = gate.landing_selection(self.args("main"), plan, ["tour/vulkan"], self.known, self.planned)
+        self.assertLessEqual({"repo/code", "tour/vulkan", "build/windows", "data/RMGE01"}, more,
+                             "the check, what it needs, and the plan's own")
+        self.assertNotIn("tour/d3d11", more, "only the names asked for")
+        self.assertNotIn("tour/d3d12", more)
+        both = gate.landing_selection(self.args("main"), plan, ["tour/vulkan", "unit/game"], self.known, self.planned)
+        self.assertLessEqual({"tour/vulkan", "unit/game"}, both)
+
+    def test_a_check_only_the_nightly_run_has_is_a_check_of_the_main_level(self):
+        main_names = set(gate.level_needs(self.args("main"), "main", self.known, self.planned))
+        land_names = set(gate.level_needs(self.args("main"), gate.LAND_LEVEL, self.known, self.planned))
+        self.assertIn("tour-RMGP01/d3d12", main_names)
+        self.assertNotIn("tour-RMGP01/d3d12", land_names, "a landing has no other disc's tour: --also brings it")
+        plan = scope.Plan(["repo"], False, [], {})
+        chosen = gate.landing_selection(self.args("main"), plan, ["tour-RMGP01/d3d12"], self.known, self.planned)
+        self.assertIn("tour-RMGP01/d3d12", chosen)
+        self.assertIn("data/RMGP01", chosen, "and the data it needs")
+
+    def test_a_known_name_is_no_problem_and_an_unknown_name_lists_the_known_ones(self):
+        self.assertEqual(gate.also_problem(self.args(), ["tour/d3d11", "unit/game"], self.known, self.planned), "")
+        text = gate.also_problem(self.args(), ["tour/d3d11", "tour/d3d99"], self.known, self.planned)
+        self.assertIn("--also names no check the gate knows: tour/d3d99.", text)
+        self.assertNotIn("knows: tour/d3d11", text)
+        self.assertIn("The checks a landing can run are: ", text)
+        self.assertIn("tour/d3d12", text.split("are: ")[1].split(", "))
+        self.assertIn("unit/game", text)
+
+    def test_a_check_only_the_long_run_has_is_said_so(self):
+        text = gate.also_problem(self.args(), ["soak"], self.known, self.planned)
+        self.assertEqual(text, "--also: soak only the long run (gate.py --long) has; a landing cannot run it")
+        both = gate.also_problem(self.args(), ["soak", "nothing/here"], self.known, self.planned)
+        self.assertIn("no check the gate knows: nothing/here", both)
+        self.assertIn("soak only the long run", both)
+
+    def refused(self, argv):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = gate.main(argv)
+        return code, out.getvalue(), err.getvalue()
+
+    def test_gate_land_refuses_an_unknown_name_before_anything_is_queued_or_run(self):
+        plan_dir = pathlib.Path(self.tmp.name) / "refused"
+        plan_dir.mkdir(exist_ok=True)
+        checker_made = []
+        saved = gate.GateChecker
+        gate.GateChecker = lambda args: checker_made.append(args)
+        try:
+            code, out, err = self.refused(["land", "docs/x", "--also", "tour/d3d12,tour/nowhere", "--queue-file", str(plan_dir / "q.tsv"),
+                                           "--landing-tree", str(plan_dir / "tree"), "--failures", str(plan_dir / "f.tsv"),
+                                           "--live", str(plan_dir / "live")])
+        finally:
+            gate.GateChecker = saved
+        self.assertEqual(code, 2)
+        self.assertIn("gate.py: --also names no check the gate knows: tour/nowhere. The checks a landing can run are: ", err)
+        self.assertEqual(out.strip(), "VERDICT not-judged")
+        self.assertFalse((plan_dir / "q.tsv").exists(), "nothing was put in the queue")
+        self.assertEqual(checker_made, [], "no checker was made, so no run")
+        self.assertFalse((plan_dir / "tree").exists())
+
+    def test_gate_land_with_a_known_name_hands_it_to_the_runner(self):
+        w_tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(w_tmp.cleanup)
+        w = World(w_tmp.name)
+        w.branch("docs/x", {"docs/x.md": "x\n"})
+        saved = gate.GateChecker, gate.TREE
+        gate.GateChecker = lambda args: w.checker
+        gate.TREE = w.src
+        try:
+            code, out, err = self.refused(["land", "docs/x", "--also", "tour/d3d11,unit/game", "--queue-file", str(w.plan / "q.tsv"),
+                                           "--landing-tree", str(w.tree), "--failures", str(w.plan / "f.tsv"),
+                                           "--live", str(w.plan / "live")])
+        finally:
+            gate.GateChecker, gate.TREE = saved
+        self.assertEqual(code, 0, out + err)
+        self.assertEqual(w.checker.calls[0]["also"], "tour/d3d11,unit/game")
+
+    def test_also_without_scope_and_with_a_tablet_check_without_a_tablet_are_refused(self):
+        code, out, err = self.refused(["--main", "--also", "tour/d3d12", "--tablet", "T"])
+        self.assertEqual(code, 2)
+        self.assertIn("--also goes with --scope", err)
+        code, out, err = self.refused(["--main", "--move", "--scope", "repo", "--also", "tour/tablet"])
+        self.assertEqual(code, 2)
+        self.assertIn("needs the tablet's serial", err)
+        code, out, err = self.refused(["land", "--queue", "--also", "tour/d3d12", "--queue-file", str(pathlib.Path(self.tmp.name) / "q2.tsv")])
+        self.assertEqual(code, 2)
+        self.assertIn("--also goes with branches", err)
 
 
 def main():
