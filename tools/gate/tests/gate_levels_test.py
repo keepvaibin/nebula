@@ -275,7 +275,7 @@ def main():
         args = gate.parser().parse_args(["--main", "--move"])
         longer = gate.parser().parse_args(["--main", "--move", "--github-wait", "180"])             if "--github-wait" in gate.parser().format_help() else None
         check(longer is not None and args.github_wait == 120 and longer.github_wait == 180
-              and "rule.wait(args.github_wait" in __import__("inspect").getsource(gate.main),
+              and "rule.wait(args.github_wait" in __import__("inspect").getsource(gate.run_main),
               "--github-wait sets the move's wait for GitHub, 120 minutes unless given")
         asked = [0]
 
@@ -316,7 +316,8 @@ def main():
         c1 = commit("c1")
         env = {k: v for k, v in os.environ.items() if k != gate.ALLOWED_ENV}
         r = sh(git, "push", "origin", "%s:refs/heads/main" % c1, env=env)
-        check(r.returncode != 0 and "main moves only through" in r.stderr, "a plain push to main is refused: %s" % r.stderr[-200:])
+        check(r.returncode != 0 and main_push_guard.REFUSAL in r.stderr and "main moves only through gate.py land <branch>" in r.stderr
+              and "--move" not in r.stderr, "a plain push to main is refused with the one way that exists: %s" % r.stderr[-200:])
         r = sh(git, "push", "origin", ":refs/heads/main", env=env)
         check(r.returncode != 0 and "never deleted" in r.stderr, "deleting main is refused")
         r = sh(git, "push", "origin", "%s:refs/heads/side" % c1, env=env)

@@ -428,7 +428,7 @@ def lines_and_verdict_json(s, check):
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
         code = gate.main(["--main", "--work", str(s.work), "--board", "", "--status", ""])
     check(code == 2 and out.getvalue().splitlines()[-1] == "VERDICT not-judged", "a refused start ends VERDICT not-judged, exit 2")
-    check("if args.move and code == 0" in inspect.getsource(gate.main) and "kinds.keep_base" in inspect.getsource(gate.main),
+    check("if args.move and code == 0" in inspect.getsource(gate.run_main) and "kinds.keep_base" in inspect.getsource(gate.run_main),
           "main moves only on a pass, and its build is kept then")
 
 

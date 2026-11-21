@@ -177,7 +177,7 @@ What every test must be for that:
 
 While `gate.lock` is held, other builds on the machine use at most 8 jobs.
 
-**The time is watched.** Every result holds each check's seconds, and `gate-runs/history.tsv` gets one line per run. A main
+**The time is watched.** Every result holds each check's seconds, and `D:/NebulaWork/build/gate-runs/history.tsv` gets one line per run. A main
 gate over 30 minutes is a ledger row for Agent 1; the answer is more parts side by side, never fewer checks.
 
 ---
@@ -213,10 +213,10 @@ declares it. A picture with no approved copy is `new`: it never fails a run.
   names is `fail`. A line that names no differing picture is stale: the check `pictures/declared` of a main gate is `tool`
   (`env` when the tablet's pictures were not taken, since they cannot be told from it).
 - *What a run leaves.* In its folder: `new-pictures.tsv` (one line for each new or declared picture, complete enough to be its
-  approved row), the pictures' files and the sheet to look at, `new-pictures/sheet/review.html`. The summary prints the count
+  approved row), the pictures' files and the sheet to look at, `D:/NebulaWork/build/gate-runs/<run folder>/new-pictures/sheet/review.html`. The summary prints the count
   and the sheet's path.
 - *Approval at the landing.* When a run with `--move` has passed (and GitHub is green) and left new pictures, the gate calls
-  `pictures.approve_landing` (`gate.py approve_pictures`) before it moves main: it puts the files in the picture store, adds or
+  `pictures.approve_landing` (called by `approve_pictures` in `gate.py`) before it moves main: it puts the files in the picture store, adds or
   replaces the rows, removes `PICTURES-CHANGE.txt`, and makes ONE commit on top of the tested commit that touches only those
   files (message `pictures: N approved for <the tests>`, the repository's own identity). Then it runs the picture checks again
   on the same run folders (no game runs); they must all be `pass`, else nothing moves and the result is `tool`. Only then
@@ -273,7 +273,7 @@ They need the machine alone, so they are not in levels 1 and 2.
 
 - **The speed measure** (`tools/measure/measure.py`): the play route (`tests/measure/route`, one heavy stage, three minutes in real time, a visible window, no sound) on Direct3D 12, Vulkan, Direct3D 11, Direct3D 12 held to four processors (`d3d12-4cores`) and the tablet. It starts after every move of main and in the long run. A player never sees it; it tells whether a change made the game slower.
   - *Commands.* `measure.py run --bin BIN --work WORK --commit SHA [--runs ...] [--history FILE] [--pending FILE]` measures. `measure.py keep FILE [--history H]` adds the lines of a `--pending` file to the history (a line already there is not added twice). `measure.py anchor --commit SHA` marks a commit's trusted lines as the start of the native work. `measure.py accept --commit SHA` restarts the baseline after a slowdown that was looked at and accepted. `measure.py digest RUN_FOLDER` prints one run's figures.
-  - *History.* `gate-runs/measure-history.tsv`, one line per run, holding main's commits only. The nightly run and a move of main write their lines at once. A measure inside a landing is to run with `--pending FILE`: it compares with the history as usual but writes its trusted lines to FILE, and the gate calls `keep` when the landing has moved main (the gate's `measure/step` checks, below).
+  - *History.* `D:/NebulaWork/build/gate-runs/measure-history.tsv`, one line per run, holding main's commits only. The nightly run and a move of main write their lines at once. A measure inside a landing is to run with `--pending FILE`: it compares with the history as usual but writes its trusted lines to FILE, and the gate calls `keep` when the landing has moved main (the gate's `measure/step` checks, below).
   - *Figures.* Judged: the 99th-percentile gap between pictures (`gap_p99_ms`), late pictures a minute (`late_per_min`), the render thread's time per picture (`render_ms`), the graphics card's time per picture (`gpu_ms`, only where the renderer gives it; else "not measured"), the most memory held (`memory_mb`), the median game step (`step_ms`) and its 99th percentile (`step_p99_ms`). Shown and never judged: the longest gap (`gap_max_ms`), the longest step (`step_max_ms`) and the steps over 18 ms (`steps_over_18`): one slow frame in three minutes is not a change in the game.
   - *Worse.* A figure is compared with the median of the last ten trusted runs with the same key (computer, graphics card, run kind pc, pc-4cores or tablet, renderer, scene, picture size, rate). It is worse only beyond the largest of three times the spread (median absolute deviation times 1.4826), 5% of the median and the figure's floor: 0.25 ms for the gap figures, 0.02 ms for the step, render and card times, 2 for late pictures a minute, 32 MB for memory (so a median of 0 never gives a band of 0). With fewer than five trusted runs it says "no baseline yet". A run with a worse figure is measured again once, by itself; worse twice is WORSE (exit 1): a ledger row.
   - *Not trusted* (exit 3, no history line, compared with nothing), each with its own plain reason: a compiler, build tool or another copy of the game was running (the measure waits for a quiet machine up to 30 minutes first); the graphics card was used by other programs for more than 10% (the desktop's compositor, `dwm.exe`, is not counted: it draws the game's window too); other programs used more than 10% of all the processors' time over the run; the game's window was minimized, covered (less than half of it visible, the windows above it subtracted as rectangles), the active window, or the pointer moving over it (the runner's `window-watch.txt`; a pointer that only rests under the window, as the owner's does where the window comes up, is not counted: a window that takes no focus reads no pointer that does not move). The tablet's run does not read the PC's load. A busy PC gives "not trusted", never a false "worse".
@@ -322,12 +322,12 @@ Agent 1 builds these into `tools/gate`; each has a test that fails without it.
 
 | Tool | What it does |
 |---|---|
-| `gate.py --quick`, `--main`, `--long`, `--final` | The four levels. `--full` goes away |
+| `gate.py --quick`, `--main`, `--long`, `--final` | The four levels |
 | `--main --move` | Only the landing runner's own call: takes the lock, runs, reads GitHub (before the move for `github-first`, after it for `github`), moves main, writes the board, frees the lock |
 | `--only CHECK` | One check alone, for tracing a red main |
 | The two lists | Read by every level, with the rules of section 4 |
 | A pre-push hook | Refuses a push to main unless the gate recorded that commit as allowed |
-| `gate-runs/history.tsv` | One line per run: commit, level, result, seconds per check |
+| `D:/NebulaWork/build/gate-runs/history.tsv` | One line per run: commit, level, result, seconds per check |
 | `D:\NebulaWork\plan\STATUS.md` | Written after every gate and every move (section 12) |
 
 ---

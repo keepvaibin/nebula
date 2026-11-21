@@ -119,7 +119,7 @@ def main():
         # The pre-push checks (census, ratchet: a work tree and an inventory) are machine work: they run once the lock
         # is held, never before it (11-18: they ran beside a measurement while the gate waited).
         import inspect
-        source = inspect.getsource(gate.main)
+        source = inspect.getsource(gate.run_main)
         check(0 < source.find("take_gate_lock(lock, holder") < source.find("push_checks(commit)"),
               "the pre-push checks run after the gate lock is taken")
 
