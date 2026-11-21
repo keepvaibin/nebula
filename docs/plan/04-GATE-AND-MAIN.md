@@ -195,11 +195,41 @@ It is the only place Linux and Mac code is built, so it is part of the main gate
 **Pictures.** A changed picture fails the gate. It is approved only in a commit that names the cause: the ledger row or the
 intended change, and which pictures. A picture whose change has no known cause is never approved; it is a fault to trace.
 
-**Flaky tests.** The gate retries nothing. If a check fails and the same commit passes it on a second run:
+**Kinds of result.** Every check and every test ends as one kind (`tools/gate/kinds.py`; the runner writes `"kind"` into each
+test's `result.json`):
 
-- that is a fault, in the test or in the game. It gets a ledger row at once, with both logs kept;
-- the second run does not count as the pass. The cause is found, or the test goes on the known-failures list with its row while its owner fixes it;
-- two runs of fixed steps that differ are a determinism fault in the game or the harness, and are treated as one.
+| Kind | Meaning | Fails a run? |
+|---|---|---|
+| `pass` | It passed. | no |
+| `fail` | The game or the change is wrong: once the game has started, a crash dump, frames that stopped, an exit code other than 0, a loss report that is not all 0, a wrong step hash, a picture that differs from its approved copy. | yes |
+| `tool` | The test tool broke: the runner or a script raised, a file the runner must provide is missing, the game could not be started at all, a result file is missing or cannot be read, a check ran another number of cases than its suite lists, or none. | no: the run is not judged; the tool is fixed and the check run again |
+| `env` | The machine was not fit: the tablet does not answer, the drive is full, another graphics card or driver than the approved pictures name, a lock not had in time. The tablet's `owed` state is `env`. | no: not judged (an owed tablet part does not change the verdict) |
+| `flake` | It failed, then passed when run again alone. | no |
+| `main` | It failed again alone and fails the same way on main's build: main is at fault. | no |
+
+A check's kind is the worst of its tests, in the order fail, tool, env, flake, main, pass. The run ends with one line
+`KIND <kind> <check> <test> :: <first line of its message>` for each result that is not a pass (those of kind `main`
+first), then the last line `VERDICT pass` (exit 0), `VERDICT fail` (a fail is left: exit 1) or `VERDICT not-judged` (no
+fail, but a tool or env: exit 2). The same facts are in `verdict.json` in the run's folder. Main moves only on
+`VERDICT pass`.
+
+**Run again alone.** After every lane has ended, each test that is `fail` is run once more by itself: the same build, no
+other game process, a fresh folder `rerun/` in the run's folder. If it passes, its kind is `flake` and one line goes to
+`D:/NebulaWork/plan/native/flakes.tsv` (time, test, renderer, commit, the first failure's message); its second run takes the
+first's place in the run's folder, the first is kept in `rerun/first/`. When that file holds three lines for one test and
+renderer within seven days, the test goes to `D:/NebulaWork/plan/native/set-aside.tsv` and the gate says to open a ledger row for it (the files live outside the repository, so a test run never changes the tree).
+A test listed there still runs and is reported (`set aside` on its line), and its `fail` does not fail a run; the gate
+prints the set-aside tests at the top of every summary, and a line leaves the file when its row is closed. The tablet's tests
+are not run again (the test app is removed when the tablet's part ends).
+
+**Check against main.** A test that is still `fail` after its second run is run alone on main's build, but only when its
+own definition (its test folder, or for a generated tour the files that write it) is the same on `origin/main` and in the tree
+under test; otherwise the check is skipped, with a line saying so, and the test stays `fail`. Main's build is kept by the
+gate in `D:/NebulaWork/build/base-bins/<commit>/bin`, a copy made whenever the gate moves main (the two newest are kept); with
+no copy for `origin/main` the check is skipped too. A test that fails there with the same first message is `main`: it does
+not fail the run, it is printed first in the summary, and the gate says to open a ledger row for it.
+
+Two runs of fixed steps that differ are a determinism fault in the game or the harness, and are treated as one.
 
 ---
 

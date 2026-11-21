@@ -26,19 +26,32 @@ starts the game for a test goes through here.
 --only CHECK[,CHECK]: only the checks those shell patterns name, and the checks they need (for tracing a red main).
 --serial: the parts that start the game one after another; by default they run side by side (section 7).
 
-Each check ends in one state:
-  pass     it passed;
-  fail     it failed, or it exists and could not run;
+Every check and every test ends as one kind (tools/gate/kinds.py; docs/plan/04-GATE-AND-MAIN.md section 9):
+  pass   it passed;
+  fail   the game or the change is wrong: the only kind that fails a run;
+  tool   the test tool broke: the runner or a script raised, a result file is missing or cannot be read, a check ran
+         another number of cases than it declares, or none;
+  env    the machine was not fit: the tablet away, the drive full, another graphics card than the approved pictures
+         name, a lock not had in time;
+  flake  it failed, then passed when run again alone (a line in <plan>/native/flakes.tsv); the third flake of one test
+         and renderer in seven days sets the test aside (<plan>/native/set-aside.tsv): it still runs and is reported,
+         its fail does not count;
+  main   it failed again alone and fails the same way on main's kept build (<build>/base-bins/<commit>): main is at
+         fault, not the change.
+After every lane has ended, each test that is fail is run once more alone, then on main's build (settle).
+Each check's state: those kinds, and
   known    it failed only in tests tools/gate/known-failures.tsv lists for it (each with an open ledger row); a listed
            test that passes fails the check: its line must go;
   planned  it is not built yet and tools/gate/planned.tsv lists it for this level; a listed check that runs fails;
-  owed     the tablet's part, when the tablet does not answer, its lock stays held, or it leaves during the run: the
-           part runs on main's newest commit first thing when the tablet is back; the board says so.
-The run passes when no check failed.
+  owed     env of the tablet's part, when the tablet does not answer, its lock stays held, or it leaves during the run:
+           the part runs on main's newest commit first thing when the tablet is back; the board says so. It does not
+           change the verdict.
 
-It writes one result (JSON and text, side by side), one line in <work>/history.tsv and the owner's page
-(tools/gate/status.py, --status), and exits 1 when a check failed, 0 when none did, 2 when it could not start (bad
-options, a lock held, a rule of section 5 not met).
+It writes one result (JSON and text, side by side), verdict.json, one line in <work>/history.tsv and the owner's page
+(tools/gate/status.py, --status). Its last lines: one `KIND <kind> <check> <test> :: <message>` for each result that
+is not a pass, then `VERDICT pass` (exit 0), `VERDICT fail` (a fail is left; exit 1) or `VERDICT not-judged` (no fail,
+but a tool or env; exit 2: the check is run again once the tool is fixed or the machine is fit). Exit 2 also when it
+could not start (bad options, a lock held, a rule of section 5 not met). Main moves only on VERDICT pass.
 """
 import argparse
 import ctypes
@@ -60,6 +73,7 @@ TREE = HERE.parent.parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(TREE / "tools" / "verify"))
 import gate_tour  # noqa: E402
+import kinds  # noqa: E402
 import step_hash  # noqa: E402
 
 LEVELS = ("quick", "main", "long", "final")
@@ -114,6 +128,15 @@ KNOWN_COLUMNS = ("check", "test", "ledger row", "first seen", "what")
 PLANNED_COLUMNS = ("check", "level", "plan step or ledger row", "owner")
 CLOSED = ("fixed", "not-a-fault", "decided", "out-of-scope")
 MAIN_GATE_SECONDS = 30 * 60
+# The runner, and where a run keeps what lies outside the repository, so that a test run never changes the tree: the
+# flakes and the set-aside list (kinds.py), and main's kept builds (a copy of the bin folder each time the gate moves
+# main, the two newest kept). Tests of this file put their own folders in these.
+RUNNER = TREE / "tools" / "lumacore" / "luma_test.py"
+NATIVE = pathlib.Path("D:/NebulaWork/plan/native")
+FLAKES = NATIVE / "flakes.tsv"
+SET_ASIDE = NATIVE / "set-aside.tsv"
+BASE_BINS = pathlib.Path("D:/NebulaWork/build/base-bins")
+MAIN_REF = "origin/main"
 
 
 # The two lists ----------------------------------------------------------------------------------------------------
@@ -187,21 +210,37 @@ def read_lists(known_path=KNOWN, planned_path=PLANNED, ledger_path=LEDGER):
     return known, planned, problems
 
 
+def kind_of_verdict(verdict):
+    """The kind of a runner verdict (luma_test.py kind_of, the one place it is decided), for a result that names none."""
+    global _RUNNER_MODULE
+    if _RUNNER_MODULE is None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("luma_test_kinds", TREE / "tools" / "lumacore" / "luma_test.py")
+        _RUNNER_MODULE = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(_RUNNER_MODULE)
+    return _RUNNER_MODULE.kind_of(verdict)
+
+
+_RUNNER_MODULE = None
+
+
 def judge(passed, detail, verdicts, known):
     """(state, detail) of a check's outcome: `verdicts` {test: verdict} when the check runs tests (None when it does
-    not, or when its runs are not all reported), `known` its known-failures lines {test: row}."""
+    not), `known` its known-failures lines {test: row}."""
     if verdicts is None:
         return ("pass" if passed else "fail"), detail
-    listed_passing = sorted(t for t in known if verdicts.get(t) == "pass")
-    if listed_passing:
-        return "fail", detail + "; passes but is listed in known-failures.tsv, remove the line: " + ", ".join(listed_passing)
-    if passed:
-        return "pass", detail
-    unexpected = [t for t, v in verdicts.items() if v != "pass" and t not in known]
-    listed_failing = sorted(t for t in known if t in verdicts and verdicts[t] != "pass")
-    if not unexpected and listed_failing:
-        return "known", detail + "; known: " + ", ".join("%s (%s)" % (t, known[t]["ledger row"]) for t in listed_failing)
-    return "fail", detail
+    cases = kinds.cases_of_verdicts(verdicts, kind_of_verdict)
+    records, state = kinds.judge_cases(cases, known, (), passed)
+    return state, with_notes(detail, records)
+
+
+def with_notes(detail, records):
+    """A check's detail with what its listed tests say: known ones, and a listed test that passes (its line must go)."""
+    known = ["%s (%s)" % (r["test"], r["note"][7:-1]) for r in records if r["note"].startswith("known (")]
+    listed = sorted(r["test"] for r in records if r["message"].startswith("passes but is listed"))
+    if listed:
+        return detail + "; passes but is listed in known-failures.tsv, remove the line: " + ", ".join(listed)
+    return detail + ("; known: " + ", ".join(known) if known else "")
 
 
 def level_has(level, planned_level):
@@ -210,6 +249,22 @@ def level_has(level, planned_level):
 
 
 # The run ----------------------------------------------------------------------------------------------------------
+
+
+# How a state reads in a row: the kinds that need a person's eye in capitals (tools/plan/plan.py reads these words).
+LABELS = {"fail": "FAIL", "tool": "TOOL", "env": "ENV", "flake": "FLAKE", "new": "NEW"}
+NOT_PASSED = ("fail", "tool", "env")
+STATES = ("pass", "known", "planned", "owed", "fail", "tool", "env", "flake", "main", "new")
+
+
+def default_records(state, detail):
+    """What a row without tests reports: nothing for a state that is a pass; the owed tablet is env that does not count;
+    a fail, tool or env is its own one result."""
+    if state == "owed":
+        return [kinds.record("-", "env", detail, counts=False, note="owed")]
+    if state in NOT_PASSED:
+        return [kinds.record("-", state, detail)]
+    return []
 
 
 class Gate:
@@ -225,6 +280,14 @@ class Gate:
         self.known = known or {}
         self.planned = planned or {}
         self.selected = selected
+        self.cases = {}
+        self.picture_jobs = []
+        self.tree = TREE
+        self.main_ref = MAIN_REF
+        self.open_rows = []
+        self.aside = kinds.read_aside(SET_ASIDE)
+        self.verdict = None
+        self.lines = []
         self.started = time.time()
         self.commit = git("rev-parse", "--short", "HEAD")
         self.dirty = git("status", "--porcelain") != ""
@@ -257,8 +320,8 @@ class Gate:
             self.local.sink = sinks[i]
             try:
                 lanes[i]()
-            except Exception as e:  # noqa: BLE001 - a lane that breaks is a failed check, said plainly
-                self.record("lane/%d" % i, "fail", 0.0, "%s: %s" % (type(e).__name__, e))
+            except Exception as e:  # noqa: BLE001 - a lane that breaks is the gate's own fault: tool, said plainly
+                self.record("lane/%d" % i, "tool", 0.0, "%s: %s" % (type(e).__name__, e))
         threads = [threading.Thread(target=go, args=(i,), name="lane-%d" % i) for i in range(len(lanes))]
         for thread in threads:
             thread.start()
@@ -271,34 +334,59 @@ class Gate:
             self.needs.setdefault(name, set()).update(needs)
         return self.selected is None or name in self.selected
 
-    def record(self, name, state, seconds, detail, log=None):
-        row = {"check": name, "state": state, "passed": state != "fail", "seconds": seconds, "detail": detail,
-               "log": str(log) if log is not None and pathlib.Path(log).exists() else None}
+    def record(self, name, state, seconds, detail, log=None, records=None, pending=False):
+        row = {"check": name, "state": state, "passed": state not in NOT_PASSED, "seconds": seconds, "detail": detail,
+               "log": str(log) if log is not None and pathlib.Path(log).exists() else None,
+               "records": default_records(state, detail) if records is None else records}
+        if pending:
+            row["pending"] = True
         with self.lock:
             self.rows().append(row)
-            print("%-34s %-7s %7.1f s  %s" % (name, state if state != "fail" else "FAIL", seconds, detail), flush=True)
+            print("%-34s %-7s %7.1f s  %s" % (name, "again" if pending else LABELS.get(state, state), seconds, detail),
+                  flush=True)
 
     def check(self, name, fn, needs=()):
-        """Runs one check. fn returns (passed, detail) or (passed, detail, {test: verdict}); an exception is a failure
-        with its text. True unless it failed; None when --only leaves it out."""
+        """Runs one check. fn returns (passed, detail), or (passed, detail, tests) where tests is a kinds.Cases or
+        {test: verdict}, or (passed, detail, tests, kind) where `kind` is what a failure of this check is (tool or env
+        where it is not the change's: the default is fail). An exception is the tool's: kind tool, with its text. True
+        unless it did not pass; None when --only leaves it out. A check whose tests failed is run again once every lane has
+        ended (settle): its row is first printed `again`."""
         if not self.wanted(name, needs):
             return None
         if self.dry:
             return True
         t0 = time.time()
         log = self.work / ("%s.log" % name.replace("/", "-").replace(" ", "-"))
-        verdicts = None
+        cases = None
         try:
             out = fn(log)
             passed, detail = out[0], out[1]
-            verdicts = out[2] if len(out) > 2 else None
-        except Exception as e:  # noqa: BLE001 - every failure of a check is the check's result
-            passed, detail = False, "%s: %s" % (type(e).__name__, e)
-        state, detail = judge(bool(passed), detail, verdicts, self.known.get(name, {}))
+            tests = out[2] if len(out) > 2 else None
+            fail_kind = out[3] if len(out) > 3 and out[3] else "fail"
+            if isinstance(tests, kinds.Cases):
+                cases = tests
+            elif tests is not None:
+                cases = kinds.cases_of_verdicts(tests, kind_of_verdict)
+            if cases is not None:
+                records, state = kinds.judge_cases(cases, self.known.get(name, {}), self.aside, bool(passed))
+                detail = with_notes(detail, records) if detail else kinds.describe(cases, records)
+            else:
+                state = "pass" if passed else fail_kind
+                records = [] if passed else [kinds.record("-", fail_kind, detail)]
+        except Exception as e:  # noqa: BLE001 - a check that raised is the tool's fault (a full drive: the machine's)
+            state = "env" if kinds.drive_full(e) else "tool"
+            detail = "%s%s: %s" % ("the drive is full: " if state == "env" else "", type(e).__name__, e)
+            records = [kinds.record("-", state, detail)]
+            cases = None
         if name in self.planned:
             state, detail = "fail", "it runs, so its line in planned.tsv must go; " + detail
-        self.record(name, state, round(time.time() - t0, 1), detail, log)
-        return state != "fail"
+            records = [kinds.record("-", "fail", detail)]
+        pending = (cases is not None and cases.source is not None
+                   and any(r["kind"] == "fail" and r["counts"] and r["test"] != "-" and not r["final"] for r in records))
+        if pending:
+            self.cases[name] = cases
+        self.record(name, state, round(time.time() - t0, 1), detail, log, records, pending=pending)
+        return state not in NOT_PASSED
 
     def missing(self, name, why, needs=()):
         """A check that exists and cannot run here: a failure, said plainly."""
@@ -313,10 +401,36 @@ class Gate:
     def owe_last(self, why):
         """The last check failed because the tablet left: owed."""
         row = self.rows()[-1]
-        if row["state"] == "fail":
+        if row["state"] in ("fail", "env"):
             row["state"], row["passed"] = "owed", True
             row["detail"] = "%s; %s" % (why, row["detail"])
+            row["records"] = default_records("owed", row["detail"])
+            row.pop("pending", None)
             print("%-34s %-7s (%s)" % (row["check"], "owed", why), flush=True)
+
+    def settle(self):
+        """After every lane has ended: each test that is fail is run once more alone, a pass is flake; one that fails
+        again is run alone on main's build. The rows' states are settled and printed again."""
+        pending = [r for r in self.results if r.get("pending")]
+        if self.dry or not pending:
+            return
+        settler = kinds.Settler(FLAKES, SET_ASIDE, self.commit, say=lambda text: print("gate.py: " + text, flush=True))
+        for row in pending:
+            cases = self.cases[row["check"]]
+            if STOPPED.is_set():
+                self.open_rows.append("the second runs of %s were not made: the run was stopped" % row["check"])
+                records = row["records"]
+            else:
+                records = settler.settle(row["check"], cases, row["records"])
+            row["records"] = records
+            row["state"] = kinds.state_of(records)
+            row["passed"] = row["state"] not in NOT_PASSED
+            row["detail"] = kinds.describe(cases, records)
+            row.pop("pending", None)
+            print("%-34s %-7s %7.1f s  %s" % (row["check"], LABELS.get(row["state"], row["state"]), row["seconds"],
+                                              row["detail"]), flush=True)
+        self.open_rows += settler.open_rows
+        self.aside = kinds.read_aside(SET_ASIDE)
 
     def plan_rows(self):
         """The planned checks of this level that --only keeps."""
@@ -326,31 +440,38 @@ class Gate:
                 self.record(name, "planned", 0.0, "not built yet: %s (%s)" % (row["plan step or ledger row"], row["owner"]))
 
     def counts(self):
-        out = {s: 0 for s in ("pass", "known", "planned", "owed", "fail")}
+        out = {s: 0 for s in STATES}
         for r in self.results:
-            out[r["state"]] += 1
+            out[r["state"]] = out.get(r["state"], 0) + 1
         return out
 
     def write(self):
-        failed = [r for r in self.results if r["state"] == "fail"]
+        if not self.results:
+            self.record("gate/none", "tool", 0.0, "no check ran")
+        self.verdict = kinds.verdict_of([r["records"] for r in self.results])
+        self.code = kinds.EXIT_OF[self.verdict]
+        passed = self.verdict == "pass"
         counts = self.counts()
         seconds = round(time.time() - self.started, 1)
+        self.lines = kinds.kind_lines(self.results)
+        aside = sorted("%s %s" % k for k in self.aside)
         out = {"gate": 2, "mode": self.level, "commit": self.commit, "dirty": self.dirty, "run": self.name,
                "only": self.args.only or None,
                "started": datetime.datetime.fromtimestamp(self.started).isoformat(timespec="seconds"),
-               "seconds": seconds, "passed": not failed and bool(self.results), "counts": counts,
-               "checks": self.results}
+               "seconds": seconds, "passed": passed, "verdict": self.verdict, "counts": counts, "checks": self.results}
         path = pathlib.Path(self.args.out) if self.args.out else self.work / "result.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
+        self.write_verdict()
         head = "gate %s %s%s%s: %s (%d checks: %s; %.0f s)" % (
             self.level, self.commit, " (uncommitted changes)" if self.dirty else "",
-            " only " + self.args.only if self.args.only else "", "PASS" if out["passed"] else "FAIL", len(self.results),
+            " only " + self.args.only if self.args.only else "", self.verdict.upper(), len(self.results),
             ", ".join("%d %s" % (n, s if s != "fail" else "failed") for s, n in counts.items() if n), seconds)
-        lines = [head] + ["  %-34s %-7s %s" % (r["check"], r["state"], r["detail"]) for r in self.results]
-        path.with_suffix(".txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        aside_line = ["set aside (still run, do not count): " + ", ".join(aside)] if aside else []
+        lines = aside_line + [head] + ["  %-34s %-7s %s" % (r["check"], r["state"], r["detail"]) for r in self.results]
+        path.with_suffix(".txt").write_text("\n".join(lines + self.lines) + "\n", encoding="utf-8")
         append_history(pathlib.Path(self.args.work) / "history.tsv", out)
-        if out["passed"] and not self.args.keep_runs and not self.args.out:
+        if passed and not self.args.keep_runs and not self.args.out:
             # The passed tests' working files are not evidence once the run passed (N-1060): the drive keeps its room.
             import prune_runs
             tests, freed = prune_runs.prune(self.work)
@@ -366,9 +487,26 @@ class Gate:
             shutil.copyfile(path, keep.with_suffix(".json"))
             shutil.copyfile(path.with_suffix(".txt"), keep.with_suffix(".txt"))
             print("recorded:", keep.with_suffix(".txt"))
+        for line in aside_line:
+            print("gate.py: " + line)
+        for text in self.open_rows:
+            print("gate.py: ledger row to open: " + text)
         print(head)
         print("result:", path)
-        return out["passed"]
+        for line in self.lines:
+            print(line)
+        return passed
+
+    def write_verdict(self, verdict=None, why=""):
+        """verdict.json in the run's folder: the verdict, and every result that is not a pass (the same facts as the KIND
+        lines of the run's end). `verdict` and `why` say when the run's last word is not its checks' (main not moved)."""
+        results = [dict(check=r["check"], **rec) for r in self.results for rec in r["records"]]
+        body = {"verdict": verdict or self.verdict, "checks_verdict": self.verdict, "why": why, "run": self.name,
+                "level": self.level, "commit": self.commit, "exit": kinds.EXIT_OF[verdict or self.verdict],
+                "lines": self.lines, "results": results,
+                "set_aside": sorted("%s %s" % k for k in self.aside), "open_rows": self.open_rows,
+                "checks": [{"check": r["check"], "state": r["state"], "detail": r["detail"]} for r in self.results]}
+        (self.work / "verdict.json").write_text(json.dumps(body, indent=2) + "\n", encoding="utf-8")
 
 
 HISTORY_COLUMNS = ("started", "run", "level", "commit", "result", "seconds", "pass", "known", "planned", "owed",
@@ -382,7 +520,7 @@ def append_history(path, out):
     new = not path.exists()
     c = out["counts"]
     cells = (out["started"], out["run"], out["mode"], out["commit"] + ("+" if out["dirty"] else ""),
-             "pass" if out["passed"] else "fail", "%.0f" % out["seconds"], c["pass"], c["known"], c["planned"],
+             out["verdict"], "%.0f" % out["seconds"], c["pass"], c["known"], c["planned"],
              c["owed"], c["fail"], out["only"] or "-",
              " ".join("%s=%s/%.0f" % (r["check"], r["state"], r.get("seconds", 0.0)) for r in out["checks"]))
     with open(path, "a", encoding="utf-8") as f:
@@ -551,8 +689,17 @@ def unit_tests(g):
                     "-Dir", pathlib.Path(g.args.build_root) / "msvc"], log)
         text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")
         summary = next((l.strip() for l in text.splitlines() if "tests passed" in l), last_line(text))
-        return code == 0, summary
+        return counted(code, summary, text)
     return fn
+
+
+def counted(code, summary, text):
+    """(passed, summary[, None, kind]) of a ctest run: one that ran no test is tool, never a pass. ctest's summary says
+    'N tests failed out of M'."""
+    m = re.search(r"out of (\d+)", text)
+    if m is None or int(m.group(1)) == 0:
+        return False, "no test ran: " + summary, None, "tool"
+    return code == 0, summary
 
 
 def game_tests(g):
@@ -562,7 +709,7 @@ def game_tests(g):
                     "-Dir", pathlib.Path(g.args.build_root) / "game"], log)
         text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")
         summary = next((l.strip() for l in text.splitlines() if "tests passed" in l), last_line(text))
-        return code == 0, summary
+        return counted(code, summary, text)
     return fn
 
 
@@ -574,6 +721,8 @@ def rust_tests(g):
         text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")
         passed = sum(int(l.split()[3]) for l in text.splitlines() if l.startswith("test result:"))
         failed = sum(int(l.split()[5]) for l in text.splitlines() if l.startswith("test result:"))
+        if passed + failed == 0:
+            return False, "no test ran", None, "tool"
         return code == 0 and failed == 0, "%d passed, %d failed" % (passed, failed)
     return fn
 
@@ -617,6 +766,8 @@ def lumalink_tests(g):
         passed = sum(int(l.split()[3]) for l in text.splitlines() if l.startswith("test result:"))
         failed = sum(int(l.split()[5]) for l in text.splitlines() if l.startswith("test result:"))
         pin = (TREE / "tools" / "lumacore" / "lumalink.commit").read_text(encoding="utf-8").strip()
+        if passed + failed == 0:
+            return False, "no test ran (LumaLink %s)" % pin[:9], None, "tool"
         return code == 0 and failed == 0, "%d passed, %d failed (LumaLink %s)" % (passed, failed, pin[:9])
     return fn
 
@@ -678,7 +829,9 @@ def scripts(g, paths, extra=()):
             if run([sys.executable, "-X", "utf8", "-I", path, *args], log, cwd=TREE, timeout=900) != 0:
                 bad.append(path.stem)
         detail = "%d of %d pass" % (len(paths) - len(bad), len(paths))
-        return not bad and bool(paths), detail + ("; not: " + ", ".join(bad) if bad else "")
+        if not paths:
+            return False, "no script to run: nothing ran", None, "tool"
+        return not bad, detail + ("; not: " + ", ".join(bad) if bad else "")
     return fn
 
 
@@ -709,38 +862,151 @@ def watch_env(renderer, env=None):
     return out
 
 
-def harness(g, suite, renderer, label, device=None, bin_dir=None, env=None):
-    """One harness suite on one renderer, on this computer or on an Android device (its serial; the test app
-    prepared and the device's lock held by the gate). Passes when every test in it passed (a test whose disc has no
-    pak is not-run, which is not a pass). Its verdicts go with it when every test of the suite reported one, so the
-    known-failures list can be applied. `env`: more for the games' environment (the coverage build's counts)."""
-    def fn(log):
-        work = g.work / ("runs-%s-%s" % (label, renderer))
-        on_device = ["--device", device, "--bin", g.android_bin] if device else ["--bin", bin_dir or g.bin]
-        code = run([sys.executable, "-X", "utf8", "-I", TREE / "tools/lumacore/luma_test.py", "run", suite]
-                   + on_device + ["--work", work, "--who", "gate", "--lock", g.work / ("harness-%s-%s.lock" % (label, renderer)),
-                                  "--commit", g.commit, "--renderer", renderer], log,
-                   env=watch_env(renderer, dict(env or {}, LUMA_TEST_PAKS=g.args.paks)), cwd=g.args.build_root)
-        # The run's copies of the programs are not evidence: removed so the drive does not fill.
-        for d in work.rglob("bin"):
+def suite_layout(suite):
+    """(the folder name the runner files a suite's runs under, the tests it lists), the tests None for one test folder."""
+    suite = pathlib.Path(suite)
+    if suite.is_file() and suite.name == "suite.json":
+        return suite.parent.name, list(json.loads(suite.read_text(encoding="utf-8")).get("tests", []))
+    return suite.name, None
+
+
+# What defines a test that is not in the repository (a tour is written into the run's folder from these).
+GENERATED_TESTS = ("tools/gate/gate_tour.py", "tools/verify/tours", "tools/verify/step_hash.py")
+
+
+class HarnessSource:
+    """One harness suite on one renderer that can run its tests again (kinds.Settler's source): alone with the same
+    build, and on main's kept build. The first run is harness()'s; this class makes the command for all three."""
+
+    def __init__(self, g, suite, renderer, label, device=None, bin_dir=None, env=None):
+        self.g, self.suite, self.renderer, self.label = g, suite, renderer, label
+        self.device, self.bin_dir, self.env = device, bin_dir, env
+        self.suite_dir, self.listed = suite_layout(suite)
+        self.tag = "%s-%s" % (label, renderer)
+        self.second = None
+
+    def first_work(self):
+        return self.g.work / ("runs-%s" % self.tag)
+
+    def command(self, work, bin_dir, names, lock):
+        g = self.g
+        where = ["--device", self.device, "--bin", g.android_bin] if self.device else ["--bin", bin_dir]
+        cmd = [sys.executable, "-X", "utf8", "-I", RUNNER, "run", self.suite] + where
+        cmd += ["--work", work, "--who", "gate", "--lock", lock, "--commit", g.commit, "--renderer", self.renderer]
+        if names is not None and self.listed is not None:
+            cmd += [a for n in names for a in ("--test", n)]
+        return cmd
+
+    def start(self, work, bin_dir, names, log, lock):
+        """Runs the runner on the tests (None: all) into `work`; its exit code. The run's copies of the programs are not
+        evidence: removed so the drive does not fill."""
+        g = self.g
+        pathlib.Path(log).parent.mkdir(parents=True, exist_ok=True)
+        code = run(self.command(work, bin_dir, names, lock), log,
+                   env=watch_env(self.renderer, dict(self.env or {}, LUMA_TEST_PAKS=g.args.paks)),
+                   cwd=g.args.build_root)
+        for d in pathlib.Path(work).rglob("bin"):
             if d.is_dir():
                 shutil.rmtree(d, ignore_errors=True)
-        detail = summarize(log, renderer)
-        seen = verdicts(log, renderer)
-        tests = suite_tests(suite)
-        if tests is not None and len(seen) != tests:
-            detail += "; %d of %d tests reported" % (len(seen), tests)
-            seen = None
-        return code == 0 and not detail.startswith("0 of 0") and "; not:" not in detail, detail, seen
+        return code
+
+    def read(self, work, names):
+        return kinds.read_cases(work, self.suite_dir, names, self.renderer, kind_of_verdict)
+
+    def alone(self, names):
+        """The tests run again by themselves, nothing else running: the same build, a fresh folder rerun/ in the run's."""
+        g = self.g
+        self.second = g.work / "rerun" / self.tag
+        shutil.rmtree(self.second, ignore_errors=True)
+        self.start(self.second, self.bin_dir or g.bin, names, g.work / "rerun" / ("%s.log" % self.tag),
+                   g.work / ("rerun-%s.lock" % self.tag))
+        results, _, _ = self.read(self.second, names if self.listed is not None else None)
+        return results
+
+    def adopt(self, name):
+        """A test that failed once and passed alone: its second run takes the first's place in the run's folder (the first
+        goes to rerun/first/), so the pictures and replays that read the runs read the run that passed."""
+        first = self.first_work() / "runs" / self.suite_dir / name
+        second = self.second / "runs" / self.suite_dir / name
+        if not second.is_dir():
+            return
+        keep = self.g.work / "rerun" / "first" / self.tag
+        try:
+            keep.mkdir(parents=True, exist_ok=True)
+            if first.is_dir():
+                shutil.move(str(first), str(keep / name))
+            shutil.move(str(second), str(first))
+        except OSError as error:
+            print("gate.py: %s: the second run of %s could not take the first's place: %s" % (self.tag, name, error), flush=True)
+
+    def definition(self, name):
+        """The repository paths that define a test: its folder, or for a test written into the run's folder (a tour) what
+        writes it."""
+        folder = pathlib.Path(self.suite).parent / name if self.listed is not None else pathlib.Path(self.suite)
+        try:
+            return [folder.resolve().relative_to(pathlib.Path(self.g.tree).resolve()).as_posix()]
+        except ValueError:
+            return list(GENERATED_TESTS)
+
+    def on_main(self, names):
+        """The tests run alone on main's kept build, only those whose definition is main's: ({name: result}, {name: why
+        it was not run})."""
+        g = self.g
+        commit = git_in(g.tree, "rev-parse", g.main_ref)
+        base = kinds.base_of(BASE_BINS, commit)
+        if base is None:
+            return {}, {n: "no kept build of main %s in %s" % (commit[:9] or g.main_ref, BASE_BINS) for n in names}
+        skipped, run_names = {}, []
+        for n in names:
+            if kinds.definition_same(GIT, g.tree, g.main_ref, self.definition(n)):
+                run_names.append(n)
+            else:
+                skipped[n] = "its definition differs from %s" % g.main_ref
+        if not run_names:
+            return {}, skipped
+        work = g.work / "main" / self.tag
+        shutil.rmtree(work, ignore_errors=True)
+        self.start(work, str(base), run_names, g.work / "main" / ("%s.log" % self.tag), g.work / ("main-%s.lock" % self.tag))
+        results, _, _ = self.read(work, run_names if self.listed is not None else None)
+        return results, skipped
+
+
+def git_in(tree, *args):
+    r = subprocess.run([GIT, "-C", str(tree), *args], capture_output=True, text=True)
+    return r.stdout.strip() if r.returncode == 0 else ""
+
+
+def harness(g, suite, renderer, label, device=None, bin_dir=None, env=None):
+    """One harness suite on one renderer, on this computer or on an Android device (its serial; the test app
+    prepared and the device's lock held by the gate). Each test's kind is read from its result.json (the runner
+    writes it); a test that left none, a result that cannot be read, a number of results other than the suite lists,
+    and none at all are tool. Passes when every test passed (a test whose disc has no pak is not-run: env). The
+    results go with it, and a source that runs a failed test again alone and on main's build (not on a device: its
+    test app is removed when its part ends). `env`: more for the games' environment (the coverage build's counts)."""
+    def fn(log):
+        source = HarnessSource(g, suite, renderer, label, device, bin_dir, env)
+        work = source.first_work()
+        code = source.start(work, bin_dir or g.bin, None, log, g.work / ("harness-%s-%s.lock" % (label, renderer)))
+        results, declared, problem = source.read(work, source.listed)
+        said = last_line(pathlib.Path(log).read_text(encoding="utf-8", errors="replace"))
+        missing = [n for n, (k, m) in results.items() if k == "tool" and m.startswith("no result.json")]
+        if code == ENV_EXIT and len(missing) == len(results) and results:
+            # The runner would not start: the machine was not fit (the device away, a lock held), not the tests.
+            results = {n: ("env", said) for n in results}
+            problem = None
+        elif missing:
+            results.update({n: ("tool", "%s (the runner said: %s)" % (results[n][1], said)) for n in missing})
+        passes = all(k == "pass" for k, _ in results.values())
+        if problem is None and passes and code != 0:
+            problem = "the runner exited %d though every test passed" % code
+        elif problem is None and not passes and code == 0:
+            problem = "the runner exited 0 though a test did not pass"
+        cases = kinds.Cases(results, declared, problem, renderer, None if device else source)
+        return passes and problem is None, "", cases
     return fn
 
 
-def suite_tests(suite):
-    """How many tests a suite.json names, or None for one test's folder."""
-    suite = pathlib.Path(suite)
-    if suite.is_file() and suite.name == "suite.json":
-        return len(json.loads(suite.read_text(encoding="utf-8")).get("tests", []))
-    return None
+ENV_EXIT = 3  # luma_test.py ENV_EXIT: the runner could not start because the machine was not fit
 
 
 def start_soak(g):
@@ -856,7 +1122,8 @@ def replays(g, label, renderer, against=None):
         other = None if against is None else g.work / ("runs-%s-%s" % against)
         ok, lines = step_hash.check(work, other, some=g.level == "quick")
         pathlib.Path(log).write_text("\n".join(lines) + "\n", encoding="utf-8")
-        return ok, lines[-1]
+        # Not one run compared is no proof: tool. A step hash that differs is a fail.
+        return ok, lines[-1], None, "tool" if lines[-1].startswith("0 of 0 the same") else "fail"
     return fn
 
 
@@ -1102,7 +1369,16 @@ def pictures(g, label, renderer, place="pc"):
         others = [l.split()[0] + " " + l.split()[1] for l in lines if l.split() and l.split()[0] in ("changed", "new", "missing", "machine")]
         review = next((l for l in lines if l.startswith("review: ")), "")
         detail = summary[len("pictures: "):] + ("; not: " + ", ".join(others[:8]) + (" ..." if len(others) > 8 else "") if others else "")
-        return code == 0, detail + ("; " + review if review else "")
+        # Another graphics card or driver than the approved pictures name is env; none taken at all is tool; a picture
+        # that differs is a fail.
+        words = {l.split()[0] for l in lines if l.split()}
+        if code != 0 and "machine" in words and not words & {"changed", "new", "missing"}:
+            fail_kind = "env"
+        elif summary.startswith("pictures: 0 of 0"):
+            fail_kind, code = "tool", 1
+        else:
+            fail_kind = "fail"
+        return code == 0, detail + ("; " + review if review else ""), None, fail_kind
     return fn
 
 
@@ -1136,7 +1412,13 @@ def mod_tests(g, renderer, bin_dir=None, label="mods", more_env=None):
         for d in work.rglob("bin"):
             if d.is_dir():
                 shutil.rmtree(d, ignore_errors=True)
-        return code == 0, summarize(log, renderer)
+        seen = verdicts(log, renderer)
+        cases = kinds.cases_of_verdicts(seen, kind_of_verdict, renderer)
+        if not seen:
+            cases.problem = "ran no case"
+        elif code != 0 and all(v == "pass" for v in seen.values()):
+            cases.problem = "the mod tests exited %d though every test passed" % code
+        return code == 0 and not cases.problem, summarize(log, renderer), cases
     return fn
 
 
@@ -1661,7 +1943,7 @@ def engine_lane(g, r):
     loads, save files."""
     def lane():
         g.check("engine/%s" % r, harness(g, TREE / "tests" / "engine" / "suite.json", r, "engine"), ("build/windows",))
-        g.check("pictures/engine/%s" % r, pictures(g, "engine", r), ("engine/%s" % r,))
+        g.picture_jobs.append(("pictures/engine/%s" % r, "engine", r, ("engine/%s" % r,)))
     return lane
 
 
@@ -1669,8 +1951,15 @@ def tour_lane(g, tour, label, r):
     """One tour on one renderer, with its pictures."""
     def lane():
         g.check("%s/%s" % (label, r), harness(g, tour, r, label), ("build/windows",))
-        g.check("pictures/%s/%s" % (label, r), pictures(g, label, r), ("%s/%s" % (label, r),))
+        g.picture_jobs.append(("pictures/%s/%s" % (label, r), label, r, ("%s/%s" % (label, r),)))
     return lane
+
+
+def picture_part(g):
+    """The pictures of the engine tests and the tours, checked after the second runs (settle): a test that failed once and
+    passed alone has its second run's pictures. In the order of their names, whichever lane asked first."""
+    for name, label, r, needs in sorted(g.picture_jobs, key=lambda job: job[0]):
+        g.check(name, pictures(g, label, r), needs)
 
 
 def mods_lane(g, r):
@@ -1813,7 +2102,7 @@ def locked_part(g, name, fn):
     holder = "long run part %s of %s pid %d" % (name, TREE.name, os.getpid())
     held = take_gate_lock(g.args.gate_lock, holder, g.args.wait, g.args.board, g.args.who)
     if held is not None:
-        g.record("part/" + name, "fail", 0.0, "not run: " + held)
+        g.record("part/" + name, "env", 0.0, "not run: " + held)
         return None
     try:
         return fn()
@@ -1829,7 +2118,7 @@ def run_checks(args, known=None, planned=None, selected=None, dry=False):
     g = Gate(args, dry=dry, known=known, planned=planned, selected=selected)
     level = args.mode
     if not locked_part(g, "build", lambda: build_part(g)):
-        g.code = 0 if g.write() else 1
+        g.write()
         return g
     quick = level == "quick"
     every = level in ("main", "final")
@@ -1873,12 +2162,19 @@ def run_checks(args, known=None, planned=None, selected=None, dry=False):
                 locked_part(g, name, lambda part=part: g.lanes(part))
     else:
         g.lanes(lanes)
-    replay_part(g, renderers)
+    # The soak plays beside the lanes in processes of its own: it is waited for first, so that what is run again alone
+    # really runs alone.
     if level in ("long", "final") and g.wanted("soak", ("build/windows",)) and not g.dry:
         if soak is None:
             g.missing("soak", "it did not start")
         else:
             g.check("soak", soak_result(*soak))
+    # Once every lane has ended, nothing else runs: the tests that failed are run again alone (and on main's build), then
+    # the checks that read the runs' files (pictures, replays) read the runs as they now stand.
+    if any(r.get("pending") for r in g.results):
+        locked_part(g, "again", g.settle)
+    picture_part(g)
+    replay_part(g, renderers)
     if level in ("long", "final"):
         # Last, with the machine alone: the gate lock keeps gates out, measure.py takes measure.lock.
         locked_part(g, "measure", lambda: g.check("measure/route", measure_route(g), ("build/windows",)))
@@ -1887,7 +2183,7 @@ def run_checks(args, known=None, planned=None, selected=None, dry=False):
         g.check("github", github_check(g))
     g.plan_rows()
     if not dry:
-        g.code = 0 if g.write() else 1
+        g.write()
     return g
 
 
@@ -1970,6 +2266,7 @@ def main(argv=None):
 
     def refuse(text):
         print("gate.py: " + text, file=sys.stderr)
+        print(kinds.verdict_line("not-judged"), flush=True)
         return 2
 
     if args.move and (args.mode != "main" or patterns or args.no_build):
@@ -2045,7 +2342,7 @@ def main(argv=None):
         for t in taken:
             free_gate_lock(t, holder, args.board, args.who, "not run: " + why)
         return refuse("main could not move to %s: %s" % (commit[:9], why))
-    code, summary = 2, "it ended before writing a result"
+    code, summary, g = 2, "it ended before writing a result", None
     watch = GithubWatch(candidate, commit, planned_jobs(planned)).start() if args.move else None
     try:
         try:
@@ -2054,7 +2351,7 @@ def main(argv=None):
             if watch is not None:
                 watch.stop()
         code = g.code
-        summary = "all checks passed" if code == 0 else "checks failed (exit %d)" % code
+        summary = {0: "all checks passed", 1: "checks failed (exit 1)"}.get(code, "not judged (exit %d): a tool or the machine, not the change" % code)
         if watch is not None and watch.red:
             code, summary = 1, "stopped: " + watch.red
             board_line(args.board, "%s NOTICE: main gate %s on %s stopped: %s." % (args.who, g.name, commit[:9],
@@ -2095,6 +2392,11 @@ def main(argv=None):
                     args.who, g.name, commit[:9], why))
             else:
                 summary = "passed, GitHub green (%s), main moved to %s" % (detail, commit[:9])
+                # The build that moved main is kept (the two newest): a test that fails in a later change is run on it.
+                kept = kinds.keep_base(git("rev-parse", "HEAD"), g.bin, BASE_BINS)
+                if kept is not None:
+                    print("gate.py: " + kept)
+                    board_line(args.board, "%s NOTICE: %s." % (args.who, kept))
                 owed = owed_of(detail)
                 if owed:
                     board_line(args.board, "%s OWED: main %s moved with GitHub's %s not ended; %s." % (
@@ -2118,6 +2420,11 @@ def main(argv=None):
                 status.write(args.status, work=args.work, board=args.board)
             except Exception as e:  # noqa: BLE001 - the page is a report; the gate's result stands without it
                 print("gate.py: the status page was not written: %s: %s" % (type(e).__name__, e), file=sys.stderr)
+    # The run's last word, and its last line: a pass only where main moved, or no move was asked and every check passed.
+    verdict = {0: "pass", 1: "fail"}.get(code, "not-judged")
+    if g is not None and verdict != g.verdict:
+        g.write_verdict(verdict, summary)
+    print(kinds.verdict_line(verdict), flush=True)
     return code
 
 
