@@ -423,6 +423,22 @@ class StartTest(unittest.TestCase):
             t.git("checkout", "--", "runtime", cwd=t.folder())
             t.run(["start", "C.1"], expect=0)
 
+    def test_a_tool_run_from_the_agents_own_folder_writes_blocked_md_and_it_does_not_stop_the_next_start(self):
+        with Tree() as t:
+            t.run(["start", "A.1"], expect=0)
+            folder = t.folder()
+            t.commit("A.1")
+            code, text = run(["blocked", "A.1", "waiting"], folder, t.work, t.store, 0, t.live)       # the tool of the folder itself
+            blocked = plan.native(folder) / "BLOCKED.md"
+            self.assertIn("A.1: waiting", blocked.read_text(encoding="utf-8"))
+            self.assertIn("BLOCKED.md", t.git("status", "--porcelain", cwd=folder), "it is an uncommitted file of the folder")
+            code, text = run(["start", "C.1"], folder, t.work, t.store, 0, t.live)
+            self.assertIn("started C.1", text)
+            self.assertIn("A.1: waiting", blocked.read_text(encoding="utf-8"), "it goes with the folder to the next branch")
+            (folder / "other.txt").write_text("x", encoding="utf-8")                                  # any other file still stops it
+            plan.set_state(t.tree, "C.1", "landed")
+            self.assertEqual(run(["start", "A.1"], folder, t.work, t.store, None, t.live)[0], 1)
+
     def test_start_refuses_while_something_is_in_work(self):
         with Tree() as t:
             t.run(["start", "A.1"], expect=0)
