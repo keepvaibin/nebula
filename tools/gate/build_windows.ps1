@@ -7,7 +7,8 @@
 # -Pak is optional and never refused: a game.pak of the tree's store version is named in BIN/pak.path; with none, or one of
 # another store version, the bin folder has no pak.path and the build says so. The gate asks for the right data by key
 # (tools/gate/gamedata.py, after this build: the importer is one of the programs built here) and writes pak.path itself.
-# Prints each step's result; any FAILED line or non-zero exit ends it with exit 1. Nothing here reads the
+# Prints each step's result; any FAILED line or non-zero exit ends it with exit 1, except a step whose every failed job is of the
+# compiler cache alone (build_steps.ps1): that is run again once, and failing again the same way ends it with exit 2 (not judged). Nothing here reads the
 # environment of the person running it beyond the tools' locations.
 #
 # -Sanitize address,undefined: the game modules built with those sanitizers (native/CMakeLists.txt NEBULA_SANITIZE),
@@ -45,8 +46,6 @@ $vs = & vswhere.exe -latest -property installationPath
 $vcvars = Join-Path $vs "VC\Auxiliary\Build\vcvars64.bat"
 $cmake = Join-Path $vs "Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
 $ninja = (Get-Command ninja).Source.Replace("\", "/")
-$failed = 0
-
 # The compiler cache: its server starts with the first build and reads these then (it stops after 10 idle minutes).
 $launch = ""
 $cacheBefore = $null
@@ -82,29 +81,7 @@ function Drop-Shared-Objects([string]$Folder) {
     Set-Content -Path "$Folder/sccache-own-paths" -Value "objects compiled with this folder's own paths (N-1049)" -Encoding ascii
 }
 
-# A step: its command in the build environment, its output in its log. Start returns the running process; Finish
-# waits for it and judges it (a FAILED line or a non-zero exit fails the build); Step does both.
-function Start-Step([string]$Command, [string]$Log) {
-    $p = Start-Process -FilePath cmd.exe -ArgumentList "/d /c `"call `"$vcvars`" >nul && ($Command) > `"$Log`" 2>&1`"" `
-        -WindowStyle Hidden -PassThru
-    $null = $p.Handle  # held from the start, or ExitCode reads empty once the process has ended
-    $p
-}
-function Finish-Step([string]$Name, $Process, [string]$Log, $Watch) {
-    $Process.WaitForExit()
-    $code = $Process.ExitCode
-    $fails = @(Select-String -Path $Log -Pattern '^FAILED:|ninja: build stopped' -ErrorAction SilentlyContinue)
-    "{0}: exit {1}, {2} FAILED, {3} s" -f $Name, $code, $fails.Count, [int]$Watch.Elapsed.TotalSeconds
-    if ($code -ne 0 -or $fails.Count -ne 0) {
-        Select-String -Path $Log -Pattern '^FAILED:|: error|: fatal error|error:' | Select-Object -First 12 |
-            ForEach-Object { "  " + $_.Line.Substring(0, [Math]::Min(220, $_.Line.Length)) }
-        $script:failed++
-    }
-}
-function Step([string]$Name, [string]$Command, [string]$Log) {
-    $sw = [Diagnostics.Stopwatch]::StartNew()
-    Finish-Step $Name (Start-Step $Command $Log) $Log $sw
-}
+. "$PSScriptRoot/build_steps.ps1"   # Start-Step, Finish-Step, Step: a step that failed in the compiler cache alone is run again
 
 # The game modules (both), the headless host, the self-description and the services list.
 $game = "$Root/game"
@@ -161,8 +138,8 @@ if (-not (Test-Path "$msvc/build.ninja") -or -not (Test-Path "$msvc/CMakeCache.t
 if ((& $counting) -ne [bool]$Coverage) { "msvc: $msvc is not configured with NEBULA_COVERAGE=$([bool]$Coverage)"; exit 1 }
 $msvcWatch = [Diagnostics.Stopwatch]::StartNew()
 $msvcRun = Start-Step "`"$cmake`" --build `"$msvc`" -j $half -- -k 0" "$Root/msvc.build.log"
-Finish-Step "game" $gameRun "$Root/game.build.log" $gameWatch
-Finish-Step "msvc" $msvcRun "$Root/msvc.build.log" $msvcWatch
+Finish-Step "game" $gameRun "$Root/game.build.log" $gameWatch "`"$cmake`" --build `"$game`" --target all -j $half -- -k 0"
+Finish-Step "msvc" $msvcRun "$Root/msvc.build.log" $msvcWatch "`"$cmake`" --build `"$msvc`" -j $half -- -k 0"
 
 # The harness's game half: a LumaCore mod library, built as build tools build mods (no library linked, unwind tables).
 $inc = "$Tree/native/include"
@@ -186,7 +163,8 @@ if ($launch) {
         "sccache: $hits hits, $misses misses, $other not cacheable; cache $([int]($after.cache_size / 1MB)) MB in $SccacheDir"
     }
 }
-if ($failed -ne 0) { "build failed"; exit 1 }
+if ($script:failed -ne 0) { "build failed"; exit 1 }
+if ($script:cacheOnly -ne 0) { "build not judged: the compiler cache failed twice in the same way, not the compiler"; exit 2 }
 
 # The bin folder: what luma_test.py runs (the programs, the game modules, the game half, the importer, the
 # self-description, the shader compiler and the pak's path).
