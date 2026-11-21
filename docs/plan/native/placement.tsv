@@ -1,0 +1,317 @@
+id	place	note
+N-1017	T
+N-1040	T
+N-1041	B5	mod tests under the sanitizer; waits until mod tests run again
+N-1042	T
+N-1043	T
+N-1044	T
+N-1045	T
+N-1049	T
+N-1052	T
+N-1062	T
+N-1063	T
+N-1069	T
+N-1070	T
+N-1073	T
+N-1075	T
+N-1078	T
+N-1080	T
+N-1086	T
+N-1088	T
+N-1090	T
+P-014	Z	profile retaken at the end
+P-023	T
+P-321	T	code on main; close the row
+P-323	T	code on main; close the row
+P-082	B1
+P-094	B1
+P-095	B1
+P-096	C	code on main; close the row
+P-205	G8
+P-272	G8
+P-285	B1
+P-037	G6
+P-071	G6
+P-072	G6
+P-073	G1
+P-074	G1
+P-075	G1
+P-076	B5	the mod look's host half; waits for the mod look
+P-077	G1
+P-083	G1
+P-084	G1
+P-086	B6
+P-106	B6
+P-160	B6
+P-162	B6
+P-202	G7
+P-203	G9
+P-206	G9
+P-219	G6	movie volume half; the pointer half closes in S0.2
+P-220	G1
+P-221	G6
+P-222	G6
+P-226	G6
+P-234	G1
+P-236	G1
+P-261	S0.2
+P-268	G9
+P-271	G6
+P-279	G1
+P-282	G1
+P-286	G6
+P-306	G9
+P-320	C	code on main; close the row
+N-1079	T
+P-019	G2	E6b landing 5
+P-020	B2
+P-097	B2
+P-098	B2
+P-099	B2
+P-100	B2
+P-101	B2
+P-102	B2
+P-276	B2
+P-277	B2
+P-278	B2
+P-281	G2	with E6b landing 3
+P-015	B3
+P-016	B3
+P-017	B3
+P-035	B3
+P-036	B3
+P-103	B3
+P-104	B3
+P-105	B3
+P-107	B3
+P-108	B3
+P-109	B3
+P-110	B3
+P-111	B3
+P-112	B3
+P-115	B3
+P-116	B3
+P-120	B3
+P-121	B3
+P-125	B3
+P-126	B3
+P-273	B3
+P-280	B3
+P-302	B3
+P-307	B3
+P-022	S0.1
+N-1053	S0.3
+N-1054	S0.3
+N-1076	G4	not seen on main in 50 runs; checked when the frozen branch's step-speed commits are taken
+N-1089	T
+P-122	K	decided
+P-170	K	not a fault
+P-171	K	decided
+P-179	K	not a fault
+P-182	K	decided
+P-215	G7	closes with P-202
+P-216	R2
+P-217	B1
+P-224	G6
+P-227	G6
+P-228	G6
+P-230	R10
+P-231	B1
+P-232	G8	closes with P-205
+P-237	G7	closes with P-202
+P-241	G3	the collision half (F7 landing 3); the halo half is B1
+P-242	S0.2
+P-245	B1
+P-246	B1
+P-249	S0.2
+P-250	B1
+P-251	B1
+P-252	B1
+P-255	R2	the site-mesh half in R4
+P-257	B1
+P-258	B1
+P-259	B1
+P-260	S0.2
+P-262	R4	particles group
+P-263	R4	particles group
+P-264	B1
+P-265	G3
+P-266	B1
+P-267	B1
+P-270	B1
+P-275	G7	closes with P-202
+P-284	B1
+P-287	B1
+P-288	G1
+P-293	R7
+P-295	R7	its part about the answers of the depth questions goes in S0.2
+P-298	R7
+P-305	R7	E4 landing 7
+P-310	R4	particles group, the cook's reads
+P-322	T	code on main; confirm and close
+N-1074	T
+P-046	R5
+P-142	R6
+P-143	R4
+P-144	R5
+P-145	R4
+P-149	R4
+P-150	R4
+P-151	R3
+P-154	R4
+P-155	R2	the sites' half in R4
+P-156	R5
+P-157	R3	closes when the console field records are deleted (the last landing of E3 step 3)
+P-173	R3
+P-181	R4
+P-184	R10	the layout material record; its ambient write goes in R6
+P-190	R6	the texture half in R2
+P-194	R4
+P-195	R4
+P-196	R4
+P-198	R8
+P-199	R10
+P-207	R8
+P-213	R8
+P-214	S0.2
+P-229	R10
+P-239	R4	stencil clear in R7 landing 3, fog in R6
+P-248	R4	shadows group
+P-254	R4v	views as records, before R5
+P-291	R9
+P-292	R9
+P-299	R3
+P-303	R3
+P-304	R3
+P-308	T	a tool fault; fixed with the test tools
+N-1081	R7	E4 landing 7
+N-1082	R7	E4 landing 2
+P-006	R7	E4 landing 3
+P-007	R7	E4 landing 5
+P-021	R7	decided; done in E4 landing 6
+P-025	R7	E4 landing 3
+P-027	R7	E4 landing 6
+P-031	R7	E4 landing 3
+P-053	R7	E4 landing 3
+P-055	R7	E4 landing 3
+P-063	R7	E4 landing 3
+P-289	R8
+P-290	R7	E4 landing 3
+P-296	R7	E4 landing 3
+P-300	R8	needs the planner's named depth (R7 landing 2)
+P-319	R7	E4 landing 6
+N-1067	R1
+N-1068	S0.2
+P-010	R1
+P-026	R7	E4 landing 4
+P-028	R7	E4 landing 7
+P-029	K	not a fault
+P-030	R7	E4 landing 7
+P-048	R2
+P-049	R7	E4 landing 7
+P-050	R7	E4 landing 7
+P-052	R1
+P-054	R7	E4 landing 7
+P-056	R2
+P-057	R7	E4 landing 7
+P-058	R7
+P-059	R2
+P-060	R3
+P-061	R2
+P-064	R3
+P-065	R1
+P-066	R2
+P-117	B4
+P-223	G6
+P-225	G6
+P-233	G8
+P-235	G8
+P-238	G4
+P-240	G4
+P-247	G4
+P-283	G3	F7 landing 7
+P-297	R3
+P-301	R8
+I-002	G2	E6b landing 2
+I-003	R5	measured with E6b landing 8
+I-004	G2	E6b landing 1
+I-005	G2	E6b landing 3
+I-006	G2	E6b landing 3
+I-007	G2	E6b landing 3
+I-010	G2	E6b landing 5
+I-012	G2	E6b landing 3
+I-013	G2	E6b landing 1
+I-014	G2	E6b landing 7
+N-1084	G2	E6b landing 1
+P-034	G2	E6b landing 3
+P-042	G2	E6b landing 9
+P-078	G2	E6b landing 6
+P-163	G2	E6b landing 6
+P-274	G2	E6b landing 1
+P-311	G2	E6b landing 3
+P-312	G2	E6b landing 3
+P-313	G2	E6b landing 3
+P-314	G2	E6b landing 4
+P-315	G2	E6b landing 5
+P-316	G2	E6b landing 5
+P-317	G2	E6b landing 3
+P-318	G2	E6b landing 5
+N-1077	G4	seen on a frozen branch's step-speed commits; checked when they are taken
+P-013	G4
+P-038	R4
+P-039	G4
+P-040	G3
+P-088	G4
+P-127	R4
+P-128	R4
+P-129	G4
+P-130	G4
+P-131	G4
+P-132	G4
+P-133	G4
+P-134	G4
+P-135	G4
+P-136	G4
+P-137	G4
+P-138	G4
+P-139	G4
+P-140	R6
+P-141	G4
+P-146	G3
+P-152	R6
+P-165	G4
+P-269	Z	profile retaken at the end
+P-118	K	kept by the owner
+P-148	G8
+P-166	K	kept by the owner
+P-167	B1	the console's hip-drop rule comes back
+P-168	K	kept by the owner
+P-180	K	kept by the owner
+P-185	R8
+P-186	G6
+P-187	G7
+P-188	R4	particles group
+P-189	G8
+P-191	G5
+P-192	G8
+P-193	G6
+P-197	R10
+P-200	R10
+P-201	G7
+P-204	G8
+P-208	G9
+P-210	R10
+P-211	G9
+P-218	R10
+P-243	G5
+P-244	G1
+P-253	G5
+P-256	G5
+P-294	S0.2
+P-309	R3
+N-1083	G3	F7 landing 7
+P-009	B4
+P-032	B4
+P-087	B4
+P-175	B4
+P-176	B4

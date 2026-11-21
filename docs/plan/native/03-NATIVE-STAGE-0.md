@@ -1,0 +1,277 @@
+# Nebula native plan: Stage 0, solid ground
+
+Step by step. The order and the reasons are in `docs/plan/native/02-NATIVE-OVERVIEW.md`. Each step is a card: what changes, where, the rows it closes, what it needs first, the old path, the proof, what a player gets, what to read first. "FM" is the design file `docs/engine/FRAME-MODEL.md` on main; "INV" is the inventory `docs/engine/CONSOLE-FREE.md` (branch `docs/console-free` until Stage 0 lands it). The full ledger text of each row is in `docs/plan/native/rows/<package>.tsv`.
+
+## Contents
+
+- **S0.1 The written work lands**
+  - S0.1.1 Land `rows/p022c` and `rows/p022d` as one batch
+  - S0.1.2 Documents
+  - S0.1.3 Render data path step 1: `f4/e3-1a`, `f4/e3-1b`, `f4/e3-1c`
+  - S0.1.4 Render data path step 2, first landing: `f4/e3-2a`
+  - S0.1.5 Render data path step 2, second landing: `f4/e3-2b` and `f4/e3-2c`
+- **S0.2 The game step reads nothing from the picture or the wall clock**
+  - S0.2.1 Landing A: drawing stops changing the game
+  - S0.2.2 The scene query's form, written into the inventory before code
+  - S0.2.3 Landing B, part 1: the pointer
+  - S0.2.4 Landing B, part 2: the talk balloon
+  - S0.2.5 Landing B, part 3: the lens flare
+  - S0.2.6 Landing B, part 4: the question-and-answer path is deleted
+- **S0.3 Dead fields left by shelved work come off main**
+  - S0.3.1 Search main for what the rows name
+  - S0.3.2 Remove what is left
+
+---
+
+## S0.1 The written work lands
+
+Six branches of written work and two documents go onto main: the shared renderer logic of P-022 (two branches), the inventory and design-file corrections, and render data path steps 1 and 2 (six branches that change the cooked model file and how textures are listed). A player sees nothing: the cooked model file changes form, so the game's files are made again at setup (store 39, then 40).
+
+- **Design:** P-022's row note (parts 1 to 4); FM 2.8 (model format 13, step 1's first landing); FM 2.9 (typed material sections, step 1's second landing); FM 2.10 (samplers decided at the cook, a texture list made once); INV section 3, line "The frame's rows"; the handoff report, entries 11-19 17:05 to 18:00 and 18:50, and its last section.
+- **Needs first:** nothing in the skeleton (it opens Stage 0). Inside the package: S0.1.3 needs S0.1.1; S0.1.4 needs S0.1.3; S0.1.5 needs S0.1.4 (stack order, plan decision).
+- **Rows:** 1 (P-022)
+
+### S0.1.1 Land `rows/p022c` and `rows/p022d` as one batch
+
+- **What changes.** P-022 says the same per-renderer logic is written four times (Direct3D 12, Direct3D 11, Vulkan, Metal). Parts 1 and 2 are on main: the GPU's time by pass is one unit (`gpu_pass_times.h`, tested by `gpu_pass_times_tests.cpp`) and the DXGI sync interval's choice is `dxgi_sync_interval` in `render_config.h` (tested in `render_config_tests.cpp`). What is left is part 3, the encoding of test pictures (branch `rows/p022c`, one function `write_capture_rows` for the four renderers), and part 4, the housekeeping at a frame's start (branch `rows/p022d`: `FrameGpuTime`, `TemporalInterpHold::lift_at_frame_start`, `upload_rings_due`; the commit also sets P-022 fixed in the ledger). Both are pushed and restacked on main 790626cb5. The tip of p022c (4a67ed3e6) moves two pixel conversions from `post_process_settings.cpp` to `renderer_common.cpp`, because the shader tools build `renderer_common.cpp` alone and did not link. Land as one batch (skeleton) through the quick gate and the main gate. Skip the step if the testing agent's proof run already landed them.
+- **Where.** `rows/p022c` is two commits: 62a23f094 (part 3: `runtime/include/galaxy/render/renderer_common.h`, `runtime/src/render/renderer_common.cpp`, and the capture code of `renderer_d3d12.cpp`, `d3d11/renderer_d3d11_scene.cpp`, `vk/renderer_vk_frame.cpp`, `mtl/renderer_mtl_draw.mm`) and 4a67ed3e6 (`renderer_common.cpp`, `post_process_settings.cpp`). `rows/p022d` (ec91acc35) touches `runtime/include/galaxy/render/gpu_pass_times.h`, `gpu_upload_ring.h` and `temporal_hold.h`, the four renderers' headers under `runtime/include/galaxy/render/`, `runtime/src/render/gpu_pass_times.cpp`, `gpu_pass_times_tests.cpp`, `gpu_upload_ring.cpp`, `temporal_hold_tests.cpp`, the four renderers' sources (`renderer_d3d12.cpp`, `d3d11/renderer_d3d11.cpp`, `vk/renderer_vk.cpp`, `mtl/renderer_mtl.mm`) and `docs/plan/ledger.tsv`. `write_capture_rows`, `FrameGpuTime`, `lift_at_frame_start`, `upload_rings_due` (not found at 790626cb5: the two branches add them). All files above exist at 790626cb5; parts 1 and 2 are there too (`gpu_pass_times.h`, `dxgi_sync_interval` in `runtime/include/galaxy/render/render_config.h`).
+- **Rows.** P-022: whole (parts 3 and 4 are what the row says is left: "the capture's encoding, the housekeeping at a frame's start").
+- **Needs first.** nothing
+- **Old path.** none: nothing draws differently. The four renderers' own copies of the same logic are the old path; they are replaced in these two commits.
+- **Proof.**
+  1. Quick gate and main gate pass on the batch. Both branches' own builds and unit tests passed (report 11-19 19:2x).
+  2. Pictures and replays unchanged: the report says part 3 touches only how test pictures are encoded after read-back and cannot touch game state.
+  3. Metal cannot be compiled on the PC: the Metal job of GitHub's Mac build is its proof.
+  4. `--diagnostics ring-stress` now also runs on Direct3D 11 and Metal (the one visible difference, a diagnostic).
+- **For a player.** Nothing visible: it is how the code is built (a fix in one renderer now reaches all four).
+- **Read first.** The report's last section says every main gate fails about one run in two on a Direct3D 11 depth-test fault, P-332 (no ledger row yet). p022c's gate re-run failed at 09:3x on a tablet flake (stop 058) and on mod test `draw/2403-draw-points` (Direct3D 11, picture f100, RMSE 23.9 against a limit of 12); an earlier run failed at 07:1x on the Direct3D 11 replay of 025-EggStarGalaxy-4 (step 0, 0873f048 against 521573f1). A hunt of 48 plays showed p022c is not the cause. The sources do not say how P-332 is handled before this landing; S0.2.6 deletes the path it sits in. Read the report's last section before a gate run.
+
+### S0.1.2 Documents
+
+- **What changes.** Two document moves in one landing. (1) The inventory on branch `docs/console-free` (a172aa701) replaces main's older `docs/engine/CONSOLE-FREE.md` whole. (2) Ledger rows whose code is on main are closed: P-096, P-320, P-321, P-323.
+- **Where.** `docs/engine/CONSOLE-FREE.md`, `docs/plan/ledger.tsv` (all exist at 790626cb5). The inventory source is `D:/NebulaWork/MarioGalaxyRecomp/Nebula-A1l/docs/engine/CONSOLE-FREE.md` on `docs/console-free` (its tip is a172aa701, "the text path written before its code").
+- **Rows.** No row of this package. Closes P-096, P-320, P-321, P-323 in the ledger (rows outside this package).
+- **Needs first.** nothing
+- **Old path.** none: nothing draws differently.
+- **Proof.**
+  1. The landed inventory equals a172aa701's copy byte for byte (a file compare).
+  2. For each of the four rows, the code named in its note is on main (`git log` on the commits named in "Read first" or on the files the row's note names), checked before the row is closed.
+- **For a player.** Nothing visible: it is how the code is built.
+- **Read first.** (a) The correction of FM 2.10 (the per-frame look-up of every texture a list names stays; only the copy of the list's pairs is skipped) is not in this step: S0.1.5's branch (c7731c9ea on `f4/e3-2c`) carries it (plan decision). (b) The report gives a landing for two of the four rows: P-096 landed 02:20 as fad4dfd14, and the batch of ten (with P-323's proof, 180 of 180 runs) landed 11-19 17:05. Main's own ledger still shows P-096, P-320, P-321 and P-323 as open. Commits found on main (ancestors of 790626cb5; confirm each against its row's text before closing): P-096 fad4dfd14, with 976f4c857 (Android setup keeps the game in place, full device and leftovers); P-320 143176320 ("one set of UTF-8 rules for the game's text, the mods' and NebulaText's"); P-321 cce5a8423 ("the measure's tablet run installs its test app and removes it"); P-323 1f4565b67 (every test picture asked is written, on every renderer), with fabbfe47a, c01117add and 5ed0692ff (its approvals). The sources do not say that these commits are the whole of each row's fix (plan decision 13: confirm on main first).
+
+### S0.1.3 Render data path step 1: `f4/e3-1a`, `f4/e3-1b`, `f4/e3-1c`
+
+- **What changes.** Today (main, model format 12) a model file keeps its arrays at fixed places in a header, and a material is one 208-byte record followed by parts it names by offset. The three branches (tips 58900bf8b, b9dc99ecb, d32c2c573) change this. 1a: format 13 has a header of magic, version, size, flags, `section_count`, `sections_at`; a section table of `{name, flags, at, size, count, stride}` at the block's end names every array, and every array stays where 12 put it, so a byte compare proves it. 1b: a material becomes typed sections `MATL`, `GXMT`, `FORM`, `SLOT`, `GXTG`, `GXTM`, `GXWP`, `FROW`, `FTEX`, `FINP` in place of `MT12`; records name their parts by index and count; a broken file is refused at load naming the part out of range. 1c: every reader steps through records by the stride the file states, lists keep an exact size and alignment is checked (a later cooker may add fields at a record's end). Details from FM 2.8 and 2.9: the inverse binds are taken by `IBND`'s own count, not `joint_count` (12's header had no count for them); a missing required section stops the load naming it, and a model of another version names the version it found; `MATL` holds the state word (every form of a material shares the material's), the flags (translucent, normal scale, on a billboard) and `light_masks[4]`; fields that nothing outside the importer reads (`cull`, `early_depth`, `channel_count`, `alpha_comp0`, `alpha_op`, `alpha_comp1`, `blend_type`, the channels' `material_source` and `ambient_source`) are not written; the descriptions of FM 2.3 (kind, alpha cutoff, glow row and the rest) are not written in this step, each comes with its first reader (R3.9). Make the three discs' game data at store 39 first (US, PAL, Japanese), then land the three as one: one quick gate, one main gate.
+- **Where.** `native/include/nebula_model.h` (`NEBULA_MODEL_VERSION` is 12 at main; `nebula_model_section` is not found at 790626cb5, the branch adds it); `crates/nebula-import/src/cook/model_write.rs` (`VERSION` is 12 at main; `model_write::sections` not found at 790626cb5; `model_write::names`), `gltf.rs` (`GameModel::read`, `skeleton_gltf`), `gltf_tests.rs`; `native/petari/src/Game/Render/ModelData.cpp` (`loadFile`), `Material.cpp`, `Model.cpp`; `native/petari/include/Game/Render/ModelData.hpp`, `Material.hpp`; `runtime/src/render/core/registries.cpp` (`read_model`, `place_model`, `model_register`, `restart`); `runtime/src/render/core/model_sections_tests.cpp` (not found at 790626cb5; the stack adds it); the shell script `inv/e3_1a_build.sh` and its logs in `D:/NebulaWork/plan/a1/inv/`. Branch tips: 58900bf8b (1a, with its test fix), b9dc99ecb (1b, with its test fix), d32c2c573 (1c).
+- **Rows.** none of this package's rows (render data path step 1; FM 2.8, 2.9).
+- **Needs first.** S0.1.1
+- **Old path.** none: FM 2.8 and 2.9 say no switch is needed, no path draws differently. `MT12` and `NebulaModelMaterial` are deleted by 1b; the old format 12 is not read.
+- **Proof.**
+  1. FM 2.8: `tools/verify/model13_compare.py` (not found at 790626cb5; on `f4/e3-1a`): main's importer and the branch's cook the US disc, and every model's block from byte 112 to the end of 12's layout is equal.
+  2. FM 2.8: C test `galaxy_model_sections_tests` finds every section and count; Rust test `the_section_table_names_every_array_where_12_put_it`.
+  3. FM 2.9: a test in `crates/nebula-import` cooks every model of the US disc with 2.8's writer and with 1b's and compares per material; and `D:/NebulaWork/plan/a1/inv/model29_compare.py`, kept outside the repository because it reads the old record, shows the same.
+  4. FM 2.9: `git grep -nw` of each field 12 dropped over `native/include` returns 0; `NebulaModelMaterial`, `MATERIAL_BYTES`, `MT12` over the tree outside `docs/` return 0; a C test refuses a model without `MATL`, naming it.
+  5. Importer tests 311 and 312 pass, 0 failed (the two tests that read the old layout were fixed on 1a and 1b); the 1c tests of stride and alignment pass.
+  6. The gate's pictures on every stop and renderer are unchanged and the replay is identical; the store version goes up by one.
+- **For a player.** Nothing visible: it is how the code is built (game files are made again once at setup).
+- **Read first.** Each cook waits for 155 GB free on D: (the build script skips a cook when D: would fall under 150 GB); clear space before it. The report found 1a marked failed once only because the Japanese cook was skipped at 154 GB free.
+
+### S0.1.4 Render data path step 2, first landing: `f4/e3-2a`
+
+- **What changes.** Today `TEXR` keeps the console's sampler codes and, at load, `ModelData.cpp` copies them into a `ResTIMG` (the console's texture header); a form's list decodes them again at every table build. The branch (tip 49858e8bd, over 659f5c5ae) adds a `SAMP` section: each distinct sampler of the model in the form the renderer takes (wrap s and t, min and mag linear, mip mode, anisotropy, `min_lod`, `max_lod`, `lod_bias`), decoded once by the importer; `TEXR` loses the codes and gains `sampler`, its `SAMP` entry. The tip commit also moves the game's own uses of a model's texture (Mario's eyelid pictures, the normal-map objects, fur) onto a `ModelTexture` (`MR::getModelTexture`, a `GameTexture` made from a `ModelTexture`, `SiteTextures::setSampler`); without it the game did not build. Pictures swapped in from the disc and the typed draws keep one decode, `nebula_sampler_from_codes`, until render data path step 4 cooks them (P-155). Store 40: make the three discs' data at 40, land, then remove the store 39 data (`us-pak-39`, `a1-pak-pal-39`, `a1-pak-jp-39`).
+- **Where.** `native/include/nebula_model.h`; `native/petari/src/Game/Render/ModelData.cpp`, `GameTexture.cpp`, `TypedDraw.cpp`, `Material.cpp` and `native/petari/include/Game/Render/GameTexture.hpp`, `TypedDraw.hpp`; `native/petari/src/Game/Player/MarioActorDraw.cpp`; `native/petari/src/Game/MapObj/NormalMapBase.cpp`; `native/petari/src/Game/Util/FurCtrl.cpp`, `FurDrawer.cpp`, `FurMulti.cpp`, `LiveActorUtil.cpp`, `ModelUtil.cpp` (their headers under `native/petari/include/Game/Util/`, and `MarioActor.hpp`); the importer's cook (`crates/nebula-import/src/cook/model_write.rs`, with the importer test of Proof 1); `nebula_sampler_from_codes` and `MR::getModelTexture` (not found at 790626cb5: the branch adds them); the script `inv/e3_2a_build.sh`.
+- **Rows.** none of this package's rows (step 2, FM 2.10). P-155 stays open: the disc pictures and sites are step 4's.
+- **Needs first.** S0.1.3
+- **Old path.** none: nothing draws differently.
+- **Proof.**
+  1. FM 2.10: a test in `crates/nebula-import`: for every texture of every model of the US disc, its `SAMP` entry equals the decode of 12's codes by the rule of `Material.cpp` (lines 789-797 as cited at c8222595e).
+  2. `D:/NebulaWork/plan/a1/inv/model210_compare.py` prints "0 models differ" (every texture decodes to the same sampler at store 40 as the old code made from store 39, every other part of every model equal). The build script passes when its last line is `done`, no step exits non-zero, and that line appears.
+  3. The gate's pictures on every stop and renderer unchanged, the replay identical.
+  4. The three discs' data exist at store 40 before the store 39 data are removed.
+- **For a player.** Nothing visible: it is how the code is built.
+- **Read first.** FM 2.10's search `git grep -n "mMinType" native/petari/src/Game/Render/Material.cpp` and `RenderTexture::idOf` in the same file returning 0 is not met by this landing: `Material.cpp` still uses both at main (lines 788 and 791) for pictures swapped in (`setTexture`). That search is run at R4.9 (plan decision); R2.4 handles the player's swapped images and step 4 (R4) the disc pictures.
+
+### S0.1.5 Render data path step 2, second landing: `f4/e3-2b` and `f4/e3-2c`
+
+- **What changes.** Today a model's texture is found by its image's address at every draw, and every frame the renderer copies every material's texture list again into that frame's buffer. 2b (tip 0d73751e9): each of a model's own textures gets its renderer id once, when the model loads, kept in `ModelTexture`, and a material's list takes it from there; a picture swapped in (`ModelData::setTexture`) keeps id 0 and the old look-up so a rewrite still reaches the screen; a texture's first upload now happens while the stage loads, not at its first draw. 2c (tip c7731c9ea): each list is kept in one store, `core::TextureLists` (`runtime/src/render/core/texture_lists.h`), for as long as its table lives, copied again only when one of its textures or samplers changes; a freed spot is reused only after the graphics card has finished every frame that might read it; the three renderers' per-frame list buffers go and each provides memory chunks. Land both as one.
+- **Where.** `native/petari/src/Game/Render/ModelData.cpp`, `Material.cpp`, `native/petari/include/Game/Render/ModelData.hpp`; `runtime/src/render/core/draw_walker.cpp` (`RenderCore::walk_tables` at 771, `walk_bound_tables` at 857); `write_texture_list` in `runtime/src/render/renderer_d3d12.cpp`, `vk/renderer_vk_frame.cpp`, `mtl/renderer_mtl_draw.mm` and declared in `runtime/include/galaxy/render/d3d11/renderer_d3d11.h`; `texture_lists.h` and `galaxy_texture_lists_tests` (not found at 790626cb5: the stack adds them); `inv/syntax_host.py`, `inv/e3_2b_build.sh`, `inv/e3_2c_build.sh`, `D:/NebulaWork/plan/a1/chain-e3-2bc.sh`.
+- **Rows.** none of this package's rows (step 2). P-155 stays open.
+- **Needs first.** S0.1.4
+- **Old path.** none: nothing draws differently. The per-frame list buffers of the three renderers are deleted here.
+- **Proof.**
+  1. `galaxy_texture_lists_tests` passes, and fails with the fence check removed (so it tests the rule).
+  2. Pictures and replays unchanged on the gate.
+  3. Walk time on the play route on the PC and the tablet, before and after: never slower (FM 2.10 proof; file 08 7.4).
+  4. Syntax check by `inv/syntax_host.py` passed on Direct3D 12, Vulkan and Direct3D 11; Metal is checked by GitHub's Mac build.
+- **For a player.** Nothing visible: less copying each frame, and a texture's first upload during the load.
+- **Read first.** Known gaps carried to R2.1 (do not close them here): no walk-level counting test exists yet, and a list that shows a target (a picture the game draws into, changing each frame) is still copied each frame. The report's order also ends with `rows/p328` (8c82be4d9: the measure's window takes no focus and is watched; local, still on the base before P-242); the skeleton gives it no step (the sources give no further detail; read the report's entry 11-19 19:0x before leaving it out). The look-up each walk stays; only the copy is skipped.
+
+### Rows of this package
+
+| Row | Today | After | Closes at |
+| --- | --- | --- | --- |
+| P-022 | The same per-renderer logic is written four times (pass times, sync interval, capture encoding, frame-start housekeeping); parts 1 and 2 are on main. | One shared copy of each: the capture encoding (`write_capture_rows`) and the frame's opening housekeeping (`FrameGpuTime`, `lift_at_frame_start`, `upload_rings_due`) join the two parts already shared. | S0.1.1 |
+
+
+---
+
+## S0.2 The game step reads nothing from the picture or the wall clock
+
+Today the game's step depends on how the picture was drawn and how fast the computer ran: drawing advances the game's random stream, draws make step decisions, the star pointer and the talk balloon read the drawn depth, the lens flare reads depth answers, and a stage load and a cutscene skip are cut by wall time. This package removes each dependency, in two landings that each change the recorded replays once. A player gets a pointer, balloon and lens flare that behave the same on every screen shape, resolution and machine speed; where the drawn depth and the collision differ, what the pointer grabs can change.
+
+"Screen probes" is the name in the code for the game asking the graphics card for depth at chosen points of the drawn picture; the answers come back two frames late. S0.2.6 deletes that path.
+
+- **Design:** row notes of P-294 (owner 11-19: "compute it from the world"; the agent's decision: a ray from the step's camera through the pointer, against collision and the pointer targets' spheres), P-242, N-1068, P-249 (the agent's decision of 11-19: drawing takes its own random stream), P-260, P-214, P-261; INV section 3, line "The game's picture read back for a step", and INV section 4 line 476 (the form is written before its code, file 08 7.4); FM 1.5 (what the game thread waits for), FM 1.9 (the row on frame F - 2's probe answers), FM 2.1 rule 2, FM 2.2 (the hand-over table), FM 2.15 item 10 (Probes); the handoff report on P-242 and P-332.
+- **Needs first:** nothing in the skeleton (it follows S0.1 in Stage 0's order). Inside the package: S0.2.3 to S0.2.6 are landing B and follow landing A (S0.2.1) and S0.2.2.
+- **Rows:** 7 (N-1068, P-214, P-242, P-249, P-260, P-261, P-294). Parts of P-219, P-293 and P-295 (rows outside this package) are closed here too.
+
+### S0.2.1 Landing A: drawing stops changing the game
+
+- **What changes.** One landing, in four parts; replays are re-recorded once and the landing says so. Today `GameSystem::frameLoop` draws once a frame while a time rate or a cutscene skip runs more steps, so each fault below follows the draw count (plan decision 14: each fault is a bullet; a row closes when its last bullet is done).
+  - (a) P-249, three faults in one row. `MR::getRandom` is the game's one stream (`MathUtil.cpp:18-23`) and Mario's draw and view code takes numbers from it: the spin ring 130 per `drawSpinEffect`, the wall-shade noise 64 per `updateRandomTexture`, the dark mask 2 per `updateDarkMask` while the mask is on. So every later number depends on how many frames were drawn. Fix (the agent's decision of 11-19 after the owner's "decide smartly"): drawing takes its own random stream, cosmetic numbers apart from the game's; the game's stream is advanced only by the step. The replay changes once for every run that shows the spin ring, the wall shade or the dark mask.
+  - (b) P-214, four faults, each a draw that does step work; the step makes the decision and stores it and `draw()` only records: the galaxy map's capture (`GalaxyMapController::draw` calls `capture()` on the nerve's first step, which kills and shows layouts, sets the map's mode and runs its movement; with a time rate of 2 the nerve's first step may be past when the draw comes); the pointer blur's hide flags (`StarPointerLayout::draw` hides the points, the step reads that); the message's sound tag (`CustomTagProcessor` starts it from the text's draw); the movie's shown frame (`MoviePlayerSimple::draw` picks it, and subtitles, rumble and the close read it back through `getCurrentFrame`; the pick is made from the stream's position).
+  - (c) P-261: the settings menu's galaxy and star requests, now answered and started in `GameScene::draw` (a stage change through `NebulaModCalls::changeStage` or `setGrandStars`, after the frame's steps and outside the step's record), are taken at the step's start as that step's input (the names asked there too, or served from the message data without the scene), so a travel lands on a recorded step.
+  - (d) P-260, two faults: the stage's load after the star is chosen runs in slices of 4 ms of wall time (`GameScene::initAfterScenarioChosen`, the placement's own deadline), resumed once a frame from the star select's nerves, so the frames between the choice and play follow the computer's speed: it runs in slices of a fixed count of work (plan decision: a fixed count now; the load worker comes with G3.7); and the placement's id sets are found by a scan of every set per placement, quadratic in a level's placements: they are found through a map. The cutscene skip's batching (9 ms and 40 steps a frame) stays by time (plan decision: after (a) and (b) it cannot change game state; its budget is P-235 in G8.2).
+- **Where.** `native/petari/src/Game/Util/MathUtil.cpp` (lines 18-23); `Game/Player/MarioActorSpecialDraw.cpp` (547-590, 355-383, 632-644), `MarioActorDraw.cpp` (474-475, 786), `MarioActorShadow.cpp` (256); `Game/System/GameSystem.cpp` (frameLoop, 182-205); `Game/Screen/GalaxyMapController.cpp` (161-183), `StarPointerLayout.cpp` (545-581, 844), `CustomTagProcessor.cpp` (478-499), `Game/Ui/TextBox.cpp` (156), `Game/Screen/MoviePlayerSimple.cpp` (73, 128); `Game/Scene/GameScene.cpp` (165-217, 300-322), `StageDataHolder.cpp` (168), `PlacementInfoOrdered.cpp` (139, 157-166), `Game/System/GameSystemSceneController.cpp` (151-163, 240-251, 480-487), `Game/Scene/ScenarioSelectScene.cpp` (277, 312, 320), `Game/System/NebulaCutsceneSkip.cpp` (46-47, 384-399). All line numbers as cited at 241395b49; every file above exists at 790626cb5.
+- **Rows.** P-249: whole. P-214: whole. P-261: whole. P-260: the fixed-count slices and the id-set map (its load worker half is G3.7's, plan decision).
+- **Needs first.** nothing
+- **Old path.** none: no switch is named. Drawing's use of the game's stream and the wall-time slices are replaced in place; replays are re-recorded once.
+- **Proof.**
+  1. The step hash at play's first step is equal on a fast machine and on a slowed one (the row's own test, P-260).
+  2. A time rate of 2 gives the same step hashes as a time rate of 1 at equal steps (skeleton; it runs more steps than draws, which is the case P-214 and P-249 name).
+  3. Replays re-recorded once; the landing's message says the replay reference changes for runs showing the spin ring, the wall shade or the dark mask.
+- **For a player.** Nothing visible in normal play; the same stage plays the same on a slow and a fast machine.
+- **Read first.** The row P-260 offers "a skip runs a fixed number of steps per frame or runs to its end with the input held"; the skeleton keeps the skip's batching by time. This card follows the skeleton. P-249's row also offers moving the calls to the end of the step to keep the replay identical, or making the noise in the shader from a seed and the timer; the decision of 11-19 (own stream, replay changes once) is the one written here. P-203 (G9.1) also moves the movie's frame pick to the step, and fires subtitle and rumble entries as the movie's place crosses their start; read P-203 with part (b)'s movie bullet and leave the entries' firing to G9.1.
+
+### S0.2.2 The scene query's form, written into the inventory before code
+
+- **What changes.** INV section 3's line "The game's picture read back for a step" today says only "a scene query on the game thread; the flare on the GPU", state "open; question for the owner", proof "P-191's four-screen proof". It is rewritten with the decided form (P-294's decision of 11-19): a ray from the step's camera through the pointer, against collision and the pointer targets' spheres, in the step, no picture read back, no frame of delay; the talk balloon's point by the same query kind; the flare's visibility computed on the graphics card, not returned to the game (S0.2.5). The question for the owner is closed by his answer of 11-19. Rule: the form is written before its code (INV section 4, "the form written before their code, file 08 7.4").
+- **Where.** `docs/engine/CONSOLE-FREE.md`, section 3, the line "The game's picture read back for a step" (names `StarPointerDirector.cpp:155-177`, `StarPointerController.cpp:31-43`, `TalkDirector.cpp:100-124`, `LensFlare.cpp:230`; row P-294 with N-1068). This is the copy S0.1.2 lands on main.
+- **Rows.** P-294: its form is written here (parts S0.2.3 to S0.2.5 close it).
+- **Needs first.** S0.1.2 (puts the inventory on main; the skeleton does not name this dependency)
+- **Old path.** none
+- **Proof.**
+  1. The line states the query's inputs (camera, pointer position), what it tests (collision and the targets' spheres), and the result (a world point and the distance along the view).
+  2. A reader who knows the code can say where the query is called (S0.2.3, S0.2.4).
+- **For a player.** Nothing visible: it is how the code is built.
+- **Read first.** The sources do not say how the query returns "the distance" the step also needs (`mViewDistZ`) or what it does when the ray hits neither collision nor a target (the sources give no further detail; read the row and the code first).
+
+### S0.2.3 Landing B, part 1: the pointer
+
+- **What changes.** Today `StarPointerPeekZ` asks the picture for the depth under the pointer (frame F - 2's answer) and `StarPointerController::movement` unprojects it, through the console's projection (7 floats) and viewport (6 floats) forms, into `mWorldPos` and `mViewDistZ`; the target check and the value handed out read them. The step now takes its world point and distance from the query of S0.2.2 and nothing waits for a picture. `StarPointerPeekZ` goes; the unprojection through the console's projection and viewport forms goes (`TDDraw::invProject` as used here, `mProjectionParameters`, `mViewportParameters`). This is P-219's pointer half.
+- **Where.** `native/petari/src/Game/Screen/StarPointerController.cpp` (31-43; `movement` and `storeDataFromCallback`), `StarPointerDirector.cpp` (31-50 `update`; 151-177 `StarPointerPeekZ`), `native/petari/include/Game/Screen/StarPointerDirector.hpp` (20-21, `mProjectionParameters` and `mViewportParameters`), `native/petari/src/Game/Util/StarPointerUtil.cpp` (123, 564), `native/petari/src/Game/Util/DirectDraw.cpp` and `native/petari/include/Game/Util/DirectDraw.hpp` (`TDDraw::invProject`, 353-381 as cited at 241395b49). All exist at 790626cb5.
+- **Rows.** P-294: pointer part. P-219: the pointer half closes here (its movie-volume half is G6.6).
+- **Needs first.** S0.2.1, S0.2.2
+- **Old path.** `StarPointerPeekZ` and the pointer's reads of probe answers; deleted at S0.2.6.
+- **Proof.**
+  1. The pointer's world point is the same at every screen shape and resolution (INV proof column: P-191's four-screen proof; until then it is expected to differ wherever the pointer is used).
+  2. Step hashes of one recorded play equal on every renderer (landing B's proof, S0.2.6).
+- **For a player.** The pointer grabs what the world says is under it on every screen shape; where the drawn depth and the collision differed, the pick can differ.
+- **Read first.** P-219's note says "the pointer's depth source is N-1068's question"; the decision is the query, so nothing is read from the picture.
+
+### S0.2.4 Landing B, part 2: the talk balloon
+
+- **What changes.** Today `TalkPeekZ::setDrawSyncToken` reads the depth at the balloon's screen point (channel 2, one point, frame F - 2), unprojects it through the frame's projection and viewport into `mWorldPos`, then asks the next frame's depth at the point now. `TalkDirector`'s world point comes from the query kind of S0.2.2 instead; `TalkPeekZ` goes.
+- **Where.** `native/petari/src/Game/NPC/TalkDirector.cpp` (97-124 as at main; 100-124 as cited at 241395b49), `native/petari/include/Game/NPC/TalkDirector.hpp`. Both exist at 790626cb5.
+- **Rows.** P-294: the talk balloon part.
+- **Needs first.** S0.2.2
+- **Old path.** `TalkPeekZ`; deleted here, its game-side probe calls with it at S0.2.6.
+- **Proof.**
+  1. The balloon's world point equals the query's at every screen shape.
+  2. Step hashes of one recorded play equal on every renderer (landing B's proof, S0.2.6).
+- **For a player.** The balloon sits at the same world point on every screen shape.
+- **Read first.** nothing
+
+### S0.2.5 Landing B, part 3: the lens flare
+
+- **What changes.** Today `LensFlareDirector::movement` takes the newest answers the render side gives, for the probes its draw asked (`setDrawSyncToken`), and places the flare's ring, glow and line from them (`controlFlare`). The step now places the ring, glow and line from the sun and the camera only. How much of the flare shows is decided on the graphics card (plan decision): a 1 by 1 target written each picture from the flare's depth samples and eased over time, read by the flare's vertex programs; no answer returns to the game. `BrightObjBase` (`calcBrightInfo`, `checkVisibilityOfSphere`, `checkVisible`, `setResult`, its `BrightInfo`) asks its depth samples every frame on channel 3 (`cProbeCount` per bright object) and is part of this path.
+- **Where.** `native/petari/src/Game/Screen/LensFlare.cpp` (201-237, 240-249, 291-330; the read at :230) and `native/petari/include/Game/Screen/LensFlare.hpp`; `native/petari/src/Game/MapObj/BrightObj.cpp` and `native/petari/include/Game/MapObj/BrightObj.hpp`; the flare's vertex programs and the 1 by 1 target's place in the frame are not named by the sources (the sources give no further detail; read the code first).
+- **Rows.** P-294: the flare part, so P-294 closes here (S0.2.6 deletes the path). P-242: the flare's reading of answers (closes at S0.2.6).
+- **Needs first.** S0.2.2
+- **Old path.** The flare's probe asks and reads; deleted at S0.2.6.
+- **Proof.**
+  1. The sun behind an object hides the flare on every renderer; the report's mod test `draw/2403-draw-points` (sun behind a house, picture f100) is the case that failed when the flare showed through. The sources do not list it as this step's proof; use it as a check.
+  2. The flare's fade is eased over time, so the picture at one frame changes by design: the pictures are compared and approved where they change.
+- **For a player.** The lens flare fades in and out smoothly and no longer flashes on behind a wall under load.
+- **Read first.** Plan decision 7: the card says "the flare's depth samples" with no count, because the code and the reports differ on it. Read `LensFlare::movement` and `BrightObj.cpp` (`BrightObjBase::cProbeCount`, and the extra mark entry `FrameList::probeScreen` adds to each ask) to see which points are the samples before the target's input is written. Vulkan answers the sun's test as seen or hidden (`NEBULA_PROBE_COMPARED`) while the others answer a depth (report, 11-20 10:5x); the new form must give one result on every renderer.
+
+### S0.2.6 Landing B, part 4: the question-and-answer path is deleted
+
+- **What changes.** Everything that exists to ask the graphics card a question and wait for its answer goes. With it go N-1068's wait (the game thread waits for frame F - 2's answers, 15.8% and 18.3% of game-thread samples in `StarPointerPeekZ::setDrawSyncToken` in Agent 3's profile, about 3 ms a step), P-242 (a list released unwalked gives an older frame's answers, seen as a replay difference under load), and the probe parts of P-293 and P-295. FM 2.15 item 10 (the planner places a probe pass) and N-1068's line in 2.15's rows table are void (plan decision 9): the planner has no part for depth questions. The design file is corrected in this landing: FM 1.5, 1.9, 2.1 rule 2, 2.2 and 2.15 (item 10, N-1068's row, and the mentions of probes in landings 2) stop describing probes. If a mod service exposes these answers, it answers "not available" behind a marked stub and is listed for the mod stage (plan decision).
+- **Where.** Game side: `native/petari/src/Game/Render/FrameList.cpp` (1078-1111: `newProbeAsker`, `probeScreen`, `screenProbeResults`) and `native/petari/include/Game/Render/FrameList.hpp` (147-152). Host: `native/host/host_main.cpp` (`svc_probe_results` at 2784 and the stub at 2837, `services.probe_results` at 6379); `native/include/nebula_game_api.h` (`NebulaScreenProbe` 851-856, the host service `probe_results` 1057-1060); `native/include/nebula_frame_list.h` (the probe pass kind `NEBULA_PASS_PROBE` at 235, `NEBULA_PROBE_DEPTH`/`NEBULA_PROBE_COMPARED` 254-257, `probe_channel`, `first_probe`, `probe_count`, `probes`). Render core: `runtime/src/render/core/probe_book.h` (`ProbeBook`, `kDelay` 2), `runtime/include/galaxy/render/render_core.h` (`screen_probe_results` 131, `poll_screen_probes` 186, `ScreenProbeFlight` 564, `record_screen_probes` 574, `kProbeWaitNs` 579), `runtime/src/render/render_core.cpp` (1586-1722), `runtime/include/galaxy/render_api.h` and `runtime/src/render/render_api.cpp`, `runtime/include/galaxy/render/render_queue.h` (50), `runtime/src/render/core/draw_walker.cpp` (`plan_early_probes` use at 1500, probes at 1530, 1649-1670), `runtime/src/render/core/walk_plan.h` (`plan_early_probes`, 127). Each renderer's `record_screen_probes` and `screen_probes_finished` (`runtime/src/render/renderer_d3d12.cpp` 6636 and its header `runtime/include/galaxy/render/renderer_d3d12.h`, `d3d11/renderer_d3d11_scene.cpp` 1173 and 1253, `vk/renderer_vk_frame.cpp` 3332 with `test_screen_probes` 3401 (the seen-or-hidden answer), `mtl/renderer_mtl_draw.mm` 464 and `test_screen_probes` 531 with `renderer_mtl_scene.mm` 462, and the renderers' headers under `runtime/include/galaxy/render/`). The probe shader: `ScreenProbeCs` (`runtime/src/render/utility_shader_table.inc` 10, `screen_probe_shader_source` and its text `kScreenProbeCs` in `runtime/src/render/renderer_common.cpp`, `kScreenProbeGroup` and `ScreenProbePixel` in `runtime/include/galaxy/render/renderer_common.h` 141-148, `runtime/include/galaxy/render/vk/utility_spirv_table.inc`). Tests that name these: `runtime/src/render/core/walk_plan_tests.cpp`, `runtime/src/render/frame_pass_tests.cpp`, `runtime/src/render/render_core_host_tests.cpp` (390), `native/tests/frame_list_tests.cpp` (189, 207). All exist at 790626cb5.
+- **Rows.** N-1068: whole. P-242: whole. P-293: the part on `screen_probes_finished` indexing slots with no check. P-295: the part on `ProbeBook::answered` writing through a freed element. P-294: path gone (closed at S0.2.5).
+- **Needs first.** S0.2.3, S0.2.4, S0.2.5
+- **Old path.** The whole path above; deleted in this step. No switch is named.
+- **Proof.**
+  1. One recorded play gives the same step hashes on Direct3D 12, Direct3D 11, Vulkan, the tablet and a software device, idle and with 12 copies running at once (P-242's parallel runs: 12 of 12 the same).
+  2. `git grep` for `screen_probe` in `runtime` and `native` finds nothing (at 790626cb5 it finds 23 files); the same for the other names deleted above (`ProbeBook`, `NEBULA_PASS_PROBE`, `plan_early_probes`, `ScreenProbeCs`, `probe_results`, `StarPointerPeekZ`, `TalkPeekZ`), except a marked mod-service stub if the Read first (d) check finds one is needed.
+  3. The game thread's share in the old wait is near zero (N-1068's profile: the same 5090 plain-module profile, 3 stages by 45 s, `D:/NebulaWork/build/a3-prof`).
+  4. Replays re-recorded once, one reference for every renderer (Vulkan's sun answer no longer differs by design).
+  5. The gate's replays pass.
+- **For a player.** Nothing visible beyond S0.2.3 to S0.2.5: the lens flare, pointer and balloon no longer lag two frames or misread under load.
+- **Read first.** (a) FM 1.5 (what the game thread waits for), 1.9 (the row on frame F - 2's answers), 2.1 rule 2, 2.2 (the hand-over table's probe line) and 2.15 (item 10 and N-1068's row) still describe the probes: they are corrected in this landing (plan decision 9), which the sources did not list as an edit. (b) N-1068's row proposed measuring kDelay 2 against 3 first; with the path deleted that choice is not made. (c) P-332 (the Direct3D 11 depth tests reading a count of 2 under load) sits in this path; the sources do not say whether this step makes its hunt unnecessary, and the report's last section is the state of it. (d) A search of `native/include` at 790626cb5 finds the probe answers only in the host service `probe_results` and no mod call; confirm in the mod call tables (`NebulaModCalls.cpp`) before writing a stub.
+- **Parts closed here** (plan decision 1: parts of this package's rows that a note names and no earlier step places; a part that belongs to another package is named with that package's step).
+  - [ ] N-1068: the wait; its measure of `kDelay` 2 against 3 is void. P-242: the lens flare's, pointer's and balloon's reads (S0.2.3 to S0.2.5) and the released-unwalked answers (the path is gone); its test "releases lists under load and checks the answers' frame" is void.
+  - [ ] P-219's pointer half: the unprojection through the console's projection and viewport forms goes with S0.2.3; also its note's `TDDraw::invProject` taking depth as a 24-bit integer (`DirectDraw.cpp:356`) and `project2D` reading the viewport back from the draw state (`DirectDraw.cpp:387`, `Frame::getViewportv`): `invProject` goes with the pointer and the balloon; `project2D` has other callers (`MarioActorSpecialDraw.cpp`, `MarioSearchLight.cpp`): read them first. P-219's movie-volume half is G6.6. Their reads of the console's viewport form are closed in R4v.1 (plan decision).
+  - [ ] P-260's load worker half (the stage loads on a worker, or in one piece, with no frame stepping game state the stage keeps) is G3.7; its skip's budget is G8.2 (P-235).
+  - [ ] P-214's movie frame: the entries' firing by the movie's place is G9.1 (P-203).
+  - [ ] P-293 and P-295: only the probe parts close here; their other parts are R7.8.
+  - [ ] A mod service that exposes the answers: answers "not available" behind a marked stub and is listed for the mod stage (plan decision).
+
+### Rows of this package
+
+| Row | Today | After | Closes at |
+| --- | --- | --- | --- |
+| N-1068 | The game thread waits for frame F - 2's screen probe answers, about 3 ms a step (15.8% and 18.3% of game-thread samples). | The wait is gone with the whole question-and-answer path; the step reads nothing from the picture. | S0.2.6 |
+| P-214 | Draws that do step work: the map's capture, the pointer blur's hide flags, the message's sound tag, the movie's shown frame follow the draw count. | The step makes each decision and stores it; `draw()` only records. | S0.2.1 |
+| P-242 | The step's input from screen probes follows the computer's load: a list released unwalked gives an older frame's answers. | No probes: every renderer gives the same step hashes under load. | S0.2.6 |
+| P-249 | Mario's draw and view code advances the game's random stream, so later numbers depend on the draw count. | Drawing takes its own random stream; the step's stream is advanced only by the step. Replay changes once. | S0.2.1 |
+| P-260 | The stage's load runs in 4 ms wall-time slices and the placement's id sets are scanned per placement; step counts follow the machine's speed. | Load slices of a fixed count of work; id sets found through a map; the load worker is G3.7's, the skip's budget G8.2's. | S0.2.1 (the rest: G3.7, G8.2) |
+| P-261 | The settings menu's galaxy and star requests are served from the draw pass, so a state change begins after the frame's steps. | The requests are taken at the step's start as that step's input. | S0.2.1 |
+| P-294 | The star pointer's and talk balloon's world points and the flare's visibility come from the drawn picture's depth, two frames late. | A ray from the step's camera through the pointer against collision and the targets' spheres; the flare decided on the graphics card. | S0.2.5 |
+
+
+---
+
+## S0.3 Dead fields left by shelved work come off main
+
+Ray tracing was shelved for version 2 (owner, 11-16), but main still carried its shaders, program forms, frame-list fields and per-frame signals from the game, and the cook still wrote data that only the tracer read. Much went with earlier stages. This package finds what is left and removes it. A player sees nothing; the game's files and the game's per-frame work get a little smaller.
+
+- **Design:** the rows' own notes (N-1053: "file 05 package order; branch ray-tracing keeps the work"; N-1054: the E13a stage 4b plan, store 36 and store 37 changes, and its proof). No FM or INV section covers them. FM 2.9 and FM 2.4 say the model file carries no field without a reader.
+- **Needs first:** nothing in the skeleton.
+- **Rows:** 2 (N-1053, N-1054)
+
+### S0.3.1 Search main for what the rows name
+
+- **What changes.** Nothing changes in the code; the step records, for each name the rows give, whether it is still at main and how many places hold it. N-1053 names the shelved feature's shaders, program forms, frame-list fields and the game's per-frame signals. N-1054 names what the cook wrote only for the tracer: the programs' traced text (`NATIVE_TRACED` and `NATIVE_PREPASS` blocks, `TRACED_LEVEL`, `TRACED_FACE`, `TRACED_UNKEYED`, the vertex gain input), the meshes' gain stream, `flats_at`, the glow shapes the renderer keeps per model, the hit record's fields, the generated texture levels, and the pak's `RtStages` and `RtEffects` tables. Much went with earlier stages (store 37, model 12; the skeleton): the model file's version 12 already says "no hit records, paint lights, glow shapes or flat bits (the tracer's)" (`nebula_model.h`). Record the counts, name by name, in the step's log.
+- **Where.** Search roots: `runtime`, `native`, `crates`, `tools`, `platform`. Checked for this card at 790626cb5 with `git grep` (the step's own search is still to be done and recorded): no hit for `NATIVE_TRACED`, `NATIVE_PREPASS`, `TRACED_LEVEL`, `TRACED_FACE`, `TRACED_UNKEYED`, `flats_at`, `world_lights`, `shadow_drops`, `point_lights`, `light_set_owners`, `clip_volumes`, `NEBULA_PASS_TRACED_DRAW`, `tracedOnly` or `setStageLight` in `runtime` or `native` (the last seven are the frame-list fields and emitters named in `docs/audit-2026-11-17/B-findings-port.md`, lines 249-252); `GameLightSignal.cpp` is gone (report, 11-19 22:3x). The tracer's own sources that audit file B lists (`runtime/src/render/rt/`, `core/rt_*.cpp`, the build switch `NEBULA_RAY_TRACING`, the `rt_` members of `RenderCore`) are not at main either: a search of the tree outside `docs/` finds no `rt_backend`, `rt_walk`, `rt_follow_setting` or `NEBULA_RAY_TRACING`, only a comment naming `rt_walk.cpp` in `native/petari/src/Game/System/LumaDrawLight.cpp` (35). Still at main: the cook checks an added pack's ray tables and writes them nowhere (`crates/nebula-import/src/cook/overlay.rs` 19-30 `RAY_TABLES`, 780, 1184; `RtStages` and `RtEffects` are named at 26-27, 32 and in its tests at 1199, 1200, 1216, and `crates/luma-validate/src/rules/layers.rs` 110 lists the same tables); comments that say "traced" in `crates/nebula-import/src/cook/programs.rs` (554, 744, 1164, 1534); comments naming ray tracing in `native/petari/include/Game/Render/Material.hpp` (292) and `native/petari/src/Game/Render/ModelData.cpp` (20); the cook's check of ray-tracing rows in added content's shader files "checked, used for nothing" (`crates/nebula-import/src/cook/gltf.rs` 1475, `surface_shader.rs` 19 and 254; their tests `gltf_tests.rs` 672 and `surface_shader_tests.rs`) and two shader type lists that name a raytracing type (`post_shader.rs` 285, `surface_shader.rs` 381). Also `tools/dev/build_programs.py` and `runtime/src/render/programs/table.tsv` (exist).
+- **Rows.** N-1053: finds what is left. N-1054: finds what is left.
+- **Needs first.** nothing
+- **Old path.** none: nothing draws differently.
+- **Proof.**
+  1. A table of each named item with its count at main, before any change.
+  2. For each item with a count above 0, the file and line.
+- **For a player.** Nothing visible: it is how the code is built.
+- **Read first.** The hits above are by name only. A name found in a comment or in a test is not the same as a live reader; the step reads each hit before S0.3.2 removes it. The cook's own comments say the checks of added content's ray tables and rows exist so that a file that was valid before stays valid (`overlay.rs` 20, `surface_shader.rs` 254, `gltf_tests.rs` 672): they write nothing, so N-1054's "pak's `RtStages` and `RtEffects` tables" are already not written at main. S0.3.2 removes them (plan decision).
+
+### S0.3.2 Remove what is left
+
+- **What changes.** Whatever S0.3.1 finds is deleted: the shelved feature's leftover shaders, program forms, frame-list fields and per-frame signals (N-1053); the cook's traced program text, gain stream and glow shapes (N-1054). The cook's generated texture levels are not decided here: R2.3 decides them (plan decision). The shelved feature's two tables (`RtStages` and `RtEffects`) and the checks of them are removed (plan decision): the cook's check of an added pack's ray tables (`overlay.rs` `RAY_TABLES`, `crates/luma-validate/src/rules/layers.rs`) and the checks of ray-tracing rows in added content's shader files (`gltf.rs`, `surface_shader.rs`, `post_shader.rs`) with their tests. Content that still carries those tables loads with them ignored; that is noted for later work (plan decision). N-1054's plan: the cook writes none of it; the programs and `table.tsv` are built again (`tools/dev/build_programs.py`); the gate's US, PAL and Japanese paks are cooked again. If the cook's output changes, the three discs' game data are made again and the store version goes up. Both rows close.
+- **Where.** The files S0.3.1 records. Known to exist at 790626cb5: `crates/nebula-import/src/cook/overlay.rs`, `programs.rs`, `texture.rs`, `tools/dev/build_programs.py`, `runtime/src/render/programs/table.tsv`.
+- **Rows.** N-1053: whole. N-1054: whole.
+- **Needs first.** S0.3.1
+- **Old path.** The dead fields themselves; deleted here. The branch `ray-tracing` keeps the work (N-1053's note).
+- **Proof.**
+  1. The program set is the same after the change (N-1054: "the program set the same at 4b-2").
+  2. The tests for the added content's ray data (N-1054's wording is "the mods' ray data") are removed with the tables and checks they test; a pack that still carries the two tables loads with them ignored (plan decision; the sources name no test, so one is written).
+  3. The gate's pictures are the same.
+  4. A search for each name of S0.3.1's table returns nothing, or only the lines the step records as kept, with the reason.
+- **For a player.** Nothing visible: it is how the code is built.
+- **Read first.** N-1054 lists "the generated texture levels" as read only by the tracer. At main the cook still writes `NEBULA_TEXTURE_GENERATED_LEVELS` (`native/include/nebula_cooked_texture.h`, `crates/nebula-import/src/cook/texture.rs`), and the draw walk forces such a texture's lowest and highest level to 0 (`draw_walker.cpp`, 823 and 925). Decided (plan decision): they are decided in R2.3 (P-059, with P-155's line on generated levels), not here; this step leaves the flag and the walk's forcing as they are.
+
+### Rows of this package
+
+| Row | Today | After | Closes at |
+| --- | --- | --- | --- |
+| N-1053 | Ray tracing is shelved, but main carried its shaders, program forms, frame-list fields and the game's per-frame signals for it. | None of it on main; the branch `ray-tracing` keeps the work. | S0.3.2 |
+| N-1054 | The cook still writes what only the tracer read: traced program text, the gain stream, `flats_at`, glow shapes, hit record fields, and the `RtStages` and `RtEffects` tables (generated texture levels are decided in R2.3). | The cook writes none of it, and the two tables' checks are gone (content carrying them loads with them ignored); programs and `table.tsv` built again; the three discs' paks cooked again; pictures the same. | S0.3.2 |
