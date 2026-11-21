@@ -658,7 +658,8 @@ class Cases(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             err = io.StringIO()
             with contextlib.redirect_stderr(err):
-                self.assertEqual(gate.main(["land"]), 2)
+                # land_main settles the live folder first: a temporary one, never the real D:/NebulaWork/plan/native
+                self.assertEqual(gate.main(["land", "--live", str(pathlib.Path(self.tmp.name) / "live-none")]), 2)
         self.assertIn("one of the two", err.getvalue())
 
 
@@ -782,7 +783,8 @@ class AlsoTest(unittest.TestCase):
         code, out, err = self.refused(["--main", "--move", "--scope", "repo", "--also", "tour/tablet"])
         self.assertEqual(code, 2)
         self.assertIn("main moves only through gate.py land <branch>", err, "by hand it is refused first")
-        code, out, err = self.refused(["land", "--queue", "--also", "tour/d3d12", "--queue-file", str(pathlib.Path(self.tmp.name) / "q2.tsv")])
+        code, out, err = self.refused(["land", "--queue", "--also", "tour/d3d12", "--queue-file", str(pathlib.Path(self.tmp.name) / "q2.tsv"),
+                                       "--live", str(pathlib.Path(self.tmp.name) / "live-q2")])
         self.assertEqual(code, 2)
         self.assertIn("--also goes with branches", err)
 
