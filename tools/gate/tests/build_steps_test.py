@@ -4,8 +4,9 @@ Python process that prints a planted log and exits with a planted code.
 
     python -X utf8 -I tools/gate/tests/build_steps_test.py [--work FOLDER]
 
-The compiler cache's own client can fail for a moment on a busy machine (`sccache: error: Only one usage of each socket address ...
-(os error 10048)`): one job of thousands fails, no compiler said anything, and the whole build and the landing were lost.
+Seen on 2026-11-21: one job of about 4,700, in a build from nothing with the cache's server running throughout, ended with a line of the
+cache's own client (`sccache: error: Only one usage of each socket address ... (os error 10048)`) and no compiler message, and the
+whole build and the landing were lost.
 
   cache_error_only_is_built_again       a log whose every FAILED block has an `sccache: error` line and no compiler or linker diagnostic:
                                         the step runs once more, one line says so, the second result is the step's (passes)
@@ -19,6 +20,11 @@ The compiler cache's own client can fail for a moment on a busy machine (`sccach
                                         ends exit 2 with the line the gate reads
   gate_reads_exit_2_as_tool             gate.py build_windows: the not-judged line and exit 2 are kind `tool` (never `fail`); a real failure is
                                         still `fail`; each build run again by itself is one line TOOL in tool-faults.tsv with the could-not text
+  vcvars_is_in_front_of_every_start     the step runs in the build environment (a fake vcvars .bat sets a variable the fake step prints), the
+                                        first time and the second (the run-again goes through the same Start-Step)
+  failure_is_named                      gate.py build_windows: the count is the script's (the sum of the steps' N FAILED) and the detail is
+                                        `<step>: <first compiler or linker message>` (MSVC, clang, linker), else the first FAILED line; two
+                                        different compile errors are two different texts (the signature of three failures in a row)
   output_is_line_buffered               gate.unbuffer_output: a line printed to a pipe arrives at once (a landing showed nothing for 543 s)
 Exit 0 when every case holds.
 """
@@ -54,14 +60,14 @@ def log(*blocks):
     return "[1/9] Building CXX x\n" + "".join(blocks) + "[7/9] Building CXX y\n" + STOP
 
 
-FAKE = """import json, pathlib, sys
+FAKE = """import json, os, pathlib, sys
 state = pathlib.Path(sys.argv[1])
 spec = json.loads((state / "spec.json").read_text(encoding="utf-8"))
 counter = state / "runs.txt"
 n = len(counter.read_text(encoding="utf-8").split()) if counter.exists() else 0
 counter.write_text(counter.read_text(encoding="utf-8") + "x " if counter.exists() else "x ", encoding="utf-8")
 text, code = spec[min(n, len(spec) - 1)]
-sys.stdout.write(text)
+sys.stdout.write("VC=%s\\n" % os.environ.get("FAKE_VC", "unset") + text)
 sys.exit(code)
 """
 
@@ -72,7 +78,7 @@ def powershell():
 
 @unittest.skipUnless(powershell(), "the build steps are PowerShell on Windows")
 class Steps(unittest.TestCase):
-    def step(self, *runs):
+    def step(self, *runs, vcvars=""):
         """Runs `Step` of build_steps.ps1 over a fake command that prints each run's planted log and exits with its code.
         (output lines, runs made, the two counts)."""
         tmp = pathlib.Path(tempfile.mkdtemp(prefix="build-steps-"))
@@ -80,7 +86,7 @@ class Steps(unittest.TestCase):
         (tmp / "spec.json").write_text(json.dumps(runs), encoding="utf-8")
         (tmp / "fake.py").write_text(FAKE, encoding="utf-8")
         wrapper = tmp / "wrapper.ps1"
-        wrapper.write_text('$ErrorActionPreference = "Stop"\n$vcvars = ""\n. "%s"\n' % STEPS.as_posix()
+        wrapper.write_text('$ErrorActionPreference = "Stop"\n$vcvars = "%s"\n. "%s"\n' % (vcvars, STEPS.as_posix())
                            + 'Step "msvc" \'"%s" -I "%s" "%s"\' "%s"\n' % (sys.executable, (tmp / "fake.py").as_posix(), tmp.as_posix(),
                                                                        (tmp / "msvc.build.log").as_posix())
                            + '"RESULT failed=$($script:failed) cacheOnly=$($script:cacheOnly)"\n', encoding="utf-8")
@@ -93,6 +99,20 @@ class Steps(unittest.TestCase):
         counts = dict(kv.split("=") for kv in result[len("RESULT "):].split())
         self.tmp = tmp
         return lines, runs_made, (int(counts["failed"]), int(counts["cacheOnly"]))
+
+    def test_vcvars_is_in_front_of_every_start(self):
+        tmp = pathlib.Path(tempfile.mkdtemp(prefix="build-vcvars-"))
+        self.addCleanup(lambda: shutil.rmtree(tmp, ignore_errors=True))
+        bat = tmp / "vcvars64.bat"
+        bat.write_text("@echo off\r\nset FAKE_VC=on\r\n", encoding="ascii")
+        lines, runs, counts = self.step((log(CACHE_BLOCK), 1), ("ok\n", 0), vcvars=str(bat))
+        self.assertEqual((runs, counts), (2, (0, 0)), lines)
+        first = (self.tmp / "msvc.build.log.cache-error").read_text(encoding="utf-8")
+        second = (self.tmp / "msvc.build.log").read_text(encoding="utf-8")
+        self.assertIn("VC=on", first, "the first start has the build environment")
+        self.assertIn("VC=on", second, "and so does the run again")
+        lines, runs, counts = self.step(("ok\n", 0))
+        self.assertIn("VC=unset", (self.tmp / "msvc.build.log").read_text(encoding="utf-8"), "with no vcvars the variable is not there")
 
     def test_cache_error_only_is_built_again(self):
         lines, runs, counts = self.step((log(CACHE_BLOCK), 1), ("[1/1] Linking\n", 0))
@@ -228,6 +248,68 @@ class GateSide(unittest.TestCase):
     def test_a_pass_with_no_cache_trouble_writes_nothing(self):
         g = self.check(0, "game: exit 0, 0 FAILED, 5 s\nbins ok abc\n")
         self.assertEqual((g.results[-1]["state"], self.faults()), ("pass", []))
+
+
+def script_output(*steps):
+    """What build_windows.ps1 prints for steps ((name, exit, [indented lines])): one result line each, then the indented lines."""
+    out = []
+    for name, code, lines in steps:
+        n = sum(1 for l in lines if l.startswith("FAILED:"))
+        out.append("%s: exit %d, %d FAILED, 5 s" % (name, code, n))
+        out += ["  " + l for l in lines]
+    return "\n".join(out) + "\nbuild failed\n"
+
+
+class FailureNamed(unittest.TestCase):
+    def named(self, *steps):
+        return gate.build_failure(script_output(*steps))
+
+    def test_an_msvc_error(self):
+        n, why = self.named(("game", 0, []), ("msvc", 1, ["FAILED: CMakeFiles/b.dir/b.cpp.obj", "b.cpp(12): error C2065: 'x': undeclared identifier"]))
+        self.assertEqual((n, why), (1, "msvc: b.cpp(12): error C2065: 'x': undeclared identifier"))
+
+    def test_a_clang_error(self):
+        n, why = self.named(("game", 1, ["FAILED: native/c.o", "C:/t/c.cpp:3:1: error: expected ';' after expression"]))
+        self.assertEqual((n, why), (1, "game: C:/t/c.cpp:3:1: error: expected ';' after expression"))
+
+    def test_a_linker_error_and_a_fatal_error(self):
+        n, why = self.named(("msvc", 1, ["FAILED: nebula.exe", "a.obj : error LNK2019: unresolved external symbol y"]))
+        self.assertEqual(why, "msvc: a.obj : error LNK2019: unresolved external symbol y")
+        n, why = self.named(("msvc", 1, ["FAILED: d.obj", "d.cpp(1): fatal error C1083: Cannot open include file: 'q.h'"]))
+        self.assertTrue(why.startswith("msvc: d.cpp(1): fatal error C1083"), why)
+
+    def test_a_failure_with_no_diagnostic_line_names_the_failed_job(self):
+        n, why = self.named(("msvc", 1, ["FAILED: CMakeFiles/z.dir/z.cpp.obj"]))
+        self.assertEqual((n, why), (1, "msvc: FAILED: CMakeFiles/z.dir/z.cpp.obj"))
+        n, why = gate.build_failure("a tool broke\nbuild failed\n")
+        self.assertEqual((n, why), (None, "build failed"), "no step line at all: the old reading, the last line (last_line)")
+
+    def test_two_failed_steps_the_first_ones_line_is_taken_and_the_count_is_the_sum(self):
+        n, why = self.named(("game", 1, ["FAILED: g.o", "g.cpp:1:1: error: first"]),
+                            ("msvc", 1, ["FAILED: a.obj", "FAILED: b.obj", "a.cpp(1): error C2143: second"]))
+        self.assertEqual((n, why), (3, "game: g.cpp:1:1: error: first"))
+
+    def test_different_compile_errors_are_different_texts(self):
+        a = self.named(("msvc", 1, ["FAILED: a.obj", "a.cpp(1): error C2143: one"]))[1]
+        b = self.named(("msvc", 1, ["FAILED: b.obj", "b.cpp(2): error C2065: two"]))[1]
+        self.assertNotEqual(a, b)
+
+    def test_the_text_is_cut_to_200_characters_with_the_objects_path_kept(self):
+        why = self.named(("msvc", 1, ["FAILED: x.obj", "D:/very/long/path/" + "p/" * 80 + "x.cpp(1): error C2143: " + "m" * 100]))[1]
+        self.assertEqual(len(why), 200)
+        self.assertTrue(why.startswith("msvc: D:/very/long/path/"))
+
+    def test_a_cache_line_is_not_taken_as_the_diagnostic(self):
+        n, why = self.named(("msvc", 1, ["FAILED: a.obj", SCCACHE, "FAILED: b.obj", "b.cpp(2): error C2065: two"]))
+        self.assertEqual(why, "msvc: b.cpp(2): error C2065: two")
+
+    def test_the_gates_line_has_the_count_and_the_text(self):
+        case = GateSide("check")
+        case.setUp()
+        self.addCleanup(case.tearDown)
+        g = case.check(1, script_output(("msvc", 1, ["FAILED: a.obj", "a.cpp(1): error C2143: one"])))
+        self.assertEqual(g.results[-1]["detail"], "exit 1, 1 FAILED: msvc: a.cpp(1): error C2143: one")
+        self.assertEqual(g.results[-1]["state"], "fail")
 
 
 class Output(unittest.TestCase):

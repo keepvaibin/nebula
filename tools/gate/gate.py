@@ -810,6 +810,38 @@ def cache_again(g, text, check="build/windows"):
             print("gate.py: the tool-fault record could not be written (%s: %s)" % (type(e).__name__, e), flush=True)
 
 
+STEP_RESULT = re.compile(r"^(\S[^:]*): exit (-?\d+), (\d+) FAILED, \d+ s\s*$")
+COMPILER_MESSAGE = re.compile(r" error C|error LNK|: error:|fatal error")
+
+
+def build_failure(text):
+    """(the number of failed jobs, what failed) of build_windows.ps1's output: the count is the script's own, the sum of its steps'
+    `N FAILED`; the text is `<step>: <first diagnostic line>`, the first indented line under the first failed step that holds a
+    compiler or linker message, else that step's first `FAILED:` line, else the last line (last_line), cut to 200 characters. It is
+    what the failure's signature is made of (three failures in a row of the same text stop the step), so it names the job."""
+    lines = text.splitlines()
+    total, first, count = 0, None, 0
+    for i, line in enumerate(lines):
+        m = STEP_RESULT.match(line)
+        if m is None:
+            continue
+        failed = int(m.group(3))
+        total += failed
+        if first is None and (int(m.group(2)) != 0 or failed):
+            first = (m.group(1), i)
+        count += 1
+    if first is None:
+        return (total if count else None), last_line(text)
+    step, at = first
+    under = []
+    for line in lines[at + 1:]:
+        if not line.startswith(" ") or not line.strip():
+            break
+        under.append(line.strip())
+    said = (next((l for l in under if COMPILER_MESSAGE.search(l) and not l.startswith("sccache: error")), None) or next((l for l in under if l.startswith("FAILED:")), None))
+    return total, ("%s: %s" % (step, said) if said else last_line(text))[:200]
+
+
 def build_windows(g, root=None, bin_dir=None, sanitize="", coverage=False):
     """The game modules (clang) and every Windows program with the unit tests and the test extension (MSVC), into the
     build root; then the bin folder the harness runs. `sanitize`: the game modules with those sanitizers, `coverage`:
@@ -833,7 +865,8 @@ def build_windows(g, root=None, bin_dir=None, sanitize="", coverage=False):
             cached = next((l for l in text.splitlines() if CACHE_AGAIN in l), "")
             return False, "%s%s" % (NOT_JUDGED_BUILD, ("; " + cached) if cached else ""), None, "tool"
         if code != 0 or fails:
-            return False, "exit %d, %d FAILED: %s" % (code, len(fails), fails[0][8:120] if fails else last_line(text))
+            count, why = build_failure(text)
+            return False, "exit %d, %d FAILED: %s" % (code, count if count is not None else len(fails), why)
         if g.pak and not g.args.pak:
             write_pak_path(bin_dir, g.pak)    # another build of this run (the sanitizer's, the coverage one's): the data found already
         return True, "bins at %s" % bin_dir

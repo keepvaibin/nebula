@@ -4,10 +4,10 @@
 # counts in the including script's scope: $script:failed (steps that failed) and $script:cacheOnly (steps that failed twice in
 # the compiler cache alone).
 #
-# The compiler cache's own client can fail for a moment on a busy machine ("sccache: error: Only one usage of each socket
-# address ... (os error 10048)": Windows gave its connection to the server a local port that was in use) and it does not try
-# again. That is a fault of the tool chain, not of the change. When every FAILED block of a step's log holds a line that starts
-# with `sccache: error` and no compiler or linker diagnostic, the step is run once more by itself (the same command: ninja builds
+# The compiler cache's own client can fail without a compiler message. Seen on 2026-11-21: one job of about 4,700, in a build from
+# nothing with the cache's server running throughout, ended with "sccache: error: Only one usage of each socket address ...
+# (os error 10048)", a line of the client, and no compiler message. Nothing more is known of the cause.
+# When every FAILED block of a step's log holds a line that starts with `sccache: error` and no compiler or linker diagnostic, the step is run once more by itself (the same command: ninja builds
 # only what is missing) and one line says so; the second result is the step's result. A second failure of the same kind is
 # counted in $script:cacheOnly (the script ends "not judged", exit 2); a step with any real diagnostic is never run again.
 $script:failed = 0
@@ -15,7 +15,7 @@ $script:cacheOnly = 0
 
 function Start-Step([string]$Command, [string]$Log) {
     $prefix = if ($vcvars) { "call `"$vcvars`" >nul && " } else { "" }
-    $p = Start-Process -FilePath cmd.exe -ArgumentList "/d /c `"$env($Command) > `"$Log`" 2>&1`"" -WindowStyle Hidden -PassThru
+    $p = Start-Process -FilePath cmd.exe -ArgumentList "/d /c `"$prefix($Command) > `"$Log`" 2>&1`"" -WindowStyle Hidden -PassThru
     $null = $p.Handle  # held from the start, or ExitCode reads empty once the process has ended
     $p
 }
