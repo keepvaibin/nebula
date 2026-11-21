@@ -57,9 +57,9 @@ check(band.judge(94.0, flat, bad="lower")["verdict"] == "worse" and band.judge(1
 # Not measured is compared with nothing (never 0).
 r = band.judge(None, flat)
 check(r["verdict"] == "not measured" and r["median"] is None and r["band"] is None, "not measured: %s" % r)
-# A median of 0 gives a band of 0: any rise is outside it. (Kept as the design says; the report names it.)
+# Without a floor a median of 0 gives a band of 0: any rise is outside it (second_part_test.py gives each figure its floor).
 check(band.judge(0.0, [0.0] * 6)["verdict"] == "holds" and band.judge(0.1, [0.0] * 6)["verdict"] == "worse",
-      "median 0: the band is 0")
+      "median 0, no floor: the band is 0")
 check(band.FIGURES["gap_max_ms"] == "higher" and set(band.FIGURES) == set(m.COMPARED),
       "every compared figure has a bad side")
 
@@ -94,13 +94,14 @@ for part, other in (("computer", "PC2"), ("gpu", "Card B"), ("device", "pc-4core
           "a different %s has its own baseline" % part)
 
 # ---- Fakes for the runs ----
-pace = "[pace] seconds=10 steps=600 refresh_ms=8.333 missed=0 step_work_max_us=%d render_avg_us=800\n"
+pace = "[pace] seconds=10 steps=600 refresh_ms=8.333 missed=0 step_work_max_us=5000 render_avg_us=%d\n"
 
 
 class Machine:
-    """A machine with scripted answers: waits for quiet (True, "") and the card's use as (percent, text)."""
-    def __init__(self, quiet=None, card=None):
-        self.quiet, self.card, self.asked = list(quiet or []), list(card or []), 0
+    """A machine with scripted answers: waits for quiet (True, ""), the card's use as (percent, text), and the
+    processors' use by other programs over a run as (percent, text)."""
+    def __init__(self, quiet=None, card=None, cpu=None):
+        self.quiet, self.card, self.cpu, self.asked = list(quiet or []), list(card or []), list(cpu or []), 0
 
     def wait_quiet(self):
         self.asked += 1
@@ -108,6 +109,17 @@ class Machine:
 
     def card_use(self):
         return self.card.pop(0) if self.card else (0.0, "other programs use the card 0.0%")
+
+    def cpu_watch(self):
+        machine = self
+
+        class Watch:
+            def begin(self):
+                pass
+
+            def end(self):
+                return machine.cpu.pop(0) if machine.cpu else (0.0, "other programs use the processors 0.0%")
+        return Watch()
 
 
 def make_runner(steps, calls, extra=None):
@@ -171,18 +183,18 @@ v = verdict_of(work)
 g = entry(v, "gpu_ms")
 check(g["verdict"] == "not measured" and g["value"] is None and g["median"] is None and g["mark"] == "-" and
       v["exit"] == 0 and v["verdict"] == "ok", "the verdict file: a figure not measured is compared with nothing: %s" % g)
-s = entry(v, "step_max_ms")
+s = entry(v, "render_ms")
 check(s["verdict"] == "no baseline yet" or s["verdict"] == "holds", "the verdict file has each figure: %s" % s)
 # From the sixth run there is a baseline (five trusted earlier).
 code, said, calls, work, out = go(history, "d3d12", {"d3d12": [10000]}, "%09d" % 6)
-s = entry(verdict_of(work), "step_max_ms")
+s = entry(verdict_of(work), "render_ms")
 check(s["verdict"] == "holds" and s["median"] == 10.0 and abs(s["band"] - 0.5) < 1e-9 and s["mark"] == "trusted",
       "with five trusted lines the figure is compared: %s" % s)
 
 # ---- Better is reported, never an error ----
 code, said, calls, work, out = go(history, "d3d12", {"d3d12": [8000]}, "%09d" % 7)
-check(code == 0 and said == ["d3d12 better: step_max_ms"] and len(calls) == 1, "better: exit 0, no second run: %s %s" % (code, said))
-check(band.parse_marks(figure_rows(history)[-1]["marks"])["step_max_ms"] == "trusted", "a better figure is trusted")
+check(code == 0 and said == ["d3d12 better: render_ms"] and len(calls) == 1, "better: exit 0, no second run: %s %s" % (code, said))
+check(band.parse_marks(figure_rows(history)[-1]["marks"])["render_ms"] == "trusted", "a better figure is trusted")
 
 # ---- Worse once, fine the second time: ok, outlier then trusted ----
 n_before = len(figure_rows(history))
@@ -191,25 +203,25 @@ rows = figure_rows(history)
 check(code == 0 and len(calls) == 2 and calls[1][1].endswith("-again"), "run again once, in its own folder: %s %s" % (code, calls))
 check(len(rows) == n_before + 2, "both measures are kept")
 r1, r2 = rows[-2], rows[-1]
-check(band.parse_marks(r1["marks"])["step_max_ms"] == "outlier" and band.parse_marks(r2["marks"]) == {"step_max_ms": "trusted"},
+check(band.parse_marks(r1["marks"])["render_ms"] == "outlier" and band.parse_marks(r2["marks"]) == {"render_ms": "trusted"},
       "the first figure is an outlier, the second trusted, and the second's other figures carry no mark: %s | %s" % (
           r1["marks"], r2["marks"]))
-check(r1["step_max_ms"] == "12.00" and r2["step_max_ms"] == "10.00", "the figures are the two measures'")
-check(said == ["d3d12 ok (worse in step_max_ms once, fine when measured again)"], "the verdict is ok: %s" % said)
+check(r1["render_ms"] == "12.000" and r2["render_ms"] == "10.000", "the figures are the two measures'")
+check(said == ["d3d12 ok (worse in render_ms once, fine when measured again)"], "the verdict is ok: %s" % said)
 v = verdict_of(work)
-check(entry(v, "step_max_ms", 1)["verdict"] == "worse" and entry(v, "step_max_ms", 1)["mark"] == "outlier" and
-      entry(v, "step_max_ms", 2)["verdict"] == "holds" and entry(v, "step_max_ms", 2)["mark"] == "trusted" and
+check(entry(v, "render_ms", 1)["verdict"] == "worse" and entry(v, "render_ms", 1)["mark"] == "outlier" and
+      entry(v, "render_ms", 2)["verdict"] == "holds" and entry(v, "render_ms", 2)["mark"] == "trusted" and
       v["exit"] == 0, "the verdict file keeps both: %s" % v["figures"][:3])
-check(12.0 not in band.trusted_values(m.read_history(history), band.key_of(r1), "step_max_ms"),
+check(12.0 not in band.trusted_values(m.read_history(history), band.key_of(r1), "render_ms"),
       "an outlier is never in a baseline")
 
 # ---- Worse twice: WORSE, both kept as worse, exit 1 ----
 code, said, calls, work, out = go(history, "d3d12", {"d3d12": [13000, 13500]}, "%09d" % 9)
 rows = figure_rows(history)
-check(code == 1 and said == ["d3d12 WORSE: step_max_ms"] and len(calls) == 2, "worse twice: exit 1, %s %s" % (code, said))
-check(all(band.parse_marks(r["marks"])["step_max_ms"] == "worse" for r in rows[-2:]), "both lines are marked worse")
+check(code == 1 and said == ["d3d12 WORSE: render_ms"] and len(calls) == 2, "worse twice: exit 1, %s %s" % (code, said))
+check(all(band.parse_marks(r["marks"])["render_ms"] == "worse" for r in rows[-2:]), "both lines are marked worse")
 check(verdict_of(work)["exit"] == 1 and verdict_of(work)["verdict"] == "WORSE", "the verdict file says WORSE")
-check(not {13.0, 13.5} & set(band.trusted_values(m.read_history(history), band.key_of(rows[-1]), "step_max_ms")),
+check(not {13.0, 13.5} & set(band.trusted_values(m.read_history(history), band.key_of(rows[-1]), "render_ms")),
       "worse lines are not in the baseline")
 
 # ---- accept: the baseline restarts from a commit, its worse lines become trusted ----
@@ -219,12 +231,12 @@ f_out = io.StringIO()
 with contextlib.redirect_stdout(f_out):
     code = m.main(["accept", "--commit", worse_commit, "--history", str(history), "--renderer", "d3d12"])
 rows = figure_rows(history)
-trusted_now = band.trusted_values(m.read_history(history), band.key_of(rows[-1]), "step_max_ms")
+trusted_now = band.trusted_values(m.read_history(history), band.key_of(rows[-1]), "render_ms")
 check(code == 0 and trusted_now == [13.0, 13.5], "accept: the older lines retire, the worse lines from the commit on are trusted: %s %s" % (
     code, trusted_now))
 check("accepted from" in f_out.getvalue(), "accept says what it did: %s" % f_out.getvalue())
 code, said, calls, work, out = go(history, "d3d12", {"d3d12": [13000]}, "%09d" % 10)
-check(code == 0 and entry(verdict_of(work), "step_max_ms")["verdict"] == "no baseline yet",
+check(code == 0 and entry(verdict_of(work), "render_ms")["verdict"] == "no baseline yet",
       "after accept, the new level starts a baseline (only two trusted lines): %s %s" % (code, said))
 # A commit that is not in the history is refused (exit 2), changing nothing.
 size_before = history.read_text(encoding="utf-8")

@@ -123,6 +123,10 @@ class QuietMachine:
     def card_use(self):
         return 0.0, "other programs use the card 0.0%"
 
+    def cpu_watch(self):
+        return type("Watch", (), {"begin": lambda self: None,
+                                  "end": lambda self: (0.0, "other programs use the processors 0.0%")})()
+
 
 machine = QuietMachine()
 
@@ -200,7 +204,7 @@ def disturbed_runner(command, env=None, check=False):
 args.runs = "d3d12"
 before = len(m.read_history(args.history))
 failed, said = m.measure_runs(args, work / "measure3", disturbed_runner, machine=machine)
-check(failed == 3 and said == ["d3d12 not trusted (window: active first at 12.0 s, 40 of the quarter seconds)"] and
+check(failed == 3 and said == ["d3d12 not trusted (the window had the keyboard focus, first at 12.0 s, 40 of the quarter seconds)"] and
       len(m.read_history(args.history)) == before, "a reached window: not trusted, no line: %s" % said)
 check(m.window_disturbed(work / "measure") is None, "no watch file: nothing reached")
 
