@@ -1,12 +1,20 @@
 """page.py: the native plan's progress page (package T13, item 6).
 
-make_data() turns the plan's files into one small dictionary (progress-data.json); render() puts the page around it.
-The page (progress.html) is one self-contained file: no outside script, font or style, no address of any kind. It loads
-`progress-data.json` from beside it with fetch; when that fails (a page opened from disk cannot fetch) it draws the same
-data, which plan.py page embedded in a script tag of type application/json. Light and dark by prefers-color-scheme,
-colours as tokens on :root, system fonts, readable at phone width with no sideways scroll.
+Three files, so that each update is cheap for the agent that publishes it after every landing:
 
-The embedded copy means the HTML changes with each `plan.py page`; plan.py writes it only when its text differs.
+  progress.html        static: the layout, the script and what never changes with progress (the step ids, titles,
+                       packages and their order, embedded once from steps.tsv). Rewritten only when this tool or the
+                       plan's step list changes, never because progress changed.
+  progress-data.json   only what changes: per step its state, agent, commit and landing time (keyed by step id; a step
+                       still open is not in it), the blocked list with reasons, the claims, the tool-fault table, the
+                       flake count, a generated-at time. Compact JSON.
+  progress-local.html  the same page with the data embedded, for opening from disk (a page opened from disk cannot fetch
+                       the data file). Not published.
+
+The published pair is progress.html plus progress-data.json. The page fetches `progress-data.json` from beside it; when
+that fails it draws the data embedded in the page, if there is any (progress-local.html), else it says so. One
+self-contained file each: no outside script, font or style, no address of any kind. Light and dark by
+prefers-color-scheme, colours as tokens on :root, system fonts, readable at phone width with no sideways scroll.
 """
 import json
 
@@ -14,39 +22,47 @@ TITLE = "Nebula Native Progress"
 LAST_LANDINGS = 10
 
 
-def make_data(steps, landings, state, claims, stale, faults, flakes, now):
-    """`steps`: plan.read_steps (state, commit, agent). `landings`: live.read_landings. `state`: live.read_state.
-    `claims`: live.read_claims. `stale`: set of stale package names. `faults`: live.fault_groups. `flakes`: a count.
-    `now`: the time of writing (text)."""
-    titles = {s["step"]: s["title"] for s in steps}
-    packages, order = {}, []
+def make_static(steps):
+    """What never changes with progress: the step ids, titles, packages and order."""
+    order, totals = [], {}
     for s in steps:
-        p = packages.get(s["package"])
-        if p is None:
-            p = packages[s["package"]] = {"package": s["package"], "total": 0, "landed": 0, "started": 0, "blocked": 0}
+        if s["package"] not in totals:
             order.append(s["package"])
-        p["total"] += 1
-        if s["state"] in ("landed", "started", "blocked"):
-            p[s["state"]] += 1
-    started = [{"step": s["step"], "title": s["title"], "agent": s.get("agent") or "1", "branch": "native/" + s["step"]}
-               for s in steps if s["state"] == "started"]
-    blocked = [{"step": s["step"], "title": s["title"], "agent": s.get("agent") or "1",
-                "reason": (state.get(s["step"]) or {}).get("reason", "") or s.get("reason", "")}
-               for s in steps if s["state"] == "blocked"]
-    last = [{"step": r["step"], "title": titles.get(r["step"], ""), "time": r["finished"], "commit": r["commit"]}
-            for r in landings[-LAST_LANDINGS:]][::-1]
+            totals[s["package"]] = 0
+        totals[s["package"]] += 1
+    return {"title": TITLE, "total": len(steps), "packages": [{"package": p, "total": totals[p]} for p in order],
+            "steps": [{"id": s["step"], "package": s["package"], "title": s["title"]} for s in steps]}
+
+
+def make_data(steps, landings, state, claims, stale, faults, flakes, now):
+    """What changes. `steps`: plan.read_steps (state, commit, agent). `landings`: live.read_landings. `state`:
+    live.read_state. `claims`: live.read_claims. `stale`: set of stale package names. `faults`: live.fault_groups.
+    `flakes`: a count. `now`: the time of writing (text).
+
+    "steps" is keyed by step id and has no entry for a step still open; an entry has `state`, and `agent` (a started or
+    blocked step), `commit` and `time` (a landed step; the time is the landing's, when the tool recorded it)."""
+    when = {}
+    for r in landings:
+        when[r["step"]] = r["finished"]
+    by_step = {}
+    for s in steps:
+        if s["state"] == "open":
+            continue
+        e = {"state": s["state"]}
+        if s["state"] in ("started", "blocked"):
+            e["agent"] = s.get("agent") or "1"
+        if s["state"] == "landed":
+            if s["commit"]:
+                e["commit"] = s["commit"]
+            if when.get(s["step"]):
+                e["time"] = when[s["step"]]
+        by_step[s["step"]] = e
     return {
-        "title": TITLE,
         "generated": now,
-        "total": len(steps),
-        "landed": sum(1 for s in steps if s["state"] == "landed"),
-        "packages": [packages[p] for p in order],
-        "steps": [{"id": s["step"], "package": s["package"], "title": s["title"], "state": s["state"],
-                   "commit": s["commit"] if s["state"] == "landed" else "",
-                   "agent": (s.get("agent") or "1") if s["state"] in ("started", "blocked") else ""} for s in steps],
-        "landings": last,
-        "started": started,
-        "blocked": blocked,
+        "steps": by_step,
+        "blocked": [{"step": s["step"], "agent": s.get("agent") or "1",
+                     "reason": (state.get(s["step"]) or {}).get("reason", "") or s.get("reason", "")}
+                    for s in steps if s["state"] == "blocked"],
         "claims": [{"package": c["package"], "agent": c["agent"], "time": c["time"], "branch": c["branch"],
                     "stale": c["package"] in stale} for c in claims],
         "tool_faults": [{k: g[k] for k in ("signature", "count", "first_seen", "last_seen", "step", "agent", "kind", "check",
@@ -55,13 +71,17 @@ def make_data(steps, landings, state, claims, stale, faults, flakes, now):
     }
 
 
+def compact(data):
+    return json.dumps(data, sort_keys=True, separators=(",", ":"))
+
+
 def data_json(data):
-    return json.dumps(data, sort_keys=True, separators=(",", ":")) + "\n"
+    return compact(data) + "\n"
 
 
 def embed(data):
     """The data for a script tag: `</` and `<!--` cannot end the tag or open a comment."""
-    return json.dumps(data, sort_keys=True).replace("</", "<\\/").replace("<!--", "<\\u0021--")
+    return compact(data).replace("</", "<\\/").replace("<!--", "<\\u0021--")
 
 
 PAGE = r"""<!doctype html>
@@ -127,17 +147,20 @@ h2 { font-size: 1.05rem; margin: 28px 0 10px; }
 <div class="note" id="note" hidden></div>
 <div id="app"></div>
 </main>
-<script type="application/json" id="embedded-data">__DATA__</script>
+<script type="application/json" id="plan-static">__STATIC__</script>__LOCAL__
 <script>
 (function () {
   var app = document.getElementById("app");
+  var S = JSON.parse(document.getElementById("plan-static").textContent);
+  var titles = {};
+  S.steps.forEach(function (s) { titles[s.id] = s.title; });
   function el(tag, cls, text) {
     var e = document.createElement(tag);
     if (cls) e.className = cls;
     if (text !== undefined && text !== null) e.textContent = String(text);
     return e;
   }
-  function section(title) { var h = el("h2", null, title); app.appendChild(h); }
+  function section(title) { app.appendChild(el("h2", null, title)); }
   function bar(parts, total) {
     var b = el("div", "bar");
     parts.forEach(function (p) {
@@ -157,25 +180,36 @@ h2 { font-size: 1.05rem; margin: 28px 0 10px; }
     card.appendChild(dl);
   }
   function none(text) { app.appendChild(el("div", "muted", text)); }
+  function head(card, id, extra) {
+    var r = el("div", "row");
+    r.appendChild(el("b", null, id));
+    r.appendChild(el("span", null, titles[id] || ""));
+    (extra || []).forEach(function (x) { r.appendChild(x); });
+    card.appendChild(r);
+  }
 
   function draw(d) {
     app.textContent = "";
     document.getElementById("when").textContent = "Written " + d.generated;
+    var st = d.steps || {};
+    function stateOf(id) { return st[id] ? st[id].state : "open"; }
+    var n = { landed: 0, started: 0, blocked: 0 };
+    S.steps.forEach(function (s) { var x = stateOf(s.id); if (n[x] !== undefined) n[x] += 1; });
     var top = el("div", "card");
-    top.appendChild(el("div", "big", d.landed + " of " + d.total));
+    top.appendChild(el("div", "big", n.landed + " of " + S.total));
     top.appendChild(el("div", "muted", "steps landed"));
-    var started = d.steps.filter(function (s) { return s.state === "started"; }).length;
-    var blocked = d.steps.filter(function (s) { return s.state === "blocked"; }).length;
-    top.appendChild(bar([["landed", d.landed], ["started", started], ["blocked", blocked]], d.total));
+    top.appendChild(bar([["landed", n.landed], ["started", n.started], ["blocked", n.blocked]], S.total));
     app.appendChild(top);
 
     section("Packages");
     var pk = el("div", "card");
-    d.packages.forEach(function (p) {
+    S.packages.forEach(function (p) {
+      var c = { landed: 0, started: 0, blocked: 0 };
+      S.steps.forEach(function (s) { if (s.package === p.package) { var x = stateOf(s.id); if (c[x] !== undefined) c[x] += 1; } });
       var r = el("div", "pk");
       r.appendChild(el("span", null, p.package));
-      r.appendChild(bar([["landed", p.landed], ["started", p.started], ["blocked", p.blocked]], p.total));
-      r.appendChild(el("span", "n", p.landed + "/" + p.total));
+      r.appendChild(bar([["landed", c.landed], ["started", c.started], ["blocked", c.blocked]], p.total));
+      r.appendChild(el("span", "n", c.landed + "/" + p.total));
       pk.appendChild(r);
     });
     app.appendChild(pk);
@@ -183,52 +217,50 @@ h2 { font-size: 1.05rem; margin: 28px 0 10px; }
     section("All steps");
     var gridCard = el("div", "card");
     var g = el("div", "grid");
-    d.steps.forEach(function (s) {
-      var c = el("div", "cell " + s.state);
-      c.title = s.id + " " + s.title + " (" + s.state + ")";
+    S.steps.forEach(function (s) {
+      var x = stateOf(s.id);
+      var c = el("div", "cell " + x);
+      c.title = s.id + " " + s.title + " (" + x + ")";
       g.appendChild(c);
     });
     gridCard.appendChild(g);
     var lg = el("div", "legend muted");
-    [["landed", "landed"], ["started", "started"], ["blocked", "blocked"], ["open", "open"]].forEach(function (p) {
+    ["landed", "started", "blocked", "open"].forEach(function (name) {
       var item = el("span");
       var i = el("i");
-      i.style.background = "var(--" + p[0] + ")";
+      i.style.background = "var(--" + name + ")";
       item.appendChild(i);
-      item.appendChild(document.createTextNode(p[1]));
+      item.appendChild(document.createTextNode(name));
       lg.appendChild(item);
     });
     gridCard.appendChild(lg);
     app.appendChild(gridCard);
 
     section("Last landings");
-    if (!d.landings.length) none("None yet.");
-    d.landings.forEach(function (l) {
+    var landed = S.steps.filter(function (s) { return stateOf(s.id) === "landed" && st[s.id].time; });
+    landed.sort(function (a, b) { return st[a.id].time < st[b.id].time ? 1 : (st[a.id].time > st[b.id].time ? -1 : 0); });
+    if (!landed.length) none("None yet.");
+    landed.slice(0, 10).forEach(function (s) {
       var c = el("div", "card");
-      var r = el("div", "row");
-      r.appendChild(el("b", null, l.step));
-      r.appendChild(el("span", null, l.title));
-      c.appendChild(r);
-      c.appendChild(el("div", "muted", l.time + (l.commit ? "  commit " + l.commit : "")));
+      head(c, s.id);
+      c.appendChild(el("div", "muted", st[s.id].time + (st[s.id].commit ? "  commit " + st[s.id].commit : "")));
       app.appendChild(c);
     });
 
     section("Started");
-    if (!d.started.length) none("Nothing started.");
-    d.started.forEach(function (s) {
+    var started = S.steps.filter(function (s) { return stateOf(s.id) === "started"; });
+    if (!started.length) none("Nothing started.");
+    started.forEach(function (s) {
       var c = el("div", "card");
-      var r = el("div", "row");
-      r.appendChild(el("b", null, s.step));
-      r.appendChild(el("span", null, s.title));
-      r.appendChild(el("span", "tag", "agent " + s.agent));
-      c.appendChild(r);
-      c.appendChild(el("div", "muted", s.branch));
+      head(c, s.id, [el("span", "tag", "agent " + (st[s.id].agent || "1"))]);
+      c.appendChild(el("div", "muted", "native/" + s.id));
       app.appendChild(c);
     });
 
     section("Claims");
-    if (!d.claims.length) none("No package is claimed.");
-    d.claims.forEach(function (k) {
+    var claims = d.claims || [];
+    if (!claims.length) none("No package is claimed.");
+    claims.forEach(function (k) {
       var c = el("div", "card");
       var r = el("div", "row");
       r.appendChild(el("b", null, k.package));
@@ -240,20 +272,19 @@ h2 { font-size: 1.05rem; margin: 28px 0 10px; }
     });
 
     section("Blocked");
-    if (!d.blocked.length) none("Nothing is blocked.");
-    d.blocked.forEach(function (b) {
+    var blocked = d.blocked || [];
+    if (!blocked.length) none("Nothing is blocked.");
+    blocked.forEach(function (b) {
       var c = el("div", "card");
-      var r = el("div", "row");
-      r.appendChild(el("b", null, b.step));
-      r.appendChild(el("span", null, b.title));
-      c.appendChild(r);
+      head(c, b.step, [el("span", "tag", "agent " + b.agent)]);
       c.appendChild(el("div", null, b.reason || "(no reason written)"));
       app.appendChild(c);
     });
 
-    section("Tool faults (" + d.tool_faults.length + " kinds, most frequent first)");
-    if (!d.tool_faults.length) none("No tool fault recorded.");
-    d.tool_faults.forEach(function (f) {
+    var faults = d.tool_faults || [];
+    section("Tool faults (" + faults.length + " kinds, most frequent first)");
+    if (!faults.length) none("No tool fault recorded.");
+    faults.forEach(function (f) {
       var c = el("div", "card");
       var r = el("div", "row");
       r.appendChild(el("b", null, f.count + (f.count === 1 ? " time" : " times")));
@@ -271,14 +302,16 @@ h2 { font-size: 1.05rem; margin: 28px 0 10px; }
   }
 
   function embedded() {
-    try { return JSON.parse(document.getElementById("embedded-data").textContent); } catch (e) { return null; }
+    var e = document.getElementById("embedded-data");
+    if (!e) return null;
+    try { return JSON.parse(e.textContent); } catch (x) { return null; }
   }
   function fallback() {
     var d = embedded();
     if (d) {
-      var n = document.getElementById("note");
-      n.hidden = false;
-      n.textContent = "Shown from the data written into this page; the data file beside it could not be read.";
+      var note = document.getElementById("note");
+      note.hidden = false;
+      note.textContent = "Shown from the data written into this page; the data file beside it could not be read.";
       draw(d);
     } else {
       document.getElementById("when").textContent = "No data: progress-data.json could not be read and none is embedded.";
@@ -299,5 +332,11 @@ h2 { font-size: 1.05rem; margin: 28px 0 10px; }
 """
 
 
-def render(data):
-    return PAGE.replace("__DATA__", embed(data))
+def render(static, data=None):
+    """The page. With `data` (the local copy) the data is embedded as well; without, the page is the static one."""
+    local = ""
+    if data is not None:
+        local = '\n<script type="application/json" id="embedded-data">%s</script>' % embed(data)
+    head, _, rest = PAGE.partition("__STATIC__")      # one pass: no title or reason can be taken for a marker
+    mid, _, tail = rest.partition("__LOCAL__")
+    return head + embed(static) + mid + local + tail
