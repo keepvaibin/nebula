@@ -1,6 +1,8 @@
 """plan.py: the step tool of the native plan (package T13). The coding agent reads, codes and proves; this says what is next.
 
-    python -X utf8 -I tools/plan/plan.py next | status | rows [ID] | start ID | land ID | blocked ID "WHY" | tool "TEXT"
+    python -X utf8 -I tools/plan/plan.py next | status | page | rows [ID] | start ID | land ID | blocked ID "WHY"
+                                         | claim PACKAGE [--take-stale] | tool "TEXT" | toolfault --last --could-not "TEXT"
+    (next, start, land, blocked, claim, tool, toolfault and status take --agent 1|2; 1 is the default)
 
 The plan is `docs/plan/native/`: `steps.tsv` (order, step, package, title, package_needs, card_file, state, commit),
 the step cards in the three card files, the package row tables, `rows/<package>.tsv`. The repository's copy is the
@@ -13,27 +15,43 @@ next     The first step in file order whose state is `open`, whose needs are lan
          every step that does not itself need everything (and the package's own earlier steps). Prints the step, its
          whole card, its package's row table, the checks its changed paths will run, and the commands to start and to
          land it. If an earlier step is blocked it says so and names the first later step that does not depend on it.
-start    Branch `native/<id>` from main in `D:/NebulaWork/MarioGalaxyRecomp/N-<id>`; the step becomes `started`. Refuses
-         while three steps are started and not landed, and a step whose needs are not landed.
+         Two agents (--agent): agent 1, the master, follows the order of steps.tsv; while agent 2 holds a claim that is
+         not stale, agent 1 passes over the packages of agent 2's list that are not yet started and takes them only when
+         everything else it may do is done. Agent 2, the helper, has the fixed list G6, G7, G8, G9, G1, R10, R9, G4, in
+         that order, and is never given anything else; a package that is landed or claimed by agent 1 is skipped; when
+         the list is done or nothing on it can start, `next --agent 2` says so and the helper stops. Neither agent is
+         given a package whose needs are not landed, nor G2.1 to G2.7 while R7 is in work (or R7 while they are):
+         both change the frame and present code. A claim with no commit on its branch for 48 hours is reported as stale.
+start    Branch `native/<id>` from main in `D:/NebulaWork/MarioGalaxyRecomp/N-<id>`; the step becomes `started` and its
+         package is claimed by the agent. Refuses while three steps of the agent are started and not landed, a step whose
+         needs are not landed, a package another agent holds, and for agent 2 a package that is not on its list.
 land     Refuses unless every ledger row the card closes whole is `fixed` with a proof that names a test, a search or a
          measure, and every row it only advances has a dated note written by this branch; checks the file and line
          references in the changed documents and the commit messages (tools/verify/doc_refs.py); then hands the branch
          to the gate (`land_with_gate`, below). A pass sets `landed` and the commit in the same landing. A failure is
          stored by signature (failures.py): the third time in a row the same one comes back it exits with code 3.
+         A TOOL or ENV result is also written, at once, as a line of tool-faults.tsv (live.py), and the command that adds
+         the agent's "could not" sentence is printed.
 blocked  Sets `blocked`; writes the reason and the failure's first line into BLOCKED.md. `next` then skips to
          independent work.
-tool     Writes a tool fault into BLOCKED.md under "tools". The step is not blocked.
-status   Writes STATUS.md and prints it: steps landed, started, blocked, the last five landings, the next step. The
-         agent runs it at every start and after every context compaction; it is the only memory it needs.
+claim    Claims a package for the agent; a stale claim of the other agent is taken over with --take-stale (its branch is
+         left as it is).
+tool     Writes a tool fault into BLOCKED.md under "tools" and into tool-faults.tsv. The step is not blocked.
+toolfault --last --could-not "TEXT": the sentence on what the agent's last tool fault stopped it from doing.
+status   Writes STATUS.md and prints it: steps landed, started, blocked, claims, the last five landings, the next step.
+         The agent runs it at every start and after every context compaction; it is the only memory it needs.
+page     Writes progress-data.json and progress.html into the live folder (page.py), from steps.tsv, the live state, the
+         tool faults and tests/flakes.tsv. land, start, blocked and toolfault do it too, so the page is never behind.
 rows     What a card's "Rows." line means (closes whole / advances), for one step or all of them.
 
 Exit codes: 0 done; 1 refused or failed; 2 the command was wrong; 3 the same failure three times; 4 a tool or
 machine fault only (it does not count as a failure of the change).
 
-State lives in the plan tree (`--tree`, default the tree this file is in). `landed` and the commit are in steps.tsv and
-travel with the landing's own commit (and, after a pass, are written into the plan tree too). `started` and `blocked` are
-this tree's own: they are in `state.tsv`, untracked, so that steps.tsv stays what main has and the plan tree can pull
-main without a conflict. STATUS.md and landings.tsv are untracked too; BLOCKED.md is a plain file the agent may commit.
+State. `landed` and the commit are in steps.tsv (the repository) and travel with the landing's own commit; after a pass
+they are written into the plan tree too. Everything that more than one agent, or the progress page, must see is in the
+live folder (LIVE below; `--live` for tests): started and blocked steps, claims, tool faults, the landings' times, the
+page. It is never kept in a file inside one work folder. STATUS.md is the plan tree's own, untracked; BLOCKED.md is a
+plain file the agent may commit.
 """
 import argparse
 import datetime
@@ -53,6 +71,8 @@ sys.path.insert(0, str(TREE / "tools" / "verify"))
 
 import failures  # noqa: E402
 import doc_refs  # noqa: E402
+import live as lv  # noqa: E402
+import page  # noqa: E402
 
 GIT = "C:/Program Files/Git/cmd/git.exe"
 NATIVE = "docs/plan/native"
@@ -61,6 +81,10 @@ FAILURES = "D:/NebulaWork/plan/landing-failures.tsv"
 TABLET = "R52WA0FXE5J"
 TABLET_WAIT = 30
 MAX_STARTED = 3
+LIVE = "D:/NebulaWork/plan/native"       # the live state: claims, started and blocked steps, tool faults, the page
+AGENT2_LIST = ("G6", "G7", "G8", "G9", "G1", "R10", "R9", "G4")   # the helper's packages, in this order, and no others
+# Two groups of steps that must not be in work at the same time (both change the renderers' frame and present code).
+PAIRS = ((("G2a",), ("R7",)),)
 
 STEP_COLUMNS = ["order", "step", "package", "title", "package_needs", "card_file", "state", "commit"]
 STATES = ("open", "started", "blocked", "landed")
@@ -116,26 +140,27 @@ def read_base(tree):
     return steps
 
 
-def read_local(tree):
-    """{step id: state} from `state.tsv`: the started and blocked steps of this plan tree."""
-    path = native(tree) / "state.tsv"
-    out = {}
-    if path.exists():
-        for line in path.read_text(encoding="utf-8").splitlines()[1:]:
-            cells = line.split("\t")
-            if len(cells) >= 2 and cells[1] in ("started", "blocked"):
-                out[cells[0]] = cells[1]
-    return out
+def live_dir(live=None):
+    return pathlib.Path(live or LIVE)
 
 
-def read_steps(tree):
+def now():
+    return datetime.datetime.now()
+
+
+atomic_write = lv.atomic_write
+
+
+def read_steps(tree, live=None):
     """The steps, in file order, with their state: what `steps.tsv` says (`open` or `landed`, with the commit), and for an
-    open step the local state (`started`, `blocked`)."""
+    open step the live state (`started`, `blocked`, with `agent` and `reason`). Every row has `agent` and `reason`."""
     steps = read_base(tree)
-    local = read_local(tree)
+    local = lv.read_state(live_dir(live))
     for s in steps:
+        s["agent"], s["reason"] = "", ""
         if s["state"] == "open" and s["step"] in local:
-            s["state"] = local[s["step"]]
+            e = local[s["step"]]
+            s["state"], s["agent"], s["reason"] = e["state"], e["agent"], e["reason"]
     return steps
 
 
@@ -144,44 +169,22 @@ def write_steps(tree, steps):
     atomic_write(native(tree) / "steps.tsv", text)
 
 
-def atomic_write(path, text):
-    path = pathlib.Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
-            f.write(text)
-        os.replace(tmp, path)
-    except BaseException:
-        if os.path.exists(tmp):
-            os.unlink(tmp)
-        raise
-
-
-def set_state(tree, step_id, state, commit=None):
+def set_state(tree, step_id, state, commit=None, agent=1, reason="", live=None, track=True):
     """Sets a step's state. `landed` (with the commit) is written into steps.tsv: that is what a landing carries.
-    `started` and `blocked` are this plan tree's own, kept in the untracked `state.tsv` beside it, so that steps.tsv stays
-    the file main has and the plan tree can follow main without a conflict; `open` takes a step out of `state.tsv`."""
+    `started` and `blocked` are the live folder's (state.tsv there, with the agent and the reason), so that both agents
+    and the page see them and steps.tsv stays what main has; `open` takes a step out of it. `track` False leaves the live
+    folder alone (the landing's own commit, in the work folder, before the gate has answered)."""
     base = read_base(tree)
     row = find(base, step_id)
     if row is None:
         raise KeyError(step_id)
-    local = read_local(tree)
     if state == "landed":
         row["state"] = "landed"
         if commit is not None:
             row["commit"] = commit
         write_steps(tree, base)
-        local.pop(step_id, None)
-    elif state == "open":
-        local.pop(step_id, None)
-    else:
-        local[step_id] = state
-    path = native(tree) / "state.tsv"
-    if not local and not path.exists():
-        return                            # nothing local to keep: no file is made (a work folder stays clean)
-    ordered = [(s["step"], local[s["step"]]) for s in base if s["step"] in local]
-    atomic_write(path, "step\tstate\n" + "".join("%s\t%s\n" % p for p in ordered))
+    if track:
+        lv.set_state_entry(live_dir(live), step_id, state, agent, reason)
 
 
 def find(steps, step_id):
@@ -229,20 +232,113 @@ def unmet(step, steps):
 
 
 class Choice:
-    def __init__(self, step, blocked_before):
-        self.step, self.blocked_before = step, blocked_before
+    def __init__(self, step, blocked_before, notes=()):
+        self.step, self.blocked_before, self.notes = step, blocked_before, list(notes)
 
 
-def choose_next(steps):
-    """The step `next` offers, with the blocked steps that came before it in the file (the reason it is not the first
-    open one). None when nothing can start."""
-    blocked = []
+def group_ids(steps, token):
+    """The step ids of a package, or of a split (`G2a`)."""
+    if token in SPLITS:
+        pkg, numbers = SPLITS[token]
+        return {"%s.%d" % (pkg, n) for n in numbers}
+    return {s["step"] for s in steps if s["package"] == token}
+
+
+def pair_conflict(step, steps):
+    """Why `step` may not start now because its pair is in work ("" when it may): a started step in the other group."""
+    for left, right in PAIRS:
+        a = set().union(*[group_ids(steps, x) for x in left])
+        b = set().union(*[group_ids(steps, x) for x in right])
+        for mine, other, name in ((a, b, right), (b, a, left)):
+            if step["step"] in mine and any(s["state"] == "started" and s["step"] in other for s in steps):
+                return "%s is in work, and both change the renderers' frame and present code" % "/".join(name)
+    return ""
+
+
+def has_progress(steps, package):
+    return any(s["package"] == package and s["state"] in ("landed", "started", "blocked") for s in steps)
+
+
+def choose_next(steps, claims=(), stale=frozenset()):
+    """The step agent 1 (the master) is offered: the first in file order that is open, has its needs landed, is not of a
+    package another agent holds, and whose pair is not in work; with the blocked steps that came before it in the file.
+    While agent 2 holds a claim that is not stale, packages of agent 2's list that have no step landed or started are
+    left to the end. None when nothing can start."""
+    helper_active = any(c["agent"] == "2" and c["package"] not in stale for c in claims)
+    blocked, deferred = [], []
     for s in steps:
         if s["state"] == "blocked":
             blocked.append(s)
-        elif s["state"] == "open" and not unmet(s, steps):
-            return Choice(s, blocked)
+            continue
+        if s["state"] != "open" or unmet(s, steps):
+            continue
+        c = lv.claim_of(claims, s["package"])
+        if c and c["agent"] != "1":
+            continue
+        if pair_conflict(s, steps):
+            continue
+        if helper_active and s["package"] in AGENT2_LIST and not (c and c["agent"] == "1") and not has_progress(steps, s["package"]):
+            deferred.append(s)
+            continue
+        return Choice(s, blocked)
+    if deferred:
+        return Choice(deferred[0], blocked, ["Everything else agent 1 may do is done, so it takes package %s from agent 2's list." %
+                                             deferred[0]["package"]])
     return None
+
+
+def choose_helper(steps, claims=(), stale=frozenset()):
+    """What agent 2 (the helper) is offered: (Choice or None, [(package, why not)]). Its list, in its order; a package
+    already landed or held by agent 1 is skipped; a package is done in order, so only its first step that is not landed
+    can be offered."""
+    report = []
+    for pkg in AGENT2_LIST:
+        mine = [s for s in steps if s["package"] == pkg]
+        pending = [s for s in mine if s["state"] != "landed"]
+        if not mine:
+            report.append((pkg, "is not in the plan"))
+            continue
+        if not pending:
+            report.append((pkg, "is landed"))
+            continue
+        c = lv.claim_of(claims, pkg)
+        if c and c["agent"] != "2":
+            report.append((pkg, "is claimed by agent %s%s" % (c["agent"], " (stale)" if pkg in stale else "")))
+            continue
+        s = pending[0]
+        if s["state"] == "started":
+            report.append((pkg, "has step %s started%s: land it first" % (s["step"], " by agent %s" % s["agent"] if s["agent"] else "")))
+            continue
+        if s["state"] == "blocked":
+            report.append((pkg, "has step %s blocked: %s" % (s["step"], s["reason"] or "(no reason written)")))
+            continue
+        waiting = unmet(s, steps)
+        if waiting:
+            by_package = {}
+            for sid, _state in waiting:
+                owner = find(steps, sid)
+                by_package.setdefault(owner["package"] if owner else sid, []).append(sid)
+            shown = ", ".join("%s (%d not landed, first %s)" % (p, len(ids), ids[0]) for p, ids in by_package.items())
+            report.append((pkg, "waits for %s" % shown))
+            continue
+        why = pair_conflict(s, steps)
+        if why:
+            report.append((pkg, "waits: " + why))
+            continue
+        return Choice(s, []), report
+    return None, report
+
+
+def branch_time(tree, branch):
+    """The time of the newest commit of a branch, in seconds, or None when the branch is not there."""
+    r = git(tree, "log", "-1", "--format=%ct", "refs/heads/" + branch)
+    if r.returncode != 0 or not r.stdout.strip().isdigit():
+        return None
+    return int(r.stdout.strip())
+
+
+def stale_of(tree, claims, at=None):
+    return lv.stale_packages(claims, lambda b: branch_time(tree, b), at or now())
 
 
 # ---- cards ---------------------------------------------------------------------------------------------------
@@ -743,7 +839,7 @@ def blocked_reasons(tree):
     return out
 
 
-def tool_faults(tree):
+def tool_notes(tree):
     path = native(tree) / "BLOCKED.md"
     if not path.exists():
         return []
@@ -756,49 +852,48 @@ def tool_faults(tree):
     return out
 
 
-def read_landings(tree):
-    path = native(tree) / "landings.tsv"
-    rows = []
-    if path.exists():
-        for line in path.read_text(encoding="utf-8").splitlines()[1:]:
-            c = line.split("\t")
-            if len(c) >= 4:
-                rows.append(c)
-    return rows
-
-
-def add_landing(tree, step_id, commit, seconds, when=None):
-    path = native(tree) / "landings.tsv"
-    text = path.read_text(encoding="utf-8") if path.exists() else "step\tcommit\tfinished\tseconds\n"
-    when = (when or datetime.datetime.now()).isoformat(timespec="minutes")
-    atomic_write(path, text + "%s\t%s\t%s\t%d\n" % (step_id, commit, when, seconds))
-
-
 def work_folder(work_root, step_id):
     return pathlib.Path(work_root) / ("N-" + step_id)
 
 
-def status_text(tree, work_root=WORK_ROOT, now=None):
-    steps = read_steps(tree)
+def count_flakes(tree):
+    """The number of lines in tests/flakes.tsv (the header, if it has one, not counted); 0 when there is no file."""
+    path = pathlib.Path(tree) / "tests" / "flakes.tsv"
+    if not path.exists():
+        return 0
+    lines = [l for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
+    return len(lines) - (1 if lines and lines[0].lower().startswith(("date", "time")) else 0)
+
+
+def status_text(tree, work_root=WORK_ROOT, at=None, live=None):
+    steps = read_steps(tree, live)
     by = {s: [x for x in steps if x["state"] == s] for s in STATES}
     reasons = blocked_reasons(tree)
-    now = now or datetime.datetime.now()
+    at = at or now()
+    claims = lv.read_claims(live_dir(live))
+    stale = stale_of(tree, claims, at)
     out = ["# Native plan: status", "", "Written %s by plan.py status. Run it at every start and after every context "
-           "compaction." % now.isoformat(timespec="minutes"), "",
+           "compaction." % at.isoformat(timespec="minutes"), "",
            "Steps landed: %d of %d." % (len(by["landed"]), len(steps)), ""]
-    out.append("## Started (%d of %d allowed)" % (len(by["started"]), MAX_STARTED))
+    out.append("## Started (%d, at most %d for one agent)" % (len(by["started"]), MAX_STARTED))
     out.append("")
-    out += ["- %s %s: branch native/%s in %s" % (s["step"], s["title"], s["step"], work_folder(work_root, s["step"]).as_posix())
-            for s in by["started"]] or ["- none"]
+    out += ["- %s %s: agent %s, branch native/%s in %s" % (s["step"], s["title"], s["agent"] or "1", s["step"],
+                                                          work_folder(work_root, s["step"]).as_posix()) for s in by["started"]] or ["- none"]
     out += ["", "## Blocked (%d)" % len(by["blocked"]), ""]
-    out += ["- %s %s: %s" % (s["step"], s["title"], reasons.get(s["step"], "(no reason written)")) for s in by["blocked"]] or ["- none"]
-    faults = tool_faults(tree)
-    out += ["", "## Tool faults reported (%d)" % len(faults), ""] + (faults[-5:] or ["- none"])
+    out += ["- %s %s: %s" % (s["step"], s["title"], s["reason"] or reasons.get(s["step"], "(no reason written)"))
+            for s in by["blocked"]] or ["- none"]
+    out += ["", "## Claims (%d)" % len(claims), ""]
+    out += ["- %s: agent %s since %s%s%s" % (c["package"], c["agent"], c["time"], ", branch " + c["branch"] if c["branch"] else "",
+                                            " STALE (no commit for %d hours): plan.py claim %s --take-stale" % (lv.STALE_HOURS, c["package"])
+                                            if c["package"] in stale else "") for c in claims] or ["- none"]
+    faults = lv.fault_groups(lv.read_faults(live_dir(live)))
+    out += ["", "## Tool faults (%d kinds, %d events)" % (len(faults), sum(g["count"] for g in faults)), ""]
+    out += ["- %dx %s %s: %s" % (g["count"], g["kind"], g["check"], g["first_error"][:100]) for g in faults[:5]] or ["- none"]
     out += ["", "## Last five landings", ""]
-    last = read_landings(tree)[-5:]
-    out += ["- %s: commit %s, %s, %s s" % (c[0], c[1], c[2], c[3]) for c in reversed(last)] or ["- none yet"]
-    choice = choose_next(steps)
-    out += ["", "## Next", ""]
+    last = lv.read_landings(live_dir(live))[-5:]
+    out += ["- %s: commit %s, %s, %s s" % (c["step"], c["commit"], c["finished"], c["seconds"]) for c in reversed(last)] or ["- none yet"]
+    choice = choose_next(steps, claims, stale)
+    out += ["", "## Next (agent 1)", ""]
     if choice:
         out.append("- %s %s (plan.py next prints its card)" % (choice.step["step"], choice.step["title"]))
         if choice.blocked_before:
@@ -808,15 +903,87 @@ def status_text(tree, work_root=WORK_ROOT, now=None):
     else:
         waiting = [s["step"] for s in by["started"]]
         out.append("- nothing can start now" + ("; steps in progress: " + ", ".join(waiting) if waiting else ""))
+    helper, report = choose_helper(steps, claims, stale)
+    out += ["", "## Next (agent 2)", ""]
+    out.append("- %s %s" % (helper.step["step"], helper.step["title"]) if helper else "- nothing on agent 2's list can start now")
     return "\n".join(out) + "\n"
+
+
+def page_paths(live=None):
+    d = live_dir(live)
+    return d / "progress.html", d / "progress-data.json", d / "progress-url.txt"
+
+
+def page_data(tree, live=None, at=None):
+    steps = read_steps(tree, live)
+    reasons = blocked_reasons(tree)
+    for s in steps:
+        if s["state"] == "blocked" and not s["reason"]:
+            s["reason"] = reasons.get(s["step"], "")
+    d = live_dir(live)
+    claims = lv.read_claims(d)
+    at = at or now()
+    return page.make_data(steps, lv.read_landings(d), lv.read_state(d), claims, stale_of(tree, claims, at),
+                          lv.fault_groups(lv.read_faults(d)), count_flakes(tree), lv.stamp(at))
+
+
+def write_page(tree, live=None, at=None):
+    """Writes progress-data.json (always) and progress.html (when its text changed) into the live folder.
+    Returns (html path, json path, data)."""
+    html_path, json_path, _ = page_paths(live)
+    data = page_data(tree, live, at)
+    with lv.locked(live_dir(live)):
+        atomic_write(json_path, page.data_json(data))
+        html = page.render(data)
+        if not html_path.exists() or html_path.read_text(encoding="utf-8") != html:
+            atomic_write(html_path, html)
+    return html_path, json_path, data
+
+
+def refresh_page(a):
+    """After a change of state: the page's files are made again. Never a reason to fail the command."""
+    try:
+        write_page(a.tree, a.live)
+    except (OSError, ValueError, lv.Busy):
+        pass
 
 
 # ---- commands ------------------------------------------------------------------------------------------------
 
+def agent_of(a):
+    return str(getattr(a, "agent", 1))
+
+
+def say_stale(a, claims, stale):
+    at = now()
+    for c in claims:
+        if c["package"] in stale and c["agent"] != agent_of(a):
+            hours = lv.claim_age_hours(c, lambda b: branch_time(a.tree, b), at)
+            say("STALE: package %s is claimed by agent %s (no commit on %s for %d hours). Take it over with: "
+                "plan.py claim %s --take-stale --agent %s" % (c["package"], c["agent"], c["branch"] or "its branch", hours,
+                                                               c["package"], agent_of(a)))
+
+
 def cmd_next(a):
-    steps = read_steps(a.tree)
-    choice = choose_next(steps)
+    steps = read_steps(a.tree, a.live)
+    claims = lv.read_claims(live_dir(a.live))
+    stale = stale_of(a.tree, claims)
     landed = sum(1 for s in steps if s["state"] == "landed")
+    agent = agent_of(a)
+    say_stale(a, claims, stale)
+    if agent == "2":
+        choice, report = choose_helper(steps, claims, stale)
+        if choice is None:
+            if all(why in ("is landed", "is not in the plan") for _, why in report):
+                say("Agent 2's list is finished: %s are all landed. Stop and report to agent 1. Do not take any other package." %
+                    ", ".join(AGENT2_LIST))
+            else:
+                say("Nothing on agent 2's list can start now. Stop and report to agent 1; do not take any other package.")
+                for pkg, why in report:
+                    say("  %s %s" % (pkg, why))
+            return 1
+    else:
+        choice = choose_next(steps, claims, stale)
     if choice is None:
         if landed == len(steps):
             say("Every step is landed (%d of %d). Nothing is next." % (landed, len(steps)))
@@ -830,8 +997,10 @@ def cmd_next(a):
     s = choice.step
     say("NEXT: %s  %s" % (s["step"], s["title"]))
     say("Package %s; step %s of %d; %d landed so far." % (s["package"], s["order"], len(steps), landed))
+    for note in choice.notes:
+        say("NOTE: " + note)
     for b in choice.blocked_before:
-        why = blocked_reasons(a.tree).get(b["step"], "(no reason written)")
+        why = b["reason"] or blocked_reasons(a.tree).get(b["step"], "(no reason written)")
         say("BLOCKED: %s %s: %s" % (b["step"], b["title"], why))
     if choice.blocked_before:
         say("The step above is blocked, so the first later step that does not need its package is %s." % s["step"])
@@ -866,13 +1035,14 @@ def cmd_next(a):
     say()
     say("=== COMMANDS ===")
     plan = (pathlib.Path(a.tree) / "tools" / "plan" / "plan.py").as_posix()
-    say("start: python -X utf8 -I %s start %s" % (plan, s["step"]))
-    say("land:  python -X utf8 -I %s land %s" % (plan, s["step"]))
+    who = " --agent 2" if agent == "2" else ""
+    say("start: python -X utf8 -I %s start %s%s" % (plan, s["step"], who))
+    say("land:  python -X utf8 -I %s land %s%s" % (plan, s["step"], who))
     return 0
 
 
 def cmd_rows(a):
-    steps = read_steps(a.tree)
+    steps = read_steps(a.tree, a.live)
     if a.id:
         s = find(steps, a.id)
         if s is None:
@@ -892,23 +1062,45 @@ def cmd_rows(a):
     return 1 if bad else 0
 
 
+def holds_refusal(a, package, claims, stale):
+    """Why this agent may not work on `package` ("" when it may): the other agent holds it, or it is not on the helper's list."""
+    agent = agent_of(a)
+    if agent == "2" and package not in AGENT2_LIST:
+        return "package %s is not on agent 2's list (%s); agent 2 is never given another package" % (package, ", ".join(AGENT2_LIST))
+    c = lv.claim_of(claims, package)
+    if c and c["agent"] != agent:
+        return "package %s is held by agent %s%s" % (package, c["agent"], (
+            " (the claim is stale: plan.py claim %s --take-stale --agent %s)" % (package, agent)) if package in stale else "")
+    return ""
+
+
 def cmd_start(a):
-    steps = read_steps(a.tree)
+    steps = read_steps(a.tree, a.live)
     s = find(steps, a.id)
+    agent = agent_of(a)
     if s is None:
         say("plan.py: no step %s" % a.id)
         return 1
     if s["state"] in ("landed", "started"):
-        say("plan.py: step %s is already %s" % (a.id, s["state"]))
+        say("plan.py: step %s is already %s%s" % (a.id, s["state"], " (agent %s)" % s["agent"] if s["state"] == "started" else ""))
         return 1
-    started = [x["step"] for x in steps if x["state"] == "started"]
-    if len(started) >= MAX_STARTED:
-        say("plan.py: %d steps are started and not landed (%s). Land one first (plan.py land <id>)." % (
-            len(started), ", ".join(started)))
+    claims = lv.read_claims(live_dir(a.live))
+    stale = stale_of(a.tree, claims)
+    why = holds_refusal(a, s["package"], claims, stale)
+    if why:
+        say("plan.py: " + why)
+        return 1
+    mine = [x["step"] for x in steps if x["state"] == "started" and (x["agent"] or "1") == agent]
+    if len(mine) >= MAX_STARTED:
+        say("plan.py: %d steps are started and not landed (%s). Land one first (plan.py land <id>)." % (len(mine), ", ".join(mine)))
         return 1
     waiting = unmet(s, steps)
     if waiting:
         say("plan.py: step %s needs first: %s" % (a.id, ", ".join("%s (%s)" % w for w in waiting)))
+        return 1
+    why = pair_conflict(s, steps)
+    if why:
+        say("plan.py: step %s waits: %s" % (a.id, why))
         return 1
     folder = work_folder(a.work_root, a.id)
     branch = "native/" + a.id
@@ -924,8 +1116,42 @@ def cmd_start(a):
     if made.returncode != 0:
         say("plan.py: git worktree add failed: %s" % made.stderr.strip())
         return 1
-    set_state(a.tree, a.id, "started")
-    say("started %s: branch %s in %s" % (a.id, branch, folder.as_posix()))
+    set_state(a.tree, a.id, "started", agent=agent, live=a.live)
+    lv.put_claim(live_dir(a.live), s["package"], agent, branch)
+    refresh_page(a)
+    say("started %s: branch %s in %s (package %s is claimed by agent %s)" % (a.id, branch, folder.as_posix(), s["package"], agent))
+    return 0
+
+
+def cmd_claim(a):
+    steps = read_steps(a.tree, a.live)
+    if not any(s["package"] == a.package for s in steps):
+        say("plan.py: no package %s" % a.package)
+        return 1
+    agent = agent_of(a)
+    if agent == "2" and a.package not in AGENT2_LIST:
+        say("plan.py: package %s is not on agent 2's list (%s); agent 2 is never given another package" % (a.package, ", ".join(AGENT2_LIST)))
+        return 1
+    if all(s["state"] == "landed" for s in steps if s["package"] == a.package):
+        say("plan.py: package %s is landed" % a.package)
+        return 1
+    d = live_dir(a.live)
+    claims = lv.read_claims(d)
+    stale = stale_of(a.tree, claims)
+    c = lv.claim_of(claims, a.package)
+    if c and c["agent"] != agent:
+        if a.package not in stale:
+            say("plan.py: package %s is held by agent %s (claimed %s); the claim is not stale" % (a.package, c["agent"], c["time"]))
+            return 1
+        if not a.take_stale:
+            say("plan.py: package %s is held by agent %s and the claim is stale; take it with --take-stale" % (a.package, c["agent"]))
+            return 1
+        for s in steps:                      # the stale branch is left as it is; the steps started on it become this agent's
+            if s["package"] == a.package and s["state"] == "started":
+                set_state(a.tree, s["step"], "started", agent=agent, live=a.live)
+    lv.put_claim(d, a.package, agent)
+    refresh_page(a)
+    say("package %s is claimed by agent %s" % (a.package, agent))
     return 0
 
 
@@ -938,14 +1164,37 @@ def commit_messages(folder, base="origin/main"):
     return git_out(folder, "log", "%s..HEAD" % base, "--format=%B")
 
 
+RUN_FOLDER = re.compile(r"[A-Za-z]:[\\/][^\s;,)]*gate-runs[\\/][\w.-]+|gate-runs[\\/][\w.-]+")
+
+
+def record_faults(a, step_id, verdict):
+    """Every TOOL or ENV failure of a landing is one line of tool-faults.tsv, at once (never through a landing).
+    Returns the rows written."""
+    folder = next((m.group(0) for l in verdict.lines for m in [RUN_FOLDER.search(l)] if m), "")
+    rows = []
+    for check, kind, detail in verdict.failures:
+        if kind in ("TOOL", "ENV"):
+            rows.append(lv.append_fault(live_dir(a.live), agent_of(a), step_id, kind, check, detail, run_folder=folder))
+    return rows
+
+
 def cmd_land(a):
-    steps = read_steps(a.tree)
+    steps = read_steps(a.tree, a.live)
     s = find(steps, a.id)
+    agent = agent_of(a)
     if s is None:
         say("plan.py: no step %s" % a.id)
         return 1
     if s["state"] != "started":
         say("plan.py: step %s is %s; only a started step lands (plan.py start %s)" % (a.id, s["state"], a.id))
+        return 1
+    claims = lv.read_claims(live_dir(a.live))
+    why = holds_refusal(a, s["package"], claims, stale_of(a.tree, claims))
+    if why:
+        say("plan.py: " + why)
+        return 1
+    if (s["agent"] or "1") != agent:
+        say("plan.py: step %s was started by agent %s, not agent %s" % (a.id, s["agent"] or "1", agent))
         return 1
     folder = work_folder(a.work_root, a.id)
     branch = "native/" + a.id
@@ -982,7 +1231,7 @@ def cmd_land(a):
         return 1
     # 3. The landing's own commit: the step is landed, with the code's commit.
     code_commit = git_out(folder, "rev-parse", "--short=9", "HEAD")
-    set_state(folder, a.id, "landed", code_commit)
+    set_state(folder, a.id, "landed", code_commit, track=False)
     with tempfile.TemporaryDirectory() as t:
         msg = pathlib.Path(t) / "message.txt"
         msg.write_text("Plan: step %s landed\n\nThe step's code is %s.\n" % (a.id, code_commit), encoding="utf-8")
@@ -1000,15 +1249,27 @@ def cmd_land(a):
     summary = ", ".join("%d %s" % (n, k) for k, n in sorted(verdict.counts().items()))
     if verdict.passed:
         store.clear(branch)
-        set_state(a.tree, a.id, "landed", code_commit)
-        add_landing(a.tree, a.id, code_commit, seconds)
+        set_state(a.tree, a.id, "landed", code_commit, live=a.live)
+        lv.add_landing(live_dir(a.live), a.id, code_commit, seconds, agent)
+        if all(x["state"] == "landed" or x["step"] == a.id for x in steps if x["package"] == s["package"]):
+            lv.drop_claim(live_dir(a.live), s["package"])
+        else:
+            lv.put_claim(live_dir(a.live), s["package"], agent)
+        refresh_page(a)
         say("LANDED %s as %s in %d s. Verdict by kind: %s." % (a.id, code_commit, seconds, summary or "no check rows read"))
+        say("Publish the page again: progress.html with progress-data.json, to the address in %s." % page_paths(a.live)[2].as_posix())
         return 0
     git(folder, "reset", "--hard", "HEAD~1")        # the state commit goes; the next try makes it again
     say("NOT LANDED: %s. Verdict by kind: %s." % (a.id, summary or "no check rows read"))
     for check, kind, detail in verdict.failures:
         say("  %-5s %s: %s" % (kind, check, detail))
+    written = record_faults(a, a.id, verdict)
     outcome = store.record(branch, verdict.failures)
+    if written:
+        say("Written to %s (%d line%s)." % (live_dir(a.live).as_posix() + "/tool-faults.tsv", len(written), "" if len(written) == 1 else "s"))
+        say("Say what it stopped you from doing: plan.py toolfault --last --could-not \"<one sentence>\"" +
+            (" --agent %s" % agent if agent != "1" else ""))
+        refresh_page(a)
     if outcome.message:
         say(outcome.message)
     elif outcome.counted:
@@ -1017,7 +1278,7 @@ def cmd_land(a):
 
 
 def cmd_blocked(a):
-    steps = read_steps(a.tree)
+    steps = read_steps(a.tree, a.live)
     s = find(steps, a.id)
     if s is None:
         say("plan.py: no step %s" % a.id)
@@ -1027,23 +1288,53 @@ def cmd_blocked(a):
         return 1
     first = failures.Store(a.failures).last_line("native/" + a.id) or "(no failure recorded)"
     reason = " ".join(a.why.split())
-    set_state(a.tree, a.id, "blocked")
+    set_state(a.tree, a.id, "blocked", agent=agent_of(a), reason=reason, live=a.live)
     append_under(native(a.tree) / "BLOCKED.md", "steps", "- %s %s: %s | first failure line: %s" % (
         datetime.date.today().isoformat(), a.id, reason, first))
+    refresh_page(a)
     say("blocked %s. Run plan.py next." % a.id)
     return 0
 
 
 def cmd_tool(a):
-    append_under(native(a.tree) / "BLOCKED.md", "tools", "- %s: %s" % (datetime.date.today().isoformat(), " ".join(a.text.split())))
-    say("written under 'tools' in %s/BLOCKED.md. Take the next step (plan.py next); do not debug the tool." % NATIVE)
+    text = " ".join(a.text.split())
+    append_under(native(a.tree) / "BLOCKED.md", "tools", "- %s: %s" % (datetime.date.today().isoformat(), text))
+    lv.append_fault(live_dir(a.live), agent_of(a), "", "TOOL", "(by hand)", text)
+    refresh_page(a)
+    say("written under 'tools' in %s/BLOCKED.md and as a line of tool-faults.tsv. Take the next step (plan.py next); do not debug the tool." % NATIVE)
+    return 0
+
+
+def cmd_toolfault(a):
+    if not a.last:
+        say("plan.py: toolfault needs --last (it sets the sentence of the agent's last tool fault)")
+        return 1
+    row = lv.set_could_not_last(live_dir(a.live), agent_of(a), " ".join(a.could_not.split()))
+    if row is None:
+        say("plan.py: agent %s has no tool fault recorded" % agent_of(a))
+        return 1
+    refresh_page(a)
+    say("written: %s %s %s (%s): could not: %s" % (row["time"], row["kind"], row["check"], row["step"] or "no step", row["could_not"]))
     return 0
 
 
 def cmd_status(a):
-    text = status_text(a.tree, a.work_root)
+    text = status_text(a.tree, a.work_root, live=a.live)
     atomic_write(native(a.tree) / "STATUS.md", text)
     sys.stdout.write(text)
+    url = page_paths(a.live)[2]
+    if url.exists():
+        say("\nProgress page: %s" % url.read_text(encoding="utf-8").strip())
+    return 0
+
+
+def cmd_page(a):
+    html_path, json_path, data = write_page(a.tree, a.live)
+    say("progress.html: %s (%d bytes)" % (html_path.as_posix(), html_path.stat().st_size))
+    say("progress-data.json: %s (%d bytes)" % (json_path.as_posix(), json_path.stat().st_size))
+    say("%d of %d steps landed, %d started, %d blocked, %d tool fault kinds, %d flakes." % (
+        data["landed"], data["total"], len(data["started"]), len(data["blocked"]), len(data["tool_faults"]), data["flakes"]))
+    say("Publish progress.html with progress-data.json as its supporting file; keep the address in %s." % page_paths(a.live)[2].as_posix())
     return 0
 
 
@@ -1051,26 +1342,38 @@ def parser():
     p = argparse.ArgumentParser(prog="plan.py", description=__doc__.split("\n")[0])
     p.add_argument("--tree", default=str(TREE), help="the plan tree (default: the tree this file is in)")
     p.add_argument("--work-root", default=WORK_ROOT)
+    p.add_argument("--live", default=LIVE, help="the live folder (claims, state, tool faults, the page)")
     p.add_argument("--failures", default=FAILURES, help="the three-failure store")
     p.add_argument("--tablet", default=TABLET)
     p.add_argument("--tablet-wait", type=float, default=TABLET_WAIT)
+    who = argparse.ArgumentParser(add_help=False)
+    who.add_argument("--agent", type=int, choices=(1, 2), default=1, help="1 is the master (the default), 2 the helper")
     sub = p.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("next").set_defaults(fn=cmd_next)
-    sub.add_parser("status").set_defaults(fn=cmd_status)
+    sub.add_parser("next", parents=[who]).set_defaults(fn=cmd_next)
+    sub.add_parser("status", parents=[who]).set_defaults(fn=cmd_status)
+    sub.add_parser("page").set_defaults(fn=cmd_page)
     r = sub.add_parser("rows")
     r.add_argument("id", nargs="?")
     r.set_defaults(fn=cmd_rows)
     for name, fn in (("start", cmd_start), ("land", cmd_land)):
-        q = sub.add_parser(name)
+        q = sub.add_parser(name, parents=[who])
         q.add_argument("id")
         q.set_defaults(fn=fn)
-    b = sub.add_parser("blocked")
+    c = sub.add_parser("claim", parents=[who])
+    c.add_argument("package")
+    c.add_argument("--take-stale", action="store_true")
+    c.set_defaults(fn=cmd_claim)
+    b = sub.add_parser("blocked", parents=[who])
     b.add_argument("id")
     b.add_argument("why")
     b.set_defaults(fn=cmd_blocked)
-    t = sub.add_parser("tool")
+    t = sub.add_parser("tool", parents=[who])
     t.add_argument("text")
     t.set_defaults(fn=cmd_tool)
+    tf = sub.add_parser("toolfault", parents=[who])
+    tf.add_argument("--last", action="store_true")
+    tf.add_argument("--could-not", required=True)
+    tf.set_defaults(fn=cmd_toolfault)
     return p
 
 
