@@ -87,7 +87,11 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_message(VkDebugUtilsMessageSeverityFlagBits
                                              VkDebugUtilsMessageTypeFlagsEXT, const VkDebugUtilsMessengerCallbackDataEXT* data,
                                              void*) {
     if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT && data != nullptr && data->pMessage != nullptr) {
-        std::fprintf(stderr, "[vulkan] %s\n", data->pMessage);
+        // The tags the gate's validate lane counts, as Direct3D's [D3D12-LIVE-ERR] / [D3D12-LIVE-WARN]: the layer's message id
+        // (its VUID), then the message.
+        const bool error = severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        std::fprintf(stderr, "[%s] id %s: %s\n", error ? "VK-LIVE-ERR" : "VK-LIVE-WARN",
+                     data->pMessageIdName != nullptr ? data->pMessageIdName : "none", data->pMessage);
     }
     return VK_FALSE;
 }

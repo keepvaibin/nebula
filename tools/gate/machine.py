@@ -44,6 +44,7 @@ LEFTOVER_AGE_SECONDS = 600.0
 # Drive D: free space a run needs, by level. A landing's own level is "land"; the quick gate is as small as a landing.
 DISK_NEED_GB = {"quick": 30, "land": 30, "main": 80, "long": 150, "final": 150}
 KEEP_WHOLE = 3
+KEEP_FILE = "keep.txt"      # a run folder with this file in it is kept whole (a stress lane's evidence): never thinned, never pruned
 RUN_NAME = re.compile(r"^\d{8}-\d{6}-([0-9a-f]{6,40})-(quick|main|long|final|land)$")
 
 # The graphics card and the PC's memory.
@@ -451,14 +452,16 @@ def run_folders(work):
 
 
 def runs_to_thin(runs, keep=KEEP_WHOLE, held=()):
-    """Which runs stay whole: for each level the `keep` newest that passed and the `keep` newest that did not, and any run whose
-    commit is in `held` (a run still waiting for GitHub). Returns (whole names, names to thin)."""
+    """Which runs stay whole: for each level the `keep` newest that passed and the `keep` newest that did not, any run whose
+    commit is in `held` (a run still waiting for GitHub) and any run with a keep.txt in its folder (a stress result's evidence).
+    Returns (whole names, names to thin)."""
     whole = set()
     for level in {r[3] for r in runs}:
         for passed in (True, False):
             same = [r for r in runs if r[3] == level and r[4] is passed]
             whole.update(r[0] for r in same[-keep:])
     whole.update(r[0] for r in runs if r[2][:9] in held or any(h.startswith(r[2][:9]) for h in held))
+    whole.update(r[0] for r in runs if (pathlib.Path(r[1]) / KEEP_FILE).is_file())
     return whole, [r[0] for r in runs if r[0] not in whole]
 
 

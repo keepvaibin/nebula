@@ -44,6 +44,9 @@ GROUPS = {
               "compared with Direct3D 12's)",
               ["tour/d3d12", "tour/vulkan", "tour/d3d11", "pictures/tour/*", "replays/d3d12", "replays/vulkan",
                "replays/d3d11", "pictures/declared"]),
+    "validate": ("the 12-stop tour on the three renderers with the graphics API's debug layer on (a layer that is not "
+                 "installed on this PC is left out with one line)",
+                 ["validate/*"]),
     "import": ("the importer's tests, the collision proof on the US disc, the US game data of the tree's importer (found "
                "by its key, else made again), and the 12-stop tour on Direct3D 12 with that data",
                ["rust", "import/collision/RMGE01", "data/RMGE01", "tour/d3d12", "pictures/tour/d3d12", "replays/d3d12",

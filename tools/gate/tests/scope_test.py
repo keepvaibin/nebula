@@ -52,14 +52,14 @@ class Rows(unittest.TestCase):
             (("PICTURES-CHANGE.txt",), ["repo"]),
             (("tools/plan/plan.py", "tools/gate/gate.py"), ["repo", "tools"]),
             (("native/petari/src/Game/Foo.cpp",), ["repo", "build", "unit", "start", "engine1", "tour1", "android", "github"]),
-            (("runtime/src/render/renderer_common.cpp",), ["repo", "build", "unit", "start", "engine1", "engine3", "tour1", "tour3", "android", "github"]),
-            (("runtime/include/galaxy/render/renderer.h",), ["repo", "build", "unit", "start", "engine1", "engine3", "tour1", "tour3", "android", "github"]),
+            (("runtime/src/render/renderer_common.cpp",), ["repo", "build", "unit", "start", "engine1", "engine3", "tour1", "tour3", "validate", "android", "github"]),
+            (("runtime/include/galaxy/render/renderer.h",), ["repo", "build", "unit", "start", "engine1", "engine3", "tour1", "tour3", "validate", "android", "github"]),
             (("runtime/src/audio/mixer.cpp",), ["repo", "build", "unit", "start", "engine1", "tour1", "android", "github"]),
             (("platform/sdl/host.cpp",), ["repo", "build", "unit", "start", "engine1", "tour1", "android", "github"]),
             (("crates/nebula-import/src/lib.rs",), ["repo", "import", "android", "github"]),
             (("platform/android/app/build.gradle",), ["repo", "android", "tablet12", "github"]),   # repo: in every run (scope.ALWAYS)
             (("runtime/src/render/vk/renderer_vk.cpp",), ["repo", "build", "unit", "start", "engine1", "engine3", "tour1", "tour3",
-                                                          "android", "tablet12", "github"]),
+                                                          "validate", "android", "tablet12", "github"]),
             (("tests/engine/boot/test.json",), ["repo", "build", "engine3"]),
             (("tests/android/walk/test.json",), ["repo", "android", "tablet12", "github"]),
             (("tests/replays/stage.txt",), ["repo", "build", "tour1"]),
@@ -238,6 +238,16 @@ class Groups(unittest.TestCase):
         tablet = scope.select(self.needs, ["tablet12"])
         self.assertTrue({"tablet/prepare", "build/android", "tour/tablet", "tablet/remove", "tour/tablet-pc", "build/windows",
                          "data/RMGE01"} <= tablet, "the tablet's part needs the data too")
+
+    def test_validate_is_in_every_renderer_landing_and_nowhere_else(self):
+        """T12: the debug layers' lane (validate/<renderer>, the 12-stop tour with the layer on) belongs to the two renderer rows."""
+        chosen = scope.select(self.needs, ["validate"])
+        self.assertEqual(chosen, {"validate/d3d12", "validate/vulkan", "validate/d3d11", "build/windows", "data/RMGE01"})
+        for path in ("runtime/src/render/renderer_d3d12.cpp", "runtime/src/render/vk/vk_context.cpp",
+                     "runtime/include/galaxy/render/renderer.h"):
+            self.assertIn("validate", plan(path).groups, path)
+        for path in ("native/petari/src/Game/Foo.cpp", "runtime/src/audio/mixer.cpp", "tools/gate/gate.py", "tests/engine/boot/test.json"):
+            self.assertNotIn("validate", plan(path).groups, path)
 
     def test_the_tablets_runner_runs_the_tablets_part_with_what_it_needs(self):
         groups = plan("tools/lumacore/luma_test_android.py").groups

@@ -2176,11 +2176,13 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
     const auto configuration = [&](REFCLSID which, REFIID riid, void** out) {
         return agility ? agility->GetConfigurationInterface(which, riid, out) : D3D12GetDebugInterface(riid, out);
     };
+    bool debug_layer_on = false;
     try {
         if (d3d_debug_level >= 1) {
             ComPtr<ID3D12Debug> d;
             if (SUCCEEDED(configuration(kClsidDebug, IID_PPV_ARGS(&d)))) {
                 d->EnableDebugLayer();
+                debug_layer_on = true;
                 if (d3d_debug_level >= 2) {
                     ComPtr<ID3D12Debug1> d1;
                     if (SUCCEEDED(d.As(&d1))) {
@@ -2189,6 +2191,9 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
                 }
             }
         }
+        // Whether the debug layer is really on (the validate lane of the gate reads this line, as it reads Direct3D 11's and
+        // Vulkan's: it is off when the layer is not installed).
+        std::cout << "[gpu] d3d12 debug-layer=" << (debug_layer_on ? 1 : 0) << '\n';
         // --diagnostics device-faults: the removal data dump_device_removal prints (auto-breadcrumbs, page-fault
         // allocations, breadcrumb contexts), asked for before the device exists. Otherwise the system's choice.
         if (::galaxy::diagnosing(::galaxy::kDiagnoseDeviceFaults)) {

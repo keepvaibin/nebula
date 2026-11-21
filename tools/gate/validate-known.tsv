@@ -1,0 +1,5 @@
+# The errors of the graphics API debug layers that main has today (the validate lane, tools/gate/validate.py): an error listed here is
+# counted and reported, any other is a fail with its message as the first line. One line for each (renderer, id): the renderer, the
+# layer's message id (Direct3D: the number; Vulkan: the VUID), the ledger row that holds the error and the call it names (P-12; the word
+# pending until the row is written), and the first words of the message. Empty but for the header until the first real run on main.
+renderer	id	ledger row	first words

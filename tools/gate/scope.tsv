@@ -37,8 +37,8 @@ tools/gate/gate_tour.py	tour1
 tools/verify/step_hash.py	tour1
 tools/verify/tours/**	tour1
 native/**	repo,build,unit,start,engine1,tour1,android,github
-runtime/src/render/**	repo,build,unit,start,engine3,tour3,android,github
-runtime/include/galaxy/render/**	repo,build,unit,start,engine3,tour3,android,github
+runtime/src/render/**	repo,build,unit,start,engine3,tour3,validate,android,github
+runtime/include/galaxy/render/**	repo,build,unit,start,engine3,tour3,validate,android,github
 runtime/**	repo,build,unit,start,engine1,tour1,android,github
 platform/sdl/**	repo,build,unit,start,engine1,tour1,android,github
 crates/nebula-import/**	repo,import,android,github
