@@ -9,7 +9,7 @@
 # (tools/gate/gamedata.py, after this build: the importer is one of the programs built here) and writes pak.path itself.
 # Prints each step's result; any FAILED line or non-zero exit ends it with exit 1, except a step whose every failed job is of the
 # compiler cache alone (build_steps.ps1): that is run again once, and failing again the same way ends it with exit 2 (not judged). Nothing here reads the
-# environment of the person running it beyond the tools' locations.
+# environment of the person running it beyond the tools' locations and NEBULA_NO_MEASURE_WAIT (the gate sets it).
 #
 # -Sanitize address,undefined: the game modules built with those sanitizers (native/CMakeLists.txt NEBULA_SANITIZE),
 # their runtime (LLVM's clang_rt.asan_dynamic) in the bin folder. The programs stay as they are: one AddressSanitizer
@@ -35,8 +35,19 @@ param(
     # The compiler cache in front of clang and cl (N-1049): one cache for every tree and build folder, keyed by the
     # paths as they are. Empty, or no such program: none.
     [string]$Sccache = "D:/NebulaWork/tools/sccache/sccache.exe",
-    [string]$SccacheDir = "D:/NebulaWork/sccache"
+    [string]$SccacheDir = "D:/NebulaWork/sccache",
+    # A build started by hand waits while a speed measure holds this lock (tools/gate/measure_wait.py), at most this many minutes.
+    [string]$MeasureLock = "D:/NebulaWork/plan/measure.lock",
+    [double]$MeasureWaitMinutes = 15
 )
+# Started by hand (the gate and a landing set NEBULA_NO_MEASURE_WAIT for what they start): one line and a wait while a speed
+# measure runs, so the build does not spoil its figures; after the minutes given it builds anyway.
+if (-not $env:NEBULA_NO_MEASURE_WAIT) {
+    $waitPython = Get-Command python -ErrorAction SilentlyContinue
+    if ($waitPython) {
+        & $waitPython.Source -X utf8 -I (Join-Path $PSScriptRoot "measure_wait.py") --lock $MeasureLock --minutes $MeasureWaitMinutes
+    }
+}
 $ErrorActionPreference = "Stop"
 $Tree = (Resolve-Path $Tree).Path.Replace("\", "/")
 New-Item -ItemType Directory -Force $Root | Out-Null

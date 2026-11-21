@@ -33,6 +33,7 @@ The Start menu shortcut on Windows and `nebula-launch` on Linux pass `--pak` and
 | `--seconds N` | Ends the game after N seconds. |
 | `--start-check N` | Checks that the program starts, without the game's files. Opens the window and the renderer, draws and shows N frames of a blank picture, then exits. Exits with 0 when at least one picture was shown, 3 when the renderer did not start, 4 when no picture was shown, and 5 when the renderer stopped taking frames. Only this check may use a software renderer, and only when no graphics card runs the renderer. `--pak` and `--saves` are not needed. |
 | `--hidden 1` | Linux and macOS. Starts without a window and never reads your keyboard, mouse or controllers. Test tools use it. On Windows, a start with a hidden window does the same. |
+| `--no-focus 1` | Windows. The game window never asks for the keyboard focus: it is shown without being made the active window, and the game runs as it does with the focus (it never pauses, mutes or slows down because another program is in front). Test tools use it for runs with a visible window, so a run does not take your keys. Other systems accept it and ignore it. |
 
 To choose the graphics card, use **Settings** in Nebula, or set `gpu=` in `config.ini`. When `gpu=` is empty, Nebula uses the high-performance graphics card.
 

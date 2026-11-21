@@ -33,6 +33,9 @@ struct WindowOwnerConfig {
     // Shown cloaked (DWMWA_CLOAK): the window has its place, the foreground and the focus, and DWM draws none of it until
     // it is uncloaked (kUncloakMessage).
     bool cloak{};
+    // A test's visible run (--no-focus 1): the window is shown without activating it and none of the foreground, active or focus
+    // calls is made. The caller adds WS_EX_NOACTIVATE to extended_style.
+    bool no_focus{};
 };
 
 // Creates the window on its own thread and runs its message loop there (native modal loops included), independent of

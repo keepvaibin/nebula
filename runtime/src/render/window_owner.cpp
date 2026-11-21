@@ -28,11 +28,16 @@ HWND WindowOwner::start(WindowOwnerConfig config) {
                 const BOOL cloak = TRUE;
                 (void)DwmSetWindowAttribute(window, DWMWA_CLOAK, &cloak, sizeof(cloak));
             }
-            ShowWindow(window, SW_SHOWNORMAL);
-            UpdateWindow(window);
-            SetForegroundWindow(window);
-            SetActiveWindow(window);
-            SetFocus(window);
+            if (config.no_focus) {
+                ShowWindow(window, SW_SHOWNOACTIVATE);
+                UpdateWindow(window);
+            } else {
+                ShowWindow(window, SW_SHOWNORMAL);
+                UpdateWindow(window);
+                SetForegroundWindow(window);
+                SetActiveWindow(window);
+                SetFocus(window);
+            }
         }
         ready.set_value({window, GetCurrentThreadId()});
         if (window == nullptr) return;
