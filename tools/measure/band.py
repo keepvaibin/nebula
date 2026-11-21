@@ -16,7 +16,14 @@ The history is one line per run, as the measure always kept it (gate-runs/measur
 place with --history), with columns added at the end: the key's parts the old lines lacked, and `marks`, the mark of
 each compared figure of that line: `trusted` (counts for a baseline), `outlier` (worse once, fine when measured again),
 `worse` (worse twice), `retired` (before an accepted slowdown). Lines written before the marks existed have none, so
-they never count for a baseline. Columns are only ever added at the end, so an older file's lines keep their places.
+they never count for a baseline. Columns are only ever added at the end, so an older file's lines keep their places: a line
+written before `cpu_ms` existed reads with that cell empty, never 0.
+
+The pair (`measure.py pair`) compares two builds that ran side by side in the same minutes, so only the ratio of a figure is
+judged, never a value against another day's. Its band of a figure is learned from pairs of one build against itself
+(`measure.py pair-calibrate`) and kept in a file of its own (pair-bands.tsv); this module holds the arithmetic and the three
+files (the bands, the rounds' lines in pairs.tsv, the accepted slowdowns in pair-accepted.tsv). Nothing there is compared with
+the history above.
 """
 import os
 import pathlib
@@ -26,7 +33,7 @@ import tempfile
 TAB = "\t"
 COLUMNS = ("commit", "time", "device", "renderer", "rate", "refresh_hz", "gap_max_ms", "gap_p99_ms", "late_per_min",
            "step_max_ms", "steps_over_18", "render_ms", "gpu_ms", "memory_mb", "run",
-           "computer", "gpu", "scene", "size", "marks", "step_ms", "step_p99_ms", "anchor")
+           "computer", "gpu", "scene", "size", "marks", "step_ms", "step_p99_ms", "anchor", "cpu_ms")
 OLD_COLUMNS = 15  # the lines written before the key's parts and the marks were kept
 # What makes two runs comparable (with the figure's own name): the history line's columns.
 KEY_COLUMNS = ("computer", "gpu", "device", "renderer", "scene", "size", "rate")
@@ -34,12 +41,13 @@ KEY_COLUMNS = ("computer", "gpu", "device", "renderer", "scene", "size", "rate")
 # misses or a size: higher is bad. A figure where lower is bad (pictures a second) is named "lower" here.
 FIGURES = {"gap_max_ms": "higher", "gap_p99_ms": "higher", "late_per_min": "higher", "step_ms": "higher",
            "step_p99_ms": "higher", "step_max_ms": "higher", "steps_over_18": "higher", "render_ms": "higher",
-           "gpu_ms": "higher", "memory_mb": "higher"}
-# The figures that get a verdict. The others (largest single values and a count of slow steps) are shown only.
-JUDGED = ("gap_p99_ms", "late_per_min", "render_ms", "gpu_ms", "memory_mb", "step_ms", "step_p99_ms")
+           "gpu_ms": "higher", "memory_mb": "higher", "cpu_ms": "higher"}
+# The figures that get a verdict. The others (largest single values, a count of slow steps, and the step's time on the clock,
+# which holds waits as well as work: the cost of a step is cpu_ms, the processor time) are shown only.
+JUDGED = ("cpu_ms", "gap_p99_ms", "late_per_min", "render_ms", "gpu_ms", "memory_mb")
 # The least a band is wide, by figure (a time in ms, late frames a minute, memory in MB); a figure not named has none.
 FLOORS = {"gap_max_ms": 0.25, "gap_p99_ms": 0.25, "step_ms": 0.02, "step_p99_ms": 0.02, "render_ms": 0.02,
-          "gpu_ms": 0.02, "late_per_min": 2.0, "memory_mb": 32.0}
+          "gpu_ms": 0.02, "late_per_min": 2.0, "memory_mb": 32.0, "cpu_ms": 0.02}
 ANCHOR_LEAST_LINES = 5
 BASELINE_RUNS = 10
 LEAST_RUNS = 5
@@ -263,3 +271,105 @@ def keep(pending, history):
         there.add(line)
         added += 1
     return added, len(rows) - added
+
+
+# ---- The pair ----
+# The least a pair's band is wide, as a share of the ratio (0.05: the ratio may be 5 % off 1), by figure.
+PAIR_LEAST = {"cpu_ms": 0.03, "render_ms": 0.05, "gpu_ms": 0.05, "memory_mb": 0.02, "gap_p99_ms": 0.25, "late_per_min": 0.50}
+PAIR_ROUNDS = 3  # rounds before "worse"
+BANDS_COLUMNS = ("computer", "gpu", "renderer", "scene", "size", "rate", "figure", "band", "ratios", "commit", "time")
+BANDS_KEY = BANDS_COLUMNS[:6]
+ROUNDS_COLUMNS = ("time", "base_commit", "cand_commit", "renderer", "round", "figure", "base", "cand", "ratio", "word")
+ACCEPTED_COLUMNS = ("commit", "renderer", "figure", "reason", "date")
+
+
+def pair_ratio(base, cand, figure):
+    """(cand + f) / (base + f), f the figure's floor: 0 against 0 is 1, and a hundredth of a millisecond is not a change."""
+    f = FLOORS.get(figure, 0.0)
+    below = base + f
+    return 1.0 if below == 0 and cand + f == 0 else (cand + f) / below if below else float("inf")
+
+
+def pair_word(ratio, band):
+    """worse past 1 + band, better under 1 - band, else ok; `no-baseline` when there is no band (not calibrated)."""
+    if band is None:
+        return "no-baseline"
+    if ratio > 1.0 + band:
+        return "worse"
+    if ratio < 1.0 - band:
+        return "better"
+    return "ok"
+
+
+def pair_band(ratios, figure):
+    """The band of a figure from the ratios of one build against itself: max(least, 2 x the largest |r - 1|)."""
+    return max(PAIR_LEAST[figure], 2.0 * max(abs(r - 1.0) for r in ratios))
+
+
+def cells_file(path, columns, rows):
+    """The whole file again: the header, then the rows (dicts), beside it first and then put in its place."""
+    path = pathlib.Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".", suffix=".tmp")
+    with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as out:
+        out.write(TAB.join(columns) + "\n")
+        for row in rows:
+            out.write(TAB.join(str(row[c]) for c in columns) + "\n")
+    os.replace(temp, path)
+
+
+def read_cells(path, columns):
+    """The rows (dicts) of a file written by cells_file or add_cells; none when it does not exist; a line of another width is
+    left out."""
+    path = pathlib.Path(path)
+    if not path.is_file():
+        return []
+    rows = []
+    for line in path.read_text(encoding="utf-8").splitlines()[1:]:
+        cells = line.split(TAB)
+        if len(cells) == len(columns):
+            rows.append(dict(zip(columns, cells)))
+    return rows
+
+
+def add_cells(path, columns, row):
+    """One row added; the file is made with its header when it is not there."""
+    path = pathlib.Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.is_file():
+        path.write_text(TAB.join(columns) + "\n", encoding="utf-8", newline="\n")
+    with open(path, "a", encoding="utf-8", newline="\n") as out:
+        out.write(TAB.join(str(row[c]) for c in columns) + "\n")
+
+
+def pair_key(context, renderer, rate):
+    """The key of a pair's band: computer, graphics card, renderer, scene, size, rate."""
+    return (context.get("computer", ""), context.get("gpu", ""), renderer, context.get("scene", ""), context.get("size", ""),
+            str(rate))
+
+
+def pair_bands(path, key):
+    """{figure: band} of the calibration file's lines for a key (none: an empty dict: not calibrated)."""
+    return {r["figure"]: float(r["band"]) for r in read_cells(path, BANDS_COLUMNS)
+            if tuple(r[c] for c in BANDS_KEY) == tuple(key)}
+
+
+def write_pair_bands(path, key, bands, commit, now):
+    """The calibration lines of a key: {figure: (band, [ratios])} replace the key's older lines, the others stay."""
+    rows = [r for r in read_cells(path, BANDS_COLUMNS) if tuple(r[c] for c in BANDS_KEY) != tuple(key)]
+    for figure in sorted(bands):
+        band, ratios = bands[figure]
+        row = dict(zip(BANDS_KEY, key), figure=figure, band="%.4f" % band, ratios=",".join("%.4f" % r for r in ratios),
+                   commit=commit, time=now)
+        rows.append(row)
+    cells_file(path, BANDS_COLUMNS, rows)
+
+
+def accepted_reason(path, commit, renderer, figure):
+    """The reason of the accepted line for this commit, renderer and figure, or None (a commit by its first characters)."""
+    for r in read_cells(path, ACCEPTED_COLUMNS):
+        mine = r["commit"]
+        if (r["renderer"] == renderer and r["figure"] == figure and mine and commit
+                and (mine.startswith(commit) or commit.startswith(mine))):
+            return r["reason"]
+    return None

@@ -52,6 +52,10 @@ struct Summary {
     double step_work_avg_us = 0.0;
     double step_work_p99_us = 0.0;
     double step_work_max_us = 0.0;
+    // The processor time the whole process used in the window (all threads) per step, in microseconds: set only when
+    // the window's processor time is known (Window::set_cpu_ns), else cpu_known is false and the line leaves it out.
+    bool cpu_known = false;
+    double cpu_us_per_step = 0.0;
 };
 
 class Window {
@@ -59,6 +63,8 @@ public:
     void add_step(std::int64_t start_qpc);
     void add_step_work(std::int64_t work_ns);
     void add_picture(const Picture& picture);
+    // The processor time the process used over the window, in nanoseconds (-1: not known). Cleared with the window.
+    void set_cpu_ns(std::int64_t cpu_ns) { cpu_ns_ = cpu_ns; }
     // refresh_qpc: the display's refresh period in ticks (0: unknown, then no refresh counts). frequency: ticks a second.
     [[nodiscard]] Summary summarize(std::int64_t refresh_qpc, std::int64_t frequency) const;
     void clear();
@@ -69,6 +75,7 @@ private:
     std::vector<std::int64_t> steps_;
     std::vector<double> step_work_us_;
     std::vector<Picture> pictures_;
+    std::int64_t cpu_ns_ = -1;
 };
 
 }  // namespace galaxy::pacing

@@ -41,6 +41,7 @@ void Window::clear() {
     steps_.clear();
     step_work_us_.clear();
     pictures_.clear();
+    cpu_ns_ = -1;
 }
 
 Summary Window::summarize(std::int64_t refresh_qpc, std::int64_t frequency) const {
@@ -108,6 +109,10 @@ Summary Window::summarize(std::int64_t refresh_qpc, std::int64_t frequency) cons
     s.step_work_avg_us = average(work);
     s.step_work_p99_us = percentile(work, 99.0);
     s.step_work_max_us = work.empty() ? 0.0 : work.back();  // sorted by the percentile
+    if (cpu_ns_ >= 0 && !steps_.empty()) {
+        s.cpu_known = true;
+        s.cpu_us_per_step = static_cast<double>(cpu_ns_) / 1000.0 / static_cast<double>(steps_.size());
+    }
     return s;
 }
 

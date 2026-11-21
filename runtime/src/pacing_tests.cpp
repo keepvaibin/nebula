@@ -155,6 +155,69 @@ int main() {
                      "step work: 5.05 ms average, 9.9 ms p99, 10 ms longest");
     }
 
+    // The window's processor time per step: 600 steps that used 3 s of processor time are 5000 us a step; not known
+    // (-1, or no steps) is not a number.
+    {
+        galaxy::pacing::Window w;
+        for (int i = 0; i < 600; ++i) w.add_step(at(1'000'000.0 + i * kStep));
+        w.set_cpu_ns(3'000'000'000);
+        galaxy::pacing::Summary s = w.summarize(kRefresh60, kHz);
+        ok &= expect(s.cpu_known && close_to(s.cpu_us_per_step, 5000.0, 0.001), "3 s over 600 steps: 5000 us a step");
+        w.set_cpu_ns(0);
+        s = w.summarize(kRefresh60, kHz);
+        ok &= expect(s.cpu_known && s.cpu_us_per_step == 0.0, "no processor time used is a known 0");
+        w.set_cpu_ns(-1);
+        s = w.summarize(kRefresh60, kHz);
+        ok &= expect(!s.cpu_known, "a processor time of -1 is not known");
+        w.set_cpu_ns(1'000'000);
+        w.clear();
+        for (int i = 0; i < 600; ++i) w.add_step(at(1'000'000.0 + i * kStep));  // the next window's steps
+        ok &= expect(!w.summarize(kRefresh60, kHz).cpu_known, "a cleared window forgets its processor time");
+        galaxy::pacing::Window none;
+        none.set_cpu_ns(1'000'000);
+        ok &= expect(!none.summarize(kRefresh60, kHz).cpu_known, "no steps: no per step figure");
+    }
+    // The [pace] line: cpu_us_per_step at its end when known, nothing of it when not.
+    {
+        galaxy::pacing::Summary s;
+        s.steps = 600;
+        const std::string without = galaxy::pacing::line(s);
+        ok &= expect(without.find("cpu_us_per_step") == std::string::npos && without.find("step_work_max_us=") != std::string::npos,
+                     "not known: the field is left out of the line");
+        s.cpu_known = true;
+        s.cpu_us_per_step = 3350.55;
+        const std::string with = galaxy::pacing::line(s);
+        ok &= expect(with.size() > without.size() && with.compare(0, without.size(), without) == 0 &&
+                         with.substr(without.size()) == " cpu_us_per_step=3350.6",
+                     "known: the field follows the others, one decimal");
+        s.cpu_us_per_step = 0.0;
+        ok &= expect(galaxy::pacing::line(s).find(" cpu_us_per_step=0.0") != std::string::npos, "a known 0 is written as 0.0");
+    }
+    // Cycles as time by the counter's rate over the span: a counter of 3 GHz over one second of the clock, 6e9 cycles are
+    // 2 s; a span of two seconds with the counter at 2 GHz makes 1e9 cycles half a second.
+    {
+        ok &= expect(galaxy::cycles_to_ns(6'000'000'000ULL, 3'000'000'000ULL, kHz, kHz) == 2'000'000'000LL,
+                     "6e9 cycles on a 3 GHz counter: 2 s");
+        ok &= expect(galaxy::cycles_to_ns(1'000'000'000ULL, 4'000'000'000ULL, 2 * kHz, kHz) == 500'000'000LL,
+                     "1e9 cycles on a 2 GHz counter: 0.5 s");
+        ok &= expect(galaxy::cycles_to_ns(5, 0, kHz, kHz) == -1 && galaxy::cycles_to_ns(5, 7, 0, kHz) == -1 &&
+                         galaxy::cycles_to_ns(5, 7, kHz, 0) == -1,
+                     "an empty span is not known");
+        galaxy::ProcessCpuStamp a, b;
+        ok &= expect(galaxy::process_cpu_ns_between(a, b) == -1, "stamps that are not known give -1");
+        if (galaxy::process_cpu_known()) {
+            // Spin this thread for 300 ms of the clock: the process used at least a tenth of that and no more than all of
+            // the machine's processors could give (a count of 64 here).
+            a = galaxy::process_cpu_stamp();
+            const std::int64_t until = galaxy::qpc_now() + galaxy::qpc_frequency() / 1000 * 300;
+            volatile std::uint64_t sink = 0;
+            while (galaxy::qpc_now() < until) sink = sink + 1;
+            b = galaxy::process_cpu_stamp();
+            const std::int64_t ns = galaxy::process_cpu_ns_between(a, b);
+            ok &= expect(a.known && b.known, "this machine's stamps are known");
+            ok &= expect(ns >= 30'000'000 && ns <= 64 * 600'000'000LL, "a 300 ms spin: its processor time in the stamps");
+        }
+    }
     // The recorder: steps on a step clock, pictures described and presented, display reports as DXGI gives them (only
     // the latest shown, two presents behind), one window written after ten seconds of steps.
     {
@@ -196,6 +259,11 @@ int main() {
             ok &= expect(within == 1.0, "no animation error");
             ok &= expect(close_to(delay, 2e6 / 60, 2.0), "delay: two steps");
             ok &= expect(!std::isnan(value("step_work_max_us")), "the step's work in the line");
+            // The processor time of the whole process: in the line when the machine gives it (a positive time per step: the
+            // loop ran a few milliseconds), else not in it.
+            ok &= expect(galaxy::process_cpu_known() == !std::isnan(value("cpu_us_per_step")),
+                         "cpu_us_per_step in the line exactly where the processor time is known");
+            ok &= expect(!galaxy::process_cpu_known() || value("cpu_us_per_step") > 0.0, "the processor time per step is above 0");
         }
         // A new swap chain (ids from 1 again) closes the old ones still waiting as unknown.
         galaxy::pacing::describe(1, 1, 1, false);

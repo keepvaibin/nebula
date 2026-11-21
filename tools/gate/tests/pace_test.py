@@ -48,6 +48,12 @@ def main():
     check(len(w) == 2 and all(x["missed"] == 0 for x in w), "windows: after frame 0, the first after it left out")
     c = pace.combine(w)
     check(c["pictures"] == 2400 and abs(c["steps_per_second"] - 1198 / (2 * 9.983333)) < 1e-9, "combined counts and rate")
+    # A line with a field this reader does not know (cpu_us_per_step, the processor time per step: tools/measure reads it) is read
+    # as before: the same windows and combined figures, and the field's own value in the window.
+    zero = "[    1.0] extension: harness: frame 0 is game frame 900"
+    with_cpu = pace.windows_of("\n".join([zero, line()] + [line() + " cpu_us_per_step=3350.5"] * 2))
+    check(len(with_cpu) == 2 and with_cpu[0]["cpu_us_per_step"] == 3350.5 and pace.combine(with_cpu) == pace.combine(
+        pace.windows_of("\n".join([zero, line(), line(), line()]))), "a [pace] line with cpu_us_per_step is read as one without it")
 
     with tempfile.TemporaryDirectory() as tmp:
         work = pathlib.Path(tmp)

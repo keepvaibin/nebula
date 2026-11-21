@@ -10,9 +10,11 @@
 //          refresh_ms=8.333 on_time=1197 missed=0 doubled=0 animation_within_1ms=1.0000 animation_p99_us=85.0
 //          delay_avg_us=24310.2 delay_p99_us=25120.0 render_avg_us=2950.1 render_p99_us=3400.0
 //          generated_render_avg_us=480.2 generated_render_p99_us=610.0 step_work_avg_us=3100.0
-//          step_work_p99_us=4200.0 step_work_max_us=5100.0
+//          step_work_p99_us=4200.0 step_work_max_us=5100.0 cpu_us_per_step=3350.5
 //
-// (one line). tools/gate/pace.py reads these lines.
+// (one line; cpu_us_per_step, the processor time of the whole process in the window per step, is left out where the
+// machine gives none: platform_time.h process_cpu_stamp). tools/gate/pace.py and tools/measure/measure.py read these
+// lines by key.
 //
 // Who calls what:
 //   game thread     step(): each step's moment on the step clock; step_done() when its work is done

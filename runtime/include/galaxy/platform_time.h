@@ -8,6 +8,10 @@
 
 #if defined(_WIN32)
 #include "galaxy/windows_api.h"
+#if defined(_M_X64) || defined(__x86_64__)
+#include <intrin.h>
+#define GALAXY_PROCESS_CYCLES 1
+#endif
 #else
 #include <time.h>
 #endif
@@ -48,6 +52,79 @@ namespace galaxy {
 [[nodiscard]] inline std::int64_t qpc_to_ns(std::int64_t ticks) noexcept {
     const std::int64_t frequency = qpc_frequency();
     return ticks / frequency * 1000000000 + ticks % frequency * 1000000000 / frequency;
+}
+
+// The processor time this process has used, all threads, over a span the caller measures: take a stamp at each end
+// and ask process_cpu_ns_between. Windows on x64 reads QueryProcessCycleTime (exact; GetProcessTimes is sampled at
+// the clock tick) and turns cycles into time by the time stamp counter's own rate over the same span (the counter and
+// the clock above read at both ends); that needs a counter that runs at one rate (invariant: CPUID 0x80000007 EDX bit
+// 8), else, and on Windows on another processor family, the time is not known. Elsewhere it is
+// clock_gettime(CLOCK_PROCESS_CPUTIME_ID).
+struct ProcessCpuStamp {
+    std::int64_t qpc = 0;        // qpc_now() at the stamp
+    std::uint64_t counter = 0;   // the time stamp counter (Windows on x64)
+    std::uint64_t cycles = 0;    // the process's cycles (Windows on x64), else its processor time in nanoseconds
+    bool known = false;
+};
+
+// Whether process_cpu_stamp gives a processor time on this machine.
+[[nodiscard]] inline bool process_cpu_known() noexcept {
+#if defined(GALAXY_PROCESS_CYCLES)
+    static const bool invariant = [] {
+        int regs[4] = {};
+        __cpuid(regs, static_cast<int>(0x80000000u));
+        if (static_cast<unsigned>(regs[0]) < 0x80000007u) return false;
+        __cpuid(regs, 0x80000007);
+        return ((regs[3] >> 8) & 1) != 0;
+    }();
+    return invariant;
+#elif defined(_WIN32)
+    return false;
+#else
+    return true;
+#endif
+}
+
+[[nodiscard]] inline ProcessCpuStamp process_cpu_stamp() noexcept {
+    ProcessCpuStamp s;
+    if (!process_cpu_known()) return s;
+#if defined(GALAXY_PROCESS_CYCLES)
+    ULONG64 cycles = 0;
+    s.qpc = qpc_now();
+    s.counter = __rdtsc();
+    if (!QueryProcessCycleTime(GetCurrentProcess(), &cycles)) return s;
+    s.cycles = cycles;
+    s.known = true;
+#elif !defined(_WIN32)
+    timespec now{};
+    if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &now) != 0) return s;
+    s.qpc = qpc_now();
+    s.cycles = static_cast<std::uint64_t>(now.tv_sec) * 1000000000u + static_cast<std::uint64_t>(now.tv_nsec);
+    s.known = true;
+#endif
+    return s;
+}
+
+// Cycles used over a span as nanoseconds: the counter ticked `counter_ticks` while the clock ticked `qpc_ticks` (at
+// `frequency` a second), so the counter runs at counter_ticks / (qpc_ticks / frequency) a second. -1: not known (an
+// empty span).
+[[nodiscard]] inline std::int64_t cycles_to_ns(std::uint64_t cycles, std::uint64_t counter_ticks, std::int64_t qpc_ticks,
+                                               std::int64_t frequency) noexcept {
+    if (counter_ticks == 0 || qpc_ticks <= 0 || frequency <= 0) return -1;
+    const long double span_seconds = static_cast<long double>(qpc_ticks) / static_cast<long double>(frequency);
+    const long double counter_hz = static_cast<long double>(counter_ticks) / span_seconds;
+    return static_cast<std::int64_t>(static_cast<long double>(cycles) / counter_hz * 1e9L + 0.5L);
+}
+
+// The processor time between two stamps in nanoseconds, -1 when either is not known or the span is empty.
+[[nodiscard]] inline std::int64_t process_cpu_ns_between(const ProcessCpuStamp& from, const ProcessCpuStamp& to) noexcept {
+    if (!from.known || !to.known || to.cycles < from.cycles) return -1;
+#if defined(GALAXY_PROCESS_CYCLES)
+    if (to.counter <= from.counter) return -1;
+    return cycles_to_ns(to.cycles - from.cycles, to.counter - from.counter, to.qpc - from.qpc, qpc_frequency());
+#else
+    return static_cast<std::int64_t>(to.cycles - from.cycles);
+#endif
 }
 
 // Milliseconds since an arbitrary start (GetTickCount64 on Windows).
