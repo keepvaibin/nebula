@@ -99,7 +99,12 @@ check(len(rows) == 2 and rows[0]["commit"] == "old" and rows[0]["marks"] == "" a
       "an old file keeps its line and takes the new header: %s" % rows)
 check(history.read_text(encoding="utf-8").splitlines()[0] == "\t".join(m.COLUMNS), "the header is the new one")
 check(m.band.trusted_values(rows, m.band.key_of(rows[0]), "gap_max_ms") == [], "an old line is never a baseline")
-check(m.scene_of(work / "nothing") == "unknown", "no test.json: scene unknown")
+check(m.scene_of(work / "nothing") == "HoneyBeeKingdomGalaxy:1", "no test.json in the folder: the route's own")
+(run / "test.json").write_text(json.dumps({"runner": "1.0", "test": {"name": "measure-route", "stage": {
+    "name": "OtherGalaxy", "scenario": 2}}}), encoding="utf-8")
+check(m.scene_of(run) == "OtherGalaxy:2", "the harness's copy of the test wraps it: %s" % m.scene_of(run))
+(run / "test.json").write_text(json.dumps({"name": "x", "stop": "Stop9"}), encoding="utf-8")
+check(m.scene_of(run) == "Stop9", "a stop instead of a stage: %s" % m.scene_of(run))
 (run / "test.json").write_text(json.dumps({"name": "measure-route", "stage": {"name": "HoneyBeeKingdomGalaxy",
                                                                            "scenario": 1}}), encoding="utf-8")
 log_before = (run / "run.log").read_text(encoding="utf-8")

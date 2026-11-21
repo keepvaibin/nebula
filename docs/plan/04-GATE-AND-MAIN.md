@@ -267,7 +267,7 @@ Two runs of fixed steps that differ are a determinism fault in the game or the h
 
 They need the machine alone, so they are not in levels 1 and 2.
 
-- **Short set** (15 minutes or less, Agent 1 chooses it in E0.17): one renderer per run in turn, 120 Hz, one heavy stop, the benchmark. It runs at the end of each long run under `measure.lock`. Its figures go into `gate-runs/measure-history.tsv`. A figure worse than the last ten runs' spread is a ledger row, and main is red if a recent move caused it.
+- **Short set** (15 minutes or less, Agent 1 chooses it in E0.17): one renderer per run in turn, 120 Hz, one heavy stop, the benchmark. It runs at the end of each long run under `measure.lock`. Its figures go into `gate-runs/measure-history.tsv`. A figure is worse only outside the band of the last ten trusted runs with the same key (computer, graphics card, renderer, scene, picture size, rate; tools/measure/band.py); a worse figure is measured again once, and worse twice is WORSE: a ledger row, and main is red if a recent move caused it. A run on a machine with a build or another game running, or whose graphics card other programs used, is not trusted and enters no history.
 - **Full set** (the table of 00-READ-FIRST 4.3): at the end of each package that changes speed or pacing, and at the final check.
 - While `measure.lock` is held: no gate, no long run part, no build, no game. Reading and writing code goes on.
 
