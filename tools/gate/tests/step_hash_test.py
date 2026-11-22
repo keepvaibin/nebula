@@ -9,6 +9,8 @@ import sys
 import tempfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "verify"))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+import judged  # noqa: E402
 import step_hash  # noqa: E402
 
 
@@ -139,6 +141,67 @@ def main():
         check(ok and lines[-1].startswith("1 of 1") and "not compared" in lines[-1], "another renderer's runs: compared")
         ok, lines = step_hash.check(tour("device2", {one: (["r1", "r2", "y3"], "pass")}), against=t / "pc")
         check(not ok and "differs from step 2" in lines[-1], "a device that steps differently: fails")
+
+        # The window of a run is the recordings' (P-340): a run at another size is named, not compared.
+        def sized(name, runs, size, steps=None):
+            folder = tour(name, runs)
+            for test in runs:
+                run = folder / "runs" / "tour" / test / "d3d12"
+                (run / "settings").mkdir(parents=True)
+                (run / "settings" / "config.ini").write_text("vsync_interval=0\nwindow_width=%d\nwindow_height=%d\n" % size, encoding="utf-8")
+                (run / "test.json").write_text(json.dumps({"steps": steps or [{"at": 0, "hash": "on"}]}), encoding="utf-8")
+            return folder
+
+        ok, lines, kind = step_hash.check_kind(sized("w1280", {one: (good, "pass"), two: (good, "pass")}, (1280, 720)), recordings=t / "rec")
+        check(ok and kind == "pass" and lines[-1].startswith("2 of 2 the same"), "runs at the recordings' size: compared, pass")
+        ok, lines, kind = step_hash.check_kind(sized("w640", {one: (good, "pass"), two: (good, "pass")}, (640, 360)), recordings=t / "rec")
+        check(not ok and kind == "tool" and "recorded at 1280x720, run at 640x360" in lines[-1],
+              "runs at another size: named by size, kind tool: %s" % lines[-1])
+        ok, lines, kind = step_hash.check_kind(sized("w640b", {one: (good, "pass"), two: (["r1", "x2", "x3"], "pass")}, (640, 360)),
+                                               recordings=t / "rec")
+        check(not ok and kind == "tool" and "differs" not in lines[-1] and "recorded at 1280x720, run at 640x360" in lines[-1],
+              "another size with other hashes: the size is said, the hashes are not compared: %s" % lines[-1])
+        mixed = sized("wmix", {one: (good, "pass"), two: (["r1", "x2", "x3"], "pass")}, (1280, 720))
+        (mixed / "runs" / "tour" / one / "d3d12" / "settings" / "config.ini").write_text("window_width=640\nwindow_height=360\n", encoding="utf-8")
+        ok, lines, kind = step_hash.check_kind(mixed, recordings=t / "rec")
+        check(not ok and kind == "fail" and "differs from step 1" in lines[-1] and "recorded at 1280x720, run at 640x360" in lines[-1],
+              "one run at another size and another with other hashes: a fail, both named: %s" % lines[-1])
+        stepped = sized("wstep", {one: (good, "pass"), two: (good, "pass")}, (1280, 720), [{"at": 0, "hash": "on"}, {"at": 5, "window": [800, 450]}])
+        ok, lines, kind = step_hash.check_kind(stepped, recordings=t / "rec")
+        check(not ok and kind == "tool" and "run at 800x450" in lines[-1], "a window step to another size: named: %s" % lines[-1])
+        check(step_hash.window_note(t / "same" / "runs" / "tour" / one / "d3d12") == "", "a run folder that names no size: no note")
+        try:
+            step_hash.record(sized("w640c", {one: (good, "pass"), two: (good, "pass")}, (640, 360)), t / "rec-640")
+            check(False, "record refuses runs at another size")
+        except SystemExit as stop:
+            check("recorded at 1280x720, run at 640x360" in str(stop) and not list((t / "rec-640").glob("*.tsv")),
+                  "record names the size it refuses and writes nothing: %s" % stop)
+        results = {one: ("pass", ""), two: ("pass", "")}
+        out = judged.hash_results(t / "w640", results, recordings=t / "rec")
+        check(all(v[0] == "tool" and "recorded at 1280x720, run at 640x360" in v[1] for v in out.values()),
+              "the lanes' judge: a play at another size is a tool fault: %s" % out)
+        out = judged.hash_results(t / "w1280", results, recordings=t / "rec")
+        check(all(v[0] == "pass" for v in out.values()), "the lanes' judge: a play at the recordings' size passes")
+
+    # The gate's replays: a run at another size is kind tool, a hash that differs is kind fail (P-340).
+    import types
+    import gate
+    real_check = step_hash.check_kind
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            g = types.SimpleNamespace(work=pathlib.Path(tmp), level="main")
+            for answer, kind in (((False, ["a", "1 of 2 the same; not compared, the run's window is not the recordings': x (recorded at 1280x720, run at 640x360)"], "tool"), "tool"),
+                                 ((False, ["a", "1 of 2 the same; not: x (differs from step 3)"], "fail"), "fail"),
+                                 ((False, ["0 of 0 the same"], "fail"), "tool"),
+                                 ((True, ["2 of 2 the same"], "pass"), None)):
+                step_hash.check_kind = lambda *a, _answer=answer, **k: _answer
+                out = gate.replays(g, "tour", "d3d12")(pathlib.Path(tmp) / "log.txt")
+                if kind is None:
+                    check(out[0] is True, "the gate's replays pass when the check passes")
+                else:
+                    check(out[0] is False and out[3] == kind, "the gate's replays: a check of kind %s is %s: %s" % (answer[2], kind, out[3]))
+    finally:
+        step_hash.check_kind = real_check
 
     # Values the same to 1/1000: the bits name the float that differs, with both values in full (N-1064).
     import struct

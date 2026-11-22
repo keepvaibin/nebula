@@ -166,13 +166,16 @@ def plant_recordings(folder, stops):
     return out
 
 
-def plant_run(work, test, renderer, hashes, verdict="pass", kind="pass", reason="", seconds=77.0, log=None):
+def plant_run(work, test, renderer, hashes, verdict="pass", kind="pass", reason="", seconds=77.0, log=None, size=None):
     """What the runner leaves for a play: runs/tour/<test>/<renderer>/result.json, facts.jsonl and run.log."""
     folder = pathlib.Path(work) / "runs" / rs.SUITE / test / renderer
     folder.mkdir(parents=True, exist_ok=True)
     folder.joinpath("result.json").write_text(json.dumps({"test": test, "verdict": verdict, "kind": kind, "reason": reason, "seconds": seconds}), encoding="utf-8")
     lines = [{"frame": s, "key": "hash.step", "value": {"h": h, "actors": 5}} for s, h in enumerate(hashes)]
     folder.joinpath("facts.jsonl").write_text("\n".join(json.dumps(l) for l in lines) + "\n", encoding="utf-8")
+    if size is not None:   # the window the runner gave the game (settings/config.ini)
+        (folder / "settings").mkdir(exist_ok=True)
+        (folder / "settings" / "config.ini").write_text("vsync_interval=0\nwindow_width=%d\nwindow_height=%d\n" % size, encoding="utf-8")
     folder.joinpath("run.log").write_text(log if log is not None else "[D3D12-LIVE-ERR] id 5: planted\n[D3D12-LIVE-WARN] id 6: planted\n", encoding="utf-8")
 
 
@@ -191,6 +194,13 @@ def judging(check):
             plant_run(t / "wrong", name, "d3d12", wrong)
             kind, message = rs.judge_play("pass", "", t / "wrong", name)
             check(kind == "fail" and "differs from step 3" in message, "a hash that differs from the recording is a fail naming step 3: %s %s" % (kind, message))
+            plant_run(t / "size", name, "d3d12", hashes, size=(640, 360))
+            check(rs.judge_play("pass", "", t / "size", name) == ("tool", "recorded at 1280x720, run at 640x360"),
+                  "a play at another window than the recordings' is a tool fault by its size, not a hash fail: %s" % (rs.judge_play("pass", "", t / "size", name),))
+            plant_run(t / "size-wrong", name, "d3d12", wrong, size=(640, 360))
+            check(rs.judge_play("pass", "", t / "size-wrong", name)[0] == "tool", "at another window, other hashes are not compared either")
+            plant_run(t / "size-same", name, "d3d12", hashes, size=(1280, 720))
+            check(rs.judge_play("pass", "", t / "size-same", name) == ("pass", ""), "at the recordings' window the same hashes pass")
             plant_run(t / "none", name, "d3d12", [])
             kind, message = rs.judge_play("pass", "", t / "none", name)
             check(kind == "fail" and "no hashes" in message, "a pass that wrote no hashes is a fail: %s %s" % (kind, message))

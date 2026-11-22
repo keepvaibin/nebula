@@ -1848,10 +1848,10 @@ def replays(g, label, renderer, against=None):
     def fn(log):
         work = g.work / ("runs-%s-%s" % (label, renderer))
         other = None if against is None else g.work / ("runs-%s-%s" % against)
-        ok, lines = step_hash.check(work, other, some=g.level in SHORT_LEVELS)
+        ok, lines, kind = step_hash.check_kind(work, other, some=g.level in SHORT_LEVELS)
         pathlib.Path(log).write_text("\n".join(lines) + "\n", encoding="utf-8")
-        # Not one run compared is no proof: tool. A step hash that differs is a fail.
-        return ok, lines[-1], None, "tool" if lines[-1].startswith("0 of 0 the same") else "fail"
+        # Not one run compared is no proof: tool. A run whose window is not the recordings' is tool too. A step hash that differs is a fail.
+        return ok, lines[-1], None, "tool" if kind == "tool" or lines[-1].startswith("0 of 0 the same") else "fail"
     return fn
 
 

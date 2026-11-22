@@ -44,6 +44,11 @@ RECORDED_STOPS = [
     "ReverseKingdomGalaxy 1", "TamakoroExLv1Galaxy 1", "StarDustGalaxy 1", "PhantomGalaxy 1",
 ]
 RECORDINGS = TREE / "tests" / "replays"
+# The window the recordings were played in: the runner's own default (luma_test.py), the size the plays have always run at. The step
+# hashes of three recorded plays (EggStarGalaxy 1 at the smallest sizes, PhantomGalaxy 1 and StarDustGalaxy 1 at every size below
+# this one) follow the window's size, so a run at another size is not compared with the recordings: check says "recorded at WxH, run
+# at WxH" for it (ledger row P-340).
+RECORDED_WINDOW = (1280, 720)
 
 
 def read_facts(folder):
@@ -225,6 +230,35 @@ def passed(folder):
         return False
 
 
+def run_sizes(run):
+    """[(width, height)] a run's game was given: the size its settings file starts it at (settings/config.ini, written by the runner
+    from the test's `window` and the test's own settings), then the size of each `window` step of the run's test.json. Empty when
+    the run folder says none (a folder that is not a runner's, or a fake)."""
+    sizes = []
+    try:
+        values = dict(line.split("=", 1) for line in (pathlib.Path(run) / "settings" / "config.ini").read_text(
+            encoding="utf-8").splitlines() if "=" in line)
+        sizes.append((int(values["window_width"]), int(values["window_height"])))
+    except (OSError, KeyError, ValueError):
+        pass
+    try:
+        steps = json.loads((pathlib.Path(run) / "test.json").read_text(encoding="utf-8")).get("steps", [])
+        sizes += [(int(s["window"][0]), int(s["window"][1])) for s in steps if isinstance(s.get("window"), list)]
+    except (OSError, ValueError, KeyError, TypeError, IndexError, AttributeError):
+        pass
+    return sizes
+
+
+def window_note(run, recorded=None):
+    """"recorded at WxH, run at WxH" when a run's game was given a window other than the recordings', else "" (a size not known is
+    not a difference)."""
+    recorded = RECORDED_WINDOW if recorded is None else recorded
+    for size in run_sizes(run):
+        if size != tuple(recorded):
+            return "recorded at %dx%d, run at %dx%d" % (recorded[0], recorded[1], size[0], size[1])
+    return ""
+
+
 def recorded_tests():
     """The tour's test names of RECORDED_STOPS."""
     want = {tuple(s.split()) for s in RECORDED_STOPS}
@@ -272,6 +306,8 @@ def record(work, out):
         run = runs.get(name)
         if run is None or not passed(run):
             raise SystemExit("step_hash.py record: %s has no passed run in %s" % (name, work))
+        if window_note(run):
+            raise SystemExit("step_hash.py record: %s: %s (the recordings are made at one size)" % (name, window_note(run)))
         steps = plain_steps(read_facts(run)[0])
         if sorted(steps) != list(range(gate_tour.FRAMES)):
             raise SystemExit("step_hash.py record: %s has %d hashed steps, not 0 to %d" % (name, len(steps), gate_tour.FRAMES - 1))
@@ -294,10 +330,18 @@ def record(work, out):
 
 
 def check(work, against=None, some=False, recordings=RECORDINGS):
-    """(ok, lines): a work folder's runs against the recordings, or against another work folder's runs of the same
+    """(ok, lines): check_kind without the kind."""
+    ok, lines, _ = check_kind(work, against, some, recordings)
+    return ok, lines
+
+
+def check_kind(work, against=None, some=False, recordings=RECORDINGS):
+    """(ok, lines, kind): a work folder's runs against the recordings, or against another work folder's runs of the same
     tests. Against the recordings, a recorded stop that did not run fails (unless `some`); against runs, the tests
     both ran and passed are compared and the rest are named. Either way a run that failed is named, not compared: its
-    own check says why."""
+    own check says why. A run against the recordings whose window is not the recordings' (RECORDED_WINDOW) is not compared
+    either: it is named "recorded at WxH, run at WxH" and the kind is `tool` (the run is wrong, not the game) when no step hash
+    differs, else `fail`. kind: "pass", "fail" or "tool"."""
     runs = runs_by_test(work)
     if against is None:
         names = recorded_tests()
@@ -306,7 +350,7 @@ def check(work, against=None, some=False, recordings=RECORDINGS):
         theirs = runs_by_test(against)
         names = sorted(set(runs) | set(theirs))
         other = {n: theirs.get(n) for n in names}
-    lines, same, differ, skipped = [], 0, [], []
+    lines, same, differ, skipped, sized = [], 0, [], [], []
     for name in names:
         run, ref = runs.get(name), other.get(name)
         if ref is None:
@@ -318,6 +362,11 @@ def check(work, against=None, some=False, recordings=RECORDINGS):
         if not passed(run) or (against is not None and not passed(ref)):
             skipped.append(name + " (a run did not pass)")
             continue
+        note = window_note(run) if against is None else ""
+        if note:
+            sized.append("%s (%s)" % (name, note))
+            lines.append("%-40s %s" % (name, note))
+            continue
         mine = plain_steps(read_facts(run)[0])
         theirs_steps = ref if against is None else plain_steps(read_facts(ref)[0])
         ok, text = same_steps(mine, theirs_steps, name)
@@ -326,13 +375,16 @@ def check(work, against=None, some=False, recordings=RECORDINGS):
             same += 1
         else:
             differ.append("%s (%s)" % (name, text))
-    summary = "%d of %d the same" % (same, same + len(differ))
+    summary = "%d of %d the same" % (same, same + len(differ) + len(sized))
     if differ:
         summary += "; not: " + ", ".join(differ[:6]) + (" ..." if len(differ) > 6 else "")
+    if sized:
+        summary += "; not compared, the run's window is not the recordings': " + ", ".join(sized[:6]) + (" ..." if len(sized) > 6 else "")
     if skipped:
         summary += "; not compared: " + ", ".join(skipped[:6]) + (" ..." if len(skipped) > 6 else "")
     lines.append(summary)
-    return same > 0 and not differ, lines
+    ok = same > 0 and not differ and not sized
+    return ok, lines, "pass" if ok else ("tool" if sized and not differ else "fail")
 
 
 def plain_steps_of_file(path):

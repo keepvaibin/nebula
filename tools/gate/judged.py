@@ -19,7 +19,9 @@ DIFFERENT = ("changed", "missing")
 
 def hash_results(work, results, recordings=None):
     """`results` {test: (kind, message)} with a test whose step hashes differ from its recording (a test that passed, has a
-    recording and wrote hashes) made a fail; a test that passed and wrote none is a fail too. Others are left as they are."""
+    recording and wrote hashes) made a fail; a test that passed and wrote none is a fail too. A test that passed with a window other
+    than the recordings' (step_hash.RECORDED_WINDOW) is a tool fault, "recorded at WxH, run at WxH": its hashes are not compared. Others
+    are left as they are."""
     recordings = pathlib.Path(recordings) if recordings is not None else step_hash.RECORDINGS
     runs = step_hash.runs_by_test(work)
     out = dict(results)
@@ -27,6 +29,10 @@ def hash_results(work, results, recordings=None):
         run = runs.get(test)
         ref = step_hash.plain_steps_of_file(recordings / (test + ".tsv"))
         if kind != "pass" or run is None or ref is None:
+            continue
+        note = step_hash.window_note(run)
+        if note:
+            out[test] = ("tool", note)
             continue
         same, text = step_hash.same_steps(step_hash.plain_steps(step_hash.read_facts(run)[0]), ref, test)
         if not same:

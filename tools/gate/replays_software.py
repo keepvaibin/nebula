@@ -66,7 +66,7 @@ EXES = {"d3d12": "Nebula.exe", "vulkan": "NebulaVk.exe", "d3d11": "NebulaD11.exe
 RUNNER = TREE / "tools" / "lumacore" / "luma_test.py"
 SUITE = "tour"
 # The window of every play: the size the plays were recorded in (the steps of three plays depend on the window's size; see above).
-WINDOW = (1280, 720)
+WINDOW = step_hash.RECORDED_WINDOW
 # The usual limit of a tour play (gate_tour.test_for limit_seconds) times this is the limit of a play here: the measured factor of the
 # software device (seconds of one play on it over the same play on the card: 25.0 over 5.7 for HoneyBeeKingdomGalaxy 1) times two, up.
 LIMIT_SCALE = 9.0
