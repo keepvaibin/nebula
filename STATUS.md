@@ -1,17 +1,16 @@
 # Nebula native plan: status
 
-Written 2026-11-22 12:46.
+Written 2026-11-22 14:17.
 
-Steps landed: 0 of 138 (0%).
+Steps landed: 1 of 138 (1%).
 
-In work now:
-- S0.1.1 Land `rows/p022c` and `rows/p022d` as one batch (agent 1)
+In work now: Nothing started.
 
 ## Packages
 
 | Package | Landed | Of |
 | --- | --- | --- |
-| S0.1 | 0 | 5 |
+| S0.1 | 1 | 5 |
 | S0.2 | 0 | 6 |
 | S0.3 | 0 | 2 |
 | R1 | 0 | 4 |
@@ -38,7 +37,9 @@ In work now:
 
 ## Last 10 landings
 
-None yet.
+| When | Step | Title | Code commit | Main commit |
+| --- | --- | --- | --- | --- |
+| 2026-11-22 14:17 | S0.1.1 | Land `rows/p022c` and `rows/p022d` as one batch | 83b537af7 | 463d38612 |
 
 ## Repairs
 
@@ -54,4 +55,10 @@ Nothing is blocked.
 
 ## Tool faults
 
-0 tool faults recorded.
+1 tool fault recorded.
+
+The last 20:
+
+| When | Step | Test | What happened | What the agent could not do |
+| --- | --- | --- | --- | --- |
+| 2026-11-22 12:50 | - | validate/vulkan | not run: the Vulkan validation layer is not installed on this PC | - |
