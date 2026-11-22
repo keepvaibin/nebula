@@ -4,7 +4,7 @@ Written 2026-11-22 14:34.
 
 Steps landed: 2 of 138 (1%).
 
-Now: S0.1.3 since 14:26; ahead: nothing
+Now: Stopped by R: S0.1.3 blocked (console census refuses the GX section names); S0.1.4 prepared on native/S0.1.4
 
 In work now: Nothing started.
 
