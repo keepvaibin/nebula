@@ -113,7 +113,8 @@ def build_tools():
     with contextlib.redirect_stderr(quiet):
         top = Node(gate.parser())
         top.commands = {"land": Node(gate.parser(land=True)), "data": Node(capture(gamedata.main, ["list"])),
-                        "speed-base": Node(capture(speedbase.main, ["show"])), "long-results": Node(long_results.build_parser())}
+                        "speed-base": Node(capture(speedbase.main, ["show"])), "long-results": Node(long_results.build_parser()),
+                        "long-start": Node(gate.long_start_parser())}
         return {"gate": top, "plan": Node(plan.parser()), "measure": Node(capture(measure.main, ["keep", "x"]))}
 
 

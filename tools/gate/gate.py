@@ -2754,29 +2754,34 @@ def start_long(sha, args, tree=LONG_TREE, source=TREE, popen=subprocess.Popen, n
     return cmd, "the long run of main %s started in %s (log %s)" % (sha[:9], tree, log)
 
 
+def long_start_parser():
+    """The options of `gate.py long-start`: a run's options and the two of its own."""
+    p = parser()
+    p.prog = "gate.py long-start"
+    p.add_argument("--why", default="", help="why the long run is started by hand (written in the marker that stops a second start for 20 hours)")
+    p.add_argument("--sha", default="", help="the commit to run on (default origin/main of this repository, as fetched)")
+    return p
+
+
 def long_start_main(argv):
     """gate.py long-start --why TEXT [--sha COMMIT] [the options of a run, e.g. --who NAME --tablet SERIAL]: the long run of a commit
     (default: origin/main as the repository has it now: fetch first), started by hand with start_long's own call; for a day on which
     the 20-hour rule stands in the way (a long run that died after its start was written). Exit 0 started, 2 not started."""
-    pre = argparse.ArgumentParser(prog="gate.py long-start", add_help=False)
-    pre.add_argument("--why", default="")
-    pre.add_argument("--sha", default="")
-    known, rest = pre.parse_known_args(argv)
-    if not known.why.strip():
+    args = long_start_parser().parse_args(["--main"] + list(argv))
+    if not args.why.strip():
         print("gate.py long-start: --why TEXT is needed (it is written in long-started.txt)", file=sys.stderr)
         return 2
-    args = parser().parse_args(["--main"] + rest)
-    r = subprocess.run([GIT, "-C", str(TREE), "rev-parse", "--verify", (known.sha or MAIN_REF) + "^{commit}"], capture_output=True, text=True)
+    r = subprocess.run([GIT, "-C", str(TREE), "rev-parse", "--verify", (args.sha or MAIN_REF) + "^{commit}"], capture_output=True, text=True)
     if r.returncode != 0:
-        print("gate.py long-start: no such commit: %s" % (known.sha or MAIN_REF), file=sys.stderr)
+        print("gate.py long-start: no such commit: %s" % (args.sha or MAIN_REF), file=sys.stderr)
         return 2
     sha = r.stdout.strip()
-    started, what = start_long(sha, args, why=known.why)
+    started, what = start_long(sha, args, why=args.why)
     print("gate.py: long run: %s" % what)
     if started is None:
         return 2
     print("LONG-STARTED %s" % (pathlib.Path(args.work) / ("long-%s.log" % sha[:9])), flush=True)
-    board_line(args.board, "%s LONG: %s; started by hand: %s." % (args.who, what, " ".join(known.why.split())))
+    board_line(args.board, "%s LONG: %s; started by hand: %s." % (args.who, what, " ".join(args.why.split())))
     return 0
 
 
