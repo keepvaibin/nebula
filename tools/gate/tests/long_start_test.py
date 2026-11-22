@@ -108,7 +108,37 @@ if start is not None:
             [(later - datetime.timedelta(hours=3)).isoformat(), "run", "long", c2, "pass"]) + "\n", encoding="utf-8")
         cmd, what = start(c2, args, tree=long_tree, source=source, popen=popen, now=later)
         check(cmd is None and len(started) == 2, "a long run in history 3 hours ago stops a start: %s" % what)
+
+        # A start by hand (gate.py long-start, T11-B): the 20-hour rule is not asked, the reason is written, the lock rule stays.
+        why = "the long run of 11-21 died after its start was written"
+        cmd, what = start(c2, args, tree=long_tree, source=source, popen=popen, now=later, why=why)
+        check(cmd is not None and len(started) == 3, "a start by hand 3 hours after a long run starts one: %s" % what)
+        check((work / "long-started.txt").read_text(encoding="utf-8").strip() ==
+              "%s %s by hand: %s" % (later.isoformat(timespec="seconds"), c2, why), "long-started.txt names the commit and the reason")
+        cmd, what = start(c2, args, tree=long_tree, source=source, popen=popen, now=later + datetime.timedelta(minutes=5), why="again")
+        check(cmd is None and len(started) == 3 and "less than 10 minutes ago" in what,
+              "a second start by hand 5 minutes later is refused (the run may not hold the lock yet): %s" % what)
+        (lock / "holder.txt").write_text("long gate of Nebula-long@x pid %d" % os.getpid(), encoding="utf-8")
+        cmd, what = start(c2, args, tree=long_tree, source=source, popen=popen, now=later + datetime.timedelta(minutes=11), why="again")
+        check(cmd is None and len(started) == 3 and "long lock is held" in what,
+              "a start by hand is refused while a process that runs holds the long lock: %s" % what)
+        (lock / "holder.txt").write_text("long gate of Nebula-long@x pid 999999", encoding="utf-8")
+        cmd, what = start(c2, args, tree=long_tree, source=source, popen=popen, now=later + datetime.timedelta(minutes=11), why="again")
+        check(cmd is not None and len(started) == 4, "a start by hand 11 minutes later, the holder ended, starts: %s" % what)
+        cmd, what = start(c2, args, tree=long_tree, source=source, popen=popen, now=later + datetime.timedelta(hours=1))
+        check(cmd is None and len(started) == 4 and "less than 20 hours ago" in what,
+              "a start by hand counts for the 20-hour rule of a move: %s" % what)
         sh(git, "-C", str(source), "worktree", "remove", "--force", str(long_tree))
+
+# The form of the command: no reason, or no such commit, starts nothing and gives 2.
+check(getattr(gate, "long_start_main", None) is not None, "gate.long_start_main exists")
+if getattr(gate, "long_start_main", None) is not None:
+    with tempfile.TemporaryDirectory() as tmp:
+        t = pathlib.Path(tmp)
+        own = ["--work", str(t / "runs"), "--board", "", "--long-lock", str(t / "long.lock"), "--status", ""]
+        check(gate.long_start_main(own) == 2 and gate.long_start_main(["--why", "  "] + own) == 2, "no reason: refused, exit 2")
+        check(gate.long_start_main(["--why", "x", "--sha", "0123456789abcdef0123456789abcdef01234567"] + own) == 2
+              and not (t / "runs" / "long-started.txt").exists(), "no such commit: refused, exit 2, nothing written")
 
 # The play route measure's command (the long run's measure part, N-1043 and P-321): the PC's renderers, the tablet with the
 # test app and the pak when the gate has built the app. No measure is started by a move (package T13c): there is no start_measure.

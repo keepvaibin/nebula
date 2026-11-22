@@ -41,6 +41,8 @@ starts the game for a test goes through here.
 --long   level 3, on main's newest commit, under the long lock, at below-normal priority: the tablet's 102 stops
          against the PC's, a sanitizer build's tour, the soak, every disc on every renderer. Its parts are pieces of at most seven
          minutes that give way to landings (tools/gate/long_parts.py); no speed part. At its end: tools/gate/long_results.py.
+long-start --why TEXT [--sha COMMIT] [options]: the long run of a commit (default origin/main), started by hand the way a move starts it, without
+         the 20-hour rule; the reason is written in <work>/long-started.txt. A long lock held by a process that runs, or a start of the last 10 minutes, stops it.
 long-results RUN_FOLDER [--dry]: what follows from a long run's results: repairs, tool-fault lines, the report, new pictures.
 --final  level 4: the main and long levels on one commit. "Done" needs it passed with no check planned or known.
 --only CHECK[,CHECK]: only the checks those shell patterns name, and the checks they need (for tracing a red main).
@@ -2714,17 +2716,29 @@ def long_command(sha, args, tree=LONG_TREE):
     return cmd + (["--tablet", args.tablet] if args.tablet else [])
 
 
-def start_long(sha, args, tree=LONG_TREE, source=TREE, popen=subprocess.Popen, now=None):
+LONG_BY_HAND_GAP_MINUTES = 10.0
+
+
+def start_long(sha, args, tree=LONG_TREE, source=TREE, popen=subprocess.Popen, now=None, why=""):
     """After a move: when a long run is due and the long lock is free, brings the long run's tree to `sha` and starts
     the run there, detached and below normal priority (it lowers itself too, below_normal), its output in
-    <work>/long-<sha>.log. Returns (command or None, what happened) for the board."""
-    if not long_due(args.work, now=now):
+    <work>/long-<sha>.log. Returns (command or None, what happened) for the board.
+    `why` (gate.py long-start): a start by hand. The 20-hour rule is not asked, and the reason is written after the commit in
+    long-started.txt; the long lock is asked as for a move (a holder that runs stops it, one that ended is taken over by the run),
+    and so is a start of the last LONG_BY_HAND_GAP_MINUTES minutes, whose run may not have taken the lock yet."""
+    if why:
+        marker = pathlib.Path(args.work) / "long-started.txt"
+        if marker.exists():
+            last = datetime.datetime.fromisoformat(marker.read_text(encoding="utf-8").split()[0])
+            if 0 <= ((now or datetime.datetime.now()) - last).total_seconds() < LONG_BY_HAND_GAP_MINUTES * 60:
+                return None, "a long run was started less than %d minutes ago (long-started.txt)" % LONG_BY_HAND_GAP_MINUTES
+    elif not long_due(args.work, now=now):
         return None, "no long run is due: the last one started less than %d hours ago" % LONG_EVERY_HOURS
     if not long_lock_free(args.long_lock):
         return None, "the long lock is held (%s)" % lock_holder(args.long_lock)[0]
-    why = long_tree_at(sha, tree, source)
-    if why is not None:
-        return None, "its tree %s could not be brought to %s: %s" % (tree, sha[:9], why)
+    problem = long_tree_at(sha, tree, source)
+    if problem is not None:
+        return None, "its tree %s could not be brought to %s: %s" % (tree, sha[:9], problem)
     cmd = long_command(sha, args, tree)
     log = pathlib.Path(args.work) / ("long-%s.log" % sha[:9])
     log.parent.mkdir(parents=True, exist_ok=True)
@@ -2735,8 +2749,35 @@ def start_long(sha, args, tree=LONG_TREE, source=TREE, popen=subprocess.Popen, n
         machine.start_outliving(popen, cmd, cwd=str(tree), stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,
                                 close_fds=True, **detach)
     (pathlib.Path(args.work) / "long-started.txt").write_text(
-        "%s %s\n" % ((now or datetime.datetime.now()).isoformat(timespec="seconds"), sha), encoding="utf-8")
+        "%s %s%s\n" % ((now or datetime.datetime.now()).isoformat(timespec="seconds"), sha,
+                       (" by hand: " + " ".join(why.split())) if why else ""), encoding="utf-8")
     return cmd, "the long run of main %s started in %s (log %s)" % (sha[:9], tree, log)
+
+
+def long_start_main(argv):
+    """gate.py long-start --why TEXT [--sha COMMIT] [the options of a run, e.g. --who NAME --tablet SERIAL]: the long run of a commit
+    (default: origin/main as the repository has it now: fetch first), started by hand with start_long's own call; for a day on which
+    the 20-hour rule stands in the way (a long run that died after its start was written). Exit 0 started, 2 not started."""
+    pre = argparse.ArgumentParser(prog="gate.py long-start", add_help=False)
+    pre.add_argument("--why", default="")
+    pre.add_argument("--sha", default="")
+    known, rest = pre.parse_known_args(argv)
+    if not known.why.strip():
+        print("gate.py long-start: --why TEXT is needed (it is written in long-started.txt)", file=sys.stderr)
+        return 2
+    args = parser().parse_args(["--main"] + rest)
+    r = subprocess.run([GIT, "-C", str(TREE), "rev-parse", "--verify", (known.sha or MAIN_REF) + "^{commit}"], capture_output=True, text=True)
+    if r.returncode != 0:
+        print("gate.py long-start: no such commit: %s" % (known.sha or MAIN_REF), file=sys.stderr)
+        return 2
+    sha = r.stdout.strip()
+    started, what = start_long(sha, args, why=known.why)
+    print("gate.py: long run: %s" % what)
+    if started is None:
+        return 2
+    print("LONG-STARTED %s" % (pathlib.Path(args.work) / ("long-%s.log" % sha[:9])), flush=True)
+    board_line(args.board, "%s LONG: %s; started by hand: %s." % (args.who, what, " ".join(known.why.split())))
+    return 0
 
 
 # The tablet --------------------------------------------------------------------------------------------------------
@@ -4354,6 +4395,8 @@ def run_main(argv, left):
         return gamedata.main(argv[1:])
     if argv and argv[0] == "speed-base":
         return speedbase.main(argv[1:])
+    if argv and argv[0] == "long-start":
+        return long_start_main(argv[1:])
     if argv and argv[0] == "long-results":
         import long_results
         return long_results.run_cli(sys.modules[__name__], argv[1:])

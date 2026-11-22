@@ -391,6 +391,7 @@ for this rule). It starts by itself after a move: the landing's last lines say t
 (`gate-runs/long-<sha>.log`), and that it gives way to landings. A move starts no speed measure, and the long run has no speed part either:
 speed is judged in every landing (the pair on the PC, the tablet's own measure) and at the end of each package (`speed/anchor`). One long run
 at a time, under `D:\NebulaWork\plan\long.lock` (a lock whose process has ended is taken over).
+A start by hand, for a day on which the twenty hours stand in the way (a run that died after its start was written): `gate.py long-start --why TEXT [--sha COMMIT]`. It asks no twenty hours, writes the reason after the commit in the marker that stops a second start for twenty hours, and is stopped by a long lock held by a process that runs and by a start of the last ten minutes.
 
 **The long run gives way to landings (package B15).** No part holds the machine longer than 7 minutes (`tools/gate/long_parts.py`:
 `PIECE_SECONDS`, the seconds per stop taken from the long runs on record). A part whose list of stops would take longer is played as
