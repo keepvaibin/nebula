@@ -49,53 +49,24 @@ def tearDownModule():
 
 # ---- the plan's real files ----------------------------------------------------------------------------------
 
-def fresh_plan_copy():
-    """A copy of the plan's own files (the cards, the order, the checks, the ledger, the scope table) as they were at the start: every
-    step open, no commit. The tests below are about the plan as made; the real steps.tsv changes with every step that lands (T11-B: four
-    of them failed once S0.1.1 and S0.1.2 had landed)."""
-    tmp = pathlib.Path(tempfile.mkdtemp(prefix="real-plan-"))
-    for rel in ("docs/plan/native", "docs/plan/ledger.tsv", "tools/gate/scope.tsv"):
-        src, dst = TREE / rel, tmp / rel
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        if src.is_dir():
-            shutil.copytree(src, dst, ignore=shutil.ignore_patterns("BLOCKED.md"))
-        else:
-            shutil.copy2(src, dst)
-    steps_file = tmp / "docs" / "plan" / "native" / "steps.tsv"
-    rows = steps_file.read_bytes().decode("utf-8").replace(chr(13)+chr(10), nl_).split(nl_)
-    out = [rows[0]]
-    for row in rows[1:]:
-        cells = row.split(chr(9))
-        if len(cells) >= 8:
-            cells[6], cells[7] = "open", ""
-        out.append(chr(9).join(cells))
-    steps_file.write_bytes(nl_.join(out).encode("utf-8"))
-    # A repository with an origin of its own, as the tool reads main (`next` fetches origin/main's steps.tsv): every step open there too.
-    origin = tmp.with_name(tmp.name + "-origin.git")
-    git_run("init", "-q", "--bare", "-b", "main", str(origin))
-    git_run("init", "-q", "-b", "main", cwd=str(tmp))
-    for key, value in (("user.name", "keepvaibin"), ("user.email", "122556909+keepvaibin@users.noreply.github.com"), ("commit.gpgsign", "false")):
-        git_run("config", key, value, cwd=str(tmp))
-    git_run("add", "-A", cwd=str(tmp))
-    git_run("commit", "-q", "-m", "the plan as it was at the start", cwd=str(tmp))
-    git_run("remote", "add", "origin", str(origin), cwd=str(tmp))
-    git_run("push", "-q", "origin", "main", cwd=str(tmp))
-    return tmp
+_real_read_base = plan.read_base
 
 
-nl_ = chr(10)
+def open_steps(tree):
+    """The plan's own steps as they were at the start: every step open, no commit (plan.read_base with the progress taken out). The real
+    steps.tsv changes with every step that lands (T11-B: four of these tests failed once S0.1.1 and S0.1.2 had landed)."""
+    return [dict(s, state="open", commit="") for s in _real_read_base(tree)]
+
+
+def at_the_start():
+    """Patches that make the tool read the real plan as it was at the start: the steps open, and no fetch of what origin/main has landed."""
+    return (mock.patch.object(plan, "read_base", open_steps), mock.patch.object(plan, "fetch_main_landed", lambda a: None))
 
 
 class RealPlanTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.fresh = fresh_plan_copy()
-        cls.steps = plan.read_steps(cls.fresh)
-
-    @classmethod
-    def tearDownClass(cls):
-        rmtree_force(cls.fresh)
-        rmtree_force(cls.fresh.with_name(cls.fresh.name + "-origin.git"))
+        cls.steps = open_steps(TREE)
 
     def test_the_plan_is_138_steps_in_one_order_with_every_step_open_at_the_start(self):
         self.assertEqual(len(self.steps), 138)
@@ -143,7 +114,8 @@ class RealPlanTest(unittest.TestCase):
         self.assertEqual(set(plan.need_ids(by["Z.3"], self.steps)), everything | {"Z.1", "Z.2"})
 
     def test_next_on_a_fresh_copy_is_S0_1_1_with_its_card(self):
-        code, text = run(["next"], self.fresh, self.fresh / "none", self.fresh / "none.tsv")
+        with at_the_start()[0], at_the_start()[1]:
+            code, text = run(["next"], TREE, TREE / "none", TREE / "none.tsv")
         self.assertEqual(code, 0)
         lines = text.splitlines()
         self.assertEqual(lines[0], "NEXT: S0.1.1  Land `rows/p022c` and `rows/p022d` as one batch")
@@ -1370,12 +1342,8 @@ class StatusTest(unittest.TestCase):
             self.assertIn("- A.1 First step", text)
 
     def test_status_of_the_real_plan_says_138(self):
-        fresh = fresh_plan_copy()
-        try:
-            text = plan.status_text(fresh)
-        finally:
-            rmtree_force(fresh)
-            rmtree_force(fresh.with_name(fresh.name + "-origin.git"))
+        with at_the_start()[0], at_the_start()[1]:
+            text = plan.status_text(TREE)
         self.assertIn("Steps landed: 0 of 138.", text)
         self.assertIn("- S0.1.1 Land `rows/p022c` and `rows/p022d` as one batch", text)
 
