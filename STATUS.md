@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-22 14:26.
+Written 2026-11-22 14:31.
 
 Steps landed: 2 of 138 (1%).
 
