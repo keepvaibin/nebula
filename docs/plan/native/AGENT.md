@@ -170,7 +170,7 @@ written: `PLAN blocked <ID> "<what is done, what is left, what stands in the way
 | Code | It means | Do this |
 | --- | --- | --- |
 | 0 | Landed. Main has your step. | Section 4.3, first row. |
-| 1 | Refused, or a check failed. The lines starting `KIND` name each failed check and test; the line `result: <folder>\result.json` before them names the folder of the run. | A refusal names what is missing (a ledger row, an invented file reference, an uncommitted change, the wrong branch): supply it. For a failed test: open its run folder, read the log and the pictures, and find the cause in your change before you edit anything. Fix the game, never the test (unless the card changes what the test checks). Commit, land again. Never land the same commit twice hoping for another result (the one exception is under `worse` below). |
+| 1 | Refused, or a check failed. The lines starting `KIND` name each failed check and test; the line `result: <folder>\result.json` before them names the folder of the run. | A refusal names what is missing (a ledger row, an invented file reference, an uncommitted change, the wrong branch): supply it. A rule of the repository (the console census, the cast check, the byte-order check, the pre-push hook) refuses in this code too, in seconds, before anything is queued, with the check's own lines (the census: its group and the files with their counts): change the code, never land it unchanged. For a failed test: open its run folder, read the log and the pictures, and find the cause in your change before you edit anything. Fix the game, never the test (unless the card changes what the test checks). Commit, land again. Never land the same commit twice hoping for another result (the one exception is under `worse` below). |
 | 2 | The step tool did not do the command. Its line starts `plan.py:` and says why: the command or the id was wrong, a file of the plan cannot be read, or git failed. | A wrong command or id: correct it. A message `ledger line <N>: ...` names a line of `docs/plan/ledger.tsv` by its number: you wrote that line; give it exactly the 7 tab-separated columns, commit, and give the command again. Anything else: give the same command once more. The same line again: section 9, "When a tool fails", point 5. |
 | 3 | The same failure three times in a row. | Stop working on it. `PLAN blocked <ID> "<what fails and what you tried, in two sentences>"`. Then `PLAN next`. |
 | 4 | Not judged: a test tool or the machine failed, or your branch no longer applies to main. Nothing is wrong with your step as far as anyone knows. | Section 9, "When a tool fails". |
@@ -363,7 +363,10 @@ own help says, or when a check cannot see what the card asks it to prove. Then:
    lines: keep both. A conflict in code: `git rebase --abort`, `PLAN blocked <ID> "main changed the same
    code: <files>"`. Else land again.
 3. Any other code 4: land once more (add `--github-again` if the message says GitHub was at fault). Not
-   judged a second time: `PLAN blocked <ID> "tool: <the message's first line>"`.
+   judged a second time: `PLAN blocked <ID> "tool: <the message's first line>"`. A message that names a rule of the
+   repository (the console census, the cast check, the byte-order check, the pre-push hook) is never this case:
+   it is a refusal (code 1, section 5), and landing it once more gives the same refusal.
+   If a landing of yours ends so with code 4 all the same, that is a fault of the tool: `PLAN tool "..."`, then `PLAN blocked`.
 4. A fault outside a landing (one of your own commands): try the command once more. If it fails the same
    way, go on without it when the landing will run that test anyway, and say so in your log; if you cannot
    prove your change without it, `PLAN blocked <ID> "tool: ..."`.
@@ -434,13 +437,27 @@ every `PLAN blocked`, and at least once every two hours:
 `PLAN next` prints `Nothing can start now.` with the steps that are blocked:
 
 1. A blocked step that has had no second attempt (your log says which have): `PLAN start <ID>` takes its
-   branch up as it is. Read the reason first (the step's last line in the file `BLOCKED.md`, which the step
-   tool writes beside the cards, in the work folder's `docs/plan/native`) and `git log origin/main..HEAD`
+   branch up as it is. Read the reason first (the step's last line in the file `D:/NebulaWork/plan/native/BLOCKED.md`,
+   which the step tool writes with the rest of its state) and `git log origin/main..HEAD`
    with its diff. Do not repeat what you tried the first time; if
    you can see nothing you did not try, block it again with what you checked. One second attempt for each
    blocked step, never a third. Write `second attempt` in the log line.
 2. No blocked step is left that has not had its second attempt: the work is stopped.
 
+A step blocked by a fault of the tools (`PLAN blocked <ID> "tool: ..."`) or by a rule of the repository that the planner
+has since changed is taken up again as soon as main holds the mend, at any time: it is not a second attempt and needs
+no waiting for "Nothing can start now". The planner's message names the mend, or `git log origin/main` shows a commit
+that is not yours and names the fault. Then, in the work folder:
+
+1. `git fetch origin`; commit what you have on the branch you are on (section 4.3, last part), so that the folder is clean.
+2. `PLAN start <ID>`: the step is `started` again on its own branch, which the folder now has checked out. A step
+   written ahead on top of it keeps its branch and its ahead entry.
+3. `git rebase origin/main` on that branch, so that the step is built on the mend (a conflict: section 9, point 2).
+4. `PLAN land <ID>` as in section 4.1 point 8. The queue's old row of the step (waiting, "not judged") is replaced
+   by the new call; nothing is removed by hand.
+5. While it plays: `PLAN ahead`. The commits of the step written ahead are moved onto the step's new tip (section 4.3).
+6. Write a log line `unblocked` with the step and the mend. A fault line you recorded with `PLAN tool` stays on the
+   page: it says what happened.
 `PLAN next` prints `Every step is landed`, or the work is stopped by point 2: first `PLAN repair list`. Every
 repair it shows as `open` (the kinds `next` never gives), oldest first: `PLAN start R-00N` and work on it as
 section 6 says, to `PLAN land R-00N` or `PLAN blocked R-00N "<why>"`. One attempt for each. Then the work is

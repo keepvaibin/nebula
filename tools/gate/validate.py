@@ -194,6 +194,11 @@ def fault_due(faults, check, now):
     return not any(f.get("check") == check and str(f.get("time", "")).startswith(today) for f in faults)
 
 
+# The layers this PC is known not to have (docs/plan/native/AGENT.md section 9: the Vulkan validation layer is not installed here): their absence
+# is the check's own plain line and no line of tool-faults.tsv, so the progress page shows no fault for what is expected (T11-B).
+EXPECTED_ABSENT = ("vulkan",)
+
+
 def missing_layer_line(renderer):
     """The one plain line of a renderer whose layer is not on."""
     return "not run: the %s is not installed on this PC" % LAYER_NAMES[renderer]

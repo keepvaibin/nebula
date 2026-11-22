@@ -280,7 +280,7 @@ class PageFilesTest(unittest.TestCase):
 
     def test_a_blocked_reason_falls_back_to_blocked_md(self):
         lv.set_state_entry(self.t.live, "C.1", "blocked", 1, "")
-        plan.append_under(plan.native(self.t.tree) / "BLOCKED.md", "steps", "- 2026-11-20 C.1: the reason in the file | first failure line: x")
+        plan.append_under(plan.blocked_path(self.t.live), "steps", "- 2026-11-20 C.1: the reason in the file | first failure line: x")
         data = self.page()[0]
         self.assertEqual(data["blocked"][0]["reason"], "the reason in the file | first failure line: x")
 

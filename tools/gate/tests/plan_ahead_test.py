@@ -652,6 +652,37 @@ class GivenUpTest(AheadBase):
         self.assertEqual(self.t.git("show", "native/C.1:runtime/src/render/a.cpp", cwd=self.folder).replace("\r", ""), "a\nb\nc")
         self.assertIn("prepared ahead: 1 commits of C.1 are on top of main", text.splitlines())
 
+    def test_a_blocked_N_is_taken_up_again_once_main_holds_the_mend_and_M_follows_it(self):
+        """T11-B (step S0.1.3): the commands of AGENT.md section 13, last part: start N, git rebase origin/main, land N, ahead."""
+        tip = self.failed_landing()
+        self.plant(tip)
+        self.t.run(["ahead"], expect=0)
+        self.m_commit(message="C.1: its work")
+        self.unplant()
+        self.t.run(["blocked", "A.1", "tool: the census refused it"], expect=0)
+        clone = self.t.dir / "mend"                                   # the mend lands on main: a commit that is not the step's
+        git_run("clone", "-q", str(self.t.origin), str(clone))
+        (clone / "mend.txt").write_text("the mend" + chr(10), encoding="utf-8")
+        git_run("add", "-A", cwd=str(clone))
+        git_run("commit", "-q", "-m", "the mend", cwd=str(clone))
+        git_run("push", "-q", "origin", "HEAD:main", cwd=str(clone))
+        code, text = self.t.run(["start", "A.1"])
+        self.assertEqual(code, 0, text)
+        self.assertEqual(lv.read_state(self.t.live)["A.1"]["state"], "started")
+        self.assertEqual(self.on(), "native/A.1")
+        self.assertEqual(self.entry()["step"], "C.1", "the step written ahead keeps its entry")
+        self.t.git("fetch", "origin", cwd=self.folder)
+        self.t.git("rebase", "origin/main", cwd=self.folder)
+        self.assertTrue(self.is_ancestor("origin/main", "HEAD"), "the step stands on the mend")
+        new = self.rev("HEAD")
+        self.assertNotEqual(new, tip)
+        self.results = [passed_verdict()]
+        self.hooks = [lambda: (self.nested(["ahead"], 0), self.pass_moving_main()())]
+        code, text = self.land()
+        self.assertEqual(code, 0, text)
+        self.assertTrue(self.is_ancestor(new, "native/C.1"), "M's commits were moved onto N's new tip by ahead")
+        self.assertEqual(self.subjects("%s..native/C.1" % new), ["C.1: its work"])
+
     def test_a_kept_N_whose_branch_was_rebased_gets_M_moved_onto_its_new_tip_by_ahead(self):
         old = self.failed_landing()
         self.plant(old)

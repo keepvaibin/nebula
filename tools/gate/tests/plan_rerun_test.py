@@ -472,7 +472,8 @@ class CardTest(RerunBase):
     def test_the_step_after_the_first_real_step_is_the_second(self):
         with tempfile.TemporaryDirectory() as live:
             a = types.SimpleNamespace(tree=TREE, live=live, agent=1)
-            steps = plan.read_steps(TREE, live)
+            # The plan's own order, whatever has landed since: every step is read as open (T11-B: the test broke when S0.1.1 and S0.1.2 landed).
+            steps = [dict(s, state="open") for s in plan.read_steps(TREE, live)]
             self.assertEqual(plan.following(a, steps, steps[0])["step"], steps[1]["step"])
             self.assertEqual(steps[1]["step"], "S0.1.2")
 
@@ -700,6 +701,46 @@ class OwedTest(RerunBase):
         text = page.make_status(static, data, [], [], "2026-11-21T09:00:00")[0]
         self.assertIn("## For the owner to check by hand\n\n- %s %s: a | pipe (agent 1, 2026-11-21 09:00)" % (
             static["steps"][0]["id"], static["steps"][0]["title"]), text)
+
+
+class CodeChecksTest(RerunBase):
+    """T11-B (step S0.1.3): a rule of the repository (the console census, the cast check, the byte-order check) refuses a step as a refusal,
+    in seconds, with the check's own lines, before anything is committed or queued; it was "not judged" at main's move."""
+
+    CENSUS_FAIL = "import sys" + chr(10) + "print('fifo            31 closed')" + chr(10) + "print('    11 native/include/x.h')" + chr(10) + "sys.exit(1)" + chr(10)
+    PASS = "import sys" + chr(10) + "sys.exit(0)" + chr(10)
+
+    def test_a_census_hit_refuses_the_landing_with_its_lines_and_hands_nothing_over(self):
+        ready_a1(self.t)
+        self.t.commit("A.1", "the hits", {"tools/verify/console_census.py": self.CENSUS_FAIL, "tools/verify/cast_check.py": self.PASS})
+        before = self.head()
+        self.results = [passed_verdict()]
+        code, text = self.land()
+        self.assertEqual(code, 1, text)
+        self.assertIn("a rule of the repository refuses it", text)
+        self.assertIn("console_census.py refuses it:", text)
+        self.assertIn("fifo            31 closed", text)
+        self.assertIn("11 native/include/x.h", text)
+        self.assertNotIn("not judged", text)
+        self.assertEqual(self.calls, [], "the gate was not called")
+        self.assertEqual(self.head(), before, "no state commit was made")
+        self.assertFalse(self.queue.exists(), "nothing was queued")
+        self.assertIsNone(lv.read_record(self.t.live, 1), "no landing record")
+
+    def test_the_other_checks_are_named_too_and_passing_checks_land(self):
+        ready_a1(self.t)
+        self.t.commit("A.1", "a cast", {"tools/verify/console_census.py": self.PASS,
+                                        "tools/verify/cast_check.py": "print('a pointer is read as a number: x.cpp:3')" + chr(10) + "import sys" + chr(10) + "sys.exit(1)" + chr(10)})
+        self.results = [passed_verdict()]
+        code, text = self.land()
+        self.assertEqual(code, 1, text)
+        self.assertIn("cast_check.py refuses it:", text)
+        self.assertIn("a pointer is read as a number: x.cpp:3", text)
+        self.assertNotIn("console_census.py refuses", text)
+        self.assertEqual(self.calls, [])
+        self.t.commit("A.1", "fixed", {"tools/verify/cast_check.py": self.PASS})
+        self.land(expect=0)
+        self.assertEqual(len(self.calls), 1, "a tree that passes its code checks is handed to the gate")
 
 
 def main():

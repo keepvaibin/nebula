@@ -119,8 +119,8 @@ machine fault only, or a branch that does not apply (the gate's "not judged": it
 State. `landed` and the commit are in steps.tsv (the repository) and travel with the landing's own commit; after a pass
 they are written into the plan tree too (and `origin/main` has them from the landing, which is what the other agent reads). Everything that more than one agent, or the progress page, must see is in the
 live folder (LIVE below; `--live` for tests): started and blocked steps, claims, tool faults, the landings' times, the
-page. It is never kept in a file inside one work folder. STATUS.md is the plan tree's own, untracked; BLOCKED.md is a
-plain file the agent may commit.
+page. It is never kept in a file inside one work folder. STATUS.md is the plan tree's own, untracked; BLOCKED.md (the blocked
+steps' reasons and the tool notes) is in the live folder too (an older one in docs/plan/native is read as well).
 """
 import argparse
 import contextlib
@@ -961,11 +961,22 @@ def append_under(path, heading, line):
     atomic_write(path, "\n".join(lines) + "\n")
 
 
-def blocked_reasons(tree):
+def blocked_path(live=None):
+    """BLOCKED.md: in the live folder, with the rest of the state every command reads and writes (T11-B: it was a file of the work
+    folder, untracked, which `git add -A` could take into a step)."""
+    return live_dir(live) / "BLOCKED.md"
+
+
+def blocked_files(tree, live=None):
+    """The files that hold the blocked steps' reasons and the tool notes: the live folder's, and the older one of the plan tree
+    (docs/plan/native/BLOCKED.md, where an earlier version wrote it) when there is one; an entry of the live file wins."""
+    return [f for f in (native(tree) / "BLOCKED.md", blocked_path(live)) if f.exists()]
+
+
+def blocked_reasons(tree, live=None):
     """{step id: reason line} from BLOCKED.md's steps section (the last entry of a step wins)."""
-    path = native(tree) / "BLOCKED.md"
     out = {}
-    if path.exists():
+    for path in blocked_files(tree, live):
         for line in path.read_text(encoding="utf-8").splitlines():
             m = re.match(r"^- (\d{4}-\d\d-\d\d) (\S+): (.*)$", line)
             if m:
@@ -973,16 +984,15 @@ def blocked_reasons(tree):
     return out
 
 
-def tool_notes(tree):
-    path = native(tree) / "BLOCKED.md"
-    if not path.exists():
-        return []
-    lines, out, on = path.read_text(encoding="utf-8").splitlines(), [], False
-    for l in lines:
-        if l.startswith("## "):
-            on = l == "## tools"
-        elif on and l.startswith("- "):
-            out.append(l)
+def tool_notes(tree, live=None):
+    out = []
+    for path in blocked_files(tree, live):
+        on = False
+        for l in path.read_text(encoding="utf-8").splitlines():
+            if l.startswith("## "):
+                on = l == "## tools"
+            elif on and l.startswith("- "):
+                out.append(l)
     return out
 
 
@@ -1090,7 +1100,7 @@ def read_set_aside(live):
 def status_text(tree, work_root=WORK_ROOT, at=None, live=None, agent="1", queue_file=None, gate_runs=None):
     steps = read_steps(tree, live)
     by = {s: [x for x in steps if x["state"] == s] for s in STATES}
-    reasons = blocked_reasons(tree)
+    reasons = blocked_reasons(tree, live)
     at = at or now()
     claims = lv.read_claims(live_dir(live))
     stale = stale_of(tree, claims, at)
@@ -1194,7 +1204,7 @@ def page_data(tree, live=None, at=None):
     """(static, data, landings, faults): what never changes with progress (the step list), what does, and the landings and
     the tool-fault events as the live folder has them (STATUS.md lists the last of each)."""
     steps = read_steps(tree, live)
-    reasons = blocked_reasons(tree)
+    reasons = blocked_reasons(tree, live)
     for s in steps:
         if s["state"] == "blocked" and not s["reason"]:
             s["reason"] = reasons.get(s["step"], "")
@@ -1877,7 +1887,7 @@ def print_step(a, steps, s, notes=(), blocked_before=(), working=False):
     for note in notes:
         say("NOTE: " + note)
     for b in blocked_before:
-        why = b["reason"] or blocked_reasons(a.tree).get(b["step"], "(no reason written)")
+        why = b["reason"] or blocked_reasons(a.tree, a.live).get(b["step"], "(no reason written)")
         say("BLOCKED: %s %s: %s" % (b["step"], b["title"], why))
     if blocked_before:
         say("The step above is blocked, so the first later step that does not need its package is %s." % s["step"])
@@ -2348,6 +2358,30 @@ def refs_problems(folder):
     return bad
 
 
+CODE_CHECKS = ("console_census.py", "cast_check.py", "byte_order_check.py")
+
+
+def code_check_problems(folder):
+    """The repository's code checks (the ones the pre-push hook's census and the gate's repo/code run: tools/verify, each a few seconds)
+    on the folder's own tree: [line] of what refuses it, with each check's own lines (the census: the groups not as they must be and the
+    files with their counts). Empty when all pass. Run before anything is committed or queued, so that a rule of the repository
+    refuses a step in seconds, as a refusal, and not at main's move as "not judged" (T11-B, step S0.1.3)."""
+    out = []
+    for name in CODE_CHECKS:
+        script = pathlib.Path(folder) / "tools" / "verify" / name
+        if not script.is_file():
+            continue
+        r = subprocess.run([sys.executable, "-X", "utf8", "-I", str(script), str(folder)], capture_output=True, text=True, cwd=str(folder))
+        if r.returncode == 0:
+            continue
+        lines = [l.rstrip() for l in (r.stdout + r.stderr).splitlines() if l.strip()]
+        if name == "console_census.py":
+            lines = [l for l in lines if l.startswith("    ") or re.search(r"\s[1-9]\d*\s+closed|OVER THE CEILING", l)]
+        out.append("%s refuses it:" % name)
+        out.extend("  " + l for l in lines[:25])
+    return out
+
+
 def hand_to_gate(a, folder, branch, label, agent, extra, on_pass, join=False, tip=None):
     """ONE call of the gate (LAND) for a step or a repair, and what follows: a pass calls `on_pass(verdict, seconds, summary)`
     and returns its exit code; anything else prints the verdict and returns 1 (a failure), 3 (the same failure three times) or
@@ -2668,6 +2702,15 @@ def begin_landing(a, s, folder, branch):
         for l in bad[1:]:
             say(l)
         return 1
+    # 3b. The repository's code checks (the console census, the cast check, the byte-order check) on the folder's tree: a refusal here is
+    # a refusal, in seconds, with the check's own lines; nothing is committed or queued.
+    bad = code_check_problems(folder)
+    if bad:
+        say("plan.py: step %s does not land: a rule of the repository refuses it (the gate's repo/code and the pre-push hook run the same checks). "
+            "Nothing was committed or queued. Change the code, commit, and land again:" % a.id)
+        for l in bad:
+            say(l)
+        return 1
     # 4. The landing's own commit: the step is landed, with the code's commit. Made once: when the tip is already this step's
     # state commit (an earlier try made it) nothing is committed; fix commits on top of one get a second state commit, whose
     # code commit is the newer tip. Nothing is ever undone.
@@ -2763,6 +2806,13 @@ def land_repair(a):
             for l in bad[1:]:
                 say(l)
             return 1
+        bad = code_check_problems(folder)
+        if bad:
+            say("plan.py: repair %s does not land: a rule of the repository refuses it (the gate's repo/code and the pre-push hook run the "
+                "same checks). Nothing was queued. Change the code, commit, and land again:" % a.id)
+            for l in bad:
+                say(l)
+            return 1
     code_commit = (rec["tip"] if rec else git_out(folder, "rev-parse", "HEAD"))[:9]
 
     def passed(verdict, seconds, summary):
@@ -2824,7 +2874,7 @@ def cmd_blocked(a):
     first = failures.Store(a.failures).last_line(branch) or "(no failure recorded)"
     reason = " ".join(a.why.split())
     set_state(a.tree, a.id, "blocked", agent=agent_of(a), reason=reason, live=a.live)
-    append_under(native(a.tree) / "BLOCKED.md", "steps", "- %s %s: %s | first failure line: %s" % (
+    append_under(blocked_path(a.live), "steps", "- %s %s: %s | first failure line: %s" % (
         datetime.date.today().isoformat(), a.id, reason, first))
     refresh_page(a)
     say("blocked %s. Run plan.py next." % a.id)
@@ -2850,7 +2900,7 @@ def blocked_repair(a):
     reason = " ".join(a.why.split())
     lv.set_repair(live_dir(a.live), a.id, "set-aside")
     lv.set_state_entry(live_dir(a.live), a.id, "set-aside")
-    append_under(native(a.tree) / "BLOCKED.md", "repairs", "- %s %s: %s | first failure line: %s" % (
+    append_under(blocked_path(a.live), "repairs", "- %s %s: %s | first failure line: %s" % (
         datetime.date.today().isoformat(), a.id, reason, first))
     refresh_page(a)
     say("set aside %s. Run plan.py next." % a.id)
@@ -2880,10 +2930,10 @@ def cmd_repair(a):
 
 def cmd_tool(a):
     text = " ".join(a.text.split())
-    append_under(native(a.tree) / "BLOCKED.md", "tools", "- %s: %s" % (datetime.date.today().isoformat(), text))
+    append_under(blocked_path(a.live), "tools", "- %s: %s" % (datetime.date.today().isoformat(), text))
     lv.append_fault(live_dir(a.live), agent_of(a), "", "TOOL", "(by hand)", text)
     refresh_page(a)
-    say("written under 'tools' in %s/BLOCKED.md and as a line of tool-faults.tsv. Nothing is blocked by it: go on as your rules say; do not debug the tool." % NATIVE)
+    say("written under 'tools' in %s and as a line of tool-faults.tsv. Nothing is blocked by it: go on as your rules say; do not debug the tool." % blocked_path(a.live).as_posix())
     return 0
 
 

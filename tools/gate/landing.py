@@ -654,7 +654,7 @@ class Landing:
         result = self.checker.run(tree, prep.tip, list(prep.order), plan.text(), **({"also": also} if also else {}))
         for b in prep.order:
             self.last[b] = result
-        if result.verdict == "not-judged" or (result.verdict == "pass" and not result.moved and result.why_kind != "github"):
+        if result.verdict == "not-judged" or (result.verdict == "pass" and not result.moved and result.why_kind not in ("github", "hook")):
             note = result.why or "; ".join("%s %s: %s" % (k, c, m) for c, k, m in result.failures[:2]) or "a tool or the machine"
             self.queue.requeue(set(prep.order), note, result.run_folder)
             self.record_faults(prep.order, result)
@@ -664,8 +664,8 @@ class Landing:
                 self.queue.finish(b, LANDED, prep.tips[b], result.run_folder, "main moved to %s" % result.moved[:9])
                 self.store.clear(b)
             return Outcome("pass", prep.order, result)
-        if result.verdict == "pass":      # a red job of GitHub: the batch's checks passed, its landing did not
-            result.failures = [("github", "fail", result.why)]
+        if result.verdict == "pass":      # a red job of GitHub, or a repository rule at the push: the batch's checks passed, its landing did not
+            result.failures = [("pre-push" if result.why_kind == "hook" else "github", "fail", result.why)]
         return Outcome("fail", prep.order, result)
 
     def tip_table(self, tree):

@@ -94,7 +94,7 @@ def runs_of(*jobs_lists):
     return [{"id": 100 - i, "branch": "gate/x" if i == 0 else "work/x", "jobs": jobs} for i, jobs in enumerate(jobs_lists)]
 
 
-def drive(test, world, scope_text="repo,github-first", checks=None, extra=(), allow_github=True, move_why=None):
+def drive(test, world, scope_text="repo,github-first", checks=None, extra=(), allow_github=True, move_why=None, push_why=None):
     """main() of `--main --move --scope scope_text` with the fakes: (exit code, the output's lines, the work folder)."""
     tmp = pathlib.Path(tempfile.mkdtemp())
     test.addCleanup(lambda: __import__("shutil").rmtree(tmp, ignore_errors=True))
@@ -139,7 +139,7 @@ def drive(test, world, scope_text="repo,github-first", checks=None, extra=(), al
         gate.fault_writer = lambda live: (lambda *fault: getattr(world, "faults", []).append(fault))
         gate.git, gate.git_ok = fake_git, lambda *a: True
         gate.read_lists = lambda: ({}, {}, [])
-        gate.run_checks, gate.push_checks = fake_run_checks, lambda sha: None
+        gate.run_checks, gate.push_checks = fake_run_checks, lambda sha: push_why
         gate.push_candidate = push_candidate
         gate.delete_candidate = lambda c: world.deleted.append(c)
         gate.gh_rerun, gate.gh_log = world.rerun, world.gh_log
@@ -209,7 +209,8 @@ class Rule(unittest.TestCase):
                  ("GitHub could not be reached for the push of main (6 tries in 8 minutes): fatal: unable to access", "env", 2, "not-judged"),
                  ("GitHub did not finish: Mac (no result after 120 minutes)", "env", 2, "not-judged"),
                  ("the gate lock D:/x/move.lock is held: someone", "other", 2, "not-judged"),
-                 ("GitHub's jobs on gate/x: red: Mac failure on gate/x at 10:34", "github", 1, "fail"))
+                 ("GitHub's jobs on gate/x: red: Mac failure on gate/x at 10:34", "github", 1, "fail"),
+                 ("the pre-push hook refuses main (a repository rule): pre-push: refs/heads/main refused: the console census", "hook", 1, "fail"))
         for why, kind, want_code, want_verdict in cases:
             world = World(None)
             code, lines, _ = drive(self, world, "repo", allow_github=False, move_why=why)
@@ -217,7 +218,28 @@ class Rule(unittest.TestCase):
             self.assertIn("NOT-MOVED %s %s" % (kind, why), lines)
             result = gate.parse_run_output([l + "\n" for l in lines], code)
             self.assertEqual((result.verdict, result.moved, result.why_kind, result.why), ("pass", "", kind, why), "the landing's reading")
-            self.assertEqual(landing.failures_of_lines(kind_lines(lines)), [], "no failure of a check")
+            if kind == "hook":
+                self.assertTrue(any(l.startswith("KIND fail pre-push - :: the pre-push hook refuses main") for l in lines), "the hook's refusal is a KIND line")
+                self.assertEqual([f[:2] for f in landing.failures_of_lines(kind_lines(lines))], [("pre-push", "fail")])
+            else:
+                self.assertEqual(landing.failures_of_lines(kind_lines(lines)), [], "no failure of a check")
+
+    def test_a_rule_of_the_repository_that_refuses_before_the_run_is_a_fail_with_the_checks_lines_not_a_not_judged(self):
+        # T11-B (step S0.1.3): the census refused main's move at the start of the run and the landing was "not judged" (code 4): land once more.
+        why = "the console census refuses it (a closed group is not zero, or an open one is over its ceiling): fifo 31 closed; files: 11 native/include/x.h"
+        world = World(None)
+        code, lines, _ = drive(self, world, "repo", allow_github=False, push_why=why)
+        self.assertEqual((code, lines[-1]), (1, "VERDICT fail"), "\n".join(lines))
+        self.assertIn("KIND fail repo/code - :: " + why, lines)
+        self.assertEqual(world.moved, [], "main was not asked to move")
+        result = gate.parse_run_output([l + chr(10) for l in lines], code)
+        self.assertEqual(result.verdict, "fail")
+        self.assertEqual([f[:2] for f in result.failures], [("repo/code", "fail")])
+        self.assertIn("fifo 31 closed", result.failures[0][2])
+        ratchet = "the native ratchet refuses it: PUSH REFUSED"
+        code, lines, _ = drive(self, World(None), "repo", allow_github=False, push_why=ratchet)
+        self.assertEqual((code, lines[-1]), (1, "VERDICT fail"))
+        self.assertIn("KIND fail push/ratchet - :: " + ratchet, lines)
 
     def test_every_must_green_moves(self):
         world = World(runs_of(green()))

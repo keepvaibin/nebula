@@ -49,10 +49,53 @@ def tearDownModule():
 
 # ---- the plan's real files ----------------------------------------------------------------------------------
 
+def fresh_plan_copy():
+    """A copy of the plan's own files (the cards, the order, the checks, the ledger, the scope table) as they were at the start: every
+    step open, no commit. The tests below are about the plan as made; the real steps.tsv changes with every step that lands (T11-B: four
+    of them failed once S0.1.1 and S0.1.2 had landed)."""
+    tmp = pathlib.Path(tempfile.mkdtemp(prefix="real-plan-"))
+    for rel in ("docs/plan/native", "docs/plan/ledger.tsv", "tools/gate/scope.tsv"):
+        src, dst = TREE / rel, tmp / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        if src.is_dir():
+            shutil.copytree(src, dst, ignore=shutil.ignore_patterns("BLOCKED.md"))
+        else:
+            shutil.copy2(src, dst)
+    steps_file = tmp / "docs" / "plan" / "native" / "steps.tsv"
+    rows = steps_file.read_bytes().decode("utf-8").replace(chr(13)+chr(10), nl_).split(nl_)
+    out = [rows[0]]
+    for row in rows[1:]:
+        cells = row.split(chr(9))
+        if len(cells) >= 8:
+            cells[6], cells[7] = "open", ""
+        out.append(chr(9).join(cells))
+    steps_file.write_bytes(nl_.join(out).encode("utf-8"))
+    # A repository with an origin of its own, as the tool reads main (`next` fetches origin/main's steps.tsv): every step open there too.
+    origin = tmp.with_name(tmp.name + "-origin.git")
+    git_run("init", "-q", "--bare", "-b", "main", str(origin))
+    git_run("init", "-q", "-b", "main", cwd=str(tmp))
+    for key, value in (("user.name", "keepvaibin"), ("user.email", "122556909+keepvaibin@users.noreply.github.com"), ("commit.gpgsign", "false")):
+        git_run("config", key, value, cwd=str(tmp))
+    git_run("add", "-A", cwd=str(tmp))
+    git_run("commit", "-q", "-m", "the plan as it was at the start", cwd=str(tmp))
+    git_run("remote", "add", "origin", str(origin), cwd=str(tmp))
+    git_run("push", "-q", "origin", "main", cwd=str(tmp))
+    return tmp
+
+
+nl_ = chr(10)
+
+
 class RealPlanTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.steps = plan.read_steps(TREE)
+        cls.fresh = fresh_plan_copy()
+        cls.steps = plan.read_steps(cls.fresh)
+
+    @classmethod
+    def tearDownClass(cls):
+        rmtree_force(cls.fresh)
+        rmtree_force(cls.fresh.with_name(cls.fresh.name + "-origin.git"))
 
     def test_the_plan_is_138_steps_in_one_order_with_every_step_open_at_the_start(self):
         self.assertEqual(len(self.steps), 138)
@@ -100,7 +143,7 @@ class RealPlanTest(unittest.TestCase):
         self.assertEqual(set(plan.need_ids(by["Z.3"], self.steps)), everything | {"Z.1", "Z.2"})
 
     def test_next_on_a_fresh_copy_is_S0_1_1_with_its_card(self):
-        code, text = run(["next"], TREE, TREE / "none", TREE / "none.tsv")
+        code, text = run(["next"], self.fresh, self.fresh / "none", self.fresh / "none.tsv")
         self.assertEqual(code, 0)
         lines = text.splitlines()
         self.assertEqual(lines[0], "NEXT: S0.1.1  Land `rows/p022c` and `rows/p022d` as one batch")
@@ -308,7 +351,7 @@ class NextTest(unittest.TestCase):
     def test_next_says_a_step_is_blocked_and_names_the_one_that_does_not_depend_on_it(self):
         with Tree() as t:
             plan.set_state(t.tree, "A.1", "blocked")
-            plan.append_under(plan.native(t.tree) / "BLOCKED.md", "steps", "- 2026-11-20 A.1: the tool broke | first failure line: x")
+            plan.append_under(plan.blocked_path(t.live), "steps", "- 2026-11-20 A.1: the tool broke | first failure line: x")
             code, text = t.run(["next"])
             self.assertEqual(code, 0)
             self.assertIn("BLOCKED: A.1 First step: the tool broke | first failure line: x", text)
@@ -422,18 +465,25 @@ class StartTest(unittest.TestCase):
             t.git("checkout", "--", "runtime", cwd=t.folder())
             t.run(["start", "C.1"], expect=0)
 
-    def test_a_tool_run_from_the_agents_own_folder_writes_blocked_md_and_it_does_not_stop_the_next_start(self):
+    def test_a_tool_run_from_the_agents_own_folder_writes_blocked_md_to_the_live_folder_and_leaves_the_folder_clean(self):
         with Tree() as t:
             t.run(["start", "A.1"], expect=0)
             folder = t.folder()
             t.commit("A.1")
             code, text = run(["blocked", "A.1", "waiting"], folder, t.work, t.store, 0, t.live)       # the tool of the folder itself
-            blocked = plan.native(folder) / "BLOCKED.md"
+            blocked = plan.blocked_path(t.live)
+            self.assertEqual(blocked, t.live / "BLOCKED.md")
             self.assertIn("A.1: waiting", blocked.read_text(encoding="utf-8"))
-            self.assertIn("BLOCKED.md", t.git("status", "--porcelain", cwd=folder), "it is an uncommitted file of the folder")
+            self.assertFalse((plan.native(folder) / "BLOCKED.md").exists(), "no file is written into the work folder (T11-B)")
+            self.assertEqual(t.git("status", "--porcelain", cwd=folder), "", "the folder stays clean")
+            # An older BLOCKED.md of the plan tree (where an earlier version wrote it) is read as well.
+            (plan.native(folder) / "BLOCKED.md").write_text("## steps" + chr(10) + "- 2026-11-20 C.1: from the old file" + chr(10), encoding="utf-8")
+            self.assertEqual(plan.blocked_reasons(folder, t.live).get("C.1"), "from the old file")
+            self.assertTrue(plan.blocked_reasons(folder, t.live).get("A.1", "").startswith("waiting"))
+            (plan.native(folder) / "BLOCKED.md").unlink()
             code, text = run(["start", "C.1"], folder, t.work, t.store, 0, t.live)
             self.assertIn("started C.1", text)
-            self.assertIn("A.1: waiting", blocked.read_text(encoding="utf-8"), "it goes with the folder to the next branch")
+            self.assertIn("A.1: waiting", blocked.read_text(encoding="utf-8"), "it stays where it is")
             (folder / "other.txt").write_text("x", encoding="utf-8")                                  # any other file still stops it
             plan.set_state(t.tree, "C.1", "landed")
             self.assertEqual(run(["start", "A.1"], folder, t.work, t.store, None, t.live)[0], 1)
@@ -888,7 +938,7 @@ class BlockedTest(unittest.TestCase):
             failures.Store(t.store).record("native/A.1", [("tour/d3d12", "FAIL", "replay differs at step 0")])
             code, text = t.run(["blocked", "A.1", "the replay differs\nand I cannot say why"], expect=0)
             self.assertEqual(plan.find(plan.read_steps(t.tree), "A.1")["state"], "blocked")
-            blocked = (plan.native(t.tree) / "BLOCKED.md").read_text(encoding="utf-8")
+            blocked = (plan.blocked_path(t.live)).read_text(encoding="utf-8")
             self.assertRegex(blocked, r"- \d{4}-\d\d-\d\d A\.1: the replay differs and I cannot say why \| first failure line: "
                                       r"tour/d3d12 \| replay differs at step 0")
             self.assertEqual(next_id(plan.read_steps(t.tree)), "C.1", "A.2 is in the blocked package, B.1 needs it")
@@ -916,14 +966,14 @@ class BlockedTest(unittest.TestCase):
             self.assertIn("has uncommitted changes. Commit your unfinished work first", text)
             self.assertEqual(plan.find(plan.read_steps(t.tree), "A.1")["state"], "started", "nothing was changed")
             self.assertEqual(t.git("ls-remote", "origin", "refs/heads/native/A.1"), "", "nothing was pushed")
-            self.assertFalse((plan.native(t.tree) / "BLOCKED.md").exists())
+            self.assertFalse((plan.blocked_path(t.live)).exists())
             (t.folder() / "unfinished.txt").unlink()
             t.run(["blocked", "A.1", "stuck"], expect=0)
 
     def test_blocked_with_no_failure_recorded(self):
         with Tree() as t:
             t.run(["blocked", "A.1", "why"], expect=0)
-            self.assertIn("first failure line: (no failure recorded)", (plan.native(t.tree) / "BLOCKED.md").read_text(encoding="utf-8"))
+            self.assertIn("first failure line: (no failure recorded)", (plan.blocked_path(t.live)).read_text(encoding="utf-8"))
 
     def test_blocked_refuses_an_unknown_and_a_landed_step(self):
         with Tree() as t:
@@ -937,7 +987,7 @@ class BlockedTest(unittest.TestCase):
             t.run(["tool", "harness/self wrote no result.json"], expect=0)
             t.run(["blocked", "C.1", "two"], expect=0)
             t.run(["tool", "second fault"], expect=0)
-            text = (plan.native(t.tree) / "BLOCKED.md").read_text(encoding="utf-8")
+            text = (plan.blocked_path(t.live)).read_text(encoding="utf-8")
             tools_at, steps_at = text.index("## tools"), text.index("## steps")
             self.assertLess(tools_at, text.index("harness/self wrote no result.json"))
             self.assertLess(text.index("second fault"), steps_at)
@@ -1238,7 +1288,7 @@ class RepairWorkTest(unittest.TestCase):
         r = lv.read_repairs(self.t.live)[0]
         self.assertEqual(r["state"], "set-aside")
         self.assertNotIn("R-001", lv.read_state(self.t.live))
-        blocked = (plan.native(self.t.tree) / "BLOCKED.md").read_text(encoding="utf-8")
+        blocked = (plan.blocked_path(self.t.live)).read_text(encoding="utf-8")
         self.assertRegex(blocked, r"## repairs\n- \d{4}-\d\d-\d\d R-001: the test tool is at fault: it reads the wrong pak \| first failure line: "
                                   r"\(no failure recorded\)")
         self.assertTrue(self.t.git("ls-remote", "origin", "refs/heads/native/repair-001").startswith(self.t.git("rev-parse", "native/repair-001")))
@@ -1282,7 +1332,7 @@ class StatusTest(unittest.TestCase):
         with Tree() as t:
             t.run(["start", "A.1"], expect=0)
             plan.set_state(t.tree, "C.1", "blocked")
-            plan.append_under(plan.native(t.tree) / "BLOCKED.md", "steps", "- 2026-11-20 C.1: the card is wrong | first failure line: x")
+            plan.append_under(plan.blocked_path(t.live), "steps", "- 2026-11-20 C.1: the card is wrong | first failure line: x")
             t.landed("A.2", commit="abc123def")
             lv.add_landing(t.live, "A.2", "abc123def", 600)
             code, text = t.run(["status"], expect=0)
@@ -1320,7 +1370,12 @@ class StatusTest(unittest.TestCase):
             self.assertIn("- A.1 First step", text)
 
     def test_status_of_the_real_plan_says_138(self):
-        code, text = run(["status"], TREE, TREE / "none", TREE / "none.tsv") if False else (0, plan.status_text(TREE))
+        fresh = fresh_plan_copy()
+        try:
+            text = plan.status_text(fresh)
+        finally:
+            rmtree_force(fresh)
+            rmtree_force(fresh.with_name(fresh.name + "-origin.git"))
         self.assertIn("Steps landed: 0 of 138.", text)
         self.assertIn("- S0.1.1 Land `rows/p022c` and `rows/p022d` as one batch", text)
 

@@ -34,6 +34,7 @@ def main():
         census.write_text(CENSUS_FAIL, encoding="utf-8")
         why = gate.push_checks("c0ffee", tree=tree, guards=guards)
         check(why is not None and "census" in why and "runtime/src/x.h" in why, "a failing census refuses: %r" % why)
+        check(why is not None and "fifo 1 closed" in why, "it names the group that is not as it must be, with its count: %r" % why)
 
         census.write_text(CENSUS_PASS, encoding="utf-8")
         check(gate.push_checks("c0ffee", tree=tree, guards=guards) is None, "a passing census, no ratchet: passes")

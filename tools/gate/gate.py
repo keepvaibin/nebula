@@ -188,7 +188,6 @@ LEDGER = TREE / "docs" / "plan" / "ledger.tsv"
 KNOWN_COLUMNS = ("check", "test", "ledger row", "first seen", "what")
 PLANNED_COLUMNS = ("check", "level", "plan step or ledger row", "owner")
 CLOSED = ("fixed", "not-a-fault", "decided", "out-of-scope")
-MAIN_GATE_SECONDS = 30 * 60
 # The runner, and where a run keeps what lies outside the repository, so that a test run never changes the tree: the
 # flakes and the set-aside list (kinds.py), and main's kept builds (a copy of the bin folder each time the gate moves
 # main, the two newest kept). Tests of this file put their own folders in these.
@@ -633,8 +632,6 @@ class Gate:
                 self.runs_held = True
             else:
                 self.prune_runs()
-        if self.level == "main" and not self.args.only and seconds > MAIN_GATE_SECONDS:
-            print("gate.py: this main gate took %.0f minutes, over 30: a ledger row for Agent 1 (section 7)" % (seconds / 60))
         if self.args.record:
             # Kept with the tree (docs/plan/gate-runs): what the push workflow cannot run is proved by these.
             keep = TREE / "docs" / "plan" / "gate-runs" / self.name
@@ -2582,8 +2579,12 @@ def push_checks(sha, tree=TREE, guards=RATCHET):
     if census.exists():
         r = subprocess.run([sys.executable, "-I", str(census), str(tree)], capture_output=True, text=True)
         if r.returncode != 0:
-            shut = [l for l in r.stdout.splitlines() if l.startswith("    ")]
-            return "the console census refuses it (a closed group is not zero): %s" % "; ".join(shut[:5]).strip()
+            # What the census said: the groups that are not as they must be (a closed one above zero, an open one over its ceiling), then the
+            # files with their counts.
+            groups = [" ".join(l.split()) for l in r.stdout.splitlines() if re.search(r"\s[1-9]\d*\s+closed|OVER THE CEILING", l)]
+            shut = [l.strip() for l in r.stdout.splitlines() if l.startswith("    ")]
+            return "the console census refuses it (a closed group is not zero, or an open one is over its ceiling): %s; files: %s" % (
+                "; ".join(groups[:5]), "; ".join(shut[:5]))
     script = pathlib.Path(guards) / "ratchet_prepush.py"
     if not script.exists():
         return None
@@ -2655,6 +2656,8 @@ def move_main(sha, run_name, work, board, who, covers, tree=TREE, sleep=time.sle
             if now and now != before:
                 return main_moved(now)
         if not push_is_network(text):
+            if "pre-push" in text or "census" in text.lower() or "ratchet" in text.lower():
+                return "the pre-push hook refuses main (a repository rule): %s" % text[-300:]
             return "the push of main failed: %s" % text[-300:]
         if attempt == tries - 1:
             return "GitHub could not be reached for the push of main (%d tries in %d minutes): %s" % (
@@ -3322,7 +3325,7 @@ def layer_probe(g, renderer, log):
 def layer_fault(g, renderer, line):
     """The line a layer that is not installed leaves in tool-faults.tsv (the progress page shows it): a day at most for each renderer."""
     folder = getattr(g.args, "live", None)
-    if not folder:
+    if not folder or renderer in validate.EXPECTED_ABSENT:
         return
     sys.path.insert(0, str(TREE / "tools" / "plan"))
     import live  # noqa: E402 - tools/plan, as fault_writer
@@ -4578,7 +4581,12 @@ def run_main(argv, left):
     if why:
         for t in taken:
             free_gate_lock(t, holder, args.board, args.who, "not run: " + why)
-        return refuse("main could not move to %s: %s" % (commit[:9], why))
+        # A repository rule (the census, the ratchet) refuses the commit: that is a refusal of the change, never "not judged" (T11-B: step
+        # S0.1.3 was told "land once more" three times for the same census line). The KIND line is the check's own.
+        print("gate.py: main could not move to %s: %s" % (commit[:9], why), file=sys.stderr)
+        print("KIND fail %s - :: %s" % ("repo/code" if why.startswith("the console census") else "push/ratchet", " ".join(why.split())), flush=True)
+        print(kinds.verdict_line("fail"), flush=True)
+        return 1
     code, summary, g, moved_line = 2, "it ended before writing a result", None, None
     watch = GithubWatch(rule, candidate).start() if rule is not None else None
     try:
@@ -4677,8 +4685,10 @@ def run_main(argv, left):
                 # `fail` (exit 1) only where a job of GitHub is red: the change is at fault. Every other reason (main moved, the push, a
                 # lock, GitHub not finishing) judged nothing: not-judged, exit 2.
                 kind = not_moved_kind(why)
-                code, summary = (1 if kind == "github" else 2), "passed, main not moved: " + why + ("; card shared" if g.card_shared else "")
+                code, summary = (1 if kind in ("github", "hook") else 2), "passed, main not moved: " + why + ("; card shared" if g.card_shared else "")
                 print("gate.py: main not moved: " + why, file=sys.stderr)
+                if kind == "hook":
+                    print("KIND fail pre-push - :: " + " ".join(why.split()), flush=True)
                 moved_line = "NOT-MOVED %s %s" % (kind, why)
                 board_line(args.board, "%s NOTICE: main gate %s on %s passed its checks; main not moved: %s." % (
                     args.who, g.name, commit[:9], why))
@@ -4755,6 +4765,8 @@ def not_moved_kind(why):
         return "main-moved"
     if why.startswith("GitHub's jobs on "):
         return "github"
+    if why.startswith("the pre-push hook refuses main"):
+        return "hook"     # a repository rule at the push: a refusal of the change, like a red job
     if why.startswith("GitHub "):
         return "env"      # GitHub did not finish or could not run a job: nothing was judged, the branch waits
     return "other"

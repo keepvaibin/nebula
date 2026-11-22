@@ -623,7 +623,7 @@ class FaultRecordTest(unittest.TestCase):
         self.t.run(["tool", "the gate printed no   result"], expect=0)
         r = lv.read_faults(self.t.live)[0]
         self.assertEqual((r["kind"], r["check"], r["first_error"], r["step"]), ("TOOL", "(by hand)", "the gate printed no result", ""))
-        self.assertIn("the gate printed no result", (plan.native(self.t.tree) / "BLOCKED.md").read_text(encoding="utf-8"))
+        self.assertIn("the gate printed no result", (plan.blocked_path(self.t.live)).read_text(encoding="utf-8"))
 
 
 def main():

@@ -178,7 +178,7 @@ What every test must be for that:
 While `gate.lock` is held, other builds on the machine use at most 8 jobs.
 
 **The time is watched.** Every result holds each check's seconds, and `D:/NebulaWork/build/gate-runs/history.tsv` gets one line per run. A main
-gate over 30 minutes is a ledger row for Agent 1; the answer is more parts side by side, never fewer checks.
+gate over 30 minutes is a reason to run more parts side by side, never fewer checks; the gate prints nothing about it (the ledger row for Agent 1 was a duty of the four-agent process, which is gone).
 
 ---
 

@@ -368,9 +368,8 @@ def layer_not_on(s, check):
             gate.layer_fault(g, "d3d12", "not run: the Direct3D debug layer is not installed on this PC")
         gate.layer_fault(g, "vulkan", "not run: the Vulkan validation layer is not installed on this PC")
         rows = [l.split("\t") for l in (live / "tool-faults.tsv").read_text(encoding="utf-8").splitlines()[1:]]
-        check([(r[4], r[6]) for r in rows] == [("validate/d3d12", "not run: the Direct3D debug layer is not installed on this PC"),
-                                               ("validate/vulkan", "not run: the Vulkan validation layer is not installed on this PC")],
-              "tool-faults.tsv: one line a day for each renderer: %s" % rows)
+        check([(r[4], r[6]) for r in rows] == [("validate/d3d12", "not run: the Direct3D debug layer is not installed on this PC")],
+              "tool-faults.tsv: one line a day for Direct3D's layer, none for Vulkan's (its absence is expected, AGENT.md section 9): %s" % rows)
         now = datetime.datetime(2026, 11, 22, 9, 0, 0)
         faults = [{"check": "validate/d3d12", "time": "2026-11-21T23:59:00"}]
         check(validate.fault_due(faults, "validate/d3d12", now) and not validate.fault_due(faults, "validate/d3d12", now.replace(day=21)),
