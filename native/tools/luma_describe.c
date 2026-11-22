@@ -69,7 +69,17 @@ int main(int argc, char** argv) {
     void* found = module != NULL ? dlsym(module, export_name) : NULL;
     void* attach_found = module != NULL ? dlsym(module, "nebula_game_attach") : NULL;
 #endif
-    if (module == NULL || found == NULL || attach_found == NULL) {
+    if (module == NULL) {
+        /* The load's own error: a library the module imports that is not found (a sanitizer's runtime) says so here. */
+#if defined(_WIN32)
+        fprintf(stderr, "luma_describe: %s did not load (Windows error %lu)\n", module_path, (unsigned long)GetLastError());
+#else
+        const char* const why = dlerror();
+        fprintf(stderr, "luma_describe: %s did not load (%s)\n", module_path, why != NULL ? why : "no reason given");
+#endif
+        return 1;
+    }
+    if (found == NULL || attach_found == NULL) {
         fprintf(stderr, "luma_describe: %s is no game module with %s\n", module_path, export_name);
         return 1;
     }

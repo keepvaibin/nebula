@@ -438,6 +438,25 @@ if(NEBULA_SANITIZE)
                            -fno-omit-frame-pointer)
     # The module's operator new/delete are NebulaArena's; the sanitizer runtime's own definitions give way.
     target_link_options(smg_game_common INTERFACE -fsanitize=${NEBULA_SANITIZE} $<$<PLATFORM_ID:Windows>:LINKER:/force:multiple>)
+    if(WIN32 AND NEBULA_SANITIZE MATCHES "address")
+        # The module imports the address sanitizer's runtime (a DLL): it is put beside the module, from the compiler that
+        # builds it, before the module is linked, since the build's own programs (luma_describe) load the module from there
+        # (N-1088). A target of its own, so the two modules do not both copy it at the same time.
+        execute_process(COMMAND "${CMAKE_C_COMPILER}" -print-resource-dir OUTPUT_VARIABLE nebula_clang_resource_dir
+                        OUTPUT_STRIP_TRAILING_WHITESPACE RESULT_VARIABLE nebula_clang_resource_status)
+        file(GLOB nebula_asan_runtime "${nebula_clang_resource_dir}/lib/windows/clang_rt.asan_dynamic-*.dll")
+        list(LENGTH nebula_asan_runtime nebula_asan_runtime_count)
+        if(NOT nebula_clang_resource_status EQUAL 0 OR NOT nebula_asan_runtime_count EQUAL 1)
+            message(FATAL_ERROR "NEBULA_SANITIZE=address: no clang_rt.asan_dynamic-*.dll in '${nebula_clang_resource_dir}/lib/windows'")
+        endif()
+        add_custom_target(nebula_asan_runtime
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${nebula_asan_runtime}" "${CMAKE_CURRENT_BINARY_DIR}"
+            VERBATIM)
+        add_dependencies(smg_game nebula_asan_runtime)
+        if(TARGET smg_game_plain)
+            add_dependencies(smg_game_plain nebula_asan_runtime)
+        endif()
+    endif()
     if(NEBULA_SANITIZE MATCHES "address")
         # The game's arenas manage their own memory: built uninstrumented, they keep what is free poisoned and
         # what they hand out (NebulaArena.cpp), so overflows and uses after free inside them are reported too.

@@ -129,6 +129,7 @@ import replays_software  # noqa: E402
 import scope  # noqa: E402
 import step_hash  # noqa: E402
 import judged  # noqa: E402
+import sanitizer  # noqa: E402
 import stress  # noqa: E402
 import validate  # noqa: E402
 
@@ -1155,6 +1156,8 @@ class HarnessSource:
         self.judge = judge
         self.final = set()
         self.counted = ""
+        # The judge made a test that the runner ended with a non-zero code a pass (the sanitizer's listed report): that code is no fault.
+        self.ended_listed = False
 
     def first_work(self):
         return self.g.work / ("runs-%s" % self.tag)
@@ -1279,7 +1282,7 @@ def harness(g, suite, renderer, label, device=None, bin_dir=None, env=None, judg
         elif missing:
             results.update({n: ("tool", "%s (the runner said: %s)" % (results[n][1], said)) for n in missing})
         passes = all(k == "pass" for k, _ in results.values())
-        if problem is None and passes and code != 0:
+        if problem is None and passes and code != 0 and not source.ended_listed:
             problem = "the runner exited %d though every test passed" % code
         elif problem is None and not passes and code == 0:
             problem = "the runner exited 0 though a test did not pass"
@@ -3074,21 +3077,48 @@ def sanitizer_lane(g):
     return lane
 
 
+# The sanitizers of the game modules in the sanitizer build (build_windows.ps1 -Sanitize): the tour ran clean with both, 102 of 102 stops (B5).
+SANITIZERS = "address,undefined"
+
+
+def sanitizer_tour(g, tour, bin_dir):
+    """tour-asan/d3d12: the tour on the sanitizer build, each stop's log read for the sanitizers' reports (tools/gate/sanitizer.py): one
+    that sanitizer-known.tsv does not list is a fail with the report as its message, a listed one is counted into the detail."""
+    def judge(known):
+        def one(source, work, results):
+            out, final, totals = sanitizer.judge_results(results, read_logs(work, source.suite_dir, "d3d12", results), known)
+            source.final |= final
+            source.ended_listed = source.ended_listed or any(out[t][0] == "pass" != results[t][0] for t in final)
+            if pathlib.Path(work) == source.first_work():
+                source.counted = sanitizer.summary(totals, known)
+            return out
+        return one
+
+    def fn(log):
+        try:
+            known = sanitizer.read_known()
+        except sanitizer.KnownError as error:
+            pathlib.Path(log).write_text("%s\n" % error, encoding="utf-8")
+            return False, str(error).splitlines()[0]
+        return harness(g, tour, "d3d12", "tour-asan", bin_dir=bin_dir, env=sanitizer.ENV, judge=judge(known))(log)
+    return fn
+
+
 def sanitizer_part(g):
-    """The game modules built with AddressSanitizer (build_windows.ps1 -Sanitize address, a build root of its own)
+    """The game modules built with the sanitizers (SANITIZERS: build_windows.ps1 -Sanitize, a build root of its own)
     play the tour and every mod test on Direct3D 12: a memory fault either reaches ends the run with the sanitizer's
     report. The mod tests reach the game's code from mods (calls, hooks, events) that the tour never does (N-1041)."""
     root = pathlib.Path(g.args.build_root) / "asan"
     asan_bin = str(root / "bins")
     mods = mods_on(g)
-    if g.check("build/windows-asan", build_windows(g, root=root, bin_dir=asan_bin, sanitize="address")) is False:
+    if g.check("build/windows-asan", build_windows(g, root=root, bin_dir=asan_bin, sanitize=SANITIZERS)) is False:
         g.missing("tour-asan/d3d12", "the sanitizer build failed", ("build/windows-asan",))
         if mods:
             g.missing("mods-asan/d3d12", "the sanitizer build failed", ("build/windows-asan",))
         return
     tour = gate_tour.write(g.work / "tour-asan", None)
     step_hash.with_hash(tour.parent)
-    g.check("tour-asan/d3d12", harness(g, tour, "d3d12", "tour-asan", bin_dir=asan_bin), ("build/windows-asan", "data/RMGE01"))
+    g.check("tour-asan/d3d12", sanitizer_tour(g, tour, asan_bin), ("build/windows-asan", "data/RMGE01"))
     if mods:
         g.check("mods-asan/d3d12", mod_tests(g, "d3d12", bin_dir=asan_bin, label="mods-asan"), ("build/windows-asan",))
 

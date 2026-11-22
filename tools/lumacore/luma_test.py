@@ -1652,6 +1652,18 @@ def described(bin_folder, name):
     return None
 
 
+# The address sanitizer's runtime, which a sanitizer build's game modules import (build_windows.ps1 -Sanitize puts it in the bin folder).
+SANITIZER_RUNTIME = "clang_rt.*.dll"
+
+
+def copy_sanitizer_runtime(bin_folder, target, frozen):
+    """The sanitizer runtime DLLs of the bin folder, into a run's own bin folder beside the programs (the loader finds a module's
+    imports there, N-1062); each is frozen with the rest. A build without sanitizers has none: nothing is copied."""
+    for runtime in sorted(pathlib.Path(bin_folder).glob(SANITIZER_RUNTIME)):
+        shutil.copy2(runtime, pathlib.Path(target) / runtime.name)
+        frozen[runtime.name] = sha256(pathlib.Path(target) / runtime.name)
+
+
 def run_one(test, renderer, args, run_folder, previous):
     """Starts the game for one test and renderer; returns what the checks need."""
     if renderer not in EXES:
@@ -1698,6 +1710,7 @@ def run_one(test, renderer, args, run_folder, previous):
     for name in (exe.name, HOST["game"]) + plain:
         shutil.copy2(bin_folder / name, run_folder / "bin" / name)  # copy2: the program keeps its mode on Linux
         frozen[name] = sha256(run_folder / "bin" / name)
+    copy_sanitizer_runtime(bin_folder, run_folder / "bin", frozen)
     shutil.copy2(extension, run_folder / "bin" / HOST["extension"])
     frozen[HOST["extension"]] = sha256(run_folder / "bin" / HOST["extension"])
     # The game's placement facts, which the build writes beside the module (native/CMakeLists.txt, placement.py): an

@@ -1,0 +1,5 @@
+# The reports of the sanitizer tour (tools/gate/sanitizer.py) that main has today: a report listed here is counted and shown, any other is a fail with
+# the report as its first line. One line for each: the first frame of the game's code in the report (<file name>:<function>), the ledger row
+# that holds it (P-12; the word pending until the row is written), and the first words of the report. Written by the planner's row; empty but for
+# the header while main has no report.
+frame	ledger row	first words
