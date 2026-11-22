@@ -1415,12 +1415,21 @@ def harness(g, suite, renderer, label, device=None, bin_dir=None, env=None, judg
         passes = all(k == "pass" for k, _ in results.values())
         if problem is None and passes and code != 0 and not source.ended_listed:
             problem = "the runner exited %d though every test passed" % code
-        elif problem is None and not passes and code == 0:
+        elif problem is None and not passes and code == 0 and not judged_only(source, work, renderer):
             problem = "the runner exited 0 though a test did not pass"
         cases = kinds.Cases(results, declared, problem, renderer, None if device else source, final=source.final,
                             extra=source.counted, stress=stress_lane, stress_fails=stress_fails)
         return passes and problem is None, "", cases
     return fn
+
+
+def judged_only(source, work, renderer):
+    """True when the runner's own results all passed and the lane's judge (validate, stress) made the failures: the runner's exit 0 is
+    then right and says nothing against the check (T11-B: a game that plays differently showed a `tool` line beside its fails)."""
+    if source.judge is None:
+        return False
+    raw, _, _ = kinds.read_cases(work, source.suite_dir, source.listed, renderer, kind_of_verdict)
+    return all(k == "pass" for k, _ in raw.values())
 
 
 ENV_EXIT = 3  # luma_test.py ENV_EXIT: the runner could not start because the machine was not fit

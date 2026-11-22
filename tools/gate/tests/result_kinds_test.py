@@ -12,6 +12,7 @@ Each case below plants one situation and reads the kind back:
                             does not count and the summary names it first
   fails_on_main_too         a test that fails alone and on main's build in the same way is main: exit 0, first line
   main_build_without_pak_path a kept build of main with no pak.path gets the run's before a test is run on it
+  judged_fail_is_not_a_tool_line a test the lane's judge fails, the runner having passed it, is fail alone, with no tool line
   fails_on_main_differently the same test failing on main in another way stays fail
   main_check_skipped        the check against main is skipped when the test's folder changed, when it is new, or when
                             no build of main is kept; the test stays fail
@@ -231,6 +232,23 @@ def main_build_without_pak_path(s, check):
     check((kept / "pak.path").is_file() and (kept / "pak.path").read_text(encoding="ascii").strip() == "D:/data/game.pak",
           "the kept build was given the run's pak.path before the test ran on it")
     check(record_of(g, "a")["kind"] == "main", "and the test is main: %s" % record_of(g, "a"))
+
+
+def judged_fail_is_not_a_tool_line(s, check):
+    # A lane's own judge (validate, stress) fails a test the runner passed: the check says fail, and no `tool` line goes with it (T11-B).
+    s.plan({})
+    g = s.gate()
+    with contextlib.redirect_stdout(io.StringIO()):
+        g.check(CHECK, gate.harness(g, s.suite, RENDERER, "tour", judge=lambda source, work, results: dict(results, a=("fail", "the judge"))), ())
+        g.settle()
+        g.write()
+    check(record_of(g, "a")["kind"] == "fail" and g.verdict == "fail", "the judged test is fail: %s" % record_of(g, "a"))
+    check(not any(r["kind"] == "tool" for r in row(g)["records"]) and not any(l.startswith("KIND tool") for l in g.lines),
+          "and no tool line goes with it: %s" % g.lines)
+    # The runner itself failing a test while exiting 0 stays tool.
+    s.plan({"a": {"first": "fail:boom", "again": "fail:boom", "main": "fail:boom"}}, exit=0)
+    g = s.run(g=s.gate())
+    check(any(l.startswith("KIND tool") for l in g.lines), "a runner that fails a test and exits 0 is still tool: %s" % g.lines)
 
 
 def fails_on_main_differently(s, check):
@@ -607,7 +625,7 @@ def pictures_and_replays_read_the_settled_runs(s, check):
           "a tour lane no longer checks its own pictures")
 
 
-CASES = [always_fails, fails_once, third_flake_sets_aside, fails_on_main_too, main_build_without_pak_path, fails_on_main_differently, main_check_skipped,
+CASES = [always_fails, fails_once, third_flake_sets_aside, fails_on_main_too, main_build_without_pak_path, judged_fail_is_not_a_tool_line, fails_on_main_differently, main_check_skipped,
          runner_exception, unreadable_result, count_differs, zero_cases, tablet_away, runner_refused, lock_not_had,
          other_graphics_card, lines_and_verdict_json, known_and_planned_still_work, device_is_not_run_again, settle_rules,
          slow_passes_alone, slow_again_alone, kinds_order_and_exit_codes, base_builds_kept, pictures_and_replays_read_the_settled_runs]
