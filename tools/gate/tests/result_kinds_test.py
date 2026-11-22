@@ -11,6 +11,7 @@ Each case below plants one situation and reads the kind back:
   third_flake_sets_aside    the third flake of a test and renderer in seven days sets it aside; set aside, its fail
                             does not count and the summary names it first
   fails_on_main_too         a test that fails alone and on main's build in the same way is main: exit 0, first line
+  main_build_without_pak_path a kept build of main with no pak.path gets the run's before a test is run on it
   fails_on_main_differently the same test failing on main in another way stays fail
   main_check_skipped        the check against main is skipped when the test's folder changed, when it is new, or when
                             no build of main is kept; the test stays fail
@@ -217,6 +218,19 @@ def fails_on_main_too(s, check):
     g = s.run(g=s.gate())
     check(g.verdict == "fail" and g.code == 1 and g.lines[0].startswith("KIND main ") and g.lines[1].startswith("KIND fail "),
           "main's line first, then the change's fail: %s" % g.lines)
+
+
+def main_build_without_pak_path(s, check):
+    # A kept build of main made by a run that found no game data (a documents landing) has no pak.path: the run that needs it
+    # gives it the data it found, and the test is run on main's build (T11-B).
+    s.keep_main()
+    kept = kinds.base_of(s.base_bins, s.main_sha)
+    check(not (kept / "pak.path").exists(), "the kept build has no pak.path to begin with")
+    s.plan({"a": {"first": "fail:boom", "again": "fail:boom", "main": "fail:boom"}})
+    g = s.run(g=s.gate(extra=("--pak", "D:/data/game.pak")))
+    check((kept / "pak.path").is_file() and (kept / "pak.path").read_text(encoding="ascii").strip() == "D:/data/game.pak",
+          "the kept build was given the run's pak.path before the test ran on it")
+    check(record_of(g, "a")["kind"] == "main", "and the test is main: %s" % record_of(g, "a"))
 
 
 def fails_on_main_differently(s, check):
@@ -593,7 +607,7 @@ def pictures_and_replays_read_the_settled_runs(s, check):
           "a tour lane no longer checks its own pictures")
 
 
-CASES = [always_fails, fails_once, third_flake_sets_aside, fails_on_main_too, fails_on_main_differently, main_check_skipped,
+CASES = [always_fails, fails_once, third_flake_sets_aside, fails_on_main_too, main_build_without_pak_path, fails_on_main_differently, main_check_skipped,
          runner_exception, unreadable_result, count_differs, zero_cases, tablet_away, runner_refused, lock_not_had,
          other_graphics_card, lines_and_verdict_json, known_and_planned_still_work, device_is_not_run_again, settle_rules,
          slow_passes_alone, slow_again_alone, kinds_order_and_exit_codes, base_builds_kept, pictures_and_replays_read_the_settled_runs]

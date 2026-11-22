@@ -1326,6 +1326,10 @@ class HarnessSource:
         base = kinds.base_of(BASE_BINS, commit)
         if base is None:
             return {}, {n: "no kept build of main %s in %s" % (commit[:9] or g.main_ref, BASE_BINS) for n in names}
+        if g.pak and not (pathlib.Path(base) / "pak.path").is_file():
+            # A kept build made by a run that did not look for game data (a documents or tools landing) has no pak.path: the runner
+            # would stop with a harness error, and no test could ever be told to fail on main too (T11-B).
+            write_pak_path(base, g.pak)
         skipped, run_names = {}, []
         for n in names:
             if kinds.definition_same(GIT, g.tree, g.main_ref, self.definition(n)):
