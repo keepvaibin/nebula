@@ -455,6 +455,7 @@ Words used here: a "form" is one way a material is drawn (its programs, state, i
   1. `git grep -n "NEBULA_ROW_\|fillRow" native runtime platform`: 0 (FM 2.11 states the search with `MaterialAmbient`, which reaches 0 only after R6).
   2. Materials on a per-frame fill after the last landing: 0 (a count from a test run).
   3. The gate's pictures of both paths and the replay as in R3.2; the walk's time and the game step's time on the PC and the tablet, before and after (never slower).
+  4. The console census (`tools/verify/console_census.py`): the group `gx_sections` (the section names `GXMT`, `GXTG`, `GXTM`, `GXWP`, with a ceiling of 31 since S0.1.3) reads 0 and moves from the open groups to `CLOSED` in this landing, with its ceiling and the comment that names this card as its owner.
 - **For a player.** Nothing visible: it is how the code is built. Lower CPU work per frame on phones.
 - **Parts closed here** (plan decision 1; R3.13 is this package's last step). P-151 and P-157 list sites that no earlier step places. Each is closed here, or is named with the step that has it; the row closes when every item is checked. Where the sources do not say how, read the file named first.
   - [ ] P-151, the clips' and added content's rounding to the console's steps: R3.11.

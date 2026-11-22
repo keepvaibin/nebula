@@ -1,5 +1,5 @@
-"""Counts of console-era names in the tree. Groups in CLOSED must read zero; the pre-push hook runs this.
-console_census.py [TREE]. Input parsers of the importer and the remote edge are the only places allowed to name a format."""
+"""Counts of console-era names in the tree. Groups in CLOSED must read zero; a group in CEILING may not read more than its ceiling; the
+pre-push hook runs this. console_census.py [TREE]. Input parsers of the importer and the remote edge are the only places allowed to name a format."""
 import os
 import re
 import sys
@@ -35,7 +35,12 @@ GROUPS = {
     "loading": r"\bStationed|makeArchiveList|mountArchive|\bFileLoader\b|\bStageFileLoader|\bArchiveHolder\b|\bFileHolder\b|\brequestMount|\bisLoadedFile|\breceiveFile|ArchiveListCollector|\bmountAsync|\bloadToMainRAM|\bisReadResourceFromStore",
     # GX/GP calls and the command FIFO; not a name that starts with "GPU" (D3D12's GPUUploadHeapSupported) or Vulkan's
     # FIFO present mode.
-    "fifo": r"\bGX[A-Z]\w+|\bGP(?!U)[A-Z]\w+|\b(?:GX|gx|cmd|Cmd|command|Command)_?(?:FIFO|[Ff]ifo)\b|\b[Ff]ifo\b|DisplayList",
+    "fifo": r"\bGX(?!(?:MT|TG|TM|WP)\b)[A-Z]\w+|\bGP(?!U)[A-Z]\w+|\b(?:GX|gx|cmd|Cmd|command|Command)_?(?:FIFO|[Ff]ifo)\b|\b[Ff]ifo\b|DisplayList",
+    # The four section names of the model file that hold the console's material fields, kept apart until step 3's last landing (FRAME-MODEL 2.9;
+    # card R3.13 in docs/plan/native/04-NATIVE-LANE-R.md deletes them from the file). They are the design's names: they say that the section holds
+    # console-form data, and renaming them would hide it from this census and change the stores. Owner: card R3.13, which moves this group to
+    # CLOSED, where it reads 0. `fifo` above excludes exactly these four whole words and nothing else (GXMTZ, GXBegin and GXZZ are still refused).
+    "gx_sections": r"\bGX(?:MT|TG|TM|WP)\b",
     "sjis": r'"(?:\\[0-7]{3}){2,}',
     "offsets": r"\bfield_0x|\b_[0-9A-Fa-f]{2,3}\b(?!\w)",
     # Batch 5: the audio thread's lock and the console's sound pools.
@@ -44,6 +49,8 @@ GROUPS = {
     "threads": r"\bGameMutex|\bMutexHolder|\bGameThreads|\bthread_slots|\bNEBULA_THREAD_SLOTS|\bNebulaHostThread|\bthread_adopt|\bthreads_dump|\bnebula_threads|\bsListMutex|\bsMappedLock|\bnebula_host_lock|\bNEBULA_HOST_LOCK",
 }
 CLOSED = {"math", "j3d", "audio", "audio_sync", "particles", "threads", "loading", "rfl", "fifo"}
+# An open group that may not grow: the count at the tip of S0.1.5 (the uses in nebula_model.h, model_sections_tests.cpp and model_write.rs).
+CEILING = {"gx_sections": 31}
 CASE_FREE = {"j3d", "jsystem", "nw4r"}
 
 compiled = {k: re.compile(v, re.I if k in CASE_FREE else 0) for k, v in GROUPS.items()}
@@ -68,9 +75,12 @@ for root in ROOTS:
 bad = 0
 for k in GROUPS:
     mark = "closed" if k in CLOSED else "open"
-    print(f"{k:10} {counts[k]:7} {mark}")
-    if k in CLOSED and counts[k]:
-        bad += counts[k]
+    over = k in CEILING and counts[k] > CEILING[k]
+    print(f"{k:10} {counts[k]:7} {mark}" + (f" (ceiling {CEILING[k]})" if k in CEILING else "") + (" OVER THE CEILING" if over else ""))
+    if over:
+        bad += counts[k] - CEILING[k]
+    if (k in CLOSED and counts[k]) or over:
+        bad += counts[k] if k in CLOSED else 0
         for rel, c in sorted(worst[k].items(), key=lambda x: -x[1])[:20]:
             print(f"    {c} {rel}")
 sys.exit(1 if bad else 0)
