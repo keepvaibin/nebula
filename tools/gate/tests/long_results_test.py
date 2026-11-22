@@ -200,7 +200,7 @@ class Tracing(World):
         self.assertEqual(found.landing["branches"], ["native/A1.1"])
 
     def test_never_traced_and_not_a_suite(self):
-        for check in ("tour-asan/d3d12", "build/windows-asan", "coverage", "soak", "stress/tour/d3d12/2", "tour/tablet", "replays/tablet",
+        for check in ("tour-asan/d3d12", "build/windows-asan", "unit/game-asan", "coverage", "soak", "stress/tour/d3d12/2", "tour/tablet", "replays/tablet",
                       "measure/step/pc", "github/Linux", "pictures/tablet"):
             found = lr.trace(check, sha(2)[:9], "x", [], [], lambda m: self.fail("a run was made for %s" % check))
             self.assertIsNone(found.landing)

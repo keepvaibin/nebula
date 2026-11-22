@@ -652,6 +652,7 @@ Row P-138's own fix stays here (plan decision, checker decision 4): R6.5 takes t
   2. P-013: the arena tests (allocate, free, grow, destroy, `findFromRoot` over many arenas); the load-time logs (`loads.py`) before and after (audit file B).
   3. Step time on the tablet's five heaviest stops and on the PC, before and after, never slower.
   4. The hitch rows: the step that first needs a coin, bubble or star piece makes no actors (the sources name no test; the row's claim is the check).
+  5. The sanitizer build still sees the arenas: `sanitizer/tour` with `unit/game-asan` passes, and the arena tests that ask the sanitizer which bytes are poisoned (`native/tests/arena_tests.cpp`) are kept in step with the new header.
 - **For a player.** Fewer small hitches when many coins or bubbles appear; nothing else visible.
 - **Read first.** G8.4 (P-192) classes the same pools; this landing makes them at load and G8.4 lets them grow. The number of live arenas in play was never logged (audit file B: log it once a second in a busy galaxy first).
 

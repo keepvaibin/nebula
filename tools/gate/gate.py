@@ -1036,11 +1036,12 @@ def counted(code, summary, text):
     return code == 0, summary
 
 
-def game_tests(g):
-    """The game's own unit tests (native/tests), built with the game modules."""
+def game_tests(g, root=None):
+    """The game's own unit tests (native/tests), built with the game modules. `root`: the build root they were built in (the
+    gate's own by default; the sanitizer build's is its own, unit/game-asan)."""
     def fn(log):
         code = run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", HERE / "ctest.ps1",
-                    "-Dir", pathlib.Path(g.args.build_root) / "game"], log)
+                    "-Dir", pathlib.Path(root or g.args.build_root) / "game"], log)
         text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")
         summary = next((l.strip() for l in text.splitlines() if "tests passed" in l), last_line(text))
         return counted(code, summary, text)
@@ -3536,16 +3537,20 @@ def sanitizer_tour(g, tour, bin_dir, pieced=None):
 
 def sanitizer_part(g):
     """The game modules built with the sanitizers (SANITIZERS: build_windows.ps1 -Sanitize, a build root of its own)
-    play the tour and every mod test on Direct3D 12: a memory fault either reaches ends the run with the sanitizer's
-    report. The mod tests reach the game's code from mods (calls, hooks, events) that the tour never does (N-1041)."""
+    run the game's unit tests (unit/game-asan: the same tests as unit/game, among them the arenas' own, which check that
+    the sanitizer sees the game's memory), then play the tour and every mod test on Direct3D 12: a memory fault either
+    reaches ends the run with the sanitizer's report. The mod tests reach the game's code from mods (calls, hooks, events)
+    that the tour never does (N-1041)."""
     root = pathlib.Path(g.args.build_root) / "asan"
     asan_bin = str(root / "bins")
     mods = mods_on(g)
     if g.check("build/windows-asan", build_windows(g, root=root, bin_dir=asan_bin, sanitize=SANITIZERS)) is False:
+        g.missing("unit/game-asan", "the sanitizer build failed", ("build/windows-asan",))
         g.missing("tour-asan/d3d12", "the sanitizer build failed", ("build/windows-asan",))
         if mods:
             g.missing("mods-asan/d3d12", "the sanitizer build failed", ("build/windows-asan",))
         return
+    g.check("unit/game-asan", game_tests(g, root), ("build/windows-asan",))
     tour = gate_tour.write(g.work / "tour-asan", None)
     step_hash.with_hash(tour.parent)
     g.check("tour-asan/d3d12", sanitizer_tour(g, tour, asan_bin), ("build/windows-asan", "data/RMGE01"))
@@ -3779,11 +3784,20 @@ def sanitizer_pieces(g):
     """The sanitizer build (a part of its own: it keeps the lock to its end), then its tour in pieces, then what the mod tests are."""
     root = pathlib.Path(g.args.build_root) / "asan"
     asan_bin = str(root / "bins")
-    built = locked_part(g, "sanitizer build", lambda: g.check("build/windows-asan", build_windows(g, root=root, bin_dir=asan_bin, sanitize=SANITIZERS)))
+
+    def build_and_test():
+        # The game's unit tests of that build start no game: they run in the build's hold of the lock.
+        ok = g.check("build/windows-asan", build_windows(g, root=root, bin_dir=asan_bin, sanitize=SANITIZERS))
+        if ok is not False:
+            g.check("unit/game-asan", game_tests(g, root), ("build/windows-asan",))
+        return ok
+    built = locked_part(g, "sanitizer build", build_and_test)
     if built is False or built is None:
-        g.missing("tour-asan/d3d12", "the sanitizer build failed" if built is False else "its build did not run", ("build/windows-asan",))
+        why = "the sanitizer build failed" if built is False else "its build did not run"
+        g.missing("unit/game-asan", why, ("build/windows-asan",))
+        g.missing("tour-asan/d3d12", why, ("build/windows-asan",))
         if mods_on(g):
-            g.missing("mods-asan/d3d12", "the sanitizer build failed" if built is False else "its build did not run", ("build/windows-asan",))
+            g.missing("mods-asan/d3d12", why, ("build/windows-asan",))
         return
     tour = gate_tour.write(g.work / "tour-asan", None)
     step_hash.with_hash(tour.parent)
@@ -4077,7 +4091,7 @@ class AlsoPart:
 
 ALSO_PARTS = {
     "stress": AlsoPart(lambda g: stress_part(g), ("stress/*",)),
-    "sanitizer/tour": AlsoPart(lambda g: sanitizer_part(g), ("build/windows-asan", "tour-asan/*", "mods-asan/*")),
+    "sanitizer/tour": AlsoPart(lambda g: sanitizer_part(g), ("build/windows-asan", "unit/game-asan", "tour-asan/*", "mods-asan/*")),
     "soak": AlsoPart(lambda g: soak_part(g, "soak", SOAK_SHORT_MINUTES), ("soak",)),
     "soak/long": AlsoPart(lambda g: soak_part(g, "soak/long", g.args.soak_minutes), ("soak/long",)),
     "replays/software": AlsoPart(lambda g: replays_software_part(g), ("replays/software",)),

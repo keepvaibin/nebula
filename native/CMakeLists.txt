@@ -459,9 +459,15 @@ if(NEBULA_SANITIZE)
     endif()
     if(NEBULA_SANITIZE MATCHES "address")
         # The game's arenas manage their own memory: built uninstrumented, they keep what is free poisoned and
-        # what they hand out (NebulaArena.cpp), so overflows and uses after free inside them are reported too.
-        set_source_files_properties("${petari}/src/Game/System/NebulaArena.cpp" PROPERTIES COMPILE_OPTIONS "-fno-sanitize=address"
-                                    COMPILE_DEFINITIONS NEBULA_ASAN_HEAPS=1)
+        # what they hand out (NebulaArena.cpp), so overflows and uses after free inside them are reported too. The
+        # definition belongs to every target that compiles the file (smg_game_common: the rows module, smg_game_plain and,
+        # through native/tests/CMakeLists.txt, native_arena_tests), so no copy of the file can miss it. The option stays
+        # on the file: the source as written (smg_game_plain, native_arena_tests) and the rows module's generated copy
+        # (the loop above; its -iquote option stays). NebulaArena.cpp stops the build if it is compiled instrumented.
+        target_compile_definitions(smg_game_common INTERFACE NEBULA_ASAN_HEAPS=1)
+        foreach(arena_file "${petari}/src/Game/System/NebulaArena.cpp" "${CMAKE_CURRENT_BINARY_DIR}/luma/Game/System/NebulaArena.cpp")
+            set_property(SOURCE "${arena_file}" APPEND PROPERTY COMPILE_OPTIONS "-fno-sanitize=address")
+        endforeach()
     endif()
 endif()
 if(NEBULA_COVERAGE)

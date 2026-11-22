@@ -46,7 +46,7 @@ TRACE_NIGHT_SECONDS = 90 * 60                        # the tracing of one night
 PART_NAMED_SECONDS = 45 * 60                         # a part over this is named in the report
 
 # Checks that are never traced to a landing (B15 point 5): the sanitizer, coverage, soak, measure, stress, tablet and GitHub checks.
-NEVER_TRACED = ("build/windows-asan", "tour-asan/*", "mods-asan/*", "build/windows-coverage", "coverage", "soak", "soak/long",
+NEVER_TRACED = ("build/windows-asan", "unit/game-asan", "tour-asan/*", "mods-asan/*", "build/windows-coverage", "coverage", "soak", "soak/long",
                 "measure/*", "speed/*", "stress/*", "build/android", "android/tablet", "tablet/*", "tour/tablet", "tour/tablet-pc",
                 "replays/tablet", "pictures/tablet", "github*", "part/*", "lane/*", "gate/*")
 # What a run alone can play: the suites of the game's runner (the engine's tests and the tours of every disc and renderer).

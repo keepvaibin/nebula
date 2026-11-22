@@ -394,3 +394,18 @@ void operator delete(void* pData) {
 void operator delete[](void* pData) {
     NebulaArena::free(pData, nullptr);
 }
+
+// Last in the file, so the line numbers of the code above stay as they were. This file reads and writes memory it keeps
+// poisoned (block headers, free links): compiled with the address sanitizer's instrumentation it would report its own
+// accesses, and the arenas' poisoning could not be told from a fault. The build compiles it with -fno-sanitize=address
+// and NEBULA_ASAN_HEAPS=1 (native/CMakeLists.txt, the NEBULA_SANITIZE block).
+#if defined(__SANITIZE_ADDRESS__)
+#define NEBULA_ARENA_INSTRUMENTED 1
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define NEBULA_ARENA_INSTRUMENTED 1
+#endif
+#endif
+#ifdef NEBULA_ARENA_INSTRUMENTED
+#error "NebulaArena.cpp is compiled with the address sanitizer: native/CMakeLists.txt must give this file (and the rows module's copy of it) -fno-sanitize=address"
+#endif

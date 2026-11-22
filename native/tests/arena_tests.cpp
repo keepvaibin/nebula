@@ -3,6 +3,8 @@
 // block comes back zeroed; the host commits whole steps; a bad size or alignment, and an allocation before the root
 // arena, panic; owned objects and child arenas go with their arena, once; destroying an arena tells every table that
 // keeps addresses in it and gives its addresses back; the current arena after a destroy and in a scope.
+// In an address-sanitizer build (NEBULA_ASAN_HEAPS) also what the sanitizer sees of the blocks: a block's header, the bytes
+// after its data and a freed block are poisoned; a live block's data, and a block taken again, are not.
 #include "Game/System/NebulaArena.hpp"
 
 #include "Game/Render/RenderTexture.hpp"
@@ -22,6 +24,10 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+
+#ifdef NEBULA_ASAN_HEAPS
+#include <sanitizer/asan_interface.h>
+#endif
 
 extern "C" {
 extern uint64_t arena_test_reserved;
@@ -93,6 +99,44 @@ namespace {
     bool inside(const NebulaArena* pArena, const void* p, u32 size) {
         return p >= pArena->getStartAddr() && static_cast< const u8* >(p) + size <= pArena->getEndAddr();
     }
+
+#ifdef NEBULA_ASAN_HEAPS
+    // What the sanitizer's shadow says of the memory: no byte of [p, p + size) poisoned / every byte of it poisoned.
+    bool nonePoisoned(const u8* p, u32 size) {
+        return __asan_region_is_poisoned(const_cast< u8* >(p), size) == nullptr;
+    }
+
+    bool allPoisoned(const u8* p, u32 size) {
+        for (u32 i = 0; i < size; i++) {
+            if (!__asan_address_is_poisoned(p + i)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // A failure line that names the block's size and alignment.
+    void expectBlock(bool ok, const char* pWhat, u32 size, u32 alignment) {
+        if (!ok) {
+            printf("FAIL %s (size %u, alignment %u)\n", pWhat, size, alignment);
+            sFailures++;
+        }
+    }
+
+    // A block just handed out: its data is open to the program, its 16-byte header and the byte after its data are not.
+    // The data is written and read back, as the program does (the sanitizer reports a poisoned byte there and ends the test).
+    void expectLive(u8* p, u32 size, u32 alignment) {
+        expectBlock(nonePoisoned(p, size), "every byte of a live block's data is not poisoned", size, alignment);
+        expectBlock(allPoisoned(p - 16, 16), "the block's header is poisoned", size, alignment);
+        expectBlock(__asan_address_is_poisoned(p + size) != 0, "the byte after the block's last byte is poisoned", size, alignment);
+        memset(p, 0x5A, size);
+        bool intact = true;
+        for (u32 i = 0; i < size; i++) {
+            intact = intact && p[i] == 0x5A;
+        }
+        expectBlock(intact, "a live block's data reads back what was written", size, alignment);
+    }
+#endif
 }  // namespace
 
 // The tables NebulaArena::destroy tells; the textures and file views.
@@ -217,6 +261,39 @@ int main() {
         NebulaArena::free(q, nullptr);
         expect(pScene->alloc(200, 16) == q, "the static free finds the block's arena");
     }
+
+#ifdef NEBULA_ASAN_HEAPS
+    // What the sanitizer sees (NebulaArena.cpp, NEBULA_ASAN_HEAPS): the sizes include ones that fill their class exactly (a
+    // block is 16 bytes of header and the data: 0, 112, 1008, 1264 and 2032 leave no byte over) and ones that do not, each
+    // at the game's usual alignment and at larger ones (an aligned block has bytes before its header too).
+    {
+        static const u32 cSizes[] = {0, 1, 7, 8, 9, 15, 16, 17, 100, 112, 113, 200, 1008, 1009, 1264, 1265, 2032, 2033, 5000, 70001};
+        static const u32 cAligns[] = {0, 16, 64, 256, 4096};
+        for (u32 s = 0; s < sizeof(cSizes) / sizeof(cSizes[0]); s++) {
+            for (u32 a = 0; a < sizeof(cAligns) / sizeof(cAligns[0]); a++) {
+                const u32 size = cSizes[s];
+                const u32 alignment = cAligns[a];
+                u8* const p = static_cast< u8* >(pScene->alloc(size, static_cast< int >(alignment)));
+                expectLive(p, size, alignment);
+
+                // Freed: the whole block, its data and its header, is poisoned.
+                pScene->free(p);
+                expectBlock(allPoisoned(p, size), "a freed block's data is poisoned", size, alignment);
+                expectBlock(allPoisoned(p - 16, 16), "a freed block's header is poisoned", size, alignment);
+
+                // Taken again for its size: open as a new block is, and the bytes around it poisoned as before.
+                u8* const q = static_cast< u8* >(pScene->alloc(size, static_cast< int >(alignment)));
+                expectBlock(q == p, "a freed block is taken again for its size", size, alignment);
+                expectLive(q, size, alignment);
+                pScene->free(q);
+            }
+        }
+        // The slack of a block that does not fill its class (1 byte: 16 + 1 in a 32-byte class) is poisoned, all of it.
+        u8* const pSmall = static_cast< u8* >(pScene->alloc(1, 16));
+        expectBlock(allPoisoned(pSmall + 1, 15), "the slack of a one-byte block is poisoned", 1, 16);
+        pScene->free(pSmall);
+    }
+#endif
 
     // A large block commits as it grows; its ends are writable.
     {

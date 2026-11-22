@@ -1150,12 +1150,44 @@ class Also(unittest.TestCase):
         self.assertEqual(len([r for r in g.results if r["check"].startswith("stress/")]), 15, "the twelve lanes' checks")
         g, w = self.run_also(["sanitizer/tour"])
         self.assertEqual(w.row(g, "build/windows-asan")["state"], "pass")
+        self.assertEqual(w.row(g, "unit/game-asan")["state"], "pass")
         self.assertEqual(w.row(g, "tour-asan/d3d12")["state"], "pass")
+
+    def test_the_sanitizer_build_runs_the_games_unit_tests_as_a_check_of_its_own(self):
+        # A unit test that fails on the sanitizer build is a fail of unit/game-asan alone; the tour is still played.
+        g, w = self.run_also(["sanitizer/tour"], setup=lambda w: w.fail.add("unit/game-asan"))
+        self.assertEqual(w.row(g, "unit/game-asan")["state"], "fail")
+        self.assertEqual(w.row(g, "build/windows-asan")["state"], "pass")
+        self.assertEqual(w.row(g, "tour-asan/d3d12")["state"], "pass")
+        self.assertEqual(g.verdict, "fail")
+        # A build that failed: the unit tests are not run and say so, as the tour does.
+        g, w = self.run_also(["sanitizer/tour"], setup=lambda w: w.fail.add("build/windows-asan"))
+        for name in ("unit/game-asan", "tour-asan/d3d12"):
+            row = w.row(g, name)
+            self.assertEqual((row["state"], row["detail"]), ("fail", "not run: the sanitizer build failed"), name)
+        self.assertNotIn("unit/game-asan", [n for n, b, e in w.times], "its tests were not started")
+
+    def test_the_sanitizer_unit_tests_are_run_in_the_sanitizer_builds_own_folder(self):
+        # game_tests(g, root) runs ctest in <root>/game: the sanitizer build's folder, never the plain build's.
+        calls = []
+
+        def fake_run(command, log, **kw):
+            calls.append([str(c) for c in command])
+            pathlib.Path(log).write_text("100% tests passed, 0 tests failed out of 12\n", encoding="utf-8")
+            return 0
+        with Gates(self) as w, unittest.mock.patch.object(gate, "run", fake_run):
+            args = gate.parser().parse_args(w.argv())
+            g = gate.Gate(args)
+            log = w.t / "unit.log"
+            self.assertEqual(gate.game_tests(g, pathlib.Path(g.args.build_root) / "asan")(log)[0], True)
+            self.assertEqual(gate.game_tests(g)(log)[0], True)
+            dirs = [c[c.index("-Dir") + 1] for c in calls]
+            self.assertEqual(dirs, [str(pathlib.Path(g.args.build_root) / "asan" / "game"), str(pathlib.Path(g.args.build_root) / "game")])
 
     def test_they_run_after_the_needed_checks_and_before_the_measure_one_after_another(self):
         slow = {"engine/vulkan": 0.6, "pictures/engine/d3d12": 0.2}
         g, w = self.run_also(["sanitizer/tour", "soak"], setup=lambda w: w.slow.update(slow), paths=ENGINE_ONLY)
-        also_names = ("build/windows-asan", "tour-asan/d3d12", "soak", "soak-process")
+        also_names = ("build/windows-asan", "unit/game-asan", "tour-asan/d3d12", "soak", "soak-process")
         needed = [e for n, b, e in w.times if n not in also_names]
         first_also = min(b for n, b, e in w.times if n in also_names)
         self.assertGreaterEqual(first_also, max(needed), "after every needed check ended")

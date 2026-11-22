@@ -165,6 +165,10 @@ def main():
         check(tuple(long_mods.needs.get("mods-asan/d3d12", ())) == ("build/windows-asan",) and "lumalink" not in long_mods.needs
               and "mods/d3d12" not in long_mods.needs,
               "mods = full: the mod tests on the sanitizer build: %s" % (long_mods.needs.get("mods-asan/d3d12"),))
+        # The sanitizer build runs the game's unit tests as a check of its own (unit/game-asan): in the long run only.
+        check(tuple(long_needs.get("unit/game-asan", ())) == ("build/windows-asan",) and "unit/game-asan" in lg
+              and not any("unit/game-asan" in n for n in q | m),
+              "long: the sanitizer build's unit tests after that build: %s" % (long_needs.get("unit/game-asan"),))
         main_mods = gate.run_checks(args_for("--main", "--tablet", "T", "--work", str(work), "--mods", "short"), known, planned, dry=True)
         check({"lumalink", "mods/d3d12", "mods/vulkan", "mods/d3d11"} <= set(main_mods.needs),
               "mods = short: LumaLink's check and the mod tests of every renderer are back in the main level")

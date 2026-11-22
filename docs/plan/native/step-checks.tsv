@@ -22,6 +22,7 @@ G3.7	stress	proof 2: the step hash at play's first step equal on a fast and a sl
 G3.7	sanitizer/tour	proof 3: the sanitizer clean over the tour
 G3.7	soak/long	proof 3: the `soak/long` check passes
 G4.0	sanitizer/tour	proof 3: tour stop 059 run again with the sanitizer build mended
+G4.3	sanitizer/tour	proof 5: the sanitizer build still sees the arenas
 G5.2	soak	proof 3: the `soak` check passes with the switch on
 G5.5	soak/long	proof 2: every tour stop green and the `soak/long` check passes
 Z.2	stress	proof 3: the same recorded play gives the same game, also under load
