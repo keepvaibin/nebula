@@ -57,6 +57,7 @@ import json
 import os
 import pathlib
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -83,10 +84,20 @@ import json, os, pathlib, sys, time
 args = sys.argv[1:]
 plan = json.loads(pathlib.Path(os.environ["FAKE_MEASURE_PLAN"]).read_text(encoding="utf-8"))
 record = pathlib.Path(os.environ["FAKE_MEASURE_RECORD"])
+
+
+def note(entry, times=1):
+    # one file for each process: appends of processes that run at once to one file interleave on Windows (T11-B)
+    with open(str(record) + "." + str(os.getpid()), "a", encoding="utf-8") as f:
+        for _ in range(times):
+            f.write(json.dumps(entry) + "\\n")
+
+
 opts = {a: args[i + 1] for i, a in enumerate(args) if a.startswith("--") and i + 1 < len(args)}
 if args[0] == "keep":
-    with open(record, "a", encoding="utf-8") as f:
-        f.write(json.dumps({"keep": args[1], "history": opts.get("--history"), "time": time.time()}) + "\\n")
+    while plan.get("start_when") and not pathlib.Path(plan["start_when"]).exists():
+        time.sleep(0.001)
+    note({"keep": args[1], "history": opts.get("--history"), "time": time.time()}, plan.get("record_times", 1))
     print(plan.get("keep_says", "measure: kept 1 line(s)"))
     sys.exit(plan.get("keep_exit", 0))
 if args[0] in ("pair", "pair-probe"):
@@ -129,8 +140,7 @@ if args[0] in ("pair", "pair-probe"):
                     "runs": {r: {"state": states[r], "reason": reasons[r] if states[r] == "tool" else "", "figures": figures[r]}
                              for r in renderers}}
             (work / "result.json").write_text(json.dumps(body), encoding="utf-8")
-    with open(record, "a", encoding="utf-8") as f:
-        f.write(json.dumps({"run": kind, "args": args, "start": start, "end": time.time()}) + "\\n")
+    note({"run": kind, "args": args, "start": start, "end": time.time()})
     sys.exit(code)
 run = opts["--runs"]
 p = plan[run]
@@ -144,8 +154,7 @@ if not p.get("no_result"):
     body = {"commit": "fake", "exit": p.get("result_exit", p["exit"]), "verdict": "x",
             "runs": {run: {"state": p["state"], "reason": p.get("reason", ""), "figures": p.get("figures", {})}}}
     (work / "result.json").write_text(json.dumps(body), encoding="utf-8")
-with open(record, "a", encoding="utf-8") as f:
-    f.write(json.dumps({"run": run, "args": args, "start": start, "end": time.time()}) + "\\n")
+note({"run": run, "args": args, "start": start, "end": time.time()})
 sys.exit(p["exit"])
 '''
 
@@ -190,9 +199,9 @@ class Gates:
         self.plan_file.write_text(json.dumps(plan), encoding="utf-8")
 
     def calls(self):
-        if not self.record.is_file():
-            return []
-        return [json.loads(l) for l in self.record.read_text(encoding="utf-8").splitlines() if l.strip()]
+        files = sorted(self.record.parent.glob(self.record.name + ".*"))
+        rows = [json.loads(l) for f in files for l in f.read_text(encoding="utf-8").splitlines() if l.strip()]
+        return sorted(rows, key=lambda c: c.get("end", c.get("time", 0)))
 
     def runs(self):
         return [c for c in self.calls() if "run" in c]
@@ -1084,6 +1093,25 @@ class Worse(unittest.TestCase):
         note = store["row"]["note"]
         self.assertEqual(store["row"]["state"], "failed")
         self.assertIn("step_ms 4.1 (median 3, band 0.2)", note, "the person reads the values")
+
+
+class Record(unittest.TestCase):
+    """The fake measure.py's record of its calls (T11-B): the pair and the tablet's measure run at once in a landing, so their fakes write at
+    once. Lines appended by processes that run at the same time to one file broke on this PC (40 of 2400 lines in a trial of 8 processes);
+    the record is one file for each process."""
+
+    def test_eight_processes_at_once_leave_every_line_whole(self):
+        with Gates(self) as w:
+            go = w.t / "go"
+            w.measure({"record_times": 1000, "start_when": str(go)})
+            procs = [subprocess.Popen([sys.executable, "-X", "utf8", "-I", str(w.script), "keep", "c%d" % i, "--history", "h" * 400])
+                     for i in range(8)]
+            go.write_text("go", encoding="utf-8")   # all eight start their writing together
+            for proc in procs:
+                self.assertEqual(proc.wait(), 0)
+            calls = w.calls()
+            self.assertEqual(len(calls), 8 * 1000, "every line of every process is there and whole")
+            self.assertEqual(sorted({c["keep"] for c in calls}), sorted("c%d" % i for i in range(8)))
 
 
 class Also(unittest.TestCase):
