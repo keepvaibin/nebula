@@ -467,3 +467,4 @@ void AmbientOcclusionVk::finish(VkCommandBuffer commands, VkRenderPass pass, uns
 }
 
 }  // namespace galaxy::render::vk
+// (A comment only: the landing that showed the tablet's 12 stops beside the PC's last checks, B14 part 3.)
