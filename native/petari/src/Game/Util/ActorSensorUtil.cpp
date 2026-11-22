@@ -994,3 +994,4 @@ namespace MR {
         return addHitSensor(pActor, "body", type, 0, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
     }
 };  // namespace MR
+// (A comment only: the landing that showed the PC's last checks of a game-only change, B14 part 3.)
