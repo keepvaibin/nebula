@@ -14,9 +14,11 @@ this command) and tools/lumacore/luma_test.py run.
 import argparse
 import os
 import pathlib
-import re
 import sys
 import time
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import lockholder  # noqa: E402
 
 LOCK = "D:/NebulaWork/plan/measure.lock"
 SKIP_ENV = "NEBULA_NO_MEASURE_WAIT"
@@ -47,8 +49,9 @@ def process_alive(pid):
     return True
 
 
-def holder_of(lock, alive=process_alive):
-    """The text of the lock's holder.txt when the lock is held by a process that runs (or by one that is not named), else None."""
+def holder_of(lock, alive=process_alive, started=lockholder.process_started):
+    """The text of the lock's holder.txt when the lock is held by a process that runs (or by one that is not named), else None. The
+    holder is read as tools/gate/lockholder.py reads it: `pid N` anywhere in the line, and a `since` that is not the process's start."""
     lock = pathlib.Path(lock)
     if not lock.is_dir():
         return None
@@ -56,8 +59,7 @@ def holder_of(lock, alive=process_alive):
         text = (lock / "holder.txt").read_text(encoding="utf-8", errors="replace").strip()
     except OSError:
         text = ""
-    named = re.search(r"\bpid (\d+)\s*$", text)
-    if named and not alive(int(named.group(1))):
+    if lockholder.gone(text, alive, started) is not None:
         return None
     return text or "unknown"
 

@@ -122,6 +122,7 @@ import gamedata  # noqa: E402
 import github_rule  # noqa: E402
 import kinds  # noqa: E402
 import landing  # noqa: E402
+import lockholder  # noqa: E402
 import machine  # noqa: E402
 import pictures as picture_tool  # noqa: E402
 import replays_software  # noqa: E402
@@ -1659,12 +1660,11 @@ def process_alive(pid):
 
 
 def lock_holder(lock):
-    """(text, pid) of a held lock folder: its holder.txt, and the process id it names (pid N), None when none."""
+    """(text, pid) of a held lock folder: its holder.txt, and the process id it names (`pid N` anywhere in it, tools/gate/lockholder.py),
+    None when none."""
     holder = pathlib.Path(lock) / "holder.txt"
     text = holder.read_text(encoding="utf-8", errors="replace").strip() if holder.exists() else "unknown"
-    words = text.split()
-    pid = next((int(words[i + 1]) for i, w in enumerate(words[:-1]) if w == "pid" and words[i + 1].isdigit()), None)
-    return text, pid
+    return text, lockholder.parse(text)[0]
 
 
 def board_line(board, text):
@@ -1728,9 +1728,10 @@ def locks_for(mode, patterns, gate_lock, long_lock):
 
 
 def take_gate_lock(path, holder, wait_minutes, board, who, alive=process_alive, sleep=time.sleep, poll=30.0,
-                   pid=None, clock=time.time):
+                   pid=None, clock=time.time, started=lockholder.process_started):
     """Takes the gate lock for `holder` (a line naming the run, with "pid N"): None when taken, else why not. Waits
-    up to wait_minutes while another holds it; a holder whose process has ended loses it, and the board says so.
+    up to wait_minutes while another holds it; a holder whose process has ended (or runs from another start than its line's `since`:
+    the number was used again) loses it, and one printed line and the board say so, naming the old pid.
     A gate that has to wait joins the lock's queue and takes the lock only when it is the queue's first (queue_rank,
     then first come). A lock taken by hand (a holder.txt naming no process) holds until its holder frees it."""
     lock = pathlib.Path(path)
@@ -1748,8 +1749,11 @@ def take_gate_lock(path, holder, wait_minutes, board, who, alive=process_alive, 
                 try:
                     lock.mkdir()
                 except FileExistsError:
-                    text, holder_pid = lock_holder(lock)
-                    if holder_pid is not None and not alive(holder_pid):
+                    text = lock_holder(lock)[0]
+                    old = lockholder.gone(text, alive, started)
+                    if old is not None:
+                        print("gate.py: the gate lock %s was held by pid %d, which has ended: taken over (%s)" % (lock, old, text),
+                              flush=True)
                         board_line(board, "%s NOTICE: the gate lock held by a process that has ended (%s) is taken over."
                                    % (who, text))
                         shutil.rmtree(lock, ignore_errors=True)
@@ -2423,8 +2427,7 @@ def long_lock_free(lock, alive=process_alive):
     """Whether the long lock is free: no lock folder, or one whose process has ended (the run then takes it over)."""
     if not pathlib.Path(lock).exists():
         return True
-    _, pid = lock_holder(lock)
-    return pid is not None and not alive(pid)
+    return lockholder.gone(lock_holder(lock)[0], alive) is not None
 
 
 def long_command(sha, args, tree=LONG_TREE):
@@ -3170,7 +3173,7 @@ def locked_part(g, name, fn):
     Returns what fn returns, None when it did not run."""
     if g.dry or g.args.mode != "long":
         return fn()
-    holder = "long run part %s of %s pid %d" % (name, TREE.name, os.getpid())
+    holder = "long run part %s of %s %s" % (name, TREE.name, lockholder.named())
     held = take_gate_lock(g.args.gate_lock, holder, g.args.wait, g.args.board, g.args.who)
     if held is not None:
         g.record("part/" + name, "env", 0.0, "not run: " + held)
@@ -3683,7 +3686,7 @@ def run_main(argv, left):
     # quick gate beside a main gate finishes no sooner, and beside a hand slot it disturbs a measurement). The long run
     # keeps the long lock alone until it takes the gate lock part by part.
     locks = locks_for(args.mode, patterns, args.gate_lock, args.long_lock)
-    holder = "%s gate of %s@%s pid %d%s%s%s" % (args.mode, TREE.name, commit[:9], os.getpid(),
+    holder = "%s gate of %s@%s %s%s%s%s" % (args.mode, TREE.name, commit[:9], lockholder.named(),
                                                ("; covers " + args.covers) if args.covers else "",
                                                ("; quick gate " + quick.name) if quick else "",
                                                ("; GitHub wait %g minutes" % args.github_wait)

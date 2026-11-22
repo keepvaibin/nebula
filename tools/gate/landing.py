@@ -49,6 +49,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "plan"))
 import failures  # noqa: E402
 import kinds  # noqa: E402
+import lockholder  # noqa: E402
 import scope  # noqa: E402
 
 PLAN_DIR = pathlib.Path("D:/NebulaWork/plan")
@@ -130,11 +131,13 @@ def called_by_runner(pid, lock_path=RUNNER_LOCK, alive=process_alive):
 
 
 class FolderLock:
-    """A lock folder with a holder.txt naming a process (`pid N`): a holder whose process ended loses it."""
+    """A lock folder with a holder.txt naming a process (`pid N` anywhere in the line, tools/gate/lockholder.py): a holder whose process
+    ended loses it, with one printed line naming its pid."""
 
-    def __init__(self, path, alive=process_alive, pid=None, clock=time.time, sleep=time.sleep):
+    def __init__(self, path, alive=process_alive, pid=None, clock=time.time, sleep=time.sleep, started=lockholder.process_started):
         self.path = pathlib.Path(path)
         self.alive, self.pid, self.clock, self.sleep = alive, os.getpid() if pid is None else pid, clock, sleep
+        self.started = started
 
     def holder(self):
         text = ""
@@ -142,9 +145,7 @@ class FolderLock:
             text = (self.path / "holder.txt").read_text(encoding="utf-8").strip()
         except OSError:
             pass
-        words = text.split()
-        pid = next((int(words[i + 1]) for i, w in enumerate(words[:-1]) if w == "pid" and words[i + 1].isdigit()), None)
-        return text, pid
+        return text, lockholder.parse(text)[0]
 
     def try_take(self, what=""):
         """True when taken: the folder made (a held lock whose holder has ended is taken over)."""
@@ -153,12 +154,15 @@ class FolderLock:
                 self.path.parent.mkdir(parents=True, exist_ok=True)
                 self.path.mkdir()
             except FileExistsError:
-                _, pid = self.holder()
-                if pid is not None and pid != self.pid and not self.alive(pid):
+                text, pid = self.holder()
+                old = lockholder.gone(text, self.alive, self.started)
+                if old is not None and old != self.pid:
+                    print("landing: the lock %s was held by pid %d, which has ended: taken over (%s)" % (self.path, old, text), flush=True)
                     shutil.rmtree(self.path, ignore_errors=True)
                     continue
                 return False
-            (self.path / "holder.txt").write_text("%s pid %d %s\n" % (what or "landing", self.pid, stamp(self.clock)), encoding="utf-8")
+            who = lockholder.named(self.pid) if self.pid == os.getpid() else "pid %d" % self.pid
+            (self.path / "holder.txt").write_text("%s %s %s\n" % (what or "landing", who, stamp(self.clock)), encoding="utf-8")
             return True
         return False
 

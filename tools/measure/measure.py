@@ -431,11 +431,17 @@ def take_lock(path, who, alive=None):
             held = waiter.holder_of(lock, alive or waiter.process_alive)
             if held is not None:
                 raise SystemExit("measure.py: the measurement lock %s is held: %s" % (lock, held))
+            try:
+                old = (lock / "holder.txt").read_text(encoding="utf-8", errors="replace").strip()
+            except OSError:
+                old = ""
+            print("measure.py: the measurement lock %s was held by pid %s, which has ended: taken over (%s)" % (
+                lock, waiter.lockholder.parse(old)[0], old), flush=True)
             shutil.rmtree(lock, ignore_errors=True)  # its holder has ended
     else:
         raise SystemExit("measure.py: the measurement lock %s could not be taken" % lock)
-    (lock / "holder.txt").write_text("%s %s pid %d\n" % (who, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                                                         os.getpid()), encoding="utf-8")
+    (lock / "holder.txt").write_text("%s %s %s\n" % (who, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                                     waiter.lockholder.named()), encoding="utf-8")
 
 
 def processor_mask(cores):
