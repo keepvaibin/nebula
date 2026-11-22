@@ -6,18 +6,18 @@ else. Its test (that file, section 3): code, a data format, a limit or a timing 
 hardware or SDK, not because of what the game does. The game's own rules, the fixed 60 Hz game step, its content and
 the importer reading the disc once at setup stay.
 
-State (2026-11-18, the code of a1f423dd8, rows/p022 before its restack; its code is 5526e1cf0's, where only
-`native/tests/CMakeLists.txt` differs): pass one run; pass two has read each area of `FRAME-MODEL.md` 1.10 for
-the console's shape, the 921 actor files by a pattern sweep with every hit read. Not read yet: the 921 files whole.
-Items open: the frame's rows (FRAME-MODEL 1.9), P-155, P-184 to P-194. Section 4 applies file 08's
-test (section 3) and the owner's answers of 18:18 (file 08 5.H). Not 100%.
+State (2026-11-19). Pass one ran at a1f423dd8 (rows/p022 before its restack; its code is 5526e1cf0's, where only
+`native/tests/CMakeLists.txt` differs). Pass two has read each area of `FRAME-MODEL.md` 1.10 for the console's
+shape, the 921 actor files by a pattern sweep with every hit read, then whole by the readall harness (its 49 area
+reports folded 11-19, each cited line read at 241395b49); on 11-19 at 241395b49 the actor tables and pools were
+classed and the 100 self-drawing actors placed. No area is left unread. Items open: the rows of section 3. Section
+4 applies file 08's test (section 3) and the owner's answers of 18:18 (file 08 5.H). Not 100%.
 
 ## 1. Pass one: whole-tree searches
 
 Run with `git grep -c -I -E <pattern> HEAD -- runtime native/host native/petari native/include native/math platform
 crates ':(exclude)*_tests.cpp' ':(exclude)*_test.cpp' ':(exclude)*/tests/*' ':(exclude)third_party'` at a1f423dd8,
-by the script `tools/verify/console_free_search.py` (to be added with the first item that closes a search; until then
-the patterns are these). Each cell is files/lines. `native/math` was searched too and had no hit in any search.
+by hand (no script holds the searches: the patterns are these). Each cell is files/lines. `native/math` was searched too and had no hit in any search.
 
 | Search | Pattern | runtime | native/host | native/petari | native/include | platform | crates (importer) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -86,12 +86,19 @@ What the hits are, by search (each line read at a1f423dd8):
 
 | Area | Files | Read |
 | --- | --- | --- |
-| The game's sound code (`Game/AudioLib`, `Game/GameAudio`, `Game/Sound`, `Game/Speaker`, `Game/RhythmLib`) | 170 | `Sound`'s engine and the host mixer read; all swept by pattern, every hit read; P-186 |
-| Archives and the game's file access (`Game/System` archive and resource holders, `Game/Util/FileUtil`, the store) | 11 | the load path read: modern |
-| Text (`MessageHolder`, the `NMSG` reader, the host's `message_utf8`) | not counted | the record and readers read; 16-bit codes open |
-| Layouts and fonts (`Game/Ui`, `Game/Screen`'s layout code, `Game/System` font holders) | `Game/Ui` 51, `Game/Screen` 289 | `Layout::Build`, `Material`, `ResFont` read; P-184 |
-| Input (the host's and the game's) | not counted | the game's record read: modern |
-| The game's own files E14 did not reach (Agent 3's hand-over, `docs/plan/HANDOVER-AGENT-3.md` on `app/work`: Player 99, Sound 76, Enemy 109, Boss 166, Ride 19, NPC 76, MapObj 314, LiveActor 62) | 921 | swept by pattern (below), every hit read; not read whole |
+| The game's sound code (`Game/AudioLib`, `Game/GameAudio`, `Game/Sound`, `Game/Speaker`, `Game/RhythmLib`) | 170 | read whole by the readall harness at 0c98b11c2 (its Sound, AudioLib, GameAudio, Speaker and RhythmLib reports), every finding checked at 241395b49; P-186, P-192, P-193, P-221 to P-228 |
+| Archives and the game's file access (`Game/System` archive and resource holders, `Game/Util/FileUtil`, the store) | 11 | the load path read: modern; `Game/System` read whole by the readall harness at 0c98b11c2 (199 files, 32,035 lines by its count), every finding checked at 241395b49; P-231 to P-236, lines to P-189, P-192, P-197, P-205 |
+| Text (`MessageHolder` in `Game/System`, `CharStrmReader` in `Game/Ui`, `MessageUtil` and `TextString` in `Game/Util`, the tag processors in `Game/Screen`, the host's `message_utf8`, the cook's `message.rs`) | in their areas | read whole with their areas by the readall harness at 0c98b11c2, every finding checked at 241395b49: the 16-bit codes P-187 (with its 11-18 lines: the cooked text, the font's pages and byte metrics, the launcher's units), the inline tags P-202, the tag faults P-215, P-237, P-275, the settings menu's UTF-8 P-209 |
+| Layouts and fonts (`Game/Ui`, `Game/System` font holders) | `Game/Ui` 51 | read whole by the readall harness at 0c98b11c2, every finding checked at 241395b49; P-184, P-229, P-230, lines to P-146, P-151, P-197, P-209, P-218 |
+| The 2D screens, the image effects, the pointer, the movies (`Game/Screen`) | 289 (144 sources, 145 headers; 44,869 lines) | read whole at 6577392b5, and by the readall harness at 0c98b11c2 (checked at 241395b49); P-197 to P-220, P-184's 2D colours |
+| Input (the host's and the game's) | in their areas | read whole with `Game/System`, `runtime/src` and `runtime/src/input` by the readall harness at 0c98b11c2, every finding checked at 241395b49: the game's record keeps the Wii Remote's shape, P-282 (a question for the owner); P-234, P-236, P-288, lines to P-074, P-075, P-084 |
+| The game's actors (`Game/Player` 179, `Game/Enemy` 218, `Game/Boss` 333, `Game/Ride` 38, `Game/NPC` 155, `Game/MapObj` 633, `Game/LiveActor` 122; the 921 sources E14 did not reach are among them) | 1,678 | swept by pattern (below), every hit read; then read whole by the readall harness at 0c98b11c2 (its Player, Enemy, Boss, Ride, NPC, MapObj and LiveActor reports), every finding checked at 241395b49; P-243 to P-253, P-264, lines to P-084, P-136, P-146, P-154, P-155, P-189, P-190, P-192, P-214 |
+| The rest of the game (`Game/Util` 158, `Game/Map` 164, `Game/Render` 18, `Game/Camera` 158, `Game/Effect` 43, `Game/Demo` 63, `Game/Scene` 44, `Game/Particle` 35, `Game/NameObj` 25, `Game/AreaObj` 72, `Game/Animation` 22, `Game/Mii` 7, `Game/Gravity` 28, `native/petari/src/game` 12, the three headers at `native/petari/include`) | 852 | read whole by the readall harness at 0c98b11c2, every finding checked at 241395b49; P-237 to P-242, P-254 to P-263, P-265 to P-268, lines to P-010, P-021, P-134, P-142, P-144, P-146, P-149 to P-151, P-154 to P-157, P-168, P-173, P-187 to P-192, P-197, P-218, P-219 |
+| The engine below the game (`native/math` 9, `native/include` 17, `native/host` 8, the build files) | 34 and the build | read whole by the readall harness at 0c98b11c2, every finding checked at 241395b49; P-269 to P-275, lines to P-142, P-155, P-157, P-197, P-254 |
+| The platforms (`platform/android` 37, `platform/sdl` 10) | 47 | read whole by the readall harness at 0c98b11c2, every finding checked at 241395b49; P-276 to P-281, lines to P-017, P-037, P-042, P-075, P-094, P-192, P-193, P-205 |
+| The runtime (`runtime/src` 191, its input 36, render 121, render core 25, Direct3D 11 18, materials 48, Metal 32, Vulkan 42, menus 36, updater 11) | 560 | read whole by the readall harness at 0c98b11c2, every finding checked at 241395b49; P-282 to P-307, lines to P-021, P-028, P-074, P-075, P-082, P-084, P-088, P-142, P-151, P-155, P-157, P-187, P-192 to P-193, P-197, P-213, P-234, P-236, P-254 |
+| The cooked GPU programs (`runtime/src/render/programs`: 1,965 pixel and 436 vertex programs, each the cook's output) | 2,401 | 160 read whole by the readall harness at 0c98b11c2 as the sample covering every feature; the whole set is read through its one writer, `crates/nebula-import/src/cook/programs.rs`, in the importer's row below; P-303, P-304, lines to P-142, P-151 |
+| The importer and its tools (`crates/nebula-import` 88, `tools/dev` 3) | 91 | read whole by the readall harness at 0c98b11c2, every finding checked at 241395b49; P-308 to P-310, lines to P-134, P-151, P-157, P-187, P-188, P-192, P-202, P-292 |
 
 What is read so far (at a1f423dd8):
 
@@ -103,10 +110,57 @@ What is read so far (at a1f423dd8):
   functions (`MR::`) whose callers are not yet placed. A second pass names the enclosing function of every read by
   a definition match (340 lines with `ValueControl` and the message helpers): `init*`, constructors of the demo
   keepers, `load*`, `create*FromCSV`, placement getters, story-event and race-time lookups, the light tables
-  (`LightFunction.cpp:64-91`, read once for every light by `LightDataHolder.cpp:24` at load). No read by name was found in a step. The column search by
-  name (`Table.cpp:33-48`) is the game's own data access (its JMap design), paid at load: the game, not the console;
-  not an item.
-- Layouts. Cooked `NLYT` (section 1); the record's material: P-184.
+  (`LightFunction.cpp:64-91`, read once for every light by `LightDataHolder.cpp:24` at load). That pass missed the reads inside the
+  message and story helpers: the readall harness's System report (checked at 241395b49) shows reads by name in
+  steps. A message's index is found by a binary search on its name at each fetch
+  (`MessageData::findMessageIndex`, `MessageHolder.cpp:149-159`), and a story event's progress by a scan of the map
+  table by name at each ask (`GameDataHolder::isPassedStoryEvent`, `GameDataHolder.cpp:282-288`; from
+  `GameEventFlagChecker.cpp:43`, `EventUtil.cpp:157`, `:161`), a name not in the table reading as passed. The
+  column search (`Table.cpp:33-48`) is the game's own data access (its JMap design); the names are resolved to
+  ids at load in its modern form (P-189's 11-18 line).
+- Layouts. Cooked `NLYT` (section 1); the record's material: P-184, with the 2D material's colours in the console's
+  signed register form (`Ui::Material::mRegisterColors`, `native/petari/include/Game/Ui/Material.hpp:111-134`).
+- Screen (`Game/Screen`, every file read whole at 6577392b5, 11-18; the verdict of each file kept with the
+  inventory's working notes). Timing: the screens count game steps (`GameSystem::frameLoop` runs `update()` once a
+  frame and the extra world steps of a mod's time rate do not, `GameSystem.cpp:182-205`; Nebula's own screens run
+  from `GameSystem::update`, `:258-290`), drawn between steps by the layouts' interpolation
+  (`LayoutActor.cpp:42`, `draw_walker` `:618-665`): the game's step, not the console's. Glides and edge scrolls of
+  the settings menu go by the host clock. The console's shape found:
+  - the layouts' anamorphic 16:9 canvas, a layout unit 4/3 wider than tall at 16:9 and flagged panes narrowed by
+    0.75 (`LayoutManager.cpp:200-211`, `Pane.cpp:185-187`), with Nebula's screens undoing it again
+    (`NebulaUi.cpp:568-578`, `NebulaAchievementToast.cpp:388`, `NebulaAchievementBoard.cpp:53`, `NebulaPaneKit.cpp:91-92`): P-197;
+  - the depth of field's 8-bit indirect depth lookup through a ramp texture (`DepthOfFieldBlur.cpp:99-141`): P-198;
+  - `IndDummy.tpl` found by its bytes' address in the archive (`LayoutManager.cpp:597-642`): P-199;
+  - message tags as in-text binary records, string arguments as 4-byte tokens, rewritten byte by byte
+    (`MessageTagSkipTagProcessor.cpp:5-77`, `ReplaceTagProcessor.cpp`; walked also by `NebulaUi.cpp:133-139`,
+    `StaffRoll.cpp:646-657`, `TitleSequenceProduct.cpp:76-93`): P-202, beside the 16-bit codes (P-187);
+  - movie subtitles and rumble started on equality with the shown frame (`MoviePlayingSequence.cpp:335-350`,
+    `DemoPadRumbler.cpp:23-30`): P-203; the staff roll timed by steps beside its music (`StaffRoll.cpp:387-395`): P-206;
+  - effect and sound names matched by 16-bit hashes (`MultiEmitter.cpp:243-245`, `AudSeKeeper.cpp:58`, `:81`): P-204;
+  - the save in the console's `GameData.bin` layout (`BinaryDataContentAccessor.cpp:13-20`, `:55-64` and the
+    storages): P-205;
+  - the underwater warp in screen texels, smaller as the resolution grows (`WaterCameraFilter.cpp:43-44`): P-207;
+  - the A button's pictures found by texture size and IA4 format (`NebulaIcons.cpp:2368-2390`): P-210.
+  Caps on what a mod adds (5.H.3): language panes in a `BitFlag<128>` (P-200), eight sound tags a message (P-201),
+  small fixed counts in the 2D screens (P-208), a mod's ABOUT picture over 1024 dropped (P-211). Faults found on the
+  way: the settings menu's UTF-8 decoder (P-209), a bound of 4 over a 3-entry array (P-212). The rest is the game's
+  own (its layouts, counters, menus and their step counts) or modern (the holders grow: `InlineArray::grow`,
+  `Array.hpp:217-232`; pools reuse with renewed draw identity; text buffers grow to the text). Not settled by reading
+  and kept with the E4 work of fed-back and camera-bound draws: the full-screen blur's feedback
+  (`FullScreenBlur.cpp:38-46`), the heat haze's board placed at the step's camera (`HeatHazeEffect.cpp:19-30`), the
+  lens flare; and two run checks: whether the picture font's sheet takes the icons' sharp copy (`NebulaIcons.cpp:1804-1813`),
+  and Nebula's screens stepping faster while a cutscene skip runs extra `update()` calls (`GameSystem.cpp:199-202`).
+  The readall harness's second whole read (at 0c98b11c2; each line it cites read again at 241395b49) added: the
+  image effects' constants at the registers' 8-bit precision (P-213); draws that do step work, while the frame draws
+  once and may step more (`GameSystem.cpp:182-205`): the galaxy map's capture, the pointer's blur, a message's sound
+  tag, the movie's frame pick (P-214); two reads past a message by a tag's claimed length (P-215); the icons' sharp
+  sheets handed over from one reused record while the store keeps its pointer for a device restart
+  (`texture_store.cpp:593`, `:335-337`; P-216); a row button written at index -1 (P-217); the cooked layout's
+  console field widths, 16-bit pane links and 16-character names (P-218); the movie volume as 0..127 and the
+  pointer unprojected through the GX projection and viewport vectors (P-219); game behaviour chosen by
+  `__ANDROID__` (5 of the 30 platform branches in `native/petari`; P-220); and the pointer's hit tests and the
+  HOME menu on P-197's two-shape switch. Six of its claims fell on reading (kept with the inventory's notes), for
+  example the staff roll following the display (`MR::getScreenHeight` is the constant 456, `ScreenUtil.hpp:18-20`).
 - Text. Cooked `NMSG` (`MessageHolder.hpp:8-32`): host-order counts and offsets, the text as `char16_t`, flow nodes
   and branches as records. Fonts: cooked `NFNT` (`native_data.rs:244-257`): host order, sheets as distance fields
   (`cook::distance`) or pictures, a glyph found through two 256-entry pages by the code's high and low byte. Both read
@@ -130,6 +184,18 @@ What is read so far (at a1f423dd8):
   (`native_data.rs:542-545`, `CSW`); the host resamples player 1's into the output (`host_main.cpp:4016-4025`,
   `wiimote_speaker.h`): the game's content. The volume ramp (`audio_mixer.cpp:669-680`, `make_ramp`) reaches its target
   65 samples of 32 kHz into each tick, at any output rate: how the game's sounds change volume, as made; stays.
+  The readall harness read the 170 files whole (at 0c98b11c2; each line it cites read again at 241395b49). The
+  console's shape it found: the Me phrases' operands and the jump tables still big-endian, the rhythm look-ahead
+  over raw bytes (P-186's 11-18 line); banks, effect categories, wave groups, resource numbers, talk voices,
+  limited sounds, speaker and chord ids at the console's widths or counts (P-192's two 11-18 lines); a note's sends
+  as the driver's packed mix-config words decoded each update (P-221); effect, filter, switch and format values in
+  the DSP's and the table's encodings (P-222, the values themselves as made); and the step learning a music
+  stream's end from the audio device (P-226; the beat itself is read only by the audio thread's sequence clock,
+  `RhythmSystem.cpp:100-110`). Faults on the way: linear lookups on the sound paths (P-223), cooked and program
+  values trusted (P-224), streams played from the mapped store inside the mix (P-225), handles left pointed to by
+  the sound they were taken from (P-227), music tables read with no bound (P-228). Kept: the driver's 7 ticks a step
+  in its own conversions (`SeqTrack.cpp:676`, `AudSystem.cpp:363`), the categories' limits, an actor's own handles,
+  the remix's 16 note ids (as made, 5.H.5); the 4096 host voices grow with P-192.
 - Archives and file access. The game's archive names (`.arc`, `.szs` in 18 runtime, 6 game and 10 header lines) are
   names only: the store drops the ending (`asset_store.h:118-119`, `asset_store.cpp:33`). The game reads the store
   (`game.pak`, `crates/nebula-import/src/cook/store.rs`) through `AssetFolder` and `GameAssets::load` (`FileUtil.cpp:88`); `ResourceHolder`
@@ -140,9 +206,15 @@ What is read so far (at a1f423dd8):
   reads the cooked particles and their name table, and keeps a particle's index as 16 bits: P-188.
 - Input. The game takes one record per player per read, whatever the device (`nebula_game_api.h:287-322`,
   `NebulaInputSample`): buttons by the game's own names, the stick and the pointer in -1..1 of the picture, tilt in g,
-  spins counted between reads. No report of the console's controller reaches the game. Class: modern. The timing of
-  the reads (once a step) is P-075, P-078 and P-163 (E6b). The host's drivers for real Wii Remotes read the remote's
-  own reports: a device, not the console.
+  spins counted between reads. No report of the console's controller reaches the game. Class: not modern, corrected
+  11-19 from the readall harness's runtime/src and runtime/src/input reports (checked at 241395b49): the record keeps
+  the Wii Remote's shape, tilt as gravity in the remote's axes, the pointer's roll as the sensor bar would show it and
+  its distance from the screen (`nebula_game_api.h:304-316`); every native device is rewritten into it (a pad's tilt
+  as a remote's gravity by the section the game names, `tilt.cpp:67-112`; a virtual remote's distance,
+  `native_input.h:50-52`; the pointer off when a remote would not face the bar, `:80-82`, `controls_engine.cpp:10-23`),
+  and the game reads those fields as a remote's (`PlayerInputs.cpp:123-131`, `StarPointerLayout.cpp:688`,
+  `PlayerInputUtil.cpp:64`): P-282, a question for the owner. The timing of the reads (once a step) is P-075, P-078
+  and P-163 (E6b). The host's drivers for real Wii Remotes read the remote's own reports: a device, not the console.
 - The actor folders (the 921 files' folders: 285,511 lines with their headers). Swept by the scratch script
   `actors.py` for six shapes, each hit read: the console CPU's intrinsics and cache and paired-single instructions
   (`__cntlzw`, `__fsel`, `__frsqrte`, `psq_`, `__dcb*`, `OSRoundUp`...) 0; the console's addresses and memory sizes 0;
@@ -150,7 +222,8 @@ What is read so far (at a1f423dd8):
   access 4 (a colour packed for a draw, a sound id's fields: the game's); data read through byte offsets 14 (cooked
   records: the ghost file `NGST`, sequences, sound tables, `MarioConst`'s fields by name for mods); tables of a literal
   size 138 (legs, joints, walls, curve tables, the sound driver's registers: the game's own shapes). No console item
-  found in them by these shapes; a whole read is not done.
+  found in them by these shapes. The readall harness then read them whole (the actors' row of the table above): the
+  console's shapes it found there are P-243 to P-253 and P-264, each line checked at 241395b49.
 - Limits. Tables sized by a named constant (pass one, 26 lines): Windows' `MAX_PATH`, the game's rule of 999 carried
   star pieces, the mods' loader tables (not in this order), host buffers: none the console's. Capacities given when a
   holder is made (`init(n)`, `new XHolder(n)`, `new T[n]` with n of 10 or more: 37 lines in `native/petari/src`): the
@@ -220,9 +293,63 @@ Each: where; what of it is the console's; the modern form; row; state; proof.
 | Table fields found by column name | `native/petari/src/Game/Util/Table.cpp:33-48` (the column search), 241 reads in 56 files (section 2) | a table kept as the disc's column list, each field found by its name's hash when read | the cook writes each table kind as a typed record with its columns resolved; the game reads fields by index, the name search gone | P-189 | open (E) | not yet |
 | A normal map remade on the CPU and lit through a gradient texture | `native/petari/src/Game/MapObj/NormalMapBase.cpp:114`, `:119`, `:483-523` (`createGradTexture`: an LA8 gradient built on the CPU), `:525` on (`swapColorGB`: each RGBA8 texel's normal decoded and written back as 0, g, b, r in a copy), its own draw settings (`drawMaterialSetting`, `setStageForObject`) | the console's texture stages and light channels, restated (read at 5526e1cf0). The CPU: a 256 x 256 LA8 ramp made for each actor at its start, intensity by column and alpha by row (`:483-523`), keeping the console's tile conversion's scramble in rows 0-3 (`:505-510`); a matrix from the two light directions made each draw (`updateLightMtx`, `:151-215`); each draw finds the normal-mapped materials by name (`strstr` in `isNormalMapMaterial`, `:217-223`, over meshes, joints and materials, `shapeAnalyzeDraw`, `:237-292`) and remakes the joint's matrix from its angles. The shader (`runtime/src/render/materials/normal_map.hlsl`): the light channels per vertex in 0-255 units (`:48-59`); the indirect stage's normal as 8 bits less 128 (`:75`), moving the ramp's centre (texel 128) by at most 0.504 x 128 x sqrt(3), 112 texels, so rows 0-3 are never sampled (by this arithmetic, not run); four stages each clamped, the last doubled (`:109`), the alpha the console's unselected constant (`KASEL_1`) | the normal map final at the cook (the `Zormal` swap done there); the materials found once at load; the ramp evaluated per pixel from the normal and the two lights, its levels, curve and colours as the material's constants, no texture made on the CPU (the unreachable scramble goes with it); the lights from the step's light table (E3 step 6); one material program in the shared draw path, the stages written as what they compute | P-190 | open (E3) | not yet |
 | What the game runs follows the screen's shape | `native/petari/src/Game/LiveActor/ClippingJudge.cpp:20-21`, `:33`, `:42` (`MR::getAspect()` in the volumes that decide which actors run); 42 lines of `native/petari/src` read an actor's clipped state (`isClipped`, `isInvalidClipping`, `isClippingInvalid`: `grep -rn ... --include=*.cpp`, 42 hits) | the console's culling of actors' runs by the one screen it had | (c) first: every actor of the loaded scene runs in every step, drawing culled by the real view; (b) if (c) misses a measure: one run volume the same on every screen | P-191 | open, after D.6 (file 08 5.H.2) | not yet |
-| Shared counts and widths that can cap what a mod adds | `MR::Vector`, holders, registries, groups (section 2, Limits); id and index widths: `Sound.hpp:26-27` (`SoundID`: section 8 bits, group 8 bits, wave 16 bits; `SoundVoices.cpp:70`), P-188's particle index; the 138 literal tables and the pools, each read | a width or a size chosen for the console's content | every shared holder grows and every id or index is 32 bits wide or more; an actor's own count stays its number | P-192 | open (E; the tables' classing in the whole read) | not yet |
+| Shared counts and widths that can cap what a mod adds | `MR::Vector`, holders, registries, groups (section 2, Limits); id and index widths: `Sound.hpp:26-27` (`SoundID`: section 8 bits, group 8 bits, wave 16 bits; `SoundVoices.cpp:70`), P-188's particle index; the 138 literal tables and the pools, each read (section 4: none grows past P-192's list) | a width or a size chosen for the console's content | every shared holder grows and every id or index is 32 bits wide or more; an actor's own count stays its number | P-192 | open (E) | not yet |
 | Surround output by a written law | `runtime/src/audio_mixer.cpp:244-269`, `:704-729`; `runtime/src/native_audio.cpp:95-131`; `runtime/src/audio_device_wasapi.cpp:135-155`, `:207-230`; `platform/sdl/audio_device_sdl.cpp:33`; `native/petari/src/Game/Sound/SoundVoices.cpp:665-786` (section 4 says what each does) | none kept: the two-channel output stays as made (owner, 5.H.5); the surround law is new | a law from a sound's pan and surround amounts to each reported layout's speaker gains, written here before the code, each property asserted by a test, a render-to-file test through the real mixer | P-193 | open (E, with the sound work) | not yet |
-| Actors that draw for themselves | 100 files of `native/petari/src` define `draw() const` (`grep -rlE "void \w+::draw\(\) const" native/petari/src`), 55 of them name a draw helper (`Material`, `TDDraw`, `setStage`, `RenderTexture`, `NebulaPass`, `drawFillBox`, `GameTexture`) | not read yet; `FRAME-MODEL.md` does not name them | each read; those with the console's shape placed in E3 or E4's steps | P-194 | open (the whole read, 5.H.1) | not yet |
+| Actors that draw for themselves | 100 files of `native/petari/src` define `draw() const` (`git grep -l -E 'void \w+::draw\(\) const' 241395b49 -- native/petari/src`: 100), 55 of them name a draw helper | read 11-19 at 241395b49, every body whole, each file classed once by `D:/NebulaWork/plan/a1/inv/draw_class.py`: 28 sites written at each draw, their own vertices or through `DirectDraw`, `BezierSurface` and the shadow shapes (P-154's sites, FRAME-MODEL 2.12.1); 7 kept meshes (2.12's nine files, P-195); 5 shadows and volumes counted in the stencil (P-143, P-181); 8 models through the material path (one shape per point, `KirairaChain.cpp:98-107`, `Plant.cpp:698-701`, instanced by the walk, FRAME-MODEL 1.7 item 7); 16 work on the whole frame (the frame's copies: `NEBULA_PASS_COPY_FRAME` and `TAKE_FRAME`, `FrameList.cpp:1062-1072`, given out as a `ResTIMG`, `ScreenUtil.cpp:122-124`: E4's target passes and P-155; the depth of field P-198; the bloom P-185 and P-213; the blurs P-213; the fall-out field P-198; fills and fades plain; the movie kept); 17 layouts (P-197); 19 empty or calling other draws. New: WaterCameraFilter passes the screen's size through `u16` for its quad (`WaterCameraFilter.cpp:145-150`), the console's 16-bit screen positions (a line of P-154); the name `drawGD` (the console's display lists) is left on two kept meshes (`WaterRoad.cpp:250-260`, `OceanRingDrawer.cpp:263`) | placed: each draw in E3's step or E4's pass named, the console's shape in each held by the rows named; nothing of its own is left to P-194 | P-194 | read (11-19); closes with the rows it names | the read and its script |
+| The layouts' anamorphic canvas | `LayoutManager.cpp:200-211`, `:477-482`; `Pane.cpp:69`, `:185-187`; `LayoutUtil.cpp:669-678`; `DrawUtil.cpp:113-126`; undone again in `NebulaUi.cpp:568-578`, `NebulaAchievementToast.cpp:388`, `NebulaAchievementBoard.cpp:53`, `WipeRing.cpp:209`; empty `isScreen16Per9` branches `StarPointerCommandStream.cpp:91-92`, `StarPointerLayout.cpp:708-710` | the console's 16:9 picture as a 4:3 canvas stretched (a layout unit 4/3 wide), flagged panes narrowed by 0.75 | square layout units: the canvas 608 * 4/3 wide at 16:9, unflagged panes given the 4/3 width, flagged panes nothing; the 0.75 code goes | P-197 | open | not yet |
+| The depth of field's 8-bit indirect lookup | `DepthOfFieldBlur.cpp:99-141`, `frame_depth.hlsl`, `dof_final.hlsl`, `ImageEffectLocalUtil.cpp:113-124` | the depth copied to 8 bits and moved through an indirect matrix into a 128x2 ramp texture | the final pass reads the depth at full precision and weighs the blur from the two distances | P-198 | open | not yet |
+| `IndDummy.tpl` found by address | `LayoutManager.cpp:597-642` | the archive as a blob of bytes, a resource known by where it lies | the layout's texture list names it; the swap goes by that entry | P-199 | open | not yet |
+| Language panes in 128 bits | `LayoutManager.cpp:34-130`, `:645-705` | a fixed `BitFlag<128>` for a layout's panes | marks sized to the pane's children | P-200 | open | not yet |
+| Eight sound tags a message | `CustomTagProcessor.cpp:483-499` | a u8 mask of played sound tags | a mask or list sized to the message's tags | P-201 | open | not yet |
+| Message tags as in-text records | `MessageTagSkipTagProcessor.cpp:5-77`; `ReplaceTagProcessor.cpp:49-72`, `:139-161`, `:239-321`; `NebulaUi.cpp:133-139`; `StaffRoll.cpp:646-657`; `TitleSequenceProduct.cpp:76-93`; `NebulaSettingsMenu.cpp:889-901` | the message editor's binary records (0x1A, a length byte, 16-bit parameters, 4-byte string tokens) inside the text | a message parsed once into text runs and typed tag records, each holding its own string | P-202 | open | not yet |
+| Movie cues on one frame | `MoviePlayingSequence.cpp:335-350`, `DemoPadRumbler.cpp:23-30`, `MovieStream.cpp:194-217`, `MoviePlayerSimple.cpp:72-74` | a cue fires only when the shown frame equals its start; a hitch passes it | a cue fires when the movie's place crosses its start, read from the movie's position | P-203 | open | not yet |
+| Names by 16-bit hashes | `PaneEffectKeeper.cpp:107-116`, `MultiEmitter.cpp:243-245`, `AudSeKeeper.cpp:58`, `:81` | names compared by the low 16 bits of a hash | by name, as `MultiSceneEffectKeeper.cpp:77-80` does | P-204 | open | not yet |
+| The save in `GameData.bin`'s layout | `BinaryDataContentAccessor.cpp:13-20`, `:55-64`; `GameDataGalaxyStorage.cpp:184`; `BinaryDataChunkHolder.cpp:46-49`; `SpinDriverPathStorage.cpp:55`; `GameEventValueChecker.cpp:48-53` | 16-bit name hashes and offsets, counts in a byte, 6-bit ids, u16 values | named, sized records with a version; an old file read once by the importer | P-205 | open | not yet |
+| The staff roll timed by steps | `StaffRoll.cpp:49-56`, `:178-187`, `:387-395`, `:552-554` | pictures and the end placed by counting steps beside the music | placed from the stream's play position | P-206 | open | not yet |
+| The underwater warp in pixels | `WaterCameraFilter.cpp:43-44`, `water_camera.hlsl` | a warp of 0.05 screen texels a step: about 6.4 pixels at any resolution | the warp as a share of the picture | P-207 | open | not yet |
+| Small fixed counts in the 2D screens | `PictureBookLayout.cpp:61-73`, `:425-443`; `PowerStarList.cpp:113-123`, `:573-579`; `StarPieceCounter.cpp:138-156`; `WipeHolderBase.cpp:7-10`, `:64-73`; `StaffRoll.cpp:27-28`, `:283-288` | counts fixed for the disc's content | probe to the first missing name, lists sized to the content, counters laid out from the number's width | P-208 | open | not yet |
+| The settings menu's UTF-8 decoder | `NebulaSettingsMenu.cpp:538-555` (callers `:776`, `:2386`, `:2483`, `:2575`, `:3229`) | none (a fault): 4-byte sequences and stray bytes mis-read | one decoder for the module: `MR::utf8ToText16` beside `MR::Text16` (`StringUtil`), the achievements' decoder with longer forms refused | P-209 | written, lands by the chain after P-212 | `rows/p209` 5aec3a567: native_formatted_name_tests 16 of 16 (the old decoder 11 of 16 wrong); `git grep -n "fromUtf8(char16_t" -- native` 1 before, 0 after |
+| Two more lax UTF-8 decoders | `NebulaText.cpp:110-133` (NebulaText.txt); `nebula_text_tags.h:57-71` (the mod surface's tag writer) | none (a fault): stray, cut-short and longer forms stored as read | the one decoder's rules in a header every side includes, `MR::utf8ToText16` built on it; the font's reader is P-187's | P-320 | open | not yet |
+| The A button's pictures by size and format | `NebulaIcons.cpp:2368-2390` | a picture known by its 48 or 40 texel IA4 texture | by the texture's name, the whole tree walked | P-210 | open | not yet |
+| A mod's ABOUT picture over 1024 | `NebulaSettingsMenu.cpp:321`, `:4996-5001` | none of the console's: a fixed copy size | the texture made at the picture's size, never dropped | P-211 | open | not yet |
+| A bound of 4 over 3 | `NebulaSettingsMenu.cpp:5521`, `:5719` | none (a fault) | bound by the array's size | P-212 | written, lands by the chain after docs/model5 | `rows/p212` 8f095d863: the index bound by the array's count, a static_assert ties the array to `NEBULA_BENCHMARK_PART_AGAIN + 1` |
+| Image-effect constants as bytes | `ImageEffectState.cpp:103-113`, `BloomEffect.cpp:61-65`, `BloomEffectSimple.cpp:26-35`, `ScreenBlurEffect.cpp:75`; unpacked by every renderer | the TEV registers' 8-bit colours | float constants written once a step | P-213 | open | not yet |
+| Draws that do step work | `GalaxyMapController.cpp:161-163`, `:168-183`; `StarPointerLayout.cpp:545-581`, `:844`; `CustomTagProcessor.cpp:478-499`; `MoviePlayerSimple.cpp:73`, `:128` | draw and step one to one under the retrace | the step decides and stores; draw() only records | P-214 | open | not yet |
+| Reads past a message by a tag's length | `CustomTagProcessor.cpp:644-654`, `NebulaUi.cpp:154-160` | none (a fault) | bound by the text's length | P-215 | open | not yet |
+| One record for every sharp sheet | `NebulaIcons.cpp:1826-1857`, `:2078`, `:2490`; `texture_store.cpp:593`, `:335-337` | none (a fault) | a record per sheet kept while handed over; retire at the frame fence | P-216 | open | not yet |
+| A row button at index -1 | `NebulaSettingsMenu.cpp:4591-4597` | none (a fault) | no button when none can be made | P-217 | open | not yet |
+| The cooked layout's console widths | `UiData.hpp:46-59`, `Pane.hpp:154-155`, `LayoutManager.hpp:79-81` | BRLYT's 16-bit links, 16-character names, 8-byte user data | 32-bit links, whole names resolved to ids, length-prefixed user data | P-218 | open | not yet |
+| Console parameter forms at the host | `MoviePlayerSimple.cpp:141`, `MovieStream.cpp:235-242`; `StarPointerDirector.hpp:20-21` | THP's 0..127 volume; GX's projection and viewport vectors | an f32 gain and ramp; the inverse view-projection in the host's terms | P-219 | open | not yet |
+| Behaviour by operating system | `TitleSequenceProduct.cpp:72-93`, `:234-238`; `StarPointerGuidance.cpp:61-66`, `:84-88`, `:150-154` | none (the port's own) | by the input in use and the device's capabilities | P-220 | open | not yet |
+| A note's sends as mix-config words | `SoundVoices.hpp:123`, `SoundVoices.cpp:564-579`, `:704-786`; `StreamPlayer.hpp:101` | the sound driver's packed bus and curve words | typed send records; a bus map per output mode made once | P-221 | open | not yet |
+| Sound settings in DSP and table encodings | `SoundEngine.cpp:596-606`, `SoundVoices.hpp:214-234`, `SoundAudibleParam.hpp:11-40`, `SoundVoices.cpp:128-132` | Q15 integers, a filter mode word, packed switch bits, the disc's format code | floats of the same values, named flags, a playable flag and category | P-222 | open | not yet |
+| Linear lookups on the sound paths | `SoundArchive.cpp:131-137`, `SoundBank.cpp:70-98` | tables small enough to walk | maps made at load; per-id group lists | P-223 | open | not yet |
+| Cooked sound values trusted | `StreamPlayer.cpp:33-36`, `:177-221`; `SeqTrack.cpp:1412-1426`; `EffectManager.cpp:162-168`; `PlayerLink.cpp:128-133`; `EffectSound.cpp:134`, `:152` | none (a fault) | every count, index and offset checked at load; ports bounded by the cook | P-224 | open | not yet |
+| Streams played from the mapped store | `StreamPlayer.cpp:207-208`, `StreamSound.cpp:105` | none (the port's own) | a reader thread fills a ring ahead of the play position | P-225 | open | not yet |
+| A stream's end told by the device | `StreamPlayer.hpp:26-28`, `StreamSound.cpp:122-124`, `:263-266`, `AudBgm.hpp:76-82`, `SoundUtil.cpp:378-440` | sound and picture from one clock | the end known by the step clock; the audio follows | P-226 | open | not yet |
+| Sound handles taken over | `AudMePlayer.cpp:76-91`, `:186-194`, `:235-244`; `SpkSound.cpp:34-35`, `:74-90`, `:151-166` | none (a fault) | a handle and its sound detach as a pair | P-227 | open | not yet |
+| Music tables read with no bound | `AudStageBgmWrap.cpp:110-112`, `:137-139`; `AudBgmSetting.cpp:283-299`; `AudTrackController.cpp:78` | tables sized to the disc's music | each number checked; settings as records keyed by sound id | P-228 | open | not yet |
+| Layout images as TPL containers | `TexMap.cpp:43-64`, `Animation.cpp:150-158`; `Font.hpp:20`, `CharWriter.cpp:83-95` | the TPL's offsets and texel format codes, walked at run time | store textures by id; the sheet's kind in the renderer's terms | P-229 | open | not yet |
+| Cooked layouts trusted | `Animation.cpp:155-157`, `:232`, `:256`; `Layout.cpp:275`; `Group.cpp:10-12`; `TexMap.cpp:53-60`; `UiCommon.cpp:122-131` | none (a fault) | every index, count and offset checked at load | P-230 | open | not yet |
+| Story steps walked as an array | `StorySequenceExecutor.cpp:855-870`, `:958-965`, `:233-265`, `:368`, `:483` | none (a fault) | a built sequence's steps in one array, walked by its count | P-231 | open | not yet |
+| Hashes taken for names | `GameEventValueChecker.cpp:75-91`; `GameEventFlagTable.cpp:336-349`, `:586`; `ResourceHolderManager.cpp:144-154` | 16- and 15-bit name hashes as keys | names compared after a hash; flag ids checked unique at load | P-232 | open | not yet |
+| A resource's size by a tree walk | `AssetFolder.cpp:115-133`, `LayoutHolder.cpp:12-35` | the archive API's getResSize, kinds by four-byte tags | the handle carries size and kind | P-233 | open | not yet |
+| Pad connection and language in the console's shape | `PlayerInputs.cpp:61-87`, `Language.cpp:14-71` | the remote SDK's callbacks; the ten system-language slots | the device's state; the language named by the host | P-234 | open | not yet |
+| Fixed wall-time budgets and waits on the game thread | `NebulaCutsceneSkip.cpp:46-47`, `:384-399`; `SaveDataHandler.cpp:120-122` | none (the port's own; a 16.7 ms frame assumed) | a share of the measured frame interval; requests queued | P-235 | open | not yet |
+| Rumble through the motor-callback registry | `InputRumble.cpp:10`, `:81-88`, `:116-125`; `PlayerInput.cpp:37-38`; `InputInfoChecker.cpp:7`, `:29-39` | the motor callback's registry; the info request every 300 s | each pad steps the rumble in use once; the battery read when shown | P-236 | open | not yet |
+| Render values made on the CPU in the console's units | `DrawUtil.cpp:141-163` (the stencil cleared by a full-screen quad), `ModelUtil.cpp:163-183` (fog range from the one global view), `FurDrawer.cpp:85-87`, `:148-152` (shell values cut to bytes, strands in the 4 x 4 tile order) | the console's clears by drawing, its one view, its byte registers and tiled texture layout | the pass's load action; fog per view on the GPU; float values; the strands in the texture's own order | P-239 | open | not yet |
+| Game rules that read the screen's shape or size | `BasaBasa.cpp:658-685`, `Gesso.cpp:417-433`, `Petari.cpp:458-466`, `BombBird.cpp:126-132` (the frustum); `StarPointerController.cpp:68`, `:96-99`, `FireBall.cpp:225-228` (the pointer's speed in screen pixels); `CameraViewInterpolator.cpp:192-197` (the camera's wall ball from the field of view and aspect) | the console's two screens, where the frustum and the pixel width were fixed | the rule reads a volume or a speed in the world's or the design's units, the same on every screen | P-243, P-244, P-256 | open; questions for the owner | P-191's four-screen proof |
+| Work spread over steps for the console's CPU | `PunchBox.cpp:115-128` (the shadow recomputed once every 128 steps) | the console's CPU budget | computed when it changes, or on the GPU | P-248 | open | not yet |
+| The views and draw order in the GX calls' shapes | `FrameList.hpp:84-90` (projection as a type and six terms, viewport, z scale, scissor latched and read back); `Model.cpp:317-331` (translucent order by the one global view); `TypedDraw.cpp:131-141` (a site's camera found by comparing matrix bytes) | GX's latched projection and viewport, one camera per frame | a view record per picture; order per view; the camera named by the draw | P-254 | open | not yet |
+| Miis known by the console format's ids and flags | `MiiCharacters.cpp:22-24`, `:156-182`, `:202`, `:221-224` | the 8-byte create ID and its flag bits (temporary, special, local-only) | the host library's own ids; which Miis are offered by the library's rules | P-268 | open; question for the owner | not yet |
+| The input record in the Wii Remote's shape | `nebula_game_api.h:304-316`; `tilt.cpp:67-112`; `native_input.h:50-52`, `:80-82`; `controls_engine.cpp:10-23`; read at `PlayerInputs.cpp:123-131`, `StarPointerLayout.cpp:688`, `PlayerInputUtil.cpp:64` | tilt as a remote's gravity, the sensor bar's roll, a remote's distance | the device's own motion and a pointer in the picture's terms, each rule reading what it means | P-282 | open; question for the owner | not yet |
+| The game's bloom around a copy and write-back of the frame | `game_bloom.cpp:207-233`, `:345-351`, `:564-579`; `game_bloom.hlsl:5-6`, `:64-71`; the same in the other three renderers | the console's frame copy and write-back around the glow pass, the scene clamped to 8-bit range | the glow draws into its own target, the composite only adds | P-289 | open; question for the owner (the clamp on HDR) | not yet |
+| Clears and frame copies in the console's copy forms | `renderer_d3d12.cpp:6436-6475`, `renderer_common.cpp:228-235`, `renderer_common.h:41-47`, `renderer_d3d11.h:426-430`, `renderer_vk_frame.cpp:606-613`, `:2845-2851`, `renderer_mtl_scene.mm:592-600`, `:1196-1200` | the copy-with-clear's enables, rectangle and pixel-format flag; the copy's channel forms made again by a conversion draw | load actions stated per pass; each copy's format known at load, read through a swizzle | P-290, P-296 | open | not yet |
+| Depth and masks through 8-bit colour copies | `frame_depth.hlsl:24-33`, `dof_final.hlsl:18-23`, `screen_blur.hlsl:17-20`, `clip_fill.hlsl:18-25` | the console's depth read back through a colour copy | the passes read the depth target by name; masks in their own target | P-300 | open | not yet |
+| The console's texture compression and movie container | `block4_astc.h:4-10`, `texture_pack.h:44-47` (CMPR's 5/8 + 3/8 mixes); `movie_playback.cpp:737-782`, `crates/nebula-import/src/cook/thp.rs:167-174` (the THP frame chain) | CMPR's palette mixes; THP's streaming chain | each texture cooked in the forms devices sample; a frame table in the header | P-291, P-292 | open | not yet |
+| The game's picture read back for a step | `StarPointerDirector.cpp:155-177`, `StarPointerController.cpp:31-43`, `TalkDirector.cpp:100-124`, `LensFlare.cpp:230` | the console's peek at its frame buffer | a scene query on the game thread; the flare on the GPU | P-294 (with N-1068) | open; question for the owner | P-191's four-screen proof |
+| Pixel stages in the console's combiner | the hand-written programs (`color_tex_alpha.hlsl:8-9`, `:30-32` and 18 more; `program.hlsli:206-210`); the cooked programs' writer (`crates/nebula-import/src/cook/programs.rs:436-441`, `:491-521`, `:627` on, `:806-830`) | stages, 8-bit wraps and compares, two-reference alpha tests, 8-bit indirect warps in texels, the console's coordinate generators and q = 0 rule | one float expression per named form; a float cutoff; a warp map in UV units; coordinates by source and kind | P-299, P-303, P-304 | open | the pictures per form group |
+| Replacing passes for a hand list of models | `crates/nebula-import/src/cook/programs.rs:1769-1800` | none of the console's; a cap on what a mod adds (5.H.3) | each replacing pass a form declared by the content or the draw | P-309 | open | not yet |
 | Texture headers in the console's form | `ResTIMG`, 137 lines in 59 files | the J3D texture header and its filter codes | a host id and a sampler resolved at load (E3 step 2) | P-155 | open (F4) | not yet |
 
 ## 4. Section 3's test, and the owner's answers of 2026-11-18 18:18
@@ -237,9 +364,40 @@ replay identical? Yes: an item. No: listed with the reason, a question for the o
   `MarioConst.cpp:1061-1067`, `ChordInfo.cpp:18`, `SeqTrack.cpp:278-282`, `SoundArchive.cpp:11`, `:101`, `:147`,
   `SoundTable.cpp:5`, `:14`) walk cooked host-order records where they lie: the modern form already, except the
   sequences' big-endian data (P-186).
-- The 138 tables of a literal size and the pools made ahead: P-192 by the owner's rule, each classed by reading the
-  code that fills it, in the whole read. An actor's own count (`DinoPackunVs2.cpp:34-35`, 64 and 16 fires) stays,
-  the owner's words.
+- The 138 tables of a literal size and the pools made ahead, classed for P-192 by the owner's rule (file 08 5.H.3)
+  on 11-19 at 241395b49, each by reading the code that fills it. An actor's own count (`DinoPackunVs2.cpp:34-35`, 64
+  and 16 fires) stays, the owner's words.
+  - Tables: `git grep -n -E '^\s*(static\s+)?(const\s+|constexpr\s+)?[A-Za-z_][A-Za-z0-9_:<>, ]*[ *&]+m?[A-Za-z_][A-Za-z0-9_]*\s*\[\s*[0-9]+\s*\]' 241395b49 -- native/petari/{src,include}/Game/{Player,Enemy,Boss,Ride,NPC,MapObj,LiveActor,Sound}`:
+    149 hits, 11 of them an index inside an expression (`MarioActorMorph.cpp:25-28`, `MarioActorParts.cpp:245`,
+    `SkeletalFishBossRailHolder.cpp:29`, `HitSensorKeeper.cpp:42`, `:105`, `ShadowController.cpp:70`,
+    `SoundVoices.hpp:111`, `RhythmSystem.cpp:361`), so 138 tables. Each hit is classed once, none left, by
+    `D:/NebulaWork/plan/a1/inv/tables_actors_class.py` over `D:/NebulaWork/plan/a1/inv/out/tables_actors.txt`: a function's working array 33; a
+    field of a cooked record or a triangle, fixed by its format, 14; the game's own values 36 (`MarioAnimatorData`,
+    `MarioConst`, the sound driver's tables, `SoundEmitter`'s 33 sounds, an argument past them silent by design,
+    `SoundEmitter.cpp:35-36`); the parts an actor is made of 38 (a boss's legs, walls and joints; BigBubble's six
+    neighbours, one per axis, `BigBubble.cpp:1140-1147`; ArrowSwitchMulti's four targets, `ArrowSwitchMulti.cpp:72-77`,
+    `:137`; RingBeam's 32 points, `RingBeam.cpp:49-58`; SkeletalFishBossBattleDirector's four guard models, which play
+    the power-up demos' fixed two and four animations, `SkeletalFishBossBattleDirector.cpp:57-73`); the sound
+    driver's state as made 17 (5.H.5). Two that looked shared are not caps: GroupCheckManager's two groups are each a
+    `NameIndex`, which grows past the 32 and 8 it is made with (`GroupChecker.cpp:28-29`, `NameIndex.hpp:80-82`);
+    StarPieceDirector's two shooters are one per controller port (`StarPieceDirector.cpp:49-51`, `:332`). No table
+    grows that P-192 does not already list.
+  - Pools: actors taken from a group when dead (`git grep -n -E 'getDeadActor\(\)|getDeadMember|getDeadObj|findDeadActor|getDeadWeakestActor' 241395b49 -- native/petari/src`,
+    28 lines) and free slots found by a loop (`git grep -n -E 'isDead\(m[A-Za-z0-9_]+\[[a-z]+\]\)|isDead\([a-zA-Z_>.-]*m[A-Za-z0-9_]+\[[a-z]+\]\)' 241395b49 -- native/petari/src`,
+    40 lines), each read. Made again when empty: star pieces (`StarPieceDirector.cpp:257-263`), coins
+    (`CoinHolder.cpp:131-152`), air bubbles (`AirBubbleHolder.cpp:14-26`), big bubbles (`BigBubbleHolder.cpp:65-76`);
+    their making inside a step is P-247. Scene pools shared by every instance that answer none when full: Kabokuri
+    fires, Kameck beams, fire balls and turtles, TakoHei ink (16 each), clip-area drops (32), the four short talk
+    balloons, NoteFairy's and RockCreator's 1024: each grows, in P-192 already. The rest are one actor's own, and
+    stay: a boss's bombs, fires, rocks and rings (`BossStinkBug.cpp:408`, `DinoPackunBattleVs2Lv1.cpp:366`, `:390`,
+    `KoopaParts.cpp:59-116`, `PoltaFunction.cpp:150-220`, `Syati.cpp:606`, `:664`); a launcher's or group's members
+    sized by its placement (`BegomanLauncher.cpp:50`, `MeteorStrikeLauncher.cpp:58`, `PlantGroup.cpp:120`,
+    `StarPieceGroup.cpp:90-132`); fixed beams, bullets, ice and hills (`BallBeamer.cpp:53`, `RingBeamer.cpp:50`,
+    `WaterBazooka.cpp:913`, `IceMerameraKing.cpp:112`, `WormEatenPlanet.cpp:132`); a Kameck's eight summoned actors,
+    a rule it checks before it attacks (`ActiveActorList(8)`, `Kameck.cpp:51`, `:397`; `BossKameck.cpp:36`,
+    `BossKameckStateBattle.cpp:169`). The screens' slots are pages or content: eight Mii icons a page
+    (`MiiSelect.hpp:115`, `MiiSelect.cpp:499`, `mBaseIndex + i`), the file select's fellow models
+    (`FileSelectItem.cpp:98`, `:391`), the staff roll's lines (P-208).
 - Units of the console's picture (the 456-line canvas, the 608 and 832 widths, lines sized in 456-line units, the
   640 x 456 grid of effect targets): coordinates of the content, drawn at the real resolution by every renderer
   (section 2): no handling of the console's shape. Not items.
@@ -247,10 +405,11 @@ replay identical? Yes: an item. No: listed with the reason, a question for the o
   fold: kept, the owner's answer ("Sound stays as it was made"). The surround output: P-193.
 - Movies, the disc's frames: kept, the owner's answer ("Keep them"). No item.
 - The 60 Hz game step: the owner's decision (file 08 section 3).
-- New by this test: actors that draw for themselves (P-194), a class `FRAME-MODEL.md` does not name.
+- New by this test: actors that draw for themselves (P-194), a class `FRAME-MODEL.md` did not name. Read 11-19: each placed in E3 or E4, its console shape in a row already open (section 3's row).
 
-The whole read of the 921 actor files comes after the code items of D and E or after the weekly reset (file 08
-5.H.1); the pattern sweep closes no area.
+The 921 actor files were read whole by the readall harness (file 08 5.H.1; section 2, the actors' row), its
+findings checked line by line at 241395b49 and filed as P-243 to P-253 and P-264; the tables and pools above were
+classed by reading after it.
 
 What P-193 starts from (read at a1f423dd8 for 5.H.5; the law itself is written in this file when P-193 starts, before
 its code):
@@ -278,3 +437,64 @@ its code):
   speakers (`audio_device_wasapi.cpp:207-230`), its channels in the mask's order (`:135-155`); Android (SDL) always
   opens two channels (`audio_device_sdl.cpp:33`), so a phone or tablet with more speakers, or a receiver behind it,
   gets the two-channel matrix.
+- Read again at 697535a86 (11-19), two more faults of the speakers-of-their-own path:
+  - the panner's rear effect sends are matrixed into effect lines 2 and 3 with the cross term (`kUnit * left -
+    kMatrix * right`, `audio_mixer.cpp:806-816`) whatever the output, so with rear speakers the rear echo still
+    comes matrix-encoded through the front lines;
+  - power: on two channels a sound on one surround bus reaches the speakers at `kFold^2 (kUnit^2 + kMatrix^2)` =
+    0.8602 of its power (-0.654 dB, `:16-19`, `:262-264`); on its own speaker it is at 1, so the same sound is 0.65 dB
+    louder with rear speakers than on two channels.
+
+The law (written 11-19, before P-193's code; each line a property its test asserts):
+
+1. Two channels: today's matrix, bit for bit (the owner: as made). The game's mono mode (0) is the game's own and
+   stays; what it does in the mixer was not checked here.
+2. More speakers: the layout is the device's report, never assumed: Windows the mix format's channel mask; Android
+   the output's channel mask where the system reports one (else two channels); Linux and Mac what their device
+   reports. Speakers the game has no content for (low frequency, height, front wide) stay silent.
+3. A note in surround form, and every note when the output has rear speakers, is placed by its pan p and rear r
+   with the panner's constant-power law (front left `cos(pi p/2) cos(pi r/2)`, and so on); the six-bus note path
+   with its matrix curve (`SoundVoices.cpp:704-786`) and the inverted right are the two-channel encoding and are not
+   used. Which sounds and effect lines send to the inverted right or the surround buses is read first; an effect
+   line's return to them becomes a rear return of the same power.
+4. Rear gain: a sound's power on rear speakers equals its power on two channels: rear amounts are scaled by
+   `kFold sqrt(kUnit^2 + kMatrix^2)` = 0.92747; with sides and backs both present each gets 0.92747 / sqrt 2 =
+   0.65582 of it. Front and centre at 1; a centre with no speaker of its own to left and right at 1 / sqrt 2.
+5. No delay, no inversion and no matrix on a speaker of its own: the surround buses' 2.5 ms and the rear effect sends'
+   matrix belong to the two-channel encoding only; with rear speakers the rear effect sends feed rear echo lines
+   unmatrixed.
+6. Left and right mirror: swapping p for 1 - p swaps every left speaker's gain with its right twin's, at every r.
+7. No jump: every gain is continuous in p and r over [0, 1]; a change of p, r or layout ramps as volumes do (10 ms).
+8. Channel order: the device's (the mask's bit order on Windows, the reported order elsewhere), each channel named
+   from its bit, never by position.
+9. Tests: the properties over p and r on a 101 by 101 grid for each layout (2.0, 3.0, 4.0, 5.1 side, 5.1 back, 7.1,
+   7.1.4); a render of known sounds through the real mixer to a file for each layout, each channel's energy and
+   phase checked against 1 to 8. Windows and Android in the gate; Linux and Mac built with it. The owner's listening
+   comes later and is not a gate.
+
+What P-202 and P-187 start from (read at 697535a86, 11-19; the form written before their code, file 08 7.4):
+
+- The cooked message file (`NMSG`, `crates/nebula-import/src/cook/message.rs:1-15`, read by `MessageData`,
+  `MessageHolder.hpp:8-62`) keeps the disc's text as it was: UTF-16 units with the message editor's tags inside the
+  text (a 0x1A unit, then the tag's length in bytes and group, then its id and parameters in units).
+- Every reader finds the tags by scanning for 0x1A: `git grep -n -E "0x1A|0x001A" 697535a86 -- native/petari/src`
+  gives 26 hits, 17 of them message tags: `CustomTagProcessor.cpp:408`, `:429`; `MessageTagSkipTagProcessor.cpp:95`,
+  `:103`; `ReplaceTagProcessor.cpp:53`, `:87`, `:117`, `:158`, `:308`; `NebulaUi.cpp:131-134`;
+  `NebulaSettingsMenu.cpp:890`; `StaffRoll.cpp:647`; `TitleSequenceProduct.cpp:90`; `NebulaAchievementToast.cpp:54-64`
+  (writes them). The other 9 are other things (a sound id, effect floors, a timer, a colour, filter tables). The mod
+  surface writes the same records (`nebula_text_tags.h`, P-320), and the tag processors take one 16-bit code a
+  character (`TagProcessorBase.hpp:37-38`), so a character past U+FFFF cannot pass (P-187).
+- The form: the cook parses each message once into runs: text runs of code points (32-bit) and typed tag records
+  (kind, parameters, and a string of its own where the tag names one), with the message's run list and its plain text
+  apart. Readers walk runs; nothing scans for 0x1A or reads a length from inside the text (P-215 goes with it). The
+  tag processors take a code point; the cooked font maps code points by range (`NFNT` version 2, P-187). Mods and
+  Nebula's own text (`NebulaText.txt`) build runs through the same builder, decoded by the one UTF-8 decoder (P-209,
+  P-320).
+- Landings: (1) `NMSG` version 2 cooked beside version 1, the reader's run API, and a test that every message of
+  the three discs (RMGE01, RMGP01, RMGJ01) in every language gives the same characters and tags from both versions; (2) the
+  tag processors on runs; (3) `NebulaUi`, `NebulaSettingsMenu`, `NebulaAchievementToast`, `StaffRoll`,
+  `TitleSequenceProduct` and the mod surface on runs; (4) code points through the font (P-187); (5) version 1 and the
+  in-text format deleted, the search above then giving only the 9 other hits.
+- Proof: the text-layout test (every message's glyph sequence and pen positions, old path against new, every
+  language and region) identical through landings 1 to 4; the gate's pictures; a fuzz test of malformed tags against
+  the cook's parser; the search's count after landing 5.
