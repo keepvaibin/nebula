@@ -24,8 +24,13 @@ Table P, the PC's check is the pair against the kept base (package B13, part B; 
                                    without the check leaves it
   anchor_part                      --also speed/anchor: all three renderers against the anchor; worse fails; not runnable: owed, replaced after
                                    the move with the last ratios in anchor-history.tsv
-Where the checks sit:
-  pc_measure_runs_last             it starts after every lane ended (the slowest lane, the tablet's measure, the parts --also asked for)
+Where the checks sit (B14 part 3: the PC's last checks do not wait for the tablet):
+  pc_measure_starts_beside_the_tablets_lane   tour/tablet-pc, then the pair, one at a time, start when the PC's own lanes and the Android build
+                                   are over and the tablet's lane is not; never beside a build or a PC game check; the parts --also asked for keep
+                                   the pair last
+  the_screen_size                  the tablet's size is read at the start of its lane (wm size: landscape), tour/tablet-pc plays at it; the tablet's
+                                   tour reporting another size is kind tool with both sizes in one line, replays/tablet not compared; a size not
+                                   known at the start is played after the tablet's tour; a tablet that is away owes the PC's half
   pc_measure_skipped_on_a_failure  a check that failed before it: no row and no measure; the parts --also asked for are not run either
   tablet_measure_in_its_lane       it starts after build/android passed and ends before tablet/prepare starts; a plan without the tablet's
                                    part has it too; a failed build/android gives none
@@ -222,6 +227,9 @@ class Gates:
             def answers(self):
                 return rig.answers
 
+            def shell(self, command, timeout=600):
+                return 0, "Physical size: 1752x2800" + chr(10)
+
         gate.android_module = lambda: type("Module", (), {"Device": Device})
         original = gate.Gate.check
 
@@ -236,8 +244,14 @@ class Gates:
                 return name not in self.fail, "a fake: %s" % ("failed" if name in self.fail else "passed")
             return original(g, name, fake, needs)
 
-        def tablet_part(g, stops, device=None):
-            if g.android_built:
+        def tablet_part(g, stops, device=None, pc_tail=True):
+            # What the real part registers (its needs) and, with the tablet away, owes; the PC's half is the tail's (tour/tablet-pc).
+            for n in ("tour/tablet-pc", "replays/tablet"):
+                g.wanted(n, ("build/windows",))
+            if g.android_built and not rig.answers:
+                for n in ("tablet/prepare", "android/tablet", "tour/tablet", "tablet/remove", "tour/tablet-pc", "replays/tablet"):
+                    g.owe(n, "the tablet does not answer adb")
+            elif g.android_built:
                 for n in ("tablet/prepare", "android/tablet", "tour/tablet", "tablet/remove"):
                     g.check(n, None)
         gate.Gate.check, gate.tablet_part = check, tablet_part
@@ -638,6 +652,145 @@ class Pair(unittest.TestCase):
             self.assertFalse((w2.speed / speedbase.ANCHOR_LAST).exists())
 
 
+class Screen(unittest.TestCase):
+    """The tablet's screen size, and the lanes' order (B14 part 3)."""
+
+    def world(self, g, size="2800x1752"):
+        run = g.work / "runs-tour-tablet-vulkan" / "001" / "vulkan"
+        run.mkdir(parents=True)
+        if size:
+            (run / "run.log").write_text("[vulkan] swapchain %s transform=1 images=5\n" % size, encoding="utf-8")
+
+    def gate_of(self, w):
+        args = gate.parser().parse_args(w.argv())
+        args.mode = gate.LAND_LEVEL
+        g = gate.Gate(args)
+        g.selected = None
+        return g
+
+    def test_the_size_is_read_from_wm_size_and_is_landscape(self):
+        class Device:
+            def __init__(self, out, code=0):
+                self.out, self.code = out, code
+
+            def shell(self, command, timeout=600):
+                assert command == "wm size"
+                return self.code, self.out
+        self.assertEqual(gate.tablet_screen_of(Device("Physical size: 1752x2800\n")), (2800, 1752))
+        self.assertEqual(gate.tablet_screen_of(Device("Physical size: 2800x1752\n")), (2800, 1752))
+        self.assertEqual(gate.tablet_screen_of(Device("Physical size: 1752x2800\nOverride size: 1080x1728\n")), (1728, 1080), "an override is what the game sees")
+        self.assertIsNone(gate.tablet_screen_of(Device("error\n")))
+        self.assertIsNone(gate.tablet_screen_of(Device("Physical size: 1x2\n", code=1)))
+
+    def test_the_lane_reads_the_size_first_and_the_tour_plays_at_it(self):
+        with Gates(self) as w:
+            args = gate.parser().parse_args(w.argv())
+            g = gate.run_checks(args, {}, {}, gate.landing_selection(args, w.plan(*WITH_TABLET), [], {}, {}))
+            self.assertEqual(g.tablet_screen, (2800, 1752))
+            self.assertEqual(g.tablet_pc_screen, (2800, 1752), "tour/tablet-pc played at it")
+            tour = json.loads((g.work / "tour-tablet-pc" / "suite.json").read_text(encoding="utf-8"))
+            first = json.loads((g.work / "tour-tablet-pc" / tour["tests"][0] / "test.json").read_text(encoding="utf-8"))
+            self.assertEqual(first.get("window"), [2800, 1752])
+
+    def test_another_size_from_the_tablets_tour_is_kind_tool_with_both_sizes(self):
+        with Gates(self) as w:
+            g = self.gate_of(w)
+            self.world(g, "2560x1600")
+            g.tablet_pc_screen = (2800, 1752)
+            gate.tablet_after(g, ["BattleShipGalaxy 1"])
+            rows = {r["check"]: r for r in g.results}
+            self.assertEqual(rows["tablet/screen"]["state"], "tool")
+            self.assertEqual(rows["tablet/screen"]["detail"],
+                             "the tablet's tour reports a screen of 2560x1600 and the PC's run of its stops used 2800x1752")
+            self.assertEqual(rows["replays/tablet"]["state"], "tool")
+            self.assertIn("not compared: the tablet's tour reports a screen of 2560x1600", rows["replays/tablet"]["detail"])
+            self.assertNotIn("differ", rows["tablet/screen"]["detail"] + rows["replays/tablet"]["detail"], "never a difference of hashes")
+
+    def test_the_same_size_is_compared(self):
+        with Gates(self) as w:
+            g = self.gate_of(w)
+            self.world(g, "2800x1752")
+            g.tablet_pc_screen = (2800, 1752)
+            gate.tablet_after(g, ["BattleShipGalaxy 1"])
+            self.assertEqual([r["check"] for r in g.results], ["replays/tablet"])
+            self.assertEqual(g.results[0]["state"], "pass")
+
+    def test_a_size_not_known_at_the_start_is_played_after_the_tablets_tour(self):
+        with Gates(self) as w:
+            g = self.gate_of(w)
+            self.world(g, "2800x1752")
+            gate.tablet_after(g, ["BattleShipGalaxy 1"])
+            self.assertEqual([r["check"] for r in g.results], ["tour/tablet-pc", "replays/tablet"])
+            self.assertEqual(g.tablet_pc_screen, (2800, 1752))
+            # no size in the tablet's runs at all: both are said as not run, as before
+            g2 = self.gate_of(w)
+            shutil.rmtree(g.work / "runs-tour-tablet-vulkan")
+            self.world(g, "")
+            gate.tablet_after(g2, ["BattleShipGalaxy 1"])
+            self.assertEqual([(r["check"], r["state"]) for r in g2.results], [("tour/tablet-pc", "fail"), ("replays/tablet", "fail")])
+
+    def test_lanes_with_a_tail(self):
+        with Gates(self) as w:
+            g = self.gate_of(w)
+            g.args.serial = False
+            seen = []
+
+            def lane(name, seconds, copies=1, tablet=False, part=""):
+                def run():
+                    seen.append(("start", name, time.time()))
+                    if name == "tablet":
+                        time.sleep(0.1)
+                        g.android_over.set()      # its build is over
+                    time.sleep(seconds)
+                    g.rows().append({"check": name, "state": "pass", "passed": True})
+                    seen.append(("end", name, time.time()))
+                run.__name__, run.copies, run.part = name, copies, part
+                return run
+            tablet = lane("tablet", 1.2)
+            tablet.part = "tablet"
+
+            def tail():
+                seen.append(("start", "tail", time.time()))
+                g.rows().append({"check": "tail", "state": "pass", "passed": True})
+                seen.append(("end", "tail", time.time()))
+            g.lanes_with_tail([lane("a", 0.3), lane("b", 0.6), lane("self", 1.0, copies=0, part="self")], [tablet], tail, wait_for_cpu_lane=False)
+            at = {(k, n): t for k, n, t in seen}
+            self.assertGreaterEqual(at[("start", "tail")], at[("end", "b")], "after the PC's lanes")
+            self.assertLess(at[("start", "tail")], at[("end", "self")], "not waiting for the lane that starts no game")
+            self.assertLess(at[("start", "tail")], at[("end", "tablet")], "beside the tablet's lane")
+            self.assertEqual([r["check"] for r in g.results], ["a", "b", "tail", "self", "tablet"], "the PC's first, the tail, then the others")
+            # waiting for every lane
+            seen.clear()
+            g.results.clear()
+            g.android_over.clear()
+            g.lanes_with_tail([lane("a", 0.3), lane("self", 1.0, copies=0, part="self")], [lane("tablet", 0.2)], tail, wait_for_cpu_lane=True)
+            at = {(k, n): t for k, n, t in seen}
+            self.assertGreaterEqual(at[("start", "tail")], at[("end", "self")])
+
+
+    def test_a_tail_that_breaks_is_a_tool_row_and_the_tablets_lane_is_still_joined(self):
+        with Gates(self) as w:
+            g = self.gate_of(w)
+            g.args.serial = False
+            done = []
+
+            def tablet():
+                g.android_over.set()
+                time.sleep(0.4)
+                done.append("tablet")
+            tablet.part = "tablet"
+
+            def other():
+                done.append("pc")
+
+            def tail():
+                raise RuntimeError("the pair broke")
+            g.lanes_with_tail([other], [tablet], tail)
+            self.assertEqual(sorted(done), ["pc", "tablet"], "the tablet's lane ended before the call did")
+            self.assertEqual([(r["check"], r["state"]) for r in g.results], [("lane/tail", "tool")])
+            self.assertIn("RuntimeError: the pair broke", g.results[0]["detail"])
+
+
 class Where(unittest.TestCase):
     """Where the two checks sit."""
 
@@ -651,17 +804,76 @@ class Where(unittest.TestCase):
             g, args = w.land(w.plan(*paths), also, tablet)
             return g, w, args
 
-    def test_pc_measure_runs_last(self):
-        slow = {"tour/d3d12": 1.0, "build/android": 0.3, "tablet/prepare": 0.5, "replays/d3d12": 0.2}
+    TABLETS = ("build/android", "android/tablet", "tour/tablet", "tablet/prepare", "tablet/remove")
+
+    def test_pc_measure_starts_beside_the_tablets_lane(self):
+        slow = {"tour/d3d12": 0.8, "build/android": 0.2, "tablet/prepare": 2.5, "replays/d3d12": 0.2}
         g, w, _ = self.run_plan(WITH_TABLET, slow=slow)
         pc = [c for c in w.runs() if c["run"] == "pair"]
         self.assertEqual(len(pc), 1, w.runs())
-        others = [e for n, b, e in w.times]
-        self.assertGreaterEqual(pc[0]["start"], max(others), "after every other check ended")
-        tablet = [c for c in w.runs() if c["run"] == "tablet"][0]
-        self.assertGreaterEqual(pc[0]["start"], tablet["end"], "after the tablet's measure too")
+        start = pc[0]["start"]
+        pcs = [(n, b, e) for n, b, e in w.times
+               if n not in self.TABLETS and n != "tour/tablet-pc" and not n.startswith(("replays/", "pictures/"))]
+        self.assertGreaterEqual(start, max(e for n, b, e in pcs), "after every check of the PC's own lanes: %s" % pcs)
+        self.assertGreaterEqual(start, w.span("build/android")[1], "never beside a build")
+        self.assertLess(start, w.span("tablet/prepare")[1], "while the tablet's lane is still going")
+        pc_tour = w.span("tour/tablet-pc")
+        self.assertIsNotNone(pc_tour, [n for n, b, e in w.times])
+        self.assertGreaterEqual(pc_tour[0], max(e for n, b, e in pcs), "tour/tablet-pc after the PC's lanes too")
+        self.assertLessEqual(pc_tour[1], start, "one at a time: tour/tablet-pc, then the pair")
         self.assertEqual(w.row(g, PC)["state"], "pass")
-        self.assertEqual(g.results[-1]["check"], PC, "its row is the last: %s" % [r["check"] for r in g.results])
+        order = [r["check"] for r in g.results]
+        self.assertLess(order.index("tour/tablet-pc"), order.index(PC))
+        self.assertLess(order.index(PC), order.index("tablet/prepare"), "the rows: the PC's, its tail, the tablet's")
+
+    def test_the_pair_does_not_wait_for_the_self_tests(self):
+        # B14 part 3's proof: the pair beside the tools' self-tests stays inside its bands, so it does not wait for them.
+        slow = {"harness/self": 2.5, "description/self": 0.1, "tour/d3d12": 0.2, "tablet/prepare": 3.0}
+        g, w, _ = self.run_plan(WITH_TABLET + ("tools/gate/x.py",), slow=slow)
+        pc = [c for c in w.runs() if c["run"] == "pair"][0]
+        self.assertLess(pc["start"], w.span("harness/self")[1], "the self-tests go on beside the pair")
+        order = [r["check"] for r in g.results]
+        self.assertLess(order.index(PC), order.index("harness/self"), "the self-tests' rows come after the PC's lanes and the tail")
+        self.assertEqual(w.row(g, "harness/self")["state"], "pass")
+        self.assertEqual(w.row(g, "description/self")["state"], "pass")
+
+    def test_the_self_tests_are_a_lane_of_their_own_and_rust_stays_in_the_cpu_lane(self):
+        with Gates(self) as w:
+            args = gate.parser().parse_args(w.argv())
+            args.mode = gate.LAND_LEVEL
+            g = gate.Gate(args)
+            seen = []
+            g.check = lambda name, fn, needs=(): seen.append(name)
+            gate.cpu_lane(g, ("RMGE01",), with_self=False)()
+            self.assertEqual([n for n in seen if n in ("rust", "harness/self", "description/self")], ["rust"], seen)
+            seen.clear()
+            gate.cpu_lane(g, ("RMGE01",))()
+            self.assertEqual([n for n in seen if n in ("rust", "harness/self", "description/self")], ["rust", "harness/self", "description/self"])
+            seen.clear()
+            lane = gate.self_lane(g)
+            lane()
+            self.assertEqual((seen, lane.part, lane.copies), (["harness/self", "description/self"], "self", 0))
+            self.assertTrue(gate.PAIR_WAITS_FOR_SELF is False)
+
+    def test_the_pair_waits_for_the_android_build(self):
+        slow = {"tour/d3d12": 0.1, "build/android": 1.5, "tablet/prepare": 0.2}
+        g, w, _ = self.run_plan(WITH_TABLET, slow=slow)
+        pc = [c for c in w.runs() if c["run"] == "pair"][0]
+        self.assertGreaterEqual(pc["start"], w.span("build/android")[1], "the build is a build: the pair never runs beside it")
+        self.assertGreaterEqual(w.span("tour/tablet-pc")[0], w.span("build/android")[1])
+
+    def test_the_parts_asked_for_by_name_keep_the_pair_last(self):
+        g, w, _ = self.run_plan(WITH_TABLET, also=("soak",), slow={"tablet/prepare": 0.3})
+        pc = [c for c in w.runs() if c["run"] == "pair"][0]
+        self.assertGreaterEqual(pc["start"], w.span("soak-process")[1], "after the soak asked for")
+        self.assertGreaterEqual(pc["start"], max(e for n, b, e in w.times if n != "soak-process" and not n.startswith("tour/tablet-pc")), "last")
+        self.assertIsNotNone(w.span("tour/tablet-pc"), "tour/tablet-pc moves all the same")
+
+    def test_a_tablet_that_is_away_owes_the_pcs_half_and_the_pair_still_runs(self):
+        g, w, _ = self.run_plan(WITH_TABLET, setup=lambda w: setattr(w, "answers", False))
+        self.assertIsNone(w.span("tour/tablet-pc"), "no size: the PC's half is not played")
+        self.assertEqual(w.row(g, "tour/tablet-pc")["state"], "owed")
+        self.assertEqual(w.row(g, PC)["state"], "pass")
 
     def test_pc_measure_is_skipped_when_a_check_failed(self):
         g, w, _ = self.run_plan(NATIVE, setup=lambda w: w.fail.add("tour/d3d12"))
@@ -672,7 +884,7 @@ class Where(unittest.TestCase):
     def test_pc_measure_is_skipped_after_a_failed_android_build_and_so_is_the_tablet(self):
         g, w, _ = self.run_plan(WITH_TABLET, setup=lambda w: w.fail.add("build/android"))
         self.assertIsNone(w.row(g, TABLET), "no tablet measure when build/android failed")
-        self.assertIsNone(w.row(g, PC))
+        self.assertIsNone(w.row(g, PC), "the pair is not started before the Android build is known to have passed")
         self.assertEqual(w.runs(), [])
 
     def test_tablet_measure_is_between_the_build_and_the_tablets_part(self):

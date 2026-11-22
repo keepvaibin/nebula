@@ -383,6 +383,11 @@ class Gate:
         self.measure_pending = []     # the landing's measures' pending files (measure.py --pending): kept when main moves
         self.measure_faulted = set()  # the checks that already left a line in tool-faults.tsv in this run
         self.speed = {}               # the speed checks' outcome for the move (judged, owed, rebase), by check name
+        self.tablet_screen = None     # the tablet's screen size (width, height) as the tablet's lane read it at its start, or None
+        self.tablet_screen_read = threading.Event()   # set once the tablet's lane has read (or failed to read) it
+        self.android_over = threading.Event()         # set when the Android build is over (or will never run): the PC may start its last checks
+        self.tablet_pc_screen = None  # the size tour/tablet-pc played at
+        self.tablet_tail_ok = False   # the tablet's part reached its end (its PC half is to be played or compared)
         self.speed_ratios = {}        # speed/anchor's judged ratios {renderer: {figure: ratio}}, kept with the move
         self.card_shared = False
         self.slots = None
@@ -438,6 +443,55 @@ class Gate:
         for thread in threads:
             thread.join()
         self.results.extend(row for sink in sinks for row in sink)
+
+    def lanes_with_tail(self, lanes, tablet_lanes, tail, wait_for_cpu_lane=True):
+        """B14 part 3: `lanes` (the PC's) and `tablet_lanes` run side by side as in lanes(); when the PC's lanes have ended and the Android
+        build is over, `tail()` runs in this thread (the PC's last checks, one at a time, with no other game copy of the gate on the PC) while the
+        tablet's lane goes on; the call ends when everything has. Rows: the PC's lanes' first, then the tail's, then the tablet lanes'.
+        `wait_for_cpu_lane` False: the lane of the tools' self-tests (part "self") is not waited for."""
+        every = list(lanes) + list(tablet_lanes)
+        self.lanes_seen = max(self.lanes_seen, sum(getattr(lane, "copies", 1) for lane in every))
+        if self.dry or self.args.serial or len(every) < 2:
+            for lane in every:
+                lane()
+            self.android_over.set()
+            tail()
+            return
+        sinks = {id(l): [] for l in every}
+        tail_sink = []
+
+        def go(lane):
+            self.local.sink = sinks[id(lane)]
+            try:
+                lane()
+            except Exception as e:  # noqa: BLE001 - a lane that breaks is the gate's own fault: tool, said plainly
+                self.record("lane/%s" % getattr(lane, "__name__", "?"), "tool", 0.0, "%s: %s" % (type(e).__name__, e))
+            finally:
+                if lane in tablet_lanes:
+                    self.android_over.set()
+        threads = {id(l): threading.Thread(target=go, args=(l,), name="lane-%d" % i) for i, l in enumerate(every)}
+        for thread in threads.values():
+            thread.start()
+        waited = [l for l in lanes if wait_for_cpu_lane or getattr(l, "part", "") != "self"]
+        for lane in waited:
+            threads[id(lane)].join()
+        self.results.extend(row for l in lanes if l in waited for row in sinks[id(l)])
+        self.android_over.wait()
+        self.local.sink = tail_sink
+        try:
+            tail()
+        except Exception as e:  # noqa: BLE001 - the tail breaking is the gate's own fault: tool, said plainly (the tablet's lane is still joined)
+            self.record("lane/tail", "tool", 0.0, "%s: %s" % (type(e).__name__, e))
+        finally:
+            self.local.sink = None
+        for lane in lanes:
+            if lane not in waited:
+                threads[id(lane)].join()
+        for lane in tablet_lanes:
+            threads[id(lane)].join()
+        self.results.extend(tail_sink)
+        self.results.extend(row for l in lanes if l not in waited for row in sinks[id(l)])
+        self.results.extend(row for l in tablet_lanes for row in sinks[id(l)])
 
     def wanted(self, name, needs=()):
         if self.dry:
@@ -1546,7 +1600,7 @@ def measure_step(g):
 
 def landing_failed(g):
     """Whether a check of the run did not pass: the landing has failed already, and what follows it only costs time."""
-    return any(not r["passed"] for r in g.results)
+    return any(not r["passed"] for r in list(g.results) + list(getattr(g.local, "sink", None) or []))
 
 
 def measure_tablet(g, device=None):
@@ -1703,12 +1757,36 @@ def keep_speed(g, landed, args):
         measure_fault(g, "speed/keep", "TOOL", reason)
 
 
+# B14 part 3: the PC's last checks (tour/tablet-pc, then the speed pair, one at a time) start when the PC's own lanes are done and the Android
+# build is over, while the tablet's lane goes on. PAIR_WAITS_FOR_SELF: whether the lane of the tools' self-tests (it starts no game) is among
+# the lanes waited for. Decided by the proof of B14 part 3 (2026-11-22: five pairs main against main beside the self-tests, 8 at a time, every
+# figure of every pair inside its band, one round each): False. Rust's tests (a build) stay in the lane that is waited for.
+PAIR_WAITS_FOR_SELF = False
+
+
+def lanes_without(lanes, taken):
+    return [l for l in lanes if l not in taken]
+
+
+def pc_tail(g, stops):
+    """The PC's last checks, in this order and one at a time: tour/tablet-pc (when the tablet's screen size is known: else tablet_after plays it
+    once the tablet's tour has reported it), then measure/step/pc, unless a check of the PC's lanes has not passed or a part was asked for by name
+    (`--also`: the pair then stays last, as it always was)."""
+    def tail():
+        g.tablet_screen_read.wait()
+        if g.tablet_screen is not None and not g.dry:
+            tablet_pc_tour(g, stops, g.tablet_screen)
+        if not getattr(g.args, "also", "") and getattr(g, "android_built", True) and not any(r.get("pending") for r in g.results):
+            measure_pc(g)
+    return tail
+
+
 def measure_pc(g):
     """measure/step/pc, last, where the long level has measure/route: every lane has ended, the tests that failed ran again alone,
     the pictures and replays are checked, and nothing else of the landing runs. A landing that has failed already does not run it."""
     if g.level not in MEASURE_LEVELS or not g.wanted(MEASURE_PC_CHECK, DATA):
         return
-    if g.dry or landing_failed(g):
+    if g.dry or landing_failed(g) or any(r["check"] == MEASURE_PC_CHECK for r in g.results):
         return
     g.check(MEASURE_PC_CHECK, pair_step(g, MEASURE_PC_CHECK, speedbase.BASE, "measure-pc", pair_renderers(g)), DATA)
 
@@ -2690,11 +2768,12 @@ def tablet_needs():
             "replays/tablet": ("tour/tablet", "tour/tablet-pc"), "pictures/tablet": ("tour/tablet",)}
 
 
-def tablet_part(g, stops, device=None):
+def tablet_part(g, stops, device=None, pc_tail=True):
     """The tablet's part: the test app installed with the pak, tests/android, a tour of `stops` (None: all), the
     test app removed; then the PC plays the same stops at the tablet's screen size and both must take the same game
     steps at every step (the game runs the actors its picture shows: its clipping follows the picture's shape). When
-    the tablet does not answer, its lock stays held, or it leaves during the run, the part is owed (section 4.3)."""
+    the tablet does not answer, its lock stays held, or it leaves during the run, the part is owed (section 4.3). `pc_tail` False
+    (a landing, B14 part 3): the PC's half (tablet_after) is left to the caller, which plays it beside the tablet's lane."""
     needs = tablet_needs()
     # The tablet's pictures have rows of their own (place tablet, N-1040) for the main level's twelve stops; the long run's tour
     # takes more.
@@ -2753,14 +2832,56 @@ def tablet_part(g, stops, device=None):
     if gone is not None:
         owe_rest(gone + " during its part")
         return
-    screen = device_screen(g.work / "runs-tour-tablet-vulkan")
-    if screen is None:
-        g.missing("tour/tablet-pc", "the tablet's runs name no screen size")
-        g.missing("replays/tablet", "the tablet's runs name no screen size")
-        return
+    g.tablet_tail_ok = True
+    if pc_tail:
+        tablet_after(g, stops)
+
+
+def tablet_screen_of(device):
+    """The tablet's screen size as the game plays it, landscape: (the longer side, the shorter), from `wm size` (its Override size where it
+    has one, else its Physical size, which is the natural, portrait one: 1752x2800 for the 2800x1752 the Vulkan swap chain reports), or None."""
+    code, out = device.shell("wm size")
+    sizes = re.findall(r"(Override|Physical) size: (\d+)x(\d+)", out) if code == 0 else []
+    if not sizes:
+        return None
+    chosen = next((x for x in sizes if x[0] == "Override"), sizes[0])
+    a, b = int(chosen[1]), int(chosen[2])
+    return max(a, b), min(a, b)
+
+
+def tablet_pc_tour(g, stops, screen):
+    """tour/tablet-pc: the PC plays the tablet's stops at the tablet's screen size (the game runs the actors its picture shows)."""
     pc_tour = gate_tour.write(g.work / "tour-tablet-pc", stops, window=screen)
     step_hash.with_hash(pc_tour.parent)
+    g.tablet_pc_screen = screen
     g.check("tour/tablet-pc", harness(g, pc_tour, "d3d12", "tour-tablet-pc"))
+
+
+def screen_difference(asked, got):
+    """The one plain line of two screen sizes that are not equal (kind tool: never a difference of hashes)."""
+    return ("the tablet's tour reports a screen of %dx%d and the PC's run of its stops used %dx%d" % (got[0], got[1], asked[0], asked[1]))
+
+
+def tablet_after(g, stops):
+    """The checks that need both sides of the tablet's tour, once the tablet's lane has ended: the PC's tour at the tablet's size where it was
+    not played already (the tablet's size was not known at the lane's start), the size the tablet's tour reports against the one the PC's
+    run used (unequal: kind tool, and replays/tablet is not compared), and replays/tablet. The tablet away: its rows were owed by the lane."""
+    if g.dry:
+        return
+    screen = device_screen(g.work / "runs-tour-tablet-vulkan")
+    played = g.tablet_pc_screen is not None or any(r["check"] == "tour/tablet-pc" for r in g.results)
+    if screen is None:
+        if not played:
+            g.missing("tour/tablet-pc", "the tablet's runs name no screen size")
+        g.missing("replays/tablet", "the tablet's runs name no screen size")
+        return
+    if not played:
+        tablet_pc_tour(g, stops, screen)
+    elif g.tablet_pc_screen is not None and g.tablet_pc_screen != screen:
+        why = screen_difference(g.tablet_pc_screen, screen)
+        g.record("tablet/screen", "tool", 0.0, why)
+        g.record("replays/tablet", "tool", 0.0, "not compared: " + why)
+        return
     g.check("replays/tablet", replays(g, "tour-tablet", "vulkan", ("tour-tablet-pc", "d3d12")))
 
 
@@ -3046,10 +3167,11 @@ def unit_part(g):
         g.check("start/%s" % r, start_check(g, r), ("build/windows",))
 
 
-def cpu_lane(g, discs_proved):
+def cpu_lane(g, discs_proved, with_self=True):
     """The checks that start no game (Rust, LumaLink, the collision proof, the harness's and the descriptions' own
     tests): a lane beside the game lanes at below-normal priority (N-1070). One after another they held the quick gate
-    for 500 s before any game ran."""
+    for 500 s before any game ran. `with_self` False: the tools' self-tests are left to self_lane (a landing, B14 part 3: the
+    speed pair may run beside them but not beside Rust's build)."""
     def lane():
         LANE.below_normal = True
         try:
@@ -3063,13 +3185,31 @@ def cpu_lane(g, discs_proved):
                     g.check("import/collision/%s" % disc, collision_proof(g, discs[disc]), ("build/windows",))
                 else:
                     g.missing("import/collision/%s" % disc, "no %s image in %s (--discs)" % (disc, g.args.discs))
-            g.check("harness/self", scripts(g, HARNESS_SELF, ("--work", "{out}")))
-            commands = pathlib.Path(g.args.build_root) / "game" / "compile_commands.json"
-            g.check("description/self", scripts(g, DESCRIPTION_SELF, ("--commands", str(commands), "--out", "{out}")),
-                    ("build/windows",))
+            if with_self:
+                self_checks(g)
         finally:
             LANE.below_normal = False
     lane.copies = 0      # it starts no game
+    return lane
+
+
+def self_checks(g):
+    g.check("harness/self", scripts(g, HARNESS_SELF, ("--work", "{out}")))
+    commands = pathlib.Path(g.args.build_root) / "game" / "compile_commands.json"
+    g.check("description/self", scripts(g, DESCRIPTION_SELF, ("--commands", str(commands), "--out", "{out}")),
+            ("build/windows",))
+
+
+def self_lane(g):
+    """The tools' and the descriptions' own tests as a lane of their own at below-normal priority (it starts no game; no build runs in it)."""
+    def lane():
+        LANE.below_normal = True
+        try:
+            self_checks(g)
+        finally:
+            LANE.below_normal = False
+    lane.copies = 0
+    lane.part = "self"
     return lane
 
 
@@ -3265,12 +3405,35 @@ def replay_part(g, renderers):
                 ("tour/%s" % r,) + (() if r == "d3d12" else ("tour/d3d12",)))
 
 
-def android_lane(g, stops):
-    """The Android build, then the tablet's part (its stops: the twelve quick ones at the main level, all after)."""
+def read_tablet_screen(g):
+    """The tablet's screen size, asked of the tablet at the start of its lane (B14 part 3), so that the PC can play its half of the stops
+    while the tablet plays its own. None when no tablet is named, it does not answer, or it names no size."""
+    try:
+        if g.dry or not g.args.tablet:
+            return None
+        machine.ensure_adb_server(android_module().Device("").adb_path)
+        device = android_module().Device(g.args.tablet)
+        return tablet_screen_of(device) if device.answers() else None
+    except Exception as error:  # noqa: BLE001 - an unread size only means the PC's half waits for the tablet's tour
+        print("gate.py: the tablet's screen size was not read: %s: %s" % (type(error).__name__, error), flush=True)
+        return None
+
+
+def android_lane(g, stops, pc_tail=True):
+    """The Android build, then the tablet's part (its stops: the twelve quick ones at the main level, all after). `pc_tail` False: the PC's half
+    of the part is played by the caller beside the lane; the lane reads the tablet's screen size first and says when its build is over."""
     def lane():
-        g.android_built = g.args.no_build or g.check("build/android", build_android(g)) is not False
-        measure_tablet(g)
-        tablet_part(g, stops)
+        try:
+            if not pc_tail:
+                g.tablet_screen = read_tablet_screen(g)
+                g.tablet_screen_read.set()
+            g.android_built = g.args.no_build or g.check("build/android", build_android(g)) is not False
+            if not pc_tail:
+                g.android_over.set()
+            measure_tablet(g)
+            tablet_part(g, stops, pc_tail=pc_tail)
+        finally:
+            g.tablet_screen_read.set()
     lane.part = "tablet"
     return lane
 
@@ -3915,8 +4078,11 @@ def run_checks(args, known=None, planned=None, selected=None, dry=False):
         # below-normal priority, is the only work that runs beside another gate.
         long_run(g, tours)
     else:
-        # The CPU-only checks first in the list, so their rows read where they always did.
-        lanes = [cpu_lane(g, ("RMGE01",) if short else ("RMGE01",) + REGION_DISCS)]
+        # The CPU-only checks first in the list, so their rows read where they always did. In a landing the tools' self-tests are a lane of their
+        # own: the speed pair does not wait for them (the proof of B14 part 3).
+        discs_proved = ("RMGE01",) if short else ("RMGE01",) + REGION_DISCS
+        split_self = level in MEASURE_LEVELS and not PAIR_WAITS_FOR_SELF
+        lanes = [cpu_lane(g, discs_proved, with_self=not split_self)] + ([self_lane(g)] if split_self else [])
         for r in renderers:
             def renderer_lane(r=r):
                 engine_lane(g, r)()
@@ -3929,16 +4095,25 @@ def run_checks(args, known=None, planned=None, selected=None, dry=False):
             lanes.append(region_lane)
         if mods_on(g):
             lanes += [mods_lane(g, r) for r in renderers]
+        tablet_stops = None
         if not quick:
-            # The main level's tablet part is the twelve quick stops; the long run's (and the final check's) all of them.
-            lanes.append(android_lane(g, QUICK_STOPS if level in ("main", LAND_LEVEL) else None))
+            # The main level's tablet part is the twelve quick stops; the long run's (and the final check's) all of them. In a landing the PC's
+            # half of the part (tour/tablet-pc) and the speed pair are played by the PC beside the tablet's lane (B14 part 3).
+            tablet_stops = QUICK_STOPS if level in ("main", LAND_LEVEL) else None
+            lanes.append(android_lane(g, tablet_stops, pc_tail=level not in MEASURE_LEVELS))
         if level in ("long", "final"):
             lanes += [sanitizer_lane(g), coverage_lane(g)]
         if level != "quick":
             # The debug layers' messages (T12): one lane for each renderer, beside the others in a landing, a part of its own in the long run.
             vtour = validate_tour(g, tours)
             lanes += [validate_lane(g, r, vtour) for r in RENDERERS]
-        g.lanes(lanes)
+        if level in MEASURE_LEVELS and any(getattr(l, "part", "") == "tablet" for l in lanes):
+            tablet_lanes = [l for l in lanes if getattr(l, "part", "") == "tablet"]
+            g.lanes_with_tail(lanes_without(lanes, tablet_lanes), tablet_lanes, pc_tail(g, tablet_stops), wait_for_cpu_lane=PAIR_WAITS_FOR_SELF)
+            if g.tablet_tail_ok:
+                tablet_after(g, tablet_stops)
+        else:
+            g.lanes(lanes)
         if level == "final":
             stress_part(g)       # the final check is the main and long levels on one commit: the stress lane follows the others
     if level == "long" and not g.dry and g.layer_seen:
