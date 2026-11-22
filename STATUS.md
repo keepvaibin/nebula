@@ -1,13 +1,12 @@
 # Nebula native plan: status
 
-Written 2026-11-22 14:33.
+Written 2026-11-22 14:34.
 
 Steps landed: 2 of 138 (1%).
 
 Now: S0.1.3 since 14:26; ahead: nothing
 
-In work now:
-- S0.1.3 Render data path step 1: `f4/e3-1a`, `f4/e3-1b`, `f4/e3-1c` (agent 1)
+In work now: Nothing started.
 
 ## Packages
 
@@ -55,7 +54,7 @@ No repair recorded.
 
 ## Blocked
 
-Nothing is blocked.
+- S0.1.3 Render data path step 1: `f4/e3-1a`, `f4/e3-1b`, `f4/e3-1c`: The card's section names GXMT, GXTG, GXTM, GXWP (from 68a5ce1aa..d32c2c573) are refused at main's move by tools/verify/console_census.py, closed group fifo (31 hits in native/include/nebula_model.h, runtime/src/render/core/model_sections_tests.cpp, crates/nebula-import/src/cook/model_write.rs); renaming them changes the card's format and the store-39/40 data, so nothing was renamed. Build, model_sections test and doc refs passed; no run folder (refused before the runs).
 
 ## Tool faults
 
