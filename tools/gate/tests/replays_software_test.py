@@ -217,7 +217,7 @@ class Args:
             setattr(self, k, v)
 
 
-def whole_run(check, label, probes, wrong=(), crash=(), crash_once=(), hang_once=(), **kw):
+def whole_run(check, label, probes, wrong=(), crash=(), crash_once=(), hang_once=(), logs=None, **kw):
     """run_all with fakes for the game: `probes` {renderer: (state, layer)}; `wrong` the (renderer, test index) whose hash differs at step 3."""
     with tempfile.TemporaryDirectory() as tmp:
         t = pathlib.Path(tmp)
@@ -251,7 +251,7 @@ def whole_run(check, label, probes, wrong=(), crash=(), crash_once=(), hang_once
                 log = "[ 69.031] exception: thrown: C++ exception std::runtime_error: device lost: a GPU fence never completed\n[ 69.038] crash: unhandled exception 0x0000087D\n"
                 plant_run(work, test, renderer, hashes[:3], verdict="crashed", kind="fail", reason="dump x; last lines: crash: minidump failed", log=log)
             else:
-                plant_run(work, test, renderer, hashes)
+                plant_run(work, test, renderer, hashes, log=(logs or {}).get((renderer, names.index(test))))
             return 0, 1.0
 
         real = (rs.start_probe, rs.play_one, step_hash.RECORDINGS)
@@ -346,6 +346,46 @@ def the_play_again(check):
           "the others are left as they were")
 
 
+def the_removal(check):
+    """A play whose log says the graphics device was removed is a fail that names the step, though it ends and its hashes are the recorded ones."""
+    quiet = "[ 1.0] host: frame 40, file reads 1\n[ 2.0] host: frame 80, file reads 1\n"
+    check(rs.removal_note(quiet) == "", "a log with no removal: nothing said")
+    log = ("[ 13.0] host: frame 510, file reads 1\n[ 14.0] host: frame 548, file reads 1\n[Renderer] DEVICE REMOVED reason=0x887a0005\n"
+           "[ 22.4] extension: harness: frame 0 is game frame 994\n")
+    note = rs.removal_note(log)
+    check("removed after game frame 548, before the play's step 0 (game frame 994)" in note and "DEVICE REMOVED reason=0x887a0005" in note, "before the first step: said so: %s" % note)
+    later = log.replace("frame 548", "frame 1100").replace("frame 510", "frame 1000")
+    check("after game frame 1100, at step 106 of the play" in rs.removal_note(later), "after the first step: the step is named: %s" % rs.removal_note(later))
+    check("graphics device was removed" in rs.removal_note("[render] the graphics card was reset: device removed while polling a GPU fence\n"), "the game's own reset line counts too")
+    results = {("d3d12", "a"): ("pass", "", 5.0, log), ("d3d12", "b"): ("pass", "", 5.0, quiet), ("d3d12", "c"): ("fail", "crashed: x", 5.0, log)}
+    out, removed = rs.judge_removals(results, say=lambda text: None)
+    check(removed == 2, "two plays lost the device: %s" % removed)
+    check(out[("d3d12", "a")][0] == "fail" and "the graphics device was removed after game frame 548" in out[("d3d12", "a")][1], "a pass with a removed device is a fail that names the step: %s" % (out[("d3d12", "a")],))
+    check(out[("d3d12", "b")] == results[("d3d12", "b")] and out[("d3d12", "c")] == results[("d3d12", "c")], "a play with no removal, and one that failed, are left as they were")
+    on = {"d3d12": ("ok", True), "d3d11": ("ok", True), "vulkan": ("none", None)}
+    code, said, _, _, verdict, _ = whole_run(check, "removed", on, logs={("d3d12", 1): log})
+    kinds_lines = [l for l in said if l.startswith("KIND ")]
+    check(code == 1 and said[-1] == "VERDICT fail" and len(kinds_lines) == 1 and kinds_lines[0].startswith("KIND fail replays/software/d3d12 ")
+          and "the graphics device was removed after game frame 548" in kinds_lines[0], "a play that passed with a removed device is a fail, its KIND line names the step: %s" % kinds_lines)
+    check(any("the graphics device was removed in 1 play" in l for l in said), "the count is said")
+    code, said, _, _, _, _ = whole_run(check, "not removed", on, logs={("d3d12", 1): quiet})
+    check(code == 0 and said[-1] == "VERDICT pass", "the same play without the removal passes")
+
+
+def the_history_after_a_remake(check):
+    """The three renderers that make an upload ring again at a frame boundary (Direct3D 12, Vulkan, Metal) leave the vertex and matrix rings' segment
+    counter and segment fences as they are (P-339): a ring that was not made again keeps the segments the frames in flight use. There is no
+    device-free test of the counter itself (it is renderer state in begin_frame); this reads the sources."""
+    for path, what in (("runtime/src/render/renderer_d3d12.cpp", "Direct3D 12"), ("runtime/src/render/vk/renderer_vk.cpp", "Vulkan"),
+                       ("runtime/src/render/mtl/renderer_mtl.mm", "Metal")):
+        text = source(path)
+        a = text.index("if (remake_upload_rings(")
+        block = text[a:text.index("}", text.index("history_used_ = true;", a))]
+        check("history_used_ = true;" in block, "%s: a remake makes the next frame take its own segment" % what)
+        check("history_segment_ = 0u" not in block and "history_segment_fence_.fill(0u)" not in block,
+              "%s: a remake leaves history_segment_ and history_segment_fence_ as they are" % what)
+
+
 def the_cause(check):
     check(rs.cause_line("a\n  [  1.0] exception: device lost:   a GPU fence never completed \nb\n[D3D12-LIVE-ERR] id 1: x") ==
           "[ 1.0] exception: device lost: a GPU fence never completed", "the first line that names a stopped renderer, blanks squeezed")
@@ -410,7 +450,7 @@ def the_gate_part(check):
             gate.run = real
 
 
-CASES = [the_option_in_the_game, the_runner, the_replay_tool, copies, window, probe, judging, the_whole_run, the_play_again, the_cause, the_gate_part]
+CASES = [the_option_in_the_game, the_runner, the_replay_tool, copies, window, probe, judging, the_whole_run, the_play_again, the_removal, the_history_after_a_remake, the_cause, the_gate_part]
 
 
 def main():

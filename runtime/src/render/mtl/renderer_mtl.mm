@@ -479,8 +479,11 @@ void RendererMtl::grow_rings() {
     // which hands them to the context to release once the work committed so far has completed.
     std::vector<gpu::BufferRef> old;
     if (remake_upload_rings(device(), rings, false, ring_growth_failed_, old)) {
-        history_segment_ = 0u;
-        history_segment_fence_.fill(0u);
+        // The vertex and matrix rings share one segment counter and one fence for each segment (history_segment_,
+        // history_segment_fence_). A ring made again is a new buffer, every segment of which is free; a ring that was not made
+        // again (the vertex ring, when only the matrix ring grew) keeps the segments the frames in flight write and read, so
+        // the counter and the fences stay as they are: with the counter at 0 and the fences gone, the next frame wrote the
+        // segment a frame in flight was still drawing from (P-339).
         history_used_ = true;
     }
 }

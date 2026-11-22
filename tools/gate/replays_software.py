@@ -19,12 +19,12 @@ judges them).
 
 A play is
   pass  it reached its end and every step hash is the recorded one;
-  fail  it crashed, the game completed no step for 120 s (the runner's `hung`, T6's rule), or a step hash differs from the recorded one
-        (the first step that differs is named);
+  fail  it crashed, the game completed no step for 120 s (the runner's `hung`, T6's rule), a step hash differs from the recorded one
+        (the first step that differs is named), or the game's graphics device was removed during it (its log says so and the game makes a
+        new device, so the play can still end with the recorded hashes; the message names the step; no play is excused);
   flake a play that crashed or hung (the runner's `crashed` or `hung`) was played once more alone, after all the others, and passed
         then: its message holds the first run's cause. One that fails again alone is `fail`. A step hash that differs, a play at its
-        time limit and a tool or environment fault are never played again. (Cause not found: the software Direct3D 12 device is removed
-        in the Egg and Hell plays every run, ledger row P-339; the one crash of 11-21 was that moment ending in a stall.)
+        time limit and a tool or environment fault are never played again.
   tool  the runner or this script broke (no result file, a play that ran past its limit with the game still moving: the check's time limit
         is too short, never a fault of the game), or no step hash was written;
   env   the PC was not fit: no software device for Direct3D 12 or 11, no room for one copy.
@@ -289,6 +289,52 @@ def play_again(a, suite, results, layers, say, play=play_task):
     return out
 
 
+# What a play's log says when the game's graphics device was removed and the game made a new one (the play still ends, and its hashes can
+# still be the recorded ones): the removal's own line, and the line the game says when it starts a new device.
+REMOVED_MARKERS = ("[Renderer] DEVICE REMOVED", "the graphics card was reset")
+HOST_FRAME = re.compile(r"host: frame (\d+),")
+HARNESS_START = re.compile(r"harness: frame 0 is game frame (\d+)")
+
+
+def removal_note(text):
+    """'' when the log has no device removal; else where it was: the last game frame the host counted before the removal's line (the host
+    counts one line a second), as a step of the play (the play's step 0 is the game frame the harness says) or, when that frame is before
+    it, as before the first step."""
+    lines = text.splitlines()
+    for at, line in enumerate(lines):
+        if not any(marker in line for marker in REMOVED_MARKERS):
+            continue
+        frame = None
+        for earlier in reversed(lines[:at]):
+            m = HOST_FRAME.search(earlier)
+            if m:
+                frame = int(m.group(1))
+                break
+        start = HARNESS_START.search(text)
+        where = "at the start of the log"
+        if frame is not None:
+            begin = int(start.group(1)) if start else None
+            where = ("after game frame %d, at step %d of the play" % (frame, frame - begin) if begin is not None and frame >= begin else
+                     "after game frame %d, before the play's step 0%s" % (frame, " (game frame %d)" % begin if begin is not None else ""))
+        return "the graphics device was removed %s: %s" % (where, " ".join(line.split())[:120])
+    return ""
+
+
+def judge_removals(results, say=print):
+    """A play that passed with a log that says the device was removed is a `fail` whose message names the step (no play is excused). A play
+    that did not pass is left as it is. Returns (results, how many plays lost their device)."""
+    out, removed = dict(results), 0
+    for (renderer, test), (kind, message, seconds, logs) in sorted(results.items()):
+        note = removal_note(logs)
+        if not note:
+            continue
+        removed += 1
+        if kind == "pass":
+            out[(renderer, test)] = ("fail", note, seconds, logs)
+            say("%-6s %-34s %s" % (renderer, test, note))
+    return out, removed
+
+
 def last_line(path):
     try:
         lines = [l.strip() for l in pathlib.Path(path).read_text(encoding="utf-8", errors="replace").splitlines() if l.strip()]
@@ -457,6 +503,9 @@ def run_all(a, say=print):
             copies = max(1, min(copies, room.copies))
             results = play_all(a, suite, tasks, layers, copies, say)
             results = play_again(a, suite, results, layers, say)
+            results, removed = judge_removals(results, say)
+            if removed:
+                note("the graphics device was removed in %d play%s" % (removed, "" if removed == 1 else "s"))
     for r in runnable:
         if plan[r] is None and layers.get(r):
             errors, warnings = layer_counts(results, r)
