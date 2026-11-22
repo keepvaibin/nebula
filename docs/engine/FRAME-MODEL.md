@@ -561,7 +561,7 @@ moves one group.
 | 5 | a kind of block | one joint; many rigid joints; weighted (skinned); billboard and calc mode 1; calc mode 2; eye-space blocks |
 | 6 | a kind of light | the actor's lights (`loadActorLightInfo`); point lights; the player's light; the map's lights |
 
-- The switch is one table in the game module, a default per step and group (`Game/Render/RenderPath.hpp`). A landing
+- The switch is one table in the game module, a default per step and group (Game/Render/RenderPath.hpp, a file R3.2 makes). A landing
   changes one group's default. The writer reads it where it writes a record into the list (`Material::constantsOf`,
   `TypedDraw`, `LightFunction`, the block writer); the item or block it writes carries which path made it (a flag
   bit per step), so the walk serves both without a table of its own and two groups in one list draw side by side.
@@ -748,7 +748,7 @@ alpha cutoff, the glow row, the base map, the baked light, the coordinate source
 are not written in step 1: nothing on main reads them, and a field written with no reader cannot be proved. Each is
 added at `FORM`'s end by the landing that brings its first reader; `stride` makes that an added field, not a format.
 2.4's row 1 lists them as step 1's: they are not. The pipelines a model needs are already written at the cook
-(`NebulaData/Pipelines.bin`, `pipeline_list.rs:1-5`, `:102-114`) and registered at boot; what is left of P-010 is that a
+(NebulaData/Pipelines.bin, `pipeline_list.rs:1-5`, `:102-114`) and registered at boot; what is left of P-010 is that a
 draw whose pipeline is not made yet builds it on the render thread, which is E5's code and needs nothing more from the
 file.
 
@@ -1638,8 +1638,8 @@ at the picture's moment; every platform does the same or says on screen why not.
 ### 2.17 F7: the game step on the cores
 
 Read at 241395b49 (11-19), from audit file B R8.2 (what stops each part running on workers), each blocker found again
-at this commit. File 08 5.D.6: it lands only with the replay identical, the thread sanitizer clean and both soaks
-clean. Its rows: P-040, P-146 (with N-3013 and N-3014, `app/work`'s), N-1083. E7's other changes (collision and
+at this commit. File 08 5.D.6: it lands only with the replay identical, the thread sanitizer clean and the `soak` check
+passes. Its rows: P-040, P-146 (with N-3013 and N-3014, `app/work`'s), N-1083. E7's other changes (collision and
 sensors found by position, P-129 to P-141) are faster single-threaded work and are not this section's.
 
 **Today.** The step runs on one thread (`git grep -n -E "std::thread|parallel_for" 241395b49 -- native/petari/src`:
@@ -1690,7 +1690,7 @@ sensors found by position, P-129 to P-141) are faster single-threaded work and a
 
 **Proof.** The replay's step hash identical with workers off, on, and at one, two and every core, over the tour and
 the replay suite; the frame list's hash identical the same way; the thread sanitizer clean over the tour (the SDL
-host on Linux); both soaks clean; the step's time on the tablet in the five heaviest stops before and after each
+host on Linux); the `soak` check passes; the step's time on the tablet in the five heaviest stops before and after each
 landing, and on the PC never slower (a step of 1.4 ms at most there: the pool's cost must not show).
 
 ### 2.18 5.H.2: what the game runs no longer follows the screen
@@ -1749,6 +1749,6 @@ whole in the landing that changes it.
    built with the same "seen" volume as its run volume. The replay's reference changes once; said on the board.
 
 **Proof.** One test plays the same inputs at 4:3, 16:9, 21:9, 48:9 and the tablet's and a tall phone's shape and gets
-the same step hash at every step; every tour stop and both soaks green; the 42 reads above each checked under the new
+the same step hash at every step; every tour stop green and the `soak/long` check passes; the 42 reads above each checked under the new
 rule and named in the landing that changes it; the search for the clipped state run again at the last landing, its
 hits only the machinery and the forced-running calls.

@@ -1,25 +1,29 @@
 step	check	serves
+S0.1.1	stress	proof 1: the same batch passes under the stress lane's load
+S0.1.1	replays/software	proof 2: the same recorded play gives the same step hashes on a software device
+S0.1.1	sanitizer/tour	proof 1: the sanitizer clean over the tour
+S0.1.1	soak	proof 1: the `soak` check passes
 S0.2.1	stress	proof 1: the step hash at play's first step is equal on a fast machine and on a slowed one
 S0.2.6	stress	proof 1: the same step hashes idle and with 12 copies running at once
 S0.2.6	replays/software	proof 1: the same step hashes on a software device
 G3.1	sanitizer/tour	proof 4: the sanitizer clean over the tour
-G3.1	soak	proof 5: both soaks clean
+G3.1	soak	proof 5: the `soak` check passes
 G3.2	sanitizer/tour	proof 2: the sanitizer clean over the tour
-G3.2	soak	proof 2: both soaks clean
+G3.2	soak	proof 2: the `soak` check passes
 G3.3	sanitizer/tour	proof 2: the sanitizer clean over the tour
-G3.3	soak	proof 2: both soaks clean
+G3.3	soak	proof 2: the `soak` check passes
 G3.4	sanitizer/tour	proof 2: the sanitizer clean over the tour
-G3.4	soak	proof 2: both soaks clean
+G3.4	soak	proof 2: the `soak` check passes
 G3.5	sanitizer/tour	proof 2: the sanitizer clean over the tour
-G3.5	soak	proof 2: both soaks clean
+G3.5	soak	proof 2: the `soak` check passes
 G3.6	sanitizer/tour	proof 2: the sanitizer clean over the tour
-G3.6	soak	proof 2: both soaks clean
+G3.6	soak	proof 2: the `soak` check passes
 G3.7	stress	proof 2: the step hash at play's first step equal on a fast and a slowed machine
 G3.7	sanitizer/tour	proof 3: the sanitizer clean over the tour
-G3.7	soak/long	proof 3: both soaks clean
+G3.7	soak/long	proof 3: the `soak/long` check passes
 G4.0	sanitizer/tour	proof 3: tour stop 059 run again with the sanitizer build mended
-G5.2	soak	proof 3: both soaks stay green with the switch on
-G5.5	soak/long	proof 2: every tour stop and both soaks green
+G5.2	soak	proof 3: the `soak` check passes with the switch on
+G5.5	soak/long	proof 2: every tour stop green and the `soak/long` check passes
 Z.2	stress	proof 3: the same recorded play gives the same game, also under load
 Z.2	replays/software	proof 3: the same recorded play on a software device
 S0.1.5	speed/anchor	no figure of the package is worse than at the start of the native work

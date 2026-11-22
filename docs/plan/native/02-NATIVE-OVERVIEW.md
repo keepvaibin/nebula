@@ -85,6 +85,10 @@ Three smaller placements with the same reason:
 Stage 0 comes first and is short. Then two lanes run side by side. They are cut so that they do not edit the same
 files (section 5 lists the few they share). The end check closes both.
 
+How the work is done: one agent does every step, alone, in the order of `docs/plan/native/steps.tsv`, by
+`docs/plan/native/AGENT.md`. A step reaches main only through its landing, and while a landing plays the agent
+writes the next step on top of it. The step tool's list for a second agent is not used.
+
 - **Lane R, the picture:** what the game hands the graphics card and how a frame is built.
 - **Lane G, the game and the display:** the step, timing, input, sound, text, data.
 
@@ -248,7 +252,7 @@ P-071, P-072, P-286.
 **G9 Timing and small items.** Rows: P-203, P-206, P-268, P-306, P-208, P-211.
 - Movie cues fire when the movie passes them, so a hitch cannot skip one. The staff roll follows its music.
 
-G6 to G9 touch no other package's files. They are taken whenever the lane's main line waits for Lane R.
+G6 to G9 touch no other package's files. They are taken whenever the lane's main line waits for Lane R. (not used: one agent does every step)
 
 ### The end
 
@@ -260,7 +264,7 @@ G6 to G9 touch no other package's files. They are taken whenever the lane's main
 ## 5. Files both lanes touch
 
 Everything else belongs to one lane. A shared file is changed by one lane at a time; the other moves its work
-onto the result.
+onto the result. (not used: one agent does every step)
 
 | File | Lane R | Lane G | Who goes first |
 | --- | --- | --- | --- |
