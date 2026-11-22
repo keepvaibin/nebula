@@ -135,6 +135,6 @@ class Measure(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    result = unittest.main(exit=False, verbosity=0).result
+    result = unittest.main(argv=[sys.argv[0]], exit=False, verbosity=0).result
     print("long_parts_test: %s" % ("pass (%d tests)" % result.testsRun if result.wasSuccessful() else "FAILED"))
     sys.exit(0 if result.wasSuccessful() else 1)

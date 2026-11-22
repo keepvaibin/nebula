@@ -132,6 +132,7 @@ def main():
 
             class Args:
                 mode, gate_lock, wait, board, who = "long", lock_path, 0, board_path, "Agent 1"
+                queue_file, runner_lock = str(lock.parent / "landing-queue.tsv"), str(lock.parent / "runner.lock")
 
             class FakeGate:
                 dry, args, rows = False, Args(), []

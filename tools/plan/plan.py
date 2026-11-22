@@ -145,6 +145,7 @@ TABLET_WAIT = 30
 # One work folder for each agent, kept between steps (made by `start` the first time).
 AGENT_FOLDERS = {"1": "Nebula-native", "2": "Nebula-native-2"}
 LIVE = "D:/NebulaWork/plan/native"       # the live state: claims, started and blocked steps, tool faults, the page
+LIVE_REAL = LIVE                          # the live folder as the machine has it (LIVE is replaced by a test: only the real one shows the gate's record)
 GATE_RUNS = "D:/NebulaWork/build/gate-runs"   # the gate's record of its runs (history.tsv): `status` shows the newest long run from it
 AGENT2_LIST = ("G6", "G7", "G8", "G9", "G1", "R10", "R9", "G4")   # the helper's packages, in this order, and no others
 # Two groups of steps that must not be in work at the same time (both change the renderers' frame and present code).
@@ -2525,7 +2526,7 @@ def cmd_toolfault(a):
 def cmd_status(a):
     fetch_main_landed(a)
     settle_github(a)
-    real = live_dir(a.live).as_posix() == pathlib.Path(LIVE).as_posix()      # a test's own live folder shows no record of the real gate
+    real = live_dir(a.live).as_posix() == pathlib.Path(LIVE_REAL).as_posix()      # a test's own live folder shows no record of the real gate
     text = status_text(a.tree, a.work_root, live=a.live, agent=agent_of(a), queue_file=getattr(a, "queue_file", None),
                        gate_runs=GATE_RUNS if real else None)
     atomic_write(native(a.tree) / "STATUS.md", text)

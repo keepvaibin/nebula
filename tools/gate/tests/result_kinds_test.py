@@ -100,7 +100,8 @@ class Scratch:
     def gate(self, level="main", known=None, extra=()):
         args = gate.parser().parse_args(["--" + level, "--tablet", "T", "--work", str(self.work), "--board", "",
                                          "--status", "", "--build-root", str(self.build), "--paks", "", "--keep-runs",
-                                         "--wait", "0", "--gate-lock", str(self.t / "gate.lock"), *extra])
+                                         "--wait", "0", "--gate-lock", str(self.t / "gate.lock"),
+                                         "--queue-file", str(self.t / "landing-queue.tsv"), "--runner-lock", str(self.t / "runner.lock"), *extra])
         g = gate.Gate(args, known=known)
         g.tree, g.main_ref = self.tree, "main"
         # A run's folder is named by the second it starts in: every gate of a case has its own.

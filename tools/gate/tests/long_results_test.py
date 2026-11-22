@@ -401,6 +401,15 @@ class Plan(World):
         self.assertIn("--bin <bin>", text)
         self.assertIn("--test 002-B-1", text)
 
+    def test_a_test_live_folder_never_shows_the_real_gates_record(self):
+        """The landing of this package failed once because `plan.py status` of a test's live folder read the real long lock: only the
+        real live folder (plan.LIVE_REAL, which a test cannot replace) shows the record."""
+        from unittest import mock
+        self.assertEqual(plan.LIVE_REAL, "D:/NebulaWork/plan/native")
+        with mock.patch.object(plan, "LIVE", str(self.tmp)):
+            self.assertNotEqual(plan.live_dir(None).as_posix(), plan.LIVE_REAL)
+        self.assertNotIn("newest long run", plan.status_text(pathlib.Path(__file__).resolve().parents[3], live=str(self.live)))
+
     def test_confirmed_is_a_state_that_sorts_last(self):
         self.assertIn("confirmed", lv.REPAIR_STATES)
         rows = [{"id": "R-001", "state": "confirmed", "kind": "fail"}, {"id": "R-002", "state": "landed", "kind": "fail"},
@@ -432,6 +441,6 @@ class Plan(World):
 
 
 if __name__ == "__main__":
-    result = unittest.main(exit=False, verbosity=0).result
+    result = unittest.main(argv=[sys.argv[0]], exit=False, verbosity=0).result
     print("long_results_test: %s" % ("pass (%d tests)" % result.testsRun if result.wasSuccessful() else "FAILED"))
     sys.exit(0 if result.wasSuccessful() else 1)
