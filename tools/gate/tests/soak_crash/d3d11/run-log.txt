@@ -1,0 +1,12 @@
+[  297.829] game: effect SeaSmoke of マリオアクター: not renamed to 水底接触 (absent, or the name is held)
+[  297.830] context: star pointer mode -1
+[input-shake] frame=17865 source=script tilt-section=none
+[  297.908] game: scene: [scene ready]
+[  298.251] host: frame 17890, file reads 86, save ops 8, sound blocks 119178, sound subframes 119178, renderer frames 35781
+[  299.251] host: frame 17950, file reads 86, save ops 8, sound blocks 119578, sound subframes 119578, renderer frames 35901
+[  300.058] crash: exception 0xC0000005 at NebulaD11.exe+0x234316 (thread 62664), address 0x0
+[  300.058] crash: stage FactoryGalaxy
+[  300.149] crash: minidump nebula-native-20261122-114308-44120.dmp
+[  300.149] crash: the dump read a snapshot of the process
+[  300.150] crash: NEB-N01 Nebula crashed
+[  300.150] crash: report nebula-native-20261122-114308-44120.txt

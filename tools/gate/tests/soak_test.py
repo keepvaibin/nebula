@@ -118,7 +118,12 @@ def main():
             "d3d12": "crashed at 299.5 s: exception 0xC0000005 at Nebula.exe+0x3eddf6 (thread 51712), address 0x0, in stage FactoryGalaxy",
             "vulkan": "crashed at 294.7 s: exception 0xC0000005 at NebulaVk.exe+0x239f16 (thread 23520), address 0x0, in stage FactoryGalaxy"}
     for renderer, text in want.items():
-        early = soak.ended_early(data / renderer)
+        # The run's log is kept as run-log.txt (the repository ignores *.log): the run's folder is made with it as run.log.
+        folder = pathlib.Path(tempfile.mkdtemp(prefix="soak-crash-"))
+        for name in ("result.json",):
+            (folder / name).write_bytes((data / renderer / name).read_bytes())
+        (folder / "run.log").write_bytes((data / renderer / "run-log.txt").read_bytes())
+        early = soak.ended_early(folder)
         check(early == text, "%s: the crash is named by its second, exception and stage: %s" % (renderer, early))
         passes, line = soak.verdict_line(4, False, "1 laps of memory; three are needed to judge growth", early)
         check(not passes and line == "%s (harness exit 4)" % text and "laps" not in line, "%s: the line says the crash first, no memory sentence: %s" % (renderer, line))

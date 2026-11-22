@@ -1,0 +1,12 @@
+[vk-gpu] frame 0.06 ms average, 0.10 ms longest; 2.5 scene target passes and 0.8 scene target copies a frame; scene target 1280x720, swap chain 1280x720
+[vk-gpu] scene target opened a frame (closed by > opened by): take_frame_picture > clear_scene (clear) 1.00; swap_target_set > clear_scene (clear) 0.68; draw_frame_pass > draw_frame_pass 0.81; clear_scene > clear_scene(depth) (clear) 0.06;
+[  291.738] context: star pointer mode 25
+[  291.947] host: frame 17834, file reads 89, save ops 8, sound blocks 116380, sound subframes 116380, renderer frames 35669
+[  292.948] host: frame 17894, file reads 89, save ops 8, sound blocks 116780, sound subframes 116780, renderer frames 35789
+[  293.947] host: frame 17954, file reads 89, save ops 8, sound blocks 117180, sound subframes 117180, renderer frames 35909
+[  294.689] crash: exception 0xC0000005 at NebulaVk.exe+0x239f16 (thread 23520), address 0x0
+[  294.689] crash: stage FactoryGalaxy
+[  294.888] crash: minidump nebula-native-20261122-114303-31916.dmp
+[  294.888] crash: the dump read a snapshot of the process
+[  294.888] crash: NEB-N01 Nebula crashed
+[  294.888] crash: report nebula-native-20261122-114303-31916.txt
