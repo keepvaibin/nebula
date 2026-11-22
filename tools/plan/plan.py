@@ -1751,8 +1751,8 @@ def cmd_ahead(a):
     moved = 0
     if entry is None:
         if exists:
-            say("plan.py: the branch %s exists already and ahead has no entry for it. Nothing is changed and nothing is deleted: "
-                "go on with it by hand (git checkout %s) or tell the planner." % (branch, branch))
+            say("plan.py: the branch %s exists already and ahead has no entry for it. Nothing is changed and nothing is deleted. "
+                "Nothing is written ahead this time: wait for the landing." % branch)
             return 1
         if folder_changes(folder):
             say("plan.py: " + dirty_line(folder, "ahead"))

@@ -245,7 +245,8 @@ class AheadCommandTest(AheadBase):
         self.t.git("branch", "native/A.2", "origin/main", cwd=self.folder)
         code, text = self.t.run(["ahead"])
         self.assertEqual(code, 1)
-        self.assertIn("native/A.2 exists already and ahead has no entry for it", text)
+        self.assertIn("plan.py: the branch native/A.2 exists already and ahead has no entry for it. Nothing is changed and nothing is "
+                      "deleted. Nothing is written ahead this time: wait for the landing.", text.splitlines())
         self.assertEqual(self.rev("refs/heads/native/A.2"), self.rev("origin/main"))
 
     def test_an_entry_for_another_step_than_the_one_that_follows_is_refused_and_kept(self):
