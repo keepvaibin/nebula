@@ -846,7 +846,27 @@ class AdviceLinesTest(AheadBase):
         self.assertNotIn("then run gate.py land again", text)
 
 
+def test_arguments(argv):
+    """What unittest is given: the gate starts every self-test with `--work <folder>`, which is none of unittest's; the rest (-k, names)
+    is kept so that one test can be run alone."""
+    out, skip = [argv[0]], False
+    for arg in argv[1:]:
+        if skip:
+            skip = False
+        elif arg == "--work":
+            skip = True
+        else:
+            out.append(arg)
+    return out
+
+
+class ArgumentsTest(unittest.TestCase):
+    def test_the_gates_work_option_is_not_given_to_unittest(self):
+        self.assertEqual(test_arguments(["t.py", "--work", "D:/x", "-k", "a"]), ["t.py", "-k", "a"])
+        self.assertEqual(test_arguments(["t.py"]), ["t.py"])
+
+
 if __name__ == "__main__":
-    result = unittest.main(argv=[sys.argv[0], *sys.argv[1:]], exit=False, verbosity=1).result
+    result = unittest.main(argv=test_arguments(sys.argv), exit=False, verbosity=1).result
     print("plan_ahead_test: %s (%d tests)" % ("pass" if result.wasSuccessful() else "FAIL", result.testsRun))
     sys.exit(0 if result.wasSuccessful() else 1)
