@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-22 14:31.
+Written 2026-11-22 14:33.
 
 Steps landed: 2 of 138 (1%).
 
@@ -59,10 +59,11 @@ Nothing is blocked.
 
 ## Tool faults
 
-1 tool fault recorded.
+2 tool faults recorded.
 
 The last 20:
 
 | When | Step | Test | What happened | What the agent could not do |
 | --- | --- | --- | --- | --- |
+| 2026-11-22 14:33 | - | (by hand) | plan.py land S0.1.3 ended code 4 (not judged): gate.py's push check refused main's move because tools/verify/console_census.py's closed group fifo counts 31 (the card's section names GXMT, GXTG, GXTM, GXWP in native/include/nebula_model.h, runtime/src/render/core/model_sections_tests.cpp, crates/nebula-import/src/cook/model_write.rs); it is a certain refusal of the change, reported as not judged; plan.py toolfault --last then said: agent 1 has no tool fault recorded | - |
 | 2026-11-22 12:50 | - | validate/vulkan | not run: the Vulkan validation layer is not installed on this PC | - |
