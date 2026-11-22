@@ -563,7 +563,9 @@ class FaultRecordTest(unittest.TestCase):
         self.assertIn("Written to ", text)
         self.assertIn("tool-faults.tsv (1 line)", text)
         self.assertIn('plan.py toolfault --last --could-not "<one sentence>"', text)
-        self.assertIn("this is a tool fault: report it in BLOCKED.md under 'tools' and take the next step; do not debug the tool", text)
+        self.assertIn("this is a tool fault, not the change's: it does not count as a failure; give the landing once more. Not judged a "
+                      "second time: stop (an agent of the plan: plan.py blocked <ID> \"tool: <the fault's first line>\", then plan.py "
+                      "next). Do not debug the tool.", text)
 
     def test_the_line_is_never_in_the_repository_or_a_landing(self):
         self.verdict = self.tool()

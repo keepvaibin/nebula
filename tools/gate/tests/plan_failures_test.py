@@ -77,8 +77,9 @@ class StoreTest(unittest.TestCase):
         self.assertFalse(tool.counted)
         self.assertFalse(tool.stop)
         self.assertEqual(tool.exit_code, 4)
-        self.assertEqual(tool.message, "this is a tool fault: report it in BLOCKED.md under 'tools' and take the next step; "
-                                       "do not debug the tool")
+        self.assertEqual(tool.message, "this is a tool fault, not the change's: it does not count as a failure; give the landing once "
+                                       "more. Not judged a second time: stop (an agent of the plan: plan.py blocked <ID> \"tool: <the "
+                                       "fault's first line>\", then plan.py next). Do not debug the tool.")
         self.assertEqual(self.store.count("native/A.1"), 2, "a tool result leaves the count of real failures alone")
         self.assertEqual(self.store.record("native/A.1", FAIL).count, 3, "and does not break the row of the same failure")
 

@@ -627,7 +627,7 @@ class LandTest(LandBase):
         code, text = self.land()
         self.assertEqual(code, 1)
         self.assertIn("could not be read", text)
-        self.assertIn("plan.py tool", text)
+        self.assertIn("plan.py blocked A.1 \"tool: the card's Rows line cannot be read\", then plan.py next.", text)
 
     def test_a_failed_landing_is_not_landed_keeps_its_state_commit_and_is_counted(self):
         code_commit = self.ready()
@@ -670,7 +670,9 @@ class LandTest(LandBase):
         for _ in range(3):
             code, text = self.land()
             self.assertEqual(code, 4)
-            self.assertIn("this is a tool fault: report it in BLOCKED.md under 'tools' and take the next step; do not debug the tool", text)
+            self.assertIn("this is a tool fault, not the change's: it does not count as a failure; give the landing once more. Not "
+                          "judged a second time: stop (an agent of the plan: plan.py blocked <ID> \"tool: <the fault's first line>\", "
+                          "then plan.py next). Do not debug the tool.", text)
             self.assertNotIn("Same failure three times", text)
         self.assertEqual(failures.Store(self.t.store).count("native/A.1"), 0)
 

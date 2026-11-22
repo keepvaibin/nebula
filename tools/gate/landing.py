@@ -584,7 +584,7 @@ class Landing:
             self.say(failures.TOOL_TEXT if "tool" in kinds_seen else failures.ENV_TEXT)
             self.say("The fault is in tool-faults.tsv. Say what it stopped you from doing: plan.py toolfault --last --could-not \"<one sentence>\"")
         elif code == EXIT_NOT_JUDGED and not give_up:
-            self.say("Not judged: nothing here says the change is wrong. Fix what the line above says, then run gate.py land again.")
+            self.say("Not judged: nothing here says the change is wrong. Fix what the line above says, then give the same landing command again.")
         for line in kind_lines:
             self.say(line)
         self.say(kinds.verdict_line({EXIT_LANDED: "pass", EXIT_FAIL: "fail", EXIT_SAME_THREE: "fail"}.get(code, "not-judged")))

@@ -306,7 +306,7 @@ class Cases(unittest.TestCase):
         self.assertEqual(len(w.checker.calls), 1, "the runner stops: it does not retry what it could not judge")
         self.assertEqual(out[-1], "VERDICT not-judged")
         self.assertTrue(any(l.startswith("KIND tool tour/d3d12 - ::") for l in out))
-        self.assertTrue(any("tool fault: report it in BLOCKED.md" in l for l in out))
+        self.assertTrue(any("this is a tool fault, not the change's: it does not count as a failure; give the landing once more." in l for l in out))
         self.assertEqual(len(w.faults), 1, "one line of the fault record")
         self.assertEqual(w.faults[0][2:5], ("TOOL", "tour/d3d12", ""))
         self.assertEqual(failures.Store(w.store_path).count("feat/a"), 0)

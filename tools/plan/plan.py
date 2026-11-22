@@ -1,10 +1,11 @@
 """plan.py: the step tool of the native plan (package T13). The coding agent reads, codes and proves; this says what is next.
 
     python -X utf8 -I tools/plan/plan.py next | status | page | card ID | rows [ID] | start ID | land ID [--github-again] | blocked ID "WHY"
+                                         | ahead
                                          | owed ID "TEXT" | commands | note "TEXT" | note --clear
                                          | claim PACKAGE [--take-stale] | tool "TEXT" | toolfault --last --could-not "TEXT"
                                          | repair add --source S --kind K --check C ... | repair list
-    (next, start, land, blocked, claim, tool, toolfault, status and commands take --agent 1|2; 1 is the default; ID is a step, or for
+    (next, ahead, start, land, blocked, claim, tool, toolfault, status and commands take --agent 1|2; 1 is the default; ID is a step, or for
      start, land and blocked a repair such as R-003)
     (--no-push, before the command, or NEBULA_PLAN_NO_PUSH=1 in the environment: the progress branch is not pushed)
     Each agent runs the copy in its own work folder: `D:/NebulaWork/MarioGalaxyRecomp/Nebula-native/tools/plan/plan.py` for agent 1,
@@ -67,6 +68,14 @@ blocked  Refuses while the agent's work folder has uncommitted changes (commit t
          branch to origin so nothing is lost; sets `blocked`; writes the reason and the failure's first line into
          BLOCKED.md. The folder is free for the next `start`; `next` skips to independent work. For a repair it sets
          `set-aside` and writes the same into BLOCKED.md under "repairs".
+ahead    While the landing of the item N in work (a step or a repair) is in the gate's hands: makes the branch `native/<M>` of the step
+         M that follows N on top of the tip the landing was given, in the work folder (clean, on N's branch), and prints M's card, its
+         rows, what the ledger must say, the checks and the commands; M is written there, never landed. It changes no step's state, makes
+         no claim and pushes nothing; given again for the same M (N was mended and landed once more) it moves M's own commits onto N's
+         new tip (`git rebase --onto`; a conflict is aborted, the branch is as it was and the command to do by hand is printed). One step
+         ahead at a time. While M is written ahead, `land N` joins or hands over from M's branch (its own commits stay, the working tree
+         is not written to when the landing ends), `next` and `status` name M, and `start M` puts M's branch on top of main: nothing
+         moves when origin/main is in it, else M's own commits are moved onto origin/main. Nothing ever deletes a branch.
 claim    Claims a package for the agent; a stale claim of the other agent is taken over with --take-stale (its branch is
          left as it is).
 tool     Writes a tool fault into BLOCKED.md under "tools" and into tool-faults.tsv. The step is not blocked.
@@ -114,7 +123,9 @@ page. It is never kept in a file inside one work folder. STATUS.md is the plan t
 plain file the agent may commit.
 """
 import argparse
+import contextlib
 import datetime
+import io
 import os
 import pathlib
 import re
@@ -296,16 +307,17 @@ def write_steps(tree, steps):
     atomic_write(native(tree) / "steps.tsv", text)
 
 
-def set_state(tree, step_id, state, commit=None, agent=1, reason="", live=None, track=True):
+def set_state(tree, step_id, state, commit=None, agent=1, reason="", live=None, track=True, write_file=True):
     """Sets a step's state. `landed` (with the commit) is written into steps.tsv: that is what a landing carries.
     `started` and `blocked` are the live folder's (state.tsv there, with the agent and the reason), so that both agents
     and the page see them and steps.tsv stays what main has; `open` takes a step out of it. `track` False leaves the live
-    folder alone (the landing's own commit, in the work folder, before the gate has answered)."""
+    folder alone (the landing's own commit, in the work folder, before the gate has answered). `write_file` False leaves the
+    tree's steps.tsv alone (a landing that ends while the work folder is on a step written ahead: its working tree stays as it is)."""
     base = read_base(tree)
     row = find(base, step_id)
     if row is None:
         raise KeyError(step_id)
-    if state == "landed":
+    if state == "landed" and write_file:
         row["state"] = "landed"
         if commit is not None:
             row["commit"] = commit
@@ -1103,6 +1115,18 @@ def status_text(tree, work_root=WORK_ROOT, at=None, live=None, agent="1", queue_
         work_folder(work_root, (state.get(r["id"]) or {}).get("agent", "1")).as_posix()) for r in working]
     if not by["started"] and not working:
         out.append("- none")
+    written = lv.read_ahead(live_dir(live), agent)
+    held = find(steps, written["step"]) if written else None
+    if held is not None:
+        count = None
+        folder = work_folder(work_root, agent)
+        r = git(folder, "rev-list", "--count", "%s..refs/heads/native/%s" % (written["base"], written["step"])) if folder.is_dir() else None
+        if r is not None and r.returncode == 0 and r.stdout.strip().isdigit():
+            count = int(r.stdout.strip())
+        out += ["", "## Written ahead (1)", "",
+                "- %s %s: branch native/%s, %s, on top of %s (base %s); plan.py start %s takes it up once %s has landed" % (
+                    held["step"], held["title"], held["step"], commits_word(count), written["after"], written["base"][:9],
+                    held["step"], written["after"])]
     out += ["", "## Blocked (%d)" % len(by["blocked"]), ""]
     out += ["- %s %s: %s" % (s["step"], s["title"], s["reason"] or reasons.get(s["step"], "(no reason written)"))
             for s in by["blocked"]] or ["- none"]
@@ -1138,9 +1162,14 @@ def status_text(tree, work_root=WORK_ROOT, at=None, live=None, agent="1", queue_
     else:
         waiting = [s["step"] for s in by["started"]]
         out.append("- nothing can start now" + ("; steps in progress: " + ", ".join(waiting) if waiting else ""))
-    helper, report = choose_helper(steps, claims, stale)
-    out += ["", "## Next (agent 2)", ""]
-    out.append("- %s %s" % (helper.step["step"], helper.step["title"]) if helper else "- nothing on agent 2's list can start now")
+    # The helper's section only where there is a helper: an agent 2 that has never claimed, started or landed anything is not shown
+    # (a lone agent 1 would read "nothing on agent 2's list can start now" as a second agent waiting).
+    helper_seen = (agent == "2" or any(c["agent"] == "2" for c in claims) or any(e["agent"] == "2" for e in state.values())
+                   or any(l["agent"] == "2" for l in lv.read_landings(live_dir(live))))
+    if helper_seen:
+        helper, report = choose_helper(steps, claims, stale)
+        out += ["", "## Next (agent 2)", ""]
+        out.append("- %s %s" % (helper.step["step"], helper.step["title"]) if helper else "- nothing on agent 2's list can start now")
     return "\n".join(out) + "\n"
 
 
@@ -1535,6 +1564,252 @@ def say_landing_running(a):
     return rec
 
 
+# ---- a step written ahead --------------------------------------------------------------------------------------------
+# While a landing of N (a step or a repair) plays, `plan.py ahead` makes the branch of the step M that follows N on top of the tip
+# the landing was given, in the agent's work folder, and the live folder keeps one line about it (live.py, ahead-<agent>.tsv: M, N,
+# the base M's own commits stand on, the tip of N the last landing was given). `start M` takes it up once N is on main. Nothing here
+# deletes a branch, a commit or an uncommitted change, and a move of M's commits that does not apply is aborted.
+
+AHEAD_REFUSAL = "ahead is for the time a landing plays: nothing of yours is being landed"
+
+
+def head_branch(folder):
+    return git(folder, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+
+
+def commit_of(folder, ref):
+    """The commit a name or an id stands for in the folder's repository, or ""."""
+    r = git(folder, "rev-parse", "--verify", "--quiet", ref + "^{commit}")
+    return r.stdout.strip() if r.returncode == 0 else ""
+
+
+def is_ancestor(folder, old, new):
+    return git(folder, "merge-base", "--is-ancestor", old, new).returncode == 0
+
+
+def tracked_changes(folder):
+    """The uncommitted changes of tracked files (what stops a rebase); a file git does not track does not."""
+    return git(folder, "status", "--porcelain", "--untracked-files=no").stdout.splitlines()
+
+
+def dirty_line(folder, again):
+    """The line `start` gives for a work folder with uncommitted changes; `again` is the command to run once they are committed."""
+    return ("the work folder %s has uncommitted changes. Commit them (or throw away what you do not want), then run %s again."
+            % (folder.as_posix(), again))
+
+
+def move_commits(folder, onto, base, branch):
+    """`git rebase --onto <onto> <base> <branch>` in the folder, which is on `branch` and has no uncommitted change to a tracked
+    file. "" when it worked; else the reason, with the rebase aborted when it had begun (the branch is as it was)."""
+    before = commit_of(folder, "refs/heads/" + branch)
+    r = git(folder, "rebase", "--onto", onto, base, branch)
+    if r.returncode == 0:
+        return ""
+    said = (r.stdout + r.stderr).strip().splitlines()
+    for name in ("rebase-merge", "rebase-apply"):
+        place = pathlib.Path(git(folder, "rev-parse", "--git-path", name).stdout.strip())
+        if not place.is_absolute():
+            place = pathlib.Path(folder) / place
+        if place.exists():
+            git(folder, "rebase", "--abort")
+            break
+    if commit_of(folder, "refs/heads/" + branch) != before:
+        raise RuntimeError("%s was changed by a rebase that failed, and could not be put back (it was %s)" % (branch, before))
+    return said[-1] if said else "conflict"
+
+
+def ahead_entry(a):
+    """The agent's ahead entry (live.read_ahead), or None."""
+    return lv.read_ahead(live_dir(a.live), agent_of(a))
+
+
+def ahead_here(a, entry=None):
+    """The agent's ahead entry when its work folder is on that step's branch now, else None."""
+    entry = entry or ahead_entry(a)
+    folder = work_folder(a.work_root, agent_of(a))
+    if entry and folder.is_dir() and head_branch(folder) == "native/" + entry["step"]:
+        return entry
+    return None
+
+
+def ahead_count(a, entry):
+    """How many commits the step written ahead has of its own (the ones after its base); None when that cannot be told."""
+    folder = work_folder(a.work_root, agent_of(a))
+    r = git(folder, "rev-list", "--count", "%s..refs/heads/native/%s" % (entry["base"], entry["step"]))
+    return int(r.stdout.strip()) if r.returncode == 0 and r.stdout.strip().isdigit() else None
+
+
+def commits_word(count):
+    return "%s commits" % ("?" if count is None else count)
+
+
+def ahead_item(a, steps, rec):
+    """(kind, row, id) of the one item the agent has in work when `rec` is the landing in the gate's hands for it; else None."""
+    work = in_work(a, steps)
+    if rec and len(work) == 1:
+        kind, row = work[0]
+        ident = row["step"] if kind == "step" else row["id"]
+        if ident == rec["step"]:
+            return kind, row, ident
+    return None
+
+
+def ahead_why_none(steps, done):
+    """Why no step can follow `done` (a step row or None): the words after `nothing can be prepared ahead:`."""
+    copy = [dict(x) for x in steps]
+    for x in copy:
+        if done is not None and x["step"] == done["step"]:
+            x["state"] = "landed"
+    if all(x["state"] == "landed" for x in copy):
+        return "the list is at its end: every step is landed or is the one being landed"
+    for x in copy:
+        if x["state"] == "open":
+            waiting = unmet(x, copy)
+            if waiting:
+                return "the step after it, %s, needs %s, not landed yet" % (x["step"], ", ".join("%s (%s)" % w for w in waiting[:3]))
+    return "no open step can start after it (the steps left are blocked, held by another agent or wait for a pair)"
+
+
+def say_what_next_says(a):
+    """The second line of a refusal: the first line `plan.py next` prints now (what to do)."""
+    out = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(out):
+            cmd_next(a)
+    except Exception:  # noqa: BLE001 - a hint only
+        pass
+    first = next((l for l in out.getvalue().splitlines() if l.strip()), "")
+    say("plan.py next says: " + first if first else "plan.py next says what to do.")
+
+
+def say_ahead_in_next(a, steps, rec):
+    """`next` while a landing runs: the line about the step written ahead, or the step that could be."""
+    entry = ahead_entry(a)
+    if entry:
+        row = find(steps, entry["step"])
+        if row is not None:
+            say("AHEAD: %s  %s (branch native/%s, %s)" % (row["step"], row["title"], row["step"], commits_word(ahead_count(a, entry))))
+        return
+    item = ahead_item(a, steps, rec)
+    if item is None:
+        return
+    nxt = following(a, steps, item[1] if item[0] == "step" else None)
+    if nxt is not None and not (item[0] == "repair" and any(is_kept(s) for s in steps)):
+        say("AHEAD POSSIBLE: %s %s; plan.py ahead%s" % (nxt["step"], nxt["title"], agent_flag(agent_of(a))))
+
+
+def cmd_ahead(a):
+    """`ahead`: while the landing of N plays, the branch native/<M> of the step that follows N, on top of the tip the landing was given
+    (made at the first call; at a later one moved onto the new tip of N when N was mended and landed again), and what `next` prints
+    for a step. It changes no step's state, makes no claim and pushes nothing."""
+    fetch_main_landed(a)
+    agent = agent_of(a)
+    steps = read_steps(a.tree, a.live)
+    rec = landing_of(a)
+    item = ahead_item(a, steps, rec)
+    if item is None:
+        say(AHEAD_REFUSAL)
+        say_what_next_says(a)
+        return 1
+    kind, row, n_id = item
+    done = row if kind == "step" else None
+    folder = work_folder(a.work_root, agent)
+    n_branch = item_branch(n_id)
+    live = live_dir(a.live)
+    entry = ahead_entry(a)
+    if entry:
+        held = find(steps, entry["step"])
+        if held is None or held["state"] == "landed":
+            lv.drop_ahead(live, agent, entry["step"])
+            say("the ahead entry of %s is dropped (%s); native/%s is left as it is." % (
+                entry["step"], "it is landed" if held else "the plan has no such step", entry["step"]))
+            entry = None
+    if kind == "repair":
+        kept = next((s for s in steps if is_kept(s)), None)
+        if kept:
+            say("nothing can be prepared ahead: step %s is kept on its branch and comes first after the repair" % kept["step"])
+            return 1
+    nxt = following(a, steps, done)
+    if nxt is None:
+        say("nothing can be prepared ahead: " + ahead_why_none(steps, done))
+        if entry:
+            say("native/%s, written ahead, is kept as it is." % entry["step"])
+        return 1
+    m_id = nxt["step"]
+    branch = "native/" + m_id
+    if entry and entry["step"] != m_id:
+        say("ahead has native/%s written, and the step that follows now is %s: native/%s is kept as it is (nothing is deleted); "
+            "one step ahead at a time. `plan.py next` says which step comes first." % (entry["step"], m_id, entry["step"]))
+        return 1
+    if not folder.is_dir() or not (folder / ".git").exists():
+        say("plan.py: the work folder %s is missing" % folder.as_posix())
+        return 1
+    exists = branch_exists(folder, "refs/heads/" + branch)
+    if entry and not exists:
+        lv.drop_ahead(live, agent, m_id)                  # an entry whose branch is gone is no entry
+        entry = None
+    moved = 0
+    if entry is None:
+        if exists:
+            say("plan.py: the branch %s exists already and ahead has no entry for it. Nothing is changed and nothing is deleted: "
+                "go on with it by hand (git checkout %s) or tell the planner." % (branch, branch))
+            return 1
+        if folder_changes(folder):
+            say("plan.py: " + dirty_line(folder, "ahead"))
+            return 1
+        on = head_branch(folder)
+        if on != n_branch:
+            say("plan.py: the work folder %s is on branch %s, not %s: ahead makes %s on top of the landing of %s from there. "
+                "git checkout %s first." % (folder.as_posix(), on, n_branch, branch, n_id, n_branch))
+            return 1
+        base = commit_of(folder, rec["tip"])
+        if not base:
+            say("plan.py: the tip %s of the landing of %s is not a commit of this repository" % (rec["tip"][:9], n_id))
+            return 1
+        made = git(folder, "checkout", "--no-track", "-b", branch, base)
+        if made.returncode != 0:
+            say("plan.py: git checkout failed: %s" % (made.stderr or made.stdout).strip())
+            return 1
+    else:
+        if head_branch(folder) != branch:
+            if folder_changes(folder):
+                say("plan.py: " + dirty_line(folder, "ahead"))
+                return 1
+            made = git(folder, "checkout", branch)
+            if made.returncode != 0:
+                say("plan.py: git checkout failed: %s" % (made.stderr or made.stdout).strip())
+                return 1
+        n_tip = commit_of(folder, "refs/heads/" + n_branch) or commit_of(folder, rec["tip"])
+        base = entry["base"]
+        if n_tip != base and not is_ancestor(folder, n_tip, "refs/heads/" + branch):
+            if not commit_of(folder, base):
+                say("plan.py: the commit %s that %s was written on is no longer in this repository, so its commits cannot be moved. "
+                    "%s is kept as it is; nothing is deleted." % (base[:9], branch, branch))
+                return 1
+            if tracked_changes(folder):
+                say("plan.py: the work folder %s has uncommitted changes, and the commits of %s have to be moved onto %s: commit your "
+                    "work on %s first, then run ahead again." % (folder.as_posix(), branch, n_branch, branch))
+                return 1
+            moved = ahead_count(a, entry) or 0
+            why = move_commits(folder, n_tip, base, branch)
+            if why:
+                say("plan.py: the commits of %s do not apply on top of %s (%s). The branch is as it was. Move it by hand: git rebase "
+                    "--onto %s %s %s (resolve, git rebase --continue), then run ahead again." % (branch, n_branch, why, n_tip, base, branch))
+                return 1
+        base = n_tip
+    if not entry or (entry["after"], entry["base"], entry["handed"]) != (n_id, base, rec["tip"]):    # a second call that changes nothing writes nothing
+        lv.write_ahead(live, agent, m_id, n_id, base, rec["tip"])
+    say("AHEAD: %s  %s" % (m_id, nxt["title"]))
+    say("on %s, the landing of %s" % (base[:9], n_id))
+    print_step_body(a, nxt)
+    say()
+    say(commands_text(a, agent))
+    say("Do not land it. When %s has landed: plan.py start %s%s" % (n_id, m_id, agent_flag(agent)))
+    if moved:
+        say("moved the %d commits of %s onto %s" % (moved, branch, base[:9]))
+    return 0
+
+
 def print_step_body(a, s):
     """A step's card and what goes with it: the package's rows, what the landing needs in the ledger, the checks its changed
     paths run and the extra checks its proof asks for. Changes nothing."""
@@ -1592,6 +1867,10 @@ def print_step(a, steps, s, notes=(), blocked_before=(), working=False):
     landed = sum(1 for x in steps if x["state"] == "landed")
     agent = agent_of(a)
     say("%s: %s  %s" % ("IN WORK" if working else "NEXT", s["step"], s["title"]))
+    entry = None if working else ahead_entry(a)
+    if entry and entry["step"] == s["step"]:
+        say("PREPARED AHEAD: branch native/%s, %s; plan.py start %s%s takes it up" % (
+            s["step"], commits_word(ahead_count(a, entry)), s["step"], agent_flag(agent)))
     say("Package %s; step %s of %d; %d landed so far." % (s["package"], s["order"], len(steps), landed))
     if working:
         say("This is in work: go on with it, then land it or block it. Nothing new is given while it is.")
@@ -1657,7 +1936,9 @@ def cmd_next(a):
     stale = stale_of(a.tree, claims)
     landed = sum(1 for s in steps if s["state"] == "landed")
     agent = agent_of(a)
-    say_landing_running(a)
+    running = say_landing_running(a)
+    if running:
+        say_ahead_in_next(a, steps, running)
     say_stale(a, claims, stale)
     work = in_work(a, steps)
     if work and agent == "1" and all(k == "step" for k, _ in work):
@@ -1824,8 +2105,7 @@ def begin_work(a, branch, on_main=False):
         if not (folder / ".git").exists():
             return "%s exists and is not a work folder of this repository. Move it away, then run start again." % folder.as_posix()
         if folder_changes(folder):
-            return ("the work folder %s has uncommitted changes. Commit them (or throw away what you do not want), then run "
-                    "start again." % folder.as_posix())
+            return dirty_line(folder, "start")
     fetched = git(folder if folder.exists() else a.tree, "fetch", "origin")
     if fetched.returncode != 0:
         return "git fetch origin failed: %s" % fetched.stderr.strip()
@@ -1854,6 +2134,48 @@ def begin_work(a, branch, on_main=False):
                 return ("the commits of %s do not apply on top of origin/main (%s). The branch is as it was; put it on main by hand "
                         "(git rebase origin/main, resolve, git rebase --continue), then run start again." % (
                             branch, said[-1] if said else "conflict"))
+    return None
+
+
+def take_up_prepared(a, entry):
+    """What `start` does for a step written ahead (its branch native/<id> stands on the tip of the item that was being landed):
+    the folder goes onto the branch; when origin/main is not in it yet the step's own commits (the ones after the entry's base) are
+    moved onto origin/main (`git rebase --onto origin/main <base> native/<id>`, a clean folder; a conflict is aborted and the
+    branch is as it was). When origin/main is in the branch nothing moves and uncommitted changes stay. Returns the refusal text, or
+    None when the folder is on the branch, on top of main."""
+    agent = agent_of(a)
+    folder = work_folder(a.work_root, agent)
+    branch = "native/" + entry["step"]
+    work = in_work(a, read_steps(a.tree, a.live))
+    if work:
+        return in_work_line(a, work)
+    if not (folder / ".git").exists():
+        return "the work folder %s is missing" % folder.as_posix()
+    fetched = git(folder, "fetch", "origin")
+    if fetched.returncode != 0:
+        return "git fetch origin failed: %s" % fetched.stderr.strip()
+    if head_branch(folder) != branch:
+        if folder_changes(folder):
+            return dirty_line(folder, "start")
+        made = git(folder, "checkout", branch)
+        if made.returncode != 0:
+            return "git checkout failed: %s" % (made.stderr or made.stdout).strip()
+    base = entry["base"]
+    have = commit_of(folder, base)
+    # Nothing moves when main is in the branch and the commit the step stands on is in main (N is on main as it was written). When N
+    # is not on main (given up), or main has it under other ids, or main has gone further, the step's own commits are moved.
+    if have and is_ancestor(folder, "origin/main", "refs/heads/" + branch) and is_ancestor(folder, base, "origin/main"):
+        return None
+    if not have:
+        return ("the commit %s that %s was written on is no longer in this repository, so its commits cannot be moved onto main. %s "
+                "is kept as it is; nothing is deleted." % (base[:9], branch, branch))
+    if tracked_changes(folder):
+        return ("the work folder %s has uncommitted changes, and the commits of %s have to be moved onto origin/main: commit them "
+                "first (git add, git commit), then run start again." % (folder.as_posix(), branch))
+    why = move_commits(folder, "origin/main", base, branch)
+    if why:
+        return ("the commits of %s do not apply on top of origin/main (%s). The branch is as it was. Move it by hand: git rebase "
+                "--onto origin/main %s %s (resolve, git rebase --continue), then run start again." % (branch, why, base, branch))
     return None
 
 
@@ -1890,7 +2212,9 @@ def cmd_start(a):
         return 1
     folder = work_folder(a.work_root, agent)
     branch = "native/" + a.id
-    why = begin_work(a, branch, on_main=is_kept(s))
+    entry = ahead_entry(a)
+    prepared = entry if entry and entry["step"] == a.id and folder.is_dir() and branch_exists(folder, "refs/heads/" + branch) else None
+    why = take_up_prepared(a, prepared) if prepared else begin_work(a, branch, on_main=is_kept(s))
     if why:
         say("plan.py: " + why)
         return 1
@@ -1898,6 +2222,10 @@ def cmd_start(a):
     lv.put_claim(live_dir(a.live), s["package"], agent, branch)
     refresh_page(a)
     say("started %s: branch %s in %s (package %s is claimed by agent %s)" % (a.id, branch, folder.as_posix(), s["package"], agent))
+    if prepared:
+        count = git(folder, "rev-list", "--count", "origin/main..refs/heads/" + branch).stdout.strip()
+        say("prepared ahead: %s commits of %s are on top of main" % (count, a.id))
+        lv.drop_ahead(live_dir(a.live), agent, a.id)
     if replay_allowed(card_text(a.tree, s)):
         say("This step's card says its replay reference may change. Once the change is made and the tour has played every recorded "
             "stop, record the reference with: %s" % REPLAY_RECORD)
@@ -2020,20 +2348,23 @@ def refs_problems(folder):
     return bad
 
 
-def hand_to_gate(a, folder, branch, label, agent, extra, on_pass, join=False):
+def hand_to_gate(a, folder, branch, label, agent, extra, on_pass, join=False, tip=None):
     """ONE call of the gate (LAND) for a step or a repair, and what follows: a pass calls `on_pass(verdict, seconds, summary)`
     and returns its exit code; anything else prints the verdict and returns 1 (a failure), 3 (the same failure three times) or
     4 (a tool or the machine: not judged). Nothing is undone: a state commit made before stays on the branch.
 
     The landing record (live.write_record) is written just before the gate is called and removed when it has answered. `join`:
     the gate already has this branch in its queue (an earlier call, cut): its record is left as it is, nothing is pushed, and the
-    gate's own call attaches to the row and waits for its end."""
+    gate's own call attaches to the row and waits for its end. `tip`: the commit handed over when the folder's HEAD is not the branch
+    (the folder is on a step written ahead); it is the folder's HEAD otherwise."""
     started = time.time()
     options = gate_options(a, agent) + list(extra)
     if join:
         run = lambda: LAND(folder, branch, a.tablet, a.tablet_wait, options, push=False)
     else:
-        lv.write_record(live_dir(a.live), agent, label, branch, git_out(folder, "rev-parse", "HEAD"), os.getpid())
+        tip = tip or git_out(folder, "rev-parse", "HEAD")
+        lv.write_record(live_dir(a.live), agent, label, branch, tip, os.getpid())
+        lv.set_ahead_handed(live_dir(a.live), agent, label, tip)       # a step written ahead remembers which tip was given
         run = lambda: LAND(folder, branch, a.tablet, a.tablet_wait, options)
     try:
         verdict = run()
@@ -2093,9 +2424,9 @@ def code_commit_at(folder, tip, step_id):
     return row["commit"] if row and row["state"] == "landed" else ""
 
 
-def later_commits(folder, tip):
-    """[`sha subject`] of the commits of the branch after `tip`."""
-    return git(folder, "log", "--format=%h %s", "%s..HEAD" % tip).stdout.strip().splitlines()
+def later_commits(folder, tip, ref="HEAD"):
+    """[`sha subject`] of the commits of `ref` (the folder's HEAD) after `tip`."""
+    return git(folder, "log", "--format=%h %s", "%s..%s" % (tip, ref)).stdout.strip().splitlines()
 
 
 def replay_allowed(card):
@@ -2171,6 +2502,10 @@ def land_item(a):
     if s["state"] == "landed" and a.id in MAIN_LANDED:
         return found_on_main(a, steps, s)
     if s["state"] != "started":
+        held = ahead_entry(a)
+        if held and held["step"] == a.id:
+            say("step %s is prepared ahead, not started: plan.py start %s%s" % (a.id, a.id, agent_flag(agent)))
+            return 1
         say("plan.py: step %s is %s; only a started step lands (plan.py start %s)" % (a.id, s["state"], a.id))
         return 1
     claims = lv.read_claims(live_dir(a.live))
@@ -2189,11 +2524,41 @@ def land_item(a):
         return 1
     if rec:
         return join_landing(a, s, folder, branch, rec)
+    here = ahead_here(a)
+    if here and here["after"] == a.id and head_branch(folder) != branch:
+        return land_from_ahead(a, s, folder, branch, here)
     why = work_folder_problem(a, folder, branch)
     if why:
         say("plan.py: " + why)
         return 1
     return begin_landing(a, s, folder, branch)
+
+
+def land_from_ahead(a, s, folder, branch, entry):
+    """A new landing of the step `entry` was written ahead of, given while the work folder is on the step written ahead (the landing
+    before was not judged, and nothing has changed on the step's branch since). The branch's tip is handed over as it is: nothing is
+    committed, the folder stays where it is with its uncommitted changes. Any other new landing (the branch has commits the last
+    landing did not hold, or the tool's own state commit is still to be made) needs the folder on the step's branch, clean."""
+    agent = agent_of(a)
+    tip = commit_of(folder, "refs/heads/" + branch)
+    if tip and tip == entry["handed"] and is_state_commit(folder, tip, a.id) and code_commit_at(folder, tip, a.id):
+        say("landing %s again from native/%s: its tip %s is the one the last landing was given; nothing is committed and the folder "
+            "stays on native/%s." % (a.id, entry["step"], tip[:9], entry["step"]))
+        code_commit = code_commit_at(folder, tip, a.id)
+
+        def passed(verdict, seconds, summary):
+            return finish_landing(a, s, code_commit, verdict, seconds, summary)
+
+        return hand_to_gate(a, folder, branch, a.id, agent, also_options(a, a.id), passed, tip=tip)
+    say("plan.py: " + ahead_branch_line(folder, entry, branch, a.id))
+    return 1
+
+
+def ahead_branch_line(folder, entry, branch, item):
+    """Why a landing that needs the step's own branch cannot be given from the step written ahead: both branches are named."""
+    return ("the work folder %s is on native/%s (written ahead), and %s needs a commit of its own or a new landing commit first: "
+            "commit your work on native/%s, then git checkout %s, then run land %s again." % (
+                folder.as_posix(), entry["step"], branch, entry["step"], branch, item))
 
 
 def join_landing(a, s, folder, branch, rec):
@@ -2202,7 +2567,9 @@ def join_landing(a, s, folder, branch, rec):
     checked again and nothing is committed or pushed. When the landing that ran judged an older commit than the folder's tip
     now: if it failed, the present tip is landed in the same call; if it passed, the later commits are named as not on main."""
     agent = agent_of(a)
-    if not folder.is_dir() or git(folder, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip() != branch:
+    # The folder is on the step's branch, or on the step written ahead: the join reads the record's tip and the step's own branch
+    # (refs/heads/<branch>), never HEAD, and needs neither the step's branch checked out nor a clean folder.
+    if not folder.is_dir() or (head_branch(folder) != branch and not ahead_here(a)):
         say("plan.py: the work folder %s is not on branch %s, so the landing of %s cannot be joined from it" % (folder.as_posix(), branch, a.id))
         return 1
     if rec.get("finishing"):
@@ -2221,16 +2588,20 @@ def join_landing(a, s, folder, branch, rec):
     code_commit = code_commit_at(folder, tip, a.id) or tip[:9]
 
     def passed(verdict, seconds, summary):
-        later = later_commits(folder, tip)
+        later = later_commits(folder, tip, "refs/heads/" + branch)
         code = finish_landing(a, s, code_commit, verdict, seconds, summary)
         if later:
             say("NOTE: the landing judged %s. These later commits of the branch are not on main: %s" % (tip[:9], "; ".join(later)))
         return code
 
     code = hand_to_gate(a, folder, branch, a.id, agent, also_options(a, a.id), passed, join=True)
-    here = git_out(folder, "rev-parse", "HEAD")
+    here = commit_of(folder, "refs/heads/" + branch) or git_out(folder, "rev-parse", "HEAD")
     if code in (1, 4) and here != tip:
         say("the landing that was running judged an older commit (%s); landing the present one (%s) now" % (tip[:9], here[:9]))
+        on_ahead = ahead_here(a)
+        if on_ahead and head_branch(folder) != branch:
+            say("plan.py: " + ahead_branch_line(folder, on_ahead, branch, a.id))
+            return 1
         why = work_folder_problem(a, folder, branch)
         if why:
             say("plan.py: " + why)
@@ -2250,7 +2621,9 @@ def finish_landing(a, s, code_commit, verdict, seconds, summary):
     the page. The landings list takes a step id once, so whoever does this second adds nothing."""
     agent = agent_of(a)
     MAIN_LANDED[a.id] = code_commit
-    set_state(a.tree, a.id, "landed", code_commit, live=a.live)
+    # A landing that ends while the work folder is on a step written ahead writes no file of the working tree (steps.tsv there is
+    # that step's own); what is landed is read from origin/main, and the live folder has the rest.
+    set_state(a.tree, a.id, "landed", code_commit, live=a.live, write_file=ahead_here(a) is None)
     lv.add_landing(live_dir(a.live), a.id, code_commit, seconds, agent, main=verdict.commit or "-")
     settle_claim(a, read_steps(a.tree, a.live), s, agent, renew=True)
     refresh_page(a)
@@ -2269,7 +2642,7 @@ def begin_landing(a, s, folder, branch):
     reading = card_rows(card_text(folder, s))
     if not reading.ok:
         say("plan.py: the card's Rows line could not be read (%s): %s" % (reading.why, reading.raw[:200]))
-        say("It is the plan's fault, not the step's: write it in BLOCKED.md under tools (plan.py tool \"...\") and take the next step.")
+        say("It is the plan's fault, not the step's: plan.py blocked %s \"tool: the card's Rows line cannot be read\", then plan.py next." % a.id)
         return 1
     git(folder, "fetch", "origin")
     ledger = read_ledger((folder / LEDGER).read_bytes().decode("utf-8"))
@@ -2416,6 +2789,10 @@ def park_branch(a, folder, branch):
     """What `blocked` does for something in work: the folder must have no uncommitted change, and the branch goes to origin so
     that nothing is lost. Returns the refusal text, or None."""
     if folder.exists() and folder_changes(folder):
+        here = ahead_here(a)
+        if here:                                     # the folder is on the step written ahead: its work is what has to be committed
+            return ("the work folder %s has uncommitted changes. Commit your work on native/%s first (git add, git commit), then run "
+                    "blocked again." % (folder.as_posix(), here["step"]))
         return ("the work folder %s has uncommitted changes. Commit your unfinished work first (git add, git commit), then run "
                 "blocked again." % folder.as_posix())
     here = folder if folder.exists() else a.tree
@@ -2506,7 +2883,7 @@ def cmd_tool(a):
     append_under(native(a.tree) / "BLOCKED.md", "tools", "- %s: %s" % (datetime.date.today().isoformat(), text))
     lv.append_fault(live_dir(a.live), agent_of(a), "", "TOOL", "(by hand)", text)
     refresh_page(a)
-    say("written under 'tools' in %s/BLOCKED.md and as a line of tool-faults.tsv. Take the next step (plan.py next); do not debug the tool." % NATIVE)
+    say("written under 'tools' in %s/BLOCKED.md and as a line of tool-faults.tsv. Nothing is blocked by it: go on as your rules say; do not debug the tool." % NATIVE)
     return 0
 
 
@@ -2579,6 +2956,8 @@ def parser():
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("next", parents=[who]).set_defaults(fn=cmd_next)
     sub.add_parser("status", parents=[who]).set_defaults(fn=cmd_status)
+    sub.add_parser("ahead", parents=[who], help="while a landing plays: the branch and the card of the step that follows it, on top of "
+                   "the commit being tested").set_defaults(fn=cmd_ahead)
     sub.add_parser("page").set_defaults(fn=cmd_page)
     cd = sub.add_parser("card", help="any step's card, its package's rows and the checks it needs; changes nothing")
     cd.add_argument("id")
@@ -2656,7 +3035,7 @@ def main(argv=None):
         if why:
             say(why)
             return 2
-    if a.cmd not in ("next", "start", "land", "status", "card"):
+    if a.cmd not in ("next", "start", "land", "status", "card", "ahead"):
         read_main_quietly(a)           # the others read what is landed from the last fetched origin/main, with no fetch and no line
     try:
         return a.fn(a)

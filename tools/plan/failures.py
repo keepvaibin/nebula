@@ -25,8 +25,9 @@ STOP_CODE = 3
 KINDS = ("PASS", "FAIL", "TOOL", "ENV", "FLAKE", "NEW")
 
 STOP_TEXT = "Same failure three times. Stop retrying. Run plan.py blocked, then plan.py next."
-TOOL_TEXT = ("this is a tool fault: report it in BLOCKED.md under 'tools' and take the next step; "
-             "do not debug the tool")
+TOOL_TEXT = ("this is a tool fault, not the change's: it does not count as a failure; give the landing once more. Not judged a "
+             "second time: stop (an agent of the plan: plan.py blocked <ID> \"tool: <the fault's first line>\", then plan.py next). "
+             "Do not debug the tool.")
 ENV_TEXT = ("this is the machine's fault, not the change's (disk, graphics card, tablet or another program): "
             "it does not count as a failure; run the landing again when the machine is free")
 

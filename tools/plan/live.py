@@ -9,6 +9,9 @@ it a temporary folder), never in an untracked file inside one work folder:
     landings.tsv      step, commit, finished, seconds, agent, main   (commit: the code's commit on the step's branch; main:
                       the commit main moved to, `-` where it is not known)
     landing-<agent>.tsv   step, branch, tip, time, pid   the landing handed to the gate and not yet answered (one file for each agent)
+    ahead-<agent>.tsv step, after, base, handed, time    the step written ahead while a landing plays (plan.py ahead): its branch is
+                      native/<step>, `after` is the item being landed, `base` the commit the step's own commits stand on, `handed`
+                      the tip of that item the last landing was given
     owed.tsv          time, agent, step, text            what only a person or other hardware can check
     repairs.tsv       id, opened, source, kind, check, renderer, step, commit, evidence, row, state, closed, seen, note
     github-pending.tsv  time, commit, branches, candidate, run_folder, rerun   (a landing that moved main before GitHub's jobs
@@ -34,6 +37,7 @@ CLAIM_COLUMNS = ["package", "agent", "time", "branch"]
 FAULT_COLUMNS = ["time", "agent", "step", "kind", "check", "test", "first_error", "run_folder", "could_not"]
 LANDING_COLUMNS = ["step", "commit", "finished", "seconds", "agent", "main"]
 RECORD_COLUMNS = ["step", "branch", "tip", "time", "pid"]
+AHEAD_COLUMNS = ["step", "after", "base", "handed", "time"]
 OWED_COLUMNS = ["time", "agent", "step", "text"]
 REPAIR_COLUMNS = ["id", "opened", "source", "kind", "check", "renderer", "step", "commit", "evidence", "row", "state", "closed",
                   "seen", "note"]
@@ -307,6 +311,42 @@ def drop_record(live, agent, step=None):
         old = read_record(live, agent)
         if old is not None and (step is None or old["step"] == step):
             record_path(live, agent).unlink(missing_ok=True)
+
+
+# ---- the step written ahead ---------------------------------------------------------------------------------------------
+# One line for each agent: the step whose branch `plan.py ahead` made on top of the item that is being landed. Nothing here
+# changes a step's state; it only says where the branch stands, so that `start`, `land` and `ahead` can find its base again.
+
+def ahead_path(live, agent):
+    return pathlib.Path(live) / ("ahead-%s.tsv" % agent)
+
+
+def read_ahead(live, agent):
+    rows = read_rows(ahead_path(live, agent), AHEAD_COLUMNS)
+    return rows[0] if rows else None
+
+
+def write_ahead(live, agent, step, after, base, handed, now=None):
+    with locked(live):
+        write_rows(ahead_path(live, agent), AHEAD_COLUMNS,
+                   [{"step": step, "after": after, "base": base, "handed": handed, "time": stamp(now)}])
+
+
+def set_ahead_handed(live, agent, after, handed):
+    """The tip of `after` that a landing was just given, when the agent's ahead entry stands on that item."""
+    with locked(live):
+        old = read_ahead(live, agent)
+        if old is not None and old["after"] == after and old["handed"] != handed:
+            old["handed"] = handed
+            write_rows(ahead_path(live, agent), AHEAD_COLUMNS, [old])
+
+
+def drop_ahead(live, agent, step=None):
+    """Removes the agent's ahead entry (only when it is for `step`, if one is given). The branch is never touched."""
+    with locked(live):
+        old = read_ahead(live, agent)
+        if old is not None and (step is None or old["step"] == step):
+            ahead_path(live, agent).unlink(missing_ok=True)
 
 
 # ---- what only a person can check ---------------------------------------------------------------------------------------
