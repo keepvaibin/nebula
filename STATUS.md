@@ -6,7 +6,8 @@ Steps landed: 1 of 138 (1%).
 
 Now: S0.1.2 since 14:17; ahead: nothing
 
-In work now: Nothing started.
+In work now:
+- S0.1.2 Documents (agent 1)
 
 ## Packages
 
