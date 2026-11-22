@@ -1,19 +1,18 @@
 # Nebula native plan: status
 
-Written 2026-11-22 14:18.
+Written 2026-11-22 14:25.
 
-Steps landed: 1 of 138 (1%).
+Steps landed: 2 of 138 (1%).
 
 Now: S0.1.2 since 14:17; ahead: nothing
 
-In work now:
-- S0.1.2 Documents (agent 1)
+In work now: Nothing started.
 
 ## Packages
 
 | Package | Landed | Of |
 | --- | --- | --- |
-| S0.1 | 1 | 5 |
+| S0.1 | 2 | 5 |
 | S0.2 | 0 | 6 |
 | S0.3 | 0 | 2 |
 | R1 | 0 | 4 |
@@ -42,6 +41,7 @@ In work now:
 
 | When | Step | Title | Code commit | Main commit |
 | --- | --- | --- | --- | --- |
+| 2026-11-22 14:25 | S0.1.2 | Documents | 59bdb8776 | 2c5dbb271 |
 | 2026-11-22 14:17 | S0.1.1 | Land `rows/p022c` and `rows/p022d` as one batch | 83b537af7 | 463d38612 |
 
 ## Repairs
