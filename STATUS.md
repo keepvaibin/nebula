@@ -1,10 +1,11 @@
 # Nebula native plan: status
 
-Written 2026-11-22 12:01.
+Written 2026-11-22 12:46.
 
 Steps landed: 0 of 138 (0%).
 
-In work now: Nothing started.
+In work now:
+- S0.1.1 Land `rows/p022c` and `rows/p022d` as one batch (agent 1)
 
 ## Packages
 
@@ -41,11 +42,7 @@ None yet.
 
 ## Repairs
 
-0 open of kind fail, 1 in all.
-
-| Id | State | Kind | Check | Renderer | Traced to | Seen |
-| --- | --- | --- | --- | --- | --- | --- |
-| R-001 | open | stress | stress/tour/d3d11/3 | d3d11 | commit abc | 2 |
+No repair recorded.
 
 ## For the owner to check by hand
 
