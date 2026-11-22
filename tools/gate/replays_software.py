@@ -21,6 +21,10 @@ A play is
   pass  it reached its end and every step hash is the recorded one;
   fail  it crashed, the game completed no step for 120 s (the runner's `hung`, T6's rule), or a step hash differs from the recorded one
         (the first step that differs is named);
+  flake a play that crashed or hung (the runner's `crashed` or `hung`) was played once more alone, after all the others, and passed
+        then: its message holds the first run's cause. One that fails again alone is `fail`. A step hash that differs, a play at its
+        time limit and a tool or environment fault are never played again. (Cause not found: the software Direct3D 12 device is removed
+        in the Egg and Hell plays every run, ledger row P-339; the one crash of 11-21 was that moment ending in a stall.)
   tool  the runner or this script broke (no result file, a play that ran past its limit with the game still moving: the check's time limit
         is too short, never a fault of the game), or no step hash was written;
   env   the PC was not fit: no software device for Direct3D 12 or 11, no room for one copy.
@@ -210,11 +214,35 @@ def judge_play(kind, message, work, test):
     return kind, message
 
 
+def play_task(a, suite, renderer, test, layers, folder):
+    """One play in the folder `folder` of the run's work folder: (kind, message, seconds, log text)."""
+    limit = 240 * a.limit_scale + 900  # the runner's limit with its own grace and the wait for the game's output
+    work = pathlib.Path(a.work) / renderer / folder
+    work.mkdir(parents=True, exist_ok=True)
+    command = task_command(suite, a.bin, a.pak, work, a.who, renderer, test, a.limit_scale, layers.get(renderer), work / "run.lock")
+    code, seconds = play_one(command, work / "harness.out", limit)
+    kind, message, game_seconds = result_of(work, test, renderer)
+    if code == 124:
+        kind, message = "tool", "the runner did not end within %d s and was ended" % limit
+    elif kind == "tool" and message.startswith("no result.json"):
+        said = last_line(work / "harness.out")
+        message = "%s (the runner said: %s)" % (message, said)
+    kind, message = judge_play(kind, message, work, test)
+    logs = read_logs(work, test, renderer)
+    if kind != "pass" and cause_line(logs):
+        message = "%s (the game's log: %s)" % (message, cause_line(logs))
+    return kind, message, game_seconds if game_seconds is not None else seconds, logs
+
+
+def say_play(say, renderer, test, result):
+    kind, message, seconds, _ = result
+    say("%-6s %-34s %-5s %s" % (renderer, test, kind, ("%.0f s" % seconds) + (": " + message if message else "")))
+
+
 def play_all(a, suite, tasks, layers, copies, say):
     """Plays every (renderer, test) of `tasks` with `copies` at once, each in a folder of its own. Returns {(renderer, test):
     (kind, message, seconds, log text)}. Idle copies take the next play: the order of the tasks is the order they start in."""
     results, lock, queue = {}, threading.Lock(), list(tasks)
-    limit = 240 * a.limit_scale + 900  # the runner's limit with its own grace and the wait for the game's output
 
     def worker():
         while True:
@@ -222,24 +250,10 @@ def play_all(a, suite, tasks, layers, copies, say):
                 if not queue:
                     return
                 renderer, test = queue.pop(0)
-            work = pathlib.Path(a.work) / renderer / test
-            work.mkdir(parents=True, exist_ok=True)
-            command = task_command(suite, a.bin, a.pak, work, a.who, renderer, test, a.limit_scale, layers.get(renderer), work / "run.lock")
-            code, seconds = play_one(command, work / "harness.out", limit)
-            kind, message, game_seconds = result_of(work, test, renderer)
-            if code == 124:
-                kind, message = "tool", "the runner did not end within %d s and was ended" % limit
-            elif kind == "tool" and message.startswith("no result.json"):
-                said = last_line(work / "harness.out")
-                message = "%s (the runner said: %s)" % (message, said)
-            kind, message = judge_play(kind, message, work, test)
-            logs = read_logs(work, test, renderer)
-            if kind != "pass" and cause_line(logs):
-                message = "%s (the game's log: %s)" % (message, cause_line(logs))
+            result = play_task(a, suite, renderer, test, layers, test)
             with lock:
-                results[(renderer, test)] = (kind, message, game_seconds if game_seconds is not None else seconds, logs)
-            say("%-6s %-34s %-5s %s" % (renderer, test, kind, ("%.0f s" % (game_seconds if game_seconds is not None else seconds)) + (
-                ": " + message if message else "")))
+                results[(renderer, test)] = result
+            say_play(say, renderer, test, result)
 
     threads = [threading.Thread(target=worker) for _ in range(max(1, copies))]
     for t in threads:
@@ -247,6 +261,32 @@ def play_all(a, suite, tasks, layers, copies, say):
     for t in threads:
         t.join()
     return results
+
+
+def crashed_or_hung(result):
+    """Whether a play's result is the runner's `crashed` or `hung` (the game ended on its own fault or stopped stepping), the only plays
+    that are played again: a step hash that differs, a time limit, a tool or an environment fault never is."""
+    kind, message = result[0], result[1]
+    return kind == "fail" and message.split(":", 1)[0] in ("crashed", "hung")
+
+
+def play_again(a, suite, results, layers, say, play=play_task):
+    """The plays that crashed or hung are played once more, one at a time, alone, after all the others, each in a folder of its own
+    (<test>-alone). One that passes alone is kind `flake` and its message holds the first run's cause; one that fails again is `fail`
+    and holds both. Returns {(renderer, test): result} with the plays played again replaced. No line goes to flakes.tsv: the gate's own
+    settling (kinds.py Settler) does not read this check's plays."""
+    out = dict(results)
+    for (renderer, test), first in sorted(results.items(), key=lambda item: item[0][1] + item[0][0]):
+        if not crashed_or_hung(first):
+            continue
+        say("%-6s %-34s played again alone: it %s" % (renderer, test, first[1][:160]))
+        second = play(a, suite, renderer, test, layers, test + "-alone")
+        say_play(say, renderer, test, second)
+        if second[0] == "pass":
+            out[(renderer, test)] = ("flake", "failed once, passed alone; the first run: %s" % first[1], second[2], second[3])
+        else:
+            out[(renderer, test)] = ("fail", "failed again alone: %s; the first run: %s" % (second[1], first[1]), second[2], second[3])
+    return out
 
 
 def last_line(path):
@@ -416,6 +456,7 @@ def run_all(a, say=print):
         else:
             copies = max(1, min(copies, room.copies))
             results = play_all(a, suite, tasks, layers, copies, say)
+            results = play_again(a, suite, results, layers, say)
     for r in runnable:
         if plan[r] is None and layers.get(r):
             errors, warnings = layer_counts(results, r)

@@ -217,7 +217,7 @@ class Args:
             setattr(self, k, v)
 
 
-def whole_run(check, label, probes, wrong=(), crash=(), **kw):
+def whole_run(check, label, probes, wrong=(), crash=(), crash_once=(), hang_once=(), **kw):
     """run_all with fakes for the game: `probes` {renderer: (state, layer)}; `wrong` the (renderer, test index) whose hash differs at step 3."""
     with tempfile.TemporaryDirectory() as tmp:
         t = pathlib.Path(tmp)
@@ -241,7 +241,13 @@ def whole_run(check, label, probes, wrong=(), crash=(), **kw):
             hashes = list(recs[test])
             if (renderer, names.index(test)) in wrong:
                 hashes[3] = "0badf00d00000000"
-            if (renderer, names.index(test)) in crash:
+            again = work.name.endswith("-alone")
+            key = (renderer, names.index(test))
+            if key in hang_once and not again:
+                plant_run(work, test, renderer, hashes[:3], verdict="hung", kind="fail", reason="the game completed no step for 120 s")
+            elif key in crash_once and not again:
+                plant_run(work, test, renderer, hashes[:3], verdict="crashed", kind="fail", reason="dump x; last lines: crash: minidump failed")
+            elif (renderer, names.index(test)) in crash:
                 log = "[ 69.031] exception: thrown: C++ exception std::runtime_error: device lost: a GPU fence never completed\n[ 69.038] crash: unhandled exception 0x0000087D\n"
                 plant_run(work, test, renderer, hashes[:3], verdict="crashed", kind="fail", reason="dump x; last lines: crash: minidump failed", log=log)
             else:
@@ -309,6 +315,37 @@ def the_whole_run(check):
     check(code == 0 and rs.NO_VULKAN not in "\n".join(said), "a software Vulkan device would be played, with no 'not run' line")
 
 
+def the_play_again(check):
+    """A play that crashed or hung is played once more alone after the others: a pass is flake (the first cause in its message), a second
+    crash is fail; a step hash that differs is never played again."""
+    on = {"d3d12": ("ok", True), "d3d11": ("ok", True), "vulkan": ("none", None)}
+    code, said, started, _, verdict, _ = whole_run(check, "crash once", on, crash_once={("d3d12", 1)})
+    lines = [l for l in said if l.startswith("KIND ")]
+    check(code == 0 and said[-1] == "VERDICT pass", "a crash that passes alone: the run passes: %s" % said[-3:])
+    check(len(lines) == 1 and lines[0].startswith("KIND flake replays/software/d3d12 ") and "failed once, passed alone; the first run: crashed: dump x" in lines[0],
+          "the play is a flake and says the first run's cause: %s" % lines)
+    check(len(started) == 5 and started[-1][started[-1].index("--work") + 1].endswith("-alone") and "d3d12" in started[-1],
+          "five plays started, the fifth alone and last: %s" % [c[c.index("--work") + 1][-40:] for c in started])
+    check(any("played again alone" in l for l in said), "it says that it plays the one again")
+    code, said, started, _, _, _ = whole_run(check, "hang once", on, hang_once={("d3d11", 0)})
+    lines = [l for l in said if l.startswith("KIND ")]
+    check(code == 0 and len(lines) == 1 and lines[0].startswith("KIND flake replays/software/d3d11 ") and "hung" in lines[0], "a hang that passes alone is a flake: %s" % lines)
+    code, said, started, _, _, _ = whole_run(check, "crash twice", on, crash={("d3d12", 1)})
+    lines = [l for l in said if l.startswith("KIND ")]
+    check(code == 1 and len(started) == 5 and len(lines) == 1 and lines[0].startswith("KIND fail replays/software/d3d12 ")
+          and "failed again alone: crashed: dump x" in lines[0] and "the first run: crashed: dump x" in lines[0],
+          "a crash that crashes again alone is a fail with both causes: %s" % lines)
+    code, said, started, _, _, _ = whole_run(check, "hash differs", on, wrong={("d3d11", 1)})
+    check(code == 1 and len(started) == 4, "a step hash that differs is not played again: %d plays started" % len(started))
+    results = {("d3d12", "a"): ("fail", "crashed: x", 1.0, ""), ("d3d12", "b"): ("fail", "the step hashes differ from the recording: differs from step 3", 1.0, ""),
+               ("d3d12", "c"): ("env", "too-slow: x", 1.0, ""), ("d3d12", "d"): ("tool", "no result.json", 1.0, ""), ("d3d11", "e"): ("fail", "hung: the game completed no step for 120 s", 1.0, "")}
+    again = []
+    out = rs.play_again(Args("w", "b"), "suite", results, {}, lambda text: None, play=lambda a, suite, renderer, test, layers, folder: again.append((renderer, test, folder)) or ("pass", "", 2.0, ""))
+    check(sorted(again) == [("d3d11", "e", "e-alone"), ("d3d12", "a", "a-alone")], "only crashed and hung plays are played again: %s" % again)
+    check(out[("d3d12", "b")] == results[("d3d12", "b")] and out[("d3d12", "c")] == results[("d3d12", "c")] and out[("d3d12", "d")] == results[("d3d12", "d")],
+          "the others are left as they were")
+
+
 def the_cause(check):
     check(rs.cause_line("a\n  [  1.0] exception: device lost:   a GPU fence never completed \nb\n[D3D12-LIVE-ERR] id 1: x") ==
           "[ 1.0] exception: device lost: a GPU fence never completed", "the first line that names a stopped renderer, blanks squeezed")
@@ -373,7 +410,7 @@ def the_gate_part(check):
             gate.run = real
 
 
-CASES = [the_option_in_the_game, the_runner, the_replay_tool, copies, window, probe, judging, the_whole_run, the_cause, the_gate_part]
+CASES = [the_option_in_the_game, the_runner, the_replay_tool, copies, window, probe, judging, the_whole_run, the_play_again, the_cause, the_gate_part]
 
 
 def main():
