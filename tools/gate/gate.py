@@ -39,7 +39,9 @@ starts the game for a test goes through here.
          section 10.2; the candidate becomes the base after a move that judged it), measure/step/tablet the single measure (its trusted
          lines are kept in the history after the move); the nightly run measures too.
 --long   level 3, on main's newest commit, under the long lock, at below-normal priority: the tablet's 102 stops
-         against the PC's, a sanitizer build's tour, the soak, every disc on every renderer.
+         against the PC's, a sanitizer build's tour, the soak, every disc on every renderer. Its parts are pieces of at most seven
+         minutes that give way to landings (tools/gate/long_parts.py); no speed part. At its end: tools/gate/long_results.py.
+long-results RUN_FOLDER [--dry]: what follows from a long run's results: repairs, tool-fault lines, the report, new pictures.
 --final  level 4: the main and long levels on one commit. "Done" needs it passed with no check planned or known.
 --only CHECK[,CHECK]: only the checks those shell patterns name, and the checks they need (for tracing a red main).
 speed-base make|anchor|show: the kept builds of the speed check (tools/gate/speedbase.py, docs/plan/04-GATE-AND-MAIN.md section 10.2).
@@ -126,6 +128,7 @@ import github_rule  # noqa: E402
 import kinds  # noqa: E402
 import landing  # noqa: E402
 import lockholder  # noqa: E402
+import long_parts  # noqa: E402
 import machine  # noqa: E402
 import pictures as picture_tool  # noqa: E402
 import replays_software  # noqa: E402
@@ -385,6 +388,10 @@ class Gate:
         self.slots = None
         self.sampler = None
         self.lanes_seen = 0
+        self.part_log = []            # the long run: [{"part", "waited", "held"}] for each piece that took the machine (locked_part)
+        self.carried = {}             # a check whose tests ran in pieces: the seconds the pieces took, added to its row
+        self.pieces = {}              # the long run: {(label, renderer): PiecedRun} of the checks whose tests run in pieces
+        self.android_built = False
 
     def game_slot(self, weight=1):
         """A game copy's place among the copies that may run at once (machine_ready): `with g.game_slot(): ...` around a program
@@ -459,7 +466,7 @@ class Gate:
             return None
         if self.dry:
             return True
-        t0 = time.time()
+        t0 = time.time() - self.carried.pop(name, 0.0)
         log = self.work / ("%s.log" % name.replace("/", "-").replace(" ", "-"))
         cases = None
         try:
@@ -563,7 +570,7 @@ class Gate:
         out, path, head, aside_line, new_line = self._save()
         passed = self.verdict == "pass"
         seconds = out["seconds"]
-        append_history(pathlib.Path(self.args.work) / "history.tsv", out)
+        append_history(pathlib.Path(self.args.work) / "history.tsv", out, getattr(self.args, "covers", ""))
         if passed and not self.args.keep_runs and not self.args.out:
             if self.new_pictures and getattr(self.args, "move", False):
                 # The approval at the landing runs the picture checks again on these folders (main()): pruned after it.
@@ -672,11 +679,14 @@ class Gate:
 
 
 HISTORY_COLUMNS = ("started", "run", "level", "commit", "result", "seconds", "pass", "known", "planned", "owed",
-                   "failed", "only", "checks")
+                   "failed", "only", "checks", "covers", "moved")
+# `covers` and `moved` came with package B15: what a landing's run covered (the branches) and, in a line of level `move`, the commit
+# main moved to. A file written before them is read as it is (long_results.read_history).
 
 
-def append_history(path, out):
-    """One line per run in gate-runs/history.tsv: when, which, the result and every check's state and seconds."""
+def append_history(path, out, covers=""):
+    """One line per run in gate-runs/history.tsv: when, which, the result and every check's state and seconds; `covers`: the branches
+    the run answers for (a landing's)."""
     path = pathlib.Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     new = not path.exists()
@@ -685,7 +695,22 @@ def append_history(path, out):
              out["verdict"], "%.0f" % out["seconds"], c["pass"], c["known"], c["planned"],
              c["owed"], c["fail"] + c["worse"], out["only"] or "-",
              " ".join((["github-form=" + out["github"]] if out.get("github") else []) +
-                      ["%s=%s/%.0f" % (r["check"], r["state"], r.get("seconds", 0.0)) for r in out["checks"]]))
+                      ["%s=%s/%.0f" % (r["check"], r["state"], r.get("seconds", 0.0)) for r in out["checks"]]),
+             covers or "-", "-")
+    with open(path, "a", encoding="utf-8") as f:
+        if new:
+            f.write("\t".join(HISTORY_COLUMNS) + "\n")
+        f.write("\t".join(str(x) for x in cells) + "\n")
+
+
+def append_move(path, run, moved, covers, now=None):
+    """After a landing has moved main: one line of level `move` in history.tsv: when, the run, the commit main moved to and the branches
+    the landing covered. It is the record that tracing a failure of the long run to a landing reads (tools/gate/long_results.py)."""
+    path = pathlib.Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    new = not path.exists()
+    now = now or datetime.datetime.now()
+    cells = (now.isoformat(timespec="seconds"), run, "move", moved, "pass", "0", "0", "0", "0", "0", "0", "-", "", covers or "-", moved)
     with open(path, "a", encoding="utf-8") as f:
         if new:
             f.write("\t".join(HISTORY_COLUMNS) + "\n")
@@ -1265,7 +1290,43 @@ def git_in(tree, *args):
     return r.stdout.strip() if r.returncode == 0 else ""
 
 
-def harness(g, suite, renderer, label, device=None, bin_dir=None, env=None, judge=None, stress_lane=False, stress_fails=False):
+class PiecedRun:
+    """One harness check whose tests are played in pieces (the long run, package B15 point 12): each piece is the runner on some of
+    the suite's tests into the one run folder, under the lock for itself; `harness(..., pieced=run)` then reads and judges all of them
+    as one check, so the board keeps one line for the part. The pieces' exit codes and logs are kept for that reading."""
+
+    def __init__(self, g, suite, renderer, label, check, device=None, bin_dir=None, env=None, judge=None):
+        self.g, self.bin_dir, self.device, self.check = g, bin_dir, device, check
+        self.source = HarnessSource(g, suite, renderer, label, device, bin_dir, env, judge)
+        self.names = list(self.source.listed or [])
+        self.codes, self.logs, self.seconds = [], [], 0.0
+
+    def run_piece(self, names, index):
+        """Plays `names` (some of the suite's tests); nothing in a dry run. A piece that cannot start is the runner's own exit code."""
+        if self.g.dry:
+            return
+        started = time.time()
+        log = self.g.work / ("%s-piece%d.log" % (self.source.tag, index + 1))
+        code = self.source.start(self.source.first_work(), self.bin_dir or self.g.bin, list(names), log,
+                                 self.g.work / ("harness-%s.lock" % self.source.tag))
+        self.codes.append(code)
+        self.logs.append(log)
+        self.seconds += time.time() - started
+
+    def finish(self, log):
+        """The pieces' logs in the check's own log, and the exit code the check reads: the first that was not 0 (none run: 1)."""
+        with open(log, "w", encoding="utf-8") as f:
+            for i, piece in enumerate(self.logs):
+                f.write("=== piece %d of %d ===\n" % (i + 1, len(self.logs)))
+                try:
+                    f.write(pathlib.Path(piece).read_text(encoding="utf-8", errors="replace"))
+                except OSError:
+                    pass
+        self.g.carried[self.check] = self.seconds
+        return next((c for c in self.codes if c != 0), 0 if self.codes else 1)
+
+
+def harness(g, suite, renderer, label, device=None, bin_dir=None, env=None, judge=None, stress_lane=False, stress_fails=False, pieced=None):
     """One harness suite on one renderer, on this computer or on an Android device (its serial; the test app
     prepared and the device's lock held by the gate). Each test's kind is read from its result.json (the runner
     writes it); a test that left none, a result that cannot be read, a number of results other than the suite lists,
@@ -1275,9 +1336,13 @@ def harness(g, suite, renderer, label, device=None, bin_dir=None, env=None, judg
     lane's own judgement of each test (HarnessSource). `stress_lane`: the check is a stress lane's (kinds.Cases.stress);
     `stress_fails`: its stress result is a fail (a landing asked for the lane by --also)."""
     def fn(log):
-        source = HarnessSource(g, suite, renderer, label, device, bin_dir, env, judge)
+        if pieced is not None:
+            # The tests ran in pieces, each under the lock for itself (PiecedRun); this reads them, with the pieces' logs as the check's.
+            source, code = pieced.source, pieced.finish(log)
+        else:
+            source = HarnessSource(g, suite, renderer, label, device, bin_dir, env, judge)
+            code = source.start(source.first_work(), bin_dir or g.bin, None, log, g.work / ("harness-%s-%s.lock" % (label, renderer)))
         work = source.first_work()
-        code = source.start(work, bin_dir or g.bin, None, log, g.work / ("harness-%s-%s.lock" % (label, renderer)))
         results, declared, problem = source.read(work, source.listed)
         said = last_line(pathlib.Path(log).read_text(encoding="utf-8", errors="replace"))
         missing = [n for n, (k, m) in results.items() if k == "tool" and m.startswith("no result.json")]
@@ -1349,19 +1414,6 @@ def test_apk(args):
     return pathlib.Path(args.build_root) / "android" / "Nebula.apk"
 
 
-def measure_route(g):
-    """The play route measure in the long run (the part holds the gate lock): one line per run in
-    gate-runs/measure-history.tsv, compared with the last ten of its device and renderer."""
-    def fn(log):
-        apk = test_apk(g.args)
-        code = run(measure_command(g.commit, g.bin, g.android_bin, apk if apk.is_file() else None, g.work / "measure",
-                                   g.args, g.pak, g.paks_text()), log)
-        text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")
-        said = next((l for l in reversed(text.splitlines()) if l.startswith("measure: ")), "measure: no summary")
-        return code == 0, said[len("measure: "):]
-    return fn
-
-
 # The speed measure of a landing (package B8, docs/plan/04-GATE-AND-MAIN.md): the play route once on Direct3D 12 (measure/step/pc,
 # last, with the machine alone) and once on the tablet (measure/step/tablet, in the Android lane after its build). The two run
 # names are the planner's to change.
@@ -1370,7 +1422,7 @@ MEASURE_TABLET_RUN = "tablet"
 MEASURE_PC_CHECK = "measure/step/pc"
 MEASURE_TABLET_CHECK = "measure/step/tablet"
 MEASURE_LEVELS = ("main", LAND_LEVEL)
-# The time the tablet's check may take: the long level's rule (measure_route), a route of three minutes measured at most twice; each
+# The time the tablet's check may take: a route of three minutes measured at most twice; each
 # run's start and end take two minutes; the install and removal five, and the wait for its lock is the landing's --tablet-wait.
 MEASURE_ROUTE_MINUTES = 3
 MEASURE_RUN_MINUTES = 2
@@ -2535,7 +2587,7 @@ def long_due(work, hours=LONG_EVERY_HOURS, now=None):
     path = pathlib.Path(work) / "history.tsv"
     now = now or datetime.datetime.now()
     rows = [l.split("\t") for l in path.read_text(encoding="utf-8").splitlines()[1:]] if path.exists() else []
-    started = [datetime.datetime.fromisoformat(r[0]) for r in rows if len(r) > 2 and r[2] == "long"]
+    started = [datetime.datetime.fromisoformat(r[0]) for r in rows if len(r) > 2 and r[2] == "long" and (len(r) < 12 or r[11] in ("-", ""))]
     marker = pathlib.Path(work) / "long-started.txt"
     if marker.exists():
         started.append(datetime.datetime.fromisoformat(marker.read_text(encoding="utf-8").split()[0]))
@@ -2630,15 +2682,20 @@ def take_device_lock_wait(path, who, wait_minutes, sleep=time.sleep):
         sleep(30.0)
 
 
+def tablet_needs():
+    """What each of the tablet part's checks needs (the part and the long run's pieces name them alike)."""
+    built = ("build/android",)
+    return {"tablet/prepare": built + ("data/RMGE01", "tablet/remove"), "android/tablet": built + ("tablet/prepare",),
+            "tour/tablet": built + ("tablet/prepare",), "tablet/remove": (), "tour/tablet-pc": DATA,
+            "replays/tablet": ("tour/tablet", "tour/tablet-pc"), "pictures/tablet": ("tour/tablet",)}
+
+
 def tablet_part(g, stops, device=None):
     """The tablet's part: the test app installed with the pak, tests/android, a tour of `stops` (None: all), the
     test app removed; then the PC plays the same stops at the tablet's screen size and both must take the same game
     steps at every step (the game runs the actors its picture shows: its clipping follows the picture's shape). When
     the tablet does not answer, its lock stays held, or it leaves during the run, the part is owed (section 4.3)."""
-    built = ("build/android",)
-    needs = {"tablet/prepare": built + ("data/RMGE01", "tablet/remove"), "android/tablet": built + ("tablet/prepare",),
-             "tour/tablet": built + ("tablet/prepare",), "tablet/remove": (), "tour/tablet-pc": DATA,
-             "replays/tablet": ("tour/tablet", "tour/tablet-pc"), "pictures/tablet": ("tour/tablet",)}
+    needs = tablet_needs()
     # The tablet's pictures have rows of their own (place tablet, N-1040) for the main level's twelve stops; the long run's tour
     # takes more.
     checks = TABLET_CHECKS + (("pictures/tablet",) if g.level in ("main", LAND_LEVEL) else ())
@@ -3025,10 +3082,10 @@ def engine_lane(g, r):
     return lane
 
 
-def tour_lane(g, tour, label, r, needs=DATA):
-    """One tour on one renderer, with its pictures."""
+def tour_lane(g, tour, label, r, needs=DATA, pieced=None):
+    """One tour on one renderer, with its pictures. `pieced`: the long run played its stops in pieces (PiecedRun); this reads them."""
     def lane():
-        g.check("%s/%s" % (label, r), harness(g, tour, r, label), needs)
+        g.check("%s/%s" % (label, r), harness(g, tour, r, label, pieced=pieced), needs)
         g.picture_jobs.append(("pictures/%s/%s" % (label, r), label, r, ("%s/%s" % (label, r),)))
     return lane
 
@@ -3229,7 +3286,7 @@ def sanitizer_lane(g):
 SANITIZERS = "address,undefined"
 
 
-def sanitizer_tour(g, tour, bin_dir):
+def sanitizer_tour(g, tour, bin_dir, pieced=None):
     """tour-asan/d3d12: the tour on the sanitizer build, each stop's log read for the sanitizers' reports (tools/gate/sanitizer.py): one
     that sanitizer-known.tsv does not list is a fail with the report as its message, a listed one is counted into the detail."""
     def judge(known):
@@ -3248,6 +3305,9 @@ def sanitizer_tour(g, tour, bin_dir):
         except sanitizer.KnownError as error:
             pathlib.Path(log).write_text("%s\n" % error, encoding="utf-8")
             return False, str(error).splitlines()[0]
+        if pieced is not None:
+            pieced.source.judge = judge(known)
+            return harness(g, tour, "d3d12", "tour-asan", bin_dir=bin_dir, env=sanitizer.ENV, pieced=pieced)(log)
         return harness(g, tour, "d3d12", "tour-asan", bin_dir=bin_dir, env=sanitizer.ENV, judge=judge(known))(log)
     return fn
 
@@ -3297,19 +3357,23 @@ def coverage_part(g):
     g.check("coverage", coverage_check(g, bin_dir, tour), ("build/windows-coverage", "data/RMGE01"))
 
 
-def coverage_check(g, bin_dir, tour):
+def coverage_check(g, bin_dir, tour, parts=None):
     """The counting runs, then the report. The runs' own verdicts are the other checks' business (the same tests run
-    there on the players' build); here they say only what ran."""
+    there on the players' build); here they say only what ran. `parts`: {name: function(log)} of runs already played in pieces
+    (the long run: their counts are in the folder already), read here in place of being played."""
     def fn(log):
         out = g.work / "coverage"
         counts = out / "counts"
-        shutil.rmtree(counts, ignore_errors=True)
-        counts.mkdir(parents=True)
+        if parts is None:
+            shutil.rmtree(counts, ignore_errors=True)
+            counts.mkdir(parents=True)
         # %m: one file per module (Nebula.exe, smg_game, smg_game_plain), %p: per process.
         env = {"LLVM_PROFILE_FILE": str(counts / "counts-%m-%p.profraw")}
         runs = [("engine", harness(g, TREE / "tests" / "engine" / "suite.json", "d3d12", "engine-coverage",
                                    bin_dir=bin_dir, env=env)),
                 ("tour", harness(g, tour, "d3d12", "tour-coverage", bin_dir=bin_dir, env=env))]
+        if parts is not None:
+            runs = [(n, parts[n]) for n, _ in runs]
         if mods_on(g):
             runs.append(("mods", mod_tests(g, "d3d12", bin_dir=bin_dir, label="mods-coverage", more_env=env)))
         said = []
@@ -3352,14 +3416,397 @@ def locked_part(g, name, fn):
     if g.dry or g.args.mode != "long":
         return fn()
     holder = "long run part %s of %s %s" % (name, TREE.name, lockholder.named())
-    held = take_gate_lock(g.args.gate_lock, holder, g.args.wait, g.args.board, g.args.who)
-    if held is not None:
-        g.record("part/" + name, "env", 0.0, "not run: " + held)
-        return None
+    watch = landing_watch(g.args)
+    started = PART_CLOCK()
+    deadline = started + 60.0 * g.args.wait
+    while True:
+        # Landings first (B15 point 10): the part does not take the lock while a branch waits or runs in the landing queue. A branch
+        # that arrives between the look and the lock is let go first too: the lock is given back and the look made again.
+        why = long_parts.wait_clear(watch, max(0.0, (deadline - PART_CLOCK()) / 60.0), say=print, sleep=PART_SLEEP, clock=PART_CLOCK,
+                                    poll=PART_POLL[0])
+        if why:
+            g.record("part/" + name, "env", 0.0, "not run: " + why)
+            return None
+        held = take_gate_lock(g.args.gate_lock, holder, max(0.0, (deadline - PART_CLOCK()) / 60.0), g.args.board, g.args.who,
+                              sleep=PART_SLEEP, poll=PART_POLL[0])
+        if held is not None:
+            g.record("part/" + name, "env", 0.0, "not run: " + held)
+            return None
+        if not watch.busy():
+            break
+        free_gate_lock(g.args.gate_lock, holder, g.args.board, g.args.who, "part %s: a landing came first" % name)
+    taken = PART_CLOCK()
     try:
         return fn()
     finally:
+        if hasattr(g, "part_log"):
+            g.part_log.append({"part": name, "waited": round(taken - started, 1), "held": round(PART_CLOCK() - taken, 1)})
         free_gate_lock(g.args.gate_lock, holder, g.args.board, g.args.who, "part %s done" % name)
+
+
+# The long run's clock and sleep, which a self-test replaces.
+PART_CLOCK = time.time
+PART_SLEEP = time.sleep
+PART_POLL = [long_parts.POLL_SECONDS]
+
+
+def landing_watch(args):
+    """The landing queue as the long run's parts look at it (long_parts.LandingWatch)."""
+    return long_parts.LandingWatch(getattr(args, "queue_file", landing.QUEUE), getattr(args, "runner_lock", landing.RUNNER_LOCK),
+                                   process_alive, lambda lock: lock_holder(lock)[1])
+
+
+def beside_part(g, name, fn):
+    """A part of the long run that plays BESIDE the PC's parts (the tablet's pieces, B15's addition to point 12): it takes no gate lock (the
+    tablet's lock is `fn`'s own), so a landing with no tablet check never waits for it. It does not start while a branch waits or runs
+    in the landing queue (a landing that needs the tablet goes first), nor while a speed measure of the PC is being measured
+    (measure.lock) unless a proof has shown the measure keeps its figures beside the tablet's lane (long_parts.TABLET_BESIDE_MEASURE).
+    Returns (True, what fn returned) or (False, why it did not start)."""
+    if g.dry or g.args.mode != "long":
+        return True, fn()
+    watch = landing_watch(g.args)
+
+    def measuring():
+        if long_parts.TABLET_BESIDE_MEASURE:
+            return ""
+        return long_parts.measure_held(pathlib.Path(g.args.gate_lock).parent, process_alive, lambda lock: lock_holder(lock)[1])
+
+    started = PART_CLOCK()
+    while True:
+        why = long_parts.wait_clear(watch, max(0.0, (started + 60.0 * g.args.wait - PART_CLOCK()) / 60.0), say=print, sleep=PART_SLEEP,
+                                    clock=PART_CLOCK, poll=PART_POLL[0], extra=measuring)
+        if why:
+            return False, why
+        break
+    begun = PART_CLOCK()
+    try:
+        return True, fn()
+    finally:
+        g.part_log.append({"part": name, "waited": round(begun - started, 1), "held": round(PART_CLOCK() - begun, 1), "beside": True})
+
+
+# The long run's parts in pieces (package B15, point 12): no piece holds the machine longer than long_parts.PIECE_SECONDS, and a landing
+# goes first between two pieces. The pieces of one check play into one run folder; the check is read and judged once, after the last.
+
+
+def long_tour_set(g, tours):
+    """[(label, suite, renderer, needs)] of the tours the long run plays: the US disc's and each other disc's, on every renderer."""
+    sets = [("tour", tours["tour"], DATA)] + [("tour-%s" % d, tours["tour-%s" % d], DATA + ("data/%s" % d,)) for d in REGION_DISCS]
+    return [(label, suite, r, needs) for label, suite, needs in sets for r in RENDERERS]
+
+
+def play_in_pieces(g, name, runs, per_stop, fixed=0.0, before=None):
+    """Plays the tests of the PiecedRuns `runs` (side by side) in pieces, each under the gate lock for itself (locked_part). The pieces
+    are named `name i/n`. `before(i, run)` runs first in a piece's lane (the validate lane's probe): False leaves that run out."""
+    count = max((len(pr.names) for pr in runs), default=0)
+    sizes = long_parts.pieces_of(count, per_stop, fixed)
+    for i in range(len(sizes)):
+        def play(i=i):
+            lanes = []
+            for pr in runs:
+                def lane(pr=pr):
+                    if before is not None and before(i, pr) is False:
+                        return
+                    pr.run_piece(long_parts.split(pr.names, sizes)[i], i)
+                lanes.append(lane)
+            g.lanes(lanes)
+        locked_part(g, long_parts.piece_label(name, i, len(sizes)), play)
+    return sizes
+
+
+def pc_tour_pieces(g, tours):
+    """The tours of every disc on every renderer, side by side, in pieces; then each check read and judged."""
+    todo = long_tour_set(g, tours)
+    runs = {(label, r): PiecedRun(g, suite, r, label, "%s/%s" % (label, r)) for label, suite, r, needs in todo}
+    play_in_pieces(g, "tours", list(runs.values()), long_parts.TOURS_PER_STOP)
+    g.lanes([tour_lane(g, suite, label, r, needs, pieced=runs[(label, r)]) for label, suite, r, needs in todo])
+
+
+def validate_pieces(g, tours):
+    """validate/<renderer> on the whole tour, in pieces; the debug layer is probed in the first piece (a renderer whose layer is not
+    installed plays nothing and says so, as the lane always did)."""
+    tour = validate_tour(g, tours)
+    runs = {r: PiecedRun(g, tour, r, "validate", "validate/%s" % r, env=VALIDATE_ENV) for r in RENDERERS}
+    absent = {}
+    by_run = {id(pr): r for r, pr in runs.items()}
+
+    def before(i, pr):
+        r = by_run[id(pr)]
+        if i == 0 and not g.dry:
+            if layer_probe(g, r, g.work / ("validate-%s-probe.log" % r)) is False:
+                absent[r] = validate.missing_layer_line(r)
+                layer_fault(g, r, absent[r])
+        return r not in absent
+
+    play_in_pieces(g, "validate", list(runs.values()), long_parts.VALIDATE_PER_STOP, before=before)
+
+    def reading(r):
+        def lane():
+            def fn(log):
+                known = validate.read_known()
+                if r in absent:
+                    return True, absent[r]
+                runs[r].source.judge = validate_judge(g, r, known)
+                return harness(g, tour, r, "validate", env=VALIDATE_ENV, pieced=runs[r])(log)
+            g.check("validate/%s" % r, fn, DATA)
+        return lane
+    g.lanes([reading(r) for r in RENDERERS])
+
+
+def sanitizer_pieces(g):
+    """The sanitizer build (a part of its own: it keeps the lock to its end), then its tour in pieces, then what the mod tests are."""
+    root = pathlib.Path(g.args.build_root) / "asan"
+    asan_bin = str(root / "bins")
+    built = locked_part(g, "sanitizer build", lambda: g.check("build/windows-asan", build_windows(g, root=root, bin_dir=asan_bin, sanitize=SANITIZERS)))
+    if built is False or built is None:
+        g.missing("tour-asan/d3d12", "the sanitizer build failed" if built is False else "its build did not run", ("build/windows-asan",))
+        if mods_on(g):
+            g.missing("mods-asan/d3d12", "the sanitizer build failed" if built is False else "its build did not run", ("build/windows-asan",))
+        return
+    tour = gate_tour.write(g.work / "tour-asan", None)
+    step_hash.with_hash(tour.parent)
+    pr = PiecedRun(g, tour, "d3d12", "tour-asan", "tour-asan/d3d12", bin_dir=asan_bin, env=sanitizer.ENV)
+    play_in_pieces(g, "sanitizer tour", [pr], long_parts.ASAN_PER_STOP)
+    g.check("tour-asan/d3d12", sanitizer_tour(g, tour, asan_bin, pieced=pr), ("build/windows-asan", "data/RMGE01"))
+    if mods_on(g):
+        locked_part(g, "sanitizer mods", lambda: g.check("mods-asan/d3d12", mod_tests(g, "d3d12", bin_dir=asan_bin, label="mods-asan"),
+                                                         ("build/windows-asan",)))
+
+
+def coverage_pieces(g):
+    """The coverage build (a part of its own), the engine suite (one piece), the tour in pieces, then the merge and the report (one piece)."""
+    root = pathlib.Path(g.args.build_root) / "coverage"
+    bin_dir = str(root / "bins")
+    built = locked_part(g, "coverage build", lambda: g.check("build/windows-coverage", build_windows(g, root=root, bin_dir=bin_dir, coverage=True)))
+    if built is False or built is None:
+        g.missing("coverage", "the coverage build failed" if built is False else "its build did not run", ("build/windows-coverage",))
+        return
+    tour = gate_tour.write(g.work / "tour-coverage", None)
+    step_hash.with_hash(tour.parent)
+    out = g.work / "coverage"
+    counts = out / "counts"
+    if not g.dry:
+        shutil.rmtree(counts, ignore_errors=True)
+        counts.mkdir(parents=True)
+    env = {"LLVM_PROFILE_FILE": str(counts / "counts-%m-%p.profraw")}
+    engine = {}
+    locked_part(g, "coverage engine", lambda: engine.setdefault("result", harness(
+        g, TREE / "tests" / "engine" / "suite.json", "d3d12", "engine-coverage", bin_dir=bin_dir, env=env)(out / "engine.log")
+        if not g.dry else None))
+    pr = PiecedRun(g, tour, "d3d12", "tour-coverage", "coverage", bin_dir=bin_dir, env=env)
+    play_in_pieces(g, "coverage tour", [pr], long_parts.COVERAGE_PER_STOP)
+    parts = {"engine": lambda log: engine.get("result") or (False, "the engine suite did not run"),
+             "tour": harness(g, tour, "d3d12", "tour-coverage", bin_dir=bin_dir, env=env, pieced=pr)}
+    locked_part(g, "coverage report", lambda: g.check("coverage", coverage_check(g, bin_dir, tour, parts), ("build/windows-coverage", "data/RMGE01")))
+
+
+class TabletTrack:
+    """The long run's tablet pieces (package B15 point 12 and the planner's addition of 11-21 23:55): they take the tablet's lock, not
+    the gate lock, and play in a thread beside the PC's parts. The PC's own run of the same stops stays a PC part: after each tablet
+    piece, its PC piece takes the gate lock (`pc_pieces`). One row each for tablet/prepare, android/tablet, tour/tablet and tablet/remove."""
+
+    def __init__(self, g, device=None):
+        self.g, self.device = g, device
+        self.thread = None
+        self.sized, self.finished = threading.Event(), threading.Event()
+        self.events, self.sizes, self.pr = {}, [], None
+        self.prepared, self.removed = [], []
+        self.complete, self.why = False, ""
+        self.pc, self.pc_next, self.no_screen = None, 0, False
+        self.needs = tablet_needs()
+        self.wanted = []
+
+    def event(self, i):
+        return self.events.setdefault(i, threading.Event())
+
+    def start(self):
+        g = self.g
+        self.wanted = [n for n in TABLET_CHECKS if g.wanted(n, self.needs[n])]
+        if g.dry:
+            g.check("build/android", build_android(g))
+            return
+        if not self.wanted and not g.wanted("build/android", ()):
+            self.finished.set()
+            return
+        self.thread = threading.Thread(target=self.main, name="tablet-track")
+        self.thread.start()
+
+    def owe_rest(self, why):
+        g = self.g
+        for n in self.wanted:
+            if not any(r["check"] == n for r in g.rows()):
+                g.owe(n, why)
+
+    def main(self):
+        g = self.g
+        try:
+            built = locked_part(g, "android build", lambda: g.args.no_build or g.check("build/android", build_android(g)) is not False)
+            g.android_built = bool(built)
+            if not g.android_built:
+                for n in self.wanted:
+                    g.missing(n, "the Android build failed" if built is False else "its build did not run")
+                return
+            if not self.wanted:
+                return
+            machine.ensure_adb_server(android_module().Device("").adb_path)
+            device = self.device or android_module().Device(g.args.tablet)
+            if not device.answers():
+                self.owe_rest("%s does not answer adb" % g.args.tablet)
+                return
+            tour = gate_tour.write(g.work / "tour-tablet", None)
+            step_hash.with_hash(tour.parent)
+            self.pr = PiecedRun(g, tour, "vulkan", "tour-tablet", "tour/tablet", device=g.args.tablet)
+            self.sizes = long_parts.pieces_of(len(self.pr.names), long_parts.TABLET_PER_STOP, long_parts.TABLET_FIXED + long_parts.TABLET_SUITE)
+            self.sized.set()
+            gone = None
+            for i, names in enumerate(long_parts.split(self.pr.names, self.sizes)):
+                ran, out = beside_part(g, long_parts.piece_label("tablet", i, len(self.sizes)),
+                                       lambda i=i, names=names: self.piece(device, i, names))
+                if not ran:
+                    gone = "a tablet piece did not start: " + out
+                    break
+                if out:
+                    gone = out
+                    break
+                self.event(i).set()
+            if gone is None and not self.problem():
+                self.rows()
+                self.complete = True
+            else:
+                self.why = gone or ""
+                self.finish_rows(gone)
+        except Exception as error:  # noqa: BLE001 - the track broke: a fault of the gate's own, said plainly
+            g.record("lane/tablet", "tool", 0.0, "%s: %s" % (type(error).__name__, error))
+        finally:
+            self.sized.set()
+            self.finished.set()
+
+    def problem(self):
+        """Why the pieces cannot be read as one: an install that failed while the tablet answered ('' when none)."""
+        return next((d for ok, d in self.prepared if not ok), "")
+
+    def piece(self, device, i, names):
+        """One tablet piece under the tablet's lock: install, tests/android (the first piece), the stops, remove. None, or why the tablet is gone."""
+        g = self.g
+        held = take_device_lock_wait(g.args.tablet_lock, "gate %s" % g.name, g.args.tablet_wait)
+        if held is not None:
+            return "the tablet's lock stayed held %g minutes: %s" % (g.args.tablet_wait, held)
+        gone = None
+        try:
+            ok, detail = device_step(g, "prepare")(g.work / ("tablet-prepare-piece%d.log" % (i + 1)))[:2]
+            self.prepared.append((ok, detail))
+            if not ok:
+                if not device.answers():
+                    gone = "the tablet left adb"
+            else:
+                if i == 0:
+                    g.check("android/tablet", harness(g, TREE / "tests" / "android" / "suite.json", "vulkan", "android", g.args.tablet),
+                            self.needs["android/tablet"])
+                    if not device.answers():
+                        gone = "the tablet left adb"
+                if gone is None:
+                    self.pr.run_piece(names, i)
+                    if not device.answers():
+                        gone = "the tablet left adb"
+        finally:
+            if gone is None and device.answers():
+                self.removed.append(device_step(g, "remove")(g.work / ("tablet-remove-piece%d.log" % (i + 1)))[:2])
+            else:
+                self.removed.append(None)
+            shutil.rmtree(g.args.tablet_lock, ignore_errors=True)
+        return gone
+
+    @staticmethod
+    def merged(results, what):
+        """A check fn over the pieces' (passed, detail) results: passes when every piece did; the first that did not names itself."""
+        def fn(log):
+            bad = next((d for ok, d in results if not ok), None)
+            pathlib.Path(log).write_text("\n".join(d for _, d in results) + "\n", encoding="utf-8")
+            return bad is None, ("%s in %d pieces: %s" % (what, len(results), results[-1][1])) if bad is None else bad
+        return fn
+
+    def rows(self):
+        """The four rows of the tablet's part, from all the pieces."""
+        g = self.g
+        g.check("tablet/prepare", self.merged(self.prepared, "installed"), self.needs["tablet/prepare"])
+        g.check("tour/tablet", harness(g, self.pr.source.suite, "vulkan", "tour-tablet", g.args.tablet, pieced=self.pr), self.needs["tour/tablet"])
+        g.check("tablet/remove", self.merged([r for r in self.removed if r], "removed"), ())
+
+    def finish_rows(self, gone):
+        """The tablet left, its lock stayed held, an install failed, or a piece could not start: what ran is on the board, the rest is owed
+        (a failed install is a fail)."""
+        g = self.g
+        bad = self.problem()
+        if bad:
+            g.check("tablet/prepare", self.merged(self.prepared, "installed"), self.needs["tablet/prepare"])
+            for n in self.wanted:
+                g.missing(n, "tablet/prepare failed: " + bad)
+            return
+        if self.removed and not any(self.removed):
+            g.owe("tablet/remove", "the tablet left adb: the test app may still be on it")
+        self.owe_rest((gone or "the tablet's part") + " during its part")
+
+    def pc_pieces(self, block=True):
+        """The PC plays the tablet's stops at the tablet's screen size, a piece after each tablet piece, each under the gate lock for itself.
+        Called between the PC's parts with block=False it plays the pieces that are ready; the last call (block=True) waits for the rest,
+        and then both runs must take the same steps."""
+        g = self.g
+        if g.dry or self.thread is None:
+            return
+        if not self.sized.is_set():
+            if not block:
+                return
+            self.sized.wait()
+        while self.pc_next < len(self.sizes):
+            i = self.pc_next
+            while block and not (self.event(i).is_set() or self.finished.is_set()):
+                self.event(i).wait(5.0)
+            if not self.event(i).is_set():
+                break
+            if self.pc is None:
+                screen = device_screen(g.work / "runs-tour-tablet-vulkan")
+                if screen is None:
+                    self.pc_next = len(self.sizes)
+                    self.no_screen = True
+                    break
+                pc_tour = gate_tour.write(g.work / "tour-tablet-pc", None, window=screen)
+                step_hash.with_hash(pc_tour.parent)
+                self.pc = (pc_tour, PiecedRun(g, pc_tour, "d3d12", "tour-tablet-pc", "tour/tablet-pc"))
+            names = long_parts.split(self.pc[1].names, self.sizes)[i]
+            locked_part(g, long_parts.piece_label("tablet-pc", i, len(self.sizes)), lambda i=i, names=names: self.pc[1].run_piece(names, i))
+            self.pc_next += 1
+        if not block:
+            return
+        self.thread.join()
+        if not self.complete:
+            return
+        if self.pc is None or self.pc_next < len(self.sizes):
+            why = "the tablet's runs name no screen size" if self.no_screen else "its pieces did not all run"
+            g.missing("tour/tablet-pc", why)
+            g.missing("replays/tablet", why)
+            return
+        g.check("tour/tablet-pc", harness(g, self.pc[0], "d3d12", "tour-tablet-pc", pieced=self.pc[1]), self.needs["tour/tablet-pc"])
+        g.check("replays/tablet", replays(g, "tour-tablet", "vulkan", ("tour-tablet-pc", "d3d12")), self.needs["replays/tablet"])
+
+    def join(self):
+        if self.thread is not None:
+            self.thread.join()
+
+
+def long_run(g, tours):
+    """The long run's checks that play the game, in the order of the parts: the tablet's pieces start beside; the PC's parts follow one
+    after another (the tours of every disc and renderer, the validate lane, the sanitizer build and its tour, the coverage build and its
+    runs, the stress lane), the PC's pieces of the tablet's stops between them as the tablet's pieces are done."""
+    track = TabletTrack(g)
+    track.start()
+    try:
+        for part in (lambda: pc_tour_pieces(g, tours), lambda: validate_pieces(g, tours), lambda: sanitizer_pieces(g),
+                     lambda: coverage_pieces(g), lambda: locked_part(g, "stress", lambda: stress_part(g))):
+            part()
+            track.pc_pieces(block=False)
+        track.pc_pieces(block=True)
+    finally:
+        track.join()
 
 
 # The parts of the nightly run that `--also` asks for by name (package B8): the name, the function that runs the part in the landing
@@ -3462,42 +3909,35 @@ def run_checks(args, known=None, planned=None, selected=None, dry=False):
     tours = write_tours(g, QUICK_STOPS if short else None, QUICK_REGION_STOPS if short else None)
     # Region discs: Direct3D 12 at the quick and main levels; every renderer in the long run and the final check.
     region_renderers = RENDERERS if level in ("long", "final") else ("d3d12",)
-    # The CPU-only checks first in the list, so their rows read where they always did.
-    lanes = [cpu_lane(g, ("RMGE01",) if short else ("RMGE01",) + REGION_DISCS)] if level != "long" else []
-    for r in renderers:
-        def renderer_lane(r=r):
-            if level != "long":
-                engine_lane(g, r)()
-            tour_lane(g, tours["tour"], "tour", r)()
-        lanes.append(renderer_lane)
-    for disc in REGION_DISCS if level != LAND_LEVEL else ():
-        def region_lane(disc=disc):
-            for r in region_renderers:
-                tour_lane(g, tours["tour-%s" % disc], "tour-%s" % disc, r, DATA + ("data/%s" % disc,))()
-        lanes.append(region_lane)
-    if level != "long" and mods_on(g):
-        lanes += [mods_lane(g, r) for r in renderers]
-    if not quick:
-        # The main level's tablet part is the twelve quick stops; the long run's (and the final check's) all of them.
-        lanes.append(android_lane(g, QUICK_STOPS if level in ("main", LAND_LEVEL) else None))
-    if level in ("long", "final"):
-        lanes += [sanitizer_lane(g), coverage_lane(g)]
-    if level != "quick":
-        # The debug layers' messages (T12): one lane for each renderer, beside the others in a landing, a part of its own in the long run.
-        vtour = validate_tour(g, tours)
-        lanes += [validate_lane(g, r, vtour) for r in RENDERERS]
     if level == "long":
-        lanes.append(stress_lane(g))
-    if level == "long":
-        # Part by part under the gate lock: the tours of every renderer and disc side by side, then the tablet, then
-        # the sanitizer build's runs, then the coverage build's. The soak, started above in processes of its own at
+        # The long run's parts (B15): pieces of at most seven minutes, each under the gate lock for itself, a landing first between two
+        # pieces; the tablet's pieces beside them under the tablet's lock. The soak, started above in processes of its own at
         # below-normal priority, is the only work that runs beside another gate.
-        apart = {n: [l for l in lanes if getattr(l, "part", "") == n] for n in ("tablet", "sanitizer", "coverage", "validate", "stress")}
-        tour_lanes = [l for l in lanes if not getattr(l, "part", "")]
-        for name, part in (("tours", tour_lanes),) + tuple(apart.items()):
-            if part:
-                locked_part(g, name, lambda part=part: g.lanes(part))
+        long_run(g, tours)
     else:
+        # The CPU-only checks first in the list, so their rows read where they always did.
+        lanes = [cpu_lane(g, ("RMGE01",) if short else ("RMGE01",) + REGION_DISCS)]
+        for r in renderers:
+            def renderer_lane(r=r):
+                engine_lane(g, r)()
+                tour_lane(g, tours["tour"], "tour", r)()
+            lanes.append(renderer_lane)
+        for disc in REGION_DISCS if level != LAND_LEVEL else ():
+            def region_lane(disc=disc):
+                for r in region_renderers:
+                    tour_lane(g, tours["tour-%s" % disc], "tour-%s" % disc, r, DATA + ("data/%s" % disc,))()
+            lanes.append(region_lane)
+        if mods_on(g):
+            lanes += [mods_lane(g, r) for r in renderers]
+        if not quick:
+            # The main level's tablet part is the twelve quick stops; the long run's (and the final check's) all of them.
+            lanes.append(android_lane(g, QUICK_STOPS if level in ("main", LAND_LEVEL) else None))
+        if level in ("long", "final"):
+            lanes += [sanitizer_lane(g), coverage_lane(g)]
+        if level != "quick":
+            # The debug layers' messages (T12): one lane for each renderer, beside the others in a landing, a part of its own in the long run.
+            vtour = validate_tour(g, tours)
+            lanes += [validate_lane(g, r, vtour) for r in RENDERERS]
         g.lanes(lanes)
         if level == "final":
             stress_part(g)       # the final check is the main and long levels on one commit: the stress lane follows the others
@@ -3524,9 +3964,6 @@ def run_checks(args, known=None, planned=None, selected=None, dry=False):
         # Last, with the machine alone (the landing holds the gate lock, measure.py takes measure.lock): a landing that has failed
         # already does not measure.
         measure_pc(g)
-    if level in ("long", "final"):
-        # Last, with the machine alone: the gate lock keeps gates out, measure.py takes measure.lock.
-        locked_part(g, "measure", lambda: g.check("measure/route", measure_route(g), DATA))
     if every and not getattr(g.args, "move", False):
         # With --move the gate waits for GitHub after its own checks, outside gate.lock (main()).
         github_part(g)
@@ -3628,6 +4065,8 @@ def parser(land=False):
         # against the holder of the runner's lock. Not for a person: a --move without it is refused.
         p.add_argument("--landing-runner", type=int, default=0, help=argparse.SUPPRESS)
         p.add_argument("--runner-lock", default=str(landing.RUNNER_LOCK), help=argparse.SUPPRESS)
+        p.add_argument("--queue-file", default=str(landing.QUEUE),
+                       help="the long run: the landing queue its parts look at before they take the gate lock")
     p.add_argument("--only", default="", help="only these checks (shell patterns, comma-separated) and what they need")
     p.add_argument("--scope", default="",
                    help="--main: only the checks of the groups a change needs (tools/gate/scope.py): GROUP[,GROUP...], 'auto' "
@@ -3740,6 +4179,9 @@ def run_main(argv, left):
         return gamedata.main(argv[1:])
     if argv and argv[0] == "speed-base":
         return speedbase.main(argv[1:])
+    if argv and argv[0] == "long-results":
+        import long_results
+        return long_results.run_cli(sys.modules[__name__], argv[1:])
     args = parser().parse_args(argv)
     patterns = [s.strip() for s in args.only.split(",") if s.strip()]
 
@@ -3910,6 +4352,8 @@ def run_main(argv, left):
             code, summary = 1, "stopped: " + watch.red
             board_line(args.board, "%s NOTICE: main gate %s on %s stopped: %s." % (args.who, g.name, commit[:9],
                                                                                     watch.red))
+        if args.mode == "long" and not patterns and g is not None:
+            long_results_step(g, args)
         owed = [r["check"] for r in g.results if r["state"] == "owed"]
         if owed and args.board:
             board_line(args.board, owed_line(args.who, args.mode, g.name, commit, owed))
@@ -3990,6 +4434,10 @@ def run_main(argv, left):
                     args.who, g.name, commit[:9], why))
             else:
                 moved_line = "MOVED %s" % landed
+                try:
+                    append_move(pathlib.Path(args.work) / "history.tsv", g.name, landed, args.covers)
+                except OSError as e:
+                    print("gate.py: the move was not written to history.tsv (%s: %s)" % (type(e).__name__, e), file=sys.stderr)
                 keep_measures(g, args)
                 keep_speed(g, landed, args)
                 summary = "passed, %s, main moved to %s" % (
@@ -4005,6 +4453,7 @@ def run_main(argv, left):
                 started, what = start_long(landed, args)
                 print("gate.py: long run: %s" % what)
                 if started is not None:
+                    print("LONG-STARTED %s" % (pathlib.Path(args.work) / ("long-%s.log" % landed[:9])), flush=True)
                     board_line(args.board, "%s LONG: %s; none had started in %d hours (section 14, N-1046)." % (args.who, what, LONG_EVERY_HOURS))
                 elif what.startswith("its tree"):
                     board_line(args.board, "%s NOTICE: main moved to %s; no long run started: %s." % (args.who, landed[:9], what))
@@ -4031,6 +4480,24 @@ def run_main(argv, left):
     return code
 
 
+def long_results_step(g, args):
+    """The end of a long run that ran all its checks (not under --only): the pieces' times are written (parts.json) and what follows from
+    the results is done (tools/gate/long_results.py). A fault of this step is said and goes to tool-faults.tsv; the run's verdict stands."""
+    try:
+        (g.work / "parts.json").write_text(json.dumps(g.part_log, indent=1) + "\n", encoding="utf-8")
+        import long_results
+        lr = long_results.make_args(live=args.live, work=args.work, queue_file=args.queue_file, tablet=args.tablet or None,
+                                    build_root=args.build_root, board=args.board, gate_lock=args.gate_lock, long_lock=args.long_lock,
+                                    tablet_lock=args.tablet_lock, runner_lock=args.runner_lock, wait=args.wait)
+        long_results.results(long_results.Run(g.work), long_results.build_context(sys.modules[__name__], lr, False))
+    except Exception as e:  # noqa: BLE001 - what follows from the results is not the results: the run's own word stands
+        print("gate.py: long-results: %s: %s" % (type(e).__name__, e), file=sys.stderr, flush=True)
+        try:
+            fault_writer(args.live)("gate", "nightly", "TOOL", "long-results", "", "%s: %s" % (type(e).__name__, e), str(g.work))
+        except Exception:  # noqa: BLE001
+            pass
+
+
 def not_moved_kind(why):
     """Why a pass did not move main, for gate.py land: main moved during the run (nothing was judged), a red job of GitHub
     (the batch fails), or another reason (a lock, the pictures' approval: not judged)."""
@@ -4051,13 +4518,15 @@ def parse_run_output(lines, code):
     lines, `MOVED <sha>` when main moved, `NOT-MOVED <kind> <why>` when the checks passed and main did not move, the run's
     folder from its `result:` line, and VERDICT. A run that wrote no VERDICT or exited with another code than 0, 1, 2 is not
     judged (the tool broke)."""
-    kind_lines, moved, not_moved, folder, verdict, why = [], "", None, "", None, ""
+    kind_lines, moved, not_moved, folder, verdict, why, long_log = [], "", None, "", None, "", ""
     for raw in lines:
         line = raw.rstrip("\r\n")
         if line.startswith("KIND "):
             kind_lines.append(line)
         elif line.startswith("MOVED "):
             moved = line.split()[1]
+        elif line.startswith("LONG-STARTED "):
+            long_log = line[len("LONG-STARTED "):].strip()
         elif line.startswith("NOT-MOVED "):
             parts = line.split(" ", 2)
             not_moved = (parts[1], parts[2] if len(parts) > 2 else "")
@@ -4075,7 +4544,7 @@ def parse_run_output(lines, code):
         return landing.Result("pass", kind_lines, failures_, folder, "", not_moved[1], not_moved[0])
     if verdict == "pass" and not moved:
         return landing.Result("pass", kind_lines, failures_, folder, "", "the run passed and did not say that main moved", "other")
-    return landing.Result(verdict, kind_lines, failures_, folder, moved, why if verdict == "not-judged" else "")
+    return landing.Result(verdict, kind_lines, failures_, folder, moved, why if verdict == "not-judged" else "", long_log=long_log)
 
 
 class GateChecker:

@@ -109,6 +109,14 @@ def run_line(row):
         row["owed"], row["failed"], row["run"])
 
 
+def long_line(work, row, lock):
+    """The newest long run: its counts, and (tools/gate/long_results.py) the repairs it opened and `running since HH:MM` while one runs."""
+    import long_results
+    import landing
+    extra = long_results.newest_long(work, alive=landing.process_alive, lock=lock)
+    return run_line(row) + ("; " + extra if row or extra != "none yet" else "")
+
+
 def build(work, board, tree=TREE, now=None):
     now = now or datetime.datetime.now()
     main = git("rev-parse", "--short", "origin/main", tree=tree) or "?"
@@ -127,7 +135,7 @@ def build(work, board, tree=TREE, now=None):
            "- %s%s" % (state, (" (" + colour.strip() + ")") if colour else " (no MAIN-RED on the board)"),
            "- Last main gate: " + run_line(runs.get("main")),
            "- Last landing: " + run_line(runs.get("land")),
-           "- Last long run: " + run_line(runs.get("long")),
+           "- Last long run: " + long_line(work, runs.get("long"), pathlib.Path(board).parent / "long.lock" if board else "none"),
            "- Last quick gate: " + run_line(runs.get("quick")), "",
            "## Ledger (from %s)" % ledger_from, "",
            "| Agent | Package | Closed | Open |", "|---|---|---|---|"]

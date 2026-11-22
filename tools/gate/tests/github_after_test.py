@@ -267,7 +267,9 @@ class AfterTest(unittest.TestCase):
             code, lines, work = ggt.drive(self, world, scope_text)
             self.assertEqual(result_json(work)["github"], form)
             history = (work / "history.tsv").read_text(encoding="utf-8").splitlines()
-            self.assertIn("github-form=" + form, history[-1].split("\t")[-1])
+            runs = [l.split("\t") for l in history[1:] if l.split("\t")[2] != "move"]      # the move's own line (level move) follows the run's
+            self.assertIn("github-form=" + form, runs[-1][12])
+            self.assertEqual(history[-1].split("\t")[2], "move", "main moved: its line is the last")
         world = ggt.World(None)
         code, lines, work = ggt.drive(self, world, "repo", allow_github=False)
         self.assertNotIn("github", result_json(work), "a plan with no GitHub part has no form")

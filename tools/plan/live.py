@@ -40,7 +40,7 @@ REPAIR_COLUMNS = ["id", "opened", "source", "kind", "check", "renderer", "step",
 PENDING_COLUMNS = ["time", "commit", "branches", "candidate", "run_folder", "rerun"]
 REPAIR_SOURCES = ("nightly", "stress", "measure", "github")
 REPAIR_KINDS = ("fail", "stress", "worse")
-REPAIR_STATES = ("open", "started", "landed", "set-aside")
+REPAIR_STATES = ("open", "started", "landed", "confirmed", "set-aside")   # confirmed: landed, and a later long run passed its check
 STALE_HOURS = 48
 
 
@@ -424,8 +424,8 @@ def set_repair(live, repair_id, state, closed=None):
 
 
 def repair_order(rows):
-    """Open repairs of kind `fail` first, then the other open ones, then started, set-aside and landed; each group in id order."""
-    rank = {"open": 0, "started": 1, "set-aside": 2, "landed": 3}
+    """Open repairs of kind `fail` first, then the other open ones, then started, set-aside, landed and confirmed; each group in id order."""
+    rank = {"open": 0, "started": 1, "set-aside": 2, "landed": 3, "confirmed": 4}
     return sorted(rows, key=lambda r: (rank.get(r["state"], 9), 0 if r["kind"] == "fail" else 1, r["id"]))
 
 

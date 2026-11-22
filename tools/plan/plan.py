@@ -145,6 +145,7 @@ TABLET_WAIT = 30
 # One work folder for each agent, kept between steps (made by `start` the first time).
 AGENT_FOLDERS = {"1": "Nebula-native", "2": "Nebula-native-2"}
 LIVE = "D:/NebulaWork/plan/native"       # the live state: claims, started and blocked steps, tool faults, the page
+GATE_RUNS = "D:/NebulaWork/build/gate-runs"   # the gate's record of its runs (history.tsv): `status` shows the newest long run from it
 AGENT2_LIST = ("G6", "G7", "G8", "G9", "G1", "R10", "R9", "G4")   # the helper's packages, in this order, and no others
 # Two groups of steps that must not be in work at the same time (both change the renderers' frame and present code).
 PAIRS = ((("G2a",), ("R7",)),)
@@ -1073,7 +1074,7 @@ def read_set_aside(live):
     return out
 
 
-def status_text(tree, work_root=WORK_ROOT, at=None, live=None, agent="1", queue_file=None):
+def status_text(tree, work_root=WORK_ROOT, at=None, live=None, agent="1", queue_file=None, gate_runs=None):
     steps = read_steps(tree, live)
     by = {s: [x for x in steps if x["state"] == s] for s in STATES}
     reasons = blocked_reasons(tree)
@@ -1112,6 +1113,9 @@ def status_text(tree, work_root=WORK_ROOT, at=None, live=None, agent="1", queue_
         sum(1 for r in repairs if r["state"] == "open" and r["kind"] == "fail"), len(repairs)), ""]
     out += ["- %s %s %s: %s, %s, seen %sx" % (r["id"], r["state"], r["kind"], lv.repair_what(r), lv.repair_traced(r), r["seen"])
             for r in lv.repair_order(repairs)] or ["- none"]
+    if gate_runs:
+        import long_results
+        out += ["", "## The newest long run", "", "- " + long_results.newest_long(gate_runs, alive=alive)]
     faults = lv.fault_groups(lv.read_faults(live_dir(live)))
     out += ["", "## Tool faults (%d kinds, %d events)" % (len(faults), sum(g["count"] for g in faults)), ""]
     out += ["- %dx %s %s: %s" % (g["count"], g["kind"], g["check"], g["first_error"][:100]) for g in faults[:5]] or ["- none"]
@@ -1444,6 +1448,18 @@ def item_branch(item_id):
     return "native/repair-" + item_id[2:] if is_repair(item_id) else "native/" + item_id
 
 
+def branch_item(branch):
+    """The step or repair a branch is for (the other way round from item_branch): ("step", "<ID>") for `native/<ID>`, ("repair", "R-00N")
+    for `native/repair-00N`, None for any other branch (a tools landing)."""
+    if not branch.startswith("native/"):
+        return None
+    name = branch[len("native/"):]
+    if name.startswith("repair-"):
+        item = "R-" + name[len("repair-"):]
+        return ("repair", item) if is_repair(item) else None
+    return ("step", name) if name else None
+
+
 def plan_path(a):
     return (pathlib.Path(a.tree) / "tools" / "plan" / "plan.py").as_posix()
 
@@ -1608,6 +1624,11 @@ def print_repair(a, r, working=False, commands=True):
     say("What failed: %s" % lv.repair_what(r))
     say("Seen: %s time%s; opened %s." % (r["seen"], "" if r["seen"] == "1" else "s", r["opened"]))
     say("Evidence: %s" % (r["evidence"] if r["evidence"] not in ("", "-") else "none recorded"))
+    howto = pathlib.Path(r["evidence"]) / "how-to-run.txt" if r["evidence"] not in ("", "-") else None
+    if howto is not None and howto.is_file():
+        say("Run the failed test alone (the command the gate ran for it):")
+        for line in howto.read_text(encoding="utf-8", errors="replace").strip().splitlines():
+            say("  " + line)
     traced = lv.repair_traced(r)
     say("Traced to: %s" % (traced[len("traced to "):] if traced.startswith("traced to ") else "no landing (not traced)"))
     say("Ledger row: %s" % (r["row"] if r["row"] not in ("", "-") else "none"))
@@ -2504,7 +2525,9 @@ def cmd_toolfault(a):
 def cmd_status(a):
     fetch_main_landed(a)
     settle_github(a)
-    text = status_text(a.tree, a.work_root, live=a.live, agent=agent_of(a), queue_file=getattr(a, "queue_file", None))
+    real = live_dir(a.live).as_posix() == pathlib.Path(LIVE).as_posix()      # a test's own live folder shows no record of the real gate
+    text = status_text(a.tree, a.work_root, live=a.live, agent=agent_of(a), queue_file=getattr(a, "queue_file", None),
+                       gate_runs=GATE_RUNS if real else None)
     atomic_write(native(a.tree) / "STATUS.md", text)
     sys.stdout.write(text)
     url = page_paths(a.live).url

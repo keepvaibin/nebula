@@ -415,9 +415,10 @@ class Result:
     `why_kind`: when a pass did not move main, `main-moved` (main moved during the run: nothing was judged) or `github` (a
     red job of GitHub: the batch fails)."""
 
-    def __init__(self, verdict, lines=(), failures_=(), run_folder="", moved="", why="", why_kind=""):
+    def __init__(self, verdict, lines=(), failures_=(), run_folder="", moved="", why="", why_kind="", long_log=""):
         self.verdict, self.lines, self.failures = verdict, list(lines), list(failures_)
         self.run_folder, self.moved, self.why, self.why_kind = str(run_folder or ""), moved, why, why_kind
+        self.long_log = long_log      # the log of the long run this move started ('' when none started)
 
 
 ADVISORY_END = "advisory, blocks nothing"
@@ -569,6 +570,13 @@ class Landing:
                 tool_env = True
         for line in status:
             self.say(line)
+        for b in branches:
+            result = self.last.get(b)
+            if result is not None and result.long_log:
+                self.say("gate.py: a long run started after this move: its log is %s. It plays its parts one piece at a time (none longer "
+                         "than 7 minutes) and gives way to every landing: a piece does not start while a branch waits or runs in the "
+                         "queue." % result.long_log)
+                break
         if code == EXIT_SAME_THREE:
             self.say(failures.STOP_TEXT)
         elif code == EXIT_NOT_JUDGED and tool_env:
@@ -622,6 +630,11 @@ class Landing:
         for b in prep.empty:
             self.queue.finish(b, LANDED, note="no commit of its own: main holds it already")
             self.store.clear(b)
+            asked = [n for n in also_names(getattr(self, "alsos", {}).get(b, "")) if n != GITHUB_FIRST]
+            if asked:
+                # Nothing was run for this branch (main holds it already), so what it asked for by --also was not run either.
+                self.say("gate.py: %s: main holds it already, so no check ran: the checks asked for with --also were NOT run: %s. Put a "
+                         "commit of its own on the branch (a documents-only change is enough) to run them." % (b, ", ".join(asked)))
         if not prep.order:
             return Outcome("none")
         paths, why = scope.changed_paths(self.repo.git, tree, self.main_ref, prep.tip)

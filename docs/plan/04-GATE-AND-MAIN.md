@@ -271,7 +271,7 @@ Two runs of fixed steps that differ are a determinism fault in the game or the h
 
 They need the machine alone, so they are not in levels 1 and 2.
 
-- **The speed measure** (`tools/measure/measure.py`): the play route (`tests/measure/route`, one heavy stage, three minutes in real time, a visible window, no sound) on Direct3D 12, Vulkan, Direct3D 11, Direct3D 12 held to four processors (`d3d12-4cores`) and the tablet. It starts after every move of main and in the long run. A player never sees it; it tells whether a change made the game slower.
+- **The speed measure** (`tools/measure/measure.py`): the play route (`tests/measure/route`, one heavy stage, three minutes in real time, a visible window, no sound) on Direct3D 12, Vulkan, Direct3D 11, Direct3D 12 held to four processors (`d3d12-4cores`) and the tablet. It starts in no long run and after no move of main: the single measure is `measure/step/tablet` of a landing; the PC's speed is the pair (10.1). A player never sees it; it tells whether a change made the game slower.
   - *Commands.* `measure.py run --bin BIN --work WORK --commit SHA [--runs ...] [--history FILE] [--pending FILE]` measures. `measure.py keep FILE [--history H]` adds the lines of a `--pending` file to the history (a line already there is not added twice). `measure.py anchor --commit SHA` marks a commit's trusted lines as the start of the native work. `measure.py accept --commit SHA` restarts the baseline after a slowdown that was looked at and accepted. `measure.py digest RUN_FOLDER` prints one run's figures.
   - *History.* `D:/NebulaWork/build/gate-runs/measure-history.tsv`, one line per run, holding main's commits only. The nightly run and a move of main write their lines at once. A measure inside a landing is to run with `--pending FILE`: it compares with the history as usual but writes its trusted lines to FILE, and the gate calls `keep` when the landing has moved main (the gate's `measure/step` checks, below).
   - *Figures.* Judged: the 99th-percentile gap between pictures (`gap_p99_ms`), late pictures a minute (`late_per_min`), the render thread's time per picture (`render_ms`), the graphics card's time per picture (`gpu_ms`, only where the renderer gives it; else "not measured"), the most memory held (`memory_mb`) and the cost of the game's work: the processor time the frame threads spend working, per game step, all together (`cpu_work_ms`), the game thread's (`cpu_game_ms`) and the render thread's (`cpu_render_ms`). Each frame thread reads its own processor clock at the marks of work and of waiting the engine already has and adds up the work; a timer's spin and a present that blocks are not in it. Shown and never judged: the longest gap (`gap_max_ms`), the longest step (`step_max_ms`), the steps over 18 ms (`steps_over_18`), the median game step (`step_ms`) and its 99th percentile (`step_p99_ms`) (they hold waiting) and `cpu_ms`, the processor time of the whole process per step, which holds waiting too (section 10.1): one slow frame in three minutes is not a change in the game.
@@ -281,7 +281,7 @@ They need the machine alone, so they are not in levels 1 and 2.
   - *Result for a tool.* Every run writes `result.json` in its work folder: for each run kind its state (`ok`, `better`, `no-baseline`, `worse`, `not-trusted`, `tool`; `left-out` for a kind not asked for), the reason, and each figure's value, median, band, whether it is judged, its verdict and its anchor comparison. Exit codes: 0 ran, 1 WORSE, 2 the measure could not run or read its results, 3 not trusted.
   - *Locks.* The PC's runs take the gate lock (through `--gate-lock`, unless the caller holds it) and `measure.lock`, whose `holder.txt` names the measure's process (`pid N`); a lock whose process has ended is taken over. A run of the tablet alone takes no `measure.lock` and waits for no quiet PC. A build (`build_windows.ps1`) or a test run (`luma_test.py run`) started by hand waits while `measure.lock` is held, one line saying so, at most 15 minutes, then goes on (`tools/gate/measure_wait.py`); the gate, a landing and the measure itself set `NEBULA_NO_MEASURE_WAIT` and never wait.
   - *In a landing* (`gate.py land`, package B8). A plan that holds an engine or a tour group (`engine1`, `engine3`, `tour1`, `tour3`) gets the group `measure_pc`, and one that also holds the Android build (`android`) gets `measure_tablet`; the plan the landing prints names them. No row of `tools/gate/scope.tsv` names them, the other levels do not have them, and a plain `--main` run has both. The two run names are the constants `MEASURE_PC_RUN` (`d3d12`) and `MEASURE_TABLET_RUN` (`tablet`) at the top of the measure's code in `tools/gate/gate.py`.
-    - `measure/step/pc` runs where the long run has `measure/route`: after every lane has ended, after the tests that failed were run again alone, after the pictures and replays and after the parts `--also` asked for, with nothing else of the landing running. It is left out, with no row, when a check before it failed. It is the pair of section 10.1, not the single measure (section 10.2 says what it is judged against): `measure.py pair --base <the base's bins> --cand <the landing's bins> --runs d3d12[,d3d11,vulkan] --work <run folder>/measure-pc --pending <run folder>/measure-pc.tsv --base-pak <the base's game.pak> --cand-pak <the landing's> --base-commit ... --cand-commit ... --name measure/step/pc` (the landing holds the gate lock, so no `--gate-lock`; no quiet minutes are waited for). `d3d12` is always asked; `d3d11` and `vulkan` where the landing's plan has an engine or a tour check of that renderer (a full run has all three).
+    - `measure/step/pc` runs last in a landing: after every lane has ended, after the tests that failed were run again alone, after the pictures and replays and after the parts `--also` asked for, with nothing else of the landing running. It is left out, with no row, when a check before it failed. It is the pair of section 10.1, not the single measure (section 10.2 says what it is judged against): `measure.py pair --base <the base's bins> --cand <the landing's bins> --runs d3d12[,d3d11,vulkan] --work <run folder>/measure-pc --pending <run folder>/measure-pc.tsv --base-pak <the base's game.pak> --cand-pak <the landing's> --base-commit ... --cand-commit ... --name measure/step/pc` (the landing holds the gate lock, so no `--gate-lock`; no quiet minutes are waited for). `d3d12` is always asked; `d3d11` and `vulkan` where the landing's plan has an engine or a tour check of that renderer (a full run has all three).
     - `measure/step/tablet` runs in the Android lane right after a `build/android` that passed and before the tablet's part, so it starts on a rested tablet: `measure.py run --runs tablet --device <serial> --device-lock <the tablet's lock> --device-wait <--tablet-wait> --android-bin <the Android build> --apk <the test app> --pak <the game data> --pending <run folder>/measure-tablet.tsv`. The measure takes the lock, installs the test app, plays and removes the app by itself, and the tablet's part prepares it again as before. It runs beside the PC's lanes (a tablet-only measure takes no PC lock and its figures do not depend on the PC). No `--tablet`, or a tablet that does not answer adb, makes the row `owed`.
     - *What the result means.* The gate reads `result.json`, the run's entry; the exit code only as a cross-check.
 
@@ -386,9 +386,39 @@ first move.
 
 ## 14. Who starts the long run
 
-Whoever moves main starts it, if none is running and the last one started twenty hours ago or more. A move starts no speed measure: the measure is a part of the nightly run only. One at a time, under
-`D:\NebulaWork\plan\long.lock`. It takes `tablet.lock` for its tablet part and `measure.lock` for its last 15 minutes.
-A main gate may run beside it; they share the tablet through its lock.
+Whoever moves main starts it, if none is running and the last one started twenty hours ago or more (a run with `--only` is not a long run
+for this rule). It starts by itself after a move: the landing's last lines say that a long run started, where its log is
+(`gate-runs/long-<sha>.log`), and that it gives way to landings. A move starts no speed measure, and the long run has no speed part either:
+speed is judged in every landing (the pair on the PC, the tablet's own measure) and at the end of each package (`speed/anchor`). One long run
+at a time, under `D:\NebulaWork\plan\long.lock` (a lock whose process has ended is taken over).
+
+**The long run gives way to landings (package B15).** No part holds the machine longer than 7 minutes (`tools/gate/long_parts.py`:
+`PIECE_SECONDS`, the seconds per stop taken from the long runs on record). A part whose list of stops would take longer is played as
+pieces, each of which takes `gate.lock` for itself; a build of the run's own (the first build, the sanitizer build, the coverage build, the
+Android build) keeps the lock to its end. A piece does not take the lock while a branch waits or runs in the landing queue
+(`landing-queue.tsv`; a `running` row counts while the queue runner lives): it looks every 30 seconds, and when it has the lock it looks
+once more, so a branch that came between the look and the lock goes first. A landing that arrives during a piece waits for that piece
+only. The board keeps one line for each check: the pieces play into one run folder and the check is read and judged once, after the last
+(all pieces pass is a pass; a failed test is named as before; a piece that could not start is `tool`). The tablet's pieces take
+`tablet.lock`, not `gate.lock`, and play beside the PC's parts; they do not start while a branch waits or runs in the landing queue, nor while
+a speed measure holds `measure.lock` (until a proof shows that the pair's figures stay inside their bands beside the tablet's lane:
+`long_parts.TABLET_BESIDE_MEASURE`). The PC's own run of the same stops (`tour/tablet-pc`) is a PC part under `gate.lock`, a piece after each
+tablet piece. The soak plays beside everything at below-normal priority and takes no lock.
+
+**What follows from its results (package B15, `tools/gate/long_results.py`).** At the end of a long run that ran all its checks, and alone
+on a finished run folder (`gate.py long-results RUN_FOLDER [--dry]`), each check that is not a pass leads to work: `fail` is traced to the
+landing that brought it and opens a repair (`plan.py repair add`, source nightly) whose evidence folder holds `how-to-run.txt`, the command
+that plays the failed test alone (the gate's own command, `<bin>` for the build's programs); `stress` and `worse` open a repair of that kind;
+`tool`, `env`, a part that did not run and a tablet that was away are one line each in `tool-faults.tsv` (step `nightly`); `planned` is
+nothing. Tracing looks at the commits main moved to (the lines of level `move` in `history.tsv`: the commit and the branches the landing
+covered; before them the landing queue's rows) after the newest earlier long run that passed the check, and halves them by building the
+middle one in the long run's own tree and playing the failed tests there under the gate lock. It never traces the sanitizer, coverage, soak,
+measure, stress, tablet and GitHub checks, a check that is not a suite of the game's runner, a check whose one run takes over 15 minutes, and
+nothing once the night's tracing used 90 minutes; such a repair names the landings in between. A repair that landed becomes `confirmed` when
+a later long run passes its check; a check that fails again opens a repair that says "seen again after R-nnn". New pictures of the run's own
+stops are approved on a branch `nightly/pictures-<date>` through `gate.py land` when no picture check failed and no branch waits. The run
+folder gets `nightly-report.md` (the parts with their minutes, a part over 45 minutes named) and `long-results.json`; the step run twice on
+one folder changes nothing the second time.
 
 ---
 

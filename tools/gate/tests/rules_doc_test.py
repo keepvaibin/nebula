@@ -42,6 +42,7 @@ sys.path.insert(0, str(TREE / "tools" / "verify"))
 import doc_refs  # noqa: E402
 import gamedata  # noqa: E402
 import gate  # noqa: E402
+import long_results  # noqa: E402
 import measure  # noqa: E402
 import plan  # noqa: E402
 import speedbase  # noqa: E402
@@ -112,7 +113,7 @@ def build_tools():
     with contextlib.redirect_stderr(quiet):
         top = Node(gate.parser())
         top.commands = {"land": Node(gate.parser(land=True)), "data": Node(capture(gamedata.main, ["list"])),
-                        "speed-base": Node(capture(speedbase.main, ["show"]))}
+                        "speed-base": Node(capture(speedbase.main, ["show"])), "long-results": Node(long_results.build_parser())}
         return {"gate": top, "plan": Node(plan.parser()), "measure": Node(capture(measure.main, ["keep", "x"]))}
 
 

@@ -594,6 +594,44 @@ class Cases(unittest.TestCase):
         r = gate.parse_run_output(["KIND fail t - :: x [known (P-1)]\n", "KIND fail t2 a :: y\n", "VERDICT fail\n"], 1)
         self.assertEqual(r.failures, [("t2", "fail", "y")], "a known failure does not count")
 
+    def test_a_branch_main_holds_already_says_that_its_also_checks_were_not_run(self):
+        """B15 point 11: a landing of a branch main already holds runs nothing, so the checks asked for with --also did not run; it says so."""
+        w = self.w
+        w.branch("feat/held", {}, commits=0)             # the branch is at a commit main holds: no commit of its own
+        runs = len(w.checker.calls)
+        L = w.landing()
+        self.assertEqual(L.land(["feat/held"], also="stress,soak/long"), 0, L.out)
+        self.assertEqual(len(w.checker.calls), runs, "nothing ran")
+        said = [l for l in L.out if "main holds it already" in l and "NOT run" in l]
+        self.assertEqual(len(said), 1, L.out)
+        self.assertIn("stress, soak/long", said[0])
+        L = w.landing()
+        L.land(["feat/held"])
+        self.assertFalse([l for l in L.out if "NOT run" in l], "asked for nothing: nothing to say")
+
+    def test_the_landing_says_that_a_long_run_started_and_where_its_log_is(self):
+        """B15 point 11: the last lines of a landing whose move started a long run say so, name the log, and say it gives way to landings."""
+        w = self.w
+        w.branch("feat/a", {"docs/a.md": "a"})
+        inner = w.checker
+
+        class Starting:
+            calls = inner.calls
+
+            def run(self, *a, **k):
+                result = inner.run(*a, **k)
+                result.long_log = "D:/NebulaWork/build/gate-runs/long-abc123def.log"
+                return result
+        code, out, _ = land(w, ["feat/a"], checker=Starting())
+        self.assertEqual(code, 0, out)
+        line = next(l for l in out if "a long run started after this move" in l)
+        self.assertIn("long-abc123def.log", line)
+        self.assertIn("gives way to every landing", line)
+        self.assertLess(out.index(line), out.index("VERDICT pass"))
+        r = gate.parse_run_output(["LONG-STARTED D:/runs/long-1234.log\n", "MOVED " + "a" * 40 + "\n", "VERDICT pass\n"], 0)
+        self.assertEqual(r.long_log, "D:/runs/long-1234.log")
+        self.assertEqual(gate.parse_run_output(["MOVED " + "a" * 40 + "\n", "VERDICT pass\n"], 0).long_log, "")
+
     def test_the_checker_starts_the_landing_trees_gate(self):
         class Popen:
             def __init__(self, cmd, **k):

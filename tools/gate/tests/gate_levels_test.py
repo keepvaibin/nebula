@@ -155,8 +155,8 @@ def main():
         check({"tour/vulkan", "tour/d3d11", "replays/tablet", "tour/tablet-pc", "github", "build/android",
                "tour-RMGP01/d3d12", "pictures/tablet"} <= m and "soak" not in m and "tour-RMGP01/vulkan" not in m,
               "main: %s" % sorted(m))
-        check({"soak", "tour-asan/d3d12", "tour-RMGJ01/vulkan", "tour-RMGP01/d3d11", "tour/tablet", "coverage", "measure/route"} <= lg
-              and "github" not in lg and "unit/windows" not in lg and "pictures/tablet" not in lg, "long: %s" % sorted(lg))
+        check({"soak", "tour-asan/d3d12", "tour-RMGJ01/vulkan", "tour-RMGP01/d3d11", "tour/tablet", "coverage"} <= lg
+              and not any(n.startswith(("measure/", "speed/")) for n in lg) and "github" not in lg and "unit/windows" not in lg and "pictures/tablet" not in lg, "long: %s" % sorted(lg))
         # The mod suites and LumaLink's own check run in no level while the table says mods = off (package T4).
         check(not any(n.startswith("mods") or n == "lumalink" for n in q | m | lg | f if n not in planned),
               "mods = off: no mod check at any level: %s" % sorted(n for n in q | m | lg | f if n.startswith("mods") or n == "lumalink"))
@@ -171,9 +171,9 @@ def main():
         # The play route measure runs at the long run's end (N-1043): a check of its own, not a planned one.
         check(set(long_needs.get("coverage", ())) == {"build/windows-coverage", "data/RMGE01"} and "build/windows-coverage" in lg,
               "long: the coverage build's report runs: %s" % (long_needs.get("coverage"),))
-        check(set(long_needs.get("measure/route", ())) == {"build/windows", "data/RMGE01"},
-              "long: the play route measure runs: %s" % (long_needs.get("measure/route"),))
-        # The landing's speed measure (package B8) is a check of the main level alone: the long run has measure/route, so the final check has no measure/step/*.
+        check("measure/route" not in long_needs and "measure/route" not in f,
+              "long and final: the long run has no speed part any more (B15 point 7): %s" % sorted(n for n in lg if n.startswith("measure")))
+        # The landing's speed measure (package B8) is a check of the main level alone: the long run has no speed part.
         step = {"measure/step/pc", "measure/step/tablet"}
         check(step <= m and not step & (q | lg | f), "the speed measure's two checks are the main level's alone: %s" % sorted(step & (q | lg | f)))
         check((m | lg) - step <= f | {"pictures/tablet"} and "measure/full" in f, "final has main's and long's: %s" % sorted((m | lg) - f))
