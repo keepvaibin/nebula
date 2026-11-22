@@ -43,6 +43,32 @@ def main():
         b.pop("window")
         check(a == b, "the size changes nothing else: the same input")
 
+    # B14 part 2: the prepare step's `machine:` lines join the run's notes, and exit 3 (the pushed data is not the PC's) is kind tool.
+    import types
+    with tempfile.TemporaryDirectory() as tmp:
+        g = types.SimpleNamespace(args=types.SimpleNamespace(tablet="T", build_root=tmp), pak="X", machine_notes=[])
+        real = gate.run
+        cut = "tool: the game data on the tablet is not the PC's after two pushes: size 1 of 2"
+        for code, text, want in ((0, "install: Success\nmachine: game data kept on the tablet: K, 4.0 GB\npak: ok\n", (True, "pak: ok")),
+                                 (3, "install: Success\n" + cut + "\n", (False, cut, None, "tool")),
+                                 (1, "the pak did not reach the device: x\n", (False, "the pak did not reach the device: x"))):
+            def fake(cmd, log, text=text, code=code, **kw):
+                pathlib.Path(log).write_text(text, encoding="utf-8")
+                return code
+            gate.run = fake
+            try:
+                got = gate.device_step(g, "prepare")(pathlib.Path(tmp) / "log.txt")
+            finally:
+                gate.run = real
+            check(got == want, "prepare with exit %d: %s" % (code, got))
+        check(g.machine_notes == ["the tablet: game data kept on the tablet: K, 4.0 GB"], "the machine line joins the notes: %s" % g.machine_notes)
+        gate.run = lambda cmd, log, **kw: (pathlib.Path(log).write_text("uninstall: Success\n", encoding="utf-8"), 3)[1]
+        try:
+            got = gate.device_step(g, "remove")(pathlib.Path(tmp) / "log2.txt")
+        finally:
+            gate.run = real
+        check(got == (False, "uninstall: Success"), "exit 3 of remove is not kind tool: %s" % (got,))
+
     if failures:
         print("gate_tablet_test.py: FAILED:\n  " + "\n  ".join(failures))
         return 1

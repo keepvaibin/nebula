@@ -1761,7 +1761,9 @@ def build_android(g):
 
 
 def device_step(g, step):
-    """luma_test_android.py prepare (install the test app, copy the pak in) or remove, on the gate's tablet."""
+    """luma_test_android.py prepare (install the test app, fill its game.pak from the copy kept on the tablet: B14 part 2) or remove, on the
+    gate's tablet. The `machine:` lines it prints (what is kept, no room, no hash tool) join the run's machine notes; exit 3 of prepare
+    (the pushed data is not the PC's after two pushes) is kind tool."""
     def fn(log):
         args = [sys.executable, "-X", "utf8", "-I", TREE / "tools" / "lumacore" / "luma_test_android.py", step,
                 "--device", g.args.tablet]
@@ -1769,7 +1771,13 @@ def device_step(g, step):
             args += ["--apk", test_apk(g.args), "--pak", g.pak,
                      "--who", "gate"]
         code = run(args, log, timeout=3600)
-        return code == 0, last_line(pathlib.Path(log).read_text(encoding="utf-8", errors="replace"))
+        text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")
+        for line in text.splitlines():
+            if line.startswith("machine: "):
+                g.machine_notes.append("the tablet: " + line[len("machine: "):])
+        if code == 3 and step == "prepare":
+            return False, last_line(text), None, "tool"
+        return code == 0, last_line(text)
     return fn
 
 
@@ -2782,6 +2790,10 @@ class RealTablet:
             return True, int.from_bytes(head[8:12], "little")
         return True, None
 
+    def kept(self):
+        """(key, size) of the game data kept on the tablet between runs (luma_test_android.py kept_report), or None."""
+        return android_module().kept_report(self.device)
+
     def push(self, pak):
         """The test data pushed again (luma_test_android.py push-data): (ok, what it said)."""
         log = self.g.work / "machine-push-data.log"
@@ -2903,7 +2915,11 @@ def machine_ready(g, asked, tablet, soak=0, probes=None, learned=None):
                                 "it again failed: %s" % (on_it, want, said))
                 notes.append("the test data on the tablet was %s, this tree's is %d: pushed again" % (on_it, want))
         elif device is not None and not installed:
-            notes.append("the test app is not on the tablet: the run installs it and pushes the data")
+            notes.append("the test app is not on the tablet: the run installs it and fills its data from the copy kept there")
+        if device is not None and hasattr(device, "kept"):
+            kept = device.kept()
+            notes.append("game data kept on the tablet: %s, %s" % (kept[0], "%.1f GB" % (kept[1] / 1e9)) if kept else
+                         "no game data is kept on the tablet: the run pushes it once and keeps it")
 
     # 4. The graphics card and the PC's memory.
     learned = learned or machine.Learned(MACHINE_JSON)

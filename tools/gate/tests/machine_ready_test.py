@@ -63,9 +63,12 @@ def proc(pid, ppid, name="Nebula.exe", path=ORPHAN, age=3600.0):
 
 
 class FakeTablet:
-    def __init__(self, state="device", installed=True, version=38, push_ok=True):
-        self.the_state, self.installed, self.version, self.push_ok = state, installed, version, push_ok
+    def __init__(self, state="device", installed=True, version=38, push_ok=True, kept=None):
+        self.the_state, self.installed, self.version, self.push_ok, self.kept_value = state, installed, version, push_ok, kept
         self.pushed = []
+
+    def kept(self):
+        return self.kept_value
 
     def state(self):
         return self.the_state
@@ -419,6 +422,22 @@ class Tablet(Base):
         self.assertTrue(self.ready(g, FakeProbes(tablet=tablet), tablet=True))
         self.assertEqual(tablet.pushed, [])
         self.assertTrue(any("not on the tablet" in n for n in g.machine_notes))
+
+    def test_the_game_data_kept_on_the_tablet_is_said(self):
+        # B14 part 2: the landing's start says what is kept there (the key and the size), or that the run pushes it once.
+        tablet = FakeTablet(installed=False, version=None, kept=("RMGE01-37-3aa6533b1f08", 4_020_000_000))
+        g = self.make_gate("main")
+        self.assertTrue(self.ready(g, FakeProbes(tablet=tablet), tablet=True))
+        self.assertIn("game data kept on the tablet: RMGE01-37-3aa6533b1f08, 4.0 GB", g.machine_notes)
+        self.assertEqual(tablet.pushed, [])
+        tablet = FakeTablet(installed=False, version=None, kept=None)
+        g = self.make_gate("main")
+        self.assertTrue(self.ready(g, FakeProbes(tablet=tablet), tablet=True))
+        self.assertTrue(any(n.startswith("no game data is kept on the tablet") for n in g.machine_notes), g.machine_notes)
+        # a tablet that does not answer says nothing of it
+        g = self.make_gate("main")
+        self.assertTrue(self.ready(g, FakeProbes(tablet=FakeTablet(state="absent", kept=("K", 1))), tablet=True))
+        self.assertFalse(any("kept on the tablet" in n for n in g.machine_notes))
 
     def test_real_tablet_reading(self):
         g = self.make_gate("main", "R52")

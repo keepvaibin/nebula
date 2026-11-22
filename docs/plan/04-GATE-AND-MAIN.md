@@ -501,6 +501,19 @@ this order, and the first of points 1, 2 and 4 that cannot be met, or a failed p
    store version (`runtime/include/galaxy/store_version.inc`); data of another version is pushed again (`luma_test_android.py
    push-data`). A tablet that does not answer or is not authorised stops nothing: its part is owed (section 4.3) and the rest of the
    run is judged.
+   **The game data stays on the tablet between runs (B14 part 2).** The test app is removed after every use (the tablet's measure stands
+   alone), but the 4.0 GB of game data are kept at `/data/local/tmp/nebula-test/game-<key>.pak` (the key the gate gives the data, as in
+   `RMGE01-37-3aa6533b1f08`) with `game-<key>.pak.info` beside it (the size and a hash). `luma_test_android.py prepare` installs the app and
+   fills its own game data file by a copy on the tablet (`run-as ... cp`; where the tablet refuses that, a shell line that pipes the kept
+   file into the app), then checks the size. A key with no kept copy, a kept file of another size than the recorded one, or one with no info
+   file is pushed (`adb push`, once for each version of the data), its hash made on the tablet (`sha256sum`, else `md5sum`, else the size only,
+   and a `machine:` line says so) and compared with the PC's; unequal: one more push, then exit 3 (kind `tool`, both values in the line). A
+   copy of another key is removed first: one kept copy at a time. With less free room (`df /data`) than the kept copy, the app's copy and 1 GB
+   the run goes the old way (a temporary file pushed, copied in, removed; nothing kept) and a `machine:` line says so; a run never fails for
+   room. The `machine:` lines of `prepare` join the landing's machine notes, and the landing's start says `game data kept on the tablet:
+   <key>, 4.0 GB` or that none is kept. The tablet's measure, which installs the app itself, gets the same copy. `luma_test_android.py remove
+   --data` removes the kept copy and nothing else; it is run when a run of work is over. Only `/data/local/tmp/nebula-test/` and the package
+   `dev.nebula.galaxy.test` are touched.
 4. The graphics card and the PC's memory. The card the game uses is the first one DXGI lists for high performance (what the game
    itself takes; `LUMA_TEST_GPU` names another); its total is DXGI's dedicated memory and what every program holds of it is Windows'
    counter `GPU Adapter Memory`, read by its English name through PDH (any maker's card, any language). One game copy takes what the
