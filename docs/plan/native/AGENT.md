@@ -84,6 +84,8 @@ Every step is built on the one before it, and nothing reaches main that its land
      it from the code and write the answer into the design file in this same landing, before the code that
      depends on it.
    Line numbers in a card were taken at an older commit. Find the code by its names, not by the numbers.
+   Some cards were written before the landing existed and say `quick gate`, `main gate` or `the gate`: each
+   means the landing (`PLAN land`). You run nothing else for it.
 4. Make the change the card describes: all of it, and nothing the card does not ask for. Something else you
    notice that is wrong gets a ledger row (section 10), not a fix in this step.
 5. Prove it. Write the tests the card's "Proof" asks for, and run only the tests you wrote or changed, plus
@@ -114,8 +116,10 @@ Do not wait for a landing with empty hands.
 1. `PLAN ahead`. It makes the branch of the next step, `native/<M>`, in the work folder, on top of the commit
    that is being tested, and prints `AHEAD: <M>`, that step's card, rows and checks, and your commands.
    If it prints `nothing can be prepared ahead: ...` there is no step that can follow yet: join the landing
-   (point 8 of 4.1) and wait for it. The same for any other refusal of `ahead` (each says why; none deletes a
-   branch or a commit): nothing is written ahead this time. Never make a step's branch by hand.
+   (point 8 of 4.1) and wait for it. Any other refusal of `ahead` says why, and none deletes a branch or a
+   commit. One that names what to do (uncommitted changes: commit them; the folder on another branch: the
+   `git checkout` it names; `do not apply`: the paragraph under the table of 4.3): do that and give `ahead`
+   again. Any other: nothing is written ahead this time. Never make a step's branch by hand.
 2. Work on `<M>` exactly as in 4.1 points 3 to 7: read, change, build, prove, audit, ledger, commit. You are
    writing on top of a step that has not passed yet; that is intended.
 3. Three things you do not do for `<M>` yet: `PLAN start <M>`, `PLAN land <M>`, and a push.
@@ -145,6 +149,14 @@ Do not wait for a landing with empty hands.
 | the same failure three times (code 3) | Commit what you have of `<M>` (below). `PLAN blocked <N> "..."` (section 5). Then `PLAN next`. If it gives `<M>`: `PLAN start <M>` puts `<M>`'s commits on main without `<N>`'s; what you wrote may lean on `<N>`: read your whole change against main (`git diff origin/main`) and mend it before you go on. If it gives another step, `<M>`'s branch stays as it is for later. |
 | not judged (code 4) | Section 9, "When a tool fails". Landing `<N>` once more works from `<M>`'s branch as long as `<N>` needs no new commit; your work on `<M>` goes on meanwhile. Where `<N>` itself must change (its branch no longer applies to main): commit what you have of `<M>` (below), `git checkout native/<N>`, do it, `PLAN land <N>`, then `PLAN ahead` again. |
 
+`PLAN ahead` or `PLAN start <M>` can say that the commits of `<M>` `do not apply on top of` `<N>` or of main:
+your fix of `<N>`, or a repair that landed in between, changed lines that `<M>` changed too. The branch is
+as it was. The line prints the one
+command to give in the work folder (`git rebase --onto ...`; for a step that was kept on its branch while main
+moved, `git rebase origin/main`): copy it. For each conflict read both sides: what was tested or landed
+stands, and `<M>`'s change is made again on top of it. `git add` the files, `git rebase
+--continue`, then give `ahead` or `start` again, as the line says.
+
 Committing unfinished work of `<M>` so that the folder is clean: an ordinary commit on `native/<M>` whose
 message says plainly what it holds and what is missing. It need not build. It lands later as part of `<M>`;
 only the last commit of a step is tested.
@@ -159,7 +171,7 @@ written: `PLAN blocked <ID> "<what is done, what is left, what stands in the way
 | --- | --- | --- |
 | 0 | Landed. Main has your step. | Section 4.3, first row. |
 | 1 | Refused, or a check failed. The lines starting `KIND` name each failed check and test; the line `result: <folder>\result.json` before them names the folder of the run. | A refusal names what is missing (a ledger row, an invented file reference, an uncommitted change, the wrong branch): supply it. For a failed test: open its run folder, read the log and the pictures, and find the cause in your change before you edit anything. Fix the game, never the test (unless the card changes what the test checks). Commit, land again. Never land the same commit twice hoping for another result (the one exception is under `worse` below). |
-| 2 | The command was wrong, or a file of the plan cannot be read. | Correct the command as the message says, or wait as it says. |
+| 2 | The step tool did not do the command. Its line starts `plan.py:` and says why: the command or the id was wrong, a file of the plan cannot be read, or git failed. | A wrong command or id: correct it. A message `ledger line <N>: ...` names a line of `docs/plan/ledger.tsv` by its number: you wrote that line; give it exactly the 7 tab-separated columns, commit, and give the command again. Anything else: give the same command once more. The same line again: section 9, "When a tool fails", point 5. |
 | 3 | The same failure three times in a row. | Stop working on it. `PLAN blocked <ID> "<what fails and what you tried, in two sentences>"`. Then `PLAN next`. |
 | 4 | Not judged: a test tool or the machine failed, or your branch no longer applies to main. Nothing is wrong with your step as far as anyone knows. | Section 9, "When a tool fails". |
 
@@ -355,6 +367,11 @@ own help says, or when a check cannot see what the card asks it to prove. Then:
 4. A fault outside a landing (one of your own commands): try the command once more. If it fails the same
    way, go on without it when the landing will run that test anyway, and say so in your log; if you cannot
    prove your change without it, `PLAN blocked <ID> "tool: ..."`.
+5. When the command that fails twice is `PLAN` itself (code 2, the same line both times): for `ahead`,
+   nothing is written ahead this time; for `note`, `page`, `tool`, `toolfault` and `owed`, write the text
+   into your log instead and go on; for `start` and `land`, `PLAN blocked <ID> "tool: <its line>"`, then
+   `PLAN next`. If `next` fails twice, or `blocked` fails in the same way too, the step tool cannot be used:
+   the work is stopped (section 13), with the tool's line as the reason.
 
 Do not look for the cause inside the tool, do not work around it with a command of your own, and do not wait
 for it to be mended. The record you wrote is counted on the progress page, with what it stopped you from
@@ -431,8 +448,9 @@ done, or stopped.
 
 Done or stopped: `PLAN note "<Done: all 138 steps are on main. / Stopped: <why, one sentence>>"`, the page
 (section 12), a log line, and end your turn with at most six lines for the owner: what is on main (the count
-from `PLAN status`), what is blocked and why (one line each), where the page is. These are the only two
-reasons for which you end your turn. No release, tag or upload is ever made by you.
+from `PLAN status`), what is blocked and why (one line each), where the page is. (Stopped because the step
+tool itself cannot be used: leave out the note and the page, write the log line and the six lines.) These are
+the only two reasons for which you end your turn. No release, tag or upload is ever made by you.
 
 ## 14. After a context compaction, a restart, or the owner's word "continue"
 
