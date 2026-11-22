@@ -41,11 +41,11 @@ None yet.
 
 ## Repairs
 
-0 open of kind fail, 1 in all.
+1 open of kind fail, 1 in all.
 
 | Id | State | Kind | Check | Renderer | Traced to | Seen |
 | --- | --- | --- | --- | --- | --- | --- |
-| R-001 | open | stress | stress/tour/d3d12/1 | d3d12 | commit 94625b5a7 | 2 |
+| R-001 | open | fail | tour/d3d12 | d3d12 | step S1.1 commit abc | 1 |
 
 ## For the owner to check by hand
 
