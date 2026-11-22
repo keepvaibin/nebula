@@ -4,7 +4,12 @@
    stage asked for at every stage's start after the first, the end at the last frame, input only inside the run.
 2. The judgment: flat memory passes; memory that keeps growing past the bound fails; the first lap's growth is left
    out; a run of fewer than three laps cannot pass.
-3. The gate's verdict (gate.soak_result): the soak's output lands in the check's log, which is not the file the soak
+3. The pause menu is a block of two presses with nothing between them, in the middle of a stage only (N-1089: a pointer and A sent
+   into the open menu pressed its Settings button, the overlay stayed open, and the stage move that followed never got past its
+   opening camera).
+4. The lives: every stage starts with soak.LIVES lives (a call of the game's own function after its stage was asked for) and its
+   lives at the end are a fact (N-1089: with none left the game ended the run at its title screen and the next stage move stalled).
+5. The gate's verdict (gate.soak_result): the soak's output lands in the check's log, which is not the file the soak
    writes (N-1065: both were soak.log, and the copy onto itself failed the check).
 """
 import json
@@ -45,6 +50,32 @@ def main():
         again = json.loads((soak.write(pathlib.Path(tmp) / "b", minutes=10, lap=3, stage_seconds=60, seed=7).parent
                             / "soak" / "test.json").read_text(encoding="utf-8"))
         check(again == raw, "the same seed writes the same test")
+
+    # 3. The pause menu: pairs of presses, nothing between a pair, never in a stage's first PAUSE_AFTER frames nor so late that the block
+    # runs into the next stage (the default plan: 120 minutes, 12 stages a lap).
+    plan = soak.test_for(120, 12, 60, 20261117)["steps"]
+    per = 60 * soak.STEPS_PER_SECOND
+    presses = [s for s in plan if s.get("hold") == ["PLUS"]]
+    check(len(presses) >= 20 and len(presses) % 2 == 0, "the plan presses pause in pairs, often enough to be a test: %d" % len(presses))
+    for first, second in zip(presses[0::2], presses[1::2]):
+        check(second["at"] - first["at"] == 3 + soak.PAUSE_WAIT, "the second press closes the menu after the wait: %s %s" % (first, second))
+        between = [s for s in plan if first["at"] < s["at"] < second["at"]]
+        check(not between, "no input inside an open pause menu at %d: %s" % (first["at"], between[:2]))
+        start = first["at"] // per * per
+        check(first["at"] - start >= soak.PAUSE_AFTER, "no pause in a stage's first %d frames: %d" % (soak.PAUSE_AFTER, first["at"] - start))
+        check(second["at"] + 3 + 60 < start + per, "the pause block ends inside its stage: %d" % second["at"])
+        after = [s for s in plan if second["at"] < s["at"] < second["at"] + 60]
+        check(not after, "the menu's way out is left alone at %d: %s" % (second["at"], after[:2]))
+
+    # 4. The lives, in the default plan: a refill and a read at every stage of the 120 minutes.
+    refills = [s for s in plan if s.get("call") == "GameDataFunction::addPlayerLeft"]
+    reads = [s for s in plan if s.get("call") == "GameDataFunction::getPlayerLeft"]
+    check(len(refills) == 120 and len(reads) == 120, "a refill and a read for each of the 120 stages: %d %d" % (len(refills), len(reads)))
+    check(all(s["args"] == [soak.LIVES] and s["signature"] == "void(int)" for s in refills), "the refill gives %d lives" % soak.LIVES)
+    check([s["fact"] for s in reads] == ["soak.lives.%d" % n for n in range(120)], "the lives read at each stage's end is its own fact")
+    for n, (give, read) in enumerate(zip(refills, reads)):
+        check(n * per <= give["at"] < n * per + soak.LOAD_FRAMES and read["at"] >= (n + 1) * per - 2 - 1,
+              "the refill is at the stage's start and the read at its end: %d %d" % (give["at"], read["at"]))
 
     lap = 1000
     flat = [(f, 900 << 20) for f in range(0, 5 * lap, 50)]

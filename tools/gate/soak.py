@@ -38,6 +38,20 @@ STEPS_PER_SECOND = 60
 MEMORY_SECONDS = 30
 BOUND_MB = 32.0
 LOAD_FRAMES = 300  # input starts this long after a stage is asked for (the load and its opening take some of it)
+# The pause menu is a block of its own: a press, PAUSE_WAIT frames with no input at all, a press that closes it, and the menu's way
+# out. The first plan sent a random pointer and A into the open menu: that pressed its Settings button, the overlay stayed open
+# (scripted pad input cannot close it) and the stage that followed never got past its opening camera (ledger N-1089; the same plan
+# without its pause presses passed both stages). A press is not made in the first PAUSE_AFTER frames of a stage (the stage's opening
+# lasts about 900 of them; a press the game does not take would leave the second press to open the menu), nor where the block
+# would not end before the stage does.
+PAUSE_WAIT = 60
+PAUSE_BLOCK = 3 + PAUSE_WAIT + 3 + 60  # the opening press, the wait, the closing press, the menu's way out
+PAUSE_AFTER = 1200
+# The lives: random play dies, a stage costs lives, and with none left the game ends the run at its title screen (the second stall of
+# N-1089: Mario was out of lives in the Bowser stage, the game went to the title and the file select, the plan's pointer opened the
+# Settings overlay there, and the next stage move never reached its opening camera). Every stage starts with LIVES lives, as a player
+# who takes a 1-Up now and then would have, and the lives left at its end are a fact (soak.lives.<stage number>).
+LIVES = 99
 
 
 def stops():
@@ -54,12 +68,16 @@ def save_for(chosen):
     return save
 
 
-def random_play(r, start, end):
-    """Seeded random input from frame start to end (exclusive): the tour's moves, the pointer, the pause menu."""
+def random_play(r, start, end, stage_start=None):
+    """Seeded random input from frame start to end (exclusive): the tour's moves, the pointer, the pause menu (a block: PAUSE_BLOCK).
+    stage_start: the frame the stage was asked for (default `start`)."""
     steps = []
     at = start
+    stage_start = start if stage_start is None else stage_start
     while at < end - 30:
         kind = r.choice(["stick"] * 6 + ["jump"] * 3 + ["spin"] * 2 + ["crouch", "pointer", "b"] + ["pause"] * (1 if r.random() < 0.05 else 0))
+        if kind == "pause" and (at - stage_start < PAUSE_AFTER or at + PAUSE_BLOCK >= end - 30):
+            kind = "stick"
         if kind == "stick":
             frames = min(r.randint(20, 120), end - at - 1)
             steps.append({"at": at, "stick": [round(r.uniform(-1, 1), 2), round(r.uniform(-1, 1), 2)], "frames": frames})
@@ -82,7 +100,8 @@ def random_play(r, start, end):
             at += 20
         else:
             steps.append({"at": at, "hold": ["PLUS"], "frames": 3})
-            at += 40
+            steps.append({"at": at + 3 + PAUSE_WAIT, "hold": ["PLUS"], "frames": 3})
+            at += PAUSE_BLOCK
     return steps
 
 
@@ -104,7 +123,11 @@ def test_for(minutes, lap, stage_seconds, seed):
         stage, scenario = chosen[n % len(chosen)]
         if at:
             steps.append({"at": at, "stage": {"name": stage, "scenario": scenario}})
-        steps += random_play(r, at + (LOAD_FRAMES if at else 30), at + per)
+        steps.append({"at": at + (LOAD_FRAMES if at else 30) - 1, "call": "GameDataFunction::addPlayerLeft", "signature": "void(int)",
+                      "args": [LIVES]})
+        steps.append({"at": at + per - 2, "call": "GameDataFunction::getPlayerLeft", "signature": "s32()", "args": [],
+                      "fact": "soak.lives.%d" % n})
+        steps += random_play(r, at + (LOAD_FRAMES if at else 30), at + per, at)
     steps.append({"at": total, "end": True})
     steps.sort(key=lambda s: s["at"])
     first = chosen[0]

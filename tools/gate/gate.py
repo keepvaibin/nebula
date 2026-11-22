@@ -3353,7 +3353,7 @@ SOAK_SHORT_MINUTES = 30
 
 
 def soak_part(g, name, minutes):
-    """The soak (tools/gate/soak.py: both soak plans, one process for each renderer, side by side) for `minutes`, after the other checks;
+    """The soak (tools/gate/soak.py: its one plan, one process for each renderer, side by side) for `minutes`, after the other checks;
     one check `name`."""
     if not g.wanted(name, DATA) or g.dry:
         return

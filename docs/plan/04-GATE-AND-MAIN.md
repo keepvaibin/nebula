@@ -454,8 +454,8 @@ landing besides what the changed files need. NAMES are comma-separated: the nigh
 |---|---|
 | `stress` | the stress lane (twelve copies of the game at once). Asked for by name, a result that fails beside the others and passes alone counts as `fail` in this landing: it is the step's proof that a fault under load is gone |
 | `sanitizer/tour` | the 102-stop tour on the sanitizer build (address and undefined behaviour), in the build's own kept folder. A stop ends at the first report the sanitizers print (no recovery): the report is a finding about the game, the check is `fail` with the report as its message, unless the first frame of the game's code in it is listed in `tools/gate/sanitizer-known.tsv` (frame, ledger row, first words): that is counted and shown. Run by name: `gate.py land BRANCH --also sanitizer/tour`. Times on the build PC (11-21): the sanitizer build from nothing 12 minutes, the 12-stop tour 85 seconds, the 102 stops 12 minutes |
-| `soak` | both soak plans side by side for 30 minutes |
-| `soak/long` | the same for the long run's time (`--soak-minutes`, 120) |
+| `soak` | the soak (`tools/gate/soak.py`: one plan of seeded random play through 12 tour stages, a lap, in real time) on Direct3D 12, Vulkan and Direct3D 11, three processes side by side, for 30 minutes. It passes when every renderer ends with no crash, no stop in frames and no stage that fails to load, and its memory does not grow (a median per lap at most 32 MB above the second lap's; the first lap is left out). What a step's "both soaks clean" means: this check, passed |
+| `soak/long` | the same for 120 minutes (`--soak-minutes`), the nightly's soak |
 | `replays/software` | the recorded plays (`tests/replays`) on Microsoft's software graphics device, Direct3D 12 and 11 (`tools/gate/replays_software.py`, with the game's software-device launch option), as many copies at once as the PC's memory and processors hold and with no graphics-card slot; every step hash is compared with the recording |
 
 They run after the checks the groups need have passed (a landing that failed runs none), before `measure/step/pc`, one after another,
