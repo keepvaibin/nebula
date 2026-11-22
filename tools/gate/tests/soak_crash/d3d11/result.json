@@ -1,0 +1,10 @@
+{
+ "test": "soak",
+ "renderer": "d3d11",
+ "verdict": "crashed",
+ "kind": "fail",
+ "reason": "dump nebula-native-20261122-114308-44120.dmp; last lines: [  300.058] crash: stage FactoryGalaxy | [  300.149] crash: minidump nebula-native-20261122-114308-44120.dmp | [  300.149] crash: the dump read a snapshot of the process | [  300.150] crash: NEB-N01 Nebula crashed | [  300.150] crash: report nebula-native-20261122-114308-44120.txt",
+ "frames": 16846,
+ "seconds": 300.42,
+ "exit": 4
+}

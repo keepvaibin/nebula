@@ -1,0 +1,10 @@
+{
+ "test": "soak",
+ "renderer": "vulkan",
+ "verdict": "crashed",
+ "kind": "fail",
+ "reason": "dump nebula-native-20261122-114303-31916.dmp; last lines: [  294.689] crash: stage FactoryGalaxy | [  294.888] crash: minidump nebula-native-20261122-114303-31916.dmp | [  294.888] crash: the dump read a snapshot of the process | [  294.888] crash: NEB-N01 Nebula crashed | [  294.888] crash: report nebula-native-20261122-114303-31916.txt",
+ "frames": 16256,
+ "seconds": 295.2,
+ "exit": 4
+}

@@ -24,6 +24,7 @@ import argparse
 import json
 import pathlib
 import random
+import re
 import shutil
 import statistics
 import subprocess
@@ -179,6 +180,47 @@ def memory_of(run_folder):
     return samples
 
 
+CRASH = re.compile(r"^\[\s*(\d+\.\d+)\]\s*crash: exception (.*)$")
+STAGE = re.compile(r"^\[\s*\d+\.\d+\]\s*crash: stage (.*)$")
+HUNG = re.compile(r"no step for (\d+) s.*?frame (\d+)")
+
+
+def ended_early(folder):
+    """What a soak run that did not end by its own end step says, first: "crashed at 299.5 s: exception 0xC0000005 at Nebula.exe+0x3eddf6
+    (thread 51712), address 0x0, in stage FactoryGalaxy" or "hung: no frame for 120 s (it stood at frame 17956)", from the run's own result
+    and log (the way the tour's lanes name a crash); "" for a run that ended by itself."""
+    folder = pathlib.Path(folder)
+    try:
+        result = json.loads((folder / "result.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ""
+    verdict = result.get("verdict")
+    if verdict in (None, "pass"):
+        return ""
+    try:
+        lines = (folder / "run.log").read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        lines = []
+    when, what, stage = result.get("seconds"), str(result.get("reason") or "")[:160], ""
+    for line in lines:
+        crash, named = CRASH.match(line), STAGE.match(line)
+        if crash and not stage:
+            when, what = float(crash.group(1)), "exception " + crash.group(2).strip()
+        elif named and not stage and what.startswith("exception"):
+            stage = ", in stage " + named.group(1).strip()
+    hung = HUNG.search(what)
+    if verdict == "hung" and hung:
+        what = "no frame for %s s (it stood at frame %s)" % hung.groups()
+    return "%s%s: %s%s" % (verdict, (" at %.1f s" % when) if isinstance(when, (int, float)) else "", what, stage)
+
+
+def verdict_line(code, passes, memory, early):
+    """(passes, the line) of one renderer: a run that ended early says so first and leaves the memory sentence out (no laps to judge)."""
+    if early:
+        return False, "%s (harness exit %d)" % (early, code)
+    return code == 0 and passes, "harness exit %d; %s" % (code, memory)
+
+
 def run_all(a):
     suite = write(pathlib.Path(a.work) / "suite", a.minutes, a.lap, a.stage_seconds, a.seed)
     chosen, per, total = plan(a.minutes, a.lap, a.stage_seconds, a.seed)
@@ -199,7 +241,7 @@ def run_all(a):
                 shutil.rmtree(d, ignore_errors=True)
         folders = [f.parent for f in work.rglob("facts.jsonl")]
         ok, detail = judge(memory_of(folders[0]), lap_frames) if folders else (False, "no facts")
-        results[renderer] = (code == 0 and ok, "harness exit %d; %s" % (code, detail))
+        results[renderer] = verdict_line(code, ok, detail, ended_early(folders[0]) if folders else "")
 
     threads = [threading.Thread(target=one, args=(r,)) for r in a.renderers.split(",")]
     for t in threads:

@@ -111,6 +111,30 @@ def main():
         ok, said = gate.soak_result(process, check_log)(check_log)
         check(ok, "a soak log that is the check's log is read, not copied onto itself: %s" % said)
 
+    # 6. A soak that ends by a crash or a hang says so first, per renderer, with the second, the exception and the stage (T11-B, the logs of
+    #    the planted crash after 18000 steps: tools/gate/tests/soak_crash); a memory sentence is left out when the run ended early.
+    data = pathlib.Path(__file__).resolve().parent / "soak_crash"
+    want = {"d3d11": "crashed at 300.1 s: exception 0xC0000005 at NebulaD11.exe+0x234316 (thread 62664), address 0x0, in stage FactoryGalaxy",
+            "d3d12": "crashed at 299.5 s: exception 0xC0000005 at Nebula.exe+0x3eddf6 (thread 51712), address 0x0, in stage FactoryGalaxy",
+            "vulkan": "crashed at 294.7 s: exception 0xC0000005 at NebulaVk.exe+0x239f16 (thread 23520), address 0x0, in stage FactoryGalaxy"}
+    for renderer, text in want.items():
+        early = soak.ended_early(data / renderer)
+        check(early == text, "%s: the crash is named by its second, exception and stage: %s" % (renderer, early))
+        passes, line = soak.verdict_line(4, False, "1 laps of memory; three are needed to judge growth", early)
+        check(not passes and line == "%s (harness exit 4)" % text and "laps" not in line, "%s: the line says the crash first, no memory sentence: %s" % (renderer, line))
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = pathlib.Path(tmp)
+        (folder / "result.json").write_text(json.dumps({"verdict": "hung", "seconds": 143.2, "reason":
+            "the game completed no step for 120 s while its process was alive (it stood at frame 8600); no stall dump was written"}), encoding="utf-8")
+        early = soak.ended_early(folder)
+        check(early == "hung at 143.2 s: no frame for 120 s (it stood at frame 8600)", "a hang says the seconds without a frame: %s" % early)
+        (folder / "result.json").write_text(json.dumps({"verdict": "pass", "seconds": 7200.0}), encoding="utf-8")
+        check(soak.ended_early(folder) == "", "a run that ended by itself says nothing early")
+        passes, line = soak.verdict_line(0, False, "3 laps of memory grew by 40 MB", "")
+        check(not passes and line == "harness exit 0; 3 laps of memory grew by 40 MB", "a run that ended by itself keeps the memory sentence: %s" % line)
+        passes, line = soak.verdict_line(0, True, "flat", "")
+        check(passes, "a flat run that ended by itself passes")
+
     if failures:
         print("soak_test.py: FAILED:\n  " + "\n  ".join(failures))
         return 1
