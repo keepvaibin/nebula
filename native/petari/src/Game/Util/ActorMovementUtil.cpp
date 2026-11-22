@@ -1261,4 +1261,3 @@ namespace MR {
         ::calcRotate(pActor, front, rParam.mTurnDegree);
     }
 };  // namespace MR
-// (A comment only: the landing that proved the speed pair of the gate, B13 part B.)
