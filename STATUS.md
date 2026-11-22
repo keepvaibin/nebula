@@ -1,12 +1,13 @@
 # Nebula native plan: status
 
-Written 2026-11-22 14:25.
+Written 2026-11-22 14:26.
 
 Steps landed: 2 of 138 (1%).
 
 Now: S0.1.2 since 14:17; ahead: nothing
 
-In work now: Nothing started.
+In work now:
+- S0.1.3 Render data path step 1: `f4/e3-1a`, `f4/e3-1b`, `f4/e3-1c` (agent 1)
 
 ## Packages
 
