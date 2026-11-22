@@ -523,7 +523,7 @@ class StepChecksTest(RerunBase):
         table = plan.read_step_checks(TREE)
         ids = {s["step"] for s in plan.read_base(TREE)}
         self.assertGreaterEqual(len(table), 8)
-        self.assertEqual(set(plan.ALSO_CHECKS), {"stress", "sanitizer/tour", "soak", "soak/long", "replays/software"})
+        self.assertEqual(set(plan.ALSO_CHECKS), {"stress", "sanitizer/tour", "soak", "soak/long", "replays/software", "speed/anchor"})
         for step_id, items in table.items():
             self.assertIn(step_id, ids)
             for check, serves in items:

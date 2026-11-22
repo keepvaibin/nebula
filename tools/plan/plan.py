@@ -156,7 +156,7 @@ STATE_COMMIT = "Plan: step %s landed"    # the subject of the tool's own commit:
 
 # The extra checks a step's proof asks for (docs/plan/native/step-checks.tsv): the nightly's parts, which `gate.py land --also` takes.
 STEP_CHECKS_FILE = "step-checks.tsv"
-ALSO_CHECKS = ("stress", "sanitizer/tour", "soak", "soak/long", "replays/software")
+ALSO_CHECKS = ("stress", "sanitizer/tour", "soak", "soak/long", "replays/software", "speed/anchor")
 
 # A replay reference (tests/replays/*.tsv) changes only where the card says so (T14 item 5).
 REPLAY_DIR = "tests/replays/"

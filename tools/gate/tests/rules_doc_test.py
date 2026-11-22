@@ -3,7 +3,7 @@
     python -X utf8 -I tools/gate/tests/rules_doc_test.py [--work FOLDER]
 
 Every command and every option the document names inside backticks is offered by that tool's own parser: gate.py (its levels and
-options, `land` and its options, `data` and its commands), plan.py (its commands, `repair` and its commands, the options of each),
+options, `land` and its options, `data` and `speed-base` and their commands), plan.py (its commands, `repair` and its commands, the options of each),
 measure.py (its commands and their options). The parsers are read from the tools themselves (gate.parser, plan.parser, and the parser
 that measure.main and gamedata.main build, taken as they parse), so a name the tool lost fails here. No game, no build, no network.
 
@@ -44,6 +44,7 @@ import gamedata  # noqa: E402
 import gate  # noqa: E402
 import measure  # noqa: E402
 import plan  # noqa: E402
+import speedbase  # noqa: E402
 
 DOC = TREE / "docs" / "plan" / "04-GATE-AND-MAIN.md"
 TOOLS = ("gate", "plan", "measure")
@@ -110,7 +111,8 @@ def build_tools():
     quiet = io.StringIO()
     with contextlib.redirect_stderr(quiet):
         top = Node(gate.parser())
-        top.commands = {"land": Node(gate.parser(land=True)), "data": Node(capture(gamedata.main, ["list"]))}
+        top.commands = {"land": Node(gate.parser(land=True)), "data": Node(capture(gamedata.main, ["list"])),
+                        "speed-base": Node(capture(speedbase.main, ["show"]))}
         return {"gate": top, "plan": Node(plan.parser()), "measure": Node(capture(measure.main, ["keep", "x"]))}
 
 

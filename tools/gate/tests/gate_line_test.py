@@ -7,12 +7,23 @@ The gate's run_checks runs for real on a landing's plan. Every check but the mea
 ended and passes (or fails, when the case says); measure.py is a fake program that writes the result.json the case plants and exits as
 planted, recording its own arguments and times. The folders under D:/NebulaWork are replaced by temporary ones.
 
-Table B, each state of the measure (on the PC's check and on the tablet's):
+Table B, each state of the measure (the tablet's check; the PC's check is the pair, Table P below):
   every_state_has_its_row          ok, better, no-baseline: pass, the figures named with value and median (no baseline yet said); worse: kind
                                    worse, the run fails, exit 1; not-trusted, tool, no result.json, an exit code and a state that disagree,
                                    the time limit: owed with the plain reason, one line in tool-faults.tsv; left-out: owed, no line
   a_row_fails_the_run_like_fail    the verdict and exit code of each: pass 0, worse fail 1, owed pass 0
   one_fault_line_for_a_check       two owed measures in one run: one line each, the check named as the test
+Table P, the PC's check is the pair against the kept base (package B13, part B; a fake measure.py writes the result.json and the --pending table):
+  pair_states                      every figure ok, better or accepted: pass; a figure worse: kind worse, the landing fails, the figures named;
+                                   not calibrated: owed with the command that makes the bands; no base yet: owed, nothing started; the pair
+                                   could not run on the candidate's side or on both, no result.json, an exit and a state that disagree, the time
+                                   limit: owed and one line in tool-faults.tsv; the base's side could not and the candidate's can: owed, the
+                                   base moves to the candidate unjudged
+  pair_renderers                   d3d12 always; d3d11 and vulkan when the plan runs them
+  base_follows_the_move            judged: the base becomes the candidate and the old folder goes; owed: it stays; rebase: it moves; a plan
+                                   without the check leaves it
+  anchor_part                      --also speed/anchor: all three renderers against the anchor; worse fails; not runnable: owed, replaced after
+                                   the move with the last ratios in anchor-history.tsv
 Where the checks sit:
   pc_measure_runs_last             it starts after every lane ended (the slowest lane, the tablet's measure, the parts --also asked for)
   pc_measure_skipped_on_a_failure  a check that failed before it: no row and no measure; the parts --also asked for are not run either
@@ -58,6 +69,7 @@ import kinds  # noqa: E402
 import landing  # noqa: E402
 import landing_test as lt  # noqa: E402
 import scope  # noqa: E402
+import speedbase  # noqa: E402
 
 TABLE = scope.read_table()
 
@@ -72,6 +84,49 @@ if args[0] == "keep":
         f.write(json.dumps({"keep": args[1], "history": opts.get("--history"), "time": time.time()}) + "\\n")
     print(plan.get("keep_says", "measure: kept 1 line(s)"))
     sys.exit(plan.get("keep_exit", 0))
+if args[0] in ("pair", "pair-probe"):
+    kind = args[0]
+    renderers = opts["--runs"].split(",") if kind == "pair" else [opts["--renderer"]]
+    p = plan.get(kind, {})
+    start = time.time()
+    time.sleep(p.get("seconds", 0.2))
+    code = 0
+    if kind == "pair-probe":
+        if p.get("ok", True):
+            print("  steps_over_18  3")
+            print("  render_ms      1.5")
+        else:
+            print("measure.py pair-probe: the run ended with exit 1: nothing")
+            code = 2
+    else:
+        states = {r: p.get("states", {}).get(r, "ok") for r in renderers}
+        reasons = {r: p.get("reasons", {}).get(r, "the cand side ended with exit 1") for r in renderers}
+        rows, figures = [], {}
+        for r in renderers:
+            figures[r] = {}
+            if states[r] == "tool":
+                rows.append([r, "-", "tool", "measure/step/pc %s tool: %s" % (r, reasons[r])])
+                continue
+            for fig in p.get("figures", ["cpu_work_ms", "render_ms"]):
+                state = p.get("figure_states", {}).get("%s.%s" % (r, fig), states[r])
+                rows.append([r, fig, state, "measure/step/pc %s %s %s: base 1.000, candidate 1.100 (+10.0%%)" % (r, fig, state)])
+                figures[r][fig] = {"value": 1.1, "median": 1.0, "band": 0.05, "judged": True, "verdict": state, "anchor": None,
+                                   "ratios": [1.1, 1.09, 1.11] if state == "worse" else [1.01]}
+        code = 2 if "tool" in states.values() else 1 if "worse" in states.values() else 0
+        code = p.get("exit", code)
+        if opts.get("--pending"):
+            lines = ["check\\trenderer\\tfigure\\tstate\\tline"] + ["\\t".join([opts.get("--name", "measure/step/pc")] + row) for row in rows]
+            pathlib.Path(opts["--pending"]).write_text("\\n".join(lines) + "\\n", encoding="utf-8")
+        if not p.get("no_result"):
+            work = pathlib.Path(opts["--work"])
+            work.mkdir(parents=True, exist_ok=True)
+            body = {"commit": "fake", "exit": p.get("result_exit", code), "verdict": "x",
+                    "runs": {r: {"state": states[r], "reason": reasons[r] if states[r] == "tool" else "", "figures": figures[r]}
+                             for r in renderers}}
+            (work / "result.json").write_text(json.dumps(body), encoding="utf-8")
+    with open(record, "a", encoding="utf-8") as f:
+        f.write(json.dumps({"run": kind, "args": args, "start": start, "end": time.time()}) + "\\n")
+    sys.exit(code)
 run = opts["--runs"]
 p = plan[run]
 start = time.time()
@@ -117,6 +172,14 @@ class Gates:
         self.script.write_text(FAKE_MEASURE, encoding="utf-8")
         self.plan_file, self.record = self.t / "plan.json", self.t / "record.jsonl"
         self.measure({})
+        self.speed = self.t / "speed-base"
+        self.bins = self.t / "bins"
+        (self.bins / "D3D12").mkdir(parents=True)
+        (self.bins / "Nebula.exe").write_bytes(b"exe")
+        self.pak = self.t / "game.pak"
+        self.pak.write_bytes(b"pak")
+        for kind, sha in (("base", "b" * 40), ("anchor", "a" * 40)):
+            speedbase.make(kind, self.bins, sha, self.pak, self.speed, registry=self.t / "registry.tsv")
 
     def measure(self, plan):
         self.plan_file.write_text(json.dumps(plan), encoding="utf-8")
@@ -136,12 +199,13 @@ class Gates:
 
     def __enter__(self):
         names = ("MEASURE", "FLAKES", "SET_ASIDE", "BASE_BINS", "MACHINE_JSON", "PICTURE_STORE", "machine_ready", "tablet_part", "fault_writer",
-                 "android_module", "start_soak", "harness", "measure_limit")
+                 "android_module", "start_soak", "harness", "measure_limit", "pair_limit", "SPEED_ROOT")
         self.saved = {n: getattr(gate, n) for n in names}
         self.saved_check, self.saved_ensure = gate.Gate.check, gate.machine.ensure_adb_server
         self.env = {k: os.environ.get(k) for k in ("FAKE_MEASURE_PLAN", "FAKE_MEASURE_RECORD")}
         os.environ["FAKE_MEASURE_PLAN"], os.environ["FAKE_MEASURE_RECORD"] = str(self.plan_file), str(self.record)
         gate.MEASURE = self.script
+        gate.SPEED_ROOT = self.speed
         gate.FLAKES, gate.SET_ASIDE = self.t / "flakes.tsv", self.t / "set-aside.tsv"
         gate.BASE_BINS, gate.MACHINE_JSON, gate.PICTURE_STORE = self.t / "base-bins", self.t / "machine.json", self.t / "pictures"
         gate.machine_ready = lambda *a, **k: True
@@ -162,7 +226,7 @@ class Gates:
         original = gate.Gate.check
 
         def check(g, name, fn, needs=()):
-            if name.startswith("measure/step"):
+            if name.startswith(("measure/step", "speed/")):
                 return original(g, name, fn, needs)
 
             def fake(log):
@@ -269,8 +333,8 @@ class Table(unittest.TestCase):
 
     def one(self, check, run, case):
         state, code, figures, row_state, text, fault, verdict, exit_code = case
-        if state == "left-out" and check == PC:
-            return                                        # only the tablet is ever left out
+        if check == PC:
+            return                                        # the PC's check is the pair (class Pair)
         reason = {"not-trusted": "the machine was not quiet: a compiler ran", "tool": "the harness exit 1",
                   "left-out": "no --device"}.get(state, "")
         g, w = self.go({run: {"exit": code, "state": state, "reason": reason, "figures": figures}}, *NATIVE)
@@ -287,18 +351,17 @@ class Table(unittest.TestCase):
 
     def test_every_state_has_its_row(self):
         for case in self.CASES:
-            self.one(PC, "d3d12", case)
             self.one(TABLET, "tablet", case)
 
     def test_worse_row_is_a_kind_line_and_fails_the_run(self):
-        g, row = self.one(PC, "d3d12", self.CASES[3])
+        g, row = self.one(TABLET, "tablet", self.CASES[3])
         lines = [l for l in g.lines if l.startswith("KIND worse")]
         self.assertEqual(len(lines), 1, g.lines)
         parsed = kinds.parse_kind_line(lines[0])
-        self.assertEqual(parsed[:3], ("worse", PC, "-"))
+        self.assertEqual(parsed[:3], ("worse", TABLET, "-"))
         self.assertEqual(kinds.worse_names(parsed[3]), "render_ms+step_ms")
         self.assertEqual([r["kind"] for r in row["records"]], ["worse"])
-        self.assertEqual(landing.failures_of_lines(g.lines), [(PC, "worse", parsed[3])])
+        self.assertEqual(landing.failures_of_lines(g.lines), [(TABLET, "worse", parsed[3])])
 
     def test_the_states_that_disagree_are_owed(self):
         # An exit code that is not the state's, a state measure.py does not have, no result.json, a result.json that is not one.
@@ -309,16 +372,16 @@ class Table(unittest.TestCase):
                  "no result.json": {"exit": 0, "state": "ok", "no_result": True},
                  "a worse state with no worse figure": {"exit": 1, "state": "worse", "figures": HOLDS}}
         for why, plan in cases.items():
-            g, w = self.go({"d3d12": plan}, *NATIVE)
-            row = w.row(g, PC)
+            g, w = self.go({"tablet": plan}, *NATIVE)
+            row = w.row(g, TABLET)
             self.assertEqual(row["state"], "owed", why)
             self.assertTrue(row["detail"].startswith("the measure could not run: "), "%s: %s" % (why, row["detail"]))
             self.assertEqual((g.verdict, len(w.faults)), ("pass", 1), why)
 
     def test_the_time_limit_is_owed(self):
         with Gates(self) as w:
-            w.measure({"d3d12": {"exit": 0, "state": "ok", "figures": HOLDS, "seconds": 30}})
-            gate.measure_limit = lambda tablet, wait=0.0: 1
+            w.measure({"pair": {"seconds": 30}})
+            gate.pair_limit = lambda renderers: 1
             g, _ = w.land(w.plan(*ENGINE_ONLY))
             row = w.row(g, PC)
             self.assertEqual((row["state"], row["detail"]), ("owed", "the measure could not run: its time limit"))
@@ -326,10 +389,11 @@ class Table(unittest.TestCase):
             self.assertEqual(g.verdict, "pass")
 
     def test_the_limits_follow_the_long_levels_rule(self):
-        # A route of three minutes measured at most twice with two minutes for each start and end; the PC adds five minutes of waiting for
-        # a quiet machine, the tablet its lock's wait and five minutes for the install and removal.
-        self.assertEqual(gate.measure_limit(False), 15 * 60)
-        self.assertEqual(gate.measure_limit(True, 30), (10 + 30 + 5) * 60)
+        # The tablet: a route of three minutes measured at most twice with two minutes for each start and end, its lock's wait and five
+        # minutes for the install and removal. The pair: three rounds of every renderer asked for and one repeat, a round at 150 s, and 120 s.
+        self.assertEqual(gate.measure_limit(30), (10 + 30 + 5) * 60)
+        self.assertEqual(gate.pair_limit(["d3d12"]), 120 + 4 * 150)
+        self.assertEqual(gate.pair_limit(["d3d12", "d3d11", "vulkan"]), 120 + 10 * 150)
 
     def test_one_fault_line_for_a_check(self):
         with Gates(self) as w:
@@ -340,14 +404,247 @@ class Table(unittest.TestCase):
             self.assertEqual([(f[3], f[4], f[5]) for f in w.faults], [(PC, PC, "first"), (TABLET, TABLET, "third")])
 
 
+class Pair(unittest.TestCase):
+    """Table P: the PC's check is the pair against the kept base; the base and the anchor follow the move."""
+
+    def go(self, pair=None, probe=None, plan=ENGINE_ONLY, also=(), setup=None, then=None):
+        """A landing's checks on `plan` with the planted pair; `then(g, w)` runs inside the world (its folders, its fault writer), where
+        what the move does with the kept builds is tried: the real speed-base folder is never reached."""
+        with Gates(self) as w:
+            self.w = w
+            w.measure({"pair": pair or {}, **({"pair-probe": probe} if probe else {}), "tablet": {"exit": 0, "state": "ok", "figures": HOLDS}})
+            if setup:
+                setup(w)
+            g, args = w.land(w.plan(*plan), also)
+            if then:
+                then(g, w)
+            return g, w
+
+    def test_pass(self):
+        g, w = self.go()
+        row = w.row(g, PC)
+        self.assertEqual(row["state"], "pass", row["detail"])
+        self.assertIn("holds against the base " + "b" * 9, row["detail"])
+        self.assertEqual(g.speed, {PC: "judged"})
+        self.assertEqual((g.verdict, g.code, w.faults), ("pass", 0, []))
+        for state in ("better", "accepted"):
+            g, w = self.go({"states": {"d3d12": state}})
+            self.assertEqual((w.row(g, PC)["state"], g.speed), ("pass", {PC: "judged"}), state)
+
+    def test_worse_fails_the_landing_with_the_figures_named(self):
+        g, w = self.go({"states": {"d3d12": "worse"}, "figure_states": {"d3d12.render_ms": "ok"}})
+        row = w.row(g, PC)
+        self.assertEqual(row["state"], "worse", row["detail"])
+        self.assertTrue(row["detail"].startswith("worse: d3d12.cpu_work_ms: measure/step/pc d3d12 cpu_work_ms worse: base 1.000"), row["detail"])
+        self.assertEqual((g.verdict, g.code), ("fail", 1))
+        parsed = kinds.parse_kind_line([l for l in g.lines if l.startswith("KIND worse")][0])
+        self.assertEqual((parsed[:3], kinds.worse_names(parsed[3])), (("worse", PC, "-"), "d3d12.cpu_work_ms"))
+        self.assertEqual(g.speed[PC], "owed")
+
+    def test_not_calibrated_is_owed_with_the_command_that_makes_the_bands(self):
+        g, w = self.go({"states": {"d3d12": "no-baseline"}})
+        row = w.row(g, PC)
+        self.assertEqual(row["state"], "owed", row["detail"])
+        self.assertIn("not calibrated on this PC: d3d12", row["detail"])
+        self.assertIn("measure.py pair-calibrate --bin %s --runs d3d12" % g.bin, row["detail"])
+        self.assertEqual((g.verdict, w.faults, g.speed), ("pass", [], {PC: "owed"}), "owed, no fault line: it is no fault of a tool")
+
+    def test_no_base_yet_is_owed_and_nothing_starts(self):
+        g, w = self.go(setup=lambda w: (w.speed / "current.txt").unlink())
+        row = w.row(g, PC)
+        self.assertEqual(row["state"], "owed")
+        self.assertIn("there is no base yet", row["detail"])
+        self.assertIn("gate.py speed-base make --bin", row["detail"])
+        self.assertEqual([c["run"] for c in w.runs()], [])
+        self.assertEqual(g.speed, {PC: "owed"})
+
+    def test_a_broken_base_is_owed_and_said(self):
+        g, w = self.go(setup=lambda w: shutil.rmtree(next(p for p in w.speed.iterdir() if p.is_dir() and p.name.startswith("base-"))))
+        row = w.row(g, PC)
+        self.assertEqual(row["state"], "owed")
+        self.assertIn("the base cannot be read", row["detail"])
+
+    def test_the_candidates_side_that_cannot_run_is_a_tool_fault(self):
+        g, w = self.go({"states": {"d3d12": "tool"}, "reasons": {"d3d12": "the cand side ended with exit 1: boom"}})
+        row = w.row(g, PC)
+        self.assertEqual(row["state"], "owed", row["detail"])
+        self.assertIn("the measure could not run: d3d12: the cand side ended with exit 1: boom", row["detail"])
+        self.assertEqual([(f[2], f[3]) for f in w.faults], [("TOOL", PC)])
+        self.assertEqual([c["run"] for c in w.runs()], ["pair"], "no probe: the candidate is the one at fault")
+        self.assertEqual(g.speed, {PC: "owed"})
+
+    def test_both_sides_that_cannot_run_is_a_tool_fault(self):
+        g, w = self.go({"states": {"d3d12": "tool"}, "reasons": {"d3d12": "the base side ended with exit 1"}}, probe={"ok": False})
+        row = w.row(g, PC)
+        self.assertEqual(row["state"], "owed", row["detail"])
+        self.assertIn("the measure could not run", row["detail"])
+        self.assertEqual([(f[2], f[3]) for f in w.faults], [("TOOL", PC)])
+        self.assertIn("probe", [c["run"].replace("pair-", "") for c in w.runs()], "the candidate was asked for alone")
+        self.assertEqual(g.speed, {PC: "owed"})
+
+    def test_the_base_that_cannot_run_the_route_moves_to_the_candidate_unjudged(self):
+        g, w = self.go({"states": {"d3d12": "tool"}, "reasons": {"d3d12": "the base side ended with exit 1: old route"}}, probe={"ok": True})
+        row = w.row(g, PC)
+        self.assertEqual(row["state"], "owed", row["detail"])
+        self.assertEqual(row["detail"], "the base %s cannot run this route any more: the base moves to %s unjudged" % ("b" * 9, g.commit[:9]))
+        self.assertEqual((g.verdict, w.faults, g.speed), ("pass", [], {PC: "rebase"}))
+        probe = [c for c in w.calls() if c.get("run") == "pair-probe"]
+        self.assertEqual(len(probe), 1)
+        self.assertEqual(probe[0]["args"][probe[0]["args"].index("--renderer") + 1], "d3d12")
+        self.assertEqual(probe[0]["args"][probe[0]["args"].index("--bin") + 1], g.bin, "the candidate's build alone")
+
+    def test_a_pair_that_wrote_no_result_is_owed(self):
+        g, w = self.go({"no_result": True})
+        row = w.row(g, PC)
+        self.assertEqual(row["state"], "owed")
+        self.assertIn("no readable result.json for d3d12", row["detail"])
+        self.assertEqual([(f[2], f[3]) for f in w.faults], [("TOOL", PC)])
+
+    def test_the_renderers_follow_the_plan(self):
+        class G:
+            def __init__(self, selected):
+                self.selected = selected
+        every = ["d3d12", "d3d11", "vulkan"]
+        self.assertEqual(gate.pair_renderers(G(None)), every, "a full run")
+        self.assertEqual(gate.pair_renderers(G(set())), ["d3d12"], "d3d12 always")
+        self.assertEqual(gate.pair_renderers(G({"tour/d3d11", "engine/d3d12"})), ["d3d12", "d3d11"])
+        self.assertEqual(gate.pair_renderers(G({"engine/vulkan"})), ["d3d12", "vulkan"])
+        self.assertEqual(gate.pair_renderers(G({"start/vulkan", "pictures/tour/d3d11"})), ["d3d12"], "a start or a picture is no play")
+        # engine1 and tour1 run d3d12 only; engine3 the three
+        for paths, want in ((NATIVE, "d3d12"), (ENGINE_ONLY, "d3d12,d3d11,vulkan"), (("tests/replays/x.tsv",), "d3d12")):
+            g, w = self.go(plan=paths)
+            runs = [c for c in w.runs() if c["run"] == "pair"][0]["args"]
+            self.assertEqual(runs[runs.index("--runs") + 1], want, paths)
+
+    # --- what the move does with the kept builds
+
+    def keep(self, g, w, pak=None, landed="c" * 40):
+        """gate.keep_speed for the run's Gate with the candidate's build in w.bins: what it printed."""
+        g.args.pak = str(w.pak if pak is None else pak)
+        g.bin = str(w.bins)
+        (w.bins / "marker.txt").write_text("the candidate's", encoding="utf-8")
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            gate.keep_speed(g, landed, g.args)
+        return out.getvalue()
+
+    def moved(self, pair=None, probe=None, plan=ENGINE_ONLY, also=()):
+        said = []
+        g, w = self.go(pair, probe, plan, also, then=lambda g, w: said.append(self.keep(g, w)))
+        return g, w, said[0]
+
+    def history(self, w, name, columns):
+        return speedbase.read_rows(w.speed / name, columns)
+
+    def test_a_judged_pair_makes_the_candidate_the_base(self):
+        g, w, said = self.moved()
+        base = speedbase.read("base", w.speed)
+        self.assertEqual(base.commit, "c" * 40)
+        self.assertTrue((base.bins / "marker.txt").is_file(), "the candidate's files")
+        self.assertEqual([p.name for p in w.speed.iterdir() if p.is_dir() and p.name.startswith("base-")], [base.folder.name], "the old base's folder is removed")
+        rows = self.history(w, speedbase.BASE_HISTORY, speedbase.BASE_COLUMNS)
+        self.assertEqual([(r["event"], r["commit"], r["previous"]) for r in rows], [("moved", "c" * 9, "b" * 9)])
+        self.assertIn("speed base moved to ccccccccc (was bbbbbbbbb)", said)
+        self.assertEqual(speedbase.read("anchor", w.speed).commit, "a" * 40, "a landing that judged never replaces the anchor")
+
+    def test_a_pair_that_did_not_judge_leaves_the_base(self):
+        for pair in ({"states": {"d3d12": "no-baseline"}}, {"states": {"d3d12": "tool"}, "reasons": {"d3d12": "the cand side ended with exit 1"}}):
+            g, w, said = self.moved(pair)
+            self.assertEqual(speedbase.read("base", w.speed).commit, "b" * 40, pair)
+            rows = self.history(w, speedbase.BASE_HISTORY, speedbase.BASE_COLUMNS)
+            self.assertEqual([(r["event"], r["commit"]) for r in rows], [("kept", "b" * 9)], "the next pair covers both changes")
+            self.assertIn("speed base stays bbbbbbbbb", said)
+
+    def test_a_base_that_could_not_run_is_replaced_and_the_history_says_rebased(self):
+        g, w, said = self.moved({"states": {"d3d12": "tool"}, "reasons": {"d3d12": "the base side ended with exit 1"}}, probe={"ok": True})
+        self.assertEqual(speedbase.read("base", w.speed).commit, "c" * 40)
+        rows = self.history(w, speedbase.BASE_HISTORY, speedbase.BASE_COLUMNS)
+        self.assertEqual([(r["event"], r["commit"], r["previous"]) for r in rows], [("rebased", "c" * 9, "b" * 9)])
+        self.assertIn("rebased to ccccccccc, unjudged", said)
+
+    def test_a_plan_without_the_check_does_not_touch_the_base(self):
+        g, w, said = self.moved(plan=("docs/plan/x.md",))
+        self.assertEqual(g.speed, {})
+        self.assertEqual(speedbase.read("base", w.speed).commit, "b" * 40)
+        self.assertFalse((w.speed / speedbase.BASE_HISTORY).exists(), "no row")
+        self.assertEqual(said, "")
+
+    def test_a_failed_keep_is_a_line_and_a_fault_not_a_failure(self):
+        said = []
+        g, w = self.go(then=lambda g, w: said.append(self.keep(g, w, pak=w.t / "no-such.pak")))
+        self.assertIn("the speed base was not kept up (KeptError", said[0])
+        self.assertEqual([(f[2], f[3]) for f in w.faults], [("TOOL", "speed/keep")])
+        self.assertEqual(speedbase.read("base", w.speed).commit, "b" * 40)
+
+    # --- the anchor
+
+    def test_the_anchor_part_runs_the_three_renderers_against_the_anchor(self):
+        g, w = self.go(also=["speed/anchor"])
+        row = w.row(g, "speed/anchor")
+        self.assertEqual(row["state"], "pass", row["detail"])
+        self.assertIn("holds against the anchor " + "a" * 9, row["detail"])
+        calls = [c["args"] for c in w.runs() if c["run"] == "pair"]
+        self.assertEqual(len(calls), 2, "the landing's pair and the anchor's")
+        mine = [a for a in calls if a[a.index("--name") + 1] == "speed/anchor"][0]
+        anchor = speedbase.read("anchor", w.speed)
+        self.assertEqual((mine[mine.index("--runs") + 1], mine[mine.index("--base") + 1], mine[mine.index("--base-commit") + 1]),
+                         ("d3d12,d3d11,vulkan", str(anchor.bins), "a" * 40))
+        self.assertEqual(mine[mine.index("--work") + 1], str(g.work / "speed-anchor"))
+        order = [r["check"] for r in g.results]
+        self.assertLess(order.index("speed/anchor"), order.index(PC), "before the landing's own pair")
+        self.assertEqual(g.speed, {"speed/anchor": "judged", PC: "judged"})
+
+    def test_a_worse_anchor_fails_with_kind_worse(self):
+        with Gates(self) as w:
+            w.measure({"pair": {"states": {"vulkan": "worse"}}})
+            g, _ = w.land(w.plan(*ENGINE_ONLY), ["speed/anchor"])
+            row = w.row(g, "speed/anchor")
+            self.assertEqual(row["state"], "worse", row["detail"])
+            self.assertIn("vulkan.cpu_work_ms", row["detail"])
+            self.assertEqual((g.verdict, g.code), ("fail", 1))
+            self.assertIsNone(w.row(g, PC), "a landing that failed does not run the pair")
+
+    def test_no_anchor_yet_is_owed(self):
+        g, w = self.go(also=["speed/anchor"], setup=lambda w: (w.speed / "anchor.txt").unlink())
+        row = w.row(g, "speed/anchor")
+        self.assertEqual(row["state"], "owed")
+        self.assertIn("there is no anchor yet", row["detail"])
+        self.assertIn("speed-base anchor --bin", row["detail"])
+        self.assertEqual(w.row(g, PC)["state"], "pass")
+
+    def test_the_judged_anchor_keeps_its_ratios_and_an_anchor_that_cannot_run_is_replaced(self):
+        g, w, said = self.moved(also=["speed/anchor"])
+        last = json.loads((w.speed / speedbase.ANCHOR_LAST).read_text(encoding="utf-8"))
+        self.assertEqual((last["anchor"], last["judged at"]), ("a" * 40, "c" * 40))
+        self.assertEqual(last["ratios"]["d3d12"], {"cpu_work_ms": 1.01, "render_ms": 1.01})
+        self.assertEqual(set(last["ratios"]), {"d3d12", "d3d11", "vulkan"})
+        self.assertEqual(speedbase.read("anchor", w.speed).commit, "a" * 40)
+        self.assertIn("speed anchor aaaaaaaaa: the ratios of ccccccccc are kept", said)
+        # the anchor can no longer run the route: owed, replaced by the candidate after the move, the history keeping the last ratios
+        with Gates(self) as w2:
+            speedbase.note_anchor_ratios({"d3d12": {"cpu_work_ms": 1.05}}, "a" * 40, "9" * 40, w2.speed)
+            w2.measure({"pair": {"states": {"d3d12": "tool", "d3d11": "tool", "vulkan": "tool"},
+                                 "reasons": {r: "the base side ended with exit 1" for r in ("d3d12", "d3d11", "vulkan")}}, "pair-probe": {"ok": True}})
+            g2, args = w2.land(w2.plan(*ENGINE_ONLY), ["speed/anchor"])
+            row = w2.row(g2, "speed/anchor")
+            self.assertEqual((row["state"], g2.speed["speed/anchor"]), ("owed", "rebase"), row["detail"])
+            self.assertEqual(row["detail"], "the anchor %s cannot run this route any more: the anchor moves to %s unjudged" % ("a" * 9, g2.commit[:9]))
+            g2.args.pak, g2.bin = str(w2.pak), str(w2.bins)
+            with contextlib.redirect_stdout(io.StringIO()):
+                gate.keep_speed(g2, "d" * 40, g2.args)
+            self.assertEqual(speedbase.read("anchor", w2.speed).commit, "d" * 40)
+            rows = speedbase.read_rows(w2.speed / speedbase.ANCHOR_HISTORY, speedbase.ANCHOR_COLUMNS)
+            self.assertEqual((rows[-1]["commit"], rows[-1]["previous"], rows[-1]["judged at"], rows[-1]["ratios"]),
+                             ("d" * 9, "a" * 9, "9" * 40, "d3d12.cpu_work_ms=1.0500"))
+            self.assertFalse((w2.speed / speedbase.ANCHOR_LAST).exists())
+
+
 class Where(unittest.TestCase):
     """Where the two checks sit."""
 
     def run_plan(self, paths, setup=None, tablet="T", also=(), slow=None):
         with Gates(self) as w:
             self.w = w
-            w.measure({"d3d12": {"exit": 0, "state": "ok", "figures": HOLDS, "seconds": 0.3},
-                       "tablet": {"exit": 0, "state": "ok", "figures": HOLDS, "seconds": 0.4}})
+            w.measure({"pair": {"seconds": 0.3}, "tablet": {"exit": 0, "state": "ok", "figures": HOLDS, "seconds": 0.4}})
             w.slow = dict(slow or {})
             if setup:
                 setup(w)
@@ -357,7 +654,7 @@ class Where(unittest.TestCase):
     def test_pc_measure_runs_last(self):
         slow = {"tour/d3d12": 1.0, "build/android": 0.3, "tablet/prepare": 0.5, "replays/d3d12": 0.2}
         g, w, _ = self.run_plan(WITH_TABLET, slow=slow)
-        pc = [c for c in w.runs() if c["run"] == "d3d12"]
+        pc = [c for c in w.runs() if c["run"] == "pair"]
         self.assertEqual(len(pc), 1, w.runs())
         others = [e for n, b, e in w.times]
         self.assertGreaterEqual(pc[0]["start"], max(others), "after every other check ended")
@@ -391,14 +688,14 @@ class Where(unittest.TestCase):
         g, w, _ = self.run_plan(NATIVE)
         self.assertEqual(w.row(g, TABLET)["state"], "pass")
         self.assertFalse([r for r in g.results if r["check"].startswith("tablet/")], "no tablet part in this plan")
-        self.assertEqual({c["run"] for c in w.runs()}, {"d3d12", "tablet"})
+        self.assertEqual({c["run"] for c in w.runs()}, {"pair", "tablet"})
 
     def test_no_tablet_named_is_owed_and_nothing_starts(self):
         g, w, _ = self.run_plan(NATIVE, tablet="")
         row = w.row(g, TABLET)
         self.assertEqual(row["state"], "owed")
         self.assertIn("no tablet is named", row["detail"])
-        self.assertEqual([c["run"] for c in w.runs()], ["d3d12"])
+        self.assertEqual([c["run"] for c in w.runs()], ["pair"])
         self.assertEqual(g.verdict, "pass")
         self.assertEqual(w.faults, [], "a tablet that is away is no tool fault")
 
@@ -407,7 +704,7 @@ class Where(unittest.TestCase):
         row = w.row(g, TABLET)
         self.assertEqual(row["state"], "owed")
         self.assertIn("does not answer adb", row["detail"])
-        self.assertEqual([c["run"] for c in w.runs()], ["d3d12"])
+        self.assertEqual([c["run"] for c in w.runs()], ["pair"])
         self.assertEqual(g.verdict, "pass")
 
     def test_the_plan_decides_what_is_measured(self):
@@ -419,7 +716,7 @@ class Where(unittest.TestCase):
             self.assertEqual(("measure_pc" in plan.groups, "measure_tablet" in plan.groups), (pc, tablet), paths)
             g, w, _ = self.run_plan(paths)
             self.assertEqual((w.row(g, PC) is not None, w.row(g, TABLET) is not None), (pc, tablet), (paths, g.printed))
-            self.assertEqual({c["run"] for c in w.runs()}, ({"d3d12"} if pc else set()) | ({"tablet"} if tablet else set()), paths)
+            self.assertEqual({c["run"] for c in w.runs()}, ({"pair"} if pc else set()) | ({"tablet"} if tablet else set()), paths)
         full = scope.groups_from_text("full")[0]
         self.assertIn("measure_pc", full)
         self.assertIn("measure_tablet", full)
@@ -446,9 +743,11 @@ class Where(unittest.TestCase):
     def test_the_commands(self):
         g, w, args = self.run_plan(NATIVE)
         by = {c["run"]: c["args"] for c in w.runs()}
-        pc, tablet = by["d3d12"], by["tablet"]
+        pc, tablet = by["pair"], by["tablet"]
+        base = speedbase.read("base", w.speed)
         for a, want in ((pc, [("--runs", "d3d12"), ("--pending", str(g.work / "measure-pc.tsv")), ("--work", str(g.work / "measure-pc")),
-                              ("--quiet-minutes", "5"), ("--commit", g.commit)]),
+                              ("--base", str(base.bins)), ("--cand", g.bin), ("--base-pak", str(base.pak)), ("--cand-pak", "X"),
+                              ("--base-commit", "b" * 40), ("--cand-commit", g.commit), ("--name", PC)]),
                         (tablet, [("--runs", "tablet"), ("--device", "T"), ("--device-lock", str(w.t / "tablet.lock")),
                                   ("--device-wait", "7"), ("--android-bin", g.android_bin), ("--apk", str(w.build / "android" / "Nebula.apk")),
                                   ("--pak", "X"), ("--pending", str(g.work / "measure-tablet.tsv")),
@@ -458,6 +757,7 @@ class Where(unittest.TestCase):
         self.assertNotIn("--gate-lock", pc, "the landing holds the gate lock")
         self.assertNotIn("--gate-lock", tablet)
         self.assertNotIn("--device", pc)
+        self.assertNotIn("--quiet-minutes", pc)
         self.assertNotIn("--quiet-minutes", tablet)
         self.assertEqual(gate.MEASURE_PC_RUN, "d3d12")
         self.assertEqual(gate.MEASURE_TABLET_RUN, "tablet")
@@ -524,11 +824,11 @@ class Worse(unittest.TestCase):
 
     def test_a_worse_row_is_never_run_again_nor_a_flake_nor_set_aside(self):
         with Gates(self) as w:
-            w.measure({"d3d12": {"exit": 1, "state": "worse", "figures": WORSE}})
+            w.measure({"pair": {"states": {"d3d12": "worse"}}})
             g, _ = w.land(w.plan(*ENGINE_ONLY))
             names = [r["check"] for r in g.results]
             self.assertEqual(len(names), len(set(names)), "no check ran twice")
-            self.assertEqual([c["run"] for c in w.runs()], ["d3d12"], "the measure ran once: it measured twice itself")
+            self.assertEqual([c["run"] for c in w.runs()], ["pair"], "the pair ran once: it made its three rounds itself")
             self.assertFalse(gate.FLAKES.exists() and gate.FLAKES.read_text(encoding="utf-8").strip(), "no line in flakes.tsv")
             self.assertFalse(gate.SET_ASIDE.exists() and gate.SET_ASIDE.read_text(encoding="utf-8").strip())
             self.assertFalse([r for r in g.results if r.get("pending")])
@@ -578,15 +878,14 @@ class Also(unittest.TestCase):
     """--also by name."""
 
     CHECKS = {"stress": "stress/engine/d3d12", "sanitizer/tour": "tour-asan/d3d12", "soak": "soak", "soak/long": "soak/long",
-              "replays/software": "replays/software"}
+              "replays/software": "replays/software", "speed/anchor": "speed/anchor"}
     # A name of the table whose part is not on main (every part is today): the landing refuses it. A plant, as the table's own
     # entry for `replays/software` was before package T9.
     UNBUILT = {"future/part": gate.AlsoPart(None, ("future/part",))}
 
     def run_also(self, names, setup=None, paths=("docs/plan/x.md",)):
         with Gates(self) as w:
-            w.measure({"d3d12": {"exit": 0, "state": "ok", "figures": HOLDS, "seconds": 0.2},
-                       "tablet": {"exit": 0, "state": "ok", "figures": HOLDS, "seconds": 0.2}})
+            w.measure({"pair": {"seconds": 0.2}, "tablet": {"exit": 0, "state": "ok", "figures": HOLDS, "seconds": 0.2}})
             if setup:
                 setup(w)
             g, args = w.land(w.plan(*paths), names)
@@ -597,7 +896,7 @@ class Also(unittest.TestCase):
             g, w = self.run_also([name])
             self.assertIsNotNone(w.row(g, check), "%s: %s" % (name, [r["check"] for r in g.results]))
             self.assertEqual(w.row(g, check)["state"], "pass", name)
-        self.assertEqual(sorted(gate.ALSO_PARTS), ["replays/software", "sanitizer/tour", "soak", "soak/long", "stress"])
+        self.assertEqual(sorted(gate.ALSO_PARTS), ["replays/software", "sanitizer/tour", "soak", "soak/long", "speed/anchor", "stress"])
         self.assertTrue(all(part.run is not None for part in gate.ALSO_PARTS.values()), "every name of the table is built")
 
     def test_the_soaks_ask_for_their_lengths(self):

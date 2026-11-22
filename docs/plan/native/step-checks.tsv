@@ -22,3 +22,27 @@ G5.2	soak	proof 3: both soaks stay green with the switch on
 G5.5	soak/long	proof 2: every tour stop and both soaks green
 Z.2	stress	proof 3: the same recorded play gives the same game, also under load
 Z.2	replays/software	proof 3: the same recorded play on a software device
+S0.1.5	speed/anchor	no figure of the package is worse than at the start of the native work
+S0.2.6	speed/anchor	no figure of the package is worse than at the start of the native work
+S0.3.2	speed/anchor	no figure of the package is worse than at the start of the native work
+R1.4	speed/anchor	no figure of the package is worse than at the start of the native work
+R2.5	speed/anchor	no figure of the package is worse than at the start of the native work
+G1.5	speed/anchor	no figure of the package is worse than at the start of the native work
+R3.13	speed/anchor	no figure of the package is worse than at the start of the native work
+R4.9	speed/anchor	no figure of the package is worse than at the start of the native work
+R4v.2	speed/anchor	no figure of the package is worse than at the start of the native work
+R5.8	speed/anchor	no figure of the package is worse than at the start of the native work
+R6.7	speed/anchor	no figure of the package is worse than at the start of the native work
+G3.7	speed/anchor	no figure of the package is worse than at the start of the native work
+G4.4	speed/anchor	no figure of the package is worse than at the start of the native work
+G5.5	speed/anchor	no figure of the package is worse than at the start of the native work
+R7.8	speed/anchor	no figure of the package is worse than at the start of the native work
+R8.6	speed/anchor	no figure of the package is worse than at the start of the native work
+R9.2	speed/anchor	no figure of the package is worse than at the start of the native work
+R10.4	speed/anchor	no figure of the package is worse than at the start of the native work
+G6.8	speed/anchor	no figure of the package is worse than at the start of the native work
+G7.5	speed/anchor	no figure of the package is worse than at the start of the native work
+G8.4	speed/anchor	no figure of the package is worse than at the start of the native work
+G9.5	speed/anchor	no figure of the package is worse than at the start of the native work
+G2.9	speed/anchor	no figure of the package is worse than at the start of the native work
+Z.3	speed/anchor	no figure of the package is worse than at the start of the native work

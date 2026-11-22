@@ -35,19 +35,22 @@ starts the game for a test goes through here.
          top of the tested one that touches only tests/pictures/approved.tsv (and removes PICTURES-CHANGE.txt), runs the
          picture checks again on the same runs (all must pass, else nothing moves: tool), and moves main to that commit.
          After the move the long run starts if none started in the last 20 hours. No speed measure starts at a move: a landing that
-         plays the game has measured itself (measure/step/pc, measure/step/tablet; their trusted lines are kept in the history after
-         the move), and the nightly run measures too.
+         plays the game has measured itself: measure/step/pc is the pair of the landing's build against the kept base (tools/gate/speedbase.py,
+         section 10.2; the candidate becomes the base after a move that judged it), measure/step/tablet the single measure (its trusted
+         lines are kept in the history after the move); the nightly run measures too.
 --long   level 3, on main's newest commit, under the long lock, at below-normal priority: the tablet's 102 stops
          against the PC's, a sanitizer build's tour, the soak, every disc on every renderer.
 --final  level 4: the main and long levels on one commit. "Done" needs it passed with no check planned or known.
 --only CHECK[,CHECK]: only the checks those shell patterns name, and the checks they need (for tracing a red main).
+speed-base make|anchor|show: the kept builds of the speed check (tools/gate/speedbase.py, docs/plan/04-GATE-AND-MAIN.md section 10.2).
 land BRANCH [BRANCH ...] | land --queue: the landing queue (tools/gate/landing.py, docs/plan/04-GATE-AND-MAIN.md section 15): the
          branches wait in D:/NebulaWork/plan/landing-queue.tsv, the runner replays them on origin/main in the gate's own work
          folder, runs the checks of the groups the union of their changed files needs (tools/gate/scope.tsv) once, moves main, and
          halves the batch to find the branch at fault. Exit 0 landed, 1 fail, 2 not judged, 3 the same failure three times.
 --scope GROUPS|auto|full: with --main (--move too), only the checks of these groups; what `land` runs on the batch's tip.
 --also NAMES: with --scope, and with `land` (a step's proof that asks for more): more checks, by name (comma-separated): the
-         nightly's parts in ALSO_PARTS (stress, sanitizer/tour, soak, soak/long, replays/software), or any check of the main level.
+         nightly's parts in ALSO_PARTS (stress, sanitizer/tour, soak, soak/long, replays/software, speed/anchor: the pair against
+         the anchor), or any check of the main level.
          They run after the checks the groups need have passed (a failed landing runs none), before measure/step/pc, one after
          another, as the nightly run runs them (every stop of a tour), so a landing with --also runs its groups' checks at that
          depth too. `stress` asked so counts a stress result as a fail. A name of the table whose part is not on main yet is refused
@@ -127,6 +130,7 @@ import machine  # noqa: E402
 import pictures as picture_tool  # noqa: E402
 import replays_software  # noqa: E402
 import scope  # noqa: E402
+import speedbase  # noqa: E402
 import step_hash  # noqa: E402
 import judged  # noqa: E402
 import sanitizer  # noqa: E402
@@ -375,6 +379,8 @@ class Gate:
         self.layer_seen = {}          # the validate lane: {renderer: the layer error ids its first runs showed}
         self.measure_pending = []     # the landing's measures' pending files (measure.py --pending): kept when main moves
         self.measure_faulted = set()  # the checks that already left a line in tool-faults.tsv in this run
+        self.speed = {}               # the speed checks' outcome for the move (judged, owed, rebase), by check name
+        self.speed_ratios = {}        # speed/anchor's judged ratios {renderer: {figure: ratio}}, kept with the move
         self.card_shared = False
         self.slots = None
         self.sampler = None
@@ -1364,10 +1370,8 @@ MEASURE_TABLET_RUN = "tablet"
 MEASURE_PC_CHECK = "measure/step/pc"
 MEASURE_TABLET_CHECK = "measure/step/tablet"
 MEASURE_LEVELS = ("main", LAND_LEVEL)
-# The time a check may take: the long level's rule (measure_route), a route of three minutes measured at most twice, and for the
-# PC the five minutes of waiting for a quiet machine; each run's start and end take two minutes; the tablet's install and
-# removal five, and the wait for its lock is the landing's --tablet-wait.
-MEASURE_QUIET_MINUTES = 5
+# The time the tablet's check may take: the long level's rule (measure_route), a route of three minutes measured at most twice; each
+# run's start and end take two minutes; the install and removal five, and the wait for its lock is the landing's --tablet-wait.
 MEASURE_ROUTE_MINUTES = 3
 MEASURE_RUN_MINUTES = 2
 MEASURE_TABLET_SET_MINUTES = 5
@@ -1375,11 +1379,10 @@ MEASURE_TABLET_SET_MINUTES = 5
 MEASURE_EXIT_OF = {"ok": 0, "better": 0, "no-baseline": 0, "left-out": 0, "worse": 1, "not-trusted": 3, "tool": 2}
 
 
-def measure_limit(tablet, wait_minutes=0.0):
-    """Seconds a measure/step check may run: the routes measured twice, and the PC's wait for a quiet machine or the tablet's wait
-    for its lock and its install."""
+def measure_limit(wait_minutes=0.0):
+    """Seconds the tablet's check may run: the route measured twice, and the wait for the tablet's lock and its install."""
     twice = 2 * (MEASURE_ROUTE_MINUTES + MEASURE_RUN_MINUTES)
-    return int(60 * (twice + (wait_minutes + MEASURE_TABLET_SET_MINUTES if tablet else MEASURE_QUIET_MINUTES)))
+    return int(60 * (twice + wait_minutes + MEASURE_TABLET_SET_MINUTES))
 
 
 def measure_figures_text(state, figures):
@@ -1455,26 +1458,21 @@ def measure_fault(g, check, kind, reason):
         print("gate.py: %s: the tool-fault line was not written: %s: %s" % (check, type(error).__name__, error), flush=True)
 
 
-def measure_step(g, tablet):
-    """One of the landing's two speed measures (measure/step/pc or measure/step/tablet), as measure.py run with its own pending
-    file; the row from measure_reading (docs/plan/04-GATE-AND-MAIN.md section 5.2): pass, `worse` (main does not move), or owed with
-    one line in tool-faults.tsv (not trusted, could not run, its time limit). The tablet's form stands alone: its own device lock,
-    install and removal. The pending file is kept by keep_measures when main has moved."""
-    name = MEASURE_TABLET_CHECK if tablet else MEASURE_PC_CHECK
-    run_name = MEASURE_TABLET_RUN if tablet else MEASURE_PC_RUN
+def measure_step(g):
+    """The landing's speed measure of the tablet (measure/step/tablet), as measure.py run with its own pending file; the row from
+    measure_reading (docs/plan/04-GATE-AND-MAIN.md section 5.2): pass, `worse` (main does not move), or owed with one line in
+    tool-faults.tsv (not trusted, could not run, its time limit). Its form stands alone: its own device lock, install and removal.
+    The pending file is kept by keep_measures when main has moved. The PC's check is the pair (pair_step)."""
+    name = MEASURE_TABLET_CHECK
+    run_name = MEASURE_TABLET_RUN
 
     def fn(log):
-        folder = "measure-tablet" if tablet else "measure-pc"
+        folder = "measure-tablet"
         work, pending = g.work / folder, g.work / (folder + ".tsv")
-        if tablet:
-            apk = test_apk(g.args)
-            cmd = measure_command(g.commit, g.bin, g.android_bin, apk if apk.is_file() else None, work, g.args, g.pak,
-                                  g.paks_text(), runs=run_name, pending=pending, device_wait=g.args.tablet_wait)
-            limit = measure_limit(True, g.args.tablet_wait)
-        else:
-            cmd = measure_command(g.commit, g.bin, None, None, work, g.args, g.pak, g.paks_text(), runs=run_name,
-                                  pending=pending, quiet=MEASURE_QUIET_MINUTES)
-            limit = measure_limit(False)
+        apk = test_apk(g.args)
+        cmd = measure_command(g.commit, g.bin, g.android_bin, apk if apk.is_file() else None, work, g.args, g.pak,
+                              g.paks_text(), runs=run_name, pending=pending, device_wait=g.args.tablet_wait)
+        limit = measure_limit(g.args.tablet_wait)
         g.measure_pending.append(pending)
         code = run(cmd, log, timeout=limit)
         kind, text = measure_reading(work, run_name, code)
@@ -1516,7 +1514,141 @@ def measure_tablet(g, device=None):
     if not device.answers():
         g.owe(MEASURE_TABLET_CHECK, "%s does not answer adb: the measure on the tablet is owed" % g.args.tablet)
         return
-    g.check(MEASURE_TABLET_CHECK, measure_step(g, True), needs)
+    g.check(MEASURE_TABLET_CHECK, measure_step(g), needs)
+
+
+# The pair (package B13, docs/plan/04-GATE-AND-MAIN.md section 10.1): the PC's speed check of a landing and `speed/anchor` run the candidate's
+# build against a kept build (tools/gate/speedbase.py) with `measure.py pair`, the gate reading result.json and the --pending table as data.
+SPEED_ROOT = speedbase.ROOT
+ANCHOR_CHECK = "speed/anchor"
+PAIR_ROUNDS = 3
+PAIR_ROUND_SECONDS = 150      # a round took 121 s on this PC (measured 2026-11-21); the limit has room for a slower one
+PAIR_FIXED_SECONDS = 120
+PAIR_PROBE_SECONDS = 300
+# The renderers a pair judges: Direct3D 12 always; Direct3D 11 and Vulkan where the plan runs them (the engine or the tour group).
+PAIR_RENDERERS = ("d3d12", "d3d11", "vulkan")
+PAIR_REQUIRED = ("steps_over_18", "render_ms")     # what measure.py requires of a side (its REQUIRED): the probe shows them
+
+
+def pair_renderers(g):
+    """The renderers the landing's pair judges: d3d12, and each other one the landing's plan plays (a check `engine/R` or `tour/R`)."""
+    return [r for r in PAIR_RENDERERS if r == "d3d12" or g.selected is None or any(
+        n in g.selected for n in ("engine/%s" % r, "tour/%s" % r))]
+
+
+def pair_limit(renderers):
+    """Seconds a pair may run: three rounds of every renderer asked for and one repeat, each round with room for a slow one, and the
+    start and end of the tool."""
+    return int(PAIR_FIXED_SECONDS + (PAIR_ROUNDS * len(renderers) + 1) * PAIR_ROUND_SECONDS)
+
+
+def pair_command(g, kept, check, work, pending, renderers):
+    """measure.py pair of the candidate's build (this run's bins and game data) against the kept build `kept`. No gate lock option: the
+    landing holds it. Both sides keep their own game data."""
+    return [sys.executable, "-X", "utf8", "-I", str(MEASURE), "pair", "--base", str(kept.bins), "--cand", str(g.bin),
+            "--runs", ",".join(renderers), "--work", str(work), "--pending", str(pending), "--base-pak", str(kept.pak),
+            "--cand-pak", str(g.pak), "--base-commit", kept.commit, "--cand-commit", g.commit, "--name", check, "--who", g.args.who]
+
+
+def candidate_runs(g, renderers, folder):
+    """Whether the candidate's build reaches the route's stage on each of `renderers` by itself (measure.py pair-probe): True when every
+    one does. Asked only when the pair says the kept build's side could not."""
+    for r in renderers:
+        log = g.work / ("%s-probe-%s.log" % (folder, r))
+        cmd = [sys.executable, "-X", "utf8", "-I", str(MEASURE), "pair-probe", "--bin", str(g.bin), "--renderer", r, "--work",
+               str(g.work / folder / ("probe-" + r)), "--base-pak", str(g.pak), "--commit", g.commit]
+        code = run(cmd, log, timeout=PAIR_PROBE_SECONDS)
+        text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace") if pathlib.Path(log).is_file() else ""
+        if code in (124, 125) or not speedbase.probe_ran(text, PAIR_REQUIRED):
+            return False
+    return True
+
+
+def calibrate_hint(g, renderers):
+    return ("python -X utf8 -I tools/measure/measure.py pair-calibrate --bin %s --runs %s --pairs 5 --work <a folder> --commit %s" % (
+        g.bin, ",".join(renderers), g.commit))
+
+
+def pair_step(g, check, kind, folder, renderers):
+    """A pair check of the landing: the candidate against the kept build `kind` (`base` for measure/step/pc, `anchor` for speed/anchor).
+    The row: pass (every figure ok, better or accepted), `worse` (a figure worse in all three rounds: the landing fails), or owed -
+    no kept build yet, not calibrated on this PC, the pair could not run (one line in tool-faults.tsv), or the kept build can no longer
+    run the route while the candidate's does: the kept build then moves to the candidate after the move, unjudged. g.speed[check] says
+    what the move does with it (judged, owed, rebase)."""
+    def fn(log):
+        try:
+            kept = speedbase.read(kind, SPEED_ROOT)
+        except speedbase.KeptError as error:
+            g.speed[check] = "owed"
+            return False, "the %s cannot be read: %s" % (kind, error), None, "owed"
+        if kept is None:
+            g.speed[check] = "owed"
+            made = "make" if kind == speedbase.BASE else "anchor"
+            return False, ("there is no %s yet, so nothing is judged: make it with python -X utf8 -I tools/gate/gate.py speed-base %s "
+                           "--bin <a main build's bins> --commit <its commit>" % (kind, made)), None, "owed"
+        work, pending = g.work / folder, g.work / (folder + ".tsv")
+        code = run(pair_command(g, kept, check, work, pending, renderers), log, timeout=pair_limit(renderers))
+        reading = speedbase.read_pair(work, pending, code, renderers)
+        if reading.kind == "pass":
+            g.speed[check] = "judged"
+            g.speed_ratios[check] = reading.ratios
+            return True, "holds against the %s %s: %s" % (kind, kept.commit[:9], reading.text)
+        g.speed[check] = "owed"
+        if reading.kind == "worse":
+            return False, reading.text, None, "worse"
+        if reading.kind == "stopped":
+            return False, "the measure could not run: " + reading.text, None, "owed"
+        if reading.kind == "uncalibrated":
+            return False, "%s; the check is owed until the bands are made: %s" % (reading.text, calibrate_hint(g, renderers)), None, "owed"
+        if reading.kind == "tool" and speedbase.base_side_only(reading) and candidate_runs(g, list(reading.tool), folder):
+            g.speed[check] = "rebase"
+            return False, "the %s %s cannot run this route any more: the %s moves to %s unjudged" % (
+                kind, kept.commit[:9], kind, g.commit[:9]), None, "owed"
+        measure_fault(g, check, "TOOL", "the measure could not run: " + reading.text)
+        return False, "the measure could not run: " + reading.text, None, "owed"
+    return fn
+
+
+def anchor_part(g):
+    """`--also speed/anchor`: the candidate against the anchor on every renderer, judged as the pair of the landing is (worse fails with
+    kind `worse`). Where the anchor cannot run today's route the check is owed and the anchor becomes the candidate after the move."""
+    if not g.wanted(ANCHOR_CHECK, DATA) or g.dry:
+        return
+    g.check(ANCHOR_CHECK, pair_step(g, ANCHOR_CHECK, speedbase.ANCHOR, "speed-anchor", list(PAIR_RENDERERS)), DATA)
+
+
+def keep_speed(g, landed, args):
+    """After main moved: the kept builds follow the landing. The base becomes the candidate when the landing's pair judged it (a pass, or
+    a worse figure accepted by the owner's word) or when the base could no longer run the route (`rebased`, unjudged); a pair that did not
+    judge (owed, could not run) leaves it, so that the next pair covers both changes. A landing whose plan had no measure_pc check
+    leaves it. The anchor is replaced only where it could no longer run the route; a judged `speed/anchor` keeps its ratios. A failure
+    changes nothing about the landing: one printed line and one line in tool-faults.tsv."""
+    try:
+        before = speedbase.read(speedbase.BASE, SPEED_ROOT)
+        state = g.speed.get(MEASURE_PC_CHECK)
+        if state in ("judged", "rebase"):
+            speedbase.make(speedbase.BASE, g.bin, landed, g.pak or None, SPEED_ROOT)
+            speedbase.remember_base("moved" if state == "judged" else "rebased", landed, before.commit if before else None,
+                                    "the pair judged it" if state == "judged" else "the base could not run the route: unjudged", SPEED_ROOT)
+            print("gate.py: speed base %s (was %s)" % ("moved to " + landed[:9] if state == "judged" else "rebased to " + landed[:9] + ", unjudged",
+                  before.commit[:9] if before else "none"), flush=True)
+        elif state == "owed":
+            speedbase.remember_base("kept", before.commit if before else "-", before.commit if before else None,
+                                    "the landing %s did not judge its speed" % landed[:9], SPEED_ROOT)
+            print("gate.py: speed base stays %s: the landing's pair did not judge" % (before.commit[:9] if before else "empty"), flush=True)
+        state = g.speed.get(ANCHOR_CHECK)
+        anchor = speedbase.read(speedbase.ANCHOR, SPEED_ROOT)
+        if state == "judged" and anchor is not None:
+            speedbase.note_anchor_ratios(g.speed_ratios.get(ANCHOR_CHECK, {}), anchor.commit, landed, SPEED_ROOT)
+            print("gate.py: speed anchor %s: the ratios of %s are kept" % (anchor.commit[:9], landed[:9]), flush=True)
+        elif state == "rebase":
+            speedbase.make_anchor(g.bin, landed, g.pak or None, SPEED_ROOT)
+            print("gate.py: speed anchor rebased to %s, unjudged (the old one could not run the route)" % landed[:9], flush=True)
+    except (speedbase.KeptError, OSError) as error:
+        reason = "the speed base was not kept up (%s: %s)" % (type(error).__name__, error)
+        print("gate.py: " + reason, flush=True)
+        g.measure_faulted.discard("speed/keep")
+        measure_fault(g, "speed/keep", "TOOL", reason)
 
 
 def measure_pc(g):
@@ -1526,7 +1658,7 @@ def measure_pc(g):
         return
     if g.dry or landing_failed(g):
         return
-    g.check(MEASURE_PC_CHECK, measure_step(g, False), DATA)
+    g.check(MEASURE_PC_CHECK, pair_step(g, MEASURE_PC_CHECK, speedbase.BASE, "measure-pc", pair_renderers(g)), DATA)
 
 
 def keep_measures(g, args):
@@ -1679,8 +1811,8 @@ def board_line(board, text):
 def owed_line(who, mode, name, commit, owed):
     """The board line for the rows a run owes (`owed`: their check names): what is owed, by the rows' own names. A row of the speed
     measure (measure/...) is the measure's; any other owed row is the tablet's part. It says when the rows run again."""
-    measure = [r for r in owed if r.startswith("measure/")]
-    part = [r for r in owed if not r.startswith("measure/")]
+    measure = [r for r in owed if r.startswith(("measure/", "speed/"))]
+    part = [r for r in owed if not r.startswith(("measure/", "speed/"))]
     what = " and ".join((["the tablet's part"] if part else []) + (["the speed measure"] if measure else []))
     when = " and ".join((["the tablet is back"] if part or any("tablet" in r for r in measure) else []) +
                         (["the machine is quiet"] if any("tablet" not in r for r in measure) else []))
@@ -2571,7 +2703,7 @@ def tablet_part(g, stops, device=None):
 
 # The checks of a run that start the game (on this computer or the tablet), and those that never do: a run whose checks are all of
 # the second kind (documents, tools, builds) asks nothing of the machine. A test pins that every check of every level is in one.
-GAME_CHECKS = ("start/", "engine/", "tour", "mods", "soak", "coverage", "android/", "tablet/", "measure/", "validate/", "stress/")
+GAME_CHECKS = ("start/", "engine/", "tour", "mods", "soak", "coverage", "android/", "tablet/", "measure/", "speed/", "validate/", "stress/")
 NO_GAME_CHECKS = ("repo/", "build/", "data/", "unit/", "rust", "lumalink", "import/", "harness/", "description/", "pictures/",
                   "replays/", "github", "part/", "lane/", "gate/")
 # The locks a held gate, long run or measure keeps: a game process that one of them may own is never ended as a leftover.
@@ -3264,6 +3396,7 @@ ALSO_PARTS = {
     "soak": AlsoPart(lambda g: soak_part(g, "soak", SOAK_SHORT_MINUTES), ("soak",)),
     "soak/long": AlsoPart(lambda g: soak_part(g, "soak/long", g.args.soak_minutes), ("soak/long",)),
     "replays/software": AlsoPart(lambda g: replays_software_part(g), ("replays/software",)),
+    "speed/anchor": AlsoPart(lambda g: anchor_part(g), ("speed/anchor",)),
 }
 # Two lengths of one soak: they share a work folder and a log, so a landing asks for one.
 ALSO_ONE_OF = ("soak", "soak/long")
@@ -3589,6 +3722,8 @@ def run_main(argv, left):
         return land_main(argv[1:])
     if argv and argv[0] == "data":
         return gamedata.main(argv[1:])
+    if argv and argv[0] == "speed-base":
+        return speedbase.main(argv[1:])
     args = parser().parse_args(argv)
     patterns = [s.strip() for s in args.only.split(",") if s.strip()]
 
@@ -3840,6 +3975,7 @@ def run_main(argv, left):
             else:
                 moved_line = "MOVED %s" % landed
                 keep_measures(g, args)
+                keep_speed(g, landed, args)
                 summary = "passed, %s, main moved to %s" % (
                     "GitHub's jobs are read after the move" if pending_after else
                     ("GitHub green (%s)" % detail) if rule is not None else "no GitHub part in the plan", landed[:9]) + (

@@ -5,6 +5,7 @@
   also_names_agree      every check name docs/plan/native/step-checks.tsv asks for is in the gate's ALSO_PARTS and in the step tool's
                         ALSO_CHECKS (and the two have the same names); a name one of them lacks is named
   long_proofs           G3.7 and G5.5 ask for soak/long in place of soak, G3.7 keeps its other names
+  the_last_step_..      speed/anchor is asked by the last step (by order) of every package in steps.tsv and by no other
   also_names_catch      the same reading on planted tables: a name the gate lacks, one the step tool lacks and one the table has
                         and neither has are each reported
   row_labels_agree      every state of tools/gate/kinds.py and of the gate (STATES), printed as the gate prints a row, is read by the
@@ -63,7 +64,18 @@ class AlsoNames(unittest.TestCase):
             names = [r[1] for r in rows if r[0] == step]
             self.assertIn("soak/long", names, step)
             self.assertNotIn("soak", names, step)
-        self.assertEqual([r[1] for r in rows if r[0] == "G3.7"], ["stress", "sanitizer/tour", "soak/long"], "G3.7 keeps its other names")
+        self.assertEqual([r[1] for r in rows if r[0] == "G3.7"], ["stress", "sanitizer/tour", "soak/long", "speed/anchor"], "G3.7 keeps its other names")
+
+    def test_the_last_step_of_every_package_asks_for_the_anchor(self):
+        steps = [l.split("	") for l in (plan.native(TREE) / "steps.tsv").read_text(encoding="utf-8").splitlines()[1:] if l.strip()]
+        last = {}
+        for cells in steps:                        # order, step, package
+            if cells[2] not in last or int(cells[0]) > int(last[cells[2]][0]):
+                last[cells[2]] = cells
+        rows = [l.split("	") for l in (plan.native(TREE) / plan.STEP_CHECKS_FILE).read_text(encoding="utf-8").splitlines()[1:] if l.strip()]
+        asked = sorted(r[0] for r in rows if r[1] == "speed/anchor")
+        self.assertEqual(asked, sorted(c[1] for c in last.values()), "speed/anchor: the last step by order of every package, and no other")
+        self.assertGreaterEqual(len(asked), 24)
 
     def test_also_names_catch(self):
         # a name the gate lacks, one the step tool lacks, one neither has
