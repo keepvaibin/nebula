@@ -45,7 +45,7 @@ None yet.
 
 | Id | State | Kind | Check | Renderer | Traced to | Seen |
 | --- | --- | --- | --- | --- | --- | --- |
-| R-001 | open | stress | stress/tour/d3d11/3 | d3d11 | commit abc | 1 |
+| R-001 | open | stress | stress/tour/d3d11/3 | d3d11 | commit abc | 2 |
 
 ## For the owner to check by hand
 
