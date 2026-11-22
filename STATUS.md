@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-22 14:17.
+Written 2026-11-22 14:18.
 
 Steps landed: 1 of 138 (1%).
 
@@ -50,7 +50,7 @@ No repair recorded.
 
 ## For the owner to check by hand
 
-Nothing is owed.
+- S0.1.2 Documents: P-096: on the tablet, set up the game once more over an installed one, and once with the setup cut off (close the app mid-copy); then start the launcher: the old game stays playable until the new one is whole, and nothing is left behind (no game.pak.new, no half copy). (agent 1, 2026-11-22 14:18)
 
 ## Blocked
 
