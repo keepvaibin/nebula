@@ -1052,7 +1052,7 @@ class RepairNextTest(unittest.TestCase):
                 "Note: stop 025 differs",
                 "",
                 "Read the evidence first. Find the cause and fix the game, not the test. If the test tool is at fault, do not "
-                "debug it: run plan.py toolfault and plan.py blocked for this repair.",
+                "debug it: plan.py tool \"<what the tool did>\", then plan.py blocked for this repair.",
                 "",
                 "=== COMMANDS ===",
                 "start: python -X utf8 -I %s start R-001" % plan_py,

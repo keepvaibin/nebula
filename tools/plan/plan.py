@@ -1466,7 +1466,7 @@ def github_repair_open(a):
 
 REPAIR_ID = re.compile(r"^R-\d{3,}$")
 REPAIR_RULES = ("Read the evidence first. Find the cause and fix the game, not the test. If the test tool is at fault, do not "
-                "debug it: run plan.py toolfault and plan.py blocked for this repair.")
+                "debug it: plan.py tool \"<what the tool did>\", then plan.py blocked for this repair.")
 
 
 def is_repair(item_id):
