@@ -13,6 +13,7 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/System/NebulaHost.hpp"
+#include <nebula_module.h>
 
 
 namespace {
@@ -27,6 +28,7 @@ BootScene::BootScene()
 }
 
 void BootScene::init() {
+    nebula_log("boot scene: begins, reading the system archive\n");
     // The system archive's load runs behind black (the fader starts blank) and the title follows as soon as it and the save data are ready.
     initNerve(GET_NERVE_ANON(BootSceneWaitReadDoneSystemArchive));
 
@@ -67,6 +69,7 @@ bool BootScene::isBeforeTitle() const {
 
 void BootScene::exeMountGameData() {
     if (MR::isFirstStep(this)) {
+        nebula_log("boot scene: system archive read; reading the save data\n");
         GameSequenceFunction::startPreLoadSaveDataSequence();
     }
 
@@ -81,6 +84,7 @@ void BootScene::exeMountGameData() {
 // home screen (NebulaLauncher), which shows meanwhile.
 void BootScene::exeWaitPreparation() {
     if (MR::isFirstStep(this)) {
+        nebula_log("boot scene: save data done; waiting for the preparation and the home screen\n");
         NebulaLauncher::open();
     }
     NebulaLauncher::update();
@@ -97,6 +101,7 @@ void BootScene::exeWaitReadDoneSystemArchive() {
 
 void BootScene::exeDeactive() {
     if (MR::isFirstStep(this)) {
+        nebula_log("boot scene: preparation and home screen done; going to the title\n");
         GameSequenceFunction::notifyToGameSequenceProgressToEndScene();
     }
 }

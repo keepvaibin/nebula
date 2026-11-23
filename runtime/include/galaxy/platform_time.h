@@ -24,8 +24,9 @@ namespace galaxy {
     QueryPerformanceCounter(&now);
     return now.QuadPart;
 #elif defined(__APPLE__)
-    // Mach absolute time in nanoseconds: the clock of the display link, of the presents' times and of steady_clock
-    // there (CLOCK_MONOTONIC on Darwin also counts the time the machine slept).
+    // Mach absolute time in nanoseconds: the clock of the display link and of the presents' times. NOT the clock of
+    // std::chrono::steady_clock, which on Apple (libc++, CLOCK_MONOTONIC_RAW) also counts the time the machine slept: a
+    // steady_clock value is never a moment on this clock (frame_due.h).
     return static_cast<std::int64_t>(clock_gettime_nsec_np(CLOCK_UPTIME_RAW));
 #else
     timespec now{};

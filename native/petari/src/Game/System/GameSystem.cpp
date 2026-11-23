@@ -38,6 +38,7 @@
 #include "Game/Util/SystemUtil.hpp"
 #include <Game/Ui/UiInit.hpp>
 #include <NebulaGpu.h>
+#include <nebula_module.h>
 #include <nebula_math.h>
 #include "Game/Screen/NebulaMenuFocus.hpp"
 #include "Game/Screen/NebulaPrepare.hpp"
@@ -134,7 +135,9 @@ void GameSystem::startToLoadSystemArchive() {
 
 void GameSystem::exeInitializeAudio() {
     if (MR::isFirstStep(this)) {
+        nebula_log("game system: opening the sound system\n");
         mObjHolder->createAudioSystem();
+        nebula_log("game system: the sound system call returned\n");
     }
 
     updateSceneController();
@@ -146,6 +149,7 @@ void GameSystem::exeInitializeAudio() {
 
 void GameSystem::exeInitializeBootScene() {
     if (MR::isFirstStep(this)) {
+        nebula_log("game system: sound system created; starting the boot scene\n");
         MR::requestChangeScene(SceneKind_Boot);
     }
 
