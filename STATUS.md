@@ -6,7 +6,8 @@ Steps landed: 7 of 138 (5%).
 
 Now: S0.2.2 since 04:55 (S0.2.1 landed 04:53); ahead: S0.2.3 next
 
-In work now: Nothing started.
+In work now:
+- S0.2.3 Landing B, part 1: the pointer (agent 1)
 
 ## Packages
 
