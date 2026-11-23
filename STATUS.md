@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-23 01:34. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-23 01:35. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 5 of 138 (4%).
 
-Now: R-001 since 23:08 (waits for mend M-003, helper at work); ahead: nothing
+Now: S0.2.1 since 01:06, waits for mend M-004 (proof 2: a time rate of 2 against 1); ahead: nothing
 
 In work now:
 - S0.2.1 Landing A: drawing stops changing the game (agent 1)
