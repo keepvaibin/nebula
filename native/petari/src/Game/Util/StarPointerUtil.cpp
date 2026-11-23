@@ -24,6 +24,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/ScenePointRay.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
@@ -568,18 +569,16 @@ namespace MR {
     }
 
     void calcScenePointUnderScreen(Vec3f* pWorldPos, const Vec2f& rScreenPos, MtxPtr pViewMtx, Mtx44Ptr pProjMtx) {
-        // The view-space direction through the point at a depth of 1: StarPointerTarget::calcScreenPositionFromView
-        // read backwards, so a target's sphere and its circle on the screen agree.
+        // The view-space direction through the point at a depth of 1, so a target's sphere and its circle on the
+        // screen (StarPointerTarget::calcScreenPositionFromView) agree.
         Proj3f proj;
         proj.setInline(pProjMtx);
-        const f32 ndcX = rScreenPos.x * 2.0f / MR::getScreenWidth() - 1.0f;
-        const f32 ndcY = 1.0f - rScreenPos.y * 2.0f / MR::getScreenHeight();
-        const Vec3f viewDir((ndcX + proj.mMtx[0][2]) / proj.mMtx[0][0], (ndcY + proj.mMtx[1][2]) / proj.mMtx[1][1], -1.0f);
+        const Vec3f viewDir = ScenePointRay::calcViewDir(rScreenPos.x, rScreenPos.y, MR::getScreenWidth(), MR::getScreenHeight(),
+                                                         proj.mMtx[0][0], proj.mMtx[0][2], proj.mMtx[1][1], proj.mMtx[1][2]);
 
-        // The nearest drawn target's sphere along the ray; its parameter is the view-space depth of the hit.
+        // The nearest drawn target's sphere along the ray.
         f32 nearest = MR::getFarZ();
         const AllLiveActorGroup* pGroup = MR::getAllLiveActorGroup();
-        const f32 dirDot = viewDir.dot(viewDir);
         for (s32 i = 0; i < pGroup->getPointerTargetNum(); i++) {
             const LiveActor* pActor = pGroup->getPointerTarget(i);
             if (MR::isDead(pActor) || MR::isClipped(pActor) || MR::isHiddenModel(pActor)) {
@@ -590,19 +589,8 @@ namespace MR {
             Vec3f worldPos, viewPos;
             pTarget->calcPosition(&worldPos);
             NebulaMtxMultVec(pViewMtx, &worldPos, &viewPos);
-            const f32 outside = viewPos.dot(viewPos) - pTarget->mRadius3d * pTarget->mRadius3d;
-            if (outside <= 0.0f) {
-                continue;  // the camera is inside the sphere: the near plane cuts its model
-            }
-
-            const f32 along = viewDir.dot(viewPos);
-            const f32 disc = along * along - dirDot * outside;
-            if (along <= 0.0f || disc < 0.0f) {
-                continue;
-            }
-
-            const f32 depth = (along - MR::sqrt(disc)) / dirDot;
-            if (depth < nearest) {
+            f32 depth;
+            if (ScenePointRay::calcDepthToSphere(viewDir, viewPos, pTarget->mRadius3d, &depth) && depth < nearest) {
                 nearest = depth;
             }
         }
