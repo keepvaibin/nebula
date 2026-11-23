@@ -1,6 +1,6 @@
 """measure_wait.py: a build or a test run started by hand waits while a speed measure runs (T7a).
 
-  python -X utf8 -I tools/gate/measure_wait.py [--lock PATH] [--minutes 15]
+  python -X utf8 -I tools/gate/measure_wait.py [--lock PATH] [--minutes 15] [--stop]
 
 A speed measure (tools/measure/measure.py) holds the measurement lock, a folder with holder.txt in it that ends "pid N" (the
 measure's own process). While it is held, `wait` says so in one line, looks every 10 seconds, and goes on when the lock is
@@ -23,6 +23,7 @@ import lockholder  # noqa: E402
 LOCK = "D:/NebulaWork/plan/measure.lock"
 SKIP_ENV = "NEBULA_NO_MEASURE_WAIT"
 MINUTES = 15.0
+AGENT_MINUTES = 40.0      # what the agent's own commands wait (AGENT.md section 9): a game never starts beside a running measure
 LOOK_SECONDS = 10.0
 
 
@@ -93,8 +94,12 @@ def main(argv=None):
     p.add_argument("--lock", default=None)
     p.add_argument("--minutes", type=float, default=None)
     p.add_argument("--every", type=float, default=LOOK_SECONDS)
+    p.add_argument("--stop", action="store_true", help="a measure that still runs after the minutes: exit 3, so that the caller starts nothing")
     args = p.parse_args(argv)
-    wait(args.lock, args.minutes, every=args.every)
+    result = wait(args.lock, args.minutes, every=args.every)
+    if args.stop and result == "went on":
+        print("the speed measure still runs: nothing is started; run the command again when it has ended")
+        return 3
     return 0
 
 

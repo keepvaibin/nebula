@@ -307,18 +307,36 @@ def start_check(device, frames, limit, clock=time.time, sleep=time.sleep):
 
 
 def device_lock(path, who):
-    """The device's lock (a folder, made at once or not at all): None when taken, else who holds it."""
+    """The device's lock (a folder, made at once or not at all): None when taken, else who holds it. The holder line ends with this
+    process's `since T pid N` (tools/gate/lockholder.py); a holder whose process has ended loses the lock, with one printed line, so that a
+    run that died with it does not keep the tablet away for ever. A line with no pid (taken by hand) holds until it is freed."""
     if path is None:
         return None
-    lock = pathlib.Path(path)
+    gate = str(pathlib.Path(__file__).resolve().parents[1] / "gate")
+    sys.path.insert(0, gate)
     try:
-        lock.mkdir()
-    except FileExistsError:
-        holder = lock / "holder.txt"
-        return holder.read_text(encoding="utf-8", errors="replace").strip() if holder.exists() else "unknown"
-    (lock / "holder.txt").write_text("%s %s\n" % (who, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
-                                     encoding="utf-8")
-    return None
+        import lockholder
+        import measure_wait
+    finally:
+        sys.path.remove(gate)
+    lock = pathlib.Path(path)
+    for _ in range(3):
+        try:
+            lock.mkdir()
+        except FileExistsError:
+            holder = lock / "holder.txt"
+            text = holder.read_text(encoding="utf-8", errors="replace").strip() if holder.exists() else "unknown"
+            old = lockholder.gone(text, measure_wait.process_alive, lockholder.process_started)
+            if old is not None and old != os.getpid():
+                print("luma_test_android.py: the device lock %s was held by pid %d, which has ended: taken over (%s)" % (lock, old, text),
+                      flush=True)
+                shutil.rmtree(lock, ignore_errors=True)
+                continue
+            return text
+        (lock / "holder.txt").write_text("%s %s %s\n" % (who, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), lockholder.named()),
+                                         encoding="utf-8")
+        return None
+    return "the device lock could not be taken"
 
 
 def release_lock(path):

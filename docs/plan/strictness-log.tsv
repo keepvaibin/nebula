@@ -1,0 +1,2 @@
+date	file	what changed	why	allowed by	id	removed by
+2026-11-22	tools/verify/console_census.py	the open group gx_sections counts the four section names GXMT, GXTG, GXTM and GXWP with a ceiling of 31, and the closed group fifo excludes only those four whole words	step S0.1.3 was refused by the census: the model file keeps these four names until the last landing of step 3	docs/engine/FRAME-MODEL.md section 2.9	S0.1.3	R3.13

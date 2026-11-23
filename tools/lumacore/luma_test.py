@@ -3247,7 +3247,11 @@ def main():
                 import measure_wait
             finally:
                 sys.path.remove(_gate)
-            measure_wait.wait()
+            if measure_wait.wait(minutes=None if os.environ.get("NEBULA_MEASURE_WAIT_MINUTES") else measure_wait.AGENT_MINUTES) == "went on":
+                # Never a game beside a running measure: it spoils the figures the landing judges (AGENT.md section 9).
+                print("luma_test.py: env: the speed measure still runs after %g minutes: nothing is started; run the command again when "
+                      "it has ended" % measure_wait.AGENT_MINUTES, file=sys.stderr)
+                return ENV_EXIT
         try:
             return run_tests(args)
         except EnvRefused as error:

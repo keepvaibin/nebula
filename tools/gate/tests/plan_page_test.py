@@ -78,7 +78,8 @@ class DataTest(unittest.TestCase):
                                       "A.2": {"state": "started", "agent": "2"}, "B.1": {"state": "blocked", "agent": "1"},
                                       "C.1": {"state": "landed"}})
         self.assertNotIn("B.2", d["steps"])
-        self.assertEqual(sorted(d), ["blocked", "claims", "flakes", "generated", "owed", "repairs", "set_aside", "steps", "tool_faults"])
+        self.assertEqual(sorted(d), ["blocked", "claims", "decisions", "flakes", "generated", "locks", "mends", "owed", "owner", "repairs", "set_aside", "steps", "strictness",
+                                    "tool_faults"])
 
     def test_the_repairs_are_in_the_data_in_the_order_given_with_every_field(self):
         rows = [{"id": "R-002", "opened": "2026-11-21T01:00:00", "source": "nightly", "kind": "fail", "check": "tour/d3d11",
@@ -158,7 +159,7 @@ class PageFilesTest(unittest.TestCase):
 
     def test_page_writes_the_complete_page_the_status_and_the_published_pair(self):
         data, html, index, text = self.page()
-        self.assertEqual(sorted(p.name for p in self.t.live.iterdir()), ["STATUS.md", "progress.html", "publish"])
+        self.assertEqual(sorted(p.name for p in self.t.live.iterdir()), ["STATUS.md", "heartbeat.txt", "progress.html", "publish"])
         self.assertEqual(sorted(p.name for p in self.paths.publish.iterdir()), ["index.html", "progress-data.json"])
         for p in self.outputs():
             self.assertIn(p.as_posix(), text)
@@ -174,7 +175,7 @@ class PageFilesTest(unittest.TestCase):
         (self.t.live / "flakes.tsv").write_text("", encoding="utf-8")
         self.page()
         self.assertEqual(sorted(p.name for p in self.t.live.iterdir()),
-                         ["STATUS.md", "flakes.tsv", "progress-url.txt", "progress.html", "publish"])
+                         ["STATUS.md", "flakes.tsv", "heartbeat.txt", "progress-url.txt", "progress.html", "publish"])
         self.assertTrue(self.paths.data.is_file(), "the new progress-data.json is in publish")
 
     def test_progress_html_holds_the_data_and_the_published_index_does_not(self):
@@ -773,7 +774,7 @@ class HtmlTest(unittest.TestCase):
             self.assertNotIn("__NODATA__", html)
             self.assertEqual(html.count('id="when">Loading...<'), 1, "Loading... is only the starting text")
             self.assertEqual(re.findall(r'getElementById\("when"\)\.textContent = ([^;]*);', html),
-                             ['"Written " + d.generated', '"%s"' % page.NO_DATA], "the two ways Loading... is replaced")
+                             ['"Written " + d.generated + ". %s"' % page.OLD_PAGE, '"%s"' % page.NO_DATA], "the two ways Loading... is replaced")
             self.assertIn(".catch(failed)", html)
             self.assertIn("failed();", html, "a fetch that throws at once is the same message")
             self.assertIn("if (!drawn)", html, "data that came is never overwritten by the message")
@@ -925,7 +926,7 @@ setTimeout(function () { console.log(JSON.stringify({ early: early, late: snap()
 
     def test_the_published_page_with_the_fetched_data_draws_the_numbers(self):
         out = self.node(self.index, "fetch")["late"]
-        self.assertEqual(out["when"], "Written 2026-11-20T12:00:00")
+        self.assertEqual(out["when"], "Written 2026-11-20T12:00:00. " + page.OLD_PAGE)
         for words in ("40 of 138", "steps landed", "6/6", "4/6", "result.json is missing", "land S0.1", "agent 2", "S6.4", "the reason",
                       "Tool faults (1 kinds", "Title S6.4", "commit c39"):
             self.assertIn(words, out["app"])
@@ -959,7 +960,7 @@ setTimeout(function () { console.log(JSON.stringify({ early: early, late: snap()
     def test_data_that_comes_after_the_message_is_drawn_all_the_same(self):
         out = self.node(self.index, "late")
         self.assertEqual(out["early"]["when"], "Loading...")
-        self.assertEqual(out["late"]["when"], "Written 2026-11-20T12:00:00")
+        self.assertEqual(out["late"]["when"], "Written 2026-11-20T12:00:00. " + page.OLD_PAGE)
         self.assertIn("40 of 138", out["late"]["app"])
 
 

@@ -19,8 +19,9 @@ about the tool you will change.
 4. the files I believe are at fault;
 5. what must stay refused after the mend.
 
-Point 5 is your proof: the thing the tool refused rightly before, and must refuse after. A sheet may hold a first
-helper's report at the end (this is a second try): read it first and do not repeat what it ruled out.
+Point 5 is your proof: the thing the tool refused rightly before, and must refuse after. A sheet may hold the notes
+of earlier attempts at its end, under the headings `## Attempt 1`, `## Attempt 2` (this is a later try): read them
+first and do not repeat what they ruled out.
 
 The sheet is the agent's belief, not a fact. Run its command yourself first and see the fault. A fault you cannot see
 is a finding: report it (section 9) and stop.
@@ -50,12 +51,10 @@ are never a tool fault. Report `NOT MENDED M-00N` with that line and stop.
   it does, wait. Only that lock counts: a row `running` in `landing-queue.tsv` with the lock free is a landing that
   waits for GitHub. A self-test of a tool on your own tree is no game run: start it after
   `python -X utf8 -I tools/gate/measure_wait.py`, which waits while a speed measure runs.
-- A proof that needs the whole machine (a load on every processor, runs whose time is the result) holds the gate lock
-  while it runs. Where the tool has an option for it (`measure.py --gate-lock`), use that. Else by hand, in ONE command
-  line that also frees it when the proof ends or fails: make the folder only if it does not exist (`mkdir`, which fails
-  when it does: then wait and try again), write `holder.txt` in it with `U mend M-00N`, the words `by hand` and the
-  time, run the proof, remove the folder. Never hold it across two commands, never longer than 20 minutes, never leave
-  your turn while you hold it. `gate.py` takes the lock itself: do not hold it by hand around a gate command.
+- A proof that needs the whole machine (a load on every processor, runs whose time is the result) runs through the gate
+  (a plant run, `gate.py --main --only ...`, section 7), which takes `gate.lock` itself and waits for it, or through a
+  tool's own lock option (`measure.py --gate-lock`). You never take `gate.lock`, `tablet.lock`, `measure.lock` or any
+  other lock by hand.
 - Before your own landing, see that `landing-queue.tsv` has no row `waiting` or `running` for another branch (wait with
   one blocking command at a time: a loop that reads the file every 30 seconds for up to 9 minutes).
 - Read the clock with `date` before you write a time.
@@ -73,8 +72,8 @@ Your folder is `D:/NebulaWork/MarioGalaxyRecomp/Nebula-mend`. Never the agent's 
 - When it exists: `git status` must show nothing uncommitted; if it does, the change is an earlier mend's: commit it
   on its own branch `mend/<its id>-kept` and go on. Then `git fetch origin` and `git checkout --detach origin/main`.
 - Make the branch `mend/M-00N` there (`git checkout -b mend/M-00N`). When a branch of that name exists already (an
-  earlier helper's try that was not landed), rename it first to `mend/M-00N-try1` and keep it: its commits are the
-  first helper's findings. Never delete a branch you did not make.
+  earlier helper's try that was not landed), rename it first to `mend/M-00N-try1` (the first free `-try<N>`) and keep it: its commits are an earlier
+  attempt's findings. Never delete a branch you did not make.
 - The tool you change is the one in your folder. To run the agent's `PLAN` as the agent would, use its own copy; never
   run your changed tool against the agent's work folder.
 
@@ -95,10 +94,14 @@ Your folder is `D:/NebulaWork/MarioGalaxyRecomp/Nebula-mend`. Never the agent's 
    difference. A file or line you name in a document must exist: `python -X utf8 -I tools/verify/doc_refs.py <file>`.
 6. Only the sheet's fault. A second fault you see on the way is listed in your report and not mended. A fault that is
    not in a tool (the game, the plan's cards) is not yours.
-7. Never game code: nothing under `native/`, `runtime/`, `crates/` or `platform/`. A fault whose cause is there is
-   reported `NOT MENDED, needs game code: <the files>` and you stop. The gate refuses a `mend/*` branch that changes
-   them.
-8. Two hours of work without a cause: report `NOT MENDED M-00N` with what you ruled out. Three hours in all at most.
+7. Never game code: no source file of the game, the engine, the importer or the platform code, that is nothing
+   under `native/`, `runtime/`, `crates/` or `platform/` but their build files (`CMakeLists.txt`, `*.cmake`, build
+   scripts such as `*.ps1`, `*.sh`, `*.bat`, gradle files, `*.toml`, `Cargo.lock`). A mend of a build file is a tool mend:
+   the scope table then runs the game's checks for it, as it should. A fault whose cause is in a source file is
+   reported `NOT MENDED M-00N, needs game code: <the files>` and you stop. The gate refuses a `mend/*` branch that
+   changes one.
+8. Two hours of your own work without a cause: report `NOT MENDED M-00N` with what you ruled out. Three hours of your
+   own work in all at most. Time spent waiting in the gate's line does not count.
 
 ## 5. What no mend may do
 
@@ -137,6 +140,9 @@ A tool that does what its document says and a card that asks for something else 
 
 `tools/gate/strictness.tsv` lists the places whose change can make a check see less: tables and lists by file, and
 every changed or deleted line of an existing test file of the tools (`tools/**/tests/**`). Pure additions are free.
+The guard guards itself: a removed or changed line of `tools/gate/strictness.tsv`, and any change of
+`tools/gate/strictness.py`, are on the list, and a removed or changed line of `docs/plan/strictness-log.tsv` is
+refused outright: the log only grows.
 A landing whose diff meets the list must add, in the same landing, one line to `docs/plan/strictness-log.tsv`:
 
 `date`, `file`, `what changed`, `why`, `allowed by` (the document and section), `id` (your mend, `M-00N`), `removed by`
@@ -178,6 +184,13 @@ with no time limit. Expect 20 to 30 minutes in the gate's line for a change unde
 alone takes about 16).
 
 - A refusal in seconds: read the lines, supply what is missing, run it again.
+- When the sheet says `plan.py` itself is at fault, `mend land` cannot run. Run by hand what it runs, from your folder:
+  `python -X utf8 -I tools/verify/doc_refs.py <each changed document>`, the three code checks
+  (`python -X utf8 -I tools/verify/console_census.py <your folder>`, the same for `cast_check.py` and
+  `byte_order_check.py`) and `python -X utf8 -I tools/gate/strictness.py --base origin/main --branch mend/M-00N`; each must
+  pass. Then hand the branch to the gate yourself: `python -X utf8 -I tools/gate/gate.py land mend/M-00N --who "mend
+  M-00N" --tablet R52WA0FXE5J --tablet-wait 30`, as a background command with no time limit. The agent records it
+  afterwards (`plan.py mend open ... --landed <commit>`).
 - A failure of your own change: find the cause, fix it, add the test that would have caught it, land once more.
   A second failure of any kind: stop and report it.
 - A failure that is not from your change (a result of the kind `tool` or `env` in a check you did not touch, a flake):
@@ -203,5 +216,15 @@ Then, in this order:
 7. What the agent does now: for `MENDED`, nothing but to read your commit and close the mend; for `NOT MENDED`, what
    you ruled out and where you think the cause is.
 
-Append the same text to `D:/NebulaWork/plan/TESTING-PROGRESS.md` under the heading `Mend M-00N`, with the time.
-Leave nothing running: no process of yours, no lock, no tablet install.
+Append the same text to the sheet, under the heading `## Attempt <N> report` (the next attempt reads it there; the
+agent's `mend failed` adds its own line below it). Leave nothing running: no process of yours, no lock, no tablet install.
+
+## 10. When the agent itself mends
+
+The third attempt of a mend is the agent's own. It reads this file whole first, and nothing in it is relaxed for
+it: the same folder `Nebula-mend`, the same branch `mend/M-00N` (an earlier attempt's branch is renamed to
+`mend/M-00N-try<N>` first), the same sheet with the notes of the two attempts before it, the same limit of three hours
+of its own work, the same proofs (a changed judge is proven again by its planted fault, section 7), the same landing
+`plan.py mend land M-00N`. The strictness check judges its branch as it judges a helper's, and it writes the same
+report at the end of the sheet. While it works the step waits: `plan.py next`, `start`, `ahead` and `land` answer
+`WAIT: mend M-00N is open`. When it fails too, `plan.py mend failed M-00N "<why>"` blocks the step `tool: M-00N`.

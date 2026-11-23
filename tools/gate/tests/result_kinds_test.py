@@ -100,10 +100,12 @@ class Scratch:
         assert kinds.keep_base(self.main_sha, self.build / "bins", self.base_bins) is None
 
     def gate(self, level="main", known=None, extra=()):
+        os.environ["NEBULA_PLAN_NO_PUSH"] = "1"     # the repair a third flake opens runs plan.py, which must push no progress branch
         args = gate.parser().parse_args(["--" + level, "--tablet", "T", "--work", str(self.work), "--board", "",
                                          "--status", "", "--build-root", str(self.build), "--paks", "", "--keep-runs",
                                          "--wait", "0", "--gate-lock", str(self.t / "gate.lock"),
-                                         "--queue-file", str(self.t / "landing-queue.tsv"), "--runner-lock", str(self.t / "runner.lock"), *extra])
+                                         "--queue-file", str(self.t / "landing-queue.tsv"), "--runner-lock", str(self.t / "runner.lock"),
+                                         "--live", str(self.t / "live"), *extra])
         g = gate.Gate(args, known=known)
         g.tree, g.main_ref = self.tree, "main"
         # A run's folder is named by the second it starts in: every gate of a case has its own.
@@ -190,7 +192,8 @@ def third_flake_sets_aside(s, check):
     kinds.append_line(s.flakes, (ago(3), "a", RENDERER, "c3", "m3"))
     g = s.run(g=s.gate())
     check(("a", RENDERER) in kinds.read_aside(s.aside), "the third flake in seven days sets the test aside: %s" % s.aside)
-    check(any("set aside: a on %s" % RENDERER in t for t in g.open_rows), "a ledger row is asked for: %s" % g.open_rows)
+    check([(f["test"], f["renderer"]) for f in g.flake_results] == [("a", RENDERER)] and not g.open_rows,
+          "one repair is opened for it (the gate's flake results), and no ledger row is asked for: %s %s" % (g.flake_results, g.open_rows))
     # Set aside: it still runs and is reported, it does not count.
     s.plan({"a": {"first": "fail:boom", "again": "fail:boom"}})
     g = s.run(g=s.gate())

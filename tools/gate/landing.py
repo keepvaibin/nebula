@@ -98,6 +98,15 @@ def cell(text):
     return str(text).replace("\t", " ").replace("\r", " ").replace("\n", " ")
 
 
+PLANT_PREFIX = "plant/"      # a planted fault (docs/plan/native/TOOL-MEND-PLANTS.md): judged by hand, never landed
+PLANT_REFUSAL = "a branch named plant/... is a planted fault and never lands (docs/plan/native/TOOL-MEND-PLANTS.md)"
+
+
+def plant_branches(names):
+    """The names among `names` that are planted-fault branches."""
+    return [n for n in names if str(n).startswith(PLANT_PREFIX)]
+
+
 def also_names(*texts):
     """The check names of comma-separated texts, each once, in the order given."""
     out = []
@@ -483,6 +492,11 @@ class Landing:
     def land(self, branches, agent="1", wait_minutes=600.0, also=""):
         """Queues the branches and sees them to an end: the runner when none is alive, else a waiter. Returns the exit code
         and prints the caller's lines. `also`: checks (comma-separated names) this landing runs besides the changed files'."""
+        planted = plant_branches(branches)
+        if planted:
+            self.say("gate.py: refused: %s: %s" % (", ".join(planted), PLANT_REFUSAL))
+            self.say(kinds.verdict_line("not-judged"))
+            return EXIT_NOT_JUDGED
         self.queue.add(branches, agent, self.commit_of, also)
         deadline = self.clock() + 60.0 * wait_minutes
         while True:

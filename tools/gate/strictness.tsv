@@ -1,0 +1,31 @@
+# The places whose change can make a check see less (tools/gate/strictness.py; docs/plan/native/TOOL-MEND.md section 6).
+# A landing that changes one of them adds a line to docs/plan/strictness-log.tsv in the same landing. Pure additions are free in
+# the mode `removed`; blank lines and white space are never a change. `block:NAME` is the top-level list or number of that name.
+pattern	mode	where	hides
+tools/gate/known-failures.tsv	added	*	a new line makes a failing test pass the gate
+tools/gate/planned.tsv	added	*	a new line makes a check count as not built yet, so it does not run
+tools/gate/sanitizer-known.tsv	added	*	a new line lets a memory-fault report pass the sanitizer tour
+tools/gate/validate-known.tsv	added	*	a new line lets a graphics debug-layer error pass the validate lane
+tools/verify/doc_refs_allow.txt	added	*	a new line lets a document name a file or line that does not exist
+tools/release_check_allow.txt	added	*	a new line lets a text through the release check
+tools/gate/scope.tsv	any	*	a row decides which checks a landing runs; a changed row can make a landing run less
+tools/gate/github_jobs.tsv	any	*	the class of a GitHub job decides whether a red job stops main
+tests/pictures/approved.tsv	any	*	an approved picture is what a picture must equal
+tests/replays/*.tsv	any	*	a recorded step hash is what the game must equal, step by step
+docs/plan/native/step-checks.tsv	removed	*	a removed line takes an extra check (stress, soak, sanitizer) out of a step's landing
+tests/engine/suite.json	removed	*	a removed name takes an engine test out of every landing
+tools/verify/tours/tour_enterable.txt	removed	*	a removed line takes a stop out of the tours
+.github/workflows/**	removed	*	a removed line takes a job or a step out of GitHub's checks
+tools/verify/console_census.py	any	*	the skip list, the closed groups, the ceilings and the patterns decide what the census sees
+tools/verify/cast_check.py	any	*	its reviewed exceptions decide which pointer casts it accepts
+tools/verify/byte_order_check.py	any	*	its reviewed exceptions decide which byte-order uses it accepts
+tools/measure/band.py	any	*	the band rule, the floors and the judged figures decide when a speed figure is worse
+tools/gate/main_push_guard.py	any	*	it is the rule that main moves only through a landing
+tools/gate/strictness.py	any	*	it is this check
+tools/gate/strictness.tsv	removed	*	a removed or changed line takes a place out of this check
+tools/gate/long_results.py	any	block:NEVER_TRACED	a name added here keeps a failed check from being traced to a landing
+tools/gate/kinds.py	any	block:FLAKES_TO_SET_ASIDE,FLAKE_DAYS	these decide when a flaky test is set aside and stops counting
+tools/audit_repo.ps1	any	block:$AllowedBinaries,$ForbiddenExtensions,$ForbiddenBuildExtensions,$SecretPatterns	these decide which files the repository audit refuses
+tools/**/tests/**	removed	*	a changed or deleted line of an existing self-test can make it pass what it refused
+tools/lumacore/harness_*_test.py	removed	*	a changed or deleted line of an existing self-test can make it pass what it refused
+tools/lumacore/*_fixture_test.py	removed	*	a changed or deleted line of an existing self-test can make it pass what it refused

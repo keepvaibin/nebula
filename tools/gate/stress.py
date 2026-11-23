@@ -111,3 +111,31 @@ def open_repairs(live, run_folder, commit, results, run=subprocess.run, say=prin
             say("gate.py: stress: the repair for %s %s could not be opened (exit %d): %s" % (
                 found["check"], found["test"], done.returncode, ((done.stderr or "") + (done.stdout or "")).strip()[-200:]))
     return ids
+
+
+def flake_command(live, found, commit, evidence):
+    """The `plan.py repair add` command of a test set aside (the third flake in seven days): source flake, kind fail, check
+    `flake:<test>`, so that `plan.py next` gives it before a step and a landed repair ends the time the test is set aside."""
+    return [sys.executable, "-X", "utf8", "-I", str(PLAN_TOOL), "--live", str(live), "repair", "add", "--source", "flake",
+            "--kind", "fail", "--check", "flake:" + found["test"], "--renderer", found["renderer"], "--commit", commit or "-",
+            "--evidence", str(evidence), "--note",
+            "%s on %s failed once and passed alone %d times in 7 days, so it is set aside (its failure no longer counts): %s" % (
+                found["test"], found["renderer"], found.get("count", 3), found["message"])]
+
+
+def open_flake_repairs(live, run_folder, commit, results, run=subprocess.run, say=print):
+    """One repair for each test the run set aside; the run folder is kept whole (its rerun/first folders are the evidence). Returns the
+    repair ids; a repair that could not be opened is said, never a fault of the run."""
+    keep_whole(run_folder, results)
+    ids = []
+    for found in results:
+        done = run(flake_command(live, found, commit, run_folder), capture_output=True, text=True, cwd=str(TREE))
+        said = (done.stdout or "").strip().splitlines()
+        if done.returncode == 0 and said:
+            ids.append(said[-1])
+            say("gate.py: flake: repair %s opened for %s on %s, which is set aside; the run folder %s is kept whole" % (
+                said[-1], found["test"], found["renderer"], run_folder))
+        else:
+            say("gate.py: flake: the repair for %s on %s could not be opened (exit %d): %s" % (
+                found["test"], found["renderer"], done.returncode, ((done.stderr or "") + (done.stdout or "")).strip()[-200:]))
+    return ids

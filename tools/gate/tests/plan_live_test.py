@@ -115,7 +115,7 @@ class FilesTest(LiveTest):
         self.assertEqual(first("claims.tsv"), "package\tagent\ttime\tbranch")
         self.assertEqual(first("tool-faults.tsv"), "time\tagent\tstep\tkind\tcheck\ttest\tfirst_error\trun_folder\tcould_not")
         self.assertEqual(first("state.tsv"), "step\tstate\tagent\treason\ttime")
-        self.assertEqual(first("landings.tsv"), "step\tcommit\tfinished\tseconds\tagent\tmain")
+        self.assertEqual(first("landings.tsv"), "step\tcommit\tfinished\tseconds\tagent\tmain\tfigures")
 
     def test_state_entries(self):
         lv.set_state_entry(self.live, "A.1", "started", 2, now=NOW)
@@ -135,7 +135,7 @@ class FilesTest(LiveTest):
     def test_landings(self):
         lv.add_landing(self.live, "A.1", "abc123", 61.7, 2, NOW)
         self.assertEqual(lv.read_landings(self.live), [{"step": "A.1", "commit": "abc123", "finished": "2026-11-20T12:00:00",
-                                                         "seconds": "61", "agent": "2", "main": "-"}])
+                                                         "seconds": "61", "agent": "2", "main": "-", "figures": "-"}])
 
     def test_a_landing_is_listed_once_for_each_step_and_main_is_filled_in_when_it_becomes_known(self):
         self.assertTrue(lv.add_landing(self.live, "A.1", "abc123", 61, 1, NOW))

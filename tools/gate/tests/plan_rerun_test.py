@@ -77,6 +77,18 @@ class RerunBase(unittest.TestCase):
     def head(self):
         return self.t.git("rev-parse", "HEAD", cwd=self.folder)
 
+    def permit(self, *files):
+        """What a card that asks for the change, and the strictness log, say of these files (a step may change a test tool, a list of
+        known reports or a recorded replay only so): the branch's card names them and the log has a line for each."""
+        card = self.folder / "docs" / "plan" / "native" / "03-X.md"
+        card.write_text(card.read_text(encoding="utf-8").replace("`runtime/src/render/a.cpp`, ", "`runtime/src/render/a.cpp`, " + ", ".join(
+            "`%s`" % f for f in files) + ", ", 1), encoding="utf-8")
+        log = self.folder / "docs" / "plan" / "strictness-log.tsv"
+        log.write_text("\t".join(plan.strictness.LOG_COLUMNS) + "\n" + "".join("\t".join(
+            ["2026-11-22", f, "a test plants it", "a self-test", "plan_rerun_test", "A.1", "-"]) + "\n" for f in files), encoding="utf-8")
+        self.t.git("add", "-A", cwd=self.folder)
+        self.t.git("commit", "-q", "-m", "the card and the log name them", cwd=self.folder)
+
     def subjects(self):
         return self.t.git("log", "--format=%s", "origin/main..HEAD", cwd=self.folder).splitlines()
 
@@ -136,10 +148,10 @@ class StateCommitTest(RerunBase):
         fix = self.fix("the repair")
         self.results = [passed_verdict()]
         self.land(expect=0)
-        self.assertEqual(self.subjects()[:4], [STATE_SUBJECT, "fix: the repair", STATE_SUBJECT, "A.1: the code"])
+        self.assertEqual(self.subjects()[:3], [STATE_SUBJECT, "fix: the repair", "A.1: the code"], "the earlier state commit was taken off (E1)")
         rows = lambda ref: plan.find(plan.parse_base(self.t.git("show", ref + ":docs/plan/native/steps.tsv", cwd=self.folder), ref), "A.1")
         self.assertEqual((rows("HEAD")["state"], rows("HEAD")["commit"]), ("landed", fix))
-        self.assertEqual(rows("HEAD~2")["commit"], code_commit, "the first one still names the first code commit")
+        self.assertNotEqual(rows("HEAD")["commit"], code_commit, "and no commit names the first code commit as the step's")
         self.assertEqual(self.t.git("show", "HEAD", "--name-only", "--format=", cwd=self.folder), "docs/plan/native/steps.tsv")
 
     def test_the_tool_never_calls_a_hard_reset(self):
@@ -158,7 +170,7 @@ class StateCommitTest(RerunBase):
         before = len(self.state_commits())
         self.results = [passed_verdict()]
         self.land(expect=0)
-        self.assertEqual(len(self.state_commits()), before + 1)
+        self.assertEqual(len(self.state_commits()), before, "the tool's own earlier one went, its new one came; the other commit stays")
 
 
 # ---- A2: what is landed is what origin/main says ----------------------------------------------------------------------
@@ -353,8 +365,8 @@ class ChangedWhileRunningTest(RerunBase):
         self.assertLess(lines.index(said), [i for i, l in enumerate(lines) if l.startswith("LANDED A.1")][0])
         self.assertEqual([c["kw"] for c in self.calls], [{"push": False}, {}], "joined first, then a landing of its own")
         self.assertEqual(self.calls[1]["head"], self.head())
-        self.assertEqual(self.subjects()[:3], [STATE_SUBJECT, "fix: the repair", STATE_SUBJECT], "a second state commit on the fix")
-        self.assertIn("LANDED A.1 as %s" % fix, text)
+        self.assertEqual(self.subjects()[:3], [STATE_SUBJECT, "fix: the repair", "A.1: the code"], "the earlier state commit is off (E1), a new one on the fix")
+        self.assertIn("LANDED A.1 as %s" % self.t.git("rev-parse", "--short=9", "HEAD~1", cwd=self.folder), text)
 
     def test_a_joined_landing_that_passed_is_landed_and_the_later_commits_are_named_as_not_on_main(self):
         code_commit, old = self.after_a_failed_landing()
@@ -428,8 +440,8 @@ class FoundOnMainTest(RerunBase):
 
 class CardTest(RerunBase):
     def snapshot(self):
-        names = sorted(p.name for p in self.t.live.rglob("*") if p.is_file())
-        stamps = {p.name: p.stat().st_mtime_ns for p in self.t.live.rglob("*") if p.is_file()}
+        names = sorted(p.name for p in self.t.live.rglob("*") if p.is_file() and p.name != "heartbeat.txt")     # every command writes its time
+        stamps = {p.name: p.stat().st_mtime_ns for p in self.t.live.rglob("*") if p.is_file() and p.name != "heartbeat.txt"}
         return names, stamps, self.t.git("status", "--porcelain", cwd=self.t.tree), self.t.git("status", "--porcelain", cwd=self.folder)
 
     def test_card_prints_the_card_the_rows_and_the_checks_and_changes_nothing(self):
@@ -612,6 +624,7 @@ class ReplayGuardTest(RerunBase):
         self.assertIn('no commit message of the landing contains the words "replay reference"', text)
         self.assertEqual(self.calls, [])
         self.t.git("commit", "--allow-empty", "-m", "Replay Reference: recorded after the change", cwd=self.folder)
+        self.permit(REPLAY)
         self.results = [passed_verdict()]
         self.land(expect=0)
         self.assertEqual(len(self.calls), 1)
@@ -739,6 +752,7 @@ class CodeChecksTest(RerunBase):
         self.assertNotIn("console_census.py refuses", text)
         self.assertEqual(self.calls, [])
         self.t.commit("A.1", "fixed", {"tools/verify/cast_check.py": self.PASS})
+        self.permit("tools/verify/console_census.py", "tools/verify/cast_check.py")
         self.land(expect=0)
         self.assertEqual(len(self.calls), 1, "a tree that passes its code checks is handed to the gate")
 

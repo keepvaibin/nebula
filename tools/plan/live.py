@@ -7,7 +7,7 @@ it a temporary folder), never in an untracked file inside one work folder:
     claims.tsv        package, agent, time, branch       who holds which package
     tool-faults.tsv   time, agent, step, kind, check, test, first_error, run_folder, could_not
     landings.tsv      step, commit, finished, seconds, agent, main   (commit: the code's commit on the step's branch; main:
-                      the commit main moved to, `-` where it is not known)
+                      the commit main moved to, `-` where it is not known; figures: the speed checks' lines of the landing, `-` when it had none)
     landing-<agent>.tsv   step, branch, tip, time, pid   the landing handed to the gate and not yet answered (one file for each agent)
     ahead-<agent>.tsv step, after, base, handed, time    the step written ahead while a landing plays (plan.py ahead): its branch is
                       native/<step>, `after` is the item being landed, `base` the commit the step's own commits stand on, `handed`
@@ -17,6 +17,9 @@ it a temporary folder), never in an untracked file inside one work folder:
     github-pending.tsv  time, commit, branches, candidate, run_folder, rerun   (a landing that moved main before GitHub's jobs
                       ended: tools/gate/github_rule.py settle_pending reads them afterwards)
     progress.html, STATUS.md, publish/index.html, publish/progress-data.json, progress-url.txt  (page.py and plan.py page)
+    mends.tsv         id, step, title, check, state, opened, closed, commit, note   the tool mends (plan.py mend): one line for each
+    mends/M-00N.md    the fault sheet of a mend, written by the agent, read by the helper (docs/plan/native/TOOL-MEND.md)
+    heartbeat.txt     the time of the last command of the agent (every command but `alive` writes it)
 
 Every change is made under one lock folder (`lock`, made with mkdir, which is atomic) and written as a whole file
 replaced in one step, so a reader never sees half a file. A lock folder older than two minutes is taken as left by a
@@ -35,14 +38,17 @@ import failures
 STATE_COLUMNS = ["step", "state", "agent", "reason", "time"]
 CLAIM_COLUMNS = ["package", "agent", "time", "branch"]
 FAULT_COLUMNS = ["time", "agent", "step", "kind", "check", "test", "first_error", "run_folder", "could_not"]
-LANDING_COLUMNS = ["step", "commit", "finished", "seconds", "agent", "main"]
+LANDING_COLUMNS = ["step", "commit", "finished", "seconds", "agent", "main", "figures"]
 RECORD_COLUMNS = ["step", "branch", "tip", "time", "pid"]
 AHEAD_COLUMNS = ["step", "after", "base", "handed", "time"]
 OWED_COLUMNS = ["time", "agent", "step", "text"]
 REPAIR_COLUMNS = ["id", "opened", "source", "kind", "check", "renderer", "step", "commit", "evidence", "row", "state", "closed",
                   "seen", "note"]
 PENDING_COLUMNS = ["time", "commit", "branches", "candidate", "run_folder", "rerun"]
-REPAIR_SOURCES = ("nightly", "stress", "measure", "github")
+MEND_COLUMNS = ["id", "step", "title", "check", "state", "opened", "closed", "commit", "note", "attempts"]
+MEND_STATES = ("open", "closed", "failed", "dropped")     # dropped: the fault needs game code, the step is the agent's again
+MEND_ATTEMPTS = 3      # the helper, a second helper, the agent itself; only then the step is blocked
+REPAIR_SOURCES = ("nightly", "stress", "measure", "github", "flake")
 REPAIR_KINDS = ("fail", "stress", "worse")
 REPAIR_STATES = ("open", "started", "landed", "confirmed", "set-aside")   # confirmed: landed, and a later long run passed its check
 STALE_HOURS = 48
@@ -262,7 +268,7 @@ def read_landings(live):
     return read_rows(pathlib.Path(live) / "landings.tsv", LANDING_COLUMNS)
 
 
-def add_landing(live, step, commit, seconds, agent=1, now=None, main="-"):
+def add_landing(live, step, commit, seconds, agent=1, now=None, main="-", figures="-"):
     """One line for each step id: a step already in the list is left as it is (what follows a pass is done once, whoever does
     it), except that a main commit that was not known (`-`) is filled in. Returns True when a line was added."""
     path = pathlib.Path(live) / "landings.tsv"
@@ -271,12 +277,16 @@ def add_landing(live, step, commit, seconds, agent=1, now=None, main="-"):
         rows = read_rows(path, LANDING_COLUMNS)
         old = next((r for r in rows if r["step"] == step), None)
         if old is not None:
+            changed = False
             if main != "-" and old["main"] in ("", "-"):
-                old["main"] = main
+                old["main"], changed = main, True
+            if clean(figures) not in ("", "-") and old.get("figures", "") in ("", "-"):
+                old["figures"], changed = clean(figures), True
+            if changed:
                 write_rows(path, LANDING_COLUMNS, rows)
             return False
         rows.append({"step": step, "commit": commit, "finished": stamp(now), "seconds": str(int(seconds)), "agent": str(agent),
-                     "main": main})
+                     "main": main, "figures": clean(figures) or "-"})
         write_rows(path, LANDING_COLUMNS, rows)
         return True
 
@@ -485,3 +495,104 @@ def repair_traced(r):
         return "not traced to a landing"
     return "traced to %s" % " ".join(x for x in ("step " + r["step"] if r["step"] not in ("", "-") else "",
                                                  "commit " + r["commit"] if r["commit"] not in ("", "-") else "") if x)
+
+
+# ---- tool mends ----------------------------------------------------------------------------------------------------------
+# A tool at fault is mended by one helper while the agent waits (docs/plan/native/TOOL-MEND.md). One line for each mend in mends.tsv;
+# the fault sheet is mends/M-00N.md. The waiting step stays `started` in state.tsv with the reason `waits for M-00N`.
+
+MEND_ID = re.compile(r"^M-(\d{3,})$")
+
+
+def mends_dir(live):
+    return pathlib.Path(live) / "mends"
+
+
+def sheet_path(live, mend_id):
+    return mends_dir(live) / ("%s.md" % mend_id)
+
+
+def read_mends(live):
+    return read_rows(pathlib.Path(live) / "mends.tsv", MEND_COLUMNS)
+
+
+def next_mend_id(live):
+    """The next free M-00N: above every line of mends.tsv and every sheet in the mends folder (a sheet written by hand counts)."""
+    top = 0
+    names = [r["id"] for r in read_mends(live)]
+    folder = mends_dir(live)
+    if folder.is_dir():
+        names += [f.stem for f in folder.glob("M-*.md")]
+    for name in names:
+        m = MEND_ID.match(name)
+        if m:
+            top = max(top, int(m.group(1)))
+    return "M-%03d" % (top + 1)
+
+
+def open_mend(live):
+    """The mend that is open (at most one is), or None."""
+    return next((r for r in read_mends(live) if r["state"] == "open"), None)
+
+
+def add_mend(live, step, title, check="-", state="open", commit="-", note="-", now=None):
+    """Appends a mend (state `open`, or `closed` with its commit for one recorded after a landing by hand). Returns the row."""
+    path = pathlib.Path(live) / "mends.tsv"
+    with locked(live):
+        rows = read_mends(live)
+        row = {"id": next_mend_id(live), "step": clean(step) or "-", "title": clean(title), "check": clean(check) or "-", "state": state,
+               "opened": stamp(now), "closed": stamp(now) if state != "open" else "-", "commit": clean(commit) or "-",
+               "note": clean(note) or "-", "attempts": "0"}
+        rows.append(row)
+        write_rows(path, MEND_COLUMNS, rows)
+    return {k: clean(v) for k, v in row.items()}
+
+
+def set_mend(live, mend_id, state, commit=None, note=None, now=None, attempts=None):
+    """The mend's state (`closed` or `failed` end it; the time is written), its commit and its note. Returns the row or None."""
+    path = pathlib.Path(live) / "mends.tsv"
+    with locked(live):
+        rows = read_mends(live)
+        for r in rows:
+            if r["id"] == mend_id:
+                r["state"] = state
+                if state != "open":
+                    r["closed"] = stamp(now)
+                if commit is not None:
+                    r["commit"] = commit
+                if note is not None:
+                    r["note"] = note
+                if attempts is not None:
+                    r["attempts"] = str(attempts)
+                write_rows(path, MEND_COLUMNS, rows)
+                return {k: clean(v) for k, v in r.items()}
+    return None
+
+
+# ---- the heartbeat -----------------------------------------------------------------------------------------------------------
+
+HEARTBEAT_HOURS = 3.0
+
+
+def heartbeat_path(live):
+    return pathlib.Path(live) / "heartbeat.txt"
+
+
+def write_heartbeat(live, now=None):
+    """The time of this command, in one line. Never raises: a heartbeat that cannot be written is no fault of the command."""
+    try:
+        pathlib.Path(live).mkdir(parents=True, exist_ok=True)
+        atomic_write(heartbeat_path(live), stamp(now) + "\n")
+    except OSError:
+        pass
+
+
+def heartbeat_age_hours(live, now=None):
+    """Hours since the last heartbeat, or None when there is none."""
+    try:
+        last = parse_stamp(heartbeat_path(live).read_text(encoding="utf-8").strip())
+    except OSError:
+        return None
+    if last is None:
+        return None
+    return ((now or datetime.datetime.now()) - last).total_seconds() / 3600.0

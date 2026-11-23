@@ -347,6 +347,33 @@ def read_aside(path):
     return {(c[1], c[2]): c[0] for c in read_lines(path) if len(c) >= 3}
 
 
+FLAKE_CHECK = "flake:"      # the repair's check of a test set aside: `flake:<test>`; the repair's renderer is the test's
+
+
+def end_set_aside(path, check, renderer, note=""):
+    """The test of repair check `flake:<test>` counts again: its line leaves set-aside.tsv (`path`), and its lines leave flakes.tsv beside
+    it, so that the window of seven days starts new. True when a line of the set-aside list went."""
+    if not str(check).startswith(FLAKE_CHECK):
+        return False
+    test = str(check)[len(FLAKE_CHECK):]
+    path = pathlib.Path(path)
+    removed = False
+    for name in (path, path.with_name("flakes.tsv")):
+        if not name.is_file():
+            continue
+        keep, dropped = [], False
+        for line in name.read_text(encoding="utf-8").splitlines():
+            c = line.split("\t")
+            if len(c) > 2 and line.strip() and not line.startswith("#") and c[1] == test and c[2] == renderer:
+                dropped = True
+                continue
+            keep.append(line)
+        if dropped:
+            name.write_text("\n".join(keep) + ("\n" if keep else ""), encoding="utf-8", newline="\n")
+            removed = removed or name == path
+    return removed
+
+
 def flakes_within(path, test, renderer, now, days=FLAKE_DAYS):
     """How many lines of flakes.tsv (`time<TAB>test<TAB>renderer<TAB>commit<TAB>message`) name this test and renderer
     within `days` before `now`."""
@@ -391,6 +418,9 @@ class Settler:
         self.say = say
         self.open_rows = []
         self.newly_aside = []
+        # The third flake of a test in seven days: [{check, test, renderer, message, count}]. The gate opens one repair for each (source
+        # `flake`), and the repair, once landed, ends the time the test is set aside (end_set_aside).
+        self.flake_results = []
         # The stress lane's (Cases.stress): what failed with the other copies running and passed alone, [{check, test, renderer,
         # message, folder}], and the tests that were only too slow under the load (not a fault, only counted).
         self.stress_results = []
@@ -489,9 +519,8 @@ class Settler:
             append_line(self.aside, (self.now().isoformat(timespec="seconds"), test, cases.renderer,
                                      "%d flakes in %d days" % (n, FLAKE_DAYS)))
             self.newly_aside.append((test, cases.renderer))
-            self.open_rows.append("set aside: %s on %s flaked %d times in %d days; it still runs and is reported, it does "
-                                  "not count" % (test, cases.renderer, n, FLAKE_DAYS))
-            self.say("%s: %s is set aside (%d flakes in %d days): open a ledger row" % (check, test, n, FLAKE_DAYS))
+            self.flake_results.append({"check": check, "test": test, "renderer": cases.renderer, "message": first_message, "count": n})
+            self.say("%s: %s is set aside (%d flakes in %d days): a repair is opened for it" % (check, test, n, FLAKE_DAYS))
 
     def against_main(self, check, cases, still):
         names = [r["test"] for r in still]

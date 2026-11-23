@@ -132,10 +132,12 @@ import landing  # noqa: E402
 import lockholder  # noqa: E402
 import long_parts  # noqa: E402
 import machine  # noqa: E402
+import noprompt  # noqa: E402
 import pictures as picture_tool  # noqa: E402
 import replays_software  # noqa: E402
 import scope  # noqa: E402
 import speedbase  # noqa: E402
+import strictness  # noqa: E402
 import step_hash  # noqa: E402
 import judged  # noqa: E402
 import sanitizer  # noqa: E402
@@ -361,6 +363,7 @@ class Gate:
         self.data_paks = {}   # disc -> its game.pak, once the data check found or made it
         self.main_ref = MAIN_REF
         self.open_rows = []
+        self.flake_results = []       # the tests the run set aside: one repair is opened for each (stress.open_flake_repairs)
         self.aside = kinds.read_aside(SET_ASIDE)
         self.verdict = None
         self.github = getattr(args, "github_form", None)   # how a landing meets GitHub: "first" (waited), "after" (read after the move)
@@ -597,10 +600,15 @@ class Gate:
             print("%-34s %-7s %7.1f s  %s" % (row["check"], LABELS.get(row["state"], row["state"]), row["seconds"],
                                               row["detail"]), flush=True)
         self.open_rows += settler.open_rows
+        self.flake_results += settler.flake_results
         if settler.stress_results:
             # The stress lane's results: the run folder is kept whole, and one repair is opened for each (never a fault of the run).
             stress.open_repairs(getattr(self.args, "live", NATIVE), self.work, self.commit, settler.stress_results,
                                 say=lambda text: print(text, flush=True))
+        live = getattr(self.args, "live", "")
+        if settler.flake_results and live:
+            # The third flake of a test in seven days sets it aside and opens one repair (source flake): find whether the test or the game is at fault.
+            stress.open_flake_repairs(live, self.work, self.commit, settler.flake_results, say=lambda text: print(text, flush=True))
         self.aside = kinds.read_aside(SET_ASIDE)
 
     def plan_rows(self):
@@ -894,6 +902,22 @@ def code_checks(tree=TREE, scripts=CODE_CHECKS, log=None):
 def repo_code(g):
     def fn(log):
         return code_checks(TREE, log=log)
+    return fn
+
+
+def repo_strictness(g):
+    """A change to a place that can make a check see less needs its line in docs/plan/strictness-log.tsv (tools/gate/strictness.py). Each
+    branch the run covers is judged against main on its own; a `mend/*` branch may not change the game's source. A run on main's own
+    newest commit has no change and passes."""
+    def fn(log):
+        names = [n.strip() for n in str(getattr(g.args, "covers", "") or "").split(",") if n.strip()]
+        try:
+            lines = strictness.check_branches(TREE, MAIN_REF, names)
+        except strictness.StrictnessError as error:
+            return False, "strictness.py could not judge: %s" % error, None, "tool"
+        text = ("\n".join(lines) + "\n") if lines else "no change in a listed place without its line in the log\n"
+        pathlib.Path(log).write_text(text, encoding="utf-8")
+        return (not lines), (lines[0] if lines else "no change in a listed place without its line in the log")
     return fn
 
 
@@ -1973,6 +1997,33 @@ def owed_line(who, mode, name, commit, owed):
         who, what, mode, name, commit[:9], ", ".join(owed), when, rows))
 
 
+TABLET_OWED = "tablet-owed.tsv"       # in the live folder: time, commit, the tablet's checks a landing owed (the progress page says the tablet is away)
+
+
+def tablet_check(name):
+    return name in TABLET_NAMES or name == MEASURE_TABLET_CHECK
+
+
+def record_tablet_owed(live, commit, results, now=None):
+    """After a landing that moved main: the tablet's checks it owed are one line of tablet-owed.tsv (the page shows "Tablet away since ...:
+    n checks owed"); a landing that played a tablet check clears the file (the tablet is back). Never fails the run."""
+    if not live:
+        return
+    path = pathlib.Path(live) / TABLET_OWED
+    try:
+        owed = [r["check"] for r in results if r["state"] == "owed" and tablet_check(r["check"])]
+        played = any(r["state"] in ("pass", "known", "fail", "worse") and tablet_check(r["check"]) for r in results)
+        if played:
+            path.unlink(missing_ok=True)
+        elif owed:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            stamp = (now or datetime.datetime.now()).isoformat(timespec="seconds")
+            with open(path, "a", encoding="utf-8", newline="\n") as f:
+                f.write("%s\t%s\t%s\n" % (stamp, commit[:9], ",".join(owed)))
+    except OSError as error:
+        print("gate.py: %s was not written: %s" % (TABLET_OWED, error), flush=True)
+
+
 # Who goes first among the lock's waiters (07-BASE-FIRST, How the work flows: the long run does not take the lock
 # while a landing waits): a landing's gate (quick or main) before the work that waits for no one (the long run's
 # parts, the measure, queued loops), otherwise first come. gate.py keeps the order, not the agents.
@@ -2093,17 +2144,27 @@ def quick_passed(work, commit, whole=False):
     return None
 
 
-def take_device_lock(path, who):
-    """The device's lock (tools/lumacore/luma_test_android.py's): None when taken, else who holds it."""
+def take_device_lock(path, who, alive=process_alive, started=lockholder.process_started):
+    """The device's lock (tools/lumacore/luma_test_android.py's): None when taken, else who holds it. The holder line ends with the
+    holder's `since T pid N`; a holder whose process has ended (or runs from another start) loses the lock, with one printed line, so that a
+    run that died with the lock does not keep the tablet away for ever. A lock taken by hand (no pid in its line) holds until it is freed."""
     lock = pathlib.Path(path)
-    try:
-        lock.mkdir()
-    except FileExistsError:
-        holder = lock / "holder.txt"
-        return holder.read_text(encoding="utf-8", errors="replace").strip() if holder.exists() else "unknown"
-    (lock / "holder.txt").write_text("%s %s\n" % (who, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
-                                     encoding="utf-8")
-    return None
+    for _ in range(3):
+        try:
+            lock.mkdir()
+        except FileExistsError:
+            holder = lock / "holder.txt"
+            text = holder.read_text(encoding="utf-8", errors="replace").strip() if holder.exists() else "unknown"
+            old = lockholder.gone(text, alive, started)
+            if old is not None and old != os.getpid():
+                print("gate.py: the device lock %s was held by pid %d, which has ended: taken over (%s)" % (lock, old, text), flush=True)
+                shutil.rmtree(lock, ignore_errors=True)
+                continue
+            return text
+        (lock / "holder.txt").write_text("%s %s %s\n" % (who, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), lockholder.named()),
+                                         encoding="utf-8")
+        return None
+    return "the device lock could not be taken"
 
 
 # What each line of pictures.py check starts with, as a kind (tools/gate/kinds.py).
@@ -2607,6 +2668,15 @@ PUSH_WAITS = (15, 30, 60, 120, 240)
 PUSH_NETWORK_TEXTS = ("unable to access", "could not resolve host", "connection was reset", "connection reset", "timed out",
                       "failed to connect", "remote end hung up", "rpc failed", "early eof", "returned error: 5")
 PUSH_REFUSED_TEXTS = ("returned error: 4", "[rejected]", "[remote rejected]")
+# What git says when GitHub wants a sign-in nobody is there to give (noprompt.py keeps git from asking): nothing is landed, the page says so.
+SIGN_IN_TEXTS = ("authentication failed", "could not read username", "could not read password", "terminal prompts disabled", "invalid username",
+                 "bad credentials", "permission denied (publickey)", "returned error: 401", "returned error: 403")
+SIGN_IN = "GitHub sign-in needed"
+
+
+def needs_sign_in(text):
+    low = (text or "").lower()
+    return any(k in low for k in SIGN_IN_TEXTS)
 
 
 def push_is_network(text):
@@ -2656,6 +2726,8 @@ def move_main(sha, run_name, work, board, who, covers, tree=TREE, sleep=time.sle
                 break
             if now and now != before:
                 return main_moved(now)
+        if needs_sign_in(text):
+            return "%s: the push of main was refused (%s)" % (SIGN_IN, " ".join(text.split())[-200:])
         if not push_is_network(text):
             if "pre-push" in text or "census" in text.lower() or "ratchet" in text.lower():
                 return "the pre-push hook refuses main (a repository rule): %s" % text[-300:]
@@ -3211,6 +3283,7 @@ def build_part(g):
     g.check("repo/audit", repo_audit(g))
     g.check("repo/scripts", parse_scripts(g))
     g.check("repo/code", repo_code(g))
+    g.check("repo/strictness", repo_strictness(g))
     if not g.args.no_build and g.check("build/windows", build_windows(g)) is False:
         return False
     # The game data by key, found or made with this build's importer (a disc's data under the tree's own importer is another
@@ -4420,6 +4493,7 @@ def run_main(argv, left):
     # What the gate starts (builds, test runs, a landing's measure) never waits for a speed measure: the gate has the machine's
     # lock itself, and a measure it started is its own (tools/gate/measure_wait.py).
     os.environ["NEBULA_NO_MEASURE_WAIT"] = "1"
+    noprompt.install()     # no git prompt and no crash box for anything the gate starts (tools/gate/noprompt.py)
     argv = sys.argv[1:] if argv is None else list(argv)
     unbuffer_output()
     # The run's job object (machine.py): every program the gate starts, and theirs, ends with it, however it ends. Once a process.
@@ -4616,6 +4690,8 @@ def run_main(argv, left):
         owed = [r["check"] for r in g.results if r["state"] == "owed"]
         if owed and args.board:
             board_line(args.board, owed_line(args.who, args.mode, g.name, commit, owed))
+        if args.move and code == 0:
+            record_tablet_owed(getattr(args, "live", ""), commit, g.results)
         if args.move and code == 0 and not (watch is not None and watch.red):
             # The machine is free for the next gate from here (section 5.5); this process waits for GitHub alone, when the
             # plan has a GitHub part, and moves main once every `must` job is green for the commit.
@@ -4690,6 +4766,8 @@ def run_main(argv, left):
                 print("gate.py: main not moved: " + why, file=sys.stderr)
                 if kind == "hook":
                     print("KIND fail pre-push - :: " + " ".join(why.split()), flush=True)
+                elif why.startswith(SIGN_IN):
+                    print("KIND env github/sign-in - :: " + " ".join(why.split()), flush=True)
                 moved_line = "NOT-MOVED %s %s" % (kind, why)
                 board_line(args.board, "%s NOTICE: main gate %s on %s passed its checks; main not moved: %s." % (
                     args.who, g.name, commit[:9], why))
@@ -4873,6 +4951,11 @@ def land_main(argv):
     settle_github_pending(args.live)     # the jobs of landings that moved main before GitHub finished: read now, never waited for
     if bool(args.branches) == bool(args.queue):
         print("gate.py: land takes branches to put in the queue, or --queue to run what waits: one of the two", file=sys.stderr)
+        print(kinds.verdict_line("not-judged"), flush=True)
+        return landing.EXIT_NOT_JUDGED
+    planted = landing.plant_branches(args.branches)
+    if planted:
+        print("gate.py: refused: %s: %s" % (", ".join(planted), landing.PLANT_REFUSAL), file=sys.stderr)
         print(kinds.verdict_line("not-judged"), flush=True)
         return landing.EXIT_NOT_JUDGED
     also = landing.also_names(args.also)

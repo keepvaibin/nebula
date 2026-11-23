@@ -141,7 +141,7 @@ class MovePush(unittest.TestCase):
         self.assertEqual(gate.not_moved_kind(why), "other")
 
     def test_http_4xx_is_not_tried_again(self):
-        text = "fatal: unable to access 'https://github.com/keepvaibin/nebula.git/': The requested URL returned error: 403"
+        text = "fatal: unable to access 'https://github.com/keepvaibin/nebula.git/': The requested URL returned error: 404"
         fake = FakeGit([("fail", text)])
         why, err = self.move(fake)
         self.assertEqual(why, "the push of main failed: " + text)

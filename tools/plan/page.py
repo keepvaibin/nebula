@@ -31,6 +31,18 @@ LAST_FAULTS = 20
 NO_DATA = "The progress data could not be loaded. On the PC, open progress.html in the folder above this one."
 WAIT_SECONDS = 3
 OWED_FIELDS = ("time", "agent", "step", "text")
+DECISION_FIELDS = ("date", "step", "what", "because", "doc")
+STRICTNESS_FIELDS = ("date", "file", "what changed", "why", "allowed by", "id", "removed by")
+OWNER = "owner:"          # a step blocked with a reason that begins so waits for the owner: the page lists it apart
+OLD_PAGE = "If this time is more than three hours old, the work has stopped: open the session and send the word continue."
+
+
+def is_owner_question(reason):
+    return (reason or "").strip().startswith(OWNER)
+
+
+def reason_of(step, state):
+    return (state.get(step["step"]) or {}).get("reason", "") or step.get("reason", "")
 REPAIR_FIELDS = ("id", "opened", "source", "kind", "check", "renderer", "step", "commit", "evidence", "row", "state", "closed",
                  "seen", "note")
 
@@ -47,21 +59,27 @@ def make_static(steps):
             "steps": [{"id": s["step"], "package": s["package"], "title": s["title"]} for s in steps]}
 
 
-def make_data(steps, landings, state, claims, stale, faults, flakes, now, set_aside=(), repairs=(), owed=(), note=""):
+def make_data(steps, landings, state, claims, stale, faults, flakes, now, set_aside=(), repairs=(), owed=(), note="", mends=(),
+              decisions=(), strictness=(), tablet=None, locks=(), alive="", signin=""):
     """What changes. `steps`: plan.read_steps (state, commit, agent). `landings`: live.read_landings. `state`:
     live.read_state. `claims`: live.read_claims. `stale`: set of stale package names. `faults`: live.fault_groups.
     `flakes`: a count. `now`: the time of writing (text). `set_aside`: [{test, renderer, since, why}] of the tests the gate
     has set aside (its flakes.tsv and set-aside.tsv are in the live folder). `repairs`: [dict] of repairs.tsv, in the order
     to show (live.repair_order: open ones of kind fail first). `owed`: [dict] of owed.tsv (what only a person or other
     hardware can check), oldest first. `note`: the line the planner leaves for the page (plan.read_note), under the count; no key
-    "note" in the data when there is none.
+    "note" in the data when there is none. `mends`: [{id, step, title, state, minutes, commit, note}] (plan.py mend); `decisions`:
+    [{date, step, what, because, doc}] (docs/plan/native/decisions.tsv); `strictness`: the lines of docs/plan/strictness-log.tsv (the
+    checks changed during the run); `tablet`: None, or {since, owed} when the tablet's checks are owed; `locks`: [text] of a lock held by
+    hand for more than 30 minutes; `alive`: working, ended or stale (plan.py alive).
 
     "steps" is keyed by step id and has no entry for a step still open; an entry has `state`, and `agent` (a started or
     blocked step), `commit` (the code's commit on the step's branch), `main` (the commit main moved to, when the tool knows it) and
     `time` (a landed step; the time is the landing's, when the tool recorded it)."""
-    when, on_main = {}, {}
+    when, on_main, figures = {}, {}, {}
     for r in landings:
         when[r["step"]] = r["finished"]
+        if r.get("figures") not in (None, "", "-"):
+            figures[r["step"]] = r["figures"]
         if r.get("main") not in (None, "", "-"):
             on_main[r["step"]] = r["main"]
     by_step = {}
@@ -74,6 +92,8 @@ def make_data(steps, landings, state, claims, stale, faults, flakes, now, set_as
         if s["state"] == "landed":
             if s["commit"]:
                 e["commit"] = s["commit"]
+            if figures.get(s["step"]):
+                e["figures"] = figures[s["step"]]
             if on_main.get(s["step"]):
                 e["main"] = on_main[s["step"]]
             if when.get(s["step"]):
@@ -82,9 +102,10 @@ def make_data(steps, landings, state, claims, stale, faults, flakes, now, set_as
     data = {
         "generated": now,
         "steps": by_step,
-        "blocked": [{"step": s["step"], "agent": s.get("agent") or "1",
-                     "reason": (state.get(s["step"]) or {}).get("reason", "") or s.get("reason", "")}
-                    for s in steps if s["state"] == "blocked"],
+        "blocked": [{"step": s["step"], "agent": s.get("agent") or "1", "reason": reason_of(s, state)}
+                    for s in steps if s["state"] == "blocked" and not is_owner_question(reason_of(s, state))],
+        "owner": [{"step": s["step"], "title": s["title"], "question": reason_of(s, state)[len(OWNER):].strip()}
+                  for s in steps if s["state"] == "blocked" and is_owner_question(reason_of(s, state))],
         "claims": [{"package": c["package"], "agent": c["agent"], "time": c["time"], "branch": c["branch"],
                     "stale": c["package"] in stale} for c in claims],
         "tool_faults": [{k: g[k] for k in ("signature", "count", "first_seen", "last_seen", "step", "agent", "kind", "check",
@@ -93,7 +114,17 @@ def make_data(steps, landings, state, claims, stale, faults, flakes, now, set_as
         "set_aside": [dict(a) for a in set_aside],
         "repairs": [{k: r.get(k, "") for k in REPAIR_FIELDS} for r in repairs],
         "owed": [{k: r.get(k, "") for k in OWED_FIELDS} for r in owed],
+        "mends": [dict(m) for m in mends],
+        "decisions": [{k: r.get(k, "") for k in DECISION_FIELDS} for r in decisions],
+        "strictness": [{k: r.get(k, "") for k in STRICTNESS_FIELDS} for r in strictness],
+        "locks": list(locks),
     }
+    if tablet:
+        data["tablet"] = dict(tablet)
+    if alive:
+        data["alive"] = alive
+    if signin:
+        data["signin"] = signin
     if note:
         data["note"] = note
     return data
@@ -218,7 +249,7 @@ h2 { font-size: 1.05rem; margin: 28px 0 10px; }
 
   function draw(d) {
     app.textContent = "";
-    document.getElementById("when").textContent = "Written " + d.generated;
+    document.getElementById("when").textContent = "Written " + d.generated + ". __OLDPAGE__";
     var st = d.steps || {};
     function stateOf(id) { return st[id] ? st[id].state : "open"; }
     var n = { landed: 0, started: 0, blocked: 0 };
@@ -229,6 +260,21 @@ h2 { font-size: 1.05rem; margin: 28px 0 10px; }
     if (d.note) top.appendChild(el("div", "now", "Now: " + d.note));
     top.appendChild(bar([["landed", n.landed], ["started", n.started], ["blocked", n.blocked]], S.total));
     app.appendChild(top);
+    if (d.signin) {
+      var gh = el("div", "card");
+      gh.appendChild(el("b", "tag bad", "GitHub sign-in needed since " + d.signin + ": nothing can be landed until someone signs in"));
+      app.appendChild(gh);
+    }
+    if (d.tablet) {
+      var tb = el("div", "card");
+      tb.appendChild(el("b", "tag stale", "Tablet away since " + d.tablet.since + ": " + d.tablet.owed + " checks owed"));
+      app.appendChild(tb);
+    }
+    (d.locks || []).forEach(function (text) {
+      var lk = el("div", "card");
+      lk.appendChild(el("b", "tag stale", text));
+      app.appendChild(lk);
+    });
 
     section("Packages");
     var pk = el("div", "card");
@@ -274,6 +320,7 @@ h2 { font-size: 1.05rem; margin: 28px 0 10px; }
       head(c, s.id);
       c.appendChild(el("div", "muted", st[s.id].time + (st[s.id].commit ? "  commit " + st[s.id].commit : "") +
                        (st[s.id].main ? "  main " + st[s.id].main : "")));
+      if (st[s.id].figures) c.appendChild(el("div", "muted", "Speed: " + st[s.id].figures));
       app.appendChild(c);
     });
 
@@ -318,6 +365,57 @@ h2 { font-size: 1.05rem; margin: 28px 0 10px; }
              ["Seen", r.seen + (r.seen === "1" ? " time" : " times")], ["Source", r.source], ["Opened", r.opened],
              ["Ledger row", dash(r.row)], ["Evidence", dash(r.evidence), "err"], ["Closed by", dash(r.closed)],
              ["Note", dash(r.note)]]);
+      app.appendChild(c);
+    });
+
+    var owner = d.owner || [];
+    section("Waiting for the owner (" + owner.length + ")");
+    if (!owner.length) none("Nothing waits for the owner.");
+    owner.forEach(function (q) {
+      var c = el("div", "card");
+      head(c, q.step, [el("span", "tag stale", "owner")]);
+      c.appendChild(el("div", null, q.question));
+      app.appendChild(c);
+    });
+
+    var mends = d.mends || [];
+    section("Tool mends (" + mends.length + ")");
+    if (!mends.length) none("No tool was mended.");
+    mends.forEach(function (m) {
+      var c = el("div", "card");
+      var r = el("div", "row");
+      r.appendChild(el("b", null, m.id));
+      r.appendChild(el("span", "tag" + (m.state === "failed" ? " bad" : (m.state === "open" ? " stale" : "")), m.state));
+      r.appendChild(el("span", null, m.title));
+      c.appendChild(r);
+      kv(c, [["Step", m.step === "-" ? "" : m.step], ["Attempts", m.attempts === "0" || !m.attempts ? "" : m.attempts + " of 3"], ["Minutes", m.minutes], ["Commit", m.commit === "-" ? "" : m.commit, "err"],
+             ["Note", m.note === "-" ? "" : m.note]]);
+      app.appendChild(c);
+    });
+
+    var decisions = d.decisions || [];
+    section("Decisions (" + decisions.length + ")");
+    if (!decisions.length) none("The agent has decided nothing yet.");
+    decisions.forEach(function (x) {
+      var c = el("div", "card");
+      head(c, x.step, [el("span", "muted", x.date)]);
+      c.appendChild(el("div", null, x.what));
+      kv(c, [["Because", x.because], ["Document", x.doc === "-" ? "" : x.doc]]);
+      app.appendChild(c);
+    });
+
+    var strict = d.strictness || [];
+    section("Checks changed during the run (" + strict.length + ")");
+    if (!strict.length) none("No check was changed.");
+    strict.forEach(function (x) {
+      var c = el("div", "card");
+      var r = el("div", "row");
+      r.appendChild(el("b", null, x.id));
+      r.appendChild(el("span", "err", x.file));
+      r.appendChild(el("span", "muted", x.date));
+      c.appendChild(r);
+      c.appendChild(el("div", null, x["what changed"]));
+      kv(c, [["Why", x.why], ["Allowed by", x["allowed by"]], ["Removed by", x["removed by"] === "-" ? "" : x["removed by"]]]);
       app.appendChild(c);
     });
 
@@ -409,7 +507,7 @@ def render(static, data=None):
         local = '\n<script type="application/json" id="embedded-data">%s</script>' % embed(data)
     head, _, rest = PAGE.partition("__STATIC__")      # one pass: no title or reason can be taken for a marker
     mid, _, tail = rest.partition("__LOCAL__")
-    tail = tail.replace("__WAIT__", str(WAIT_SECONDS)).replace("__NODATA__", NO_DATA)
+    tail = tail.replace("__WAIT__", str(WAIT_SECONDS)).replace("__NODATA__", NO_DATA).replace("__OLDPAGE__", OLD_PAGE)
     return head + embed(static) + mid + local + tail
 
 
@@ -451,8 +549,13 @@ def make_status(static, data, landings, faults, now):
     title = {s["id"]: s["title"] for s in static["steps"]}
     landed = sum(1 for s in static["steps"] if state(s["id"]) == "landed")
     started = [s for s in static["steps"] if state(s["id"]) == "started"]
-    out = ["# Nebula native plan: status", "", "Written %s." % minute(now), "",
+    out = ["# Nebula native plan: status", "", "Written %s. %s" % (minute(now), OLD_PAGE), "",
            "Steps landed: %d of %d (%d%%)." % (landed, total, round(100.0 * landed / total) if total else 0), ""]
+    if data.get("signin"):
+        out += ["GitHub sign-in needed since %s: nothing can be landed until someone signs in." % minute(data["signin"]), ""]
+    if data.get("tablet"):
+        out += ["Tablet away since %s: %s checks owed." % (minute(data["tablet"]["since"]), data["tablet"]["owed"]), ""]
+    out += ["%s." % l for l in data.get("locks", [])] + [""] if data.get("locks") else []
     if data.get("note"):
         out += ["Now: " + data["note"], ""]
     if started:
@@ -484,9 +587,22 @@ def make_status(static, data, landings, faults, now):
     out += ["", "## For the owner to check by hand", ""]
     out += ["- %s %s: %s (agent %s, %s)" % (o["step"], title.get(o["step"], ""), " ".join(o["text"].split()), o["agent"], minute(o["time"]))
             for o in owed] or ["Nothing is owed."]
+    out += ["", "## Waiting for the owner", ""]
+    out += ["- %s %s: %s" % (q["step"], q["title"], cell(q["question"])) for q in data.get("owner", [])] or ["Nothing waits for the owner."]
     out += ["", "## Blocked", ""]
     out += ["- %s %s: %s" % (b["step"], title.get(b["step"], ""), " ".join((b["reason"] or "(no reason written)").split()))
             for b in data["blocked"]] or ["Nothing is blocked."]
+    mends = data.get("mends", [])
+    out += ["", "## Tool mends", ""]
+    out += table(["Id", "State", "Step", "Title", "Attempts", "Minutes", "Commit"],
+                 [(m["id"], m["state"], m["step"], m["title"], m.get("attempts", "0"), m["minutes"], m["commit"]) for m in mends]) if mends else ["No tool was mended."]
+    decisions = data.get("decisions", [])
+    out += ["", "## Decisions (%d)" % len(decisions), ""]
+    out += ["- %s %s: %s (because %s)" % (d["date"], d["step"], cell(d["what"]), cell(d["because"])) for d in decisions] or ["None."]
+    strict = data.get("strictness", [])
+    out += ["", "## Checks changed during the run (%d)" % len(strict), ""]
+    out += ["- %s %s %s: %s (allowed by %s)" % (s["date"], s["id"], s["file"], cell(s["what changed"]), cell(s["allowed by"]))
+            for s in strict] or ["None."]
     out += ["", "## Tool faults", "", "%d tool fault%s recorded." % (len(faults), "" if len(faults) == 1 else "s")]
     if faults:
         out += ["", "The last %d:" % LAST_FAULTS, ""]

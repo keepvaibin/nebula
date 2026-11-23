@@ -38,14 +38,15 @@ param(
     [string]$SccacheDir = "D:/NebulaWork/sccache",
     # A build started by hand waits while a speed measure holds this lock (tools/gate/measure_wait.py), at most this many minutes.
     [string]$MeasureLock = "D:/NebulaWork/plan/measure.lock",
-    [double]$MeasureWaitMinutes = 15
+    [double]$MeasureWaitMinutes = 40
 )
 # Started by hand (the gate and a landing set NEBULA_NO_MEASURE_WAIT for what they start): one line and a wait while a speed
-# measure runs, so the build does not spoil its figures; after the minutes given it builds anyway.
+# measure runs, so the build does not spoil its figures; a measure that still runs after the minutes given ends the script with 3, nothing built.
 if (-not $env:NEBULA_NO_MEASURE_WAIT) {
     $waitPython = Get-Command python -ErrorAction SilentlyContinue
     if ($waitPython) {
-        & $waitPython.Source -X utf8 -I (Join-Path $PSScriptRoot "measure_wait.py") --lock $MeasureLock --minutes $MeasureWaitMinutes
+        & $waitPython.Source -X utf8 -I (Join-Path $PSScriptRoot "measure_wait.py") --lock $MeasureLock --minutes $MeasureWaitMinutes --stop
+        if ($LASTEXITCODE -ne 0) { exit 3 }
     }
 }
 $ErrorActionPreference = "Stop"

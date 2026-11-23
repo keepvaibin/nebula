@@ -628,8 +628,13 @@ class LandTest(LandBase):
 
     def test_the_allow_list_of_the_branch_lets_a_known_outside_reference_through(self):
         self.ready()
+        # The allow-list is a place that can make a check see less: the card names the file, and the strictness log has its line.
+        card = (CARDS + "\n### D.1 Last step\n\n- **Rows.** None.\n").replace(
+            "`runtime/src/render/a.cpp`, ", "`runtime/src/render/a.cpp`, `tools/verify/doc_refs_allow.txt`, ")
+        line = "\t".join(["2026-11-22", "tools/verify/doc_refs_allow.txt", "one outside reference", "a test", "plan_test", "A.1", "-"])
         self.t.commit("A.1", "allow", {"tools/verify/doc_refs_allow.txt": "docs/note.md :: x/y/z.cpp\n",
-                                       "docs/note.md": "`x/y/z.cpp`\n"})
+                                       "docs/note.md": "`x/y/z.cpp`\n", "docs/plan/native/03-X.md": card,
+                                       "docs/plan/strictness-log.tsv": "\t".join(plan.strictness.LOG_COLUMNS) + "\n" + line + "\n"})
         self.land(expect=0)
 
     def test_refuses_uncommitted_changes_and_a_missing_folder_and_a_step_not_started(self):
@@ -1073,8 +1078,7 @@ class RepairNextTest(unittest.TestCase):
                 "Ledger row: P-001",
                 "Note: stop 025 differs",
                 "",
-                "Read the evidence first. Find the cause and fix the game, not the test. If the test tool is at fault, do not "
-                "debug it: plan.py tool \"<what the tool did>\", then plan.py blocked for this repair.",
+                plan.REPAIR_RULES % "R-001",
                 "",
                 "=== COMMANDS ===",
                 "start: python -X utf8 -I %s start R-001" % plan_py,

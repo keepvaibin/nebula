@@ -377,6 +377,7 @@ class LandFromAheadTest(AheadBase):
         self.results = [failed_verdict()]
         self.land()
         new = self.rev("HEAD")
+        fix = self.t.git("rev-parse", "--short=9", "HEAD~1", cwd=self.folder)     # the fix commit as the landing put it on the branch (E1)
         self.assertEqual(self.entry()["handed"], new, "a landing given from the step's branch is the tip the entry remembers")
         self.t.git("checkout", "-q", "native/A.2", cwd=self.folder)
         self.calls.clear()

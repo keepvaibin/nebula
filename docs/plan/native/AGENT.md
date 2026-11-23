@@ -4,9 +4,11 @@ You do the native plan: 138 steps, one after another, alone, until every step is
 file before your first command, and again after every context compaction. Where this file and a step's card
 disagree about WHAT to build, the card wins. Where they disagree about HOW to work, this file wins.
 
-You work alone. Start no helper, no subagent and no second session. The owner is away and is not a programmer
-of this code: do not ask him anything and never wait for him. Decide from the card, the design and the code,
-and write down what you decided and why in the ledger row's note.
+You work alone, with one exception: when a test tool is at fault you start ONE helper to mend it (section 9),
+wait for it, and write no step code meanwhile. Never a helper for a step's code, never two helpers at once,
+never another session. The owner is away and is not a programmer of this code: do not ask him anything and
+never wait for him. Decide from the card, the design and the code (section 7), and write down what you decided
+and why with `PLAN decide`.
 
 ## 1. What this is
 
@@ -17,8 +19,8 @@ step cards (`03-NATIVE-STAGE-0.md`, `04-NATIVE-LANE-R.md`, `05-NATIVE-LANE-G.md`
 package (`rows/`).
 
 A tool hands out each step, tests it and puts it on main. You never choose what is next, never choose which
-tests run, and never move main yourself. The test tools are finished and stand still while you work: your time
-goes to the game.
+tests run, and never move main yourself. The test tools stand still while you work: your time goes to the game.
+A fault in a tool is mended by a helper, never by you inside a step (section 9).
 
 ## 2. Your folder, your tool, your log
 
@@ -47,7 +49,13 @@ Take the time from `date "+%m-%d %H:%M"`, never from memory.
 2. Ask the app to keep the PC awake: load `mcp__ccd_host__request_keep_awake` with ToolSearch and call it.
    If the tool is not there or it is refused, go on.
 3. Read the last 30 lines of your log if it exists. Run `PLAN status`.
-4. Section 4.
+4. The wake-up. Load `CronCreate`, `CronList` and `CronDelete` with ToolSearch when they are only listed. `CronList`.
+   When no job has a prompt that begins `WAKE-UP native agent`, `CronCreate` one: cron `17 * * * *`, recurring,
+   prompt `WAKE-UP native agent: if a step, a landing or a mend of yours is in work, go on with it; else do section
+   14 of AGENT.md.` It fires only while the session is idle, so it costs nothing during work. It expires seven
+   days after it was made: at the first landing after each midnight, `CronDelete` it and make it again. Do this
+   at the start of every session and after every landing. The tools are not there: one log line, go on.
+5. Section 4.
 
 ## 4. The loop
 
@@ -89,12 +97,16 @@ Every step is built on the one before it, and nothing reaches main that its land
 4. Make the change the card describes: all of it, and nothing the card does not ask for. Something else you
    notice that is wrong gets a ledger row (section 10), not a fix in this step.
 5. Prove it. Write the tests the card's "Proof" asks for, and run only the tests you wrote or changed, plus
-   the build. Do not run the full test set yourself: the landing runs exactly what is needed, once.
+   the build. Do not run the full test set yourself: the landing runs exactly what is needed, once. `PLAN check`
+   runs what `land` checks before it queues anything (the ledger, the file references, the replay rule, the
+   console census and the other code checks, the strictness check, the rule on test tools and GitHub's jobs) on
+   the work folder as it stands, prints every thing that would refuse the step at once, and queues nothing:
+   run it while you write and again before you land.
 6. Audit it before the machine does. Read your whole change once, line by line (`git diff origin/main`), as a
    reviewer who did not write it: each of the four renderers has its part; nothing of the old path is left
    that the card removes; nothing is changed that the card does not name; every new text is in 14 languages;
-   every name in a document and in your commit message exists. A failed landing costs ten minutes and more;
-   this reading costs two.
+   every name in a document and in your commit message exists, and `PLAN check` is silent. A failed landing
+   costs ten minutes and more; this reading costs two.
 7. Bring the ledger up to date (`docs/plan/ledger.tsv`): each row the card closes whole is `fixed` with a proof
    text that names a test, a search or a measure; each row the card only advances gets a dated note. Commit
    (section 8). The work folder must hold no uncommitted change.
@@ -120,17 +132,20 @@ Do not wait for a landing with empty hands.
    commit. One that names what to do (uncommitted changes: commit them; the folder on another branch: the
    `git checkout` it names; `do not apply`: the paragraph under the table of 4.3): do that and give `ahead`
    again. Any other: nothing is written ahead this time. Never make a step's branch by hand.
-2. Work on `<M>` exactly as in 4.1 points 3 to 7: read, change, build, prove, audit, ledger, commit. You are
-   writing on top of a step that has not passed yet; that is intended.
+2. Work on `<M>` exactly as in 4.1 points 3 to 7: read, change, build, prove, audit, ledger, commit (`PLAN check`
+   works on `<M>`'s branch too). You are writing on top of a step that has not passed yet; that is intended.
 3. Three things you do not do for `<M>` yet: `PLAN start <M>`, `PLAN land <M>`, and a push.
-4. What you run beside a landing. The build and a unit-test program: at any time (the build waits by itself for
-   the minutes in which the landing measures the game's speed, at most 15 minutes, and says so in one line; a
-   unit-test program does not wait). An engine test and a tour: not in a landing's first 15 minutes. Its own
-   tests are playing then; yours beside them would slow the landing and could fail for the load alone. Read,
-   write, build and audit in that time, and run them when the landing has ended, or after those 15 minutes when
-   it still plays (an endurance run is left; it is made to play beside other work). A test of yours that failed
-   while a landing was playing: run it once more when the landing has ended, before you look for a cause. That
-   is the only case in which a second run is right.
+4. What you run beside a landing. A unit-test program and `PLAN check`: at any time. The build, an engine test
+   and a tour never start beside a running speed measure: the landing measures the game's speed last (the PC's
+   measure took 18 minutes in one landing) and a game or a build beside it spoils its figures. Each of them waits
+   by itself while the measure runs, says so in one line, and goes on when it has ended. When the measure still
+   runs after 40 minutes the command says so and starts nothing (exit code 3 for the build, `env` for the
+   engine test and the tour): give it again later. An engine test and a tour are also not for a landing's first
+   15 minutes: its own tests are playing then, and yours beside them would slow the landing and could fail for the
+   load alone. Read, write and audit in that time, and run them when the landing has ended, or after those 15
+   minutes when it still plays and no measure runs (an endurance run is left; it is made to play beside other
+   work). A test of yours that failed while a landing was playing: run it once more when the landing has ended,
+   before you look for a cause. That is the only case in which a second run is right.
 5. The landing's command ends or is cut off while you work. When it is cut off (no verdict printed), give it
    again, as a background command: it joins from the branch you are on. Do not leave `<M>`'s branch for that.
 6. If `<M>` is whole and committed and the landing still plays (a long extra check): read the card and the
@@ -170,7 +185,7 @@ written: `PLAN blocked <ID> "<what is done, what is left, what stands in the way
 | Code | It means | Do this |
 | --- | --- | --- |
 | 0 | Landed. Main has your step. | Section 4.3, first row. |
-| 1 | Refused, or a check failed. The lines starting `KIND` name each failed check and test; the line `result: <folder>\result.json` before them names the folder of the run. | A refusal names what is missing (a ledger row, an invented file reference, an uncommitted change, the wrong branch): supply it. A rule of the repository (the console census, the cast check, the byte-order check, the pre-push hook) refuses in this code too, in seconds, before anything is queued, with the check's own lines (the census: its group and the files with their counts): change the code, never land it unchanged. For a failed test: open its run folder, read the log and the pictures, and find the cause in your change before you edit anything. Fix the game, never the test (unless the card changes what the test checks). Commit, land again. Never land the same commit twice hoping for another result (the one exception is under `worse` below). |
+| 1 | Refused, or a check failed. The lines starting `KIND` name each failed check and test; the line `result: <folder>\result.json` before them names the folder of the run. | A refusal names what is missing (a ledger row, an invented file reference, an uncommitted change, the wrong branch): supply it. A rule of the repository (the console census, the cast check, the byte-order check, the pre-push hook) refuses in this code too, in seconds, before anything is queued, with the check's own lines (the census: its group and the files with their counts): change the code, never land it unchanged. For a failed test: open its run folder, read the log and the pictures, and find the cause in your change before you edit anything. Fix the game, never the test (unless the card changes what the test checks, or the test is one your own step added and a tool shows it is wrong by itself: on 11-22 a sanitizer report sat inside the test's own code, and the test was corrected). Commit, land again. Never land the same commit twice hoping for another result (the one exception is under `worse` below). |
 | 2 | The step tool did not do the command. Its line starts `plan.py:` and says why: the command or the id was wrong, a file of the plan cannot be read, or git failed. | A wrong command or id: correct it. A message `ledger line <N>: ...` names a line of `docs/plan/ledger.tsv` by its number: you wrote that line; give it exactly the 7 tab-separated columns, commit, and give the command again. Anything else: give the same command once more. The same line again: section 9, "When a tool fails", point 5. |
 | 3 | The same failure three times in a row. | Stop working on it. `PLAN blocked <ID> "<what fails and what you tried, in two sentences>"`. Then `PLAN next`. |
 | 4 | Not judged: a test tool or the machine failed, or your branch no longer applies to main. Nothing is wrong with your step as far as anyone knows. | Section 9, "When a tool fails". |
@@ -187,12 +202,20 @@ A kind you may see in the output:
   have measured up to 5% apart in one round. So when you have read your change against the figure and the
   renderer named, and no line of it runs in that work, land the same commit once more; this is the one case
   in which that is right. Worse again in the same figure: the cost is real, look until you find it. Passed:
-  record it with `PLAN tool "speed check: <figure> worse on <renderer> for <commit>; the same commit passed a
-  second landing"`.
+  write a log line (`note`: the figure, the renderer, the commit, "the same commit passed a second landing").
+  A step the speed check judges slower is never a tool fault and you never accept it: only the owner's word
+  accepts a slower build (section 11).
 - `flake` (failed beside other runs, passed alone), `main` (fails on main's build too), `new` (a picture with
   no approved copy), `owed` (the tablet was away, or a measure could not be trusted this time): none of these
-  stops a landing and none needs anything from you.
-- `tool`, `env`: the test tool or the machine. Code 4.
+  stops a landing and none needs anything from you. A line `is set aside` in the landing's output (the third
+  flake of one test in seven days) has already opened a repair for that test: it comes to you through
+  `PLAN next` (section 6).
+- `tool`, `env`: the test tool or the machine. Code 4: section 9.
+- `GitHub sign-in needed` (kind `env`, check `github/sign-in`): the push to GitHub was refused for the sign-in
+  and nobody is there to give it. Nothing is landed: the push is the move of main, so main stayed as it was and
+  the landing is not judged (the branch waits; your commits are safe). The page says "GitHub sign-in needed".
+  Go on as far as the tools allow: write the next step ahead, and give `PLAN land` again at each wake-up (one
+  try each: a landing runs every check again). It is never blocked, never a tool fault, never mended.
 
 After main has moved, GitHub builds the Mac and Linux programs. A red job there comes back as a REPAIR card
 through `PLAN next`; you do not wait for GitHub and you do not read it yourself.
@@ -203,7 +226,7 @@ A REPAIR card from `PLAN next` is a fault found on main after a landing (by GitH
 that plays every stop of the game about once a day, or by a speed check). It comes before any step.
 `PLAN start R-00N`, read the evidence folder the card names and the command the card gives to run the failed
 test alone, find the cause, fix the game, and `PLAN land R-00N`. If the cause is not in the game but in a
-test tool: `PLAN tool "<what the tool did>"`, then `PLAN blocked R-00N "tool: ..."`.
+test tool: a mend (section 9), `PLAN mend open R-00N "<title>"`.
 
 The card's line `Traced to:` names the landing that brought the fault, where the long run could find it by
 playing the builds in between. `Traced to: no landing (not traced)` means it could not (a memory-fault
@@ -211,6 +234,12 @@ build, the endurance run, the tablet, a fault under load): for those checks the 
 they are never traced, and a repair of kind `stress` or `worse` has no trace at all. Where a trace was begun and
 did not end, the note says why and lists the landings it left open. Finding the cause is part of the repair:
 start from the evidence.
+
+A repair of source `flake` is a test that the gate has set aside: it failed once and passed alone three times
+in seven days, so its failure no longer counts, and the card says so. Find out whether the test or the game is at
+fault. The test is at fault (a tool): a mend (section 9). The game is at fault: the fix is the repair's work, with
+a ledger row (section 10). Until a repair of that test has landed the test stays set aside; when it has landed the
+tool takes the test off the list and the test counts again, with its flakes counted anew.
 
 A repair of kind `stress` (a fault that shows only under load) or `worse` (a speed figure past its band) is never
 given by `PLAN next` and stops nothing. It waits in `PLAN repair list` until the end of the list (section 13).
@@ -226,7 +255,7 @@ The landing of a repair of a red GitHub job waits for GitHub's Mac and Linux job
 another source lands with its failed check added as an extra check, like a step that has one. Work ahead
 meanwhile.
 
-## 7. Do not invent
+## 7. Do not invent, and what you decide yourself
 
 - Every file, function and line you write about must exist: open it first. The landing refuses a commit
   message or a document that names a file or a line that is not there.
@@ -235,8 +264,30 @@ meanwhile.
 - Before calling something unused, search the whole tree for it, including the build files, the Android and
   Apple hosts and the importer.
 - If the card and the code disagree, the code is what exists. Follow what the card is for, and write the
-  difference into the ledger row's note. If the card cannot be done as written, do not improvise a different
-  step: `PLAN blocked <ID> "<what the card assumes and what the code has>"`, then `PLAN next`.
+  difference into the ledger row's note.
+
+When the card, a design document, a check or the code do not agree, or the card leaves a detail open, you decide,
+in this order of what counts:
+
+1. the owner's rules (section 8 of this file and the rules it names);
+2. the design documents (`docs/engine/`);
+3. the card;
+4. the checks (a check that is against 1 to 3 is a tool fault: a mend, section 9);
+5. your own judgement, only where no player can see, hear or feel a difference (pictures, replays and speed stay
+   as the tools judge them), and by the rules of section 8.
+
+So: the card against a design document: the document wins. A proof line that cannot be made as written (its
+evidence is gone, a count is off for a reason the code shows) is replaced by an equal or stronger proof, never
+dropped. A detail the card leaves open is chosen. Each of these is one line,
+`PLAN decide <ID> "<what>" --because "<why>" [--doc "<file, section>"]`, which writes
+`docs/plan/native/decisions.tsv` (commit it with the step), and the card's text is corrected in the same landing
+where it was wrong. The page lists the decisions.
+
+What a player could notice, or a choice between two designs that the documents do not settle, is not yours to
+decide: `PLAN blocked <ID> "owner: <the question in plain words, with the two choices>"`, then `PLAN next`, and go
+on with the other steps. The page lists these apart under "Waiting for the owner". A message from the owner in this
+session is an order; an answer to such a question is written in your log and the step is taken up with
+`PLAN start <ID>`.
 
 ## 8. Rules of the code and of git
 
@@ -272,10 +323,11 @@ meanwhile.
 
 ## 9. The test tools: what they do, what they cannot do, and what to do when one fails
 
-You use the tools. You never repair them. Do not edit `tools/gate/`, `tools/plan/`, `tools/measure/`,
-`tools/verify/`, the test runners (`tools/lumacore/luma_test.py`, `luma_test_android.py`), the self-tests of the
-tools (`tools/lumacore/tests/`, `tools/test_driver/tests/`), `.github/`, `tests/pictures/approved.tsv`, or
-`docs/plan/native/steps.tsv` and `step-checks.tsv`, unless the step's card names the file.
+You use the tools. You never repair one inside a step: a tool at fault is mended by one helper, below. Do not edit
+`tools/gate/`, `tools/plan/`, `tools/measure/`, `tools/verify/`, the test runners (`tools/lumacore/luma_test.py`,
+`luma_test_android.py`), the self-tests of the tools (`tools/lumacore/tests/`, `tools/test_driver/tests/`),
+`.github/`, `tests/pictures/approved.tsv`, or `docs/plan/native/steps.tsv` and `step-checks.tsv`, unless the
+step's card names the file: `PLAN land` and `PLAN check` refuse a step branch that does, in seconds.
 
 ### Your own commands
 
@@ -289,8 +341,10 @@ tools (`tools/lumacore/tests/`, `tools/test_driver/tests/`), `.github/`, `tests/
 
 Each one that plays the game (3 and 4) hides the window, makes no sound, takes no keyboard focus and ends every
 game process it started. The build (1), the engine test (3) and the tour (4) wait by themselves while a speed
-measure is running on the PC: one line says so (`waiting while a speed measure runs ...`), and after 15 minutes
-they go on anyway. The unit-test program (2) and the recording (5) do not wait. Never start the game any other
+measure is running on the PC: one line says so (`waiting while a speed measure runs ...`), and when it still
+runs after 40 minutes they say so and start nothing (the build ends with code 3, the engine test and the tour
+with `env`): give the command again later. A game never starts beside a measure. The unit-test program (2) and
+the recording (5) do not wait. Never start the game any other
 way. Run one that can take more than two minutes as a background command with a time limit of 600000 ms.
 
 One more, for a document you changed: `python -X utf8 -I <your folder>/tools/verify/doc_refs.py <the file>`. It
@@ -350,35 +404,91 @@ process you did not start, never remove a lock, never stop a landing or the long
 - There is one tablet. A device that is away makes its checks `owed`; nothing is yours to do.
 - Nothing checks what needs a person or other hardware (section 11's last point).
 
-### When a tool fails
+### When a tool fails: the mend
 
-A tool is at fault when a result has the kind `tool` or `env` (code 4), when a command does not do what its
-own help says, or when a check cannot see what the card asks it to prove. Then:
+While a mend is open you wait: `PLAN next`, `start`, `ahead` and `land` all answer `WAIT: mend M-00N is open`, you
+start no step, write nothing ahead and land nothing, and the step that met the fault is taken up again only when
+main holds the mend. Only `mend ...`, `status`, `page`, `note`, `alive` and `check` work meanwhile.
 
-1. Record it, in one command: `PLAN toolfault --last --could-not "<one sentence: what it stopped you from
-   doing>"` after a landing, or `PLAN tool "<what you ran, what it printed, what you needed>"` for a fault
-   outside a landing.
-2. Code 4 with "does not apply on origin/main": in the work folder, on the step's branch, `git fetch origin`, `git
+**When a tool is at fault.** Only with evidence of one of these kinds:
+
+- a landing's own kind `tool` (code 4) after one more landing (a transient fault is told by the second landing: land
+  once more first);
+- a command that ends in a traceback, or does not do what its own help says;
+- a check that cannot see what the card asks it to prove;
+- a check that refuses what a design document or the owner's rules prescribe by name (you quote both lines on the
+  sheet).
+
+Never a tool fault, always the step's: a test you find too strict, a picture that differs, a slower measure (section
+11). A result of the kind `env` (the machine: the tablet away, GitHub unreachable, a full drive, a layer that is not
+installed) is not mended: record it with `PLAN toolfault --last --could-not "<what it stopped you from doing>"` after
+a landing, or `PLAN tool "<what you ran, what it printed, what you needed>"` outside one, and go on as far as you can.
+
+**Other code 4.**
+
+1. Code 4 with "does not apply on origin/main": in the work folder, on the step's branch, `git fetch origin`, `git
    rebase origin/main`. A conflict in `docs/plan/ledger.tsv` or in a document where both sides only added
    lines: keep both. A conflict in code: `git rebase --abort`, `PLAN blocked <ID> "main changed the same
    code: <files>"`. Else land again.
-3. Any other code 4: land once more (add `--github-again` if the message says GitHub was at fault). Not
-   judged a second time: `PLAN blocked <ID> "tool: <the message's first line>"`. A message that names a rule of the
-   repository (the console census, the cast check, the byte-order check, the pre-push hook) is never this case:
-   it is a refusal (code 1, section 5), and landing it once more gives the same refusal.
-   If a landing of yours ends so with code 4 all the same, that is a fault of the tool: `PLAN tool "..."`, then `PLAN blocked`.
-4. A fault outside a landing (one of your own commands): try the command once more. If it fails the same
-   way, go on without it when the landing will run that test anyway, and say so in your log; if you cannot
-   prove your change without it, `PLAN blocked <ID> "tool: ..."`.
-5. When the command that fails twice is `PLAN` itself (code 2, the same line both times): for `ahead`,
-   nothing is written ahead this time; for `note`, `page`, `tool`, `toolfault` and `owed`, write the text
-   into your log instead and go on; for `start` and `land`, `PLAN blocked <ID> "tool: <its line>"`, then
-   `PLAN next`. If `next` fails twice, or `blocked` fails in the same way too, the step tool cannot be used:
-   the work is stopped (section 13), with the tool's line as the reason.
+2. Any other code 4: land once more (add `--github-again` if the message says GitHub was at fault). Not judged a
+   second time, of the kind `env`: `PLAN tool "..."` and `PLAN blocked <ID> "env: <the message's first line>"`. Of
+   the kind `tool`: a mend. A message that names a rule of the repository (the console census, the cast check, the
+   byte-order check, the strictness check, the pre-push hook) is never this case: it is a refusal (code 1, section
+   5), and landing it once more gives the same refusal. If a landing of yours ends so with code 4 all the same,
+   that is a fault of the tool: a mend.
 
-Do not look for the cause inside the tool, do not work around it with a command of your own, and do not wait
-for it to be mended. The record you wrote is counted on the progress page, with what it stopped you from
-doing; that is how the owner sees it.
+**The mend, step by step.**
+
+1. `PLAN mend open [<ID>] "<title>" [--last]` (`--last` takes the fault of the last landing). It writes the fault
+   sheet `D:/NebulaWork/plan/native/mends/M-00N.md` and puts the step in work into the state "waits for M-00N":
+   not blocked, and not counted for the three-failures and four-hours rules. One mend is open at a time; for one
+   step at most two mends for the same check (`--check <name>`).
+2. Fill the sheet's five headings (what I ran; what the tool said, with the run folder or the command's output;
+   what it should have said and which document and section says so; the files I believe are at fault; what must
+   stay refused after the mend). Quote the lines of the documents.
+3. Start ONE helper: the Agent tool, model `sonnet`, with these three lines: `Read <your work folder>/docs/plan/native/TOOL-MEND.md
+   whole.` / `Read the fault sheet at D:/NebulaWork/plan/native/mends/M-00N.md.` / `Your mend is M-00N.` (`mend open`
+   prints them filled in.) You write no step code and start nothing else while it works.
+4. When the Agent tool gives the helper's result at once, read it. When it runs the helper in the background, end
+   the turn with one line ("waiting for the helper of M-00N"): that is a third reason to end a turn, with the two
+   of section 13. Go on when the result arrives.
+5. `MENDED M-00N <commit>`: read the commit against TOOL-MEND.md section 5 (`git show --stat <commit>`, the changed
+   judging lines, the new self-test, the lines in `docs/plan/strictness-log.tsv`). A loosening that no document
+   allows: open the next mend at once to take it back. Else `PLAN mend close M-00N <commit>` (the commit must be on
+   main and touch a tool or a document). The step is in work again, and every step blocked with a reason that
+   begins `tool: M-00N` is open again. Then, in the work folder: `git fetch origin`, commit what you have, `git
+   rebase origin/main` on the step's branch so that it is built on the mend, `PLAN land <ID>`.
+6. `NOT MENDED M-00N`, or no result three hours after the helper started (the wake-up finds this): look at the
+   gate's line (`D:/NebulaWork/plan/landing-queue.tsv`) for a landing of `mend/M-00N`: while one waits or runs,
+   never start a second writer. Then `PLAN mend failed M-00N "<why>"`. It counts the attempts on the sheet and says
+   what comes next: after the first, `SECOND HELPER` (one new Sonnet helper, the same three lines, the first one's
+   notes are on the sheet); after the second, `YOUR OWN ATTEMPT` (you mend it yourself, by TOOL-MEND.md to the
+   letter: the same folder `Nebula-mend`, the same branch, the same sheet, the same three hours of your own work,
+   the same proofs, the same landing `PLAN mend land M-00N`; read the file whole first, nothing in it is relaxed for
+   you); only after the third failure the step is blocked `tool: M-00N <why>`, the mend is listed as needing the
+   planner, and you go on with the steps that do not need it (`PLAN next`). A later `mend close` (a mend the
+   planner makes) reopens that step.
+7. `NOT MENDED M-00N, needs game code: <files>`: that is no tool fault. `PLAN mend drop M-00N "<the files>"`, and the
+   step is yours again: add a ledger row for the fault in the game (section 10) and go on.
+8. A step that the PC's or the tablet's speed check judges slower is not a tool fault (section 11).
+
+**When `PLAN` itself is at fault** (the same line twice, code 2, from a command that is yours to give):
+
+- `ahead`: nothing is written ahead this time. `note`, `page`, `tool`, `toolfault`, `owed`, `decide`, `check`: write the
+  text into your log instead and go on.
+- `start`, `land`, `next`, `blocked`, `mend ...`: the mend is made by hand. List `D:/NebulaWork/plan/native/mends` and take
+  the next free number; write the sheet there with your file-writing tool (the five headings, the line the tool
+  printed, the traceback), start the helper with the same three lines, and write a log line `mend M-00N by hand`.
+  The helper lands its fix as TOOL-MEND.md section 8 says for this case (`gate.py land` itself). When it reports
+  `MENDED M-00N <commit>`: read the commit as in point 5, commit what you have, `git fetch origin`, `git rebase
+  origin/main` on the step's branch (the mended `plan.py` comes with it), then record it: `PLAN mend open "<title>"
+  --landed <commit>`. A failed attempt is counted by you in the log: the second helper, then your own attempt, as
+  in point 6; when the third fails too, the step tool cannot be used and the work is stopped (section 13) with
+  the tool's line as the reason.
+
+Do not look for the cause inside a tool yourself, and do not work around it with a command of your own, except in
+your own attempt (point 6). The record is counted on the progress page, with what it stopped you from doing;
+that is how the owner sees it.
 
 The tablet (`R52WA0FXE5J`) is used only through your commands and the landing. Never uninstall or wipe anything
 on it. The tools keep a copy of the game data on it under `/data/local/tmp/nebula-test/`: leave it.
@@ -396,8 +506,15 @@ impossible to pass, that is a reason to block the step, with the row's id in the
 - A proof item asks for something to be shown. Show it with a test that the landing will run from now on,
   wherever that is possible, so it stays proven.
 - "Before and after: never slower": the landing's own speed check is this proof (on the PC the check
-  `measure/step/pc`, and the tablet's measure). Do not build a measurement of your own for it. Its figures are
-  in the run folder the landing prints; copy them into the row's proof text.
+  `measure/step/pc`, and the tablet's measure). Do not build a measurement of your own for it. The figures exist
+  only after the landing: when it has passed, `PLAN land` prints the speed checks' lines and keeps them with the
+  step in the landings list and on the page. The row's proof text names the landing's check
+  (`measure/step/pc`, the run folder it prints); no figure is copied by hand.
+- A step that the PC or the tablet speed check judges slower is never a tool fault and you never accept it: you
+  find the cause in your own code; after three failed landings the step is blocked as any other (section 5); only
+  the owner's word accepts a slower build.
+- A unit test of code the step rewrites is rewritten with it, and is never deleted without a test that proves the
+  same of the new code.
 - A figure the card asks for by name that the landing does not take (a count from the timeline, a time of one
   function): take it once on main's build and once on yours, with the tool the card names, and write both
   figures and the two run folders into the row. If the named tool does not exist or does not give the figure:
@@ -411,9 +528,13 @@ impossible to pass, that is a reason to block the step, with the row's id in the
 
 ## 12. The progress page
 
-The owner follows the work on one page: every step that is on main, how long each landing took, every tool
-fault with what it stopped you from doing, and which check failed. After every landing that passed, after
-every `PLAN blocked`, and at least once every two hours:
+The owner follows the work on one page: every step that is on main, how long each landing took, with the speed
+checks' lines, every tool fault with what it stopped you from doing, the tool mends (with the attempt each is on),
+your decisions, the questions that wait for the owner, the checks that were changed during the run (the
+strictness log), whether the tablet is away and how many checks are owed, and which check failed. At its top is
+the time it was written: if that is more than three hours old, the work has stopped, and the owner opens the
+session and sends the word "continue". Every command of yours writes the time that `PLAN alive` reads. After every
+landing that passed, after every `PLAN blocked`, and at least once every two hours:
 
 1. `PLAN note "<the step in work> since <HH:MM>; ahead: <the step after it, or nothing>"` (200 characters at
    most), then `PLAN page`.
@@ -442,10 +563,13 @@ every `PLAN blocked`, and at least once every two hours:
    with its diff. Do not repeat what you tried the first time; if
    you can see nothing you did not try, block it again with what you checked. One second attempt for each
    blocked step, never a third. Write `second attempt` in the log line.
-2. No blocked step is left that has not had its second attempt: the work is stopped.
+2. No blocked step is left that has not had its second attempt: the work is stopped. A step blocked `owner: ...`
+   is not one of those: it waits for the owner's answer and is given no second attempt. When everything left waits
+   for the owner or has had its second attempt, the work is stopped, and the six lines of the end name the
+   questions.
 
-A step blocked by a fault of the tools (`PLAN blocked <ID> "tool: ..."`) or by a rule of the repository that the planner
-has since changed is taken up again as soon as main holds the mend, at any time: it is not a second attempt and needs
+A step blocked by a fault of the tools (`PLAN blocked <ID> "tool: M-00N ..."`, after the third attempt of a mend) or by a
+rule of the repository that the planner has since changed is taken up again as soon as main holds the mend, at any time: it is not a second attempt and needs
 no waiting for "Nothing can start now". The planner's message names the mend, or `git log origin/main` shows a commit
 that is not yours and names the fault. Then, in the work folder:
 
@@ -463,20 +587,26 @@ repair it shows as `open` (the kinds `next` never gives), oldest first: `PLAN st
 section 6 says, to `PLAN land R-00N` or `PLAN blocked R-00N "<why>"`. One attempt for each. Then the work is
 done, or stopped.
 
-Done or stopped: `PLAN note "<Done: all 138 steps are on main. / Stopped: <why, one sentence>>"`, the page
-(section 12), a log line, and end your turn with at most six lines for the owner: what is on main (the count
-from `PLAN status`), what is blocked and why (one line each), where the page is. (Stopped because the step
-tool itself cannot be used: leave out the note and the page, write the log line and the six lines.) These are
-the only two reasons for which you end your turn. No release, tag or upload is ever made by you.
+Done or stopped: `PLAN note "<Done: all 138 steps are on main. / Stopped: <why, one sentence>>"` (`PLAN alive`
+then says `ended`), the page (section 12), `CronDelete` of the wake-up job, a log line, and end your turn with at
+most six lines for the owner: what is on main (the count from `PLAN status`), what is blocked and why (one line
+each), what waits for the owner, where the page is. (Stopped because the step tool itself cannot be used: leave out
+the note and the page, write the log line and the six lines.) These are the only reasons for which you end your
+turn: done, stopped, and the one line while a helper of a mend works in the background (section 9). No release,
+tag or upload is ever made by you.
 
-## 14. After a context compaction, a restart, or the owner's word "continue"
+## 14. After a context compaction, a restart, the owner's word "continue", or the hourly wake-up
 
-1. Read this file again. `date`.
+1. Read this file again. `date`. The wake-up job (section 3 point 4): `CronList`; make it again when it is gone.
 2. Read the last 30 lines of your log.
-3. `PLAN status`: what is landed, what is in work, whether a landing is running, what is prepared ahead.
+3. `PLAN status`: what is landed, what is in work, whether a landing is running, what is prepared ahead, whether a
+   mend is open. `PLAN mend list`: a mend that is open and whose helper started more than three hours ago, with no
+   landing of `mend/M-00N` in the gate's line (`D:/NebulaWork/plan/landing-queue.tsv`): its helper is gone; go on
+   as section 9 point 6 says (`PLAN mend failed M-00N "no result"`).
 4. `git -C D:/NebulaWork/MarioGalaxyRecomp/Nebula-native status` and `git -C ... log --oneline -5`: which
    branch the folder is on and what is uncommitted.
 5. `PLAN next`, and go on from what it prints (section 4.1 point 1). A landing that is running: join it
-   (`PLAN land <ID>`), and `PLAN ahead` gives you back the step you were writing.
+   (`PLAN land <ID>`), and `PLAN ahead` gives you back the step you were writing. `WAIT: mend M-00N is open`: the
+   mend is what is in work (section 9).
 
 Trust the tool, the folder and your log over your memory of the conversation.

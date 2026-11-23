@@ -119,7 +119,7 @@ Columns: check, level, plan step or ledger row, owning agent.
 ### 4.3 What stays a failure
 
 - A check that exists and could not run (no build, a held lock that never frees, a missing disc): a failure, as today.
-- **Except the tablet.** It is the owner's device and may be away, locked or in power saving. Then the gate records the tablet part as "owed", main may move, and a board line says so. The owed part runs on main's newest commit before anything else as soon as the tablet is back. If it is owed for more than 24 hours, write it on the board for the owner.
+- **Except the tablet.** It is the owner's device and may be away, locked or in power saving. Then the gate records the tablet part as "owed", main may move, and a board line says so. No tool plays the owed part by itself: the board line names the command (`gate.py --main --only "<rows>"`), and the daily long run plays the tablet's pieces on main's newest commit, so a fault the owed part would have found comes back as a repair up to a day later. Nothing counts the owed rows and no number of them stops a landing. A landing that moves main writes the checks it owed to `tablet-owed.tsv` in the live folder, and one that plays a tablet check clears the file: the progress page shows "Tablet away since <time>: <n> checks owed" while the file has lines. (The old note that a part owed for more than 24 hours goes on the board had no code behind it and is taken out.)
 
 ---
 
@@ -251,9 +251,9 @@ fail, but a tool or env: exit 2). The same facts are in `verdict.json` in the ru
 other game process, a fresh folder `rerun/` in the run's folder. If it passes, its kind is `flake` and one line goes to
 `D:/NebulaWork/plan/native/flakes.tsv` (time, test, renderer, commit, the first failure's message); its second run takes the
 first's place in the run's folder, the first is kept in `rerun/first/`. When that file holds three lines for one test and
-renderer within seven days, the test goes to `D:/NebulaWork/plan/native/set-aside.tsv` and the gate says to open a ledger row for it (the files live outside the repository, so a test run never changes the tree).
+renderer within seven days, the test goes to `D:/NebulaWork/plan/native/set-aside.tsv` and the gate opens one repair for it (source `flake`, kind `fail`, check `flake:<test>`, the run folder kept whole as its evidence; `plan.py next` gives it before a step). The files live outside the repository, so a test run never changes the tree.
 A test listed there still runs and is reported (`set aside` on its line), and its `fail` does not fail a run; the gate
-prints the set-aside tests at the top of every summary, and a line leaves the file when its row is closed. The tablet's tests
+prints the set-aside tests at the top of every summary, and a line leaves the file, with the test's lines of flakes.tsv, when its repair has landed (`plan.py land R-00N` does it): until then the test stays set aside, which is for ever if nobody lands the repair. The tablet's tests
 are not run again (the test app is removed when the tablet's part ends).
 
 **Check against main.** A test that is still `fail` after its second run is run alone on main's build, but only when its
@@ -261,7 +261,7 @@ own definition (its test folder, or for a generated tour the files that write it
 under test; otherwise the check is skipped, with a line saying so, and the test stays `fail`. Main's build is kept by the
 gate in `D:/NebulaWork/build/base-bins/<commit>/bin`, a copy made whenever the gate moves main (the two newest are kept); with
 no copy for `origin/main` the check is skipped too. A test that fails there with the same first message is `main`: it does
-not fail the run, it is printed first in the summary, and the gate says to open a ledger row for it.
+not fail the run, and it is printed first in the summary.
 
 Two runs of fixed steps that differ are a determinism fault in the game or the harness, and are treated as one.
 
@@ -637,3 +637,65 @@ They decide whether the game itself writes something, and so what the runner the
 
 Since the runner no longer judges by the host's 10-second dump, a run in which those fixed waits run out is `fail` only when the
 game then did something wrong that a check sees. A picture that was never written is `tool`, because the runner waited for it.
+
+---
+
+## 17. The unattended run: mends, the strictness check, what no tool may wait for (brief U)
+
+The agent of the native plan works for days with nobody there. These are the tools that make it possible; the rules the agent
+follows are `docs/plan/native/AGENT.md` (sections 3, 7, 9, 13, 14) and, for the helper that mends a tool,
+`docs/plan/native/TOOL-MEND.md` with the recipes of `docs/plan/native/TOOL-MEND-PLANTS.md`.
+
+**The mend** (`tools/plan/plan.py`): `mend open [<step>] "<title>" [--last] [--check C]` writes the fault sheet
+`D:/NebulaWork/plan/native/mends/M-00N.md` and puts the step in work into the state "waits for M-00N" (still `started`, not
+blocked, outside the three-failures and four-hours rules); one mend is open at a time, and `next`, `start`, `ahead` and `land`
+answer `WAIT: mend M-00N is open`. `mend land M-00N` (the helper's, from its own folder on the branch `mend/M-00N`) runs the
+references check, the code checks and the strictness check, then hands the branch to the gate with `--who "mend M-00N"`; its
+landing record is `landing-mend.tsv`, so it never meets the agent's own. `mend close M-00N <commit>` needs a commit on `origin/main`
+that touches `tools/`, `docs/` or `.github/`; the waiting step is in work again and every step blocked `tool: M-00N` is open
+again. `mend failed M-00N "<why>"` counts the attempts on the sheet (the helper, a second helper, the agent itself): only the third
+failure blocks the step. `mend drop` ends a mend whose fault needs game code (not a tool fault). `mend open ... --landed <commit>`
+records a mend that was landed by hand because `plan.py` itself was at fault. `mend list` lists them (mends.tsv in the live folder);
+the page shows each with its attempt. `decide <ID> "<what>" --because "<why>" [--doc "<file, section>"]` appends a row to
+`decisions.tsv` in the plan's folder (docs/plan/native). `check` runs what `land` checks before it queues (the ledger, the file references, the replay
+rule, the code checks, the strictness check, the rule on test tools and GitHub's jobs) on the work folder and queues nothing; `land`
+refuses in seconds a step branch that changes a test tool, a GitHub job, `approved.tsv`, `steps.tsv` or `step-checks.tsv` when the
+card does not name the file. A new `land` of a step takes the tool's own earlier `Plan: step X landed` commit off the branch before it
+makes the new one (a failed landing left it, and the code commit it names was no longer the step's); main's history stays as it is.
+`alive` prints `working` (a command in the last three hours, or a landing or mend landing in the gate's line), `ended` (a note
+beginning `Done` or `Stopped`, or every step landed) or `stale`; every command but `alive` writes `heartbeat.txt` in the live folder.
+When a landing has passed, `land` prints the speed checks' lines and keeps them in `landings.tsv` (column `figures`) and on the page.
+
+**The strictness check** (`tools/gate/strictness.py`, the gate's check `repo/strictness`, and `plan.py land`, `check` and `mend land`
+in seconds): `tools/gate/strictness.tsv` lists the places whose change can make a check see less (pattern, mode `added`, `removed`
+or `any`, `*` or a named list inside a file, what it could hide): the known-failure, planned-check, sanitizer and debug-layer
+lists, the allow-lists, `scope.tsv`, `github_jobs.tsv`, the approved pictures, the recorded replays, `step-checks.tsv`, the engine
+suite and the tours' stops, GitHub's workflows, the census, cast and byte-order checks, the speed band rule, the push guard, the
+guard itself, the never-traced list, the flake limits, the repository audit's lists, and every changed or deleted line of an
+existing self-test of the tools. A landing that changes one needs, in the same landing, one line in `docs/plan/strictness-log.tsv`
+(date, file, what changed, why, allowed by, id, removed by); the log only grows. The gate judges each branch it covers on its own
+against main; a `mend/*` branch may not change source files of the game, the engine, the importer or the platform code (their build
+files are free). The check runs in every landing, because `scope.tsv` puts the group `repo` in every row that can name a listed file
+(a self-test pins it). Outside the repository nothing is judged: the speed bands of the pair and the accepted slowdowns live in the
+gate-runs folder, and `pair-accept` is the owner's word only.
+
+**Planted faults** (`TOOL-MEND-PLANTS.md`): a branch named `plant/...` is judged by a gate command without `--move`, is never pushed
+(the push guard refuses the ref) and is never landed (`gate.py land plant/...` is refused before anything is queued).
+
+**Nothing waits for a person.** `GIT_TERMINAL_PROMPT=0` and `GCM_INTERACTIVE=never` and the Windows error mode (no crash box;
+`tools/gate/noprompt.py`) are set once at the start of `plan.py` and `gate.py` and inherited by every child; the game host sets its
+own (`SetErrorMode`, no C-runtime assert box). The gate builds the release runtime (no assert box); a debug-runtime program is not
+started by any tool. A push to GitHub that is refused for the sign-in is the environment (kind `env`, check `github/sign-in`):
+nothing is landed (the push is the move of main), the landing is not judged, and the page says "GitHub sign-in needed". The agent's
+own commands never start a game beside a running speed measure: the build, the engine test and the tour wait up to 40 minutes and
+then start nothing (`measure_wait.py --stop`, exit 3).
+
+**Locks.** `gate.lock`: a holder whose process has ended is taken over with one line; a line that names no process (taken by hand)
+is waited for up to the run's `--wait` (240 minutes), then the run is not judged. `tablet.lock`: its holder line now carries the
+holder's `since T pid N`, and a holder that has ended loses it with one line (before, a run that died with it kept the tablet away
+for ever); a lock taken by hand holds. `measure.lock`: a dead holder is taken over; a hand lock stops the measure (owed) and makes the
+agent's builds wait their 40 minutes. The page names any lock of `gate.lock`, `tablet.lock`, `measure.lock` or `long.lock` that has
+been held for more than 30 minutes by a line that names no process, or by a process that has ended. No tool takes a hand lock.
+
+**A queue runner that dies** during a landing leaves its row `running`; the next `land` takes the dead runner's lock over, puts
+the row back to waiting and runs the whole batch again (the children ended with the runner's job object).

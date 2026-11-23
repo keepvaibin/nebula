@@ -144,8 +144,11 @@ import failures  # noqa: E402
 import doc_refs  # noqa: E402
 import live as lv  # noqa: E402
 import landing  # noqa: E402
+import lockholder  # noqa: E402
 import page  # noqa: E402
+import noprompt  # noqa: E402
 import scope  # noqa: E402
+import strictness  # noqa: E402
 
 GIT = "C:/Program Files/Git/cmd/git.exe"
 NATIVE = "docs/plan/native"
@@ -165,6 +168,9 @@ PAIRS = ((("G2a",), ("R7",)),)
 QUEUE_FILE = str(landing.QUEUE)          # the gate's landing queue (a landing record is read against it); tests give their own
 alive = landing.process_alive            # whether a process of this id runs; tests put their own in here
 JOIN_POLL = 5.0                          # seconds between two looks while a landing that is no longer in the queue is finishing
+SIGN_IN = "GitHub sign-in needed"
+SIGN_IN_TEXTS = ("authentication failed", "could not read username", "could not read password", "terminal prompts disabled", "invalid username",
+                 "bad credentials", "permission denied (publickey)", "returned error: 401", "returned error: 403")
 STATE_COMMIT = "Plan: step %s landed"    # the subject of the tool's own commit: the step's row is `landed`, with the code's commit
 
 # The extra checks a step's proof asks for (docs/plan/native/step-checks.tsv): the nightly's parts, which `gate.py land --also` takes.
@@ -920,7 +926,11 @@ def land_with_gate(folder, branch, tablet=TABLET, tablet_wait=TABLET_WAIT, extra
     # --force-with-lease: the branch is this step's own, and a try that went before may have left origin's copy of it behind.
     pushed = git(folder, "push", "--force-with-lease", "origin", branch) if push else None
     if pushed is not None and pushed.returncode != 0:
-        return Verdict(False, [], [("git/push", "FAIL", (pushed.stderr.strip().splitlines() or ["push refused"])[-1])])
+        said = (pushed.stderr.strip().splitlines() or ["push refused"])[-1]
+        if any(k in pushed.stderr.lower() for k in SIGN_IN_TEXTS):
+            # GitHub wants a sign-in nobody can give: the environment, not the step. Nothing is landed; the page says so.
+            return Verdict(False, [], [("github/sign-in", "ENV", "%s: %s" % (SIGN_IN, said))])
+        return Verdict(False, [], [("git/push", "FAIL", said)])
     return run_gate(folder, ["land", branch, "--tablet", tablet, "--tablet-wait", str(tablet_wait), *extra], out, branch)
 
 
@@ -1140,6 +1150,16 @@ def status_text(tree, work_root=WORK_ROOT, at=None, live=None, agent="1", queue_
     out += ["", "## Blocked (%d)" % len(by["blocked"]), ""]
     out += ["- %s %s: %s" % (s["step"], s["title"], s["reason"] or reasons.get(s["step"], "(no reason written)"))
             for s in by["blocked"]] or ["- none"]
+    questions = owner_questions(steps)
+    out += ["", "## Waiting for the owner (%d)" % len(questions), ""]
+    out += ["- %s %s: %s" % (q["step"], q["title"], q["question"]) for q in questions] or ["- none"]
+    mends = lv.read_mends(live_dir(live))
+    out += ["", "## Tool mends (%d, %d open)" % (len(mends), sum(1 for m in mends if m["state"] == "open")), ""]
+    out += ["- %s %s: step %s, %s%s" % (m["id"], m["state"], m["step"], m["title"], "" if m["commit"] in ("", "-") else ", commit " + m["commit"])
+            for m in mends] or ["- none"]
+    away = tablet_away(live_dir(live))
+    if away:
+        out += ["", "## Tablet", "", "- away since %s: %s checks owed" % (away["since"], away["owed"])]
     out += ["", "## Claims (%d)" % len(claims), ""]
     out += ["- %s: agent %s since %s%s%s" % (c["package"], c["agent"], c["time"], ", branch " + c["branch"] if c["branch"] else "",
                                             " STALE (no commit for %d hours): plan.py claim %s --take-stale" % (lv.STALE_HOURS, c["package"])
@@ -1212,11 +1232,61 @@ def page_data(tree, live=None, at=None):
     claims = lv.read_claims(d)
     at = at or now()
     landings, events = lv.read_landings(d), lv.read_faults(d)
+    signin = ""
+    for e in reversed(events):
+        if e["check"] == "github/sign-in" or SIGN_IN in e["first_error"]:
+            if not any(l["finished"] > e["time"] for l in landings):
+                signin = e["time"]
+            break
+    mends = []
+    for m in lv.read_mends(d):
+        opened, closed = lv.parse_stamp(m["opened"]), lv.parse_stamp(m["closed"])
+        mends.append(dict(m, minutes=int(((closed or at) - opened).total_seconds() // 60) if opened else 0))
     return (page.make_static(steps),
             page.make_data(steps, landings, lv.read_state(d), claims, stale_of(tree, claims, at), lv.fault_groups(events),
                            count_flakes(live), lv.stamp(at), read_set_aside(live), lv.repair_order(lv.read_repairs(d)),
-                           lv.read_owed(d), read_note(live)),
+                           lv.read_owed(d), read_note(live), mends, read_decisions(tree), read_strictness_log(tree),
+                           tablet_away(d), lock_notes(d.parent, at), signin=signin),
             landings, events)
+
+
+HAND_LOCK_MINUTES = 30
+LOCK_NAMES = ("gate.lock", "tablet.lock", "measure.lock", "long.lock")
+
+
+def tablet_away(live):
+    """{since, owed} when the gate wrote tablet-owed.tsv (a landing owed the tablet's checks and none has played them since), else None."""
+    path = live_dir(live) / "tablet-owed.tsv"
+    rows = [l.split("\t") for l in path.read_text(encoding="utf-8").splitlines() if l.strip()] if path.is_file() else []
+    if not rows:
+        return None
+    return {"since": rows[0][0], "owed": sum(len([c for c in (r[2] if len(r) > 2 else "").split(",") if c]) for r in rows)}
+
+
+def lock_notes(plan_dir, at=None, alive_fn=None):
+    """[text] for each lock of the machine (the gate's, the tablet's, the measure's, the long run's) that has been held for more than
+    30 minutes by a holder line that names no process (taken by hand: nothing takes it; the gate waits for it), or whose process has ended
+    (the next run takes it over). The page names them; nothing here frees a lock."""
+    at = at or now()
+    alive_fn = alive_fn or alive
+    out = []
+    for name in LOCK_NAMES:
+        folder = pathlib.Path(plan_dir) / name
+        if not folder.is_dir():
+            continue
+        try:
+            text = (folder / "holder.txt").read_text(encoding="utf-8", errors="replace").strip()
+            since = datetime.datetime.fromtimestamp(folder.stat().st_mtime)
+        except OSError:
+            text, since = "", at
+        if (at - since).total_seconds() < 60 * HAND_LOCK_MINUTES:
+            continue
+        pid, _ = lockholder.parse(text)
+        if pid is None:
+            out.append("%s is held by hand since %s (%s): nothing takes it, and every run that needs it waits" % (name, since.strftime("%H:%M"), text or "no holder line"))
+        elif lockholder.gone(text, alive_fn) is not None:
+            out.append("%s is held since %s by a process that has ended (%s): the next run takes it over" % (name, since.strftime("%H:%M"), text))
+    return out
 
 
 class Written:
@@ -1475,8 +1545,11 @@ def github_repair_open(a):
 
 
 REPAIR_ID = re.compile(r"^R-\d{3,}$")
-REPAIR_RULES = ("Read the evidence first. Find the cause and fix the game, not the test. If the test tool is at fault, do not "
-                "debug it: plan.py tool \"<what the tool did>\", then plan.py blocked for this repair.")
+REPAIR_RULES = ("Read the evidence first. Find the cause and fix the game, not the test. If a test tool is at fault (AGENT.md section 9: "
+                "evidence of one of its kinds), do not debug it: plan.py mend open %s \"<title>\", fill the sheet, and the helper mends it.")
+FLAKE_RULES = ("This test is set aside: it failed once and passed alone three times in seven days, so its failure no longer counts. Find "
+               "out whether the test or the game is at fault. The test (a tool): a mend, as above; the game: the fix is this repair's work, "
+               "with a ledger row (docs/plan/ledger.tsv). When this repair has landed the test counts again.")
 
 
 def is_repair(item_id):
@@ -1712,6 +1785,8 @@ def cmd_ahead(a):
     """`ahead`: while the landing of N plays, the branch native/<M> of the step that follows N, on top of the tip the landing was given
     (made at the first call; at a later one moved onto the new tip of N when N was mended and landed again), and what `next` prints
     for a step. It changes no step's state, makes no claim and pushes nothing."""
+    if mend_blocks(a):
+        return 1
     fetch_main_landed(a)
     agent = agent_of(a)
     steps = read_steps(a.tree, a.live)
@@ -1925,7 +2000,9 @@ def print_repair(a, r, working=False, commands=True):
     if r["note"] not in ("", "-"):
         say("Note: %s" % r["note"])
     say()
-    say(REPAIR_RULES)
+    say(REPAIR_RULES % r["id"])
+    if r["source"] == "flake":
+        say(FLAKE_RULES)
     if not commands:
         return
     say()
@@ -1941,6 +2018,10 @@ def print_repair(a, r, working=False, commands=True):
 def cmd_next(a):
     fetch_main_landed(a)
     settle_github(a)
+    waiting = lv.open_mend(live_dir(a.live))
+    if waiting:                                      # a helper mends a tool: nothing else is given until it has ended (AGENT.md section 9)
+        say_mend_wait(a, waiting)
+        return 0
     steps = read_steps(a.tree, a.live)
     claims = lv.read_claims(live_dir(a.live))
     stale = stale_of(a.tree, claims)
@@ -2190,6 +2271,8 @@ def take_up_prepared(a, entry):
 
 
 def cmd_start(a):
+    if mend_blocks(a):
+        return 1
     fetch_main_landed(a)
     rec = landing_of(a)
     if rec:                                          # a landing of this agent is in the gate's hands: nothing new meanwhile
@@ -2517,6 +2600,8 @@ def wait_for_process(pid, limit=1800.0):
 
 def cmd_land(a):
     """`land` with the pending GitHub results read at its start and again after its landing ended (settle_github)."""
+    if mend_blocks(a):
+        return 1
     settle_github(a)
     code = land_item(a)
     settle_github(a)
@@ -2650,6 +2735,36 @@ def also_options(a, step_id):
     return ["--also", ",".join(names)] if names else []
 
 
+SPEED_CHECKS = ("measure/", "speed/")
+
+
+def figures_line(verdict):
+    """The speed checks' lines of a passed landing, one line: `<check>: <what the check said>; ...` (`-` when it had none). The speed
+    figures exist only after the landing, so the tool carries them to the landings list and the page (AGENT.md section 11)."""
+    parts = ["%s: %s" % (check, detail) for check, kind, detail in verdict.rows if check.startswith(SPEED_CHECKS) and detail]
+    return " | ".join(parts) or "-"
+
+
+def say_figures(verdict):
+    line = figures_line(verdict)
+    if line != "-":
+        say("Speed figures of this landing (kept with the step in the landings list and on the page; copy none by hand):")
+        for part in line.split(" | "):
+            say("  " + part)
+
+
+def end_aside(a, rep):
+    """A landed repair of the source `flake` ends the time its test was set aside: the line of tests/set-aside.tsv goes (the test counts
+    again). The repair's check is `<check> <test> <renderer>` in its note's first words; the gate's list is the live folder's."""
+    if rep.get("source") != "flake":
+        return
+    import kinds
+    path = live_dir(a.live) / "set-aside.tsv"
+    removed = kinds.end_set_aside(path, rep.get("check", ""), rep.get("renderer", ""), rep.get("note", ""))
+    if removed:
+        say("The test set aside by repair %s counts again (its line is out of %s)." % (rep["id"], path.as_posix()))
+
+
 def finish_landing(a, s, code_commit, verdict, seconds, summary):
     """What follows a pass: the step is landed in the plan tree's file and in what the tool reads, the landings list, the claim and
     the page. The landings list takes a step id once, so whoever does this second adds nothing."""
@@ -2658,66 +2773,159 @@ def finish_landing(a, s, code_commit, verdict, seconds, summary):
     # A landing that ends while the work folder is on a step written ahead writes no file of the working tree (steps.tsv there is
     # that step's own); what is landed is read from origin/main, and the live folder has the rest.
     set_state(a.tree, a.id, "landed", code_commit, live=a.live, write_file=ahead_here(a) is None)
-    lv.add_landing(live_dir(a.live), a.id, code_commit, seconds, agent, main=verdict.commit or "-")
+    lv.add_landing(live_dir(a.live), a.id, code_commit, seconds, agent, main=verdict.commit or "-", figures=figures_line(verdict))
     settle_claim(a, read_steps(a.tree, a.live), s, agent, renew=True)
     refresh_page(a)
     say("LANDED %s as %s%s in %d s. Verdict by kind: %s." % (
         a.id, code_commit, (" (main has it as %s)" % verdict.commit) if verdict.commit else "", seconds,
         summary or "no check rows read"))
+    say_figures(verdict)
     say("The progress files are made again (the page to open: %s)." % page_paths(a.live).html.as_posix())
     return 0
 
 
-def begin_landing(a, s, folder, branch):
-    """The landing of the folder's present tip: the ledger, the references, the replay reference; the state commit (made once: a
-    tip that is already the tool's state commit for this step is handed over as it is); then the gate."""
-    agent = agent_of(a)
+PROTECTED_TOOLS = ("tools/gate/", "tools/plan/", "tools/measure/", "tools/verify/", "tools/lumacore/luma_test.py",
+                    "tools/lumacore/luma_test_android.py", "tools/lumacore/tests/", "tools/test_driver/tests/", ".github/",
+                    "tests/pictures/approved.tsv", "docs/plan/native/steps.tsv", "docs/plan/native/step-checks.tsv")
+# AGENT.md section 9: the agent does not edit these (the test tools, their self-tests, GitHub's jobs, the approved pictures, the plan's
+# step list and extra checks) unless the step's card names the file.
+
+
+def branch_changes(folder, step_id=None):
+    """[path] changed by the commits of the folder's HEAD that are not on origin/main, without the tool's own state commit of a step
+    (it changes steps.tsv and nothing else)."""
+    out = git(folder, "log", "--no-merges", "--format=%x01%s", "--name-only", "origin/main..HEAD")
+    paths, skip = [], False
+    for line in out.stdout.splitlines():
+        if line.startswith("\x01"):
+            skip = line[1:].startswith("Plan: step ")
+        elif line.strip() and not skip and line not in paths:
+            paths.append(line.strip())
+    return paths
+
+
+def protected_problems(folder, card, what):
+    """[line] for the files of PROTECTED_TOOLS the branch changes and the card does not name ("" card: no card names anything)."""
+    out = []
+    for path in branch_changes(folder):
+        if not any(path == p or (p.endswith("/") and path.startswith(p)) for p in PROTECTED_TOOLS):
+            continue
+        if card and (path in card or path.rsplit("/", 1)[-1] in card):
+            continue
+        out.append(path)
+    if not out:
+        return []
+    return ["plan.py: %s changes files of the test tools, their self-tests, GitHub's jobs, the approved pictures or the plan's own lists, "
+            "and its card does not name them: %s" % (what, ", ".join(out[:8]) + (" and %d more" % (len(out) - 8) if len(out) > 8 else "")),
+            "A tool at fault is mended by a helper (plan.py mend open ...), never in a step. Take the change out of the step's branch, or "
+            "name the file in the card if the card is wrong."]
+
+
+def strictness_problems(folder, branch, what):
+    """[line] of what the strictness check refuses on the folder's branch (tools/gate/strictness.py): empty when nothing."""
+    try:
+        lines = strictness.problems_for(folder, "origin/main", "HEAD", branch)
+    except strictness.StrictnessError as error:
+        return ["plan.py: strictness.py could not judge %s: %s" % (what, error)]
+    if not lines:
+        return []
+    return ["plan.py: %s changes a place that can make a check see less, and the log has no line for it (the gate's repo/strictness "
+            "refuses the same). Nothing was committed or queued:" % what] + ["  " + l for l in lines]
+
+
+def prechecks(a, s, folder, branch, first_only=True):
+    """What `land` checks before it commits or queues anything, in order: [[line, ...]], one list of lines for each thing that refuses
+    the step (only the first when `first_only`; `plan.py check` asks for all). Nothing is written, committed or queued."""
+    groups = []
+
+    def refused(lines):
+        groups.append(lines)
+        return first_only
+
     # 1. The ledger.
     reading = card_rows(card_text(folder, s))
     if not reading.ok:
-        say("plan.py: the card's Rows line could not be read (%s): %s" % (reading.why, reading.raw[:200]))
-        say("It is the plan's fault, not the step's: plan.py blocked %s \"tool: the card's Rows line cannot be read\", then plan.py next." % a.id)
-        return 1
-    git(folder, "fetch", "origin")
-    ledger = read_ledger((folder / LEDGER).read_bytes().decode("utf-8"))
-    base = git(folder, "show", "origin/main:" + LEDGER)
-    base_ledger = read_ledger(base.stdout) if base.returncode == 0 else None
-    problems = ledger_problems(reading, ledger, base_ledger)
-    if problems:
-        say("plan.py: step %s does not land yet. The ledger (%s) must say:" % (a.id, LEDGER))
-        for p in problems:
-            say("  " + p)
-        return 1
+        if refused(["plan.py: the card's Rows line could not be read (%s): %s" % (reading.why, reading.raw[:200]),
+                    "It is the plan's fault, not the step's: plan.py blocked %s \"tool: the card's Rows line cannot be read\", then plan.py next." % s["step"]]):
+            return groups
+    else:
+        git(folder, "fetch", "origin")
+        ledger = read_ledger((folder / LEDGER).read_bytes().decode("utf-8"))
+        base = git(folder, "show", "origin/main:" + LEDGER)
+        base_ledger = read_ledger(base.stdout) if base.returncode == 0 else None
+        problems = ledger_problems(reading, ledger, base_ledger)
+        if problems and refused(["plan.py: step %s does not land yet. The ledger (%s) must say:" % (s["step"], LEDGER)] + ["  " + p for p in problems]):
+            return groups
     # 2. Invented references in the changed documents and the commit messages.
     bad = refs_problems(folder)
-    if bad:
-        say("plan.py: a file or line named in the documents or the commit messages does not exist:")
-        for l in bad:
-            say("  " + l)
-        return 1
+    if bad and refused(["plan.py: a file or line named in the documents or the commit messages does not exist:"] + ["  " + l for l in bad]):
+        return groups
     # 3. A replay reference changes only where the card says so.
     bad = replay_problems(folder, replay_allowed(card_text(folder, s)))
-    if bad:
-        say("plan.py: " + bad[0])
-        for l in bad[1:]:
-            say(l)
-        return 1
+    if bad and refused(["plan.py: " + bad[0]] + list(bad[1:])):
+        return groups
     # 3b. The repository's code checks (the console census, the cast check, the byte-order check) on the folder's tree: a refusal here is
     # a refusal, in seconds, with the check's own lines; nothing is committed or queued.
     bad = code_check_problems(folder)
-    if bad:
-        say("plan.py: step %s does not land: a rule of the repository refuses it (the gate's repo/code and the pre-push hook run the same checks). "
-            "Nothing was committed or queued. Change the code, commit, and land again:" % a.id)
-        for l in bad:
+    if bad and refused(["plan.py: step %s does not land: a rule of the repository refuses it (the gate's repo/code and the pre-push hook run the same "
+                        "checks). Nothing was committed or queued. Change the code, commit, and land again:" % s["step"]] + list(bad)):
+        return groups
+    # 3c. A place that can make a check see less changes only with its line in the strictness log.
+    bad = strictness_problems(folder, branch, "step %s" % s["step"])
+    if bad and refused(bad):
+        return groups
+    # 3d. The test tools, GitHub's jobs and the plan's lists change only where the card names the file.
+    bad = protected_problems(folder, card_text(folder, s), "step %s" % s["step"])
+    if bad and refused(bad):
+        return groups
+    return groups
+
+
+def earlier_state_commits(folder, step_id):
+    """[sha], newest first: the tool's own `Plan: step <ID> landed` commits on the folder's HEAD that are not on origin/main."""
+    out = git(folder, "log", "--format=%H %s", "origin/main..HEAD").stdout.splitlines()
+    found = []
+    for line in out:
+        sha, _, subject = line.partition(" ")
+        if subject.startswith(STATE_COMMIT % step_id) and is_state_commit(folder, sha, step_id):
+            found.append(sha)
+    return found
+
+
+def drop_state_commits(folder, step_id):
+    """A new landing of a step takes the tool's own earlier state commits off its branch before it makes the new one (a landing that
+    failed left one, and the code commit it names is no longer the step's). Only those commits go; the commits after them are put on their
+    parents. Returns "" or why it could not (the rebase is aborted, the branch is as it was)."""
+    for sha in earlier_state_commits(folder, step_id):
+        r = git(folder, "rebase", "--onto", sha + "^", sha)
+        if r.returncode != 0:
+            git(folder, "rebase", "--abort")
+            return "taking the earlier state commit %s off the branch did not apply: %s" % (sha[:9], (r.stderr or r.stdout).strip()[-200:])
+    return ""
+
+
+def begin_landing(a, s, folder, branch):
+    """The landing of the folder's present tip: the ledger, the references, the replay reference, the repository's rules; the state commit
+    (made once: a tip that is already the tool's state commit for this step is handed over as it is; an earlier one under fix commits is
+    taken off first); then the gate."""
+    agent = agent_of(a)
+    groups = prechecks(a, s, folder, branch)
+    if groups:
+        for l in groups[0]:
             say(l)
         return 1
     # 4. The landing's own commit: the step is landed, with the code's commit. Made once: when the tip is already this step's
-    # state commit (an earlier try made it) nothing is committed; fix commits on top of one get a second state commit, whose
-    # code commit is the newer tip. Nothing is ever undone.
+    # state commit (an earlier try made it) nothing is committed; fix commits on top of an earlier state commit take it off the branch,
+    # and the new state commit names the newer tip (E1: no commit on the branch says "landed" for code that was not the step's).
     tip = git_out(folder, "rev-parse", "HEAD")
     if is_state_commit(folder, tip, a.id) and code_commit_at(folder, tip, a.id):
         code_commit = code_commit_at(folder, tip, a.id)
     else:
+        why = drop_state_commits(folder, a.id)
+        if why:
+            say("plan.py: " + why)
+            return 1
+        tip = git_out(folder, "rev-parse", "HEAD")
         code_commit = tip[:9]
         set_state(folder, a.id, "landed", code_commit, track=False)
         with tempfile.TemporaryDirectory() as t:
@@ -2813,17 +3021,24 @@ def land_repair(a):
             for l in bad:
                 say(l)
             return 1
+        bad = strictness_problems(folder, branch, "repair %s" % a.id) or protected_problems(folder, "", "repair %s" % a.id)
+        if bad:
+            for l in bad:
+                say(l)
+            return 1
     code_commit = (rec["tip"] if rec else git_out(folder, "rev-parse", "HEAD"))[:9]
 
     def passed(verdict, seconds, summary):
         closed = verdict.commit or code_commit
         lv.set_repair(live_dir(a.live), a.id, "landed", closed)
         lv.set_state_entry(live_dir(a.live), a.id, "landed", agent)
-        lv.add_landing(live_dir(a.live), a.id, code_commit, seconds, agent, main=verdict.commit or "-")
+        lv.add_landing(live_dir(a.live), a.id, code_commit, seconds, agent, main=verdict.commit or "-", figures=figures_line(verdict))
+        end_aside(a, rep)
         refresh_page(a)
         say("LANDED %s as %s%s in %d s. Verdict by kind: %s." % (
             a.id, code_commit, (" (main has it as %s)" % verdict.commit) if verdict.commit else "", seconds,
             summary or "no check rows read"))
+        say_figures(verdict)
         say("The repair is landed (closed by %s). The progress files are made again (the page to open: %s)." % (
             closed, page_paths(a.live).html.as_posix()))
         return 0
@@ -2831,7 +3046,7 @@ def land_repair(a):
     if rec:
         say("joined the landing of %s, in the queue since %s" % (a.id, hhmm(rec["queue_time"])))
     # A repair of a red job of GitHub is proven there before main moves (`--github first`); another repair runs its own check.
-    extra = ["--github", "first"] if rep["source"] == "github" else ["--also", rep["check"]]
+    extra = ["--github", "first"] if rep["source"] == "github" else ([] if rep["source"] == "flake" else ["--also", rep["check"]])
     return hand_to_gate(a, folder, branch, a.id, agent, extra, passed, join=bool(rec))
 
 
@@ -2950,6 +3165,439 @@ def cmd_toolfault(a):
     return 0
 
 
+# ---- tool mends, decisions, the heartbeat (docs/plan/native/TOOL-MEND.md, AGENT.md sections 3 and 9) ----------------------------------------
+
+MEND_WAIT_HOURS = 3          # no result of the helper this long after its start: the wake-up looks (AGENT.md section 9)
+MEND_PER_CHECK = 2           # per step at most two mends for the same check
+MEND_TOOL_PATHS = ("tools/", "docs/", ".github/")      # a mend's commit touches a tool or a document
+WAIT_REASON = "waits for %s"
+BLOCKED_BY_MEND = "tool: %s"
+
+
+def minutes_since(stamp_text, at=None):
+    when = lv.parse_stamp(stamp_text)
+    return int(((at or now()) - when).total_seconds() // 60) if when else 0
+
+
+def mend_prompt(a, mend_id):
+    return ["Read %s/%s/TOOL-MEND.md whole." % (pathlib.Path(a.tree).as_posix(), NATIVE),
+            "Read the fault sheet at %s." % lv.sheet_path(live_dir(a.live), mend_id).as_posix(),
+            "Your mend is %s." % mend_id]
+
+
+def mend_blocks(a):
+    """While a mend is open the agent starts no step, writes nothing ahead and lands nothing (AGENT.md section 9): `start`, `ahead` and
+    `land` answer WAIT, as `next` does. True when one is open."""
+    m = lv.open_mend(live_dir(a.live))
+    if m is None:
+        return False
+    say("WAIT: mend %s is open: %s" % (m["id"], m["title"]))
+    say("Nothing is started, written ahead or landed while a mend is open: the step goes on only when main holds the mend. `python -X utf8 -I %s next` "
+        "says what to do now." % plan_path(a))
+    return True
+
+
+def say_mend_wait(a, m):
+    """What `next` prints while a mend is open: nothing else."""
+    sheet = lv.sheet_path(live_dir(a.live), m["id"])
+    plan = plan_path(a)
+    say("WAIT: mend %s is open: %s" % (m["id"], m["title"]))
+    say("Step in work: %s. Opened %s, %d minutes ago. Nothing else is given while a mend is open." % (
+        m["step"] if m["step"] != "-" else "none", lv.parse_stamp(m["opened"]).strftime("%H:%M") if lv.parse_stamp(m["opened"]) else m["opened"],
+        minutes_since(m["opened"])))
+    say()
+    say("What to do (AGENT.md section 9):")
+    say("1. The sheet is %s; its five headings are filled in." % sheet.as_posix())
+    say("2. A helper (the Agent tool, model sonnet, one at a time) is started with these three lines, and you wait for it:")
+    for l in mend_prompt(a, m["id"]):
+        say("     " + l)
+    say("3. MENDED <commit>: read the commit against TOOL-MEND.md section 5, then `python -X utf8 -I %s mend close %s <commit>`." % (plan, m["id"]))
+    say("   NOT MENDED, or no result %d hours after its start: look at the gate's line for a landing of `mend/%s` (never two writers); then "
+        "`python -X utf8 -I %s mend failed %s \"<why>\"`: it counts the attempts on the sheet (now %s of %d) and says what comes next: "
+        "a second helper, then your own attempt, and only after the third the step is blocked." % (
+            MEND_WAIT_HOURS, m["id"], plan, m["id"], m.get("attempts") or "0", lv.MEND_ATTEMPTS))
+    say("   NOT MENDED, needs game code: `python -X utf8 -I %s mend drop %s \"<the files>\"`: that is no tool fault; the step is yours again." % (plan, m["id"]))
+
+
+def cmd_mend(a):
+    return {"open": mend_open, "land": mend_land, "close": mend_close, "failed": mend_failed, "drop": mend_drop, "list": mend_list}[a.mend_cmd](a)
+
+
+def last_fault_text(a):
+    rows = [r for r in lv.read_faults(live_dir(a.live)) if r["agent"] == agent_of(a)]
+    if not rows:
+        return None
+    r = rows[-1]
+    return ["Check: %s (kind %s)%s" % (r["check"], r["kind"], (", test " + r["test"]) if r["test"] else ""),
+            "The tool said: %s" % r["first_error"],
+            "Run folder: %s" % (r["run_folder"] or "none recorded"), "Recorded %s." % r["time"]]
+
+
+def sheet_text(m, fault):
+    out = ["# %s: %s" % (m["id"], m["title"]), "",
+           "Step in work: %s. Opened %s. Written by plan.py mend open; the agent fills in the five headings below, "
+           "then starts the helper (docs/plan/native/TOOL-MEND.md)." % (m["step"] if m["step"] != "-" else "none", m["opened"]), ""]
+    out += ["## What I ran", "", "(the command, whole, and the folder it ran in)", ""]
+    out += ["## What the tool said", ""] + (fault or ["(the command's output, or the run folder of the landing)"]) + [""]
+    out += ["## What it should have said, and which document and section says so", "", "(quote the line of the document)", ""]
+    out += ["## The files I believe are at fault", "", "(path and function, or `none known`)", ""]
+    out += ["## What must stay refused after the mend", "",
+            "(what the tool refused rightly before and must refuse after; the helper proves it)", ""]
+    return "\n".join(out)
+
+
+def commit_on_main(a, commit):
+    """(True, [paths]) when `commit` is on origin/main (after a fetch): its changed paths; else (False, why)."""
+    folder = pathlib.Path(a.tree)
+    git(folder, "fetch", "origin")
+    if not re.match(r"^[0-9a-fA-F]{7,40}$", commit or ""):
+        return False, "%r is no commit id" % commit
+    if git(folder, "cat-file", "-e", commit + "^{commit}").returncode != 0:
+        return False, "commit %s is not in this repository" % commit
+    if git(folder, "merge-base", "--is-ancestor", commit, "origin/main").returncode != 0:
+        return False, "commit %s is not on origin/main (a mend is closed only when main has it)" % commit
+    names = [l for l in git(folder, "show", "--name-only", "--format=", commit).stdout.splitlines() if l.strip()]
+    return True, names
+
+
+def mend_open(a):
+    live = live_dir(a.live)
+    words = a.words
+    if len(words) > 2:
+        say("plan.py: mend open takes [<step ID>] \"<title>\"")
+        return 1
+    step, title = (words[0], words[1]) if len(words) == 2 else ("", words[0])
+    title = " ".join(title.split())
+    if not title:
+        say("plan.py: a mend needs a title")
+        return 1
+    if a.landed:
+        ok, found = commit_on_main(a, a.landed)
+        if not ok:
+            say("plan.py: " + found)
+            return 1
+        if not any(p.startswith(MEND_TOOL_PATHS) for p in found):
+            say("plan.py: commit %s changes no tool or document path (%s)" % (a.landed, ", ".join(MEND_TOOL_PATHS)))
+            return 1
+        row = lv.add_mend(live, step or "-", title, a.check or "-", "closed", a.landed, "recorded after a landing by hand (plan.py itself was at fault)")
+        refresh_page(a)
+        say("recorded %s as closed by %s (the sheet, if you wrote one: %s)" % (row["id"], a.landed, lv.sheet_path(live, row["id"]).as_posix()))
+        return 0
+    open_now = lv.open_mend(live)
+    if open_now:
+        say("plan.py: mend %s is open (%s): finish it first (mend close, or mend failed)" % (open_now["id"], open_now["title"]))
+        return 1
+    if step:
+        s = find(read_steps(a.tree, a.live), step)
+        entry = lv.read_state(live).get(step)
+        if s is None and not is_repair(step):
+            say("plan.py: no step %s" % step)
+            return 1
+        if not entry or entry["state"] != "started":
+            say("plan.py: %s is not in work (a mend waits for the step in work: plan.py start %s first), or open the mend with no step" % (step, step))
+            return 1
+        if a.check:
+            same = [m for m in lv.read_mends(live) if m["step"] == step and m["check"] == a.check]
+            if len(same) >= MEND_PER_CHECK:
+                say("plan.py: step %s has had %d mends for %s (%s): the step is blocked, not mended a third time: plan.py blocked %s \"tool: <the fault>\"" % (
+                    step, len(same), a.check, ", ".join(m["id"] for m in same), step))
+                return 1
+    fault = last_fault_text(a) if a.last else None
+    if a.last and fault is None:
+        say("plan.py: agent %s has no tool fault recorded (--last)" % agent_of(a))
+        return 1
+    row = lv.add_mend(live, step or "-", title, a.check or "-")
+    sheet = lv.sheet_path(live, row["id"])
+    if not sheet.exists():
+        atomic_write(sheet, sheet_text(row, fault))
+    if step:
+        lv.set_state_entry(live, step, "started", (lv.read_state(live).get(step) or {}).get("agent") or "1", WAIT_REASON % row["id"])
+    refresh_page(a)
+    say("opened %s: %s" % (row["id"], title))
+    say("The fault sheet is %s. Fill in its five headings, then start ONE helper (the Agent tool, model sonnet) with these three lines and wait:" % sheet.as_posix())
+    for l in mend_prompt(a, row["id"]):
+        say("  " + l)
+    say("%s is not blocked and its time is not counted against the three-failures and four-hours rules while the mend is open." % (step or "No step"))
+    return 0
+
+
+def mend_row(a, mend_id):
+    return next((m for m in lv.read_mends(live_dir(a.live)) if m["id"] == mend_id), None)
+
+
+def mend_close(a):
+    live = live_dir(a.live)
+    m = mend_row(a, a.id)
+    if m is None:
+        say("plan.py: no mend %s (plan.py mend list)" % a.id)
+        return 1
+    if m["state"] == "closed":
+        say("plan.py: mend %s is closed already (commit %s)" % (a.id, m["commit"]))
+        return 1
+    ok, found = commit_on_main(a, a.commit)
+    if not ok:
+        say("plan.py: " + found)
+        return 1
+    if not any(p.startswith(MEND_TOOL_PATHS) for p in found):
+        say("plan.py: commit %s changes no tool or document path (%s): it is not a mend" % (a.commit, ", ".join(MEND_TOOL_PATHS)))
+        return 1
+    lv.set_mend(live, a.id, "closed", a.commit)
+    state = lv.read_state(live)
+    waiting = m["step"] if m["step"] != "-" else ""
+    if waiting and (state.get(waiting) or {}).get("state") == "started":
+        lv.set_state_entry(live, waiting, "started", state[waiting]["agent"] or "1", "")
+    reopened = []
+    for step_id, e in state.items():
+        if e["state"] == "blocked" and e["reason"].startswith(BLOCKED_BY_MEND % a.id):
+            lv.set_state_entry(live, step_id, "open")
+            reopened.append(step_id)
+    refresh_page(a)
+    say("closed %s (commit %s). %s" % (a.id, a.commit[:9], ("Step %s is in work again." % waiting) if waiting else "No step was waiting."))
+    plan = plan_path(a)
+    say("Now, in your work folder: `git fetch origin`; commit what you have (the folder must be clean); `git rebase origin/main` on the step's "
+        "branch, so that it is built on the mend (a conflict: AGENT.md section 9, point 2); then `python -X utf8 -I %s land %s`." % (
+            plan, waiting or "<the step>"))
+    for step_id in reopened:
+        say("Open again, blocked by this mend before: %s. `python -X utf8 -I %s next` gives it in its turn; `start %s` takes its branch up "
+            "(rebase it onto origin/main, then land)." % (step_id, plan, step_id))
+    return 0
+
+
+ATTEMPT_WHO = {1: "the helper", 2: "the second helper", 3: "the agent itself"}
+
+
+def add_to_sheet(a, mend_id, lines):
+    """Appends lines to the fault sheet (the next helper reads them there)."""
+    sheet = lv.sheet_path(live_dir(a.live), mend_id)
+    text = sheet.read_text(encoding="utf-8") if sheet.exists() else "# %s\n" % mend_id
+    atomic_write(sheet, text.rstrip("\n") + "\n\n" + "\n".join(lines) + "\n")
+
+
+def mend_failed(a):
+    """`mend failed M-00N "why"`: one attempt ended without a mend. The attempts are counted on the sheet: the first helper, a second helper
+    with the first one's notes, the agent itself by TOOL-MEND.md; only the third failure blocks the step."""
+    live = live_dir(a.live)
+    m = mend_row(a, a.id)
+    if m is None:
+        say("plan.py: no mend %s (plan.py mend list)" % a.id)
+        return 1
+    if m["state"] != "open":
+        say("plan.py: mend %s is %s: nothing is open to fail" % (a.id, m["state"]))
+        return 1
+    why = " ".join(a.why.split())
+    attempts = int(m.get("attempts") or 0) + 1
+    plan = plan_path(a)
+    add_to_sheet(a, a.id, ["## Attempt %d (%s) ended: NOT MENDED" % (attempts, ATTEMPT_WHO.get(attempts, "attempt %d" % attempts)), "", why])
+    if attempts < lv.MEND_ATTEMPTS:
+        lv.set_mend(live, a.id, "open", note="attempt %d failed: %s" % (attempts, why), attempts=attempts)
+        refresh_page(a)
+        say("attempt %d of %d of %s failed; the step keeps waiting." % (attempts, lv.MEND_ATTEMPTS, a.id))
+        if attempts == 1:
+            say("SECOND HELPER: start one new Sonnet helper with the same three lines; the first helper's notes are on the sheet under "
+                "\"Attempt 1\" and it reads them there:")
+            for l in mend_prompt(a, a.id):
+                say("  " + l)
+        else:
+            say("YOUR OWN ATTEMPT: you mend %s yourself, by docs/plan/native/TOOL-MEND.md to the letter (read it whole first; nothing in it is "
+                "relaxed for you): the folder Nebula-mend, the branch mend/%s (an earlier attempt's branch is renamed there first), the sheet "
+                "with the two attempts' notes, three hours of your own work, the proofs, and `python -X utf8 -I Nebula-mend/tools/plan/plan.py "
+                "mend land %s`. When it fails too: `python -X utf8 -I %s mend failed %s \"<why>\"` again." % (a.id, a.id, a.id, plan, a.id))
+        return 0
+    step = m["step"] if m["step"] != "-" else ""
+    entry = lv.read_state(live).get(step) if step else None
+    if entry and entry["state"] == "started":
+        b = argparse.Namespace(**vars(a))
+        b.id, b.why = step, (BLOCKED_BY_MEND % a.id) + " " + why
+        lv.set_state_entry(live, step, "started", entry["agent"] or "1", "")      # the wait is over; `blocked` takes the step from here
+        code = cmd_blocked(b)
+        if code != 0:
+            lv.set_state_entry(live, step, "started", entry["agent"] or "1", WAIT_REASON % a.id)
+            return code
+    lv.set_mend(live, a.id, "failed", note="attempt %d failed: %s" % (attempts, why), attempts=attempts)
+    refresh_page(a)
+    say("BLOCKED: %s failed its third attempt and is listed as needing the planner%s." % (a.id, ("; step %s is blocked `%s`" % (step, BLOCKED_BY_MEND % a.id)) if step else ""))
+    say("NEXT: `python -X utf8 -I %s next` gives the steps that do not need it. A later `mend close %s <commit>` (a mend the planner makes) "
+        "opens the step again." % (plan, a.id))
+    return 0
+
+
+def mend_drop(a):
+    """`mend drop M-00N "<the files>"`: the helper reported `NOT MENDED, needs game code`. That is no tool fault: the mend ends, the step
+    is the agent's again (it records a ledger row for the fault in the game, as AGENT.md section 10 says)."""
+    live = live_dir(a.live)
+    m = mend_row(a, a.id)
+    if m is None:
+        say("plan.py: no mend %s (plan.py mend list)" % a.id)
+        return 1
+    if m["state"] != "open":
+        say("plan.py: mend %s is %s" % (a.id, m["state"]))
+        return 1
+    why = " ".join(a.why.split())
+    add_to_sheet(a, a.id, ["## Dropped: needs game code", "", why])
+    step = m["step"] if m["step"] != "-" else ""
+    state = lv.read_state(live)
+    if step and (state.get(step) or {}).get("state") == "started":
+        lv.set_state_entry(live, step, "started", state[step]["agent"] or "1", "")
+    lv.set_mend(live, a.id, "dropped", note="needs game code: " + why)
+    refresh_page(a)
+    say("dropped %s: the fault is in the game's code (%s), not in a tool. %s is yours again: add a ledger row for the fault in the game "
+        "(AGENT.md section 10) and go on." % (a.id, why, step or "The step"))
+    return 0
+
+
+def mend_list(a):
+    rows = lv.read_mends(live_dir(a.live))
+    if not rows:
+        say("No mends.")
+        return 0
+    for m in rows:
+        opened = lv.parse_stamp(m["opened"])
+        closed = lv.parse_stamp(m["closed"])
+        minutes = int(((closed or now()) - opened).total_seconds() // 60) if opened else 0
+        say("%s  %-7s step %s, %d min, commit %s: %s%s" % (m["id"], m["state"], m["step"], minutes, m["commit"], m["title"],
+                                                        ("  [" + m["note"] + "]") if m["note"] not in ("", "-") else ""))
+    return 0
+
+
+def mend_land(a):
+    """`mend land M-00N`, for the helper, from its own folder on its branch mend/M-00N: the pre-checks of `land` that apply to a tool
+    (the references, the repository's code checks, the strictness check with the rule for `mend/*` branches), each refused in seconds,
+    then the branch goes to the gate with the mend's name. A landing that was cut is joined."""
+    live = live_dir(a.live)
+    m = mend_row(a, a.id)
+    if m is None:
+        say("plan.py: no mend %s (plan.py mend list)" % a.id)
+        return 1
+    if m["state"] == "closed":
+        say("plan.py: mend %s is closed already" % a.id)
+        return 1
+    folder = pathlib.Path(a.tree)
+    branch = "mend/" + a.id
+    agent_folder = work_folder(a.work_root, 1)
+    if folder.resolve() == agent_folder.resolve():
+        say("plan.py: run the plan.py of your own folder (Nebula-mend), never the agent's: this one is %s" % folder.as_posix())
+        return 1
+    why = work_folder_problem(a, folder, branch)
+    if why:
+        say("plan.py: " + why)
+        return 1
+    rec = active_landing(a.live, "mend", getattr(a, "queue_file", None))
+    if rec and rec["branch"] == branch:
+        say("joined the landing of %s, in the queue since %s" % (branch, hhmm(rec.get("queue_time", rec["time"]))))
+        join = True
+    else:
+        join = False
+        git(folder, "fetch", "origin")
+        groups = []
+        bad = refs_problems(folder)
+        if bad:
+            groups.append(["plan.py: a file or line named in the documents or the commit messages does not exist:"] + ["  " + l for l in bad])
+        bad = code_check_problems(folder)
+        if bad:
+            groups.append(["plan.py: a rule of the repository refuses the mend (the gate's repo/code runs the same checks):"] + list(bad))
+        bad = strictness_problems(folder, branch, "mend %s" % a.id)
+        if bad:
+            groups.append(bad)
+        if groups:
+            for g in groups:
+                for l in g:
+                    say(l)
+            return 1
+
+    def passed(verdict, seconds, summary):
+        lv.set_mend(live, a.id, m["state"], note="landed as %s" % (verdict.commit or "?"))
+        refresh_page(a)
+        say("LANDED %s as %s in %d s. Verdict by kind: %s." % (branch, verdict.commit or "(commit not read)", seconds, summary or "no check rows read"))
+        say("Report `MENDED %s %s`." % (a.id, verdict.commit or "<main's commit>"))
+        return 0
+
+    extra = ["--who", "mend %s" % a.id]
+    return hand_to_gate(a, folder, branch, branch, "mend", extra, passed, join=join)
+
+
+def cmd_check(a):
+    """The pre-checks of `land` alone on the work folder's tree: every thing that would refuse the step, all at once; nothing is written,
+    committed or queued."""
+    agent = agent_of(a)
+    folder = work_folder(a.work_root, agent)
+    if not folder.is_dir():
+        folder = pathlib.Path(a.tree)
+    on = head_branch(folder)
+    item = branch_item(on) if on else None
+    steps = read_steps(a.tree, a.live)
+    s = find(steps, item[1]) if item and item[0] == "step" else None
+    if s is None:
+        say("plan.py: the folder %s is on %s, which is no step's branch (native/<ID>); check is for a step in work" % (folder.as_posix(), on or "no branch"))
+        return 1
+    groups = prechecks(a, s, folder, on, first_only=False)
+    if not groups:
+        say("check: nothing of what `land %s` checks before it queues refuses %s as it stands (the gate's own checks are still to come)." % (s["step"], on))
+        return 0
+    say("check: %d thing%s would refuse `land %s`:" % (len(groups), "" if len(groups) == 1 else "s", s["step"]))
+    for g in groups:
+        say()
+        for l in g:
+            say(l)
+    return 1
+
+
+def cmd_decide(a):
+    """A decision of the agent (AGENT.md section 7): one line of docs/plan/native/decisions.tsv, which lands with the step."""
+    cols = ["date", "step", "what", "because", "doc"]
+    steps = read_steps(a.tree, a.live)
+    if find(steps, a.id) is None and not is_repair(a.id):
+        say("plan.py: no step %s" % a.id)
+        return 1
+    row = [datetime.date.today().isoformat(), a.id, " ".join(a.what.split()), " ".join(a.because.split()), " ".join((a.doc or "-").split())]
+    if not row[2] or not row[3]:
+        say("plan.py: a decision has a text and a reason")
+        return 1
+    path = native(a.tree) / "decisions.tsv"
+    text = path.read_text(encoding="utf-8") if path.exists() else "\t".join(cols) + "\n"
+    atomic_write(path, text.rstrip("\n") + "\n" + "\t".join(row) + "\n")
+    say("decided: %s: %s (because %s) -> %s; it lands with the step: commit the file." % (a.id, row[2], row[3], path.as_posix()))
+    return 0
+
+
+def read_decisions(tree):
+    """[{date, step, what, because, doc}] of the plan tree's decisions.tsv (a missing file has none)."""
+    path = native(tree) / "decisions.tsv"
+    return lv.read_rows(path, ["date", "step", "what", "because", "doc"])
+
+
+def read_strictness_log(tree):
+    """[{date, file, what changed, why, allowed by, id, removed by}] of docs/plan/strictness-log.tsv as the tree has it."""
+    path = pathlib.Path(tree) / "docs" / "plan" / "strictness-log.tsv"
+    return lv.read_rows(path, list(strictness.LOG_COLUMNS))
+
+
+def owner_questions(steps):
+    """[{step, title, question}] of the steps blocked with `owner: <the question>`: they wait for the owner, and the page lists them apart."""
+    return [{"step": s["step"], "title": s["title"], "question": s["reason"][len("owner:"):].strip()}
+            for s in steps if s["state"] == "blocked" and (s["reason"] or "").startswith("owner:")]
+
+
+def run_state(a, at=None):
+    """`working`, `ended` or `stale` (AGENT.md section 14): done or stopped by section 13 is `ended`; a command of the last three hours, or
+    a landing or a mend landing of the agent in the gate's line, is `working`."""
+    note = read_note(a.live) or ""
+    steps = read_steps(a.tree, a.live)
+    if re.match(r"^(Done|Stopped)\b", note) or (steps and all(s["state"] == "landed" for s in steps)):
+        return "ended"
+    age = lv.heartbeat_age_hours(live_dir(a.live), at)
+    if age is not None and age <= lv.HEARTBEAT_HOURS:
+        return "working"
+    qf = getattr(a, "queue_file", None)
+    if active_landing(a.live, "1", qf) or active_landing(a.live, "mend", qf):
+        return "working"
+    return "stale"
+
+
+def cmd_alive(a):
+    say(run_state(a))
+    return 0
+
+
 def cmd_status(a):
     fetch_main_landed(a)
     settle_github(a)
@@ -3048,6 +3696,35 @@ def parser():
     tf.add_argument("--last", action="store_true")
     tf.add_argument("--could-not", required=True)
     tf.set_defaults(fn=cmd_toolfault)
+    md = sub.add_parser("mend", help="a tool at fault is mended by one helper while the agent waits (docs/plan/native/TOOL-MEND.md)")
+    msub = md.add_subparsers(dest="mend_cmd", required=True)
+    mo = msub.add_parser("open", parents=[who], help="open a mend: the fault sheet is written and the step in work waits for it")
+    mo.add_argument("words", nargs="+", help="[<step ID>] \"<title>\"")
+    mo.add_argument("--last", action="store_true", help="the sheet starts from the agent's last tool fault")
+    mo.add_argument("--check", default="", help="the check at fault (at most %d mends of one step for one check)" % MEND_PER_CHECK)
+    mo.add_argument("--landed", default="", metavar="COMMIT", help="record a mend that was landed by hand (plan.py itself was at fault)")
+    ml = msub.add_parser("land", parents=[who], help="for the helper: the mend's branch goes to the gate after the pre-checks")
+    ml.add_argument("id")
+    mc = msub.add_parser("close", parents=[who], help="the mend is on main: the waiting step goes on, the steps it blocked are open again")
+    mc.add_argument("id")
+    mc.add_argument("commit")
+    mf = msub.add_parser("failed", parents=[who], help="one attempt ended without a mend: counts it and says what comes next; the third "
+                         "blocks the waiting step `tool: M-00N`")
+    mf.add_argument("id")
+    mf.add_argument("why")
+    mdp = msub.add_parser("drop", parents=[who], help="the fault needs game code: no tool fault, the waiting step is the agent's again")
+    mdp.add_argument("id")
+    mdp.add_argument("why")
+    msub.add_parser("list", parents=[who], help="every mend with its state, step, minutes and commit")
+    md.set_defaults(fn=cmd_mend)
+    dc = sub.add_parser("decide", parents=[who], help="a decision of the agent: one line of docs/plan/native/decisions.tsv")
+    dc.add_argument("id")
+    dc.add_argument("what")
+    dc.add_argument("--because", required=True)
+    dc.add_argument("--doc", default="", help="the file and section that settle it")
+    dc.set_defaults(fn=cmd_decide)
+    sub.add_parser("alive", parents=[who], help="one word: working, ended or stale").set_defaults(fn=cmd_alive)
+    sub.add_parser("check", parents=[who], help="what `land` checks before it queues, on the folder as it is: nothing is queued").set_defaults(fn=cmd_check)
     rp = sub.add_parser("repair", help="what is found wrong after a landing: add one, list them")
     rsub = rp.add_subparsers(dest="repair_cmd", required=True)
     ra = rsub.add_parser("add", help="write a repair (the nightly run calls this) and print its id")
@@ -3077,7 +3754,10 @@ def main(argv=None):
     finally:
         _sys.path.remove(_gate)
     selftest_guard.install_if_asked()
+    noprompt.install()                 # no git prompt and no crash box for anything this tool starts (tools/gate/noprompt.py)
     a = parser().parse_args(argv)
+    if a.cmd != "alive":
+        lv.write_heartbeat(live_dir(getattr(a, "live", None)))      # every command writes its time; `alive` reads it
     MAIN_LANDED.clear()
     del MAIN_READ[:]
     if getattr(a, "agent", None) is not None:

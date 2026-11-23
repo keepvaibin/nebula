@@ -266,12 +266,12 @@ class Groups(unittest.TestCase):
 
     def test_documents_only_selects_repo_and_no_build(self):
         chosen = scope.select(self.needs, plan("docs/a.md").groups)
-        self.assertEqual(chosen, {"repo/settings", "repo/audit", "repo/scripts", "repo/code"})
+        self.assertEqual(chosen, {"repo/settings", "repo/audit", "repo/scripts", "repo/code", "repo/strictness"})
         self.assertFalse(any(n.startswith(("build", "unit", "start", "tour", "engine", "data")) for n in chosen))
 
     def test_a_run_of_documents_runs_the_repo_checks_and_starts_no_build(self):
         ran = []
-        saved = {k: getattr(gate, k) for k in ("settings_table", "repo_audit", "parse_scripts", "repo_code", "build_windows",
+        saved = {k: getattr(gate, k) for k in ("settings_table", "repo_audit", "parse_scripts", "repo_code", "repo_strictness", "build_windows",
                                               "unit_tests", "game_tests", "start_check", "harness")}
 
         def fake(name):
@@ -289,7 +289,7 @@ class Groups(unittest.TestCase):
                 return fn
             return make
         try:
-            for k in ("settings_table", "repo_audit", "parse_scripts", "repo_code"):
+            for k in ("settings_table", "repo_audit", "parse_scripts", "repo_code", "repo_strictness"):
                 setattr(gate, k, fake(k))
             for k in ("build_windows", "unit_tests", "game_tests", "start_check", "harness"):
                 setattr(gate, k, forbidden(k))
@@ -301,8 +301,8 @@ class Groups(unittest.TestCase):
                 selected = scope.select(self.needs, plan("docs/a.md").groups)
                 with contextlib.redirect_stdout(io.StringIO()):
                     g = gate.run_checks(args, known, planned, selected)
-            self.assertEqual(sorted(ran), ["parse_scripts", "repo_audit", "repo_code", "settings_table"])
-            self.assertEqual(sorted(r["check"] for r in g.results), ["repo/audit", "repo/code", "repo/scripts", "repo/settings"])
+            self.assertEqual(sorted(ran), ["parse_scripts", "repo_audit", "repo_code", "repo_strictness", "settings_table"])
+            self.assertEqual(sorted(r["check"] for r in g.results), ["repo/audit", "repo/code", "repo/scripts", "repo/settings", "repo/strictness"])
             self.assertEqual(g.verdict, "pass")
         finally:
             for k, v in saved.items():
