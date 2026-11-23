@@ -80,3 +80,22 @@ function Step([string]$Name, [string]$Command, [string]$Log) {
     $sw = [Diagnostics.Stopwatch]::StartNew()
     Finish-Step $Name (Start-Step $Command $Log) $Log $sw $Command
 }
+
+# What a configured game folder's CMakeCache.txt holds of NEBULA_SANITIZE (the text; empty when the entry is not there) and of
+# NEBULA_COVERAGE ($true when it is ON). build_windows.ps1 asks the same question before configuring and after (M-003).
+function Get-Game-Config([string]$Folder) {
+    $cache = "$Folder/CMakeCache.txt"
+    if (-not (Test-Path $cache)) { return [pscustomobject]@{ Sanitize = ""; Counted = $false } }
+    $sanitize = Select-String -Path $cache -Pattern '^NEBULA_SANITIZE:STRING=(.*)$' -ErrorAction SilentlyContinue | Select-Object -First 1
+    [pscustomobject]@{
+        Sanitize = if ($sanitize) { $sanitize.Matches[0].Groups[1].Value } else { "" }
+        Counted  = [bool](Select-String -Path $cache -Pattern '^NEBULA_COVERAGE:BOOL=ON$' -Quiet -ErrorAction SilentlyContinue)
+    }
+}
+
+# Whether the game folder holds other sanitizers or another coverage setting than asked: it is then configured again with the
+# ones asked for (the settings are cache entries, so the configure command's -D values replace them), never built as it is.
+function Game-Config-Differs([string]$Folder, [string]$Sanitize, [bool]$Coverage) {
+    $have = Get-Game-Config $Folder
+    return ($have.Sanitize -ne $Sanitize) -or ($have.Counted -ne $Coverage)
+}

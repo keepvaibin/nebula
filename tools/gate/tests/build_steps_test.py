@@ -26,6 +26,9 @@ whole build and the landing were lost.
                                         `<step>: <first compiler or linker message>` (MSVC, clang, linker), else the first FAILED line; two
                                         different compile errors are two different texts (the signature of three failures in a row)
   output_is_line_buffered               gate.unbuffer_output: a line printed to a pipe arrives at once (a landing showed nothing for 543 s)
+  game_folder_is_configured_again       build_windows.ps1: a game folder whose CMakeCache.txt holds other NEBULA_SANITIZE or NEBULA_COVERAGE values than asked
+                                        is configured again (Game-Config-Differs in build_steps.ps1); one that holds them is not; a folder that after
+                                        configuring still differs is refused with exit 1 (M-003: a sanitizer long run was refused, never built)
 Exit 0 when every case holds.
 """
 import json
@@ -178,6 +181,105 @@ class Steps(unittest.TestCase):
             self.assertIn("--build", line, "the step's command is passed, so it can be run again: " + line)
         self.assertIn('exit 2', script)
         self.assertIn(gate.NOT_JUDGED_BUILD, script, "the line the gate reads")
+
+
+def vswhere():
+    return shutil.which("vswhere.exe") or next(iter(pathlib.Path(os.environ.get("ProgramFiles(x86)", "")).glob("Microsoft Visual Studio/Installer/vswhere.exe")), None)
+
+
+@unittest.skipUnless(powershell(), "the build script is PowerShell on Windows")
+class GameConfig(unittest.TestCase):
+    """The game folder's configure: when its CMakeCache.txt holds other sanitizers or another coverage setting than asked, it is
+    configured again; after that a folder that still differs is refused (a build never runs with other settings than asked)."""
+
+    def cache(self, tmp, sanitize=None, coverage=None):
+        tmp.mkdir(parents=True, exist_ok=True)
+        lines = []
+        if sanitize is not None:
+            lines.append("NEBULA_SANITIZE:STRING=%s" % sanitize)
+        if coverage is not None:
+            lines.append("NEBULA_COVERAGE:BOOL=%s" % coverage)
+        (tmp / "CMakeCache.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def differs(self, cache, sanitize, coverage):
+        """Game-Config-Differs over a planted cache (cache: (sanitize, coverage) cache lines, or None for no CMakeCache.txt)."""
+        tmp = pathlib.Path(tempfile.mkdtemp(prefix="build-config-"))
+        self.addCleanup(lambda: shutil.rmtree(tmp, ignore_errors=True))
+        if cache is not None:
+            self.cache(tmp, *cache)
+        wrapper = tmp / "wrapper.ps1"
+        wrapper.write_text('$ErrorActionPreference = "Stop"\n$vcvars = ""\n. "%s"\n' % STEPS.as_posix()
+                           + "$differs = Game-Config-Differs '%s' '%s' %s\n" % (tmp.as_posix(), sanitize, "$true" if coverage else "$false")
+                           + '"RESULT $differs"\n',
+                           encoding="utf-8")
+        r = subprocess.run([powershell(), "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(wrapper)], capture_output=True,
+                           text=True, timeout=120)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        return next(l for l in r.stdout.splitlines() if l.startswith("RESULT ")) == "RESULT True"
+
+    def test_the_settings_asked_for_against_the_cache(self):
+        cases = [  # (cache sanitize, cache coverage), asked sanitize, asked coverage, differs
+            (("address", "OFF"), "address,undefined", False, True),
+            (("address,undefined", "OFF"), "address,undefined", False, False),
+            (("address,undefined", "OFF"), "", False, True),
+            (("", "OFF"), "address", False, True),
+            (("", "OFF"), "", False, False),
+            (("", "ON"), "", False, True),
+            (("", "OFF"), "", True, True),
+            (("", "ON"), "", True, False),
+            (("address", "ON"), "address", True, False),
+            (("address", "ON"), "address,undefined", True, True),
+            ((None, None), "", False, False),
+            ((None, None), "address", False, True),
+            ((None, None), "", True, True),
+            (None, "", False, False),
+            (None, "address", False, True),
+        ]
+        for cache, sanitize, coverage, want in cases:
+            self.assertEqual(self.differs(cache, sanitize, coverage), want, "cache %r, asked %r coverage %r" % (cache, sanitize, coverage))
+
+    def run_script(self, cache, sanitize="", coverage=False):
+        """build_windows.ps1 over a planted tree and a game folder with that cache, up to the game configure (the real cmake fails
+        on the empty native folder at once; nothing is compiled). (output, exit code, the game folder's configure log is there)."""
+        if not (vswhere() and shutil.which("ninja")):
+            self.skipTest("no Visual Studio or ninja here")
+        tmp = pathlib.Path(tempfile.mkdtemp(prefix="build-config-run-"))
+        self.addCleanup(lambda: shutil.rmtree(tmp, ignore_errors=True))
+        (tmp / "tree" / "native").mkdir(parents=True)
+        self.cache(tmp / "root" / "game", *cache)
+        (tmp / "root" / "game" / "build.ninja").write_text("\n", encoding="utf-8")
+        env = dict(os.environ, NEBULA_NO_MEASURE_WAIT="1")
+        cmd = [powershell(), "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(GATE / "build_windows.ps1"), "-Tree", str(tmp / "tree"),
+               "-Root", str(tmp / "root"), "-Bin", str(tmp / "bin"), "-Sanitize", sanitize, "-Sccache", ""]
+        if coverage:
+            cmd.append("-Coverage")
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=300, env=env)
+        return r.stdout + r.stderr, r.returncode, (tmp / "root" / "game.configure.log").exists()
+
+    def test_a_folder_with_other_sanitizers_is_configured_again(self):
+        out, code, configured = self.run_script(("address", "OFF"), sanitize="address,undefined")
+        self.assertTrue(configured, "the game folder is configured again with the sanitizers asked for: " + out)
+        self.assertIn("game configure: exit", out)
+
+    def test_a_folder_with_another_coverage_setting_is_configured_again(self):
+        out, code, configured = self.run_script(("", "OFF"), coverage=True)
+        self.assertTrue(configured, out)
+        out, code, configured = self.run_script(("", "ON"))
+        self.assertTrue(configured, out)
+
+    def test_a_plain_build_in_a_sanitizer_folder_is_configured_again(self):
+        out, code, configured = self.run_script(("address,undefined", "OFF"))
+        self.assertTrue(configured, out)
+
+    def test_a_folder_that_still_differs_after_configuring_is_refused(self):
+        # the configure fails here (no sources), so the cache stays as it was: refused with exit 1, nothing built
+        out, code, configured = self.run_script(("address", "OFF"), sanitize="address,undefined")
+        self.assertEqual(code, 1, out)
+        self.assertIn("was configured with NEBULA_SANITIZE='address', asked for 'address,undefined'", out)
+        self.assertNotIn("bins ok", out)
+        out, code, configured = self.run_script(("", "OFF"), coverage=True)
+        self.assertEqual(code, 1, out)
+        self.assertIn("was configured with NEBULA_COVERAGE=False, asked for True", out)
 
 
 class GateSide(unittest.TestCase):
