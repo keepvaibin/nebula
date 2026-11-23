@@ -6,6 +6,9 @@ name: Check
 # nothing: the landing's candidate is the one run of a commit that is read. What needs
 # a real GPU, the game's data or the tablet runs in the local gate (tools/gate/gate.py), whose results are kept in
 # docs/plan/gate-runs. The compiler caches (.github/actions/compiler-cache) are restored by every run and saved by main only.
+# AMD's FSR 3 is in the Windows, Linux and Android programs: those jobs set NEBULA_REQUIRE_FSR3, so a build that leaves it out stops
+# (cmake/fidelityfx_vk_shaders.cmake). Its shader compiler runs on Windows only: the ffx-shaders job makes the headers and the Linux
+# job takes them (.github/actions/ffx-vk-shaders).
 on:
   push:
     branches: [main, 'gate/**']
@@ -26,6 +29,23 @@ env:
   ANDROID_NDK: '28.2.13676358'
 
 jobs:
+  # FidelityFX's Vulkan shader headers, for the Linux job (the SDK's shader compiler runs on Windows only). Every run, a candidate too.
+  ffx-shaders:
+    name: FSR 3 shaders (Windows)
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/ffx-vk-shaders
+        with:
+          folder: ${{ runner.temp }}/ffx-vk-shaders
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ffx-vk-shaders
+          path: ${{ runner.temp }}/ffx-vk-shaders
+          if-no-files-found: error
+          retention-days: 1
+
   windows:
     name: Windows (three renderers, unit tests)
     # Main and a start by hand, not a candidate (file 04, 8): this machine builds and tests Windows and Android itself, and a
@@ -33,6 +53,8 @@ jobs:
     if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
     runs-on: windows-2022
     timeout-minutes: 240
+    env:
+      NEBULA_REQUIRE_FSR3: 'ON'
     steps:
       - uses: actions/checkout@v7
       - id: cache
@@ -259,8 +281,11 @@ jobs:
           key: ${{ steps.cache.outputs.key }}
   linux:
     name: Linux
+    needs: ffx-shaders
     runs-on: ubuntu-24.04
     timeout-minutes: 240
+    env:
+      NEBULA_REQUIRE_FSR3: 'ON'
     steps:
       - uses: actions/checkout@v7
       - id: cache
@@ -286,8 +311,16 @@ jobs:
           rm llvm.tar.xz
       - name: Dependencies
         run: sh tools/fetch_build_deps.sh "$RUNNER_TEMP/deps"
+      # FSR 3's shader headers, made by the ffx-shaders job (its compiler runs on Windows only).
+      - uses: actions/download-artifact@v8
+        with:
+          name: ffx-vk-shaders
+          path: ${{ runner.temp }}/ffx-vk-shaders
       - name: Build Nebula
-        run: sh platform/linux/build_linux.sh -d "$RUNNER_TEMP/deps" -l "$RUNNER_TEMP/llvm" -w "$RUNNER_TEMP/work"
+        # NEBULA_REQUIRE_FSR3 is read by the script and by CMake: without the shader headers the build stops.
+        run: sh platform/linux/build_linux.sh -d "$RUNNER_TEMP/deps" -l "$RUNNER_TEMP/llvm" -w "$RUNNER_TEMP/work" -s "$RUNNER_TEMP/ffx-vk-shaders"
+      - name: FSR 3 (the program holds it)
+        run: python3 -X utf8 -I tools/check_fsr3_package.py "$RUNNER_TEMP/work/bin/nebula"
       - name: The compiler cache's hits and misses
         if: always() && steps.cache.outputs.key != ''
         shell: bash
@@ -316,6 +349,20 @@ jobs:
           for line in 'borderless full screen 1920 x 1080 pixels' "the system's pointer is hidden"; do
             grep -q "$line" "$d/start.log" || { echo "the start log has no line '$line':"; grep -e '^\[window\]' -e '^\[display\]' "$d/start.log" || true; exit 1; }
           done
+      - name: Start check with FSR 3 chosen (the settings file asks for it; the log says it was made, or what the device lacks)
+        shell: bash
+        run: |
+          d="$RUNNER_TEMP/start-fsr3"
+          mkdir -p "$d/data" "$d/settings"
+          printf 'upscaler=fsr3\n' > "$d/settings/config.ini"
+          status=0
+          SDL_AUDIO_DRIVER=dummy timeout 300 xvfb-run -a -s "-screen 0 1920x1080x24" sh -c 'openbox >/dev/null 2>&1 & sleep 2; exec "$0" "$@"' \
+            "$RUNNER_TEMP/work/bin/nebula" --start-check 600 --gpu-validation 1 \
+            --data "$d/data" --settings "$d/settings" --crash-dumps "$d" 2>&1 | tee "$d/start.log" || status=$?
+          [ "$status" = 0 ] || { echo "the start check ended with $status"; exit 1; }
+          if grep -q 'VK-LIVE-ERR' "$d/start.log"; then grep 'VK-LIVE-ERR' "$d/start.log" | sort | uniq -c | head -n 20; exit 1; fi
+          grep -e '^\[fsr3\]' -e 'FSR 3' "$d/start.log" || true
+          python3 -X utf8 -I tools/check_fsr3_start_log.py "$d/start.log"
       - name: Start check on Wayland (weston's headless compositor, a scale of 2)
         shell: bash
         run: |
@@ -436,6 +483,8 @@ jobs:
     if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
     runs-on: windows-2022
     timeout-minutes: 300
+    env:
+      NEBULA_REQUIRE_FSR3: 'ON'
     strategy:
       fail-fast: false
       matrix:
@@ -497,6 +546,9 @@ jobs:
             -Abis '${{ matrix.abi }}'
       # The test app (dev.nebula.galaxy.test, debuggable, with the test runner's Harness.java) for the start check,
       # x86_64 only: the same build folder, so the native code built above is not built again.
+      - name: FSR 3 (the app's program holds it)
+        shell: bash
+        run: python -X utf8 -I tools/check_fsr3_package.py "$RUNNER_TEMP/apk/Nebula-unsigned.apk"
       - name: Build the test app (x86_64)
         if: matrix.abi == 'x86_64'
         shell: pwsh

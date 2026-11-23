@@ -13,6 +13,7 @@
 # check.yml runs a nightly job only on main and by hand, not on a candidate (gate/**); a self-test (github_after_test.py) compares the classes with the jobs' conditions.
 job	class
 Mac	must
+FSR 3 shaders (Windows)	must
 Linux	must
 Linux unit tests	must
 Linux sanitizers (address,undefined)	must

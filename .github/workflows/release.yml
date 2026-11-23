@@ -16,6 +16,9 @@ name: Release
 # A release is built only from a commit main holds whose Check run (check.yml) passed: the first job asks GitHub
 # (tools/release_guard.py) and every package job needs it; a dry run only reports the answer. Each package job ends
 # with the start check check.yml runs, on the package as built (P-023).
+# AMD's FSR 3 is in the Windows, Linux and Android packages: those jobs set NEBULA_REQUIRE_FSR3, so a build that leaves it out stops
+# (cmake/fidelityfx_vk_shaders.cmake). Its shader compiler runs on Windows only: the ffx-shaders job makes the headers and the Linux
+# job takes them (.github/actions/ffx-vk-shaders). Each package is checked to hold it (tools/check_fsr3_package.py).
 on:
   push:
     tags: ['v*']
@@ -136,6 +139,24 @@ jobs:
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --title "Nebula $VERSION" \
             $prerelease --notes-file ".github/release-notes/$VERSION.md"
 
+  ffx-shaders:
+    name: FSR 3 shaders (Windows)
+    needs: release
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release.outputs.ref }}
+      - uses: ./.github/actions/ffx-vk-shaders
+        with:
+          folder: ${{ runner.temp }}/ffx-vk-shaders
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ffx-vk-shaders
+          path: ${{ runner.temp }}/ffx-vk-shaders
+          if-no-files-found: error
+
   windows-hosts:
     name: Windows programs (${{ matrix.level }})
     needs: release
@@ -144,6 +165,7 @@ jobs:
     env:
       NEBULA_MODS: ${{ needs.release.outputs.mods }}
       NEBULA_VERSION_SUFFIX: ${{ needs.release.outputs.suffix }}
+      NEBULA_REQUIRE_FSR3: 'ON'
     strategy:
       fail-fast: false
       matrix:
@@ -386,6 +408,9 @@ jobs:
         with:
           folder: ${{ runner.temp }}\bin
           programs: Nebula NebulaVk NebulaD11 Nebula-x86-64-v2 NebulaVk-x86-64-v2 NebulaD11-x86-64-v2
+      - name: FSR 3 (the programs the Setup packed hold it)
+        shell: bash
+        run: python -X utf8 -I tools/check_fsr3_package.py "$RUNNER_TEMP/bin/Nebula.exe" "$RUNNER_TEMP/bin/NebulaVk.exe" "$RUNNER_TEMP/bin/Nebula-x86-64-v2.exe" "$RUNNER_TEMP/bin/NebulaVk-x86-64-v2.exe"
       - name: The mod kit (a pre-release has none, a release has it)
         shell: bash
         run: |
@@ -411,13 +436,14 @@ jobs:
 
   linux:
     name: Linux package
-    needs: [release, lumakit]
-    if: ${{ !cancelled() && needs.release.result == 'success' && (needs.lumakit.result == 'success' || needs.lumakit.result == 'skipped') }}
+    needs: [release, lumakit, ffx-shaders]
+    if: ${{ !cancelled() && needs.release.result == 'success' && needs.ffx-shaders.result == 'success' && (needs.lumakit.result == 'success' || needs.lumakit.result == 'skipped') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 240
     env:
       NEBULA_MODS: ${{ needs.release.outputs.mods }}
       NEBULA_VERSION_SUFFIX: ${{ needs.release.outputs.suffix }}
+      NEBULA_REQUIRE_FSR3: 'ON'
     steps:
       - uses: actions/checkout@v7
         with:
@@ -447,9 +473,15 @@ jobs:
           llvm/bin/clang --version
       - name: Dependencies
         run: sh tools/fetch_build_deps.sh "$RUNNER_TEMP/deps"
+      # FSR 3's shader headers, made by the ffx-shaders job (its compiler runs on Windows only).
+      - uses: actions/download-artifact@v8
+        with:
+          name: ffx-vk-shaders
+          path: ${{ runner.temp }}/ffx-vk-shaders
       - name: Build Nebula
-        # NEBULA_MODS=OFF (no mod support) is read by the script and by every CMake project.
-        run: sh platform/linux/build_linux.sh -d "$RUNNER_TEMP/deps" -l "$RUNNER_TEMP/llvm" -w "$RUNNER_TEMP/work"
+        # NEBULA_MODS=OFF (no mod support) is read by the script and by every CMake project; NEBULA_REQUIRE_FSR3 by the script and
+        # by CMake: without the shader headers the build stops.
+        run: sh platform/linux/build_linux.sh -d "$RUNNER_TEMP/deps" -l "$RUNNER_TEMP/llvm" -w "$RUNNER_TEMP/work" -s "$RUNNER_TEMP/ffx-vk-shaders"
       - name: Pack it
         env:
           VERSION: ${{ needs.release.outputs.version }}
@@ -466,6 +498,8 @@ jobs:
           for package in "$RUNNER_TEMP"/dist/*.tar.gz; do
             python3 tools/release_manifest.py "$package" "$VERSION"
           done
+      - name: FSR 3 (the package's program holds it)
+        run: python3 -X utf8 -I tools/check_fsr3_package.py "$RUNNER_TEMP"/dist/*.tar.gz
       - name: Start check (the package as unpacked, Vulkan on Mesa's software renderer, on a virtual display, with the validation layer)
         shell: bash
         run: |
@@ -511,6 +545,22 @@ jobs:
             echo "### The Linux package needs"
             echo "glibc ${glibc#GLIBC_}, libstdc++ ${glibcxx:-none} (objdump -T of every file of the package)"
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Start check with FSR 3 chosen (the package as unpacked; the settings file asks for FSR 3, the log says it was made or what the device lacks)
+        shell: bash
+        run: |
+          d="$RUNNER_TEMP/start-fsr3"
+          mkdir -p "$d/data" "$d/settings"
+          nebula=$(find "$RUNNER_TEMP/start/unpacked" -path '*/files/nebula' -type f | head -n 1)
+          [ -n "$nebula" ] || { echo "the package has no files/nebula"; exit 1; }
+          printf 'upscaler=fsr3\n' > "$d/settings/config.ini"
+          status=0
+          SDL_AUDIO_DRIVER=dummy timeout 300 xvfb-run -a -s "-screen 0 1920x1080x24" sh -c 'openbox >/dev/null 2>&1 & sleep 2; exec "$0" "$@"' \
+            "$nebula" --start-check 600 --gpu-validation 1 \
+            --data "$d/data" --settings "$d/settings" --crash-dumps "$d" 2>&1 | tee "$d/start.log" || status=$?
+          [ "$status" = 0 ] || { echo "the start check ended with $status"; exit 1; }
+          if grep -q 'VK-LIVE-ERR' "$d/start.log"; then grep 'VK-LIVE-ERR' "$d/start.log" | sort | uniq -c | head -n 20; exit 1; fi
+          grep -e '^\[fsr3\]' -e 'FSR 3' "$d/start.log" || true
+          python3 -X utf8 -I tools/check_fsr3_start_log.py "$d/start.log"
       - name: The mod kit (a pre-release has none, a release has it)
         shell: bash
         run: |
@@ -731,6 +781,7 @@ jobs:
     env:
       NEBULA_MODS: ${{ needs.release.outputs.mods }}
       NEBULA_VERSION_SUFFIX: ${{ needs.release.outputs.suffix }}
+      NEBULA_REQUIRE_FSR3: 'ON'
     steps:
       - uses: actions/checkout@v7
         with:
@@ -794,6 +845,9 @@ jobs:
           mkdir -p "$RUNNER_TEMP/dist"
           # Signed on the release PC (installer/sign-release.ps1), which uploads it as <prefix>-Android.apk.
           cp "$RUNNER_TEMP/apk/Nebula-unsigned.apk" "$RUNNER_TEMP/dist/$PREFIX-Android-unsigned.apk"
+      - name: FSR 3 (the app's program holds it)
+        shell: bash
+        run: python -X utf8 -I tools/check_fsr3_package.py "$RUNNER_TEMP"/dist/*.apk
       - name: The mod kit (a pre-release has none, a release has it)
         shell: bash
         run: |

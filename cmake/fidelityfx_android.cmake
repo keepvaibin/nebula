@@ -1,21 +1,18 @@
-# FSR 3.1 in the Vulkan renderer on Android: the SDK's FSR 3 upscaler and Vulkan backend sources built by the NDK over the SDK's
-# Vulkan shaders. FidelityFX's shader compiler is a Windows tool: NEBULA_FFX_VK_SHADERS names its output when it is made already,
-# otherwise it runs here through the SDK's own project, on Windows. Defines `nebula_fidelityfx_vk`, or nothing where neither applies.
+# FSR 3.1 in the Vulkan renderer on Android and Linux: the SDK's FSR 3 upscaler and Vulkan backend sources built by the NDK or
+# the Linux compiler over the SDK's Vulkan shaders. FidelityFX's shader compiler is a Windows tool: NEBULA_FFX_VK_SHADERS names its
+# output when it is made already (Linux), otherwise it runs here through the SDK's own project, on Windows (Android). Defines
+# `nebula_fidelityfx_vk`, or nothing where neither applies; a build that makes a package (NEBULA_REQUIRE_FSR3) stops instead.
+include("${CMAKE_CURRENT_LIST_DIR}/fidelityfx_vk_shaders.cmake")
 
 option(NEBULA_FSR3 "Build AMD FSR 3 (FidelityFX SDK 1.1.4) into the Vulkan renderer" ON)
 set(NEBULA_FFX_VK_SHADERS "" CACHE PATH "FidelityFX's Vulkan shader headers, when made already")
 
 function(nebula_fidelityfx_android headers portable names)
     if(NOT NEBULA_FSR3)
+        nebula_fsr3_left_out("NEBULA_FSR3 is OFF")
         return()
     endif()
-    include(FetchContent)
-    FetchContent_Declare(fidelityfx_sdk
-        URL https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/archive/refs/tags/v1.1.4.tar.gz
-        URL_HASH SHA256=25c46398a656150397597f78d44bf7cb445e9e177dd116b309bbfdf50d50cc9f
-        DOWNLOAD_EXTRACT_TIMESTAMP TRUE SOURCE_SUBDIR "nebula-no-cmake")
-    FetchContent_MakeAvailable(fidelityfx_sdk)
-    set(sdk "${fidelityfx_sdk_SOURCE_DIR}/sdk")
+    nebula_fidelityfx_sdk(sdk)
 
     set(shaders "${NEBULA_FFX_VK_SHADERS}")
     if(shaders AND NOT EXISTS "${shaders}/nebula-luma16.txt")
@@ -23,34 +20,10 @@ function(nebula_fidelityfx_android headers portable names)
     endif()
     if(NOT shaders)
         if(NOT CMAKE_HOST_WIN32)
-            message(STATUS "FSR 3 left out: its shader compiler runs on Windows (or set NEBULA_FFX_VK_SHADERS)")
+            nebula_fsr3_left_out("its shader compiler runs on Windows: set NEBULA_FFX_VK_SHADERS to the shader headers a Windows build made (cmake/ffx-vk-shaders)")
             return()
         endif()
-        include("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/fidelityfx_vulkan_fixes.cmake")
-        nebula_fidelityfx_vulkan_sdk("${sdk}" "${CMAKE_BINARY_DIR}/fidelityfx-sdk-vulkan-fixed" fixed_sdk)
-        set(build "${CMAKE_BINARY_DIR}/fidelityfx-vk-luma16-build")
-        set(shaders "${build}/src/backends/shaders/vk")
-        if(NOT EXISTS "${shaders}/nebula-luma16.txt")
-            message(STATUS "Compiling the FidelityFX SDK's Vulkan shaders")
-            set(no_library "${CMAKE_BINARY_DIR}/fidelityfx-vk-no-library.lib")
-            file(TOUCH "${no_library}")
-            # The same configuration as the desktop's (cmake/fidelityfx.cmake): the SDK's libraries land in one shared folder.
-            execute_process(
-                COMMAND "${CMAKE_COMMAND}" -S "${fixed_sdk}" -B "${build}" -G "Visual Studio 17 2022" -A x64
-                        -DFFX_API_BACKEND=VK_X64 -DFFX_FSR3UPSCALER=ON -DFFX_AUTO_COMPILE_SHADERS=ON
-                        "-DVulkan_INCLUDE_DIR=${headers}" "-DVulkan_LIBRARY=${no_library}" "-DCMAKE_CXX_FLAGS_INIT=/FI\"${names}\""
-                RESULT_VARIABLE result OUTPUT_QUIET ERROR_VARIABLE errors)
-            if(NOT result EQUAL 0)
-                message(FATAL_ERROR "Configuring the FidelityFX SDK for Vulkan failed:\n${errors}")
-            endif()
-            execute_process(
-                COMMAND "${CMAKE_COMMAND}" --build "${build}" --config Release --target ffx_backend_vk_x64
-                RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE errors)
-            if(NOT result EQUAL 0)
-                message(FATAL_ERROR "Compiling the FidelityFX SDK's Vulkan shaders failed:\n${output}\n${errors}")
-            endif()
-            file(WRITE "${shaders}/nebula-luma16.txt" "rgba16f\n")
-        endif()
+        nebula_fidelityfx_vk_shaders("${sdk}" "${headers}" "${names}" shaders)
     endif()
 
     # The backend promises alignas(32) for its effect contexts, then places them at any offset of its scratch memory.

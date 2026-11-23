@@ -244,6 +244,7 @@ public:
         device_context_.vkDeviceProcAddr = ffx_device_proc;
         if (ffxGetInterfaceVK(&backend_, ffxGetDeviceVK(&device_context_), scratch_.data(), scratch_.size(), kContexts) !=
             FFX_OK) {
+            std::cerr << "[fsr3] the backend interface could not be made\n";
             return false;
         }
         FfxFsr3UpscalerContextDescription description{};
@@ -276,6 +277,8 @@ public:
             std::cerr << "[fsr3] shared resources failed: " << result << '\n';
             return false;
         }
+        std::cerr << "[fsr3] context made: render " << render_width << "x" << render_height << ", output " << output_width << "x"
+                  << output_height << '\n';
         return true;
     }
 

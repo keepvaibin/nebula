@@ -2,9 +2,12 @@
 # (pinned, checked by SHA-256) and its FSR 3 upscaler and DX12 backend libraries built once per build tree with the
 # SDK's own build and shader compiler. Defines `nebula_fidelityfx` (empty when NEBULA_FSR3 is off).
 
+include("${CMAKE_CURRENT_LIST_DIR}/fidelityfx_vk_shaders.cmake")
+
 option(NEBULA_FSR3 "Build AMD FSR 3 (FidelityFX SDK 1.1.4) into the D3D12 renderer" ON)
 add_library(nebula_fidelityfx INTERFACE)
 if(NOT NEBULA_FSR3)
+    nebula_fsr3_left_out("NEBULA_FSR3 is OFF")
     return()
 endif()
 
