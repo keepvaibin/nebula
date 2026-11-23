@@ -52,7 +52,6 @@ void RendererMtl::record_scene_ao() {
     }
     const GpuPassScope scope{*this, GpuPass::SceneAo};
     end_scene_pass();
-    settle_depth_clear();
     resolve_scene_depth();
     const FrameMap part = scene_part();
     const unsigned lowest = frame_extent_ == scene_extent_ ? dynamic_resolution_.lowest_sixteenths() : 16u;
@@ -231,7 +230,6 @@ void RendererMtl::record_wide_end() {
     }
     const GpuPassScope scope{*this, GpuPass::Camera};
     end_scene_pass();
-    settle_depth_clear();
     SceneSet& set = wide_scene_;  // the scene target's own set, waiting
     const bool per_sample = scene_.samples > 1u;
     const gpu::TextureRef wide = scene_.color;

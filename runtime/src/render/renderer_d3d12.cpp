@@ -1424,8 +1424,7 @@ void RendererD3D12::bind_draw_textures(gpu::Address lists) {
     encoder_.set_texture_arrays(srv_ring_.texture_gpu_start(), sampler_heap_->GetGPUDescriptorHandleForHeapStart(), lists);
 }
 
-// The capture pipelines (root signature: SceneConversionShaderConstants, one SRV table, a static linear clamp sampler)
-// and the screen probes' compute pipeline (constants, the depth's SRV table, the pixels' SRV, the values' UAV).
+// The capture pipelines (root signature: SceneConversionShaderConstants, one SRV table, a static linear clamp sampler).
 bool RendererD3D12::create_conversion_pipeline() {
     {
         D3D12_DESCRIPTOR_RANGE range{};
@@ -1497,34 +1496,6 @@ bool RendererD3D12::create_conversion_pipeline() {
         d3d_check(core::utility_pipeline(device_.Get(), pd, &display_filter_pipeline_), "CreateDisplayFilterPSO");
         pd.RTVFormats[0] = kSceneHdrColorFormat;
         d3d_check(core::utility_pipeline(device_.Get(), pd, &display_filter_pipeline_wide_), "CreateDisplayFilterPSO wide");
-    }
-
-    // Screen probes: t0 the depth (a table), t1 the points with their count and u0 the values (root views).
-    {
-        D3D12_DESCRIPTOR_RANGE range{};
-        range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-        range.NumDescriptors = 1;
-        D3D12_ROOT_PARAMETER params[3]{};
-        params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        params[0].DescriptorTable.NumDescriptorRanges = 1;
-        params[0].DescriptorTable.pDescriptorRanges = &range;
-        params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
-        params[1].Descriptor.ShaderRegister = 1;
-        params[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
-        params[2].Descriptor.ShaderRegister = 0;
-        D3D12_ROOT_SIGNATURE_DESC rsd{};
-        rsd.NumParameters = 3;
-        rsd.pParameters = params;
-        ComPtr<ID3DBlob> blob, err;
-        d3d_check(D3D12SerializeRootSignature(&rsd, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &err), "SerializeProbeRS");
-        d3d_check(device_->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(),
-                                               IID_PPV_ARGS(&probe_root_signature_)),
-                  "CreateProbeRS");
-        const UtilityShaderBytes cs = utility_shader(UtilityShader::ScreenProbeCs);
-        D3D12_COMPUTE_PIPELINE_STATE_DESC cd{};
-        cd.pRootSignature = probe_root_signature_.Get();
-        cd.CS = {cs->GetBufferPointer(), cs->GetBufferSize()};
-        d3d_check(core::utility_pipeline(device_.Get(), cd, &probe_pipeline_), "CreateProbePSO");
     }
 
     // CPU-only RTV slot reused after each conversion bind is recorded.
@@ -3201,9 +3172,6 @@ void RendererD3D12::shutdown() {
     for (auto& entry : target_slots_) {
         entry.second.set.conv_ring = ~std::size_t{0};
     }
-    probe_pipeline_.Reset();
-    probe_root_signature_.Reset();
-    probe_slots_ = {};
     s_clear_root_sig.Reset();
     clear_rgb_pipelines_ = {};
     clear_alpha_pipelines_ = {};
@@ -4654,11 +4622,6 @@ std::uint64_t RendererD3D12::end_frame(
     history_segment_fence_[history_segment_] = submitted_fence;
     frame_generated_[frame_slot_] = generated;
     frame_scene_drawn_[frame_slot_] = scene_drawn_;
-    for (ScreenProbeSlot& slot : probe_slots_) {
-        if (slot.fence == kProbesInFrame) {
-            slot.fence = submitted_fence;
-        }
-    }
     const HRESULT signal_hr = queue_->Signal(fence_.Get(), submitted_fence);
     if (FAILED(signal_hr)) {
         dump_device_removal(device_.Get());
@@ -6620,84 +6583,6 @@ bool RendererD3D12::draw_shown_frame_pass(const FramePassRequest& params, const 
         swap_scene_sets();
     }
     return made;
-}
-
-bool RendererD3D12::record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes, bool compared) {
-    (void)compared;
-    if (slot >= probe_slots_.size()) probe_slots_.resize(slot + 1u);
-    ScreenProbeSlot& out = probe_slots_[slot];
-    if (out.fence != 0u || probes.empty()) {
-        return false;
-    }
-    const std::uint64_t bytes = probes.size() * sizeof(float);
-    if (out.bytes < bytes) {
-        D3D12_HEAP_PROPERTIES heap{};
-        D3D12_RESOURCE_DESC desc{};
-        desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-        desc.Width = bytes;
-        desc.Height = 1;
-        desc.DepthOrArraySize = 1;
-        desc.MipLevels = 1;
-        desc.SampleDesc.Count = 1;
-        desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        heap.Type = D3D12_HEAP_TYPE_READBACK;
-        d3d_check(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_COPY_DEST,
-                                                   nullptr, IID_PPV_ARGS(&out.readback)),
-                  "screen probe readback");
-        heap.Type = D3D12_HEAP_TYPE_DEFAULT;
-        desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-        d3d_check(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc,
-                                                   D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr,
-                                                   IID_PPV_ARGS(&out.values)),
-                  "screen probe values");
-        out.mapped = reinterpret_cast<const float*>(pin_readback_mapping(out.readback.Get()));
-        if (out.mapped == nullptr) throw std::runtime_error("screen probe readback could not be mapped");
-        out.bytes = bytes;
-    }
-    // The count with the points (write_screen_probe_points): the dispatch reads no constant (P-332).
-    const UploadRing::Allocation pixels = constant_ring_.allocate(screen_probe_points_bytes(probes.size()), 16u);
-    write_screen_probe_points(probes, frame_, pixels.cpu);
-
-    ID3D12GraphicsCommandList* const list = command_list_.Get();
-    resolve_scene(true, false);  // depth alone
-    BarriersD3D12 depth{list};
-    depth.texture(scene_depth_.Get(), gpu::Use::DepthWrite, gpu::Use::ComputeRead);
-    depth.issue();
-
-    const std::uint32_t count = static_cast<std::uint32_t>(probes.size());
-    list->SetComputeRootSignature(probe_root_signature_.Get());
-    list->SetPipelineState(probe_pipeline_.Get());
-    srv_ring_.bind(list);
-    list->SetComputeRootDescriptorTable(0, srv_ring_.gpu_at(conv_scene_depth_index_));
-    list->SetComputeRootShaderResourceView(1, pixels.gpu);
-    list->SetComputeRootUnorderedAccessView(2, out.values->GetGPUVirtualAddress());
-    list->Dispatch((count + kScreenProbeGroup - 1u) / kScreenProbeGroup, 1, 1);
-
-    // The depth goes back with the values' change to the copy, in one call.
-    BarriersD3D12 after{list};
-    after.texture(scene_depth_.Get(), gpu::Use::ComputeRead, gpu::Use::DepthWrite);
-    after.buffer(out.values.Get(), gpu::Use::ComputeWrite, gpu::Use::CopySource);
-    after.issue();
-    list->CopyBufferRegion(out.readback.Get(), 0, out.values.Get(), 0, bytes);
-    BarriersD3D12 values{list};
-    values.buffer(out.values.Get(), gpu::Use::CopySource, gpu::Use::ComputeWrite);
-    values.issue();
-
-    // The drawing state as the scene's draws expect it.
-    list->SetGraphicsRootSignature(root_signature_.Get());
-    invalidate_draw_bindings();
-    bind_scene();
-    out.fence = kProbesInFrame;  // fenced at end_frame
-    return true;
-}
-
-const float* RendererD3D12::screen_probes_finished(std::size_t slot) {
-    ScreenProbeSlot& out = probe_slots_[slot];
-    if (out.fence == 0u || out.fence == kProbesInFrame || completed_fence_value() < out.fence) {
-        return nullptr;
-    }
-    out.fence = 0u;
-    return out.mapped;
 }
 
 // A readback heap may stay mapped while the GPU writes it (D3D12 leaves the

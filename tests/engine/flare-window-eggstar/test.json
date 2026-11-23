@@ -1,0 +1,126 @@
+{
+  "harness": 1,
+  "name": "flare-window-eggstar",
+  "about": "Ledger P-340: EggStarGalaxy scenario 1 played as the tour plays it (022-EggStarGalaxy-1), in a 160x90 window: the step hashes follow no window size, so the last step's hash is the one recorded at 1280x720 (tests/replays/022-EggStarGalaxy-1.tsv); before S0.2.6 the lens flare's actors made it differ from step 0.",
+  "save": {
+    "spin": true
+  },
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "limit_seconds": 240,
+  "steps": [
+    {
+      "at": 0,
+      "hash": "on"
+    },
+    {
+      "at": 40,
+      "stick": [
+        -0.15,
+        -0.32
+      ],
+      "frames": 20
+    },
+    {
+      "at": 70,
+      "hold": [
+        "Z"
+      ],
+      "frames": 5
+    },
+    {
+      "at": 100,
+      "stick": [
+        0.11,
+        -0.24
+      ],
+      "frames": 45
+    },
+    {
+      "at": 155,
+      "shake": 8
+    },
+    {
+      "at": 180,
+      "shake": 8
+    },
+    {
+      "at": 205,
+      "stick": [
+        0.78,
+        0.76
+      ],
+      "frames": 45
+    },
+    {
+      "at": 260,
+      "stick": [
+        0.88,
+        -0.2
+      ],
+      "frames": 52
+    },
+    {
+      "at": 318,
+      "hold": [
+        "A"
+      ],
+      "frames": 15
+    },
+    {
+      "at": 348,
+      "shake": 8
+    },
+    {
+      "at": 373,
+      "hold": [
+        "A"
+      ],
+      "frames": 25
+    },
+    {
+      "at": 403,
+      "stick": [
+        0.4,
+        0.69
+      ],
+      "frames": 78
+    },
+    {
+      "at": 487,
+      "hold": [
+        "Z"
+      ],
+      "frames": 20
+    },
+    {
+      "at": 517,
+      "stick": [
+        -0.07,
+        -0.92
+      ],
+      "frames": 89
+    },
+    {
+      "at": 600,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "hash.step",
+      "field": "h",
+      "is": "7da2e043400f63a8",
+      "frames": [
+        599,
+        599
+      ]
+    }
+  ],
+  "window": [
+    160,
+    90
+  ]
+}

@@ -232,8 +232,7 @@ typedef enum NebulaPassKind {
     NEBULA_PASS_BLOOM_HOLD,  /* the game's bloom, named by host (game_bloom.h), `arg0`, `arg1` its values */
     NEBULA_PASS_BLOOM_NORMAL,
     NEBULA_PASS_BLOOM_SIMPLE,
-    NEBULA_PASS_PROBE,       /* depth at `probes`, in `probe_channel`; `arg0` NEBULA_PROBE_* */
-    NEBULA_PASS_SHOW,        /* the frame drawn so far is the picture this frame shows */
+    NEBULA_PASS_SHOW,       /* the frame drawn so far is the picture this frame shows */
     NEBULA_PASS_SCENE_BEGIN, /* the 3D scene starts: `scene_camera`, `scene_view` */
     NEBULA_PASS_POST,        /* draw.post: program `arg0` (post_register) over the frame into a new picture, the frame
                                 from here; its params the 4 rows of instance_rows from `first_item` */
@@ -250,13 +249,6 @@ typedef struct NebulaCall {
     void (*fn)(void* user, const NebulaFrame* frame);
     void* user;
 } NebulaCall;
-
-/* A probe pass's `arg0`. */
-enum {
-    NEBULA_PROBE_DEPTH = 0,    /* each point's value is the depth there */
-    NEBULA_PROBE_COMPARED = 1, /* the game only asks value >= user_z (seen): the host may answer 1 seen and 0 hidden, which a
-                                  depth test of the point at user_z gives where the scene is still being drawn */
-};
 
 /* Pass layers: which output variant a draw pass's items take. */
 enum {
@@ -280,12 +272,10 @@ typedef struct NebulaFramePass {
     uint32_t arg0, arg1;
     uint8_t pixels;            /* width and height are pixels */
     uint8_t load;              /* DRAW: 0 keep, 1 clear to clear_rgba and far */
-    uint32_t probe_channel;
     uint8_t reserved;
     uint32_t over_frame_texture, over_frame_depth; /* a target pass reading the frame while the frame stays open; 0 none */
     uint32_t over_frame_channels;
-    uint32_t first_probe, probe_count;
-    uint32_t scene_camera;     /* the scene's camera, for occlusion, the upscaler and the sky */
+    uint32_t scene_camera;    /* the scene's camera, for occlusion, the upscaler and the sky */
     uint32_t scene_view;       /* its projection */
 } NebulaFramePass;
 
@@ -295,8 +285,6 @@ enum {
     NEBULA_FRAME_HAS_SCENE = 1u << 1,  /* draws a 3D scene */
     NEBULA_FRAME_HOLD = 1u << 2,       /* nothing new to show: the picture shown stays */
 };
-
-struct NebulaScreenProbe;
 
 /* The list. */
 typedef struct NebulaFrameList {
@@ -311,10 +299,9 @@ typedef struct NebulaFrameList {
     const NebulaFrameConstants* constants;
     const void* ring_vertices;
     const uint32_t* ring_indices;
-    const struct NebulaScreenProbe* probes;
     const float (*instance_rows)[4]; /* NEBULA_ITEM_INSTANCES draws' instances (NebulaParticleInstance, NebulaGlyphInstance) */
     uint32_t pass_count, item_count, view_count, camera_count;
-    uint32_t block_count, light_set_count, constants_count, probe_count;
+    uint32_t block_count, light_set_count, constants_count;
     uint32_t light_count, light_follow_count;
     uint64_t ring_vertex_bytes;
     uint32_t ring_index_count;

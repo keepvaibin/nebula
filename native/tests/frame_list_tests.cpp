@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The frame-list writer (Game/Render/FrameList.cpp) against the list the renderer reads (nebula_frame_list.h): passes
-// and their items, categories by run, cameras once each, world lights ascending by id with the newest values, probes
-// with their asker's mark, a camera cut on one list only; a list the renderer holds is never written again and one it
+// and their items, categories by run, cameras once each, world lights ascending by id with the newest values, a camera
+// cut on one list only; a list the renderer holds is never written again and one it
 // let go is, from empty; frame memory aligned and reused; the ring past its first room; and Pipelines.bin read whole,
 // with a short or lying file read no further than its end.
 #include "Game/Render/FrameList.hpp"
@@ -76,9 +76,6 @@ namespace {
             sSubmitted[sSubmitCount] = pList;
         }
         sSubmitCount++;
-    }
-    uint32_t probeResults(void*, uint32_t, NebulaScreenProbe*, uint32_t) {
-        return 0;
     }
 
     NebulaHostServices sHost;
@@ -186,11 +183,10 @@ int main() {
     sHost.game_stage = gameStage;
     sHost.pipeline_register = pipelineRegister;
     sHost.submit_frame = submitFrame;
-    sHost.probe_results = probeResults;
 
     Frame::initDefaults();
 
-    // Frame 1: a clear, a draw pass of three items in two categories, a show; cameras, world lights, probes, a cut.
+    // Frame 1: a clear, a draw pass of three items in two categories, a show; cameras, world lights, a cut.
     const u32 number = Frame::number();
     Frame::begin();
     Frame::clear(0x204060FF, 7);
@@ -203,9 +199,6 @@ int main() {
     expect(Frame::camera(cView, 1) == Frame::camera(cView, 1), "an equal camera is one entry");
     expect(Frame::camera(cView, 1) != Frame::camera(cView, 2), "another role is another camera");
     expect(Frame::camera(cOtherView, 1) != Frame::camera(cView, 1), "another view is another camera");
-    const NebulaScreenProbe probes[2] = {{0.5f, 0.25f, 0, 0, 0, 0}, {-1.0f, 0.0f, 0, 0, 0, 0}};
-    const u32 asker = Frame::newProbeAsker();
-    Frame::probeScreen(0, asker, probes, 2);
     Frame::cameraCut(7);
     Frame::show();
     Frame::end();
@@ -214,18 +207,15 @@ int main() {
     expect(Frame::number() == number + 1, "the frame number goes on");
     NebulaFrameList* const pFirst = lastList();
     expect(pFirst->released == 0, "a list is handed over held");
-    expect(pFirst->pass_count == 4, "clear, draw, probe, show");
-    if (pFirst->pass_count == 4) {
+    expect(pFirst->pass_count == 3, "clear, draw, show");
+    if (pFirst->pass_count == 3) {
         expect(pFirst->passes[0].kind == NEBULA_PASS_CLEAR && pFirst->passes[0].clear_rgba == 0x204060FF &&
                    pFirst->passes[0].clear_channels == 7,
                "the clear pass as asked");
         expect(pFirst->passes[1].kind == NEBULA_PASS_DRAW && pFirst->passes[1].first_item == 0 &&
                    pFirst->passes[1].item_count == 3,
                "the draw pass holds its three items");
-        expect(pFirst->passes[2].kind == NEBULA_PASS_PROBE && pFirst->passes[2].first_probe == 0 &&
-                   pFirst->passes[2].probe_count == 3,
-               "the probe pass holds its probes and its mark");
-        expect(pFirst->passes[3].kind == NEBULA_PASS_SHOW, "the show pass last");
+        expect(pFirst->passes[2].kind == NEBULA_PASS_SHOW, "the show pass last");
     }
     expect(pFirst->item_count == 3 && pFirst->items[0].mesh == 11 && pFirst->items[2].mesh == 13, "the items in order");
     const u32 cat0 = (pFirst->items[0].flags & NEBULA_ITEM_CATEGORY_MASK) >> NEBULA_ITEM_CATEGORY_SHIFT;
@@ -233,11 +223,6 @@ int main() {
     const u32 cat2 = (pFirst->items[2].flags & NEBULA_ITEM_CATEGORY_MASK) >> NEBULA_ITEM_CATEGORY_SHIFT;
     expect(cat0 == 2 && cat1 == 2 && cat2 == 3, "each item's category by its run");
     expect(pFirst->camera_count == 3, "three cameras");
-    expect(pFirst->probe_count == 3 && pFirst->probes[0].x == 0.5f * NEBULA_FRAME_UNITS &&
-               pFirst->probes[0].y == 0.25f * NEBULA_FRAME_UNITS,
-           "a probe in frame units");
-    expect(pFirst->probes[1].x == -1.0f, "a probe off the picture stays off it");
-    expect(pFirst->probes[2].user_x == static_cast< f32 >(asker), "the mark carries its asker");
     expect((pFirst->flags & NEBULA_FRAME_CAMERA_CUT) != 0 && pFirst->camera_epoch == 7, "the cut on its list");
 
     // Frame memory: aligned as asked; a block past a page gets one of its own.
@@ -268,7 +253,7 @@ int main() {
     NebulaFrameList* const pSecond = lastList();
     expect(pSecond != pFirst, "a held list is not written again");
     expect(pFirst->item_count == 3 && pFirst->items[0].mesh == 11, "the held list is as it was");
-    expect(pFirst->probe_count == 3, "the held list's probes stay");
+    expect(pFirst->pass_count == 3 && pFirst->camera_count == 3, "the held list's passes and cameras stay");
     expect((pSecond->flags & NEBULA_FRAME_CAMERA_CUT) == 0, "a cut is on one list only");
     expect(pSecond->ring_vertex_bytes == at2 + (3u << 20) && (at2 & 15) == 0, "ring vertices 16-byte aligned, counted");
     expect(static_cast< const u8* >(pSecond->ring_vertices)[at] == 0x5A, "earlier ring bytes survive the ring's growth");
@@ -284,7 +269,7 @@ int main() {
     expect(pThird == pFirst, "a released list is written again");
     expect(pThird->released == 0, "and is held again");
     expect(pThird->item_count == 1 && pThird->items[0].mesh == 31, "from empty");
-    expect(pThird->probe_count == 0 && pThird->camera_count == 0 &&
+    expect(pThird->camera_count == 0 &&
                pThird->pass_count == 1,
            "nothing of its last frame left");
     expect(pAgain != nullptr, "frame memory again");

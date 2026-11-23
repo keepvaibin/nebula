@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// RendererMtl: the draws' textures and samplers, parallel recording, screen probes, test captures, and the temporal
+// RendererMtl: the draws' textures and samplers, parallel recording, test captures, and the temporal
 // scene. As vk/renderer_vk_frame.cpp's second half.
 #include "renderer_mtl_internal.h"
 
@@ -314,12 +314,6 @@ bool RendererMtl::parallel_record_begin(const std::uint8_t* chunk_aux, unsigned 
     }
     // The pass the walk had open ran its draws before; the chunks run in passes of their own.
     end_scene_pass("parallel recording");
-    if (depth_clear_pending()) {
-        const SceneClearValues values = pending_depth_values_;
-        const unsigned mode = std::exchange(pending_depth_clear_, 0u);
-        begin_scene_pass_with(0u, &values, false, "settle_depth_clear", mode);
-        end_scene_pass("settle_depth_clear");
-    }
     record_aux_.assign(chunk_aux, chunk_aux + chunk_count);
     record_encoders_.assign(chunk_count, nullptr);
     record_runs_.clear();
@@ -337,7 +331,7 @@ bool RendererMtl::parallel_record_begin(const std::uint8_t* chunk_aux, unsigned 
             next_command_buffer(GpuPass::Scene);
             scene_pass_aux_ = aux;
             MTLRenderPassDescriptor* const descriptor =
-                (__bridge_transfer MTLRenderPassDescriptor*)scene_pass_descriptor(aux, nullptr, false, 0u, nullptr);
+                (__bridge_transfer MTLRenderPassDescriptor*)scene_pass_descriptor(aux, nullptr, false, 0u);
             id<MTLParallelRenderCommandEncoder> const parallel =
                 [commands_of(commands_) parallelRenderCommandEncoderWithDescriptor:descriptor];
             if (parallel == nil) {
@@ -366,10 +360,9 @@ bool RendererMtl::parallel_record_in_pass(const std::uint8_t* chunk_aux, unsigne
             return false;
         }
     }
-    // Held probes read the depth as it stands before the chunks, and a pass opened before parallel_scene_pass_ is a
-    // plain one: either ends here. begin_scene_pass_with keeps an open pass of these targets and settles a waiting
-    // depth clear as any opening does.
-    if (scene_pass_open_ && (!held_probe_slots_.empty() || depth_clear_pending() || scene_parallel_ == nullptr)) {
+    // A pass opened before parallel_scene_pass_ is a plain one: it ends here. begin_scene_pass_with keeps an open pass
+    // of these targets.
+    if (scene_pass_open_ && scene_parallel_ == nullptr) {
         end_scene_pass("parallel recording");
     }
     begin_scene_pass_with(aux, nullptr, false, "parallel recording");
@@ -444,156 +437,6 @@ void RendererMtl::parallel_record_end() {
     }
     record_runs_.clear();
     reset_draw_bindings();
-}
-
-// ---- screen probes ----
-
-// One dispatch (ScreenProbeCs): each point's pixel into the slot's pixels, the scene depth sampled there into its
-// values, which the CPU reads once the frame's fence has passed.
-bool RendererMtl::record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes, bool compared) {
-    if (slot >= probe_slots_.size()) probe_slots_.resize(slot + 1u);
-    ProbeSlot& out = probe_slots_[slot];
-    if (out.fence != 0u || probes.empty()) {
-        return false;
-    }
-    out.tested = 0u;
-    settle_depth_clear();  // asked after a waiting clear: they see it
-    // Asked inside the scene pass, compared points are tested there: the pass goes on, where reading the depth would
-    // end it (a store and a load of the whole target on a tile-based GPU) before the next draw that writes depth.
-    if (compared && scene_pass_open_ && test_screen_probes(out, probes)) {
-        out.fence = kProbesInFrame;  // fenced at end_frame
-        return true;
-    }
-    mtl::Context& context = mtl::Context::get();
-    if (out.capacity < probes.size()) {
-        out.pixels = context.create_buffer(screen_probe_points_bytes(probes.size()), mtl::Storage::Shared, "screen probe pixels");
-        out.values = context.create_buffer(probes.size() * sizeof(float), mtl::Storage::Shared, "screen probe values");
-        if (!out.pixels || !out.values) throw std::runtime_error("screen probe buffers unavailable");
-        out.capacity = probes.size();
-    }
-    // The slot is idle (fence 0): the GPU has finished with its pixels. The count goes with them (P-332).
-    write_screen_probe_points(probes, scene_map_, out.pixels->mapped);
-    out.fence = kProbesInFrame;
-    const auto count = static_cast<std::uint32_t>(probes.size());
-    if (scene_pass_open_) {
-        out.held = count;
-        held_probe_slots_.push_back(slot);
-        return true;
-    }
-    dispatch_screen_probes(slot, count);
-    return true;
-}
-
-void RendererMtl::read_held_probes() {
-    std::vector<std::size_t> held;
-    held.swap(held_probe_slots_);
-    for (const std::size_t slot : held) {
-        ProbeSlot& out = probe_slots_[slot];
-        const std::uint32_t count = std::exchange(out.held, 0u);
-        if (count != 0u) {
-            dispatch_screen_probes(slot, count);
-        }
-    }
-    held.clear();
-    if (held_probe_slots_.empty()) {
-        held_probe_slots_.swap(held);  // keeps the capacity
-    }
-}
-
-void RendererMtl::settle_screen_probes() {
-    if (!scene_pass_open_) {
-        read_held_probes();
-        return;
-    }
-    const unsigned aux = scene_pass_aux_;
-    end_scene_pass();
-    begin_scene_pass_with(aux);
-}
-
-// Each compared point (seen: the scene's depth there at or behind user_z) as a one-pixel draw of the depth clear's
-// shader at the point's reversed depth, 1 - user_z, depth-tested and writing nothing, with a visibility result of its
-// own. A point the test cannot place is answered as the depth read would: one in front of the near plane is seen, one
-// behind the far plane or not on the target hidden.
-bool RendererMtl::test_screen_probes(ProbeSlot& out, std::span<const ScreenProbe> probes) {
-    const auto count = static_cast<std::uint32_t>(probes.size());
-    // A multisampled pass has no results buffer: the first sample alone answers, which the depth read gives.
-    if (!pass_visibility_ || scene_pass_aux_ > 3u || target_pass_active_ ||
-        pass_visibility_used_ + count > kPassVisibilityResults) {
-        return false;
-    }
-    const mtl::Object pipeline = scene_pass_pipeline(mtl::UtilityShader::ClearDepthPs, 0u);
-    out.answers.assign(count, 0.0f);
-    out.drawn.assign(count, 0u);
-    out.results = pass_visibility_;
-    out.results_offset = std::uint64_t{pass_visibility_used_} * 8u;
-    id<MTLRenderCommandEncoder> const pass = pass_of(pass_);
-    for (std::uint32_t i = 0; i < count; ++i) {
-        const ScreenProbePixel pixel = screen_probe_pixel(probes[i], scene_map_);
-        const float user_z = probes[i].user_z;
-        if (pixel.x == ~0u || pixel.x >= pass_width_ || pixel.y >= pass_height_) {
-            continue;  // 0, as the dispatch reads it
-        }
-        if (user_z <= 0.0f) {
-            out.answers[i] = 1.0f;  // any depth is at or behind it
-            continue;
-        }
-        if (!(user_z <= 1.0f)) {
-            continue;  // behind every depth, or not a number: hidden
-        }
-        const float value[4] = {1.0f - user_z, 0.0f, 0.0f, 0.0f};
-        [pass setVisibilityResultMode:MTLVisibilityResultModeBoolean offset:out.results_offset + std::uint64_t{i} * 8u];
-        utility_draw(pass_, pipeline, DepthUse::TestNearer, pass_width_, pass_height_,
-                     gpu::rect(static_cast<std::int32_t>(pixel.x), static_cast<std::int32_t>(pixel.y),
-                               static_cast<std::int32_t>(pixel.x) + 1, static_cast<std::int32_t>(pixel.y) + 1),
-                     value, sizeof(value), nullptr);
-        out.drawn[i] = 1u;
-    }
-    [pass setVisibilityResultMode:MTLVisibilityResultModeDisabled offset:0];
-    pass_visibility_used_ += count;
-    out.tested = count;
-    reset_draw_bindings();
-    bind_scene();
-    return true;
-}
-
-// The probe dispatch, with the scene pass closed: the depth sampled at each point into the slot's values.
-void RendererMtl::dispatch_screen_probes(std::size_t slot, std::uint32_t count) {
-    ProbeSlot& out = probe_slots_[slot];
-    resolve_scene_depth();
-    @autoreleasepool {
-        id<MTLComputeCommandEncoder> const compute = [commands_of(commands_) computeCommandEncoder];
-        compute.label = @"screen probes";
-        [compute setComputePipelineState:(__bridge id<MTLComputePipelineState>)probe_pipeline_];
-        [compute setTexture:texture_of(scene_.depth) atIndex:0];
-        [compute setBuffer:buffer_of(out.pixels) offset:0 atIndex:1];
-        [compute setBuffer:buffer_of(out.values) offset:0 atIndex:2];
-        [compute dispatchThreadgroups:MTLSizeMake((count + kScreenProbeGroup - 1u) / kScreenProbeGroup, 1, 1)
-                threadsPerThreadgroup:MTLSizeMake(kScreenProbeGroup, 1, 1)];
-        [compute endEncoding];
-    }
-    reset_draw_bindings();
-    bind_scene();
-}
-
-const float* RendererMtl::screen_probes_finished(std::size_t slot) {
-    ProbeSlot& out = probe_slots_[slot];
-    if (out.fence == 0u || out.fence == kProbesInFrame || completed_fence_value() < out.fence) {
-        return nullptr;
-    }
-    if (out.tested != 0u) {
-        for (std::uint32_t i = 0; i < out.tested; ++i) {
-            if (out.drawn[i] != 0u) {
-                std::uint64_t passed = 0u;
-                std::memcpy(&passed, out.results->mapped + out.results_offset + std::uint64_t{i} * 8u, sizeof(passed));
-                out.answers[i] = passed != 0u ? 1.0f : 0.0f;
-            }
-        }
-        out.results.reset();
-        out.fence = 0u;
-        return out.answers.data();
-    }
-    out.fence = 0u;
-    return reinterpret_cast<const float*>(out.values->mapped);
 }
 
 // ---- test captures ----
@@ -922,7 +765,6 @@ bool RendererMtl::ensure_output_set(const FrameMap& output, bool storage) {
 
 bool RendererMtl::record_temporal_upscale(const FrameMap& output) {
     end_scene_pass();
-    settle_depth_clear();
     const GpuPassScope scope{*this, GpuPass::Upscale};
     // The scene's rectangle within the scaler's render size (dynamic resolution's step: the upscale names the size it
     // reads).

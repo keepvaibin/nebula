@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The Direct3D 11 renderer (d3d11/renderer_d3d11.h): device, swap chain, frames, present, the draws' replay, samplers and
-// tables. The scene target, its passes, copies, pictures, probes and the renderer's parts are renderer_d3d11_scene.cpp.
+// tables. The scene target, its passes, copies, pictures and the renderer's parts are renderer_d3d11_scene.cpp.
 #include "galaxy/render/present_clock.h"
 #include "galaxy/render/d3d11/renderer_d3d11.h"
 #include "../dxgi_pacing.h"
@@ -194,7 +194,6 @@ bool RendererD3D11::create_states() {
         check(device->CreatePixelShader(shader.bytes, shader.size, nullptr, &utility_ps_[static_cast<std::size_t>(shader.which)]),
               "utility pixel shader");
     }
-    check(device->CreateComputeShader(g_utility_ScreenProbeCs, sizeof(g_utility_ScreenProbeCs), nullptr, &probe_cs_), "probe shader");
     if (galaxy::diagnosing(galaxy::kDiagnoseConstantsWatch)) {
         constants_watch_ = std::make_unique<d3d11::ConstantsWatch>();
         if (!constants_watch_->initialize(device, g_utility_ConstantsWatchCs)) {
@@ -381,7 +380,6 @@ void RendererD3D11::shutdown() {
         pictures_.clear();
         frame_pass_targets_.clear();
         captures_.clear();
-        probe_slots_.clear();
         for (Frame& frame : frames_) {
             frame = Frame{};
         }
@@ -402,7 +400,6 @@ void RendererD3D11::shutdown() {
         }
         utility_ps_ = {};
         full_screen_vs_.Reset();
-        probe_cs_.Reset();
         utility_raster_.Reset();
         write_masks_ = {};
         depth_uses_ = {};
@@ -681,11 +678,6 @@ std::uint64_t RendererD3D11::end_frame(bool present_swap_chain, SubmissionCallba
     frame.scene_drawn = scene_drawn_;
     frame.generated = generated;
     last_submitted_ = fence;
-    for (ProbeSlot& probes : probe_slots_) {
-        if (probes.fence == kProbesInFrame) {
-            probes.fence = fence;
-        }
-    }
     captures_.submitted(fence);
     if (on_submitted != nullptr) {
         on_submitted(submission_context, fence);

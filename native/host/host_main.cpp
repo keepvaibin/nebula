@@ -2885,11 +2885,6 @@ void svc_submit_frame(void*, NebulaFrameList* list) {
     galaxy::render::attach_frame_list(list);
     submit_frame(false, false);
 }
-uint32_t svc_probe_results(void*, uint32_t channel, NebulaScreenProbe* probes, uint32_t capacity) {
-    static_assert(sizeof(NebulaScreenProbe) == sizeof(galaxy::render::ScreenProbe));
-    return galaxy::render::screen_probe_results(channel, reinterpret_cast<galaxy::render::ScreenProbe*>(probes), capacity,
-                                                gGameFrames.load(std::memory_order_relaxed));
-}
 // draw.post (docs/modding/reference/services/draw.md): the program compiled for the running renderer (mod_post.cpp).
 static_assert(int{galaxy::render::kModPostOk} == NEBULA_POST_OK && int{galaxy::render::kModPostCompile} == NEBULA_POST_COMPILE &&
                   int{galaxy::render::kModPostNoMotion} == NEBULA_POST_NO_MOTION,
@@ -2937,9 +2932,6 @@ void svc_submit_frame(void*, NebulaFrameList* list) {
         if (!gStartDone) note_start_done();
     }
     nebula_frame_list_release(list);
-}
-uint32_t svc_probe_results(void*, uint32_t, NebulaScreenProbe*, uint32_t) {
-    return 0u;
 }
 int32_t svc_post_register(void*, const void*, uint32_t, uint32_t, uint32_t* program, char* error, uint32_t error_capacity) {
     if (program != nullptr) {
@@ -6505,7 +6497,6 @@ int main(int argc, char** argv) {
     services.material_register = svc_material_register;
     services.pipeline_register = svc_pipeline_register;
     services.submit_frame = svc_submit_frame;
-    services.probe_results = svc_probe_results;
     services.mii_count = svc_mii_count;
     services.mii_record = svc_mii_record;
     services.clock_ns = svc_clock_ns;

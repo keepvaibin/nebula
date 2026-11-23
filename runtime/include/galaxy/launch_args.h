@@ -36,8 +36,6 @@ enum Diagnostic : unsigned {
                                            // every step, on a GPU that never needs one)
     kDiagnoseHdrHighlights = 1u << 18u,  // hdr-highlights: with HDR output, captures show the light past the paper white
                                          // (HdrPattern::Highlights) in place of the SDR picture
-    kDiagnoseProbeReads = 1u << 19u,     // probe-reads: each screen probe read of the step, with the frame it was
-                                         // answered for and its values' hash (ledger P-242)
     kDiagnoseFramePlans = 1u << 20u,     // frame-plans: every 60th frame list's shape and the walk's plans of it
                                          // (frame-plans-<pid>.txt; walk_plan_tests' fixtures, ledger P-044)
     kDiagnoseConstantsWatch = 1u << 21u,  // constants-watch: Direct3D 11 checks a compute read of its constant ring once
@@ -71,7 +69,6 @@ inline constexpr DiagnosticName kDiagnosticNames[] = {
     {"ring-stress", kDiagnoseRingStress},
     {"resolution-steps", kDiagnoseResolutionSteps},
     {"hdr-highlights", kDiagnoseHdrHighlights},
-    {"probe-reads", kDiagnoseProbeReads},
     {"frame-plans", kDiagnoseFramePlans},
     {"constants-watch", kDiagnoseConstantsWatch},
     {"frames", kDiagnoseFrames},

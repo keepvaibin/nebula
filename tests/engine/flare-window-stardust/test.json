@@ -1,0 +1,107 @@
+{
+  "harness": 1,
+  "name": "flare-window-stardust",
+  "about": "Ledger P-340: StarDustGalaxy scenario 1 played as the tour plays it (090-StarDustGalaxy-1), in a 640x360 window: the step hashes follow no window size, so the last step's hash is the one recorded at 1280x720 (tests/replays/090-StarDustGalaxy-1.tsv); before S0.2.6 the lens flare's actors made it differ from step 119.",
+  "save": {
+    "spin": true
+  },
+  "stage": {
+    "name": "StarDustGalaxy",
+    "scenario": 1
+  },
+  "limit_seconds": 240,
+  "steps": [
+    {
+      "at": 0,
+      "hash": "on"
+    },
+    {
+      "at": 40,
+      "stick": [
+        0.25,
+        -0.96
+      ],
+      "frames": 72
+    },
+    {
+      "at": 120,
+      "hold": [
+        "A"
+      ],
+      "frames": 8
+    },
+    {
+      "at": 150,
+      "stick": [
+        0.96,
+        0.11
+      ],
+      "frames": 87
+    },
+    {
+      "at": 240,
+      "hold": [
+        "Z"
+      ],
+      "frames": 20
+    },
+    {
+      "at": 270,
+      "stick": [
+        -0.95,
+        -0.13
+      ],
+      "frames": 90
+    },
+    {
+      "at": 368,
+      "stick": [
+        -0.32,
+        -0.91
+      ],
+      "frames": 49
+    },
+    {
+      "at": 422,
+      "stick": [
+        0.05,
+        0.75
+      ],
+      "frames": 61
+    },
+    {
+      "at": 488,
+      "hold": [
+        "Z"
+      ],
+      "frames": 20
+    },
+    {
+      "at": 518,
+      "stick": [
+        -0.14,
+        0.2
+      ],
+      "frames": 81
+    },
+    {
+      "at": 600,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "hash.step",
+      "field": "h",
+      "is": "eca936958e08869c",
+      "frames": [
+        599,
+        599
+      ]
+    }
+  ],
+  "window": [
+    640,
+    360
+  ]
+}

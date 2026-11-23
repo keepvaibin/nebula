@@ -1,0 +1,108 @@
+{
+  "harness": 1,
+  "name": "flare-window-phantom",
+  "about": "Ledger P-340: PhantomGalaxy scenario 1 played as the tour plays it (073-PhantomGalaxy-1), in a 640x360 window: the step hashes follow no window size, so the last step's hash is the one recorded at 1280x720 (tests/replays/073-PhantomGalaxy-1.tsv); before S0.2.6 the lens flare's actors made it differ from step 136.",
+  "save": {
+    "spin": true
+  },
+  "stage": {
+    "name": "PhantomGalaxy",
+    "scenario": 1
+  },
+  "limit_seconds": 240,
+  "steps": [
+    {
+      "at": 0,
+      "hash": "on"
+    },
+    {
+      "at": 40,
+      "stick": [
+        0.69,
+        -0.85
+      ],
+      "frames": 87
+    },
+    {
+      "at": 135,
+      "stick": [
+        -0.89,
+        -0.66
+      ],
+      "frames": 34
+    },
+    {
+      "at": 173,
+      "stick": [
+        -0.47,
+        -0.74
+      ],
+      "frames": 76
+    },
+    {
+      "at": 258,
+      "stick": [
+        0.39,
+        0.68
+      ],
+      "frames": 56
+    },
+    {
+      "at": 317,
+      "hold": [
+        "A"
+      ],
+      "frames": 8
+    },
+    {
+      "at": 347,
+      "stick": [
+        -0.19,
+        -0.01
+      ],
+      "frames": 80
+    },
+    {
+      "at": 436,
+      "hold": [
+        "A"
+      ],
+      "frames": 8
+    },
+    {
+      "at": 466,
+      "stick": [
+        0.08,
+        -0.89
+      ],
+      "frames": 36
+    },
+    {
+      "at": 505,
+      "stick": [
+        0.9,
+        1.0
+      ],
+      "frames": 55
+    },
+    {
+      "at": 600,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "hash.step",
+      "field": "h",
+      "is": "488a87c8f9f4fb5c",
+      "frames": [
+        599,
+        599
+      ]
+    }
+  ],
+  "window": [
+    640,
+    360
+  ]
+}

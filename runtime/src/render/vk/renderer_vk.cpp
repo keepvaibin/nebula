@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The Vulkan renderer (renderer_vk.h): device, swapchain, frames, present and the overlay. The scene target, draws,
-// copies and screen probes are renderer_vk_frame.cpp.
+// and copies are renderer_vk_frame.cpp.
 
 #include "renderer_vk_internal.h"
 #include "galaxy/pacing_recorder.h"
@@ -512,22 +512,6 @@ bool RendererVk::create_layouts() {
         vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &utility_set_layout_), "utility set layout");
     }
     {
-        const VkDescriptorSetLayoutBinding bindings[] = {
-            {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
-            {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
-            {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
-        };
-        VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        info.bindingCount = 3;
-        info.pBindings = bindings;
-        vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &probe_set_layout_), "probe set layout");
-        // No push constant: the count travels with the points (write_screen_probe_points, P-332).
-        VkPipelineLayoutCreateInfo layout{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
-        layout.setLayoutCount = 1;
-        layout.pSetLayouts = &probe_set_layout_;
-        vk::check(vkCreatePipelineLayout(device, &layout, nullptr, &probe_layout_), "probe pipeline layout");
-    }
-    {
         // The 2D layer's merge (layer_merge_shader_source): the layer as drawn and as it started, read with Load.
         const VkDescriptorSetLayoutBinding bindings[] = {
             {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
@@ -675,14 +659,14 @@ bool RendererVk::create_layouts() {
                                                          : &draw_layout_.scene_pass_clear),
                   "scene target clearing render pass");
     }
-    // The scene depth cleared alone (settle_depth_clear with no pass open): the depth target only, so the colour is neither
-    // loaded nor stored. [0] keeps the stencil, [1] clears it, as depth_clear_passes.
-    for (unsigned samples_log2 = 0u; (1u << samples_log2) <= msaa_max_samples_; ++samples_log2) {
+    // The single-sample depth target alone (resolve_scene_depth): the colour is neither loaded nor stored.
+    {
         VkAttachmentDescription attachment{};
         attachment.format = depth_format_;
-        attachment.samples = static_cast<VkSampleCountFlagBits>(1u << samples_log2);
+        attachment.samples = VK_SAMPLE_COUNT_1_BIT;
         attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
         attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
         attachment.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         attachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
@@ -707,11 +691,7 @@ bool RendererVk::create_layouts() {
         info.pSubpasses = &subpass;
         info.dependencyCount = 2;
         info.pDependencies = dependencies;
-        for (const unsigned stencil : {0u, 1u}) {
-            attachment.stencilLoadOp = stencil != 0u ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
-            vk::check(vkCreateRenderPass(device, &info, nullptr, &depth_alone_passes_[stencil][samples_log2]),
-                      "depth clearing render pass (depth alone)");
-        }
+        vk::check(vkCreateRenderPass(device, &info, nullptr, &depth_alone_pass_), "depth render pass (depth alone)");
     }
     // The effects layer needs its format drawn and blended, and four colour attachments with independent blending.
     {
@@ -794,7 +774,7 @@ bool RendererVk::create_layouts() {
         vk::check(vkCreateRenderPass(device, &info, nullptr, &draw_layout_.aux_passes_clear[wide ? 1u : 0u][aux]),
                   "temporal scene clearing render pass");
     }
-    // One target written whole (copies; RGBA8: screen probes): its old contents are dropped; it ends shader-readable.
+    // One target written whole (copies; RGBA8: a window-format picture): its old contents are dropped; it ends shader-readable.
     {
         VkAttachmentDescription attachment{};
         attachment.format = vk::kSceneColorFormat;
@@ -1570,25 +1550,12 @@ bool RendererVk::create_utility_pipelines() {
     depth_copy_pipeline_ = create_utility_pipeline(depth_copy_pass_, utility_layout_, vk::UtilitySpirv::BlitVs,
                                                    vk::UtilitySpirv::DepthCopyPs, VK_COLOR_COMPONENT_R_BIT, false, false,
                                                    false);
-    {
-        const VkDevice device = vk::Context::get().device();
-        const VkShaderModule module = utility_module(vk::UtilitySpirv::ScreenProbeCs);
-        VkComputePipelineCreateInfo info{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
-        info.stage = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
-        info.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-        info.stage.module = module;
-        info.stage.pName = "main";
-        info.layout = probe_layout_;
-        const VkResult result = vkCreateComputePipelines(device, vk::shared_pipeline_cache(), 1, &info, nullptr, &probe_pipeline_);
-        vkDestroyShaderModule(device, module, nullptr);
-        vk::check(result, "screen probe pipeline");
-    }
     for (unsigned kind = 0u; kind < static_cast<unsigned>(SceneUtility::Count); ++kind) {
         (void)scene_utility_pipeline(static_cast<SceneUtility>(kind));
     }
     if (msaa_max_samples_ > 1u) {
         // The single-sample depth target's pass alone (resolve_scene_depth): the resolve writes depth only.
-        depth_resolve_pipeline_ = create_utility_pipeline(depth_alone_passes_[0][0], utility_layout_,
+        depth_resolve_pipeline_ = create_utility_pipeline(depth_alone_pass_, utility_layout_,
                                                           vk::UtilitySpirv::BlitVs, vk::UtilitySpirv::DepthResolvePs, 0u, false,
                                                           false, true, VK_SAMPLE_COUNT_1_BIT, false);
     }
@@ -1638,76 +1605,6 @@ VkPipeline RendererVk::scene_utility_pipeline(SceneUtility kind) {
     return pipeline;
 }
 
-VkPipeline RendererVk::probe_test_pipeline() {
-    const unsigned aux = scene_pass_aux_;
-    if (target_pass_active_ || aux > 3u || (aux == 3u && draw_layout_.aux_pass_for(scene_variant(), 3u) == VK_NULL_HANDLE)) {
-        return VK_NULL_HANDLE;
-    }
-    VkPipeline& pipeline = probe_test_pipelines_[aux][scene_variant()];
-    if (pipeline != VK_NULL_HANDLE) {
-        return pipeline;
-    }
-    const VkDevice device = vk::Context::get().device();
-    // The scene pass this aux target opens: the motion and reactive passes are single-sample with a second target.
-    const VkRenderPass pass = aux != 0u ? draw_layout_.aux_pass_for(scene_variant(), aux) : draw_layout_.pass_for(scene_variant(), false);
-    const auto samples = aux != 0u ? VK_SAMPLE_COUNT_1_BIT : static_cast<VkSampleCountFlagBits>(1u << scene_samples_log2());
-    const VkShaderModule vs = utility_module(vk::UtilitySpirv::BlitVs);
-    const VkShaderModule ps = utility_module(vk::UtilitySpirv::ClearDepthPs);
-    VkPipelineShaderStageCreateInfo stages[2]{};
-    stages[0] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_VERTEX_BIT, vs, "main", nullptr};
-    stages[1] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_FRAGMENT_BIT, ps, "main", nullptr};
-    VkPipelineVertexInputStateCreateInfo vertex_input{VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
-    VkPipelineInputAssemblyStateCreateInfo input_assembly{VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
-    input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    VkPipelineViewportStateCreateInfo viewport{VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};
-    viewport.viewportCount = 1;
-    viewport.scissorCount = 1;
-    VkPipelineRasterizationStateCreateInfo raster{VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
-    raster.polygonMode = VK_POLYGON_MODE_FILL;
-    raster.cullMode = VK_CULL_MODE_NONE;
-    raster.frontFace = VK_FRONT_FACE_CLOCKWISE;
-    raster.lineWidth = 1.0f;
-    // The first sample, as the probe dispatch reads a multisampled depth (its resolve keeps sample 0).
-    const VkSampleMask first_sample = 1u;
-    VkPipelineMultisampleStateCreateInfo multisample{VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
-    multisample.rasterizationSamples = samples;
-    multisample.pSampleMask = &first_sample;
-    // Reversed depth: the point is seen where it is as near as the scene there or nearer.
-    VkPipelineDepthStencilStateCreateInfo depth{VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
-    depth.depthTestEnable = VK_TRUE;
-    depth.depthWriteEnable = VK_FALSE;
-    depth.depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL;
-    VkPipelineColorBlendAttachmentState targets[4]{};  // write masks 0
-    VkPipelineColorBlendStateCreateInfo blend_info{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
-    blend_info.attachmentCount = aux == 3u ? 4u : aux != 0u ? 2u : 1u;
-    blend_info.pAttachments = targets;
-    const VkDynamicState dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
-    VkPipelineDynamicStateCreateInfo dynamic{VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
-    dynamic.dynamicStateCount = 2;
-    dynamic.pDynamicStates = dynamic_states;
-    VkGraphicsPipelineCreateInfo info{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
-    info.stageCount = 2;
-    info.pStages = stages;
-    info.pVertexInputState = &vertex_input;
-    info.pInputAssemblyState = &input_assembly;
-    info.pViewportState = &viewport;
-    info.pRasterizationState = &raster;
-    info.pMultisampleState = &multisample;
-    info.pDepthStencilState = &depth;
-    info.pColorBlendState = &blend_info;
-    info.pDynamicState = &dynamic;
-    info.layout = utility_layout_;
-    info.renderPass = pass;
-    const VkResult result = vkCreateGraphicsPipelines(device, vk::shared_pipeline_cache(), 1, &info, nullptr, &pipeline);
-    vkDestroyShaderModule(device, vs, nullptr);
-    vkDestroyShaderModule(device, ps, nullptr);
-    if (result != VK_SUCCESS) {
-        pipeline = VK_NULL_HANDLE;
-        std::fprintf(stderr, "[RendererVk] probe test pipeline: %d; probes read after the pass\n", static_cast<int>(result));
-    }
-    return pipeline;
-}
-
 RendererVk::Kept RendererVk::take_apart_lost_device() {
     keep_window_ = true;
     try {
@@ -1747,19 +1644,13 @@ void RendererVk::shutdown() {
             if (picture.sampled != VK_NULL_HANDLE) vkDestroyImageView(device, picture.sampled, nullptr);
         }
         pictures_.clear();
-        for (VkPipeline* pipeline : {&conversion_pipeline_, &probe_pipeline_, &display_filter_pipeline_,
+        for (VkPipeline* pipeline : {&conversion_pipeline_, &display_filter_pipeline_,
                                      &conversion_pipeline_wide_, &display_filter_pipeline_wide_,
              &depth_resolve_pipeline_, &blit_pipeline_, &depth_copy_pipeline_}) {
             if (*pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, *pipeline, nullptr);
             *pipeline = VK_NULL_HANDLE;
         }
         for (auto& variants : scene_utility_pipelines_) {
-            for (VkPipeline& pipeline : variants) {
-                if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
-                pipeline = VK_NULL_HANDLE;
-            }
-        }
-        for (auto& variants : probe_test_pipelines_) {
             for (VkPipeline& pipeline : variants) {
                 if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
                 pipeline = VK_NULL_HANDLE;
@@ -1811,11 +1702,6 @@ void RendererVk::shutdown() {
         utility_pool_ = VK_NULL_HANDLE;
         output_scene_active_ = false;
         output_source_sampled_ = false;
-        for (ProbeSlot& slot : probe_slots_) {
-            if (slot.queries != VK_NULL_HANDLE) vkDestroyQueryPool(device, slot.queries, nullptr);
-        }
-        probe_slots_.clear();
-        held_probe_slots_.clear();
         captures_.clear();
         vertex_ring_.reset();
         index_ring_.reset();
@@ -1841,7 +1727,7 @@ void RendererVk::shutdown() {
         profile_frame_ = pass_recording_ = false;
         destroy_swapchain();
         for (VkRenderPass pass :
-             {present_pass_, color_pass_, color_pass_wide_, rgba8_pass_, depth_copy_pass_, draw_layout_.scene_pass,
+             {present_pass_, color_pass_, color_pass_wide_, rgba8_pass_, depth_copy_pass_, depth_alone_pass_, draw_layout_.scene_pass,
               draw_layout_.scene_pass_clear,
               draw_layout_.target_pass, draw_layout_.target_pass_clear}) {
             if (pass != VK_NULL_HANDLE) vkDestroyRenderPass(device, pass, nullptr);
@@ -1849,7 +1735,7 @@ void RendererVk::shutdown() {
         wide_base_sampled_ = false;
         for (auto* group : {&draw_layout_.discard_color_passes, &draw_layout_.depth_clear_passes[0],
                             &draw_layout_.depth_clear_passes[1], &draw_layout_.discard_depth_clear_passes[0],
-                            &draw_layout_.discard_depth_clear_passes[1], &depth_alone_passes_}) {
+                            &draw_layout_.discard_depth_clear_passes[1]}) {
             for (auto& passes : *group) {
                 for (VkRenderPass& pass : passes) {
                     if (pass != VK_NULL_HANDLE) vkDestroyRenderPass(device, pass, nullptr);
@@ -1874,19 +1760,19 @@ void RendererVk::shutdown() {
                 pass = VK_NULL_HANDLE;
             }
         }
-        present_pass_ = color_pass_ = color_pass_wide_ = rgba8_pass_ = depth_copy_pass_ = draw_layout_.target_pass =
+        present_pass_ = color_pass_ = color_pass_wide_ = rgba8_pass_ = depth_copy_pass_ = depth_alone_pass_ = draw_layout_.target_pass =
             draw_layout_.target_pass_clear =
             draw_layout_.scene_pass = draw_layout_.scene_pass_clear = VK_NULL_HANDLE;
-        for (VkPipelineLayout layout : {draw_layout_.layout, utility_layout_, probe_layout_, layer2d_layout_}) {
+        for (VkPipelineLayout layout : {draw_layout_.layout, utility_layout_, layer2d_layout_}) {
             if (layout != VK_NULL_HANDLE) vkDestroyPipelineLayout(device, layout, nullptr);
         }
-        draw_layout_.layout = utility_layout_ = probe_layout_ = layer2d_layout_ = VK_NULL_HANDLE;
+        draw_layout_.layout = utility_layout_ = layer2d_layout_ = VK_NULL_HANDLE;
         for (VkDescriptorSetLayout layout : {draw_layout_.sets[0], draw_layout_.sets[1], draw_layout_.sets[2],
-                                             utility_set_layout_, probe_set_layout_, layer2d_set_layout_}) {
+                                             utility_set_layout_, layer2d_set_layout_}) {
             if (layout != VK_NULL_HANDLE) vkDestroyDescriptorSetLayout(device, layout, nullptr);
         }
         draw_layout_.sets.fill(VK_NULL_HANDLE);
-        utility_set_layout_ = probe_set_layout_ = layer2d_set_layout_ = VK_NULL_HANDLE;
+        utility_set_layout_ = layer2d_set_layout_ = VK_NULL_HANDLE;
         if (linear_clamp_ != VK_NULL_HANDLE) vkDestroySampler(device, linear_clamp_, nullptr);
         linear_clamp_ = VK_NULL_HANDLE;
         context.collect();
@@ -2155,11 +2041,6 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
     frame_generated_[frame_slot_] = generated;
     frame_scene_drawn_[frame_slot_] = scene_drawn_;
     timestamp_pending_[frame_slot_] = timestamps_ != VK_NULL_HANDLE;
-    for (ProbeSlot& probes : probe_slots_) {
-        if (probes.fence == kProbesInFrame) {
-            probes.fence = fence;
-        }
-    }
     captures_.submitted(fence);
     if (on_submitted != nullptr) {
         on_submitted(submission_context, fence);

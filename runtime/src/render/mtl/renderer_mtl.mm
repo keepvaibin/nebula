@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The Metal renderer (mtl/renderer_mtl.h): device, the window's layer, frames and present. The scene target, draws,
-// copies and screen probes are renderer_mtl_scene.mm and renderer_mtl_draw.mm.
+// and copies are renderer_mtl_scene.mm and renderer_mtl_draw.mm.
 #include "renderer_mtl_internal.h"
 #include "galaxy/pacing_recorder.h"
 
@@ -179,15 +179,6 @@ bool RendererMtl::create_layouts() {
         depth.depthCompareFunction = MTLCompareFunctionGreaterEqual;
         depth.depthWriteEnabled = NO;
         depth_uses_[static_cast<std::size_t>(DepthUse::TestNearer)] = own([metal newDepthStencilStateWithDescriptor:depth]);
-        NSError* error = nil;
-        id<MTLComputePipelineState> const probe =
-            [metal newComputePipelineStateWithFunction:(__bridge id<MTLFunction>)utility_function(mtl::UtilityShader::ScreenProbeCs)
-                                                 error:&error];
-        if (probe == nil) {
-            throw std::runtime_error(std::string("the screen probe pipeline: ") +
-                                     (error != nil ? error.localizedDescription.UTF8String : ""));
-        }
-        probe_pipeline_ = own(probe);
     }
     if (bindless_) {
         sampler_array_slots_ = std::min<std::uint32_t>(kSamplerHeapSlots, caps.sampler_array_max);
@@ -384,9 +375,6 @@ void RendererMtl::shutdown() {
         frame_pass_targets_.clear();
         capture_target_.reset();
         captures_.clear();
-        probe_slots_.clear();
-        held_probe_slots_.clear();
-        pass_visibility_.reset();
         for (Frame& frame : frames_) {
             if (frame.upload_blit != nullptr) {
                 [(__bridge id<MTLBlitCommandEncoder>)frame.upload_blit endEncoding];
@@ -405,8 +393,6 @@ void RendererMtl::shutdown() {
             frame.retired_objects.clear();
             frame.tables.clear();
             frame.tables_used = 0u;
-            frame.visibility.clear();
-            frame.visibility_used = 0u;
             frame.fence = 0u;
         }
         commands_ = nullptr;
@@ -418,7 +404,6 @@ void RendererMtl::shutdown() {
         for (mtl::Object& function : utility_functions_) {
             drop(function);
         }
-        drop(probe_pipeline_);
         for (mtl::Object& state : depth_uses_) {
             drop(state);
         }
@@ -628,13 +613,6 @@ void RendererMtl::begin_frame() {
     }
     frame.retired_objects.clear();
     frame.tables_used = 0u;
-    // The slot's probe results are read (their fence passed with the slot's): zero for the passes of this frame.
-    for (std::size_t i = 0; i < frame.visibility_used; ++i) {
-        std::memset(frame.visibility[i]->mapped, 0, frame.visibility[i]->size);
-    }
-    frame.visibility_used = 0u;
-    pass_visibility_.reset();
-    pass_visibility_used_ = 0u;
     trim_idle_effect_targets();
     // Once a second of the game (target slots age on idle_clock).
     if (idle_clock() - target_swept_step_ >= kTargetSweepSteps) {
@@ -793,11 +771,6 @@ std::uint64_t RendererMtl::end_frame(bool present_swap_chain, SubmissionCallback
     history_segment_fence_[history_segment_] = fence;
     frame_generated_[frame_slot_] = generated;
     frame_scene_drawn_[frame_slot_] = scene_drawn_;
-    for (ProbeSlot& probes : probe_slots_) {
-        if (probes.fence == kProbesInFrame) {
-            probes.fence = fence;
-        }
-    }
     captures_.submitted(fence);
     if (on_submitted != nullptr) {
         on_submitted(submission_context, fence);

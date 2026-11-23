@@ -47,22 +47,4 @@ struct QueuePlace {
     return {false, stalled_at};
 }
 
-// The game's read of an earlier frame's probe answers (RenderCore::screen_probe_results) waits for them until
-// `deadline_ns`, but not on a mod: once a draw.native function has held the render thread `stall_ns` (it began at
-// `native_started_ns`; 0: none runs), the answers before them are read at once. The walk that answers them is behind
-// that call, and the game does not wait on a mod's code on another thread.
-enum class ProbeWait : std::uint8_t {
-    Wait,  // look again (woken by the answers, or when a draw.native call may have held the thread long enough)
-    Late,  // the deadline passed
-    Held,  // a draw.native function holds the render thread
-};
-
-[[nodiscard]] constexpr ProbeWait probe_wait(std::uint64_t now_ns, std::uint64_t deadline_ns, std::uint64_t native_started_ns,
-                                             std::uint64_t stall_ns) noexcept {
-    if (native_started_ns != 0 && now_ns >= native_started_ns + stall_ns) {
-        return ProbeWait::Held;
-    }
-    return now_ns >= deadline_ns ? ProbeWait::Late : ProbeWait::Wait;
-}
-
 }  // namespace galaxy::render

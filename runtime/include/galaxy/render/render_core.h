@@ -28,7 +28,6 @@
 #include "render/core/draw_record.h"
 #include "render/core/frame_core.h"
 #include "render/core/pipelines.h"
-#include "render/core/probe_book.h"
 
 #include <array>
 #include <atomic>
@@ -125,11 +124,6 @@ public:
         mark.width = width;
         mark.height = height;
     }
-    // Simulation thread, at game frame `game_frame`: channel `channel`'s probes as the list of frame
-    // `game_frame` - ProbeBook::kDelay asked them (or the newest frame before it that asked some), at most `capacity`;
-    // how many. Waits until those answers are back (bounded: 2 s).
-    [[nodiscard]] std::uint32_t screen_probe_results(std::uint32_t channel, ScreenProbe* probes, std::uint32_t capacity,
-                                                     std::uint32_t game_frame);
     void pump_messages();
     [[nodiscard]] bool quit_requested() const noexcept;
     // Out of sight (render_api.h set_window_hidden): no presents of its own, longer waits. Any thread.
@@ -182,8 +176,6 @@ private:
     [[nodiscard]] bool restart_renderer(const FrameMap& frame, bool same_card);
     void drop_device_state();
     void render_frame_on_thread(FrameChunk& chunk);
-    // Render owner: the probes whose frames have finished become their channels' answers.
-    void poll_screen_probes();
     // Presents black, a named picture (`slot`) or the newest.
     void present_cached_display_on_thread(
         bool black,
@@ -563,30 +555,6 @@ private:
     void render_work_ends() noexcept;
     static constexpr std::uint64_t kRenderStallNs = 20'000'000u;
     static constexpr std::size_t kStalledRenderQueueDepth = 8u;
-    // Probes in flight, oldest first, each with the game frame whose list asked it; their answers go to probe_book_, the
-    // one thing shared with the simulation thread (under probe_answers_lock_, waited on with probe_answers_cv_).
-    struct ScreenProbeFlight {
-        std::uint32_t channel = 0, count = 0;
-        std::uint32_t game_frame = 0;
-        std::size_t slot = 0;
-        std::vector<ScreenProbe> probes;
-    };
-    std::deque<ScreenProbeFlight> probe_flights_;
-    std::vector<std::size_t> free_probe_slots_;
-    std::size_t next_probe_slot_ = 0;
-    // `compared`: NEBULA_PROBE_COMPARED, the game only compares each value with its user_z.
-    void record_screen_probes(std::uint32_t channel, const ScreenProbe* probes, std::uint32_t count, bool compared);
-    mutable std::mutex probe_answers_lock_;
-    std::condition_variable probe_answers_cv_;
-    core::ProbeBook probe_book_;
-    unsigned probe_waits_logged_ = 0u;
-    static constexpr std::uint64_t kProbeWaitNs = 2'000'000'000u;
-    // When the draw.native function the render thread runs began (steady clock; 0: none runs): the game's probe read
-    // waits on none that has run kRenderStallNs (render_queue.h probe_wait).
-    std::atomic<std::uint64_t> native_call_started_ns_{0};
-    // Render thread: the list's real walk is over (it asks no more probes), or it leaves unwalked.
-    void probes_walked(std::uint32_t game_frame);
-    void probes_released(std::uint32_t game_frame);
     std::size_t render_chunks_in_flight_ = 0;
     std::size_t present_chunks_in_flight_ = 0;
 

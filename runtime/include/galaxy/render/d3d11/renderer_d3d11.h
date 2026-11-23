@@ -253,11 +253,6 @@ public:
     [[nodiscard]] double measured_present_hz() const noexcept { return measured_present_hz_.load(std::memory_order_relaxed); }
     [[nodiscard]] std::uint64_t frame_index() const noexcept { return frame_index_; }
 
-    // Each point's depth (0 near, 1 far) into slot `slot`'s readback; screen_probes_finished names the values once that
-    // frame's fence has passed. `compared` probes are answered by a depth test of each point (1 seen, 0 hidden).
-    [[nodiscard]] bool record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes, bool compared);
-    [[nodiscard]] const float* screen_probes_finished(std::size_t slot);
-
     // Test captures: the presented picture as PPM files (paths from set_debug_capture_paths). Writes every capture
     // whose frame the GPU has finished.
     void debug_log_backbuffer_readback();
@@ -502,7 +497,6 @@ private:
     UINT root_carried_first_ = 0u;             // where this pass's copy of it lies
     std::array<d3d11::ComPtr<ID3D11PixelShader>, static_cast<std::size_t>(Utility::Count)> utility_ps_{};
     d3d11::ComPtr<ID3D11VertexShader> full_screen_vs_;
-    d3d11::ComPtr<ID3D11ComputeShader> probe_cs_;
     // --diagnostics constants-watch: once a frame, a compute read of a ring piece checked against what was written
     // (P-332); null without it.
     std::unique_ptr<d3d11::ConstantsWatch> constants_watch_;
@@ -607,21 +601,6 @@ private:
     std::unordered_map<std::uint64_t, FramePassTarget> frame_pass_targets_;
     std::uint64_t frame_pass_color_key_ = 0u;
     std::uint64_t frame_pass_depth_key_ = 0u;
-
-    // Screen probes: a slot's points (written here) and values (the dispatch writes, read back), fenced with its frame.
-    struct ProbeSlot {
-        d3d11::ComPtr<ID3D11Buffer> points;  // the frame pixels to read (uint2), dynamic
-        d3d11::ComPtr<ID3D11ShaderResourceView> points_view;
-        d3d11::ComPtr<ID3D11Buffer> values;  // written by the probe dispatch
-        d3d11::ComPtr<ID3D11UnorderedAccessView> values_view;
-        d3d11::ComPtr<ID3D11Buffer> readback;  // D3D11_USAGE_STAGING
-        std::uint64_t capacity = 0;  // points they hold
-        std::uint64_t fence = 0;     // 0: idle; kProbesInFrame: recorded in the frame being built
-        std::uint32_t count = 0;
-        std::vector<float> answers;
-    };
-    static constexpr std::uint64_t kProbesInFrame = ~std::uint64_t{0};
-    std::vector<ProbeSlot> probe_slots_;
 
     // Captures and telemetry.
     std::string backbuffer_capture_path_;
