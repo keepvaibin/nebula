@@ -6,45 +6,34 @@
 
 class Sun;
 
-// What an object's latest answered probes saw. Written and read on the game thread in order (the answers are read before the
-// flare reads them), so one value is always the newest.
-class BrightInfo {
-public:
-    BrightInfo();
-
-    void write(const Vec2f&, const Vec2f&, f32);
-    void reset();
-
-    Vec2f mBrightnessCenter;
-    Vec2f mRealCenter;
-    f32 mBright;
+// One point of a bright object's sphere that the lens flare's sight pass reads (LensFlareDirector::drawSight): its place
+// in the frame (0 to 1, y down), the game's depth just in front of the sphere there (0 near to 1 far), and whether it is
+// on the screen.
+struct BrightSample {
+    f32 mFrameX;
+    f32 mFrameY;
+    f32 mDepth;
+    bool mOnScreen;
 };
 
 class BrightObjBase {
 public:
-    // The lens flare's readback channel, and the points of the picture an object asks about each frame. An object that
-    // asked nothing leaves cNoProbes in its first point's x.
-    static const u32 cReadbackChannel = 3;
-    static const u32 cProbeCount = 17;
-    static constexpr f32 cNoProbes = -2.0f;
+    // The points of the sphere the flare's sight reads: the centre, eight at 0.4 of the radius and eight at 0.7.
+    static const u32 cSampleCount = 17;
 
     BrightObjBase();
 
     virtual ~BrightObjBase();
-    virtual void calcBrightInfo(NebulaScreenProbe*) = 0;
-    virtual f32 getBright() const;
-    virtual const Vec2f* getBrightCenter() const;
-    virtual const Vec2f* getCenter() const;
-    virtual void getNowCenter(Vec2f*) const;
+    // Whether the object gives light now (a sun not out gives none).
+    virtual bool isShining() const {
+        return true;
+    }
+    // Its centre on the screen now.
+    virtual void getNowCenter(Vec2f*) const = 0;
 
-    void checkVisibilityOfSphere(NebulaScreenProbe*);
-    void checkVisible(NebulaScreenProbe*, const Vec3f&, const Pos3f&, const Proj3f&);
-    void setResult(const NebulaScreenProbe*);
+    // Its samples seen with the scene's camera as it stands; how many are on the screen.
+    u32 calcSamples(BrightSample*) const;
 
-    BrightInfo mInfo;
-    Vec2f mBrightCenter;
-    Vec2f mNowCenter;
-    f32 mBrightness;
     Vec3f mDrawPos;
     f32 mDrawRadius;
 };
@@ -56,7 +45,6 @@ public:
     virtual void init(const TableIter&) override;
     virtual void control() override;
 
-    virtual void calcBrightInfo(NebulaScreenProbe*) override;
     virtual void getNowCenter(Vec2f*) const override;
 
     f32 mRadius;
@@ -69,7 +57,7 @@ public:
     virtual void init(const TableIter&) override;
     virtual void control() override;
 
-    virtual void calcBrightInfo(NebulaScreenProbe*) override;
+    virtual bool isShining() const override;
     virtual void getNowCenter(Vec2f*) const override;
 
     void controlSunModel();
