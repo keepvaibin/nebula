@@ -20,7 +20,8 @@ if(CMAKE_CXX_COMPILER_LAUNCHER OR "$ENV{CMAKE_CXX_COMPILER_LAUNCHER}")
 else()
     set(NEBULA_MSVC_DEBUG_INFO /Zi)
 endif()
-add_compile_definitions(NEBULA_VERSION="${PROJECT_VERSION}")
+include(cmake/nebula_options.cmake)
+add_compile_definitions(NEBULA_VERSION="${PROJECT_VERSION}${NEBULA_VERSION_SUFFIX}")
 
 # Coverage builds (the gate's long run, tools/gate/coverage.py, N-1042): every program, library and test counts the lines
 # and functions it runs (clang's source-based coverage), each process writing them where LLVM_PROFILE_FILE says when it

@@ -20,6 +20,10 @@ saves and the settings and installs this version (installer\native\setup_engine.
           targets); D3D12\ (the Agility SDK's runtime the build put beside it); and glslang\glslang.exe and
           glslang\LICENSE.txt (the build's nebula_glslang target), installed as glslang\ beside dxc\ for LumaLink's
           shader check
+  -NoMods  a Setup with no mod support (CMake NEBULA_MODS=OFF; also set by the environment variable NEBULA_MODS=OFF): -Names and
+          -ShippedMods are not needed and nothing of them is packed (no luma\ folder, no LumaKit, no smg_game.dll
+          or x86-64-v2\smg_game.dll: the game module that carries the mod rows), and Setup registers no .luma file type and no
+          nebula: link
   -Names  the game build folder of those binaries (the folder LumaLink's --names takes): its function rows (luma\),
           luma_types\luma_types.json, luma_functions.json, luma_numbers.json and the placement facts
           (smg_game.luma-placement.json, smg_game.luma-self.json). They are installed as luma\ beside the game, with the
@@ -38,9 +42,10 @@ CARGO_TARGET_DIR when it is set, else target\ in this tree.
 param(
     [Parameter(Mandatory = $true)][string]$Version,
     [Parameter(Mandatory = $true)][string]$Bin,
-    [Parameter(Mandatory = $true)][string]$Names,
+    [string]$Names = '',
     [Parameter(Mandatory = $true)][string]$Dxc,
-    [Parameter(Mandatory = $true)][string]$ShippedMods,
+    [string]$ShippedMods = '',
+    [switch]$NoMods,
     [string]$OutputDirectory = '',
     [string]$SetupName = '',
     [string]$Repository = 'keepvaibin/nebula',
@@ -51,6 +56,8 @@ param(
     [string]$SigningKey = (Join-Path $env:USERPROFILE '.nebula-release-key\nebula-release-private.xml')
 )
 $ErrorActionPreference = 'Stop'
+if ($env:NEBULA_MODS -eq 'OFF') { $NoMods = $true }
+if (-not $NoMods -and (-not $Names -or -not $ShippedMods)) { throw '-Names and -ShippedMods are needed (or -NoMods)' }
 $installer = Split-Path -Parent $PSCommandPath
 $repo = Split-Path -Parent $installer
 $native = Join-Path $installer 'native'
@@ -122,7 +129,10 @@ try {
     foreach ($name in 'bin\x64\dxc.exe', 'bin\x64\dxcompiler.dll', 'bin\x64\dxil.dll', 'LICENSE-MS.txt', 'LICENCE-MIT.txt', 'LICENSE-LLVM.txt') {
         if (-not (Test-Path -LiteralPath (Join-Path $Dxc $name))) { throw "The compiler folder has no $name" }
     }
-    foreach ($name in 'Nebula.exe', 'Nebula-x86-64-v2.exe', 'NebulaVk.exe', 'NebulaVk-x86-64-v2.exe', 'NebulaD11.exe', 'NebulaD11-x86-64-v2.exe', 'smg_game.dll', 'smg_game_plain.dll', 'x86-64-v2\smg_game.dll', 'x86-64-v2\smg_game_plain.dll', 'D3D12\D3D12Core.dll', 'D3D12\LICENSE.txt', 'glslang\glslang.exe', 'glslang\LICENSE.txt') {
+    # The game module that carries the mod rows is not in a package with no mod support.
+    $gameModules = if ($NoMods) { @('smg_game_plain.dll', 'x86-64-v2\smg_game_plain.dll') } else { @('smg_game.dll', 'smg_game_plain.dll', 'x86-64-v2\smg_game.dll', 'x86-64-v2\smg_game_plain.dll') }
+    $programs = @('Nebula.exe', 'Nebula-x86-64-v2.exe', 'NebulaVk.exe', 'NebulaVk-x86-64-v2.exe', 'NebulaD11.exe', 'NebulaD11-x86-64-v2.exe') + $gameModules + @('D3D12\D3D12Core.dll', 'D3D12\LICENSE.txt', 'glslang\glslang.exe', 'glslang\LICENSE.txt')
+    foreach ($name in $programs) {
         if (-not (Test-Path -LiteralPath (Join-Path $Bin $name))) { throw "The bin folder has no $name" }
     }
     # The game ships no test parts (tools/release_check.ps1): LumaLink's Setup installs the test kit.
@@ -133,7 +143,7 @@ try {
     # The version folder as installed.
     $app = Join-Path $work 'payload\app'
     New-Item -ItemType Directory -Force $app | Out-Null
-    foreach ($name in 'Nebula.exe', 'Nebula-x86-64-v2.exe', 'NebulaVk.exe', 'NebulaVk-x86-64-v2.exe', 'NebulaD11.exe', 'NebulaD11-x86-64-v2.exe', 'smg_game.dll', 'smg_game_plain.dll', 'x86-64-v2\smg_game.dll', 'x86-64-v2\smg_game_plain.dll', 'D3D12\D3D12Core.dll', 'D3D12\LICENSE.txt', 'glslang\glslang.exe', 'glslang\LICENSE.txt') {
+    foreach ($name in $programs) {
         $to = Join-Path $app $name
         New-Item -ItemType Directory -Force (Split-Path -Parent $to) | Out-Null
         Copy-Item -LiteralPath (Join-Path $Bin $name) -Destination $to
@@ -145,7 +155,8 @@ try {
     foreach ($name in 'LICENSE', 'THIRD-PARTY-NOTICES.md', 'README.md') { Copy-Item -LiteralPath (Join-Path $repo $name) -Destination (Join-Path $app $name) }
 
     # The game's self-description, as LumaLink reads it from versions\<version>\luma: the rows, the type description,
-    # the placement facts, and the services list this game module gives.
+    # the placement facts, and the services list this game module gives. A Setup with no mod support has none of it.
+    if (-not $NoMods) {
     $luma = Join-Path $app 'luma'
     New-Item -ItemType Directory -Force $luma | Out-Null
     foreach ($name in 'luma', 'luma_types\luma_types.json', 'luma_types\luma_functions.json', 'luma_types\luma_numbers.json', 'smg_game.luma-placement.json', 'smg_game.luma-self.json') {
@@ -180,6 +191,7 @@ try {
     if (-not $shipped.Count) { throw "The shipped mods folder has no .luma file: $ShippedMods" }
     New-Item -ItemType Directory -Force (Join-Path $luma 'mods') | Out-Null
     foreach ($file in $shipped) { Copy-Item -LiteralPath $file.FullName -Destination (Join-Path $luma 'mods') }
+    }
 
     # build_info.h: what Setup and the install root's Nebula.exe know of this release.
     $numericVersion = (($Version -replace '-.*$', '') + '.0.0.0').Split('.')[0..3] -join '.'
@@ -239,6 +251,7 @@ inline constexpr unsigned kStoreVersion = $storeVersion;
     $cxx = @('/nologo', '/c', '/std:c++20', '/O2', '/MT', '/DNDEBUG', '/EHsc', '/W4', '/WX', '/permissive-', '/utf-8', '/Zc:__cplusplus', '/GS',
         '/guard:cf', '/Brepro', '/DUNICODE', '/D_UNICODE', '/D_WIN32_WINNT=0x0A00', '/DWINVER=0x0A00', "/I$gen", "/I$native", "/I$miniz")
     if ($UiSnapshots) { $cxx += '/DNEBULA_UI_SNAPSHOTS' }
+    if ($NoMods) { $cxx += '/DNEBULA_NO_MODS' }
     $linkFlags = @('/nologo', '/SUBSYSTEM:WINDOWS', '/DYNAMICBASE', '/NXCOMPAT', '/HIGHENTROPYVA', '/guard:cf', '/OPT:REF', '/OPT:ICF',
         '/INCREMENTAL:NO', '/MANIFEST:NO', '/Brepro', '/RELEASE')
     $objects = @{}

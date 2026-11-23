@@ -18,6 +18,11 @@
 #                 [-ReleaseKey <the release key's private XML>: Nebula.apk.sig, the release-key signature the app's
 #                  updates check (Updates.kt); default the Windows setups' key at its usual place, '' for none]
 #                 [-ShippedMods <the folder of the .luma files that come with the game: LumaKit>]
+#                 [-NoMods: an app with no mod support (CMake NEBULA_MODS=OFF; the environment variable NEBULA_MODS=OFF does
+#                  the same): only the plain game module, no mod importer library, no LumaKit (-ShippedMods is refused), no
+#                  mod entry in the manifest and no mod page or text in the launcher. A test build (-Harness) still builds
+#                  both game modules: the test runner's game half is a mod]
+#   The environment variable NEBULA_VERSION_SUFFIX (-beta.<n>) gives the version its pre-release label (cmake/nebula_options.cmake).
 #                 [-Unsigned: Nebula-unsigned.apk, a release build with no signature (and no .sig), which
 #                  installer/sign-release.ps1 signs with the release key; the release workflow builds this]
 #                 [-UnitTests: also the launcher's JVM tests (app/src/test), in the same Gradle run]
@@ -40,10 +45,17 @@ param(
     # carries them in its assets' mods folder and the game installs them at start. Empty: an app without them (a test
     # build); its mods that need LumaKit then need it installed by hand.
     [string]$ShippedMods = "",
+    [switch]$NoMods,
     [switch]$Unsigned,
     [switch]$UnitTests
 )
 $ErrorActionPreference = "Stop"
+if ($env:NEBULA_MODS -eq "OFF") { $NoMods = $true }
+if ($NoMods) {
+    if ($ShippedMods -ne "") { throw "-NoMods and -ShippedMods exclude each other" }
+    # Every CMake project reads this (cmake/nebula_options.cmake).
+    $env:NEBULA_MODS = "OFF"
+}
 $root = (Resolve-Path "$PSScriptRoot\..\..").Path
 # A test build is its own app (dev.nebula.galaxy.test, app/build.gradle.kts): only a debuggable build gets that id, so
 # a harness build that is not debuggable would replace the player's game.
@@ -86,6 +98,10 @@ function Invoke-Logged([string]$Log, [scriptblock]$Command) {
 }
 
 $jni = Join-Path $android "jniLibs"
+# The game module that carries the mod rows: not in an app with no mod support, unless it is a test build.
+$rowsModule = (-not $NoMods) -or ($Harness -ne "")
+$gameTargets = if ($rowsModule) { @("smg_game", "smg_game_plain") } else { @("smg_game_plain") }
+$hostTargets = if ($NoMods) { @("main") } else { @("main", "nebula_mods") }
 foreach ($abi in $Abis -split ",") {
     $triple = @{ "arm64-v8a" = "aarch64-linux-android"; "x86_64" = "x86_64-linux-android" }[$abi]
     if (-not $triple) { throw "unknown ABI $abi" }
@@ -94,14 +110,15 @@ foreach ($abi in $Abis -split ",") {
     Invoke-Logged "$Work\module-$abi.log" {
         cmake -G Ninja -S "$root/native" -B $module "-DCMAKE_TOOLCHAIN_FILE=$toolchain" "-DANDROID_ABI=$abi" `
             "-DANDROID_PLATFORM=android-31" -DCMAKE_BUILD_TYPE=Release "-DNEBULA_PETARI_DIR=$root/native/petari" "-DNEBULA_LTO=$lto"
-        # Both game modules: the host loads libsmg_game_plain.so unless a mod's code needs the rows.
-        if ($LASTEXITCODE -eq 0) { cmake --build $module --target smg_game smg_game_plain }
+        # Both game modules: the host loads libsmg_game_plain.so unless a mod's code needs the rows (no mod support: the
+        # plain one only, but in a test build, whose game half is a mod).
+        if ($LASTEXITCODE -eq 0) { cmake --build $module --target @gameTargets }
     }
     $hostBuild = "$Work/host-$abi" -replace '\\', '/'
     Invoke-Logged "$Work\host-$abi.log" {
         cmake -G Ninja -S "$root/platform/sdl" -B $hostBuild "-DCMAKE_TOOLCHAIN_FILE=$toolchain" "-DANDROID_ABI=$abi" `
             "-DANDROID_PLATFORM=android-31" -DCMAKE_BUILD_TYPE=Release "-DNEBULA_DEPS=$depsSlash" "-DNEBULA_HOST_TOOLS=$hostToolsSlash" "-DNEBULA_HOST_IPO=$lto" "-DNEBULA_TEST_TOOLS=$(if ($TestTools) { 'ON' } else { 'OFF' })" @ffxArgs
-        if ($LASTEXITCODE -eq 0) { cmake --build $hostBuild --target main nebula_mods }
+        if ($LASTEXITCODE -eq 0) { cmake --build $hostBuild --target @hostTargets }
     }
     $upper = ($triple -replace '-', '_').ToUpper()
     $lower = $triple -replace '-', '_'
@@ -125,8 +142,13 @@ foreach ($abi in $Abis -split ",") {
     New-Item -ItemType Directory -Force $dest | Out-Null
     # The test extension only in a test build: one left in jniLibs by an earlier test build never reaches another.
     Remove-Item -LiteralPath (Join-Path $dest "libnebula_test_extension.so") -Force -ErrorAction SilentlyContinue
-    Copy-Item "$module/libsmg_game.so", "$module/libsmg_game_plain.so", "$hostBuild/libmain.so", "$hostBuild/libnebula_mods.so", "$hostBuild/SDL3/libSDL3.so",
-        "$Work\cargo\$triple\dist\libnebula_import.so" $dest -Force
+    # Files an earlier build with mod support left in jniLibs never reach one without.
+    if (-not $rowsModule) { Remove-Item -LiteralPath (Join-Path $dest "libsmg_game.so") -Force -ErrorAction SilentlyContinue }
+    if ($NoMods) { Remove-Item -LiteralPath (Join-Path $dest "libnebula_mods.so") -Force -ErrorAction SilentlyContinue }
+    $built = @("$module/libsmg_game_plain.so", "$hostBuild/libmain.so", "$hostBuild/SDL3/libSDL3.so", "$Work\cargo\$triple\dist\libnebula_import.so")
+    if ($rowsModule) { $built += "$module/libsmg_game.so" }
+    if (-not $NoMods) { $built += "$hostBuild/libnebula_mods.so" }
+    Copy-Item $built $dest -Force
     # libadrenotools' hooks for an imported Vulkan driver (arm64 only; platform/sdl/CMakeLists.txt).
     if ($abi -eq "arm64-v8a") {
         Copy-Item "$hostBuild/adrenotools/src/hook/libhook_impl.so", "$hostBuild/adrenotools/src/hook/libmain_hook.so" $dest -Force
@@ -159,7 +181,9 @@ foreach ($abi in $Abis -split ",") {
 # The mods that come with the game (GameFiles.shippedMods unpacks them, the game installs them).
 $assetMods = Join-Path $Work "assets\mods"
 if (Test-Path -LiteralPath $assetMods) { Remove-Item -Recurse -Force -LiteralPath $assetMods }
-if ($ShippedMods) {
+if ($NoMods) {
+    # No mod support: the app carries no LumaKit.
+} elseif ($ShippedMods) {
     $shipped = @(Get-ChildItem -LiteralPath $ShippedMods -File -Filter '*.luma')
     if (-not $shipped.Count) { throw "The shipped mods folder has no .luma file: $ShippedMods" }
     New-Item -ItemType Directory -Force $assetMods | Out-Null
@@ -247,6 +271,8 @@ if ($Unsigned) {
 }
 if ($Debuggable) { $properties += "-Pnebula.debuggable=true" }
 if ($Harness -ne "") { $properties += "-Pnebula.harness=$Harness" }
+if ($NoMods) { $properties += "-Pnebula.mods=false" }
+if ($env:NEBULA_VERSION_SUFFIX) { $properties += "-Pnebula.versionSuffix=$($env:NEBULA_VERSION_SUFFIX)" }
 Push-Location $android
 try {
     $tasks = @("assembleRelease")

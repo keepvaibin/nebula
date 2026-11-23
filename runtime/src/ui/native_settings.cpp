@@ -50,6 +50,8 @@
 #include "galaxy/ui/settings_display_page.h"
 #include "galaxy/ui/settings_advanced_page.h"
 #include "galaxy/ui/settings_system_page.h"
+#include "galaxy/ui/settings_tabs.h"
+#include "galaxy/mod_support.h"
 #include "galaxy/achievements.h"
 #include "galaxy/host_extension.h"
 #include "galaxy/stats.h"
@@ -279,10 +281,8 @@ struct ShownTabs {
 
 ShownTabs shown_tabs() {
     ShownTabs shown;
-    const bool advanced = advanced_shown();
-    for (const unsigned tab : kPages) {
-        if (tab != kAdvancedTab || advanced) shown.tabs[shown.count++] = tab;
-    }
+    const ui::SettingsTabs list = ui::settings_tabs(advanced_shown(), ::galaxy::mod_support());
+    for (unsigned i = 0u; i < list.count; ++i) shown.tabs[shown.count++] = list.tabs[i];
     return shown;
 }
 
@@ -6053,7 +6053,7 @@ NativeSettingsView build_native_settings_view();
 
 void open_native_settings(unsigned page) {
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
-    if (page % kNativeSettingsTabCount == kAdvancedTab && !advanced_shown()) page = 0u;
+    if (!ui::settings_tab_shown(page % kNativeSettingsTabCount, advanced_shown(), ::galaxy::mod_support())) page = 0u;
     s_native_settings_tab.store(page % kNativeSettingsTabCount, std::memory_order_relaxed);
     s_native_settings_row.store(0u, std::memory_order_relaxed);
     set_native_settings_visible(true);
@@ -6504,7 +6504,9 @@ void route_dropped_files(std::vector<std::filesystem::path> files) {
     DroppedFiles sorted = sort_dropped_files(std::move(files));
     std::vector<std::filesystem::path>& mods = sorted.mods;
     std::vector<std::filesystem::path>& miis = sorted.miis;
-    const bool link = sorted.link;
+    // A program with no mod support takes no mod: its files and links are left (no MODS page to show them on).
+    if (!::galaxy::mod_support()) mods.clear();
+    const bool link = sorted.link && ::galaxy::mod_support();
     if (sorted.save) {
         if (sorted.more_saves != 0u) {
             std::cerr << "[settings] save import (dropped): " << sorted.more_saves << " more saves left out\n";

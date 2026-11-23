@@ -37,6 +37,7 @@
     <!-- Controllers reach the game through Game Controller. -->
     <key>GCSupportsControllerUserInteraction</key>
     <true/>
+    <!-- mods:begin (build_macos.sh -n takes everything to mods:end out: a build with no mod support) -->
     <!-- .luma mods: "Open With" Nebula and a double-click import them (the game's Mods page shows the result). -->
     <key>UTExportedTypeDeclarations</key>
     <array>
@@ -111,6 +112,7 @@
     <string>A mod you allowed asks to use the camera.</string>
     <key>NSLocalNetworkUsageDescription</key>
     <string>A mod you allowed asks to connect to devices on your local network.</string>
+    <!-- mods:end -->
     <key>NSHumanReadableCopyright</key>
     <string>Nebula is free software under the GNU General Public License, version 3. Not affiliated with Nintendo.</string>
 </dict>

@@ -17,6 +17,17 @@ plugins {
 val sdlDir = providers.gradleProperty("nebula.sdlDir").orNull ?: error("pass -Pnebula.sdlDir=<SDL3 source>")
 val jniDir = providers.gradleProperty("nebula.jniDir").orNull ?: rootProject.file("jniLibs").path
 val assetsDir = providers.gradleProperty("nebula.assetsDir").orNull ?: rootProject.file("build/nebula-assets").path
+// The version's pre-release label and whether mods are supported (build_apk.ps1 passes both; the environment variables
+// NEBULA_VERSION_SUFFIX and NEBULA_MODS do the same, as for every CMake project: cmake/nebula_options.cmake).
+//   nebula.versionSuffix  "" (a release) or "-beta.<n>": versionName is 2.0.0 and it. The versionCode of a release is
+//                         above every beta's (a beta is 26 plus its number), so the release installs over a beta.
+//   nebula.mods           false: an app with no mod support: no mod entry in the manifest (between its mods:begin and
+//                         mods:end), BuildConfig.MODS false (the launcher shows no mod page or text)
+val versionSuffix = providers.gradleProperty("nebula.versionSuffix").orNull ?: System.getenv("NEBULA_VERSION_SUFFIX") ?: ""
+val modsOn = (providers.gradleProperty("nebula.mods").orNull ?: System.getenv("NEBULA_MODS") ?: "true").lowercase() !in setOf("false", "off")
+require(Regex("(-beta\\.[0-9]+)?").matches(versionSuffix)) { "nebula.versionSuffix is empty or -beta.<n>, not '$versionSuffix'" }
+val betaNumber = Regex("-beta\\.([0-9]+)").find(versionSuffix)?.groupValues?.get(1)?.toInt()
+require(betaNumber == null || betaNumber in 1..99) { "the beta's number is 1 to 99: $versionSuffix" }
 val signing = providers.gradleProperty("nebula.signing").orNull?.let { path ->
     Properties().apply { file(path).inputStream().use { load(it) } }
 }
@@ -136,8 +147,9 @@ android {
         applicationId = "dev.nebula.galaxy"
         minSdk = 31
         targetSdk = 36
-        versionCode = 26
-        versionName = "2.0.0"
+        versionCode = if (betaNumber == null) 126 else 26 + betaNumber
+        versionName = "2.0.0$versionSuffix"
+        buildConfigField("boolean", "MODS", modsOn.toString())
         manifestPlaceholders["gameExported"] = "false"
         manifestPlaceholders["appLabel"] = "@string/app_name"
         ndk {
@@ -183,6 +195,25 @@ android {
         }
     }
 
+    if (!modsOn) {
+        // The manifest with the mod entries (the .luma, archive and nebula: links, Share, the capture and multicast
+        // permissions) taken out: a copy in the build folder takes the place of the source's.
+        val source = file("src/main/AndroidManifest.xml")
+        val stripped = layout.buildDirectory.file("generated/no-mods/AndroidManifest.xml").get().asFile
+        val strip = tasks.register("stripModsFromManifest") {
+            inputs.file(source)
+            outputs.file(stripped)
+            doLast {
+                val text = source.readText().replace("\r\n", "\n")
+                val out = Regex("[ \\t]*<!-- mods:begin.*?<!-- mods:end -->\\n", RegexOption.DOT_MATCHES_ALL).replace(text, "")
+                require(out != text && !out.contains("luma") && !out.contains("RECORD_AUDIO")) { "the manifest still names mods" }
+                stripped.parentFile.mkdirs()
+                stripped.writeText(out)
+            }
+        }
+        sourceSets["main"].manifest.srcFile(stripped)
+        tasks.matching { it.name == "preBuild" }.configureEach { dependsOn(strip) }
+    }
     sourceSets["main"].java.srcDir("$sdlDir/android-project/app/src/main/java")
     sourceSets["main"].jniLibs.srcDir(jniDir)
     sourceSets["main"].assets.srcDir(assetsDir)

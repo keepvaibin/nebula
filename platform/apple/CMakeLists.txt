@@ -16,6 +16,8 @@ project(NebulaApple LANGUAGES C CXX OBJC OBJCXX)
 # AVX2): a tablet's stick then differed from a computer's by one ulp, and its replay from the computer's (N-1064). The
 # game module is built the same way (native/CMakeLists.txt). MSVC fuses none at /fp:precise without /fp:contract.
 add_compile_options($<$<COMPILE_LANGUAGE:C,CXX,OBJC,OBJCXX>:-ffp-contract=off>)
+# The version's pre-release label and whether mods are supported (the SDL host below reads them again).
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/nebula_options.cmake")
 
 get_filename_component(nebula_root "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
 set(NEBULA_DEPS "" CACHE PATH "Folder of the dependency checkouts")
