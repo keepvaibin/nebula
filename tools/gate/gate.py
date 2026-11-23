@@ -1719,10 +1719,11 @@ def pair_step(g, check, kind, folder, renderers):
             return False, "the measure could not run: " + reading.text, None, "owed"
         if reading.kind == "uncalibrated":
             return False, "%s; the check is owed until the bands are made: %s" % (reading.text, calibrate_hint(g, renderers)), None, "owed"
-        if reading.kind == "tool" and speedbase.base_side_only(reading) and candidate_runs(g, list(reading.tool), folder):
+        if (reading.kind == "tool" and speedbase.base_side_only(reading) and not speedbase.store_difference(reading)
+                and candidate_runs(g, list(reading.tool), folder)):
             g.speed[check] = "rebase"
-            return False, "the %s %s cannot run this route any more: the %s moves to %s unjudged" % (
-                kind, kept.commit[:9], kind, g.commit[:9]), None, "owed"
+            return False, "the %s %s cannot run this route any more (%s): the %s moves to %s unjudged" % (
+                kind, kept.commit[:9], speedbase.base_side_ended(reading), kind, g.commit[:9]), None, "owed"
         measure_fault(g, check, "TOOL", "the measure could not run: " + reading.text)
         return False, "the measure could not run: " + reading.text, None, "owed"
     return fn

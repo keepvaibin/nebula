@@ -17,6 +17,8 @@ made-up result.json and --pending files; no game, no build, no graphics card.
                                 that did not run: tool, its reason kept; the time limit, a stopped run, no result.json, a state the pair does not have,
                                 an exit that is not the states': could-not
     base_side_only              only where every renderer that did not run says `the base side`
+    store_difference            a base side's reason that says the game data is of another store version is named, so that it is never
+                                taken for a build that cannot run the route; base_side_ended gives one line of what the pair said, cut short
     probe_ran                   the probe's output shows a run that reached the stage only with a number for each figure asked for
 Exit 0 when every case holds. The history of the base: remember_base writes made, moved, kept and rebased rows.
 """
@@ -255,6 +257,19 @@ class Pair(unittest.TestCase):
         t, pending = self.put({"d3d12": self.run_of("tool", "the cand side ended with exit 1", {})}, exit_code=2)
         self.assertFalse(speedbase.base_side_only(speedbase.read_pair(t, pending, 2, ["d3d12"])))
         self.assertFalse(speedbase.base_side_only(speedbase.Reading("pass", "x")), "nothing failed")
+
+    def test_a_store_version_is_no_start_that_failed(self):
+        base = "the base side ended with exit 1: measure-pair d3d12 harness-error the game x.pak is of store version 37; this tree's is 39"
+        t, pending = self.put({"d3d12": self.run_of("tool", base, {})}, exit_code=2)
+        got = speedbase.read_pair(t, pending, 2, ["d3d12"])
+        self.assertTrue(speedbase.base_side_only(got) and speedbase.store_difference(got))
+        t, pending = self.put({"d3d12": self.run_of("tool", "the base side ended with exit 3: crashed", {})}, exit_code=2)
+        got = speedbase.read_pair(t, pending, 2, ["d3d12"])
+        self.assertFalse(speedbase.store_difference(got), "a build that crashed is a build that does not start")
+        self.assertEqual(speedbase.base_side_ended(got), "d3d12: the base side ended with exit 3: crashed")
+        long = speedbase.Reading("tool", "x", {"d3d12": "the base side ended " + "word " * 200})
+        self.assertLessEqual(len(speedbase.base_side_ended(long)), speedbase.ENDED_CHARS)
+        self.assertTrue(speedbase.base_side_ended(long).endswith("..."))
 
     def test_could_not(self):
         t, pending = self.put({"d3d12": self.run_of("ok")})

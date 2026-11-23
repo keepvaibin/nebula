@@ -1664,6 +1664,32 @@ def copy_sanitizer_runtime(bin_folder, target, frozen):
         frozen[runtime.name] = sha256(pathlib.Path(target) / runtime.name)
 
 
+STORE_VERSION_FUNCTION = "nebula_import_store_version"
+ASK_SECONDS = 60
+
+
+def asked_store_version(library, function=STORE_VERSION_FUNCTION):
+    """The number the exported function `function` of `library` gives (the importer's store version: crates/nebula-import c_api.rs),
+    asked in a program of its own so that no library stays loaded here; None when it cannot be asked (no such file, not a library, no
+    such function, no answer)."""
+    code = "import ctypes,sys; f=getattr(ctypes.CDLL(sys.argv[1]), sys.argv[2]); f.restype=ctypes.c_uint32; print(f())"
+    try:
+        done = subprocess.run([sys.executable, "-I", "-c", code, str(library), function], capture_output=True, text=True,
+                              timeout=ASK_SECONDS)
+        return int(done.stdout.strip()) if done.returncode == 0 else None
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+
+
+def build_store_version(bin_folder):
+    """(the store version the game data of this build must have, whose it is): the one its own importer writes, so that an older
+    build is played with its own data; this tree's store_version.inc where the importer cannot be asked."""
+    asked = asked_store_version(pathlib.Path(bin_folder) / HOST["importer"])
+    if asked is not None:
+        return asked, "this build's, from its own importer,"
+    return int((TREE / "runtime" / "include" / "galaxy" / "store_version.inc").read_text(encoding="utf-8").strip()), "this tree's"
+
+
 def run_one(test, renderer, args, run_folder, previous):
     """Starts the game for one test and renderer; returns what the checks need."""
     if renderer not in EXES:
@@ -1681,14 +1707,15 @@ def run_one(test, renderer, args, run_folder, previous):
     for need in (exe, bin_folder / HOST["game"], bin_folder / HOST["importer"]):
         if not need.is_file():
             raise HarnessError("the bin folder has no %s" % need.name)
-    # The pak must be of this tree's store version (the host refuses another at its start: "need importing again").
+    # The pak must be of the store version of the build it is played with (the host refuses another at its start: "need importing
+    # again"). The build's own: a side of a speed pair is an older build with its own data, played by this tree's runner.
     pak_path = pak_for(test, args, bin_folder)
     pak = pak_path
-    wanted = int((TREE / "runtime" / "include" / "galaxy" / "store_version.inc").read_text(encoding="utf-8").strip())
+    wanted, whose = build_store_version(bin_folder)
     head = pak_header(pak)
     if head[:8] != b"NBSTORE" + bytes(1) or int.from_bytes(head[8:12], "little") != wanted:
-        raise HarnessError("the game %s is of store version %s; this runner's is %d: import the game again with this "
-                           "version's nebula-import or name another pak" % (pak, int.from_bytes(head[8:12], "little") if head[:8] == b"NBSTORE" + bytes(1) else "none (not a store)", wanted))
+        raise HarnessError("the game %s is of store version %s; %s is %d: import the game again with this "
+                           "version's nebula-import or name another pak" % (pak, int.from_bytes(head[8:12], "little") if head[:8] == b"NBSTORE" + bytes(1) else "none (not a store)", whose, wanted))
     if run_folder.exists():
         shutil.rmtree(run_folder)
     for sub in ("bin", "pictures", "saves", "settings", "appdata"):

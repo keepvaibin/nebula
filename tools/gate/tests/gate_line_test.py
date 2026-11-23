@@ -18,12 +18,13 @@ Table P, the PC's check is the pair against the kept base (package B13, part B; 
                                    not calibrated: owed with the command that makes the bands; no base yet: owed, nothing started; the pair
                                    could not run on the candidate's side or on both, no result.json, an exit and a state that disagree, the time
                                    limit: owed and one line in tool-faults.tsv; the base's side could not and the candidate's can: owed, the
-                                   base moves to the candidate unjudged
+                                   base moves to the candidate unjudged, the line saying which renderer's side ended how; a base side that
+                                   refused for a store version: owed, a TOOL line, the base stays (never moved for a store difference)
   pair_renderers                   d3d12 always; d3d11 and vulkan when the plan runs them
   base_follows_the_move            judged: the base becomes the candidate and the old folder goes; owed: it stays; rebase: it moves; a plan
                                    without the check leaves it
   anchor_part                      --also speed/anchor: all three renderers against the anchor; worse fails; not runnable: owed, replaced after
-                                   the move with the last ratios in anchor-history.tsv
+                                   the move with the last ratios in anchor-history.tsv; refused for a store version: owed, the anchor stays
 Where the checks sit (B14 part 3: the PC's last checks do not wait for the tablet):
   pc_measure_starts_beside_the_tablets_lane   tour/tablet-pc, then the pair, one at a time, start when the PC's own lanes and the Android build
                                    are over and the tablet's lane is not; never beside a build or a PC game check; the parts --also asked for keep
@@ -509,12 +510,29 @@ class Pair(unittest.TestCase):
         g, w = self.go({"states": {"d3d12": "tool"}, "reasons": {"d3d12": "the base side ended with exit 1: old route"}}, probe={"ok": True})
         row = w.row(g, PC)
         self.assertEqual(row["state"], "owed", row["detail"])
-        self.assertEqual(row["detail"], "the base %s cannot run this route any more: the base moves to %s unjudged" % ("b" * 9, g.commit[:9]))
+        self.assertEqual(row["detail"], "the base %s cannot run this route any more (d3d12: the base side ended with exit 1: old route): "
+                                        "the base moves to %s unjudged" % ("b" * 9, g.commit[:9]))
         self.assertEqual((g.verdict, w.faults, g.speed), ("pass", [], {PC: "rebase"}))
         probe = [c for c in w.calls() if c.get("run") == "pair-probe"]
         self.assertEqual(len(probe), 1)
         self.assertEqual(probe[0]["args"][probe[0]["args"].index("--renderer") + 1], "d3d12")
         self.assertEqual(probe[0]["args"][probe[0]["args"].index("--bin") + 1], g.bin, "the candidate's build alone")
+
+    def test_a_base_side_that_refuses_for_a_store_version_is_never_moved_unjudged(self):
+        # The runner's words for data of another store version: the side is run with its build's own data, so this is no start that
+        # failed; the kept build stays, the candidate is not asked alone, and the tool's fault is written.
+        why = "the base side ended with exit 1: measure-pair d3d12 harness-error the game x.pak is of store version 37; this tree's is 39"
+        g, w = self.go({"states": {"d3d12": "tool"}, "reasons": {"d3d12": why}}, probe={"ok": True})
+        row = w.row(g, PC)
+        self.assertEqual(row["state"], "owed", row["detail"])
+        self.assertIn("the measure could not run", row["detail"])
+        self.assertIn("of store version 37", row["detail"])
+        self.assertEqual((g.verdict, [(f[2], f[3]) for f in w.faults], g.speed), ("pass", [("TOOL", PC)], {PC: "owed"}))
+        self.assertEqual([c["run"] for c in w.runs()], ["pair"], "the candidate was not asked alone")
+        said = []
+        g, w = self.go({"states": {"d3d12": "tool"}, "reasons": {"d3d12": why}}, probe={"ok": True}, then=lambda g, w: said.append(self.keep(g, w)))
+        self.assertEqual(speedbase.read("base", w.speed).commit, "b" * 40, "the base stays")
+        self.assertIn("speed base stays bbbbbbbbb", said[0])
 
     def test_a_pair_that_wrote_no_result_is_owed(self):
         g, w = self.go({"no_result": True})
@@ -626,6 +644,23 @@ class Pair(unittest.TestCase):
             self.assertEqual((g.verdict, g.code), ("fail", 1))
             self.assertIsNone(w.row(g, PC), "a landing that failed does not run the pair")
 
+    def test_an_anchor_is_not_moved_for_a_store_version(self):
+        why = "the base side ended with exit 1: measure-pair d3d12 harness-error the game x.pak is of store version 37; this tree's is 40"
+        said = []
+        with Gates(self) as w:
+            w.measure({"pair": {"states": {r: "tool" for r in ("d3d12", "d3d11", "vulkan")}, "reasons": {r: why for r in ("d3d12", "d3d11", "vulkan")}},
+                       "pair-probe": {"ok": True}})
+            g, args = w.land(w.plan(*ENGINE_ONLY), ["speed/anchor"])
+            row = w.row(g, "speed/anchor")
+            self.assertEqual(row["state"], "owed", row["detail"])
+            self.assertNotIn("moves to", row["detail"])
+            self.assertNotEqual(g.speed.get("speed/anchor"), "rebase")
+            self.assertIn(("TOOL", "speed/anchor"), [(f[2], f[3]) for f in w.faults])
+            g.args.pak, g.bin = str(w.pak), str(w.bins)
+            with contextlib.redirect_stdout(io.StringIO()):
+                gate.keep_speed(g, "d" * 40, g.args)
+            self.assertEqual(speedbase.read("anchor", w.speed).commit, "a" * 40, "the anchor stays")
+
     def test_no_anchor_yet_is_owed(self):
         g, w = self.go(also=["speed/anchor"], setup=lambda w: (w.speed / "anchor.txt").unlink())
         row = w.row(g, "speed/anchor")
@@ -650,7 +685,9 @@ class Pair(unittest.TestCase):
             g2, args = w2.land(w2.plan(*ENGINE_ONLY), ["speed/anchor"])
             row = w2.row(g2, "speed/anchor")
             self.assertEqual((row["state"], g2.speed["speed/anchor"]), ("owed", "rebase"), row["detail"])
-            self.assertEqual(row["detail"], "the anchor %s cannot run this route any more: the anchor moves to %s unjudged" % ("a" * 9, g2.commit[:9]))
+            self.assertEqual(row["detail"], "the anchor %s cannot run this route any more (d3d11: the base side ended with exit 1; d3d12: the base "
+                                            "side ended with exit 1; vulkan: the base side ended with exit 1): the anchor moves to %s unjudged" % (
+                                                "a" * 9, g2.commit[:9]))
             g2.args.pak, g2.bin = str(w2.pak), str(w2.bins)
             with contextlib.redirect_stdout(io.StringIO()):
                 gate.keep_speed(g2, "d" * 40, g2.args)

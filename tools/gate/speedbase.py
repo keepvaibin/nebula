@@ -373,6 +373,24 @@ def base_side_only(reading):
     return bool(reading.tool) and all(why.startswith("the base side") for why in reading.tool.values())
 
 
+STORE_WORDS = "of store version"   # the runner's words for game data of another store version (tools/lumacore/luma_test.py run_one)
+ENDED_CHARS = 300
+
+
+def store_difference(reading):
+    """Whether a renderer's reason for the base's side is a difference of store version (the game data and the build it is played
+    with disagree). Never a reason for `cannot run this route`: the side is run with its own build's programs and data, so
+    this is a fault of the tool or of the kept build, and the kept build stays."""
+    return any(STORE_WORDS in why for why in reading.tool.values())
+
+
+def base_side_ended(reading):
+    """One line for a result's row: what the pair said of each renderer whose base side did not run (the program that ended and how,
+    as the pair gives it), cut at ENDED_CHARS."""
+    text = "; ".join("%s: %s" % (r, " ".join(why.split())) for r, why in sorted(reading.tool.items()))
+    return text if len(text) <= ENDED_CHARS else text[:ENDED_CHARS - 3].rstrip() + "..."
+
+
 def probe_ran(text, required=("steps_over_18", "render_ms")):
     """Whether the output of `measure.py pair-probe` shows a run that reached the stage: no `the run ended` line, and a number for each
     figure the pair itself requires of a side (measure.py REQUIRED, passed in)."""
