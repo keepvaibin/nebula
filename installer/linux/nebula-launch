@@ -5,20 +5,85 @@
 # What the game prints goes to <data>/logs/game.log (the run before: game.previous.log) unless a terminal takes it: a game
 # started from the menu writes to nothing anyone reads otherwise, and a tester has nothing to attach. The Mac app and the
 # Android app keep the same file.
+# It never ends without a word: when Nebula is not installed, or the game ends with an error, the person is told, in the
+# terminal if there is one, else in a window of the desktop (zenity, kdialog, notify-send, xmessage), else in
+# nebula-message.txt beside this file.
 set -eu
 self=$(readlink -f "$0" 2>/dev/null || printf '%s' "$0")
 root=$(cd "$(dirname "$self")" && pwd)
+
+# Says `$1` where the person will see it. NEBULA_TERMINAL=1 says there is a terminal (the package's own test).
+terminal() { [ -t 0 ] || [ -t 1 ] || [ -t 2 ] || [ -n "${NEBULA_TERMINAL:-}" ]; }
+tell() {
+    if terminal; then
+        printf '%s\n' "$1" >&2
+        return 0
+    fi
+    if [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then
+        if command -v zenity >/dev/null 2>&1; then
+            status=0
+            zenity --error --no-markup --title=Nebula --text="$1" >/dev/null 2>&1 || status=$?
+            if [ "$status" -gt 1 ]; then
+                status=0
+                zenity --error --title=Nebula --text="$1" >/dev/null 2>&1 || status=$?
+            fi
+            [ "$status" -le 1 ] && return 0
+        fi
+        if command -v kdialog >/dev/null 2>&1; then
+            kdialog --title Nebula --error "$1" >/dev/null 2>&1 && return 0
+        fi
+        if command -v notify-send >/dev/null 2>&1; then
+            notify-send -u critical Nebula "$1" >/dev/null 2>&1 && return 0
+        fi
+        if command -v xmessage >/dev/null 2>&1; then
+            xmessage -center "$1" >/dev/null 2>&1 && return 0
+        fi
+    fi
+    file=$root/nebula-message.txt
+    printf '%s\n' "$1" > "$file" 2>/dev/null || { file=${HOME:-/tmp}/nebula-message.txt; printf '%s\n' "$1" > "$file" 2>/dev/null || true; }
+    return 0
+}
+stop() {
+    tell "$1"
+    exit 1
+}
+
+# Where install.sh is: in this folder or the one above (this script lies in support/ of an unpacked download).
+installer=
+[ -f "$root/install.sh" ] && installer=$root/install.sh
+[ -z "$installer" ] && [ -f "$root/../install.sh" ] && installer=$(cd "$root/.." && pwd)/install.sh
+if [ ! -f "$root/current.json" ]; then
+    if [ -n "$installer" ]; then
+        stop "Nebula is not installed yet. To install it, open a terminal in the folder $(dirname "$installer") and run: ./install.sh"
+    fi
+    stop "Nebula is not installed yet. Unpack the download, open a terminal in the folder it made and run: ./install.sh"
+fi
 version=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$root/current.json")
 program=$root/versions/$version/nebula
-[ -x "$program" ] || { echo "nebula-launch: $program is missing: run install.sh again" >&2; exit 1; }
+[ -n "$version" ] && [ -x "$program" ] || stop "Nebula is not installed completely: the program $program is missing. Run install.sh again (in the folder you unpacked the download to, in a terminal: ./install.sh)."
 # A portable folder keeps its data beside it (the game finds portable.txt itself); otherwise the data folder is this one.
 data=$root
 [ -f "$root/portable.txt" ] && data=$root/data
 # The menu entry started with no file or link: no --import.
 [ "$#" = 1 ] && [ "$1" = "--import" ] && shift
 export LD_LIBRARY_PATH="$root/versions/$version${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+log=
 if [ ! -t 2 ] && mkdir -p "$data/logs" 2>/dev/null; then
     [ ! -f "$data/logs/game.log" ] || mv -f "$data/logs/game.log" "$data/logs/game.previous.log" 2>/dev/null || true
-    exec "$program" --pak "$root/content/game.pak" --saves "$data/saves" "$@" > "$data/logs/game.log" 2>&1
+    log=$data/logs/game.log
 fi
-exec "$program" --pak "$root/content/game.pak" --saves "$data/saves" "$@"
+code=0
+if [ -n "$log" ]; then
+    "$program" --pak "$root/content/game.pak" --saves "$data/saves" "$@" > "$log" 2>&1 || code=$?
+else
+    "$program" --pak "$root/content/game.pak" --saves "$data/saves" "$@" || code=$?
+fi
+# An error ends the game (a signal that asks it to end, hang up, interrupt or terminate, is the system's wish, not an error).
+if [ "$code" != 0 ] && [ "$code" != 129 ] && [ "$code" != 130 ] && [ "$code" != 143 ]; then
+    if [ -n "$log" ]; then
+        tell "Nebula stopped with an error (code $code). What it wrote is in $log (the run before: game.previous.log in the same folder). If you report this, attach that file."
+    else
+        tell "Nebula stopped with an error (code $code). What it wrote is above."
+    fi
+fi
+exit "$code"

@@ -4,6 +4,8 @@
 # the player's disc image and installs for the user (~/.local/share/Nebula, a menu entry, .luma files and nebula://
 # links opening in Nebula) or as a portable folder, in the layout LumaLink reads (current.json, versions/<version>,
 # content/game.pak). The game ships no test parts (tools/release_check.ps1); LumaLink's Setup has the test kit.
+# The unpacked folder holds what a person starts, install.sh and README.txt, and two folders: files (the program) and
+# support (what install.sh copies to the install folder: nebula-launch, uninstall.sh, the menu entry and its icon).
 #
 #   installer/package-linux.sh --bin <folder> --version <version> [--shipped <folder>] [--output <folder>] [--no-mods]
 #
@@ -81,18 +83,21 @@ if [ -z "$nomods" ]; then
 fi
 for f in LICENSE THIRD-PARTY-NOTICES.md README.md; do cp "$repo/$f" "$files/"; done
 
-cp "$here/linux/install.sh" "$here/linux/uninstall.sh" "$here/linux/nebula-launch" "$pkg/"
-chmod 755 "$pkg/install.sh" "$pkg/uninstall.sh" "$pkg/nebula-launch" "$files/nebula" "$files/nebula-import"
+support=$pkg/support
+mkdir -p "$support"
+cp "$here/linux/install.sh" "$pkg/"
+cp "$here/linux/uninstall.sh" "$here/linux/nebula-launch" "$support/"
+chmod 755 "$pkg/install.sh" "$support/uninstall.sh" "$support/nebula-launch" "$files/nebula" "$files/nebula-import"
 if [ -z "$nomods" ]; then
-    cp "$repo/platform/linux/dev.nebula.galaxy.desktop" "$repo/platform/linux/dev.nebula.galaxy.xml" "$pkg/"
+    cp "$repo/platform/linux/dev.nebula.galaxy.desktop" "$repo/platform/linux/dev.nebula.galaxy.xml" "$support/"
 else
     # The menu entry without the .luma type and the nebula:// link (and no type file to install).
     sed -e 's#^Exec=nebula-launch --import %u#Exec=nebula-launch#' -e '/^MimeType=/d' -e '/^#/d' \
-        "$repo/platform/linux/dev.nebula.galaxy.desktop" > "$pkg/dev.nebula.galaxy.desktop"
+        "$repo/platform/linux/dev.nebula.galaxy.desktop" > "$support/dev.nebula.galaxy.desktop"
 fi
-printf '%s\n' "$version" > "$pkg/VERSION"
+printf '%s\n' "$version" > "$support/VERSION"
 # The icon: the largest picture in installer/assets/nebula.ico (each is a PNG or a BMP; the PNG is taken).
-python3 - "$repo/installer/assets/nebula.ico" "$pkg/dev.nebula.galaxy.png" <<'EOF'
+python3 - "$repo/installer/assets/nebula.ico" "$support/dev.nebula.galaxy.png" <<'EOF'
 import struct, sys
 data = open(sys.argv[1], "rb").read()
 count = struct.unpack_from("<H", data, 4)[0]
@@ -107,15 +112,25 @@ if best is None:
 open(sys.argv[2], "wb").write(best[1])
 EOF
 cat > "$pkg/README.txt" <<EOF
+START HERE: open a terminal in this folder and run   ./install.sh
+
 Nebula $version for Linux ($arch)
 
-To install, open a terminal in this folder and run:
+1. Open this folder in a terminal (in most file managers: right-click the empty space, then "Open in Terminal").
+2. Type   ./install.sh   and press Enter.
+3. It asks for your Super Mario Galaxy disc image (.iso, .rvz or .wbfs), then whether to install for your account (with a
+   menu entry) or as a portable folder. Preparing the game takes a few minutes.
+4. Start Nebula from your app menu (Nebula), or run   nebula-launch   in a terminal.
 
-    ./install.sh
+If ./install.sh says it cannot run, type   sh install.sh   instead. If zenity or kdialog is installed, install.sh also works
+when it is started from the file manager, and then asks and answers in windows.
 
-It asks for your Super Mario Galaxy disc image, then whether to install for this user (with a menu entry) or as a
-portable folder. ./install.sh --help lists the options. To remove Nebula later, run uninstall.sh in the folder it was
-installed to.
+Needs: a 64-bit Linux with a graphics driver that supports Vulkan, glibc 2.39 or newer (for example Ubuntu 24.04 or
+Fedora 40) and your own Super Mario Galaxy disc image.
+
+If the game does not start, its log is ~/.local/share/Nebula/logs/game.log (a portable folder: data/logs/game.log inside it).
+Attach that file when you report the fault. ./install.sh --help lists the options. To remove Nebula later, run uninstall.sh in
+the folder it was installed to.
 EOF
 
 # One name per channel and architecture, as the game's update check looks for it (update_install_linux.cpp).
