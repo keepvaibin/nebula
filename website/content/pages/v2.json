@@ -2,7 +2,7 @@
   "page": "/v2/",
   "metadata": {
     "title": "Nebula v2",
-    "description": "Native code from the Petari decompilation, every language, four platforms, more controllers, mods and 34 achievements."
+    "description": "Native code from the Petari decompilation, every language, four platforms, more controllers, mods and 35 achievements."
   },
   "text": {
     "general": {
@@ -77,7 +77,7 @@
     },
     "achievements": {
       "div_1": "ACHIEVEMENTS",
-      "heading_1": "34 achievements",
+      "heading_1": "35 achievements",
       "paragraph_1": "After the first Grand Star, a Luma in the Comet Observatory shows your achievements and play statistics.",
       "subheading_1": "A Star Is Born",
       "paragraph_2": "Grab your very first Power Star.",
