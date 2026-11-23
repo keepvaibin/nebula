@@ -1,7 +1,7 @@
 """coverage.py: which code no test runs, and the share run (docs/plan/04-GATE-AND-MAIN.md 3.3, N-1042).
 
     python -X utf8 -I tools/gate/coverage.py report --binary BIN [--binary BIN...] --profile PROFDATA --work OUT [--root TREE]
-                                               [--rebase BUILD...] [--history FILE] [--commit SHA] [--llvm LLVM_BIN]
+                                               [--rebase BUILD...] [--history FILE] [--commit SHA] [--suites NAMES] [--llvm LLVM_BIN]
 
 The binaries are built with -fprofile-instr-generate -fcoverage-mapping (native/CMakeLists.txt NEBULA_COVERAGE: both
 game modules, smg_game and smg_game_plain; CMakeLists.txt NEBULA_COVERAGE: the programs), the profile merged from the
@@ -11,9 +11,13 @@ this writes, for the files under --root (the tree):
 - OUT/never-run.txt: every function no test ran, file:line and its name;
 and prints the share of lines run. --rebase names a build folder the sources' paths are recorded under when a
 compiler cache made them relative to the tree (build_windows.ps1's sccache with SCCACHE_BASEDIRS): those paths are read
-as the tree's (one --rebase a build folder). With --history the share joins that file (one line a run, its scope the
-binaries' names), and a share lower than the last line's of the same scope fails: the share of code run by tests may
-not fall (a change that adds code no test runs lowers it); another set of binaries starts its own line.
+as the tree's (one --rebase a build folder). With --history the share joins that file (one line a run: its key and its
+verdict), and a share lower than the last line of the same key that passed fails: the share of code run by tests may
+not fall (a change that adds code no test runs lowers it). The key is the binaries' names and --suites, the names of
+the runs whose counts are merged (engine, tour, mods): another set of binaries or of runs starts its own line, since
+the share of fewer runs is not the share of more (the long run of 11-22 ran no mod suite and read 16.23 % against
+22.07 % of runs with them). A run that fell is written with the verdict `fell` and is never what a later run is
+compared with.
 Exit 0 when the export worked and the share held.
 """
 import argparse
@@ -40,7 +44,10 @@ def readable(name):
     return name
 
 
-HISTORY_COLUMNS = ("time", "commit", "lines_run", "lines", "share", "functions_run", "functions", "scope")
+HISTORY_COLUMNS = ("time", "commit", "lines_run", "lines", "share", "functions_run", "functions", "scope", "verdict")
+# A line written before the verdict column existed has none and counts as a pass. The gate always names its suites, so
+# the key of a line written before that (no `|` in it) is no key the gate compares under.
+SUITES_SEPARATOR = "|"
 
 
 def parse_lcov(text, root, rebase=None):
@@ -109,7 +116,25 @@ def read_history(path):
     path = pathlib.Path(path)
     if not path.exists():
         return []
-    return [dict(zip(HISTORY_COLUMNS, l.split("\t"))) for l in path.read_text(encoding="utf-8").splitlines()[1:] if l]
+    rows = [dict(zip(HISTORY_COLUMNS, l.split("\t"))) for l in path.read_text(encoding="utf-8").splitlines()[1:] if l]
+    for row in rows:
+        row.setdefault("verdict", "pass")
+    return rows
+
+
+def compare(history, key, share):
+    """What the share fell from, as "<share> % at <commit>", or None: the last line of this key that passed."""
+    earlier = [row for row in read_history(history) if row.get("scope") == key and row.get("verdict") == "pass"]
+    if earlier and share < float(earlier[-1]["share"]) - 0.005:
+        return "%.2f %% at %s" % (float(earlier[-1]["share"]), earlier[-1]["commit"])
+    return None
+
+
+def history_key(binaries, suites=""):
+    """The key a share is compared under: the binaries' names, and the runs whose counts it holds when they are named."""
+    scope = ",".join(sorted(pathlib.Path(b).name.lower() for b in binaries))
+    names = ",".join(sorted(n for n in suites.split(",") if n))
+    return scope + (SUITES_SEPARATOR + names if names else "")
 
 
 def append_history(path, row):
@@ -119,7 +144,7 @@ def append_history(path, row):
     with open(path, "a", encoding="utf-8") as f:
         if new:
             f.write("\t".join(HISTORY_COLUMNS) + "\n")
-        f.write("\t".join(str(row[c]) for c in HISTORY_COLUMNS) + "\n")
+        f.write("\t".join(str(row.get(c, "pass") if c == "verdict" else row[c]) for c in HISTORY_COLUMNS) + "\n")
 
 
 def report(a, run=subprocess.run, now=None):
@@ -129,7 +154,7 @@ def report(a, run=subprocess.run, now=None):
         print("coverage: llvm-cov export failed: %s" % (r.stderr or r.stdout).strip()[-400:])
         return 1
     files = parse_lcov(r.stdout, a.root, a.rebase)
-    scope = ",".join(sorted(pathlib.Path(b).name.lower() for b in a.binary))
+    scope = history_key(a.binary, a.suites)
     if not files:
         print("coverage: the export names no file under %s" % a.root)
         return 1
@@ -139,13 +164,11 @@ def report(a, run=subprocess.run, now=None):
     said = "%.2f %% of %d lines run, %d of %d functions, %d files" % (share, lines, functions_run, functions, len(files))
     fell = None
     if a.history:
-        earlier = [row for row in read_history(a.history) if row.get("scope") == scope]
-        if earlier and share < float(earlier[-1]["share"]) - 0.005:
-            fell = "%.2f %% at %s" % (float(earlier[-1]["share"]), earlier[-1]["commit"])
+        fell = compare(a.history, scope, share)
         append_history(a.history, {"time": (now or datetime.datetime.now()).isoformat(timespec="seconds"),
                                    "commit": a.commit[:9], "lines_run": lines_run, "lines": lines,
                                    "share": "%.4f" % share, "functions_run": functions_run, "functions": functions,
-                                   "scope": scope})
+                                   "scope": scope, "verdict": "fell" if fell else "pass"})
     print("coverage: %s%s" % (said, ("; it fell from " + fell) if fell else ""))
     print("coverage lists: %s, %s" % (pathlib.Path(a.work) / "coverage.tsv", pathlib.Path(a.work) / "never-run.txt"))
     return 1 if fell else 0
@@ -172,6 +195,7 @@ def main(argv=None):
     r.add_argument("--rebase", action="append", default=[])
     r.add_argument("--history", default="")
     r.add_argument("--commit", default="")
+    r.add_argument("--suites", default="", help="the runs whose counts are merged (engine,tour,mods): part of the history's key")
     r.add_argument("--llvm", default=os.environ.get("NEBULA_LLVM_BIN", "C:/Program Files/LLVM/bin"))
     return report(p.parse_args(argv))
 

@@ -3757,7 +3757,7 @@ def coverage_check(g, bin_dir, tour, parts=None):
         code = run([sys.executable, "-X", "utf8", "-I", HERE / "coverage.py", "report", *binaries, "--profile", merged,
                     "--work", out, "--root", TREE, "--rebase", builds / "game", "--rebase", builds / "msvc",
                     "--history", pathlib.Path(g.args.work) / "coverage-history.tsv",
-                    "--commit", g.commit, "--llvm", llvm], log)
+                    "--commit", g.commit, "--suites", ",".join(n for n, _ in runs), "--llvm", llvm], log)
         text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")
         line = next((l for l in reversed(text.splitlines()) if l.startswith("coverage: ")), "coverage: no report")
         # The counts are large and made again each run; the lists stay with the results.

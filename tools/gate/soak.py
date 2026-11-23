@@ -11,6 +11,10 @@ A renderer passes when
     Windows' private bytes, the driver's too; Linux's and Android's resident anonymous memory; Apple's footprint) has,
     in every lap after the second, a median at most BOUND_MB above the second lap's. The first lap is left out: it
     fills what is kept once (the pipeline library, caches that hold the stages' data). Three laps at least are needed.
+    A run of LONG_RUN_LAPS whole laps or more (the nightly's ten) is judged from REFERENCE_LAP, where the warming up has
+    ended (judge_long): the growth a lap, the median of the slopes between every two laps from there on, is at most
+    BOUND_MB / (laps - 2) (the growth a lap the rule above refuses over the same run: 4 MB in ten laps), and the lowest
+    median of the last LAST_LAPS laps is at most BOUND_MB above the reference lap's. A run of fewer laps is judged as above.
 
     python -X utf8 -I tools/gate/soak.py run --bin BIN --pak PAK --work WORK [--renderers d3d12,vulkan,d3d11]
                                             [--minutes 120] [--lap 12] [--stage-seconds 60] [--seed N]
@@ -38,6 +42,13 @@ LIST = TREE / "tools" / "verify" / "tours" / "tour_enterable.txt"
 STEPS_PER_SECOND = 60
 MEMORY_SECONDS = 30
 BOUND_MB = 32.0
+# A run of LONG_RUN_LAPS whole laps or more (the nightly's 120 minutes: ten) is judged from the lap the memory stopped warming up at,
+# REFERENCE_LAP (the lowest memory of a lap's samples, per renderer, in the long run of 11-22: d3d11 646 660 659 663 670 673 670 676 676 MB
+# from lap 2 on, d3d12 803 809 810 815 828 838 830 833 843, vulkan 1179 1200 1214 1218 1221 1221 1220 1221 1223: vulkan's stopped
+# rising at lap 6, d3d11's and d3d12's had not by lap 10; the second lap to the sixth added 23, 24 and 31 MB to the median).
+LONG_RUN_LAPS = 8
+REFERENCE_LAP = 6
+LAST_LAPS = 3
 LOAD_FRAMES = 300  # input starts this long after a stage is asked for (the load and its opening take some of it)
 # The pause menu is a block of its own: a press, PAUSE_WAIT frames with no input at all, a press that closes it, and the menu's way
 # out. The first plan sent a random pointer and A into the open menu: that pressed its Settings button, the overlay stayed open
@@ -150,6 +161,29 @@ def write(out, minutes=120, lap=12, stage_seconds=60, seed=20261117):
     return suite
 
 
+def growth_per_lap(medians):
+    """The slope of the lap medians (MB a lap): the median of the slopes between every two laps (Theil and Sen), so that
+    one lap that rose and fell back does not move it: it enters the slopes of its own pairs only, fewer than half of them."""
+    slopes = [(medians[j] - medians[i]) / (j - i) for i in range(len(medians)) for j in range(i + 1, len(medians))]
+    return statistics.median(slopes)
+
+
+def judge_long(medians):
+    """A run of LONG_RUN_LAPS full laps or more: the memory has stopped warming up by lap REFERENCE_LAP, and from there on
+    - the growth a lap (growth_per_lap of the laps from the reference on) is at most BOUND_MB / (laps - 2), the growth a lap
+      the judge of shorter runs refuses over the same run (its bound, over the laps after the second), and
+    - the lowest median of the last LAST_LAPS laps is at most BOUND_MB above the reference lap's median: a lap's spike that
+      falls back is not growth, memory that stays is."""
+    reference = medians[REFERENCE_LAP - 1]
+    after = medians[REFERENCE_LAP - 1:]
+    slope = growth_per_lap(after)
+    limit = BOUND_MB / (len(medians) - 2)
+    kept = min(medians[-LAST_LAPS:]) - reference
+    detail = "lap medians %s MB; from lap %d on: %+.2f MB a lap (at most %.2f over %d laps), the lowest of the last %d laps %+.1f MB above lap %d (bound %.0f)" % (
+        " ".join("%.0f" % m for m in medians), REFERENCE_LAP, slope, limit, len(medians), LAST_LAPS, kept, REFERENCE_LAP, BOUND_MB)
+    return slope <= limit and kept <= BOUND_MB, detail
+
+
 def judge(samples, lap_frames):
     """samples: (test frame, bytes) of process.memory. Returns (passes, detail)."""
     laps = {}
@@ -159,6 +193,12 @@ def judge(samples, lap_frames):
     medians = [statistics.median(laps[k]) / (1 << 20) for k in sorted(laps)]
     if len(medians) < 3:
         return False, "%d laps of memory; three are needed to judge growth" % len(medians)
+    # A lap counts as a whole one when its samples reach to within two sample intervals of its end (the last lap of a run
+    # that stops inside it holds fewer samples, and its median is of another part of the lap).
+    last_frame = max(frame for frame, value in samples if isinstance(value, int))
+    whole = sum(1 for k in sorted(laps) if (k + 1) * lap_frames - last_frame <= 2 * MEMORY_SECONDS * STEPS_PER_SECOND or k + 1 < len(medians))
+    if whole >= LONG_RUN_LAPS:
+        return judge_long(medians[:whole])
     base = medians[1]
     worst = max(m - base for m in medians[2:])
     detail = "lap medians %s MB; the most above lap 2: %+.1f MB (bound %.0f)" % (

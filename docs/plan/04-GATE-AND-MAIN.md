@@ -83,7 +83,7 @@ On main's newest commit, in its own work tree and build folder, at below-normal 
 | Soak | Two hours of random input on each renderer, the three side by side. No crash, no memory growth beyond the stated bound |
 | Fuzzing | Each fuzz target for a fixed time, starting from the stored corpus. Every new failing input joins the corpus |
 | All discs | Every disc on every renderer |
-| Coverage | Which game and engine code no test runs. A list, kept with the results; the share of code run by tests may not fall. Planned (Agent 1 designs it) |
+| Coverage | Which game and engine code no test runs. A list, kept with the results; the share of code run by tests may not fall, compared with the last run of the same binaries and the same suites that passed (see "The coverage history's key" below) |
 | Short measurement | A fixed short set of the measures (section 10), at the long run's end |
 
 ### 3.4 Final check
@@ -488,8 +488,8 @@ landing besides what the changed files need. NAMES are comma-separated: the nigh
 |---|---|
 | `stress` | the stress lane (twelve copies of the game at once). Asked for by name, a result that fails beside the others and passes alone counts as `fail` in this landing: it is the step's proof that a fault under load is gone |
 | `sanitizer/tour` | the game's unit tests (`unit/game-asan`: those of `unit/game`, among them the arena tests that ask the sanitizer whether the game's own memory is poisoned where it must be) and the 102-stop tour on the sanitizer build (address and undefined behaviour), in the build's own kept folder. A stop ends at the first report the sanitizers print (no recovery): the report is a finding about the game, the check is `fail` with the report as its message, unless the first frame of the game's code in it is listed in `tools/gate/sanitizer-known.tsv` (frame, ledger row, first words): that is counted and shown. Run by name: `gate.py land BRANCH --also sanitizer/tour`. Times on the build PC (11-21): the sanitizer build from nothing 12 minutes, the 12-stop tour 85 seconds, the 102 stops 12 minutes |
-| `soak` | the soak (`tools/gate/soak.py`: one plan of seeded random play through 12 tour stages, a lap, in real time) on Direct3D 12, Vulkan and Direct3D 11, three processes side by side, for 30 minutes. It passes when every renderer ends with no crash, no stop in frames and no stage that fails to load, and its memory does not grow (a median per lap at most 32 MB above the second lap's; the first lap is left out). What a step's "both soaks clean" means: this check, passed |
-| `soak/long` | the same for 120 minutes (`--soak-minutes`), the nightly's soak |
+| `soak` | the soak (`tools/gate/soak.py`: one plan of seeded random play through 12 tour stages, a lap, in real time) on Direct3D 12, Vulkan and Direct3D 11, three processes side by side, for 30 minutes. It passes when every renderer ends with no crash, no stop in frames and no stage that fails to load, and its memory does not grow (a median per lap at most 32 MB above the second lap's; the first lap is left out; the 30 minutes are two laps and a half). What a step's "both soaks clean" means: this check, passed. What its memory judge sees: "The soak's memory judge" below |
+| `soak/long` | the same for 120 minutes (`--soak-minutes`), the nightly's soak: ten laps, judged from lap 6 on (the next section) |
 | `replays/software` | the recorded plays (`tests/replays`) on Microsoft's software graphics device, Direct3D 12 and 11 (`tools/gate/replays_software.py`, with the game's software-device launch option), as many copies at once as the PC's memory and processors hold and with no graphics-card slot; every step hash is compared with the recording; the recorded stops hold at 1280x720 only (ledger row P-340), and a run at another size is named "recorded at WxH, run at WxH" (`tool`) and not compared; a play that crashed or hung is played once more alone after the others (passed alone: `flake`, failed again: `fail`), a step hash that differs never; a play during which the game's graphics device was removed (its log says so, and the game makes a new device) is a `fail` that names the step, whatever else it did (P-339) |
 
 They run after the checks the groups need have passed (a landing that failed runs none), before `measure/step/pc`, one after another,
@@ -499,6 +499,38 @@ or run (exit 2, `VERDICT not-judged`); the unknown name's message lists the know
 landing that names any check runs its groups' checks as the nightly run runs them, every stop of a tour (`--main --only NAME` is how one
 nightly check is run by hand). The names travel with the branch in the queue (the column `also`), so a caller that only waits for
 another's runner still gets its checks; a batch runs the union of its branches'.
+
+**The soak's memory judge (`tools/gate/soak.py`, `judge` and `judge_long`; W long findings, 11-22).** The figure is one number for the whole
+process: its private bytes, the graphics driver's and the test driver's included, a sample every 30 seconds, the median of each lap's
+samples (a lap is 12 stages of a minute: 12 minutes). Nothing in it separates the game's own arenas from the rest. A leak is judged as steady
+growth a lap; the sight is what growth a lap a run of so many laps refuses:
+
+| Laps in the run | Rule | Steady growth refused (MB a lap, a minute) |
+|---|---|---|
+| 3 (the 30-minute check: two laps and the first half of a third) | the third lap's median at most 32 MB above the second's | the third lap's samples lie 9 minutes after the second's median: a leak from the start of 3 MB a minute (+32 to +36 MB on the recorded clean run) is refused, 2 MB a minute (+25 to +30) is not |
+| 4 to 7 | the most above lap 2 at most 32 MB | 32 / (laps - 2): 16, 10.7, 8, 6.4 |
+| 8 or more whole laps (the nightly's 10) | from lap 6 on: the growth a lap, the median of the slopes between every two laps' medians, at most 32 / (laps - 2); and the lowest median of the last 3 laps at most 32 MB above lap 6's | 32 / (laps - 2): 8 laps 5.3, 10 laps 4.0 (0.33 MB a minute, 20 MB an hour), 12 laps 3.2, 20 laps 1.8 (0.15 MB a minute) |
+
+The rule of fewer than 8 laps is the rule the soak had from 11-17 (a lap counts when it is not the last, or when its samples reach to within
+a minute of its end). The long rule keeps the old rule's sight for ten laps (the old rule refused a steady ramp above 4 MB a lap there) and
+moves its reference from lap 2 to lap 6: the first judge of a real two-hour run (11-22) read 23, 24 and 31 MB of warming up between lap 2 and
+lap 6 on the three renderers, which left 1 to 9 MB of the bound for growth, and refused all three for it. The lowest sample of each lap,
+laps 2 to 10 of that run, in MB: d3d11 646 660 659 663 670 673 670 676 676, d3d12 803 809 810 815 828 838 830 833 843, vulkan 1179 1200 1214
+1218 1221 1221 1220 1221 1223; vulkan's stopped rising at lap 6, d3d11's and d3d12's had not at lap 10 (ledger row P-343, open). One lap
+that rises and falls back does not move a median of slopes (it is in 4 of the 10 pairs of the five laps from lap 6) nor the lowest of the last
+three laps: a spike is not growth. Memory that rises and stays for the last 2 laps moves the slope; for 4 laps or more, the lowest of the last
+three. That run's laps through the long rule read: d3d11 +3.11 MB a lap (at most 4.00), d3d12 +1.94, vulkan +0.71: all pass. What it does not
+see: growth under the sight above; a rise of more than 32 MB between lap 2 and lap 6 (the old rule saw it; it is what warming up read at
+23 to 31); a rise that stays for 3 laps only and then falls back. Shown with a leak by the real gate: the short form (30 minutes) refused a
+leak of 5 MB a minute in the game process (branch `plant/w-leak`, recipe 8 in `docs/plan/native/TOOL-MEND-PLANTS.md` once that file is on main).
+
+**The coverage history's key (`tools/gate/coverage.py`; W long findings, 11-22).** `gate-runs/coverage-history.tsv` has one line a long run: the
+share of lines run, the key and the verdict. The key is the binaries' names and the suites whose counts were merged (`engine`, `tour`,
+`mods`): a long run with the mod suites off (since 11-21, `tools/gate/scope.tsv`) merges 18 engine tests and 102 tour stops, and its share
+(16.23 % on 11-22) is not that of a run with 548 mod tests too (22.07 %): each key has its own line. A run whose share is lower than the last
+line of its key that passed fails and is written with the verdict `fell`; the next run is compared with the last pass, so a fall does not
+lower the bar. The lines up to 11-21 were re-keyed once (engine,mods,tour) and the 11-22 line (engine,tour); a line with no verdict counts as
+a pass.
 
 **Game data by key.** `D:/NebulaWork/build/game-data/` holds one folder per disc, store version and importer
 (`<disc>-<store>-<first 12 characters of the git tree hash of crates/nebula-import>`). The gate asks for a disc's data by that

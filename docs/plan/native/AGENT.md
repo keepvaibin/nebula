@@ -424,6 +424,7 @@ process you did not start, never remove a lock, never stop a landing or the long
   cost because it is small.
 - The Vulkan debug layer is not installed on this PC: that one check is left out with one line. Direct3D's
   layers run.
+- The endurance run (the soak) sees no memory growth under 4 MB for each 12-minute lap in a two-hour run (3 MB a minute in its 30-minute form), and its figure is the whole process's memory with the graphics driver's, so nothing in it says whose memory grows and a pass does not prove that nothing leaks (`docs/plan/04-GATE-AND-MAIN.md`, "The soak's memory judge").
 - There is one tablet. A device that is away makes its checks `owed`; nothing is yours to do, and no tool plays them
   by themselves: the long run's tablet pieces find what they would have found, up to a day later. The page says
   "Tablet away since <time>: <n> checks owed" while it lasts.

@@ -3,7 +3,10 @@
 1. The test it writes is one the harness reads (luma_test.read_test): real time, process.memory every 30 seconds, a
    stage asked for at every stage's start after the first, the end at the last frame, input only inside the run.
 2. The judgment: flat memory passes; memory that keeps growing past the bound fails; the first lap's growth is left
-   out; a run of fewer than three laps cannot pass.
+   out; a run of fewer than three laps cannot pass. A run of eight whole laps or more is judged from lap 6 (the growth
+   a lap of the laps from there on, at most 32 / (laps - 2) MB, and the lowest of the last three laps within 32 MB of
+   lap 6): the recorded laps of the long run of 11-22 pass, the same plus a ramp of 4 MB a lap are refused, a ramp
+   under the sight passes, a lap's spike that falls back passes and memory that stays is refused, for each run length.
 3. The pause menu is a block of two presses with nothing between them, in the middle of a stage only (N-1089: a pointer and A sent
    into the open menu pressed its Settings button, the overlay stayed open, and the stage move that followed never got past its
    opening camera).
@@ -88,6 +91,71 @@ def main():
     check(soak.judge(small, lap)[0], "growth inside the bound passes: %s" % soak.judge(small, lap)[1])
     check(not soak.judge(flat[:len(flat) * 2 // 5], lap)[0], "two laps cannot pass")
     check(not soak.judge([(0, None)] * 100, lap)[0], "no bytes cannot pass")
+
+    # 2b. A run of eight whole laps or more (the nightly's ten) is judged from lap 6 (judge_long). The laps are 12 minutes of 60 steps
+    #     a second; a lap's samples are every 30 seconds, all of the lap's median, so that the laps' medians are what the test names.
+    whole = 12 * 60 * 60
+
+    def run_of(medians, last=1.0):
+        """The samples of a run whose lap medians (MB) are `medians`; the last lap's samples reach `last` of its length."""
+        out = []
+        for k, m in enumerate(medians):
+            end = whole if k < len(medians) - 1 else int(whole * last)
+            out += [(k * whole + f, int(m * (1 << 20))) for f in range(0, end - 1800 + 1, 1800)]
+        return out
+
+    # The long run of 11-22 (run 20261122-064409-c89e4e551-long, soak.log): the medians the old judge refused (+41.1, +36.7, +34.4).
+    recorded = {"d3d11": [661, 677, 692, 696, 699, 701, 718, 703, 708, 716],
+                "d3d12": [812, 830, 843, 844, 849, 854, 865, 867, 862, 867],
+                "vulkan": [1194, 1213, 1224, 1236, 1240, 1244, 1242, 1241, 1243, 1247]}
+    for renderer, medians in recorded.items():
+        ok, said = soak.judge(run_of(medians), whole)
+        check(ok and "from lap 6 on" in said, "%s: the recorded laps of 11-22 pass: %s" % (renderer, said))
+        ok, said = soak.judge(run_of([m + 4.0 * k for k, m in enumerate(medians)]), whole)
+        check(not ok, "%s: the recorded laps and a ramp of 4 MB a lap are refused: %s" % (renderer, said))
+    flat = [900.0] * 10
+    check(soak.judge(run_of(flat), whole)[0], "ten flat laps pass")
+    check(soak.judge(run_of([900.0 + min(k, 5) * 6.0 for k in range(10)]), whole)[0], "warming up to lap 6, then flat, passes")
+    for step in (4.1, 6.0, 10.0):
+        check(not soak.judge(run_of([900.0 + step * k for k in range(10)]), whole)[0], "a ramp of %.1f MB a lap in ten laps is refused: %s" % (step, soak.judge(run_of([900.0 + step * k for k in range(10)]), whole)[1]))
+    for step in (3.9, 3.0, 0.0):
+        check(soak.judge(run_of([900.0 + step * k for k in range(10)]), whole)[0], "a ramp of %.1f MB a lap in ten laps is under the sight and passes" % step)
+    # A lap's spike that falls back is not growth; memory that rises and stays is.
+    for lap_no in (3, 6, 7, 8, 9, 10):
+        spiked = list(flat)
+        spiked[lap_no - 1] += 80.0
+        check(soak.judge(run_of(spiked), whole)[0], "a spike of 80 MB in lap %d that falls back passes: %s" % (lap_no, soak.judge(run_of(spiked), whole)[1]))
+    two = list(flat)
+    two[6], two[7] = two[6] + 80.0, two[7] + 80.0
+    check(soak.judge(run_of(two), whole)[0], "two laps of spike that fall back pass (a slope of the pairs' median)")
+    for stay in (2, 3, 4):
+        stepped = flat[:10 - stay] + [flat[0] + 60.0] * stay
+        ok, said = soak.judge(run_of(stepped), whole)
+        check(not ok, "a rise of 60 MB that stays for the last %d laps is refused: %s" % (stay, said))
+    # A rise at lap 7 that stays for four laps moves the pairs' median slope not at all: the lowest of the last three laps shows it.
+    ok, said = soak.judge(run_of([900.0] * 6 + [960.0] * 4), whole)
+    check(not ok and "+0.00 MB a lap" in said, "a rise of 60 MB at lap 7 that stays is refused by the lowest of the last laps: %s" % said)
+    ok, said = soak.judge(run_of([900.0] * 6 + [920.0] * 4), whole)
+    check(ok, "a rise of 20 MB at lap 7 that stays is inside the bound: %s" % said)
+    check(soak.judge(run_of([900.0, 900.0, 960.0, 960.0, 960.0, 960.0, 960.0, 960.0, 960.0, 960.0]), whole)[0],
+          "a rise of 60 MB between laps 2 and 6 is warming up to the long rule, which sees growth from lap 6 on")
+    # The sight by run length: growth a lap refused, BOUND_MB / (laps - 2).
+    for laps, under, over in ((8, 5.0, 5.5), (10, 3.9, 4.1), (12, 3.1, 3.3), (20, 1.7, 1.9)):
+        check(soak.judge(run_of([900.0 + under * k for k in range(laps)]), whole)[0], "%d laps: %.1f MB a lap passes" % (laps, under))
+        check(not soak.judge(run_of([900.0 + over * k for k in range(laps)]), whole)[0], "%d laps: %.1f MB a lap is refused" % (laps, over))
+    # Runs of fewer whole laps are judged as before: against lap 2, the most above it (the short soak's three laps, the last one cut).
+    ok, said = soak.judge(run_of([900.0 + 7.0 * k for k in range(7)]), whole)
+    check(not ok and "the most above lap 2: +35.0 MB" in said, "seven laps, 7 MB a lap: the old rule refuses (the long rule would not: 6.4 is its sight for seven): %s" % said)
+    ok, said = soak.judge(run_of([900.0 + 4.0 * k for k in range(7)]), whole)
+    check(ok and "the most above lap 2: +20.0 MB" in said, "seven laps, 4 MB a lap: the old rule reads +20.0: %s" % said)
+    cut = run_of([900.0 + 4.0 * k for k in range(8)], last=0.5)
+    ok, said = soak.judge(cut, whole)
+    check("the most above lap 2" in said, "seven whole laps and half of the eighth are judged by the old rule: %s" % said)
+    ok, said = soak.judge(run_of([900.0 + 4.0 * k for k in range(9)], last=0.5), whole)
+    check("from lap 6 on" in said and "over 8 laps" in said, "eight whole laps and half of the ninth: the long rule on the eight: %s" % said)
+    short = run_of([803.0, 813.0, 825.0], last=0.5)
+    check(soak.judge(short, whole)[1] == "lap medians 803 813 825 MB; the most above lap 2: +12.0 MB (bound 32)",
+          "the short soak's three laps read as before: %s" % soak.judge(short, whole)[1])
 
     class Ended:
         def wait(self):

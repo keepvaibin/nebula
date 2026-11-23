@@ -9,6 +9,10 @@ game), run, and its counts merged:
 - files outside --root are left out;
 - with a history, the first run sets the share; a build that adds code no run reaches lowers it and fails, naming
   the share it fell from; the same share again passes; a line of other binaries (another scope) is not compared;
+- the key holds the suites that ran: fewer suites start their own line (a lower share is not a fall); a run that fell
+  is written as one and is not what the next run is compared with (the same low share fails again, the old share
+  passes); a line with no verdict (the file before the column) counts as a pass; the recorded rows of the long runs
+  of 11-18 to 11-22 judged by the key (data below, no build);
 - paths under each of several build folders (--rebase) read as the tree's.
 Needs clang, llvm-profdata and llvm-cov (C:/Program Files/LLVM/bin, or NEBULA_LLVM_BIN).
 """
@@ -52,10 +56,11 @@ def build_and_run(folder, extra=""):
     return exe, folder / "a.profdata"
 
 
-def report(exe, profile, out, root, history=""):
+def report(exe, profile, out, root, history="", suites=None):
     r = subprocess.run([sys.executable, "-X", "utf8", "-I", str(HERE.parent / "coverage.py"), "report", "--binary",
                         str(exe), "--profile", str(profile), "--work", str(out), "--root", str(root), "--history",
-                        str(history), "--commit", "abcdef123", "--llvm", str(LLVM)], capture_output=True, text=True)
+                        str(history), "--commit", "abcdef123", "--llvm", str(LLVM)]
+                       + (["--suites", suites] if suites is not None else []), capture_output=True, text=True)
     return r.returncode, r.stdout + r.stderr
 
 
@@ -87,6 +92,60 @@ if coverage is not None:
                                         "functions_run": 1, "functions": 1, "scope": "nebula.exe,smg_game.dll"})
         code, out = report(exe, profile, t / "out6", t, other)
         check(code == 0 and len(coverage.read_history(other)) == 2, "another scope's line is not compared: %s" % out)
+
+        # The key holds the suites. One history, three runs of the same binaries: engine and tour with every test (the
+        # high share), then with the engine suite alone (the low share: the first line of its key, not a fall), then
+        # the low share again after a run of the key that fell.
+        exe, profile = build_and_run(t / "keyed")
+        keyed = t / "keyed-history.tsv"
+        code, out = report(exe, profile, t / "k1", t, keyed, "engine,tour,mods")
+        check(code == 0 and coverage.read_history(keyed)[-1]["scope"].endswith("|engine,mods,tour"), "the key holds the suites, sorted: %s" % coverage.read_history(keyed))
+        exe_big, profile_big = build_and_run(t / "keyed_big", EXTRA)
+        code, out = report(exe_big, profile_big, t / "k2", t, keyed, "engine,tour")
+        check(code == 0 and "it fell" not in out, "fewer suites start their own line, a lower share is not a fall: %s" % out)
+        code, out = report(exe_big, profile_big, t / "k3", t, keyed, "engine,tour,mods")
+        check(code == 1 and "it fell from" in out, "the same suites with a lower share fall: %s" % out)
+        rows = coverage.read_history(keyed)
+        check([r["verdict"] for r in rows] == ["pass", "pass", "fell"], "the fall is written as one: %s" % [r["verdict"] for r in rows])
+        code, out = report(exe_big, profile_big, t / "k4", t, keyed, "engine,tour,mods")
+        check(code == 1 and "it fell from" in out, "a run that fell does not lower the next comparison: %s" % out)
+        code, out = report(exe, profile, t / "k5", t, keyed, "engine,tour,mods")
+        check(code == 0, "the share of the last run that passed holds: %s" % out)
+        # A line from before the verdict column: a pass.
+        old = t / "old-history.tsv"
+        tab = chr(9)
+        old.write_text(tab.join(["time", "commit", "lines_run", "lines", "share", "functions_run", "functions", "scope"]) + chr(10)
+                       + tab.join(["x", "c1", "9", "9", "100.0000", "1", "1", "nebula.exe"]) + chr(10), encoding="utf-8")
+        check(coverage.compare(old, "nebula.exe", 50.0) == "100.00 % at c1", "a line with no verdict counts as a pass")
+
+    # The recorded lines of the long runs (gate-runs/coverage-history.tsv, key `<binaries>|<suites>`): the run of
+    # 11-22 played no mod suite and read 16.23 % where the runs before it, with the mod suites, read 22.07 %.
+    BINARIES = "nebula.exe,smg_game.dll,smg_game_plain.dll"
+    RECORDED = [("2026-11-18T20:30:23", "cce47fc21", 95644, 440250, "21.7249", 17218, 258663, "engine,mods,tour"),
+                ("2026-11-19T03:58:50", "5dc7169c7", 95927, 440382, "21.7827", 17245, 258683, "engine,mods,tour"),
+                ("2026-11-19T12:30:55", "d9efee551", 95932, 440496, "21.7782", 17257, 258731, "engine,mods,tour"),
+                ("2026-11-19T16:53:57", "8675cd623", 95824, 440294, "21.7636", 17265, 258733, "engine,mods,tour"),
+                ("2026-11-20T08:48:43", "790626cb5", 100011, 453344, "22.0607", 17639, 259712, "engine,mods,tour"),
+                ("2026-11-21T03:36:51", "c693079e8", 100044, 453363, "22.0671", 17642, 259716, "engine,mods,tour")]
+    with tempfile.TemporaryDirectory() as tmp:
+        recorded = pathlib.Path(tmp) / "coverage-history.tsv"
+        for time, commit, lr, lines, share, fr, functions, suites in RECORDED:
+            coverage.append_history(recorded, {"time": time, "commit": commit, "lines_run": lr, "lines": lines, "share": share,
+                                               "functions_run": fr, "functions": functions, "scope": BINARIES + "|" + suites,
+                                               "verdict": "pass"})
+        with_mods, without = BINARIES + "|engine,mods,tour", BINARIES + "|engine,tour"
+        check(coverage.compare(recorded, without, 16.2257) is None, "the run of 11-22 under its own key is no fall")
+        check(coverage.compare(recorded, with_mods, 16.2257) == "22.07 % at c693079e8", "under the key with the mod suites it is one: %s" % coverage.compare(recorded, with_mods, 16.2257))
+        coverage.append_history(recorded, {"time": "2026-11-22T18:19:44", "commit": "c89e4e551", "lines_run": 73853, "lines": 455160,
+                                           "share": "16.2257", "functions_run": 13952, "functions": 259955, "scope": without,
+                                           "verdict": "pass"})
+        check(coverage.compare(recorded, without, 16.20) == "16.23 % at c89e4e551", "a drop planted within the key is refused")
+        check(coverage.compare(recorded, without, 16.2257) is None and coverage.compare(recorded, without, 16.5) is None,
+              "the same share and a higher one pass")
+        coverage.append_history(recorded, {"time": "t", "commit": "bad", "lines_run": 1, "lines": 100, "share": "15.0000", "functions_run": 1,
+                                           "functions": 1, "scope": without, "verdict": "fell"})
+        check(coverage.compare(recorded, without, 16.0) == "16.23 % at c89e4e551", "a failed line does not lower the next comparison")
+        check(coverage.compare(recorded, without, 16.2257) is None, "the last pass's share still holds")
 
     # A cache's paths (the build folder joined with paths relative to the tree) read as the tree's; a file in two
     # modules adds up; a file's own function and a decorated name read as written.
