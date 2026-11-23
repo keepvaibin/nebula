@@ -4,7 +4,7 @@ Written 2026-11-23 10:25. If this time is more than three hours old, the work ha
 
 Steps landed: 11 of 138 (8%).
 
-Now: S0.2.6 in work since 08:10; ahead: nothing (the trial ends with S0.2.6)
+Now: S0.2.6 landed at 10:25; the trial of S0.2.1 to S0.2.6 ends here: nothing in work, nothing ahead, G6.2 not started
 
 In work now: Nothing started.
 
