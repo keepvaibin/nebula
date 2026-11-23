@@ -6,9 +6,9 @@ author: keepvaibin
 image: version.jpg
 ---
 
-Like the project? Consider donating to help speed up development times and support me! My Ko-fi is at [https://ko-fi.com/keepvaibin](https://ko-fi.com/keepvaibin). And the Discord is at [https://discord.gg/2fJEdhAw2f](https://discord.gg/2fJEdhAw2f), come ask questions or hang out with the rest of the community!
+Like the project? Consider donating to help speed up development times and support me! My Ko-fi is at [https://ko-fi.com/keepvaibin](https://ko-fi.com/keepvaibin).
 
-Spreading the word around also helps, as it lets more people see what's going on!
+Join the official Nebula Discord at [https://discord.gg/2fJEdhAw2f](https://discord.gg/2fJEdhAw2f), come ask questions or hang out with the rest of the community! Spreading the word around also helps, as it lets more people see what's going on!
 
 ## Downloads
 
