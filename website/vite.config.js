@@ -1,6 +1,6 @@
 import { renderPages } from './scripts/render-pages.mjs';
 import { renderDocs, docRoutes } from './scripts/render-docs.mjs';
-import { renderBlog, blogRoutes } from './scripts/render-blog.mjs';
+import { renderBlog, blogRoutes, blogPreviewFiles } from './scripts/render-blog.mjs';
 import { defineConfig } from 'vite';
 import { resolve, sep } from 'node:path';
 import { readFileSync } from 'node:fs';
@@ -14,6 +14,15 @@ export default defineConfig(({ mode }) => {
   return {
     base: './',
     plugins: [
+      {
+        // A post's `image:` is its link-preview picture. Its share tags name it by a fixed address
+        // (blog/SLUG/FILE), so the build holds it there, beside the post's page, under its own name.
+        name: 'blog-preview-images',
+        generateBundle() {
+          for (const { fileName, source } of blogPreviewFiles())
+            this.emitFile({ type: 'asset', fileName, source: readFileSync(source) });
+        },
+      },
       {
         name: 'page-text-preview',
         async configureServer(server) {
