@@ -67,15 +67,15 @@ with tempfile.TemporaryDirectory(prefix="mod-support-package-") as folder:
     desktop_mods = desktop_clean.replace(b"Exec=nebula-launch\n", b"Exec=nebula-launch --import %u\n") + b"MimeType=application/x-nebula-luma;x-scheme-handler/nebula;\n"
     top = "Nebula-2.0.0-beta.1-linux-x64/"
     linux = {top + "files/nebula": b"x", top + "files/libsmg_game_plain.so": b"x", top + "files/libnebula_import.so": b"x",
-             top + "dev.nebula.galaxy.desktop": desktop_clean, top + "install.sh": b"#!/bin/sh\n"}
+             top + "support/dev.nebula.galaxy.desktop": desktop_clean, top + "install.sh": b"#!/bin/sh\n"}
     tar_gz(tmp / "clean.tar.gz", linux)
     code, out = run(tmp / "clean.tar.gz", "--no-mods")
     check(code == 0 and "no mod kit" in out, "a Linux package with none of the kit passes --no-mods: %s" % out)
     for what, extra in (("the rows module", {top + "files/libsmg_game.so": b"x"}),
                         ("LumaKit", {top + "files/luma/mods/lumakit.luma": b"x"}),
                         ("the self-description", {top + "files/luma/sdk/luma.h": b"x"}),
-                        ("the .luma type file", {top + "dev.nebula.galaxy.xml": b"x"}),
-                        ("the menu entry's file type and link", {top + "dev.nebula.galaxy.desktop": desktop_mods})):
+                        ("the .luma type file", {top + "support/dev.nebula.galaxy.xml": b"x"}),
+                        ("the menu entry's file type and link", {top + "support/dev.nebula.galaxy.desktop": desktop_mods})):
         tar_gz(tmp / "planted.tar.gz", {**linux, **extra})
         code, out = run(tmp / "planted.tar.gz", "--no-mods")
         check(code == 1, "a Linux package with %s fails --no-mods: %s" % (what, out))
@@ -88,11 +88,11 @@ with tempfile.TemporaryDirectory(prefix="mod-support-package-") as folder:
         made = subprocess.run(["sh", "-c", command + ' "$0"', str(TREE / "platform" / "linux" / "dev.nebula.galaxy.desktop")],
                               capture_output=True).stdout
         check(b"Exec=nebula-launch\n" in made.replace(b"\r\n", b"\n") and len(made) > 40, "the sed leaves the menu entry's start line")
-        tar_gz(tmp / "real-desktop.tar.gz", {**linux, top + "dev.nebula.galaxy.desktop": made})
+        tar_gz(tmp / "real-desktop.tar.gz", {**linux, top + "support/dev.nebula.galaxy.desktop": made})
         code, out = run(tmp / "real-desktop.tar.gz", "--no-mods")
         check(code == 0, "the menu entry the script makes from the tree's own passes --no-mods: %s" % out)
     whole = (TREE / "platform" / "linux" / "dev.nebula.galaxy.desktop").read_bytes()
-    tar_gz(tmp / "whole-desktop.tar.gz", {**linux, top + "dev.nebula.galaxy.desktop": whole})
+    tar_gz(tmp / "whole-desktop.tar.gz", {**linux, top + "support/dev.nebula.galaxy.desktop": whole})
     check(run(tmp / "whole-desktop.tar.gz", "--no-mods")[0] == 1, "the tree's own menu entry, with its file type and link, fails --no-mods")
     full = {**linux, top + "files/libsmg_game.so": b"x", top + "files/luma/mods/lumakit.luma": b"x"}
     tar_gz(tmp / "full.tar.gz", full)

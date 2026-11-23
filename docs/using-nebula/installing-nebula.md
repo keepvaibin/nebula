@@ -39,6 +39,10 @@ Nebula for Linux comes as a package named `Nebula-Linux-<arch>.tar.gz`.
 
 By default, the installer installs Nebula for your user in `~/.local/share/Nebula`, adds a menu entry, and makes `.luma` files open in Nebula.
 
+The unpacked folder holds `install.sh`, `README.txt` and two folders: `files` (the program) and `support` (what the installer copies to the install folder, among it `nebula-launch`, which starts the game). Start the game from the menu entry, or run `nebula-launch`.
+
+If you start `install.sh` from a file manager instead of a terminal, it asks and answers in windows when `zenity` or `kdialog` is installed. When it has nowhere to say something, it writes `nebula-message.txt` beside `install.sh` (or in your home folder). `nebula-launch` does the same when Nebula is not installed yet or the game stops with an error; the game's log is `~/.local/share/Nebula/logs/game.log`.
+
 ### Installer options
 
 To list the options, run `./install.sh --help`.
