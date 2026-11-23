@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-22 18:45. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-22 18:46.
 
 Steps landed: 5 of 138 (4%).
 
@@ -49,38 +49,21 @@ In work now: Nothing started.
 
 ## Repairs
 
-4 open of kind fail, 4 in all.
+3 open of kind fail, 3 in all.
 
 | Id | State | Kind | Check | Renderer | Traced to | Seen |
 | --- | --- | --- | --- | --- | --- | --- |
 | R-001 | open | fail | build/windows-asan | - | not traced | 1 |
 | R-002 | open | fail | coverage | - | not traced | 1 |
 | R-003 | open | fail | soak | - | not traced | 1 |
-| R-004 | open | fail | flake:a | d3d12 | commit 42b667ddb | 1 |
 
 ## For the owner to check by hand
 
 - S0.1.2 Documents: P-096: on the tablet, set up the game once more over an installed one, and once with the setup cut off (close the app mid-copy); then start the launcher: the old game stays playable until the new one is whole, and nothing is left behind (no game.pak.new, no half copy). (agent 1, 2026-11-22 14:18)
 
-## Waiting for the owner
-
-Nothing waits for the owner.
-
 ## Blocked
 
 Nothing is blocked.
-
-## Tool mends
-
-No tool was mended.
-
-## Decisions (0)
-
-None.
-
-## Checks changed during the run (1)
-
-- 2026-11-22 S0.1.3 tools/verify/console_census.py: the open group gx_sections counts the four section names GXMT, GXTG, GXTM and GXWP with a ceiling of 31, and the closed group fifo excludes only those four whole words (allowed by docs/engine/FRAME-MODEL.md section 2.9)
 
 ## Tool faults
 
