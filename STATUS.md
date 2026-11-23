@@ -4,7 +4,7 @@ Written 2026-11-23 05:08. If this time is more than three hours old, the work ha
 
 Steps landed: 7 of 138 (5%).
 
-Now: S0.2.2 since 04:55 (S0.2.1 landed 04:53); ahead: S0.2.3 next
+Now: S0.2.3 (the pointer asks the scene) since 05:08, written ahead and committed, tour playing; ahead: nothing
 
 In work now:
 - S0.2.3 Landing B, part 1: the pointer (agent 1)
