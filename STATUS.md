@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-23 12:05. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-23 12:29. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 11 of 138 (8%).
 
@@ -45,7 +45,7 @@ None yet.
 
 | Id | State | Kind | Check | Renderer | Traced to | Seen |
 | --- | --- | --- | --- | --- | --- | --- |
-| R-001 | open | fail | tour/d3d12 | d3d12 | step S1.1 commit abc | 2 |
+| R-001 | open | fail | tour/d3d12 | d3d12 | step S1.1 commit abc | 1 |
 
 ## For the owner to check by hand
 
@@ -89,7 +89,7 @@ No tool was mended.
 - 2026-11-23 S0.2.6: Proof 4: the replays are not recorded again; the recorded tour on this step's build gives all 20 recordings' step hashes (step_hash.py check: 20 of 20 the same over 600 steps, D:/NebulaWork/build/Nebula-native/runs/tour) (because The game step stopped reading answers at S0.2.5, whose landing recorded the four changed replays once for every renderer; recording identical files again would change nothing, and a replay recorded without a change is a place a check sees less)
 - 2026-11-23 S0.2.6: The diagnostics frame-plans and constants-watch move down to bits 19 and 20, so the bits stay without a gap after probe-reads is deleted; this replaces the part of the Read first (d) decision that left bit 19 unused (because --diagnostics takes names only (launch_args.h diagnostics_from_text), so no command line reads a bit number and a moved bit reads no old line wrongly; galaxy_launch_args_tests holds that every bit up to the last has a name, and the first landing failed it on GitHub's Linux jobs)
 
-## Checks changed during the run (47)
+## Checks changed during the run (42)
 
 - 2026-11-22 S0.1.3 tools/verify/console_census.py: the open group gx_sections counts the four section names GXMT, GXTG, GXTM and GXWP with a ceiling of 31, and the closed group fifo excludes only those four whole words (allowed by docs/engine/FRAME-MODEL.md section 2.9)
 - 2026-11-22 U-unattended tools/gate/main_push_guard.py: the guard also refuses a push of a branch named plant/... (allowed by docs/plan/native/TOOL-MEND-PLANTS.md, how a plant is kept from ever landing)
@@ -129,15 +129,10 @@ No tool was mended.
 - 2026-11-23 S0.2.5 tests/replays/073-PhantomGalaxy-1.tsv: the step hashes recorded again from a Direct3D 12 tour run of step S0.2.5 (step_hash.py record); they differ from step 0 (allowed by the card, docs/plan/native/03-NATIVE-STAGE-0.md, step S0.2.5)
 - 2026-11-23 S0.2.5 tests/replays/085-SandClockGalaxy-1.tsv: the step hashes recorded again from a Direct3D 12 tour run of step S0.2.5 (step_hash.py record); they differ from step 0 (allowed by the card, docs/plan/native/03-NATIVE-STAGE-0.md, step S0.2.5)
 - 2026-11-23 S0.2.5 tests/replays/090-StarDustGalaxy-1.tsv: the step hashes recorded again from a Direct3D 12 tour run of step S0.2.5 (step_hash.py record); they differ from step 0 (allowed by the card, docs/plan/native/03-NATIVE-STAGE-0.md, step S0.2.5)
-- 2026-11-23 AF tools/gate/scope.tsv: the rows of every path that can move a picture (native, runtime and its render folders, platform/sdl, the importer, the test driver, the runner, the tour writer, the step hash, the tour list, tests/engine, tests/replays) name the group `pictures` in place of engine1, tour1 and engine3; PICTURES-CHANGE.txt names it too (allowed by docs/plan/04-GATE-AND-MAIN.md section 9 (Pictures), the planner's brief AF)
-- 2026-11-23 AF tools/gate/strictness.py: a removed line that a line added in the same hunk gives back with a comma added or taken off at its end is not counted as removed (mode removed only) (allowed by docs/plan/04-GATE-AND-MAIN.md section 9 (Pictures), the planner's brief AF)
-- 2026-11-23 AF tools/gate/tests/scope_test.py: the expected groups of the rows for game code, the renderers, the host, the importer, the test driver, the runner, tests/engine and tests/replays name `pictures`, `engine3`, `tour3` and `tablet12`; the groups' own check runs on the main level's names (allowed by docs/plan/04-GATE-AND-MAIN.md section 9 (Pictures), the planner's brief AF)
-- 2026-11-23 AF tools/gate/tests/gate_line_test.py: the speed measure's tests build their plans from the real table with the row of native/** as it was before the group `pictures`; the renderers of a plan of tests/replays are the three; an importer plan has both measures; a landing's level comes from gate.landing_level (allowed by docs/plan/04-GATE-AND-MAIN.md section 9 (Pictures), the planner's brief AF)
-- 2026-11-23 AF tools/gate/tests/landing_test.py: the groups of the union of a game, a render and a documents branch name `pictures` and `tablet12` (allowed by docs/plan/04-GATE-AND-MAIN.md section 9 (Pictures), the planner's brief AF)
-- 2026-11-23 AF tools/gate/tests/plan_test.py: the groups of the union of a native, a render and an importer path name `pictures` and `tablet12` (allowed by docs/plan/04-GATE-AND-MAIN.md section 9 (Pictures), the planner's brief AF)
-- 2026-11-23 AF tools/gate/tests/plan_commands_test.py: the tour command's test gives agent_tour.py the pictures of its runs (one picture the same) in place of runs that took none (allowed by docs/plan/04-GATE-AND-MAIN.md section 9 (Pictures), the planner's brief AF)
-- 2026-11-23 AF tools/gate/tests/pictures_new_test.py: the declaration lines of the cases have the five words (place, renderer and disc named) (allowed by docs/plan/04-GATE-AND-MAIN.md section 9 (Pictures), the planner's brief AF)
-- 2026-11-23 AF tests/pictures/approved.tsv: 626 rows of the other two discs on Direct3D 11 (314) and Vulkan (312) take the picture the tour of main 53eb71017 draws: each lies from the approved Direct3D 12 picture of the same disc, stop and picture within the gap that renderer had before the trial (Direct3D 11: 19 pixels at most, 1 level, none over 15; Vulkan: 32993 pixels, 230 levels, 13 over 15) (allowed by docs/plan/04-GATE-AND-MAIN.md section 9 (Pictures), the planner's brief AF part 2)
+- 2026-11-23 AB-linux-fsr3 .github/workflows/release.yml: the Linux job's build line also gives build_linux.sh -s <shader headers>; the file's header comment says where FSR 3's headers come from (allowed by the planner's brief AB-linux-fsr3.md (the owner's question of 2026-11-23 about FSR 3 on Linux))
+- 2026-11-23 AB-linux-fsr3 .github/workflows/check.yml: the Linux job's build line also gives build_linux.sh -s <shader headers> (allowed by the planner's brief AB-linux-fsr3.md (the owner's question of 2026-11-23 about FSR 3 on Linux))
+- 2026-11-23 AB-linux-fsr3 tools/gate/github_jobs.tsv: the new job FSR 3 shaders (Windows) is a must job (allowed by the planner's brief AB-linux-fsr3.md (the owner's question of 2026-11-23 about FSR 3 on Linux))
+- 2026-11-23 AB-linux-fsr3 tools/gate/tests/github_rule_test.py: the count of green jobs is the table's own count (len(MUSTS)) and the jobs still waited for are the must jobs from the seventh on (MUSTS[6:]), not 7 and the seventh (allowed by the planner's brief AB-linux-fsr3.md (the owner's question of 2026-11-23 about FSR 3 on Linux))
 
 ## Tool faults
 
