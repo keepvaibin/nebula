@@ -79,6 +79,21 @@ with tempfile.TemporaryDirectory(prefix="mod-support-package-") as folder:
         tar_gz(tmp / "planted.tar.gz", {**linux, **extra})
         code, out = run(tmp / "planted.tar.gz", "--no-mods")
         check(code == 1, "a Linux package with %s fails --no-mods: %s" % (what, out))
+    # The menu entry package-linux.sh --no-mods makes from the tree's own: the sed of that script, run on the real file.
+    script = (TREE / "installer" / "package-linux.sh").read_text(encoding="utf-8").replace("\r\n", "\n")
+    match = re.search(r"(sed -e .*?)\s+\"\$repo/platform/linux/dev\.nebula\.galaxy\.desktop\"", script, flags=re.S)
+    check(match is not None, "package-linux.sh makes the menu entry of a package with no mod support with a sed")
+    if match is not None:
+        command = match.group(1).rstrip("\\ \n")
+        made = subprocess.run(["sh", "-c", command + ' "$0"', str(TREE / "platform" / "linux" / "dev.nebula.galaxy.desktop")],
+                              capture_output=True).stdout
+        check(b"Exec=nebula-launch\n" in made.replace(b"\r\n", b"\n") and len(made) > 40, "the sed leaves the menu entry's start line")
+        tar_gz(tmp / "real-desktop.tar.gz", {**linux, top + "dev.nebula.galaxy.desktop": made})
+        code, out = run(tmp / "real-desktop.tar.gz", "--no-mods")
+        check(code == 0, "the menu entry the script makes from the tree's own passes --no-mods: %s" % out)
+    whole = (TREE / "platform" / "linux" / "dev.nebula.galaxy.desktop").read_bytes()
+    tar_gz(tmp / "whole-desktop.tar.gz", {**linux, top + "dev.nebula.galaxy.desktop": whole})
+    check(run(tmp / "whole-desktop.tar.gz", "--no-mods")[0] == 1, "the tree's own menu entry, with its file type and link, fails --no-mods")
     full = {**linux, top + "files/libsmg_game.so": b"x", top + "files/luma/mods/lumakit.luma": b"x"}
     tar_gz(tmp / "full.tar.gz", full)
     check(run(tmp / "full.tar.gz", "--mods")[0] == 0, "a Linux package with the kit passes --mods")
