@@ -359,7 +359,8 @@ jobs:
           SDL_AUDIO_DRIVER=dummy timeout 300 xvfb-run -a -s "-screen 0 1920x1080x24" sh -c 'openbox >/dev/null 2>&1 & sleep 2; exec "$0" "$@"' \
             "$RUNNER_TEMP/work/bin/nebula" --start-check 600 --gpu-validation 1 \
             --data "$d/data" --settings "$d/settings" --crash-dumps "$d" 2>&1 | tee "$d/start.log" || status=$?
-          [ "$status" = 0 ] || { echo "the start check ended with $status"; exit 1; }
+          # Exit 4 is "no picture shown": with an upscaler chosen the start check's cleared pictures are not counted as shown (SGSR 2 does the same).
+          [ "$status" = 0 ] || [ "$status" = 4 ] || { echo "the start check ended with $status"; exit 1; }
           if grep -q 'VK-LIVE-ERR' "$d/start.log"; then grep 'VK-LIVE-ERR' "$d/start.log" | sort | uniq -c | head -n 20; exit 1; fi
           grep -e '^\[fsr3\]' -e 'FSR 3' "$d/start.log" || true
           python3 -X utf8 -I tools/check_fsr3_start_log.py "$d/start.log"

@@ -4,7 +4,21 @@
 
 #include <volk.h>
 
+#include <cstdio>
 #include <vector>
+
+namespace {
+
+// A call that made or allocated something and was refused: the first thing FidelityFX's context creation reports is one error code for
+// all of them, so the name and the result are logged here.
+VkResult nebula_ffx_checked(const char* name, VkResult result) {
+    if (result != VK_SUCCESS) {
+        std::fprintf(stderr, "[fsr3] vk%s returned %d\n", name, static_cast<int>(result));
+    }
+    return result;
+}
+
+}  // namespace
 
 extern "C" {
 
@@ -12,19 +26,19 @@ VKAPI_ATTR VkResult VKAPI_CALL nebula_ffx_vkAcquireNextImageKHR(VkDevice device,
     return vkAcquireNextImageKHR(device, swapchain, timeout, semaphore, fence, pImageIndex);
 }
 VKAPI_ATTR VkResult VKAPI_CALL nebula_ffx_vkAllocateCommandBuffers(VkDevice device, const VkCommandBufferAllocateInfo* pAllocateInfo, VkCommandBuffer* pCommandBuffers) {
-    return vkAllocateCommandBuffers(device, pAllocateInfo, pCommandBuffers);
+    return nebula_ffx_checked("AllocateCommandBuffers", vkAllocateCommandBuffers(device, pAllocateInfo, pCommandBuffers));
 }
 VKAPI_ATTR VkResult VKAPI_CALL nebula_ffx_vkAllocateDescriptorSets(VkDevice device, const VkDescriptorSetAllocateInfo* pAllocateInfo, VkDescriptorSet* pDescriptorSets) {
-    return vkAllocateDescriptorSets(device, pAllocateInfo, pDescriptorSets);
+    return nebula_ffx_checked("AllocateDescriptorSets", vkAllocateDescriptorSets(device, pAllocateInfo, pDescriptorSets));
 }
 VKAPI_ATTR VkResult VKAPI_CALL nebula_ffx_vkAllocateMemory(VkDevice device, const VkMemoryAllocateInfo* pAllocateInfo, const VkAllocationCallbacks* pAllocator, VkDeviceMemory* pMemory) {
-    return vkAllocateMemory(device, pAllocateInfo, pAllocator, pMemory);
+    return nebula_ffx_checked("AllocateMemory", vkAllocateMemory(device, pAllocateInfo, pAllocator, pMemory));
 }
 VKAPI_ATTR VkResult VKAPI_CALL nebula_ffx_vkBeginCommandBuffer(VkCommandBuffer commandBuffer, const VkCommandBufferBeginInfo* pBeginInfo) {
     return vkBeginCommandBuffer(commandBuffer, pBeginInfo);
 }
 VKAPI_ATTR VkResult VKAPI_CALL nebula_ffx_vkBindImageMemory(VkDevice device, VkImage image, VkDeviceMemory memory, VkDeviceSize memoryOffset) {
-    return vkBindImageMemory(device, image, memory, memoryOffset);
+    return nebula_ffx_checked("BindImageMemory", vkBindImageMemory(device, image, memory, memoryOffset));
 }
 VKAPI_ATTR void VKAPI_CALL nebula_ffx_vkCmdBeginRenderPass(VkCommandBuffer commandBuffer, const VkRenderPassBeginInfo* pRenderPassBegin, VkSubpassContents contents) {
     vkCmdBeginRenderPass(commandBuffer, pRenderPassBegin, contents);
@@ -57,43 +71,43 @@ VKAPI_ATTR void VKAPI_CALL nebula_ffx_vkCmdSetViewport(VkCommandBuffer commandBu
     vkCmdSetViewport(commandBuffer, firstViewport, viewportCount, pViewports);
 }
 VKAPI_ATTR VkResult VKAPI_CALL nebula_ffx_vkCreateBuffer(VkDevice device, const VkBufferCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkBuffer* pBuffer) {
-    return vkCreateBuffer(device, pCreateInfo, pAllocator, pBuffer);
+    return nebula_ffx_checked("CreateBuffer", vkCreateBuffer(device, pCreateInfo, pAllocator, pBuffer));
 }
 VKAPI_ATTR VkResult VKAPI_CALL nebula_ffx_vkCreateCommandPool(VkDevice device, const VkCommandPoolCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkCommandPool* pCommandPool) {
-    return vkCreateCommandPool(device, pCreateInfo, pAllocator, pCommandPool);
+    return nebula_ffx_checked("CreateCommandPool", vkCreateCommandPool(device, pCreateInfo, pAllocator, pCommandPool));
 }
 VKAPI_ATTR VkResult VKAPI_CALL nebula_ffx_vkCreateDescriptorPool(VkDevice device, const VkDescriptorPoolCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDescriptorPool* pDescriptorPool) {
-    return vkCreateDescriptorPool(device, pCreateInfo, pAllocator, pDescriptorPool);
+    return nebula_ffx_checked("CreateDescriptorPool", vkCreateDescriptorPool(device, pCreateInfo, pAllocator, pDescriptorPool));
 }
 VKAPI_ATTR VkResult VKAPI_CALL nebula_ffx_vkCreateDescriptorSetLayout(VkDevice device, const VkDescriptorSetLayoutCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDescriptorSetLayout* pSetLayout) {
-    return vkCreateDescriptorSetLayout(device, pCreateInfo, pAllocator, pSetLayout);
+    return nebula_ffx_checked("CreateDescriptorSetLayout", vkCreateDescriptorSetLayout(device, pCreateInfo, pAllocator, pSetLayout));
 }
 VKAPI_ATTR VkResult VKAPI_CALL nebula_ffx_vkCreateFramebuffer(VkDevice device, const VkFramebufferCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkFramebuffer* pFramebuffer) {
-    return vkCreateFramebuffer(device, pCreateInfo, pAllocator, pFramebuffer);
+    return nebula_ffx_checked("CreateFramebuffer", vkCreateFramebuffer(device, pCreateInfo, pAllocator, pFramebuffer));
 }
 VKAPI_ATTR VkResult VKAPI_CALL nebula_ffx_vkCreateGraphicsPipelines(VkDevice device, VkPipelineCache pipelineCache, uint32_t createInfoCount, const VkGraphicsPipelineCreateInfo* pCreateInfos, const VkAllocationCallbacks* pAllocator, VkPipeline* pPipelines) {
-    return vkCreateGraphicsPipelines(device, pipelineCache, createInfoCount, pCreateInfos, pAllocator, pPipelines);
+    return nebula_ffx_checked("CreateGraphicsPipelines", vkCreateGraphicsPipelines(device, pipelineCache, createInfoCount, pCreateInfos, pAllocator, pPipelines));
 }
 VKAPI_ATTR VkResult VKAPI_CALL nebula_ffx_vkCreateImage(VkDevice device, const VkImageCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkImage* pImage) {
-    return vkCreateImage(device, pCreateInfo, pAllocator, pImage);
+    return nebula_ffx_checked("CreateImage", vkCreateImage(device, pCreateInfo, pAllocator, pImage));
 }
 VKAPI_ATTR VkResult VKAPI_CALL nebula_ffx_vkCreateImageView(VkDevice device, const VkImageViewCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkImageView* pView) {
-    return vkCreateImageView(device, pCreateInfo, pAllocator, pView);
+    return nebula_ffx_checked("CreateImageView", vkCreateImageView(device, pCreateInfo, pAllocator, pView));
 }
 VKAPI_ATTR VkResult VKAPI_CALL nebula_ffx_vkCreatePipelineLayout(VkDevice device, const VkPipelineLayoutCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkPipelineLayout* pPipelineLayout) {
-    return vkCreatePipelineLayout(device, pCreateInfo, pAllocator, pPipelineLayout);
+    return nebula_ffx_checked("CreatePipelineLayout", vkCreatePipelineLayout(device, pCreateInfo, pAllocator, pPipelineLayout));
 }
 VKAPI_ATTR VkResult VKAPI_CALL nebula_ffx_vkCreateRenderPass(VkDevice device, const VkRenderPassCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkRenderPass* pRenderPass) {
-    return vkCreateRenderPass(device, pCreateInfo, pAllocator, pRenderPass);
+    return nebula_ffx_checked("CreateRenderPass", vkCreateRenderPass(device, pCreateInfo, pAllocator, pRenderPass));
 }
 VKAPI_ATTR VkResult VKAPI_CALL nebula_ffx_vkCreateSemaphore(VkDevice device, const VkSemaphoreCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkSemaphore* pSemaphore) {
-    return vkCreateSemaphore(device, pCreateInfo, pAllocator, pSemaphore);
+    return nebula_ffx_checked("CreateSemaphore", vkCreateSemaphore(device, pCreateInfo, pAllocator, pSemaphore));
 }
 VKAPI_ATTR VkResult VKAPI_CALL nebula_ffx_vkCreateShaderModule(VkDevice device, const VkShaderModuleCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkShaderModule* pShaderModule) {
-    return vkCreateShaderModule(device, pCreateInfo, pAllocator, pShaderModule);
+    return nebula_ffx_checked("CreateShaderModule", vkCreateShaderModule(device, pCreateInfo, pAllocator, pShaderModule));
 }
 VKAPI_ATTR VkResult VKAPI_CALL nebula_ffx_vkCreateSwapchainKHR(VkDevice device, const VkSwapchainCreateInfoKHR* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkSwapchainKHR* pSwapchain) {
-    return vkCreateSwapchainKHR(device, pCreateInfo, pAllocator, pSwapchain);
+    return nebula_ffx_checked("CreateSwapchainKHR", vkCreateSwapchainKHR(device, pCreateInfo, pAllocator, pSwapchain));
 }
 VKAPI_ATTR void VKAPI_CALL nebula_ffx_vkDestroyCommandPool(VkDevice device, VkCommandPool commandPool, const VkAllocationCallbacks* pAllocator) {
     vkDestroyCommandPool(device, commandPool, pAllocator);
