@@ -59,5 +59,8 @@ native_test(native_frame_list_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/frame_lis
 native_test(native_cutscene_skip_bound_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/cutscene_skip_bound_tests.cpp")
 # The load's slices by a fixed count of work (P-260, header only).
 native_test(native_load_slice_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/load_slice_tests.cpp")
+# The scene query's ray: the direction through a screen point and the sphere it meets first (P-294, header only).
+native_test(native_scene_point_ray_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/scene_point_ray_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/math/src/nebula_math.c")
 # The benchmark run screen's part names (header only).
 native_test(native_run_parts_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/run_parts_tests.cpp")
