@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-22 18:13.
+Written 2026-11-22 18:14.
 
 Steps landed: 5 of 138 (4%).
 
-Now: S0.1.5 since 17:14; ahead: nothing (the last of the five)
+Now: S0.1.1 to S0.1.5 landed (main fb2dfa855); R five steps done; next: S0.2.1
 
 In work now: Nothing started.
 
