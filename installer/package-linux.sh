@@ -87,7 +87,7 @@ if [ -z "$nomods" ]; then
     cp "$repo/platform/linux/dev.nebula.galaxy.desktop" "$repo/platform/linux/dev.nebula.galaxy.xml" "$pkg/"
 else
     # The menu entry without the .luma type and the nebula:// link (and no type file to install).
-    sed -e 's#^Exec=nebula-launch --import %u#Exec=nebula-launch#' -e '/^MimeType=/d' -e '/^# .*\.luma/d' \
+    sed -e 's#^Exec=nebula-launch --import %u#Exec=nebula-launch#' -e '/^MimeType=/d' -e '/^#/d' \
         "$repo/platform/linux/dev.nebula.galaxy.desktop" > "$pkg/dev.nebula.galaxy.desktop"
 fi
 printf '%s\n' "$version" > "$pkg/VERSION"

@@ -479,18 +479,23 @@ jobs:
             --data "$d/data" --settings "$d/settings" --crash-dumps "$d" 2>&1 | tee "$d/start.log"
           grep -c 'VK-LIVE-WARN' "$d/start.log" || true
           if grep -q 'VK-LIVE-ERR' "$d/start.log"; then grep 'VK-LIVE-ERR' "$d/start.log" | sort | uniq -c | head -n 20; exit 1; fi
-          # What the program needs of the player's system: the newest glibc and libstdc++ versions it asks for (the notes name them).
-          glibc=$(objdump -T "$nebula" | grep -o 'GLIBC_[0-9.]*' | sort -V | tail -n 1)
-          glibcxx=$(objdump -T "$nebula" | grep -o 'GLIBCXX_[0-9.]*' | sort -V | tail -n 1)
-          echo "nebula needs $glibc and ${glibcxx:-no GLIBCXX}"
-          for library in "$(dirname "$nebula")"/*.so*; do
-            [ -f "$library" ] || continue
-            printf '%s: %s %s\n' "$(basename "$library")" "$(objdump -T "$library" 2>/dev/null | grep -o 'GLIBC_[0-9.]*' | sort -V | tail -n 1)" \
-              "$(objdump -T "$library" 2>/dev/null | grep -o 'GLIBCXX_[0-9.]*' | sort -V | tail -n 1)"
+          # What the package needs of the player's system: the newest glibc and libstdc++ versions any of its files asks for (the
+          # notes name them), file by file in the log.
+          folder=$(dirname "$nebula")
+          all_glibc=; all_glibcxx=
+          for file in "$folder"/*; do
+            [ -f "$file" ] || continue
+            g=$(objdump -T "$file" 2>/dev/null | grep -o 'GLIBC_[0-9.]*' | sort -V | tail -n 1) || true
+            x=$(objdump -T "$file" 2>/dev/null | grep -o 'GLIBCXX_[0-9.]*' | sort -V | tail -n 1) || true
+            [ -z "$g$x" ] || printf '%s: %s %s\n' "$(basename "$file")" "$g" "$x"
+            all_glibc="$all_glibc $g"; all_glibcxx="$all_glibcxx $x"
           done
+          glibc=$(printf '%s\n' $all_glibc | sort -V | tail -n 1)
+          glibcxx=$(printf '%s\n' $all_glibcxx | sort -V | tail -n 1)
+          echo "the package needs $glibc and ${glibcxx:-no GLIBCXX}"
           {
-            echo "### The Linux program needs"
-            echo "glibc $glibc, libstdc++ ${glibcxx:-none} (objdump -T of nebula)"
+            echo "### The Linux package needs"
+            echo "glibc ${glibc#GLIBC_}, libstdc++ ${glibcxx:-none} (objdump -T of every file of the package)"
           } >> "$GITHUB_STEP_SUMMARY"
       - name: The mod kit (a pre-release has none, a release has it)
         shell: bash
