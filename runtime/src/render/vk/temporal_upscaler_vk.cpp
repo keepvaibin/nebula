@@ -229,7 +229,50 @@ VKAPI_ATTR VkResult VKAPI_CALL logged_create_compute_pipelines(VkDevice device, 
     return result;
 }
 
+// The same for the calls that make something: the backend names none of them when it gives up.
+#define NEBULA_FFX_LOGGED_CREATE(Name, InfoType, HandleType)                                                                       \
+    PFN_vk##Name g_##Name = nullptr;                                                                                              \
+    VKAPI_ATTR VkResult VKAPI_CALL logged_##Name(VkDevice device, const InfoType* info, const VkAllocationCallbacks* allocator, \
+                                                 HandleType* handle) {                                                           \
+        const VkResult result = g_##Name(device, info, allocator, handle);                                                      \
+        if (result != VK_SUCCESS) {                                                                                              \
+            std::cerr << "[fsr3] vk" #Name " returned " << static_cast<int>(result) << '\n';                                     \
+        }                                                                                                                        \
+        return result;                                                                                                           \
+    }
+NEBULA_FFX_LOGGED_CREATE(CreateBuffer, VkBufferCreateInfo, VkBuffer)
+NEBULA_FFX_LOGGED_CREATE(CreateImage, VkImageCreateInfo, VkImage)
+NEBULA_FFX_LOGGED_CREATE(CreateImageView, VkImageViewCreateInfo, VkImageView)
+NEBULA_FFX_LOGGED_CREATE(CreateSampler, VkSamplerCreateInfo, VkSampler)
+NEBULA_FFX_LOGGED_CREATE(CreateDescriptorPool, VkDescriptorPoolCreateInfo, VkDescriptorPool)
+NEBULA_FFX_LOGGED_CREATE(CreateDescriptorSetLayout, VkDescriptorSetLayoutCreateInfo, VkDescriptorSetLayout)
+NEBULA_FFX_LOGGED_CREATE(CreatePipelineLayout, VkPipelineLayoutCreateInfo, VkPipelineLayout)
+NEBULA_FFX_LOGGED_CREATE(CreateShaderModule, VkShaderModuleCreateInfo, VkShaderModule)
+NEBULA_FFX_LOGGED_CREATE(AllocateMemory, VkMemoryAllocateInfo, VkDeviceMemory)
+#undef NEBULA_FFX_LOGGED_CREATE
+
+struct LoggedCall {
+    const char* name;
+    PFN_vkVoidFunction* real;
+    PFN_vkVoidFunction logged;
+};
+
 VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL ffx_device_proc(VkDevice device, const char* name) {
+#define NEBULA_FFX_LOGGED_ENTRY(Name) \
+    {"vk" #Name, reinterpret_cast<PFN_vkVoidFunction*>(&g_##Name), reinterpret_cast<PFN_vkVoidFunction>(logged_##Name)}
+    static const LoggedCall calls[] = {
+        NEBULA_FFX_LOGGED_ENTRY(CreateBuffer),         NEBULA_FFX_LOGGED_ENTRY(CreateImage),
+        NEBULA_FFX_LOGGED_ENTRY(CreateImageView),      NEBULA_FFX_LOGGED_ENTRY(CreateSampler),
+        NEBULA_FFX_LOGGED_ENTRY(CreateDescriptorPool), NEBULA_FFX_LOGGED_ENTRY(CreateDescriptorSetLayout),
+        NEBULA_FFX_LOGGED_ENTRY(CreatePipelineLayout), NEBULA_FFX_LOGGED_ENTRY(CreateShaderModule),
+        NEBULA_FFX_LOGGED_ENTRY(AllocateMemory)};
+#undef NEBULA_FFX_LOGGED_ENTRY
+    for (const LoggedCall& call : calls) {
+        if (std::strcmp(name, call.name) == 0) {
+            *call.real = vkGetDeviceProcAddr(device, name);
+            return *call.real != nullptr ? call.logged : nullptr;
+        }
+    }
     if (std::strcmp(name, "vkCreateComputePipelines") == 0) {
         g_create_compute_pipelines = reinterpret_cast<PFN_vkCreateComputePipelines>(vkGetDeviceProcAddr(device, name));
         return g_create_compute_pipelines != nullptr ? reinterpret_cast<PFN_vkVoidFunction>(logged_create_compute_pipelines) : nullptr;
@@ -283,6 +326,12 @@ public:
         FfxErrorCode result = ffxFsr3UpscalerContextCreate(&context_, &description);
         if (result != FFX_OK) {
             std::cerr << "[fsr3] context creation failed: " << result << '\n';
+            VkPhysicalDeviceMemoryProperties memory{};
+            vkGetPhysicalDeviceMemoryProperties(physical, &memory);
+            for (uint32_t i = 0; i < memory.memoryTypeCount; ++i) {
+                std::cerr << "[fsr3] memory type " << i << ": flags 0x" << std::hex << memory.memoryTypes[i].propertyFlags << std::dec
+                          << " heap " << memory.memoryTypes[i].heapIndex << '\n';
+            }
             return false;
         }
         context_created_ = true;
