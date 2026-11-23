@@ -14,14 +14,14 @@
     "menu-key-icons",
     "talk-balloon-edge",
     "lens-flare-hidden",
+    "flare-window-phantom",
+    "flare-window-stardust",
+    "flare-window-eggstar",
     "luigi-stages",
     "save-files",
     "save-files-again",
     "save-newer",
     "save-slow-exit",
-    "save-slow-exit-again",
-    "flare-window-phantom",
-    "flare-window-stardust",
-    "flare-window-eggstar"
+    "save-slow-exit-again"
   ]
 }
