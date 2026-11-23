@@ -515,6 +515,22 @@ class MendAheadTest(AheadBase):
         self.assertEqual(code, 1)
         self.assertIn("The mend waits for no step in work", text)
 
+    def test_a_mend_opened_for_a_repair_lets_the_step_the_tool_gives_next_be_written_on_the_repairs_branch(self):
+        """The trial's M-003: a repair waited for a mend and the agent sat idle; the step the tool gives after the repair (A.1 is blocked here, so
+        C.1) is written meanwhile."""
+        self.t.run(["blocked", "A.1", "to free the folder"], expect=0)
+        lv.add_repair(self.t.live, "nightly", "fail", "build/windows-asan", evidence="x", note="the sanitizer build refuses the folder")
+        self.t.run(["start", "R-001"], expect=0)
+        self.t.commit("A.1", "R-001: the work so far")
+        tip = self.rev("HEAD")
+        self.open_mend("R-001", "the build script")
+        code, text = self.t.run(["ahead"])
+        self.assertEqual(code, 0, text)
+        self.assertIn("AHEAD: C.1", text)
+        self.assertEqual(self.entry()["base"], tip, "on top of the repair's branch")
+        self.assertEqual(self.on(), "native/C.1")
+        self.assertEqual(self.t.run(["land", "R-001"])[0], 1, "and the repair is not landed while the mend is open")
+
     def test_the_mend_closed_the_ordinary_refusal_is_back(self):
         code, text = self.t.run(["ahead"])
         self.assertEqual(code, 1)

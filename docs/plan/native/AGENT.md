@@ -107,7 +107,8 @@ Every step is built on the one before it, and nothing reaches main that its land
    bit was left empty): that is why you need not guess which ones to run. What it cannot run it names, as `not
    proven here` (GitHub's Linux, Mac and sanitizer jobs and the unit tests only they build): a name there is
    not a pass. `PLAN check --no-units` is the quick form for while you write; run the whole one before you
-   land, and again after any change that follows a failure of it.
+   land (as a background command with a time limit of 600000 ms, as the build is), and again after any change
+   that follows a failure of it.
 6. Audit it before the machine does. Read your whole change once, line by line (`git diff origin/main`), as a
    reviewer who did not write it: each of the four renderers has its part; nothing of the old path is left
    that the card removes; nothing is changed that the card does not name; every new text is in 14 languages;
