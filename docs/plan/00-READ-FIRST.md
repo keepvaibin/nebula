@@ -114,7 +114,7 @@ Given on 2026-11-17. Where the owner did not answer, the coordinator's recommend
 |---|---|
 | A 59.94 Hz display | The game may lock to it (0.1% slower, as the console was). Tolerance 0.2%, no wider |
 | When a device cannot hold 120 | **Do not switch to 60 by itself.** That feels wrong to a player and is not how good games behave. The answer is performance: the engine has to be fast enough that devices hold their target. Section 6 of Agent 1's plan says what replaces the governors |
-| The default on a 120 Hz display | Not answered. Recommendation stands: once the measures hold, a 120 Hz display starts at 120 |
+| The default frame rate | Decided 11-22 (the owner: "should be 60fps."): 60 on every system, a player chooses a higher rate. The earlier recommendation, a 120 Hz display starting at 120, is withdrawn |
 | The proof targets | Accepted (section 4.3) |
 
 ### How you work

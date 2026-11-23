@@ -899,7 +899,7 @@ Words used here: a "block" is a model's joints in the frame list (in the world, 
 | P-156 | Every presented picture recomputes on the CPU the eye-space matrices and normals of every draw (view times joint, weighted sums, inverse transpose, billboards); every unregistered material row is re-blended between the two steps at each picture; the sky is centred on the main camera in a mirror copy. | One GPU pass makes each picture's rows from joints uploaded once; culling by a bound over both steps; the sky follows each view. | R5.8 |
 | P-144 | Each animated model's joint matrices are copied twice per frame after the skeleton is evaluated: into the model's pose, then into the frame's arena. | The game writes a block's joints once a step into the list; the model's pose for game reads stays the game's. | R5.8 |
 | P-046 | Ring-run merging patches matrix numbers and indices in place in write-combined upload memory, scattered partial writes the walker avoids elsewhere, in every walk. | A ring run names each joining draw's first matrix through an instance row; the run's vertices are written once by their site. | R5.8 |
-| I-003 | Each in-between picture is a full CPU walk and a full GPU frame. | Recorded passes replayed with a new rows slice (E6b); this package supplies the rows buffer the passes read. The GPU work stays a full frame. | G2.8 |
+| I-003 | Each in-between picture is a full CPU walk and a full GPU frame. | Recorded passes replayed with a new rows slice (E6b); this package supplies the rows buffer the passes read. The GPU work stays a full frame. | G2.8 (G2.8 also closes P-318 where G2.5's jam rule left it advanced) |
 
 
 ---

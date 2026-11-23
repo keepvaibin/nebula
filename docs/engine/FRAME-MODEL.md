@@ -487,7 +487,7 @@ it. Pile A: the foundation does not touch its code; it comes after. Where this d
 | P-190: NormalMapBase remakes its normal maps and its lighting gradient on the CPU | B | F4, E3 step 2, its light in step 6 | the texture in final form at the cook; the light on the GPU from the step's light table | the inventory's row |
 | P-191: what the game runs follows the screen's shape (`ClippingJudge`) | C | after F7 (file 08 5.H.2) | every actor runs every step, or one run volume for every screen; behind the switch | the owner's decision of 11-18 18:18; changes the replay's reference once |
 | P-185, P-186, P-187, P-188, P-189, P-192: the bloom and blur's 1.333 on a wide screen, the sound sequences' byte order, 16-bit text codes, the 16-bit particle index, table fields by column hash, shared counts and id widths | A | after the foundation (file 08 E) | the inventory's lines say each one's form | P-192 is file 08 5.H.3 |
-| P-193: surround output by a written law | A | after the foundation (file 08 E, with the sound work) | the law before the code (file 08 5.H.5) | the inventory's section 4 holds what it starts from |
+| P-193: surround output by a written law | A | after the foundation (file 08 E, with the sound work); the native plan places it at steps G6.2 and G6.7, orders 28 and 29, directly after the tablet's pacing steps G2.1 to G2.5 (the owner, 11-22 and 11-23) | the law before the code (file 08 5.H.5) | the inventory's section 4 holds what it starts from |
 
 Of the render path as read for this file (1.9), nothing falls outside P-022, E3, E4, E6b and the step's threading: the
 three new rows fall in E4 and F7. The inventory (`CONSOLE-FREE.md`, 11-18) added P-184 to P-194: three in E3, P-191
@@ -1590,8 +1590,10 @@ at the picture's moment; every platform does the same or says on screen why not.
    documentation, else recorded with no per-draw arithmetic; a pass none of whose read versions changes with `t` (E4's
    versions say this exactly) is kept from the real frame, not drawn again. Each is measured per pass on the tablet
    first.
-9. Defaults (6.7). A 120 Hz display starts at 120 once the measures hold (P-042, the owner's recommendation); every
-   setting on these pages shows only where it acts.
+9. Defaults (6.7). Decided 11-22 (the owner: "should be 60fps."): the default stays 60 on every system and a player
+   chooses a higher rate (P-042); the Android fall-back and the surface vote read the step rate and not the literal 61;
+   every setting on these pages shows only where it acts. The earlier recommendation, a 120 Hz display starting at 120,
+   is withdrawn.
 
 **Rows.**
 
@@ -1603,11 +1605,11 @@ at the picture's moment; every platform does the same or says on screen why not.
 | I-005, I-006, I-007, I-012 | a display model per platform; the Linux clock; the Apple display link; variable refresh told or measured unhidden; the timeline on every platform | 3 |
 | P-312 (M2), P-317 (T6) | a picture at the first refresh after its slot on Direct3D; Android's lead down to what the held clock allows | 3 |
 | P-314 (M4) | no closing spin where a display time is asked | 4 |
-| I-010, P-315 (T4), P-316 (T5), P-318 (T3) | one arbiter on what is shown, the clock held, capped pictures placed evenly | 5 |
+| I-010, P-315 (T4), P-316 (T5), P-318 (T3) | one arbiter on what is shown, the clock held, capped pictures placed evenly (P-318 closes at landing 8 where the render thread's time for a picture, not the arbiter, keeps a tour stop off the slot: the native plan's G2.5, "a rule against a jam") | 5 |
 | P-078, P-163 | the pointer, the cursor and a mod's look read at the picture | 6 |
 | I-014 | every cut and warp stated; `camera_epoch` read by the host | 7 |
 | I-003 | the cost of a picture (with E3 step 5 and E4) | 8 |
-| P-042 | the default at 120 | 9 |
+| P-042 | the default stays 60 (decided 11-22); the Android fall-back and the vote on the step rate | 9 |
 | P-311 (M1), P-034 | the after-measure of aba64e331 on the PC; P-034's start check in the Mac job | 3 |
 | P-313 (M3) | traced with the timeline at a scene restart on Vulkan; fixed where it lies | 3 |
 | P-319 (T7) | the bloom's share on the tablet: E4's after-scene instance and the phone setting (2.15, landing 6) | E4 |

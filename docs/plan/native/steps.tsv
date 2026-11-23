@@ -10,29 +10,29 @@ order	step	package	title	package_needs	card_file	state	commit
 9	S0.2.4	S0.2	Landing B, part 2: the talk balloon	S0.1	03-NATIVE-STAGE-0.md	landed	2423dde4f
 10	S0.2.5	S0.2	Landing B, part 3: the lens flare	S0.1	03-NATIVE-STAGE-0.md	landed	21ccecf7b
 11	S0.2.6	S0.2	Landing B, part 4: the question-and-answer path is deleted	S0.1	03-NATIVE-STAGE-0.md	landed	3eaa95375
-12	G6.2	G6	Sends and sound settings as typed records (P-221, P-222)	S0.1	05-NATIVE-LANE-G.md	open	
-13	G6.7	G6	The surround law (P-193)	S0.1	05-NATIVE-LANE-G.md	open	
-14	S0.3.1	S0.3	Search main for what the rows name	S0.1	03-NATIVE-STAGE-0.md	open	
-15	S0.3.2	S0.3	Remove what is left	S0.1	03-NATIVE-STAGE-0.md	open	
-16	R1.1	R1	P-052: the renderers' own pipelines at start	S0.2	04-NATIVE-LANE-R.md	open	
-17	R1.2	R1	P-010: a stage's pipelines made while it loads, a draw never compiles	S0.2	04-NATIVE-LANE-R.md	open	
-18	R1.3	R1	N-1067: the present gate waits only on a load screen	S0.2	04-NATIVE-LANE-R.md	open	
-19	R1.4	R1	P-065 (Metal): the renderer's own shader texts compiled at build	S0.2	04-NATIVE-LANE-R.md	open	
-20	R2.1	R2	A target is read through its own slot; the walk-level counting test	S0.1	04-NATIVE-LANE-R.md	open	
-21	R2.2	R2	The sampler tables stop filling: P-048, P-056, P-066, P-061	S0.1	04-NATIVE-LANE-R.md	open	
-22	R2.3	R2	P-059: the cook decides "authored levels" once	S0.1	04-NATIVE-LANE-R.md	open	
-23	R2.4	R2	The player's swapped images	S0.1	04-NATIVE-LANE-R.md	open	
-24	R2.5	R2	P-216 and P-255's first part	S0.1	04-NATIVE-LANE-R.md	open	
-25	G1.1	G1	The record: the device's own motion, a pointer in the picture's terms, one fixed space for speed	S0.2	05-NATIVE-LANE-G.md	open	
-26	G1.2	G1	Connection, language, rumble and battery, behaviour by input	S0.2	05-NATIVE-LANE-G.md	open	
-27	G1.3	G1	Sticks: one radial dead zone, the Nunchuk's centre	S0.2	05-NATIVE-LANE-G.md	open	
-28	G1.4	G1	Presses latched between reads	S0.2	05-NATIVE-LANE-G.md	open	
-29	G1.5	G1	Windows: the controller worker and the pointer buttons; the parts of P-244 left	S0.2	05-NATIVE-LANE-G.md	open	
-30	G2.1	G2	Landing 1: a sequence starts at its arrival; the step keeps its due times	S0.2,G1	05-NATIVE-LANE-G.md	open	
-31	G2.2	G2	Landing 2: the lead at whole multiples of 60 Hz	S0.2,G1	05-NATIVE-LANE-G.md	open	
-32	G2.3	G2	Landing 3: a display model, one platform at a time	S0.2,G1	05-NATIVE-LANE-G.md	open	
-33	G2.4	G2	Landing 4: no closing spin where a display time is asked	S0.2,G1	05-NATIVE-LANE-G.md	open	
-34	G2.5	G2	Landing 5: one arbiter, the clock held, the heat input	S0.2,G1	05-NATIVE-LANE-G.md	open	
+12	S0.3.1	S0.3	Search main for what the rows name	S0.1	03-NATIVE-STAGE-0.md	open	
+13	S0.3.2	S0.3	Remove what is left	S0.1	03-NATIVE-STAGE-0.md	open	
+14	R1.1	R1	P-052: the renderers' own pipelines at start	S0.2	04-NATIVE-LANE-R.md	open	
+15	R1.2	R1	P-010: a stage's pipelines made while it loads, a draw never compiles	S0.2	04-NATIVE-LANE-R.md	open	
+16	R1.3	R1	N-1067: the present gate waits only on a load screen	S0.2	04-NATIVE-LANE-R.md	open	
+17	R1.4	R1	P-065 (Metal): the renderer's own shader texts compiled at build	S0.2	04-NATIVE-LANE-R.md	open	
+18	R2.1	R2	A target is read through its own slot; the walk-level counting test	S0.1	04-NATIVE-LANE-R.md	open	
+19	R2.2	R2	The sampler tables stop filling: P-048, P-056, P-066, P-061	S0.1	04-NATIVE-LANE-R.md	open	
+20	R2.3	R2	P-059: the cook decides "authored levels" once	S0.1	04-NATIVE-LANE-R.md	open	
+21	R2.4	R2	The player's swapped images	S0.1	04-NATIVE-LANE-R.md	open	
+22	R2.5	R2	P-216 and P-255's first part	S0.1	04-NATIVE-LANE-R.md	open	
+23	G2.1	G2	Landing 1: a sequence starts at its arrival; the step keeps its due times	S0.2	05-NATIVE-LANE-G.md	open	
+24	G2.2	G2	Landing 2: the lead at whole multiples of 60 Hz	S0.2	05-NATIVE-LANE-G.md	open	
+25	G2.3	G2	Landing 3: a display model, one platform at a time	S0.2	05-NATIVE-LANE-G.md	open	
+26	G2.4	G2	Landing 4: no closing spin where a display time is asked	S0.2	05-NATIVE-LANE-G.md	open	
+27	G2.5	G2	Landing 5: one arbiter, the clock held, the heat input	S0.2	05-NATIVE-LANE-G.md	open	
+28	G6.2	G6	Sends and sound settings as typed records (P-221, P-222)	S0.1	05-NATIVE-LANE-G.md	open	
+29	G6.7	G6	The surround law (P-193)	S0.1	05-NATIVE-LANE-G.md	open	
+30	G1.1	G1	The record: the device's own motion, a pointer in the picture's terms, one fixed space for speed	S0.2	05-NATIVE-LANE-G.md	open	
+31	G1.2	G1	Connection, language, rumble and battery, behaviour by input	S0.2	05-NATIVE-LANE-G.md	open	
+32	G1.3	G1	Sticks: one radial dead zone, the Nunchuk's centre	S0.2	05-NATIVE-LANE-G.md	open	
+33	G1.4	G1	Presses latched between reads	S0.2	05-NATIVE-LANE-G.md	open	
+34	G1.5	G1	Windows: the controller worker and the pointer buttons; the parts of P-244 left	S0.2	05-NATIVE-LANE-G.md	open	
 35	G2.6	G2	Landing 6: the pointer and the menu cursor at the picture's moment	S0.2,G1	05-NATIVE-LANE-G.md	open	
 36	G2.7	G2	Landing 7: every camera cut and warp stated; `camera_epoch` read by the host	S0.2,G1	05-NATIVE-LANE-G.md	open	
 37	R3.1	R3	The cook writes `CBLK` and `CROW`; a load-time check proves them	R2,S0.3	04-NATIVE-LANE-R.md	open	

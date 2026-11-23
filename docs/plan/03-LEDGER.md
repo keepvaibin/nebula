@@ -151,7 +151,7 @@ The title is the first line of the finding. The finding's full text, with file a
 | P-033 | (wrong behaviour, macOS and iOS) The Apple display clock locks the game to the display under the same loose 3 % tolerance as Android. |  |
 | P-034 | (performance, macOS and iOS) The Apple display link is never stopped. |  |
 | P-041 | (console-era remnant) Several host and renderer timers count frames or presents but are written and named as time, so they run 2-4x faster at 120-240  |  |
-| P-042 | (console-era remnant, a decision for the owner) The default frame-rate setting is 60, the game step, on every platform. | Owner did not answer; the recommendation stands: a 120 Hz display starts at 120 once the measures hold. |
+| P-042 | (console-era remnant; decided 11-22: stays 60) The default frame-rate setting is 60, the game step, on every platform. | Decided 11-22 (the owner: "should be 60fps."): the default stays 60 on every system and a player chooses a higher rate. |
 | P-069 | performance. Android's performance-hint session is told the busiest thread's CPU time as the "actual work duration". The API asks for the wall time of |  |
 | P-078 | wrong behaviour (suspected). The star pointer and the mod look are sampled once per game step. Above 60 Hz the pointer the player aims with moves at 6 |  |
 | P-147 | (console-era remnant, small): the mod log notice counts its line lifetimes in game frames, not in time. |  |

@@ -257,7 +257,7 @@ The camera code states every cut; the code that warps or respawns an object stat
 
 ### 6.7 Defaults and settings
 
-- A 120 Hz display starts at 120 once the gate's measures hold (P-042).
+- The default stays 60 on every system and a player chooses a higher rate (P-042; decided 11-22, the owner: "should be 60fps.").
 - The 59.94 lock as decided (E6a).
 - Every setting on these pages is shown only where it does something (see E9).
 

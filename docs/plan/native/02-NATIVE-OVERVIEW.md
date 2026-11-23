@@ -70,13 +70,18 @@ The earlier order put four things in places that would have forced work to be do
    Main still writes and carries data that only shelved work read (N-1053, N-1054). The new material and frame
    records should not be designed around fields nothing reads.
 
-5. **The two surround steps come right after S0.2 (G6.2, G6.7).**
+5. **The two surround steps come after the tablet's pacing steps (G6.2, G6.7).**
    The owner (11-22) wants 3.1, 5.1 and 7.1 in the game's options and wants to try them early. G6.7 (the surround
    law and the player's Speakers choice) needs G6.2 (the sends named as records) and nothing else; both need nothing
-   of S0.2 or S0.3 (their cards name no file those packages change), so they stand directly after the last step of
-   S0.2: orders 12 and 13 of `steps.tsv`. The rest of G6 keeps its place and waits for them (G6.1 at 115, G6.3 to
-   G6.6 at 116 to 119, G6.8 at 120). It does not go into a second beta: the owner (11-22): "just beta 1 so far", no
-   second beta is planned.
+   of S0.2, S0.3, R1, R2 or G2 landings 1 to 5 (their cards name no file those steps change but the settings' texts, which G6.7 reads as
+   they stand). The owner of 11-23 ("move all android pacing issues and any dependencies on native it might have
+   to before audio ... for perfect modernization") put the tablet's pacing steps before them: G2.1 to G2.5 stand at
+   orders 23 to 27 and G6.2 and G6.7 at 28 and 29 of `steps.tsv`. His reason: the tablet's uneven 120 Hz is what he
+   meets when he plays. R1 and R2 stand before G2.1 because a pipeline made inside a draw and a sampler table that
+   starts again would be counted by the pacing measures as late moments; G1 stands after them because only G2.6
+   needs it (G1.1). The rest of G6 keeps its place and waits for the two (G6.1 at 115, G6.3 to G6.6 at 116 to 119,
+   G6.8 at 120). It does not go into a second beta: the owner (11-22): "just beta 1 so far", no second beta is
+   planned.
 
 Three smaller placements with the same reason:
 
@@ -134,7 +139,7 @@ P-260, P-214, P-261 (and the parts of P-219, P-293 and P-295 that belong to the 
 - For a player: nothing visible; slightly smaller files and frame data.
 - Proof: the cook's output and the frame list no longer hold them; pictures unchanged.
 
-**G6.2 and G6.7 stand here, before S0.3** (orders 12 and 13; their package G6 is described under Lane G). G6.2: a
+**G6.2 and G6.7 stand after the tablet's pacing steps** (orders 28 and 29, after G2.1 to G2.5; their package G6 is described under Lane G). G6.2: a
 note's sends and the sound settings as typed records. G6.7: the surround law, and one "Speakers" setting in the sound
 options (Auto, Mono, Stereo, Encoded stereo, 3.1, 5.1, 7.1; a layout the device has no speakers for is not offered).
 - For a player: real surround on a device with more speakers, chosen or automatic; two-channel sound as made.
@@ -222,11 +227,13 @@ P-077, P-083, P-220, P-288.
 - For a player: the same feel on every pad and screen; no dropped presses; no input stalls on a busy radio.
 
 **G2 How a picture reaches the display.** Rows: I-002, I-004, I-005, I-006, I-007, I-010, I-012, I-013, I-014,
-N-1084, P-034, P-042, P-078, P-163, P-274, P-311 to P-318, P-019, P-281.
+N-1084, P-034, P-042, P-078, P-163, P-274, P-311 to P-318, P-019, P-281, P-359, P-360.
 - For a player: even frame pacing at every refresh rate, less delay between a step and its picture, one governor
   that lowers resolution before it drops pictures, a pointer that moves at the display's rate.
-- Design: FRAME-MODEL 2.16, nine landings. Landings 1 to 7 are done while Lane R is in R1 to R4. Landing 8 comes
-  with R5 and R7 landing 2. Landing 9 (the default rate) is the last, after the measures hold.
+- Design: FRAME-MODEL 2.16, nine landings. Landings 1 to 5 (the tablet's pacing, orders 23 to 27) stand directly
+  after R1 and R2, before G1 and the surround steps; landings 6 and 7 stand at 35 and 36, after G1. Landing 8 comes
+  with R5 and R7 landing 2. Landing 9 (the default stays 60, the owner 11-22; the settings show only where they act)
+  is the last, after the measures hold.
 
 **G3 The game step on the cores.** Rows: P-040, P-146, N-1083, P-283, P-265, P-241.
 - One worker pool; results applied in list order, so the game is the same on one core or many. Loads are read
@@ -250,7 +257,7 @@ N-1084, P-034, P-042, P-078, P-163, P-274, P-311 to P-318, P-019, P-281.
 **G6 Sound.** Rows: P-186, P-221, P-222, P-223, P-224, P-227, P-228, P-225, P-226, P-271, P-219, P-193, P-037,
 P-071, P-072, P-286.
 - In this order: sends and settings as typed records (G6.2) and then the surround law with the player's Speakers
-  choice (G6.7), both directly after S0.2 (orders 12 and 13); then sequence data in host order; look-ups by map;
+  choice (G6.7), both at orders 28 and 29, after the tablet's pacing steps; then sequence data in host order; look-ups by map;
   bounds checked at load; streams filled by a reader thread; a stream's end told by the game clock; then the
   device threads.
 - For a player: no sound hitch from a drive read, no crackle on machines that need a larger buffer, real surround
@@ -283,14 +290,17 @@ onto the result. (not used: one agent does every step)
 
 | File | Lane R | Lane G | Who goes first |
 | --- | --- | --- | --- |
-| The four renderers' frame and present code | R7 | G2 landings 1 to 5 | G2, while R is in R1 to R4 |
-| `render_core.cpp` | R3, R7 | S0.2, G2 | S0.2, then G2, then R7 |
+| The four renderers' frame and present code | R1, R2.1, R2.2, R7 | G2 landings 1 to 5 | R1 and R2 (orders 14 to 22), then G2 landings 1 to 5 (23 to 27), then R7 |
+| `render_core.cpp` | R1.2, R3, R7 | S0.2, G2 | S0.2, then R1.2 (15), then G2 (23 to 27, 35, 36), then R3, R7 |
 | `Model.cpp` | R1, R5 | G3 landing 4 | R5 |
-| `FrameList.cpp`, `nebula_frame_list.h` | R2, R6, R7 | G2 landing 7, G3 landing 6 | different parts; whoever lands second moves |
-| `host_main.cpp` | R7 landing 7 | G2 landing 1, G3 landing 7 | G |
+| `FrameList.cpp`, `nebula_frame_list.h` | R3.2, R4, R4v.1, R5.1, R6.1, R7.1 | G2 landings 6 and 7, G3 landing 6 | G2.6 and G2.7 (35, 36) first; different parts; whoever lands second moves |
+| `host_main.cpp` | R7 landing 7 | G2 landings 1 and 3, G6.7, G1.1 and G1.4, G3 landing 7 | G, in the order of `steps.tsv` (23, 25, 29, 30, 33, 83), then R7.7 (100) |
+| `host_window_sdl.cpp` | none | G2.3 (event pump, surface hand-over), G1.1 and G1.4, G2.9 (the vote) | G2.3 (25), then G1 (30, 33), then G2.9 (135) |
 | The clipping files (`ClippingJudge`, `ClippingActorHolder`) | none | G3 landing 2, G5 | G3 |
 | `LensFlare.cpp`, the probe code in the renderers | none after S0.2 | S0.2 | S0.2, before R touches the renderers |
-| `native_settings.cpp`, `runtime_settings.*`, `settings_table.tsv`, `NebulaText.tsv`, `NebulaSettingsMenu.cpp` | none | G6.7 (the Speakers row), G7.3, G9.5 | G6.7 (order 13); G7.3 and G9.5 read its row as it stands |
+| `native_settings.cpp`, `runtime_settings.*`, `settings_table.tsv`, `NebulaText.tsv`, `NebulaSettingsMenu.cpp`, `settings_graphics_page.cpp` | none | G2.3 and G2.5 (texts for a Linux mark and a missed target; their cards name no file), G6.7 (the Speakers row), G1.2 (the language list), G7.3, G9.5, G2.9 (P-360's text) | G2.3 and G2.5 (orders 25, 27), then G6.7 (29), then G1.2 (31); G7.3, G9.5 and G2.9 read their rows as they stand |
+
+Checked against `steps.tsv` on 11-23 (the order of the tablet's pacing before the surround steps): G2 landings 1 to 5 stand at 23 to 27, before R7 (94 to 101); `render_core.cpp` goes S0.2 (6 to 11), R1.2 (15), G2 (23 to 27, 35, 36), then R3 and R7; G1.1 (30) stands before G2.6 (35); no need of any step is placed after the step itself (`plan.py` read all 138), and places 37 to 138 are the same as before.
 
 ## 6. Decisions settled here, so the design has no open ends
 
@@ -314,13 +324,15 @@ The design file disagrees with itself in a few places. These are the answers the
 1. **One reading to confirm or overrule (from the last agent):** "sound stays as it was made" was taken to mean
    the two-channel output is left unchanged, including the console's surround fold on stereo devices, and only the
    real surround output is reworked. This plan uses that reading.
-2. **The default frame rate** (P-042) is decided at G2 landing 9, after the measures hold. The design's
-   recommendation is 120 where the display offers it.
+2. **The default frame rate** (P-042): decided (you, 11-22: "should be 60fps."). It is 60 on every system and
+   a player chooses a higher rate. G2 landing 9 keeps the Android fall-back and the surface vote on the step rate
+   and makes each setting show only where it acts.
 3. **S0.2 changes two answers the game gets:** what the pointer is over and whether a talk balloon is hidden are
    computed from the world instead of from the picture. You decided this on 11-19. Recorded plays are recorded
    again once after it.
-4. **Surround comes early (the owner, 11-22).** G6.2 and G6.7 stand directly after S0.2, so the Speakers setting
-   and real 3.1, 5.1 and 7.1 output can be tried before the rest of the sound work. Not in a second beta (his words
+4. **Surround comes early (the owner, 11-22), after the tablet's pacing (11-23).** G6.2 and G6.7 stand at orders 28
+   and 29, directly after G2.1 to G2.5, so the Speakers setting and real 3.1, 5.1 and 7.1 output can be tried before
+   the rest of the sound work. Not in a second beta (his words
    of 11-22: "just beta 1 so far"). The setting replaces "Sound output" (Mono, Stereo, Surround): Surround becomes
    "Encoded stereo", the old key is read once, and a file that said `stereo` (the default every file wrote) becomes
    Auto: a player on a surround device who never touched the row gets the device's speakers.
