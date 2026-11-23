@@ -1,12 +1,13 @@
 # Nebula native plan: status
 
-Written 2026-11-23 08:10. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-23 08:11. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 10 of 138 (7%).
 
 Now: S0.2.6 in work since 08:10; ahead: nothing (the trial ends with S0.2.6)
 
-In work now: Nothing started.
+In work now:
+- S0.2.6 Landing B, part 4: the question-and-answer path is deleted (agent 1)
 
 ## Packages
 
