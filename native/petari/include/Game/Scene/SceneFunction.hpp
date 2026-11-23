@@ -1,6 +1,7 @@
 #include <stdint.h>
 #pragma once
 
+class LoadSlice;
 
 namespace MR {
     // Category ids index the scene's category tables (SceneNameObjListExecutor); every value has a table row.
@@ -234,7 +235,7 @@ public:
     static void executeDrawList2DMovie();
     static void createStageDataHolder();
     static void startActorPlacement();
-    static bool startActorPlacementStep(uint64_t deadline);
+    static bool startActorPlacementStep(LoadSlice& rSlice);
     static void initAfterScenarioSelected();
     static void initForNameObj();
     static void initForLiveActor();

@@ -25,8 +25,8 @@ void SceneFunction::startActorPlacement() {
     ::getSceneDataInitializer()->startActorPlacement();
 }
 
-bool SceneFunction::startActorPlacementStep(uint64_t deadline) {
-    return ::getSceneDataInitializer()->startActorPlacementStep(deadline);
+bool SceneFunction::startActorPlacementStep(LoadSlice& rSlice) {
+    return ::getSceneDataInitializer()->startActorPlacementStep(rSlice);
 }
 
 void SceneFunction::initAfterScenarioSelected() {

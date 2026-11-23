@@ -32,6 +32,20 @@ namespace {
         }
         return nullptr;
     }
+
+    // Whether the draw shows the box: its layout is drawn (LayoutActor::draw) and the box and every pane above it are
+    // visible (Ui::Layout::DrawRange skips a hidden pane with all below it).
+    bool isTextBoxDrawn(const LayoutActor* pActor, const Ui::TextBox* pTextBox) {
+        if (!MR::isExecuteDrawLayout(pActor)) {
+            return false;
+        }
+        for (const Ui::Pane* pPane = pTextBox; pPane != nullptr; pPane = pPane->GetParent()) {
+            if (!pPane->IsVisible()) {
+                return false;
+            }
+        }
+        return true;
+    }
 };  // namespace
 
 namespace MR {
@@ -71,6 +85,13 @@ namespace MR {
             pProcessor->mColorIndex = 0;
             pProcessor->mSoundIndex = 0;
             pProcessor->mAlphaCtrl.update();
+            // The text's sound tags whose characters have begun to show start now, in the step, where the draw would
+            // print them (P-214): the text walked as it is drawn, for a box the draw will show.
+            if (::isTextBoxDrawn(pActor, pTextBox)) {
+                pProcessor->mIsSoundPass = true;
+                pTextBox->PrintSilent();
+                pProcessor->mIsSoundPass = false;
+            }
         }
 
         Ui::Pane* pPane = getPane(pActor, pPaneName);

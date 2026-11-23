@@ -66,7 +66,7 @@ namespace {
 
 GalaxyMapController::GalaxyMapController()
     : LayoutActor("GalaxyMapController", true), mMap(), mMapBackground(), mPowerStarList(), mBackButton(), mWipe(), mCaptureTexture(), mMode(),
-      mWipeFrame(::sMapFadeinoutFrame) {
+      mWipeFrame(::sMapFadeinoutFrame), mCaptureDrawInfo(), mCaptureDue(false), mCaptureAsked(0), mCaptureRecorded(0) {
     lumacore::setClass(this, lumacore::kClassId< GalaxyMapController >);
 }
 
@@ -144,6 +144,12 @@ void GalaxyMapController::calcAnim() {
     mBackButton->calcAnim();
     mWipe->calcAnim();
     mMapSelectButton->calcAnim();
+
+    // The capture asked for in this step (exeReadyGame), readied after the step's own animation as the draw used to.
+    if (mCaptureDue) {
+        mCaptureDue = false;
+        prepareCapture();
+    }
 }
 
 void GalaxyMapController::draw() const {
@@ -158,28 +164,43 @@ void GalaxyMapController::draw() const {
     mMapSelectButton->draw();
     mMap->drawGalaxyInfo();
 
-    if (isNerve(GET_NERVE_ANON(GalaxyMapControllerReadyGame)) && MR::isFirstStep(this)) {
-        const_cast< GalaxyMapController* >(this)->capture();
+    // A capture the step asked for and readied: recorded once, however many steps ran before this draw.
+    if (mCaptureRecorded != mCaptureAsked) {
+        recordCapture();
     }
 
     mWipe->draw();
 }
 
-void GalaxyMapController::drawForCapture() {
+// The step's half of the capture: the layouts as the capture shows them, animated for its picture.
+void GalaxyMapController::prepareCapture() {
     killAllLayout();
     mMapBackground->appear();
     mMap->setModeCapture();
     mMap->movementForCapture();
 
-    Ui::DrawInfo drawInfo = Ui::DrawInfo();
+    mCaptureDrawInfo = Ui::DrawInfo();
 
-    MR::copyLayoutDrawInfoWithAspect(&drawInfo, mMap, true);
+    MR::copyLayoutDrawInfoWithAspect(&mCaptureDrawInfo, mMap, true);
     mMapBackground->calcAnim();
     mMap->calcAnim();
-    MR::calcAnimLayoutWithDrawInfo(mMapBackground, drawInfo);
-    mMap->calcAnimForCapture(drawInfo);
-    MR::drawLayoutWithDrawInfoWithoutProjectionSetup(mMapBackground, drawInfo);
-    mMap->drawForCapture(drawInfo);
+    MR::calcAnimLayoutWithDrawInfo(mMapBackground, mCaptureDrawInfo);
+    mMap->calcAnimForCapture(mCaptureDrawInfo);
+    ++mCaptureAsked;
+}
+
+// The draw's half: the readied layouts recorded into the capture's texture.
+void GalaxyMapController::recordCapture() const {
+    Mtx44 projectionMtx;
+    f32 halfHeight = MR::getScreenHeight() * 0.5f;
+    f32 halfWidth = NebulaFrameClock::cLayoutWidth * 0.5f;
+    NebulaMtxOrtho(projectionMtx, halfHeight, -halfHeight, -halfWidth, halfWidth, -1000.0f, 1000.0f);
+    Frame::targetBegin(mCaptureTexture->image(), mCaptureTexture->shareAcross(), mCaptureTexture->shareDown(), 0);
+    Frame::setOrthographic(projectionMtx);
+    MR::drawLayoutWithDrawInfoWithoutProjectionSetup(mMapBackground, mCaptureDrawInfo);
+    mMap->drawForCapture(mCaptureDrawInfo);
+    Frame::targetEnd(mCaptureTexture->image(), NEBULA_TARGET_RGB);
+    mCaptureRecorded = mCaptureAsked;
 }
 
 static const NebulaColor8 sWipeColor = {0, 0, 0, 255};
@@ -504,6 +525,7 @@ void GalaxyMapController::exeFadeout() {
 
 void GalaxyMapController::exeReadyGame() {
     if (MR::isFirstStep(this)) {
+        mCaptureDue = true;
         MR::balloonOffTalkDirector();
         killAllLayout();
         MR::activateGameSceneDraw3D();
@@ -618,15 +640,10 @@ void GalaxyMapController::setFaderParam(NebulaColor8 color, int frame) {
     mWipeFrame = frame;
 }
 
+// At init: readied and recorded at once.
 void GalaxyMapController::capture() {
-    Mtx44 projectionMtx;
-    f32 halfHeight = MR::getScreenHeight() * 0.5f;
-    f32 halfWidth = NebulaFrameClock::cLayoutWidth * 0.5f;
-    NebulaMtxOrtho(projectionMtx, halfHeight, -halfHeight, -halfWidth, halfWidth, -1000.0f, 1000.0f);
-    Frame::targetBegin(mCaptureTexture->image(), mCaptureTexture->shareAcross(), mCaptureTexture->shareDown(), 0);
-    Frame::setOrthographic(projectionMtx);
-    drawForCapture();
-    Frame::targetEnd(mCaptureTexture->image(), NEBULA_TARGET_RGB);
+    prepareCapture();
+    recordCapture();
 }
 
 namespace MR {

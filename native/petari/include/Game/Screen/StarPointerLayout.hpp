@@ -73,6 +73,11 @@ public:
     void changeLayout(StarPointerKind);
     bool isChanceToRumble() const;
     void hideBlur();
+    // What the draw shows, decided by the step (P-214): the pointer at all, and its decoration (the blur or the command
+    // stream). updateBlurShown hides the blur's points in the step when the draw will not show them.
+    bool isShown() const;
+    bool isDecorationShown() const;
+    void updateBlurShown();
     void resetSameNerve();
     void changeToStarPointer();
     void changeToHandPointer();

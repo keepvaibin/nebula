@@ -74,6 +74,9 @@ public:
     bool mIsText;
     bool mIsInfo;
     bool mNoCharSpace;
+    // True while the step walks the text (MR::nextStepTagProcessorRecursive, TextBox::PrintSilent): the sound tags are
+    // played there, never from the draw (P-214).
+    bool mIsSoundPass;
     CustomTagAlphaCtrl mAlphaCtrl;
     Ui::TextBox* mTextBox;
     u8 mPlayedSounds;

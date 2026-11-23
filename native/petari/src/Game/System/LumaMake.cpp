@@ -336,7 +336,8 @@ namespace luma {
                     {
                         // Made by a name a mod aliased: the alias's arguments over the place's (classes, "alias").
                         const luma::classes::AliasPlacing alias(pName, iter.mInfo, iter.mIndex);
-                        while (!pObject->initStep(iter, UINT64_MAX)) {
+                        LoadSlice whole = LoadSlice::whole();
+                        while (!pObject->initStep(iter, whole)) {
                         }
                     }
                     if (!placing) {

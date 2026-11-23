@@ -1,6 +1,6 @@
 #include <nebula_game_api.h>
-extern "C" const NebulaHostServices* nebula_host(void);
 #include "Game/Scene/StageDataHolder.hpp"
+#include "Game/NameObj/LoadSlice.hpp"
 #include "Game/NameObj/NameObjFactory.hpp"
 #include "Game/Scene/PlacementInfoOrdered.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
@@ -150,22 +150,25 @@ void StageDataHolder::initAfterScenarioSelected() {
 }
 
 void StageDataHolder::initPlacement() {
-    while (!initPlacementStep(UINT64_MAX)) {}
+    LoadSlice whole = LoadSlice::whole();
+    while (!initPlacementStep(whole)) {}
 }
 
-bool StageDataHolder::initPlacementStep(uint64_t deadline) {
+// The player counts one item of the slice; each list spends its own items.
+bool StageDataHolder::initPlacementStep(LoadSlice& rSlice) {
     while (mPlacementStage < 6u) {
         if (mPlacementStage == 0u) {
             MR::setInitializeStatePlacementPlayer();
             initPlacementMario();
+            rSlice.spend();
         } else {
             PlacementInfoOrdered* lists[] = {mCommonPriorityOrder, mScenarioPriorityOrder, mCommonNormalOrder, mScenarioNormalOrder, mAfterScenarioOrder};
             if (mPlacementStage <= 2u) MR::setInitializeStatePlacementHighPriority();
             else MR::setInitializeStatePlacement();
-            if (!lists[mPlacementStage - 1u]->initPlacementStep(deadline)) return false;
+            if (!lists[mPlacementStage - 1u]->initPlacementStep(rSlice)) return false;
         }
         ++mPlacementStage;
-        if (nebula_host()->clock_ns(nebula_host()->user) >= deadline) return mPlacementStage == 6u;
+        if (rSlice.isUsedUp()) return mPlacementStage == 6u;
     }
     return true;
 }

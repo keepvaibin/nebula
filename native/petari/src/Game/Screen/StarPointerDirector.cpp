@@ -52,6 +52,7 @@ void StarPointerDirector::update() {
         if (mStarPointerLayouts != nullptr) {
             getStarPointerLayout(channel)->movement();
             getStarPointerLayout(channel)->calcAnim();
+            getStarPointerLayout(channel)->updateBlurShown();
         }
     }
 

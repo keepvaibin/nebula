@@ -1,5 +1,4 @@
 #include <nebula_game_api.h>
-extern "C" const NebulaHostServices* nebula_host(void);
 #include "Game/System/NebulaLoadTrace.hpp"
 #include "Game/System/NebulaMods.hpp"
 #include "Game/System/LumaClasses.hpp"
@@ -9,6 +8,8 @@ extern "C" const NebulaHostServices* nebula_host(void);
 #include "Game/Map/PlanetMapCreator.hpp"
 #include "Game/NameObj/ModelChangableObjFactory.hpp"
 #include "Game/NameObj/NameObjFactory.hpp"
+#include "Game/NameObj/LoadSlice.hpp"
+#include "Game/Util/HashUtil.hpp"
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 
@@ -36,6 +37,11 @@ namespace {
     bool isAfterScenario(const PlacementInfoOrdered::Identifier& rIdentifier) {
         return rIdentifier.mShapeId == -1 && PlanetMapCreatorFunction::isLoadArchiveAfterScenarioSelected(rIdentifier.mName);
     }
+
+    // Equal identifiers (the same name and shape id) hash alike.
+    u32 hashIdentifier(const PlacementInfoOrdered::Identifier& rIdentifier) {
+        return MR::getHashCode(rIdentifier.mName) ^ (static_cast< u32 >(rIdentifier.mShapeId) * 0x9E3779B1u);
+    }
 };  // namespace
 
 s32 PlacementInfoOrdered::countAfterScenario(const Table* pInfo) {
@@ -49,10 +55,21 @@ s32 PlacementInfoOrdered::countAfterScenario(const Table* pInfo) {
     return count;
 }
 
-PlacementInfoOrdered::PlacementInfoOrdered(int count) : mIndexArray(), mIndexCount(), mSetArray(), mOrderedSetArray(), mCount(count) {
+PlacementInfoOrdered::PlacementInfoOrdered(int count)
+    : mIndexArray(), mIndexCount(), mSetArray(), mOrderedSetArray(), mCount(count), mSetSlots(), mSetSlotMask() {
     mIndexArray = new Index[count];
     mSetArray = new SameIdSet[count];
     mOrderedSetArray = new SameIdSet*[count];
+    // At most count sets: a table of at least twice that is never more than half full.
+    u32 size = 8;
+    while (size < 2 * static_cast< u32 >(count)) {
+        size *= 2;
+    }
+    mSetSlots = new s32[size];
+    mSetSlotMask = size - 1;
+    for (u32 i = 0; i < size; i++) {
+        mSetSlots[i] = -1;
+    }
 }
 
 void PlacementInfoOrdered::sort() {
@@ -87,10 +104,12 @@ void PlacementInfoOrdered::sort() {
 }
 
 void PlacementInfoOrdered::initPlacement() {
-    while (!initPlacementStep(UINT64_MAX)) {}
+    LoadSlice whole = LoadSlice::whole();
+    while (!initPlacementStep(whole)) {}
 }
 
-bool PlacementInfoOrdered::initPlacementStep(uint64_t deadline) {
+// One item of the slice for each placement made whole (an object's own initStep spends more for its pieces).
+bool PlacementInfoOrdered::initPlacementStep(LoadSlice& rSlice) {
     if (!mPlacementStarted) {
         MR::startInitLiveActorSystemInfo();
         mPlacementStarted = true;
@@ -127,7 +146,7 @@ bool PlacementInfoOrdered::initPlacementStep(uint64_t deadline) {
             {
                 // A name a mod aliased (classes.md, "alias"): its arguments while the object initialises.
                 const luma::classes::AliasPlacing alias(set->mName, iter.mInfo, iter.mIndex);
-                ready = mInitializing->initStep(iter, deadline);
+                ready = mInitializing->initStep(iter, rSlice);
             }
             MR::initLiveActorSystemInfo(iter);
             MR::clearCurrentPlacementZoneId();
@@ -136,7 +155,7 @@ bool PlacementInfoOrdered::initPlacementStep(uint64_t deadline) {
         }
         mPlacementLink = mPlacementLink->getNext();
         if (mPlacementLink == nullptr) ++mPlacementSet;
-        if (nebula_host()->clock_ns(nebula_host()->user) >= deadline) {
+        if (rSlice.spend()) {
             if (mPlacementSet >= count) NebulaLoadTrace::placementDone();
             return mPlacementSet >= count;
         }
@@ -155,8 +174,8 @@ void PlacementInfoOrdered::insert(const Identifier& rIdentifier, const TableIter
 }
 
 PlacementInfoOrdered::SameIdSet* PlacementInfoOrdered::find(const Identifier& rIdentifier) const {
-    for (s32 i = 0; i < mSetNum; i++) {
-        SameIdSet* pSet = mOrderedSetArray[i];
+    for (u32 i = ::hashIdentifier(rIdentifier) & mSetSlotMask; mSetSlots[i] >= 0; i = (i + 1) & mSetSlotMask) {
+        SameIdSet* pSet = &mSetArray[mSetSlots[i]];
         if (*pSet == rIdentifier) {
             return pSet;
         }
@@ -165,9 +184,15 @@ PlacementInfoOrdered::SameIdSet* PlacementInfoOrdered::find(const Identifier& rI
     return nullptr;
 }
 
+// Called only for an identifier find() did not hold.
 PlacementInfoOrdered::SameIdSet* PlacementInfoOrdered::createSameIdSet(const Identifier& rIdentifier) {
     SameIdSet* pSet = &mSetArray[mSetNum];
     mOrderedSetArray[mSetNum] = pSet;
+    u32 i = ::hashIdentifier(rIdentifier) & mSetSlotMask;
+    while (mSetSlots[i] >= 0) {
+        i = (i + 1) & mSetSlotMask;
+    }
+    mSetSlots[i] = mSetNum;
     mSetNum++;
     *static_cast< Identifier* >(pSet) = rIdentifier;
     return pSet;

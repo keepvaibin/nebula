@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/NameObj/LoadSlice.hpp"
 #include "Game/Util/Functor.hpp"
 #include "Game/Util/Table.hpp"
 
@@ -37,8 +38,9 @@ public:
     void requestResume();
     void syncWithFlags();
 
-    // Loading-only continuation. Actors may yield before the scene is made playable.
-    virtual bool initStep(const TableIter& iter, uint64_t) { init(iter); return true; }
+    // Loading-only continuation. Actors may yield before the scene is made playable: false when the slice ran out
+    // before the object was whole (it spends one item for each piece of its own work).
+    virtual bool initStep(const TableIter& iter, LoadSlice&) { init(iter); return true; }
 
     const char* mName;
     // MovementFlag bits.

@@ -22,6 +22,17 @@ namespace MR {
         return reinterpret_cast< f32& >(value) - 1.0f;
     }
 
+    f32 getDrawRandom() {
+        u32 rand = SingletonHolder< GameSystem >::get()->mObjHolder->mDrawRandom.rand();
+        u32 value = (rand >> 9) | 0x3F800000;
+
+        return reinterpret_cast< f32& >(value) - 1.0f;
+    }
+
+    s32 getDrawRandom(s32 min, s32 max) {
+        return static_cast< f32 >(min) + (static_cast< f32 >(max) - static_cast< f32 >(min)) * getDrawRandom();
+    }
+
     f32 getRandom(f32 min, f32 max) {
         return min + (max - min) * getRandom();
     }

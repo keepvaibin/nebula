@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/Screen/LayoutActor.hpp"
+#include "Game/Ui/DrawInfo.hpp"
 
 class BackButton;
 class GalaxyMap;
@@ -34,7 +35,8 @@ public:
     virtual void appear() override;
     virtual void kill() override;
 
-    void drawForCapture();
+    void prepareCapture();
+    void recordCapture() const;
     void startGalaxyMap();
     void startAstroMap();
     void startNewGalaxyDiscover();
@@ -82,6 +84,12 @@ public:
     GameTexture* mCaptureTexture;
     s32 mMode;
     s32 mWipeFrame;
+    // The capture (P-214): the step decides it and readies the layouts (prepareCapture, mCaptureDrawInfo); the next draw
+    // records it into mCaptureTexture (recordCapture). mCaptureRecorded is the draw's own mark of what it recorded.
+    Ui::DrawInfo mCaptureDrawInfo;
+    bool mCaptureDue;
+    u32 mCaptureAsked;
+    mutable u32 mCaptureRecorded;
 };
 
 namespace MR {

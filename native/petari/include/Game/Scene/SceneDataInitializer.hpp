@@ -11,7 +11,7 @@ public:
 
     void createStageDataHolder();
     void startActorPlacement();
-    bool startActorPlacementStep(uint64_t deadline);
+    bool startActorPlacementStep(LoadSlice& rSlice);
     void initAfterScenarioSelected();
 
     StageDataHolder* mDataHolder;
