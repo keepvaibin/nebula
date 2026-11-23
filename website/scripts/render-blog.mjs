@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url';
 import { Marked, Renderer } from 'marked';
 import { highlight } from './lib/highlight.mjs';
 import { renderPageText } from './lib/page-text.mjs';
-import { shareTags } from './lib/site.mjs';
+import { shareTags, pageUrl } from './lib/site.mjs';
 import { docRoutes as listDocRoutes } from './render-docs.mjs';
 
 const root = resolve(import.meta.dirname, '..');
@@ -183,6 +183,13 @@ export function loadPosts({ drafts = process.env.BLOG_DRAFTS === '1' } = {}) {
       (!/^\d{4}-\d{2}-\d{2}$/.test(data.date) || Number.isNaN(Date.parse(`${data.date}T00:00:00Z`)))
     )
       problems.push(`${file}: date must be written YYYY-MM-DD, for example 2026-11-15`);
+    if (data.image) {
+      const named = resolve(blogDir, slug, data.image);
+      if (/[/\\]/.test(data.image) || !IMAGE_TYPES.includes(extname(data.image).toLowerCase()))
+        problems.push(`${file}: image must be the name of an image file in the post's folder`);
+      else if (!existsSync(named))
+        problems.push(`${file}: image "${data.image}" is not in content/blog/${slug}/`);
+    }
     const draft = data.draft === 'true';
     if (draft && !drafts) continue;
     posts.push({
@@ -201,6 +208,22 @@ export function loadPosts({ drafts = process.env.BLOG_DRAFTS === '1' } = {}) {
   }
   posts.sort((a, b) => b.date.localeCompare(a.date) || a.title.localeCompare(b.title));
   return { posts, problems };
+}
+
+/**
+ * A post's link-preview picture: the file the post's share tags name. The address is fixed (the post's
+ * folder and the file's own name, never a hashed name), because chat and social sites keep previews by it.
+ * `fileName` is its path in the built site, `url` the full address the tags carry, `source` the file in the post's folder.
+ */
+export function previewImage(post) {
+  if (!post.image) return null;
+  const fileName = `${post.path}${post.image}`;
+  return { fileName, url: pageUrl(fileName), source: resolve(post.folder, post.image) };
+}
+
+/** The preview pictures the build must hold, for vite.config.js to emit under exactly these names. */
+export function blogPreviewFiles({ drafts } = {}) {
+  return loadPosts({ drafts }).posts.map(previewImage).filter(Boolean);
 }
 
 /** Output folders (relative to the site root) for vite.config.js. */
@@ -469,7 +492,7 @@ ${body}
       metadata: { title: `${post.title} — ${text.title}`, description: post.summary },
     };
     const head = [
-      shareTags(post.path, { type: 'article', image: post.image && `${post.path}${post.image}` }),
+      shareTags(post.path, { type: 'article', image: previewImage(post)?.fileName }),
       `<meta property="article:published_time" content="${post.date}" />`,
     ]
       .filter(Boolean)
