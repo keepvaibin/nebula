@@ -1,13 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-23 06:20. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-23 07:14. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 9 of 138 (7%).
 
-Now: S0.2.5 since 06:21 (the lens flare decided on the graphics card); ahead: nothing
-
-In work now:
-- S0.2.5 Landing B, part 3: the lens flare (agent 1)
+In work now: Nothing started.
 
 ## Packages
 
@@ -40,31 +37,19 @@ In work now:
 
 ## Last 10 landings
 
-| When | Step | Title | Code commit | Main commit |
-| --- | --- | --- | --- | --- |
-| 2026-11-23 06:19 | S0.2.4 | Landing B, part 2: the talk balloon | 2423dde4f | 27172e772 |
-| 2026-11-23 06:02 | S0.2.3 | Landing B, part 1: the pointer | 8861980d7 | 6544d38df |
-| 2026-11-23 05:08 | S0.2.2 | The scene query's form, written into the inventory before code | e54a921e5 | 37db1ddaa |
-| 2026-11-23 04:53 | S0.2.1 | Landing A: drawing stops changing the game | 84a2f5a72 | 5695013af |
-| 2026-11-22 18:13 | S0.1.5 | Render data path step 2, second landing: `f4/e3-2b` and `f4/e3-2c` | 02d236b5c | fb2dfa855 |
-| 2026-11-22 17:13 | S0.1.4 | Render data path step 2, first landing: `f4/e3-2a` | d9dbc32ac | ce59efeb8 |
-| 2026-11-22 16:37 | S0.1.3 | Render data path step 1: `f4/e3-1a`, `f4/e3-1b`, `f4/e3-1c` | 809c419ff | 8be38b7b8 |
-| 2026-11-22 14:25 | S0.1.2 | Documents | 59bdb8776 | 2c5dbb271 |
-| 2026-11-22 14:17 | S0.1.1 | Land `rows/p022c` and `rows/p022d` as one batch | 83b537af7 | 463d38612 |
+None yet.
 
 ## Repairs
 
-0 open of kind fail, 3 in all.
+1 open of kind fail, 1 in all.
 
 | Id | State | Kind | Check | Renderer | Traced to | Seen |
 | --- | --- | --- | --- | --- | --- | --- |
-| R-001 | landed | fail | build/windows-asan | - | not traced | 1 |
-| R-002 | landed | fail | coverage | - | not traced | 1 |
-| R-003 | landed | fail | soak | - | not traced | 1 |
+| R-001 | open | fail | tour/d3d12 | d3d12 | step S1.1 commit abc | 1 |
 
 ## For the owner to check by hand
 
-- S0.1.2 Documents: P-096: on the tablet, set up the game once more over an installed one, and once with the setup cut off (close the app mid-copy); then start the launcher: the old game stays playable until the new one is whole, and nothing is left behind (no game.pak.new, no half copy). (agent 1, 2026-11-22 14:18)
+Nothing is owed.
 
 ## Waiting for the owner
 
@@ -76,14 +61,9 @@ Nothing is blocked.
 
 ## Tool mends
 
-| Id | State | Step | Title | Attempts | Minutes | Commit |
-| --- | --- | --- | --- | --- | --- | --- |
-| M-001 | closed | R-002 | coverage: the history's key holds the suites that ran, a run that fell is not the next bar | 0 | 0 | 2d7287334 |
-| M-002 | closed | R-003 | soak: a run of eight laps or more is judged from lap 6 (slope and lowest of the last laps), a spike is not growth | 0 | 0 | 2d7287334 |
-| M-003 | closed | R-001 | build_windows.ps1 refuses a build folder configured with another NEBULA_SANITIZE instead of configuring it again | 0 | 117 | c60999ee1 |
-| M-004 | closed | S0.2.1 | the replay check cannot play a run at a time rate of 2 and compare its step hashes with a rate-1 run (S0.2.1 proof 2) | 0 | 94 | fb2b39bc6 |
+No tool was mended.
 
-## Decisions (11)
+## Decisions (16)
 
 - 2026-11-23 S0.2.1: LoadSlice: 32 items a frame; an item is a phase of GameScene::initAfterScenarioChosen, the player, one placement made whole, one piece of FileSelector::initStep, or one Star Bit of the reserve (because the card asks for a fixed count of work and names no count; the count is a constant in one place, no player sees which frame of the load an item falls in, and the load worker (G3.7) replaces the slices)
 - 2026-11-23 S0.2.1: Drawing's random stream (MR::getDrawRandom) is seeded with the same seed as the game's stream, in setRandomSeedFromStageName and setFixedRandomSeed (because a fixed seed keeps the cosmetic numbers the same in every run of a replay and needs no new setting; the draw stream runs through the same sequence as the game's but is advanced only by drawing, so neither changes the other)
@@ -96,8 +76,13 @@ Nothing is blocked.
 - 2026-11-23 S0.2.3: The query's pointer targets are the actors that took a StarPointerTarget, kept per scene in AllLiveActorGroup in that order; a target counts while its actor is alive, not clipped and its model not hidden, and a sphere that holds the camera is not hit (because INV section 3 names the targets' spheres but not which; these are the ones whose model the picture's depth could show, the list dies with the scene that made its actors, and walking only them keeps the step's cost small)
 - 2026-11-23 S0.2.3: The pointer asks the scene in the step where the game scene's camera is kept (StarPointerDirector::mIsUpdateTransHolder) and a pointer layout shows its pointer, with the pointer's view and projection matrices (StarPointerTransformHolder); the ray is StarPointerTarget::calcScreenPositionFromView read backwards (because the picture was asked only in the game scene's draw while a pointer was shown, so the point stays as it was elsewhere; the targets' own screen test uses those two matrices, so a target's sphere and its circle on the screen agree)
 - 2026-11-23 S0.2.4: TalkPeekZ goes with no scene query in its place, and TDDraw::invProject with it; proof 1 becomes the searches for TalkPeekZ, setTalkDirectorDrawSyncToken and invProject and the recorded plays' step hashes (because nothing in the tree reads TalkPeekZ::mWorldPos or mDepth (the balloon is placed by TalkMessageCtrl::updateBalloonPos from its actor), so a query would compute a value no one reads, a dead copy against the owner's rules (AGENT.md section 8); invProject had no other caller)
+- 2026-11-23 S0.2.5: How much of the flare shows: a 1 by 1 target written after the scene by a new written material (flare_sight.hlsl) from the 17 samples, moved by at most 0.05 a frame from the last frame's (two targets used in turn), and the flare's models mixed into the frame by it (flare_blend.hlsl: the frame before and after them); not read by the flare's vertex programs (because the flare's materials are generated programs shared by hash with other models, and every flare material blends its source by its alpha (the glow adds, the ring and line mix), so mixing the frames by the share draws the flare at its alpha times the share on all four renderers through shared code, with no generated program changed; a target pass always clears, so the eased share reads the other target)
+- 2026-11-23 S0.2.5: The step places the flare at its bright object's centre now (the first object giving light with a sample on the screen, from the step's camera) and takes its strength from the distance to the screen's centre alone (because the card: the ring, glow and line from the sun and the camera only; how much of the object shows is the sight's, on the graphics card)
+- 2026-11-23 S0.2.5: The replay references of the four stops where the flare stands (EggStarGalaxy 1, PhantomGalaxy 1, SandClockGalaxy 1, StarDustGalaxy 1) are recorded again in this step, and again with every renderer at S0.2.6 (because the flare's three actors are in the step hash (position and nerve step), and the card's change places them from the sun and the camera where the picture's answers placed them before; the card did not name the replay)
+- 2026-11-23 S0.2.5: Proof 1 is the engine test lens-flare-hidden (EggStarGalaxy 1 at frame 100, the sun behind the house), not the mod test draw/2403-draw-points (because mods and their tests are off in this work (AGENT.md section 8); the engine test takes the same picture without the mod, and the landing judges it from now on)
+- 2026-11-23 S0.2.5: PhantomGalaxy 1, SandClockGalaxy 1 and StarDustGalaxy 1 are added to tests/replays/rate-stops.txt in this landing, though no check of this landing plays replays/rates (because P-294's note (11-23, S0.2.1) says the step that closes the row adds them; their difference at a rate of 2 came from the picture's depth answers (the star bit launcher's goal from the pointer, the flare's actors), which no step reads after S0.2.5; the long run's replays/rates judges them)
 
-## Checks changed during the run (34)
+## Checks changed during the run (38)
 
 - 2026-11-22 S0.1.3 tools/verify/console_census.py: the open group gx_sections counts the four section names GXMT, GXTG, GXTM and GXWP with a ceiling of 31, and the closed group fifo excludes only those four whole words (allowed by docs/engine/FRAME-MODEL.md section 2.9)
 - 2026-11-22 U-unattended tools/gate/main_push_guard.py: the guard also refuses a push of a branch named plant/... (allowed by docs/plan/native/TOOL-MEND-PLANTS.md, how a plant is kept from ever landing)
@@ -133,13 +118,11 @@ Nothing is blocked.
 - 2026-11-23 S0.2.1 tests/replays/090-StarDustGalaxy-1.tsv: the step hashes recorded again from a Direct3D 12 tour run of step S0.2.1 (step_hash.py record); they differ from step 0 (allowed by the card, docs/plan/native/03-NATIVE-STAGE-0.md, step S0.2.1)
 - 2026-11-23 S0.2.1 tests/replays/095-SurfingLv1Galaxy-1.tsv: the step hashes recorded again from a Direct3D 12 tour run of step S0.2.1 (step_hash.py record); they differ from step 0 (allowed by the card, docs/plan/native/03-NATIVE-STAGE-0.md, step S0.2.1)
 - 2026-11-23 S0.2.1 tests/replays/097-TamakoroExLv1Galaxy-1.tsv: the step hashes recorded again from a Direct3D 12 tour run of step S0.2.1 (step_hash.py record); they differ from step 0 (allowed by the card, docs/plan/native/03-NATIVE-STAGE-0.md, step S0.2.1)
+- 2026-11-23 S0.2.5 tests/replays/022-EggStarGalaxy-1.tsv: the step hashes recorded again from a Direct3D 12 tour run of step S0.2.5 (step_hash.py record); they differ from step 0 (allowed by the card, docs/plan/native/03-NATIVE-STAGE-0.md, step S0.2.5)
+- 2026-11-23 S0.2.5 tests/replays/073-PhantomGalaxy-1.tsv: the step hashes recorded again from a Direct3D 12 tour run of step S0.2.5 (step_hash.py record); they differ from step 0 (allowed by the card, docs/plan/native/03-NATIVE-STAGE-0.md, step S0.2.5)
+- 2026-11-23 S0.2.5 tests/replays/085-SandClockGalaxy-1.tsv: the step hashes recorded again from a Direct3D 12 tour run of step S0.2.5 (step_hash.py record); they differ from step 0 (allowed by the card, docs/plan/native/03-NATIVE-STAGE-0.md, step S0.2.5)
+- 2026-11-23 S0.2.5 tests/replays/090-StarDustGalaxy-1.tsv: the step hashes recorded again from a Direct3D 12 tour run of step S0.2.5 (step_hash.py record); they differ from step 0 (allowed by the card, docs/plan/native/03-NATIVE-STAGE-0.md, step S0.2.5)
 
 ## Tool faults
 
-1 tool fault recorded.
-
-The last 20:
-
-| When | Step | Test | What happened | What the agent could not do |
-| --- | --- | --- | --- | --- |
-| 2026-11-22 14:33 | - | (by hand) | plan.py land S0.1.3 ended code 4 (not judged): gate.py's push check refused main's move because tools/verify/console_census.py's closed group fifo counts 31 (the card's section names GXMT, GXTG, GXTM, GXWP in native/include/nebula_model.h, runtime/src/render/core/model_sections_tests.cpp, crates/nebula-import/src/cook/model_write.rs); it is a certain refusal of the change, reported as not judged; plan.py toolfault --last then said: agent 1 has no tool fault recorded | - |
+0 tool faults recorded.
