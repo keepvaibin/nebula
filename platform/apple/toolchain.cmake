@@ -85,6 +85,23 @@ set(CMAKE_OBJCXX_FLAGS_INIT "${nebula_apple_cxx}")
 set(CMAKE_CXX_STANDARD_LIBRARIES "-nostdlib++ ${nebula_apple_libcxx}/lib/libc++.a")
 set(CMAKE_OBJCXX_STANDARD_LIBRARIES "${CMAKE_CXX_STANDARD_LIBRARIES}")
 
+# The compiler's runtime library for an Intel Mac. LLVM's macOS package carries libclang_rt.osx.a for Apple silicon only, and
+# the link of an x86_64 program needs its availability checks (__isPlatformVersionAtLeast) and CPU model (__cpu_model,
+# __cpu_indicator_init). Xcode's own is a universal archive: the linker takes the x86_64 part of it.
+if(NEBULA_APPLE_PLATFORM STREQUAL "macos" AND NEBULA_APPLE_ARCH STREQUAL "x86_64" AND CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "arm64")
+    execute_process(COMMAND xcrun --find clang OUTPUT_VARIABLE nebula_apple_xcode_clang OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    get_filename_component(nebula_apple_xcode_bin "${nebula_apple_xcode_clang}" DIRECTORY)
+    file(GLOB nebula_apple_xcode_runtime "${nebula_apple_xcode_bin}/../lib/clang/*/lib/darwin/libclang_rt.osx.a")
+    list(GET nebula_apple_xcode_runtime 0 nebula_apple_xcode_runtime)
+    if(NOT nebula_apple_xcode_runtime OR NOT EXISTS "${nebula_apple_xcode_runtime}")
+        message(FATAL_ERROR "An x86_64 build on this machine needs Xcode's libclang_rt.osx.a (next to its clang): none found")
+    endif()
+    set(CMAKE_C_STANDARD_LIBRARIES "${nebula_apple_xcode_runtime}")
+    set(CMAKE_CXX_STANDARD_LIBRARIES "${CMAKE_CXX_STANDARD_LIBRARIES} ${nebula_apple_xcode_runtime}")
+    set(CMAKE_OBJC_STANDARD_LIBRARIES "${nebula_apple_xcode_runtime}")
+    set(CMAKE_OBJCXX_STANDARD_LIBRARIES "${CMAKE_CXX_STANDARD_LIBRARIES}")
+endif()
+
 # Headers Apple's SDKs lack (uchar.h), for the game module's C units.
 include_directories(SYSTEM "${CMAKE_CURRENT_LIST_DIR}/compat")
 
