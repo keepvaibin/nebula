@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-22 18:14.
+Written 2026-11-22 18:24.
 
 Steps landed: 5 of 138 (4%).
 
@@ -49,7 +49,11 @@ In work now: Nothing started.
 
 ## Repairs
 
-No repair recorded.
+1 open of kind fail, 1 in all.
+
+| Id | State | Kind | Check | Renderer | Traced to | Seen |
+| --- | --- | --- | --- | --- | --- | --- |
+| R-001 | open | fail | build/windows-asan | - | not traced | 1 |
 
 ## For the owner to check by hand
 
