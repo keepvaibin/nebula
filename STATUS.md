@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-23 12:29. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-23 13:03. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 11 of 138 (8%).
 
@@ -45,7 +45,7 @@ None yet.
 
 | Id | State | Kind | Check | Renderer | Traced to | Seen |
 | --- | --- | --- | --- | --- | --- | --- |
-| R-001 | open | fail | tour/d3d12 | d3d12 | step S1.1 commit abc | 2 |
+| R-001 | open | fail | tour/d3d12 | d3d12 | step S1.1 commit abc | 1 |
 
 ## For the owner to check by hand
 
@@ -89,7 +89,7 @@ No tool was mended.
 - 2026-11-23 S0.2.6: Proof 4: the replays are not recorded again; the recorded tour on this step's build gives all 20 recordings' step hashes (step_hash.py check: 20 of 20 the same over 600 steps, D:/NebulaWork/build/Nebula-native/runs/tour) (because The game step stopped reading answers at S0.2.5, whose landing recorded the four changed replays once for every renderer; recording identical files again would change nothing, and a replay recorded without a change is a place a check sees less)
 - 2026-11-23 S0.2.6: The diagnostics frame-plans and constants-watch move down to bits 19 and 20, so the bits stay without a gap after probe-reads is deleted; this replaces the part of the Read first (d) decision that left bit 19 unused (because --diagnostics takes names only (launch_args.h diagnostics_from_text), so no command line reads a bit number and a moved bit reads no old line wrongly; galaxy_launch_args_tests holds that every bit up to the last has a name, and the first landing failed it on GitHub's Linux jobs)
 
-## Checks changed during the run (42)
+## Checks changed during the run (46)
 
 - 2026-11-22 S0.1.3 tools/verify/console_census.py: the open group gx_sections counts the four section names GXMT, GXTG, GXTM and GXWP with a ceiling of 31, and the closed group fifo excludes only those four whole words (allowed by docs/engine/FRAME-MODEL.md section 2.9)
 - 2026-11-22 U-unattended tools/gate/main_push_guard.py: the guard also refuses a push of a branch named plant/... (allowed by docs/plan/native/TOOL-MEND-PLANTS.md, how a plant is kept from ever landing)
@@ -133,6 +133,10 @@ No tool was mended.
 - 2026-11-23 AB-linux-fsr3 .github/workflows/check.yml: the Linux job's build line also gives build_linux.sh -s <shader headers> (allowed by the planner's brief AB-linux-fsr3.md (the owner's question of 2026-11-23 about FSR 3 on Linux))
 - 2026-11-23 AB-linux-fsr3 tools/gate/github_jobs.tsv: the new job FSR 3 shaders (Windows) is a must job (allowed by the planner's brief AB-linux-fsr3.md (the owner's question of 2026-11-23 about FSR 3 on Linux))
 - 2026-11-23 AB-linux-fsr3 tools/gate/tests/github_rule_test.py: the count of green jobs is the table's own count (len(MUSTS)) and the jobs still waited for are the must jobs from the seventh on (MUSTS[6:]), not 7 and the seventh (allowed by the planner's brief AB-linux-fsr3.md (the owner's question of 2026-11-23 about FSR 3 on Linux))
+- 2026-11-23 AH-plan-tool tools/gate/tests/plan_rerun_test.py: the cases that built on a state commit that stays on the branch after a failed landing: the second land after a failure makes the commit again (one commit, on the same code commit); the foreign commit with the state subject stays and the tool's own comes on top of it; a record's tip is the tip the gate was given; the folder-reads-main cases leave a state commit as a landing cut off leaves it; the helper that makes a failed landing keeps the commit; the start text is the shared REPLAY_WORDS_RULE (allowed by docs/plan/native/AGENT.md section 4.3, the row for a failed landing, and section 9)
+- 2026-11-23 AH-plan-tool tools/gate/tests/plan_test.py: the failed landing case now says the state commit is off the branch and the branch's steps.tsv says nothing is landed (it said the commit stays) (allowed by docs/plan/native/AGENT.md section 4.3, the row for a failed landing)
+- 2026-11-23 AH-plan-tool tools/gate/tests/plan_mend_test.py: the case that start, ahead and land wait while a mend is open lists start and land (ahead writes the next step meanwhile) and the sentence they say; the case that a new landing takes the earlier state commit off makes the earlier commit as a cut-off landing leaves it (allowed by docs/plan/native/AGENT.md section 9, the mend)
+- 2026-11-23 AH-plan-tool tools/gate/tests/plan_ahead_test.py: the helper that makes a failed landing leaves its state commit on the branch (a landing cut off), and the case that makes a second state commit of a mended step does the same (allowed by docs/plan/native/AGENT.md section 4.3, the row for a failed landing)
 
 ## Tool faults
 
