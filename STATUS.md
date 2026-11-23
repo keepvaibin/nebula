@@ -1,20 +1,19 @@
 # Nebula native plan: status
 
-Written 2026-11-23 06:03. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-23 06:19. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
-Steps landed: 8 of 138 (6%).
+Steps landed: 9 of 138 (7%).
 
 Now: S0.2.4 (the talk balloon) landing since 06:05; S0.2.3 landed 06:03; ahead: S0.2.5 (the lens flare)
 
-In work now:
-- S0.2.4 Landing B, part 2: the talk balloon (agent 1)
+In work now: Nothing started.
 
 ## Packages
 
 | Package | Landed | Of |
 | --- | --- | --- |
 | S0.1 | 5 | 5 |
-| S0.2 | 3 | 6 |
+| S0.2 | 4 | 6 |
 | G6 | 0 | 8 |
 | S0.3 | 0 | 2 |
 | R1 | 0 | 4 |
@@ -42,6 +41,7 @@ In work now:
 
 | When | Step | Title | Code commit | Main commit |
 | --- | --- | --- | --- | --- |
+| 2026-11-23 06:19 | S0.2.4 | Landing B, part 2: the talk balloon | 2423dde4f | 27172e772 |
 | 2026-11-23 06:02 | S0.2.3 | Landing B, part 1: the pointer | 8861980d7 | 6544d38df |
 | 2026-11-23 05:08 | S0.2.2 | The scene query's form, written into the inventory before code | e54a921e5 | 37db1ddaa |
 | 2026-11-23 04:53 | S0.2.1 | Landing A: drawing stops changing the game | 84a2f5a72 | 5695013af |
