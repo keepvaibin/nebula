@@ -74,6 +74,7 @@ Nothing is blocked.
 | Id | State | Step | Title | Attempts | Minutes | Commit |
 | --- | --- | --- | --- | --- | --- | --- |
 | M-001 | closed | R-002 | coverage: the history's key holds the suites that ran, a run that fell is not the next bar | 0 | 0 | 2d7287334 |
+| M-002 | closed | R-003 | soak: a run of eight laps or more is judged from lap 6 (slope and lowest of the last laps), a spike is not growth | 0 | 0 | 2d7287334 |
 
 ## Decisions (0)
 
