@@ -29,6 +29,9 @@ IDENTIFIER = re.compile(r"^[a-z][a-z0-9]*(?:[_-][a-z0-9]+)+$")
 TEST_SPAN = re.compile(r"^[\w.-]*_tests?(?:\.(?:cpp|rs|py))?$")
 OPTION = re.compile(r"(?<![\w-])--[a-z][a-z0-9-]*")
 FORBIDDEN_HEADING = "**Programs you never run.**"
+# A name a card or a document mentions is not a test: the search for a test's name leaves out the plan's documents, the table files, this reader
+# and its self-test.
+NOT_SOURCE = (":(exclude)docs", ":(exclude)*.md", ":(exclude)*.tsv", ":(exclude)tools/plan/proofs.py", ":(exclude)tools/gate/tests/plan_cards_test.py")
 HOST = "native/host/host_main.cpp"
 LAUNCH_ARGS = "runtime/include/galaxy/launch_args.h"
 
@@ -128,7 +131,7 @@ class Repo:
     def mentions(self, name):
         """Whether a tracked file holds `name` as a whole word (a test's name inside its program)."""
         if name not in self.cache:
-            r = subprocess.run([GIT, "-C", str(self.tree), "grep", "-l", "-w", "-F", "-q", name], capture_output=True, text=True)
+            r = subprocess.run([GIT, "-C", str(self.tree), "grep", "-l", "-w", "-F", "-q", name, "--", ".", *NOT_SOURCE], capture_output=True, text=True)
             self.cache[name] = r.returncode == 0
         return self.cache[name]
 

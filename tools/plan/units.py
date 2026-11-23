@@ -89,6 +89,8 @@ def ctest(folder, directory, what):
     block = None
     shown = 0
     for line in text.splitlines():
+        if SUMMARY.search(line):
+            block = None                         # ctest's own summary is not the failed test's output
         t = TEST_LINE.search(line)
         if t:
             block = t.group(1) if re.search(r"Fail|Timeout|Exception|Not Run", t.group(2)) else None

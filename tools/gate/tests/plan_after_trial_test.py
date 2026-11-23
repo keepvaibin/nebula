@@ -191,6 +191,7 @@ class UnitsTest(UnitsBase):
         self.assertIn("the Windows unit tests: 1 of 3 fail:", text)
         self.assertIn("galaxy_launch_args_tests: ***Failed", text)
         self.assertIn("every diagnostic has a name: bit 19 has none", text)
+        self.assertNotIn("67% tests passed", text, "ctest's own summary is not the failed test's output")
         self.assertIn("the game's unit tests: 3 of 3 pass", text, "the other parts still run and say what they found")
 
     def test_a_failing_game_test_and_a_failing_rust_test_are_each_a_refusal(self):
