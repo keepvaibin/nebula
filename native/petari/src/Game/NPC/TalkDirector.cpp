@@ -1,6 +1,5 @@
 #include "Game/NPC/TalkDirector.hpp"
 #include "Game/System/NebulaMods.hpp"
-#include "Game/Render/FrameList.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/NPC/TalkBalloon.hpp"
@@ -13,7 +12,6 @@
 #include "Game/Util/ActorCameraUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/DirectDraw.hpp"
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
@@ -24,7 +22,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
-#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/LumaCore.hpp"
 
@@ -94,38 +91,8 @@ namespace NrvTalkDirector {
     NEW_NERVE(TalkDirectorNrvTerm, TalkDirector, Term);
 };  // namespace NrvTalkDirector
 
-TalkPeekZ::TalkPeekZ() : mAsker(Frame::newProbeAsker()) {
-}
-
-void TalkPeekZ::setDrawSyncToken() {
-    Frame::getProjectionv(mProjection);
-    Frame::getViewportv(mViewport);
-
-    // The depth at the balloon's point asked last; then the picture drawn so far, at its point now.
-    NebulaScreenProbe probe{};  // zeroed: with no answer back yet, the ask sends no unset field
-    mDepth = 0.0f;
-    if (Frame::screenProbeResults(cReadbackChannel, mAsker, &probe, 1) == 1 && probe.x >= 0.0f) {
-        mDepth = probe.value;
-        TDDraw::invProject(&mWorldPos, Vec3f(probe.user_x, probe.user_y, mDepth), const_cast< MtxPtr >(MR::getCameraViewMtx().mMtx), mProjection,
-                           mViewport, true);
-    }
-
-    probe.x = -1.0f;
-    probe.y = -1.0f;
-    probe.user_x = mScreenPos.x;
-    probe.user_y = mScreenPos.y;
-    if (MR::isInRange(mScreenPos.x, 0.0f, MR::getScreenWidth() - 1) &&
-        MR::isInRange(mScreenPos.y, 0.0f, NebulaFrameClock::cScreenLines - 1)) {
-        Vec2f pos;
-        MR::convertScreenPosToFrame(&pos, mScreenPos);
-        probe.x = pos.x;
-        probe.y = pos.y;
-    }
-    Frame::probeScreen(cReadbackChannel, mAsker, &probe, 1);
-}
-
 TalkDirector::TalkDirector(const char* pName)
-    : LayoutActor(pName, true), mMsgControls(), mPeekZ(), mBalloonHolder(), mStateHolder(), mMsgCtrl(), mBalloonCtrl(), mRequestCtrl(), mLastTalkCtrl(),
+    : LayoutActor(pName, true), mMsgControls(), mBalloonHolder(), mStateHolder(), mMsgCtrl(), mBalloonCtrl(), mRequestCtrl(), mLastTalkCtrl(),
       mTalkState(), mIsTalkStart(), mIsTalkEnd(), mIsInvalidTalk(), mIsInvalidClipping(), mIsNext(), mDemoType(TalkDemo_None), mIsSkipTerm(),
       mIsPlayerTalk(), mMessageInfo(), mCameraInfo(), mHostActor(), mBranchResult() {
     lumacore::setClass(this, lumacore::kClassId< TalkDirector >);
@@ -136,7 +103,6 @@ void TalkDirector::init(const TableIter& /*rIter*/) {
     mBalloonHolder = new TalkBalloonHolder();
     mStateHolder = new TalkStateHolder();
     mMsgControls.init(128);
-    mPeekZ = new TalkPeekZ();
     initNerve(GET_NERVE(TalkDirector, TalkDirectorNrvWait));
     initBranchResult();
     appear();
@@ -284,7 +250,6 @@ void TalkDirector::updateMessage() {
 
     if (mBalloonCtrl != nullptr) {
         mBalloonCtrl->updateBalloonPos();
-        mPeekZ->mScreenPos.set(mBalloonCtrl->mBalloonPos.x, mBalloonCtrl->mBalloonPos.y);
     }
 
     if (MR::isPowerStarGetDemoActive()) {
@@ -640,14 +605,6 @@ void MR::balloonOffTalkDirector() {
 
 void MR::invalidateTalkDirector() {
     ::getTalkDirector()->mIsInvalidTalk = true;
-}
-
-void MR::setTalkDirectorDrawSyncToken() {
-    TalkDirector* pDirector = ::getTalkDirector();
-
-    if (pDirector != nullptr) {
-        pDirector->mPeekZ->setDrawSyncToken();
-    }
 }
 
 bool MR::isActiveTalkBalloonShort() {

@@ -34,7 +34,6 @@ namespace TDDraw {
     void drawFillBox3D(TypedDraw&, const Vec3f&, const Vec3f&, const Vec3f&, const Vec3f&, u32);
     void cameraInit3D();
     void cameraInit2D();
-    void invProject(Vec3f*, const Vec3f&, MtxPtr, const f32*, const f32*, bool);
     void project2D(Vec3f*, const Vec3f&);
     void project2D(Vec2f*, const Vec3f&);
 };  // namespace TDDraw
