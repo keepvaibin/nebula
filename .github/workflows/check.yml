@@ -334,13 +334,13 @@ jobs:
           test "$("$llvm/bin/llvm-config" --version)" = "$LLVM_VERSION"
           # The row generator's libclang (native/CMakeLists.txt: a cross build looks under LLVM_ROOT).
           echo "LLVM_ROOT=$llvm" >> "$GITHUB_ENV"
-          rustup target add aarch64-apple-darwin
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
       - name: Restore libc++
         id: libcxx-cache
         uses: actions/cache/restore@v6
         with:
           path: ~/nebula-tools/toolchain/libcxx
-          key: libcxx-macos-arm64-${{ env.LLVM_VERSION }}-${{ hashFiles('platform/apple/build_libcxx.sh') }}
+          key: libcxx-macos-universal-${{ env.LLVM_VERSION }}-${{ hashFiles('platform/apple/build_libcxx.sh') }}
       - name: Build libc++
         if: steps.libcxx-cache.outputs.cache-hit != 'true'
         run: |
@@ -349,8 +349,11 @@ jobs:
           curl -fsSL --retry 3 -o "$RUNNER_TEMP/llvm-project.tar.xz" \
             "https://github.com/llvm/llvm-project/releases/download/llvmorg-$LLVM_VERSION/llvm-project-$LLVM_VERSION.src.tar.xz"
           tar -xJf "$RUNNER_TEMP/llvm-project.tar.xz" -C "$src" --strip-components 1
-          sh platform/apple/build_libcxx.sh "$src" "$TOOLS/toolchain/llvm" "$TOOLS/toolchain/libcxx" macos arm64
-          rm -rf "$TOOLS/toolchain/libcxx/build-macos-arm64"
+          # One for each processor of the universal app (Intel and Apple silicon).
+          for arch in arm64 x86_64; do
+            sh platform/apple/build_libcxx.sh "$src" "$TOOLS/toolchain/llvm" "$TOOLS/toolchain/libcxx" macos "$arch"
+            rm -rf "$TOOLS/toolchain/libcxx/build-macos-$arch"
+          done
       - name: Save libc++
         if: steps.libcxx-cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@v6
@@ -363,7 +366,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/shipped"
           cp installer/lumakit/lumakit.luma "$RUNNER_TEMP/shipped/"
-          sh platform/apple/build_macos.sh -t "$TOOLS" -w "$WORK" -a arm64 -m "$RUNNER_TEMP/shipped"
+          sh platform/apple/build_macos.sh -t "$TOOLS" -w "$WORK" -a "x86_64 arm64" -m "$RUNNER_TEMP/shipped"
       - name: The compiler cache's hits and misses
         if: always() && steps.cache.outputs.key != ''
         shell: bash
