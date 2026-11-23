@@ -251,6 +251,43 @@ NEBULA_FFX_LOGGED_CREATE(CreateShaderModule, VkShaderModuleCreateInfo, VkShaderM
 NEBULA_FFX_LOGGED_CREATE(AllocateMemory, VkMemoryAllocateInfo, VkDeviceMemory)
 #undef NEBULA_FFX_LOGGED_CREATE
 
+PFN_vkAllocateDescriptorSets g_AllocateDescriptorSets = nullptr;
+VKAPI_ATTR VkResult VKAPI_CALL logged_AllocateDescriptorSets(VkDevice device, const VkDescriptorSetAllocateInfo* info, VkDescriptorSet* sets) {
+    const VkResult result = g_AllocateDescriptorSets(device, info, sets);
+    if (result != VK_SUCCESS) {
+        std::cerr << "[fsr3] vkAllocateDescriptorSets returned " << static_cast<int>(result) << '\n';
+    }
+    return result;
+}
+
+PFN_vkMapMemory g_MapMemory = nullptr;
+VKAPI_ATTR VkResult VKAPI_CALL logged_MapMemory(VkDevice device, VkDeviceMemory memory, VkDeviceSize offset, VkDeviceSize size, VkMemoryMapFlags flags,
+                                                void** data) {
+    const VkResult result = g_MapMemory(device, memory, offset, size, flags, data);
+    if (result != VK_SUCCESS) {
+        std::cerr << "[fsr3] vkMapMemory returned " << static_cast<int>(result) << '\n';
+    }
+    return result;
+}
+
+PFN_vkBindBufferMemory g_BindBufferMemory = nullptr;
+VKAPI_ATTR VkResult VKAPI_CALL logged_BindBufferMemory(VkDevice device, VkBuffer buffer, VkDeviceMemory memory, VkDeviceSize offset) {
+    const VkResult result = g_BindBufferMemory(device, buffer, memory, offset);
+    if (result != VK_SUCCESS) {
+        std::cerr << "[fsr3] vkBindBufferMemory returned " << static_cast<int>(result) << '\n';
+    }
+    return result;
+}
+
+PFN_vkBindImageMemory g_BindImageMemory = nullptr;
+VKAPI_ATTR VkResult VKAPI_CALL logged_BindImageMemory(VkDevice device, VkImage image, VkDeviceMemory memory, VkDeviceSize offset) {
+    const VkResult result = g_BindImageMemory(device, image, memory, offset);
+    if (result != VK_SUCCESS) {
+        std::cerr << "[fsr3] vkBindImageMemory returned " << static_cast<int>(result) << '\n';
+    }
+    return result;
+}
+
 struct LoggedCall {
     const char* name;
     PFN_vkVoidFunction* real;
@@ -265,7 +302,9 @@ VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL ffx_device_proc(VkDevice device, const 
         NEBULA_FFX_LOGGED_ENTRY(CreateImageView),      NEBULA_FFX_LOGGED_ENTRY(CreateSampler),
         NEBULA_FFX_LOGGED_ENTRY(CreateDescriptorPool), NEBULA_FFX_LOGGED_ENTRY(CreateDescriptorSetLayout),
         NEBULA_FFX_LOGGED_ENTRY(CreatePipelineLayout), NEBULA_FFX_LOGGED_ENTRY(CreateShaderModule),
-        NEBULA_FFX_LOGGED_ENTRY(AllocateMemory)};
+        NEBULA_FFX_LOGGED_ENTRY(AllocateMemory),       NEBULA_FFX_LOGGED_ENTRY(AllocateDescriptorSets),
+        NEBULA_FFX_LOGGED_ENTRY(MapMemory),            NEBULA_FFX_LOGGED_ENTRY(BindBufferMemory),
+        NEBULA_FFX_LOGGED_ENTRY(BindImageMemory)};
 #undef NEBULA_FFX_LOGGED_ENTRY
     for (const LoggedCall& call : calls) {
         if (std::strcmp(name, call.name) == 0) {
