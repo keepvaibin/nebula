@@ -1,12 +1,13 @@
 # Nebula native plan: status
 
-Written 2026-11-23 06:19. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-23 06:20. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 9 of 138 (7%).
 
 Now: S0.2.4 (the talk balloon) landing since 06:05; S0.2.3 landed 06:03; ahead: S0.2.5 (the lens flare)
 
-In work now: Nothing started.
+In work now:
+- S0.2.5 Landing B, part 3: the lens flare (agent 1)
 
 ## Packages
 
