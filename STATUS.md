@@ -6,7 +6,8 @@ Steps landed: 6 of 138 (4%).
 
 Now: S0.2.1 since 01:06, queued 03:12 behind beta/mac-load; ahead: S0.2.2 written
 
-In work now: Nothing started.
+In work now:
+- S0.2.2 The scene query's form, written into the inventory before code (agent 1)
 
 ## Packages
 
