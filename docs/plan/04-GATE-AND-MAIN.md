@@ -507,7 +507,7 @@ growth a lap; the sight is what growth a lap a run of so many laps refuses:
 
 | Laps in the run | Rule | Steady growth refused (MB a lap, a minute) |
 |---|---|---|
-| 3 (the 30-minute check: two laps and the first half of a third) | the third lap's median at most 32 MB above the second's | the third lap's samples lie 9 minutes after the second's median: a leak from the start of 3 MB a minute (+32 to +36 MB on the recorded clean run) is refused, 2 MB a minute (+25 to +30) is not |
+| 3 (the 30-minute check: two laps and the first half of a third) | the third lap's median at most 32 MB above the second's | the third lap's samples lie 9 minutes after the second's median: a leak from the start of 3 MB a minute (+32 to +36 MB on the recorded clean run) is refused, 2 MB a minute (+25 to +30) is not (added to the recorded clean run's samples, 11-22 12:56) |
 | 4 to 7 | the most above lap 2 at most 32 MB | 32 / (laps - 2): 16, 10.7, 8, 6.4 |
 | 8 or more whole laps (the nightly's 10) | from lap 6 on: the growth a lap, the median of the slopes between every two laps' medians, at most 32 / (laps - 2); and the lowest median of the last 3 laps at most 32 MB above lap 6's | 32 / (laps - 2): 8 laps 5.3, 10 laps 4.0 (0.33 MB a minute, 20 MB an hour), 12 laps 3.2, 20 laps 1.8 (0.15 MB a minute) |
 
@@ -521,8 +521,7 @@ that rises and falls back does not move a median of slopes (it is in 4 of the 10
 three laps: a spike is not growth. Memory that rises and stays for the last 2 laps moves the slope; for 4 laps or more, the lowest of the last
 three. That run's laps through the long rule read: d3d11 +3.11 MB a lap (at most 4.00), d3d12 +1.94, vulkan +0.71: all pass. What it does not
 see: growth under the sight above; a rise of more than 32 MB between lap 2 and lap 6 (the old rule saw it; it is what warming up read at
-23 to 31); a rise that stays for 3 laps only and then falls back. Shown with a leak by the real gate: the short form (30 minutes) refused a
-leak of 5 MB a minute in the game process (branch `plant/w-leak`, recipe 8 in `docs/plan/native/TOOL-MEND-PLANTS.md` once that file is on main).
+23 to 31); a rise that stays for 3 laps only and then falls back. Shown with a leak by the real gate: a leak of 5 MB a minute in the game process (recipe 8 of `docs/plan/native/TOOL-MEND-PLANTS.md`) is refused by the 30-minute form on all three renderers (d3d11 +65.0 MB, d3d12 +64.9, vulkan +57.5 above lap 2; run 20261122-203137-722379d9a-main); the long rule has no plant run of its own (a run of ten laps is two hours): its proof is its self-tests, the recorded laps of 11-22 and the ramps fed to it.
 
 **The coverage history's key (`tools/gate/coverage.py`; W long findings, 11-22).** `gate-runs/coverage-history.tsv` has one line a long run: the
 share of lines run, the key and the verdict. The key is the binaries' names and the suites whose counts were merged (`engine`, `tour`,
