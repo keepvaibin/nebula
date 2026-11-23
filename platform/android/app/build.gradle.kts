@@ -17,14 +17,14 @@ plugins {
 val sdlDir = providers.gradleProperty("nebula.sdlDir").orNull ?: error("pass -Pnebula.sdlDir=<SDL3 source>")
 val jniDir = providers.gradleProperty("nebula.jniDir").orNull ?: rootProject.file("jniLibs").path
 val assetsDir = providers.gradleProperty("nebula.assetsDir").orNull ?: rootProject.file("build/nebula-assets").path
-// The version's pre-release label and whether mods are supported (build_apk.ps1 passes both; the environment variables
-// NEBULA_VERSION_SUFFIX and NEBULA_MODS do the same, as for every CMake project: cmake/nebula_options.cmake).
+// The version's pre-release label and whether mods are supported (build_apk.ps1 passes both from NEBULA_VERSION_SUFFIX and
+// NEBULA_MODS, which every CMake project reads too: cmake/nebula_options.cmake).
 //   nebula.versionSuffix  "" (a release) or "-beta.<n>": versionName is 2.0.0 and it. The versionCode of a release is
 //                         above every beta's (a beta is 26 plus its number), so the release installs over a beta.
 //   nebula.mods           false: an app with no mod support: no mod entry in the manifest (between its mods:begin and
 //                         mods:end), BuildConfig.MODS false (the launcher shows no mod page or text)
-val versionSuffix = providers.gradleProperty("nebula.versionSuffix").orNull ?: System.getenv("NEBULA_VERSION_SUFFIX") ?: ""
-val modsOn = (providers.gradleProperty("nebula.mods").orNull ?: System.getenv("NEBULA_MODS") ?: "true").lowercase() !in setOf("false", "off")
+val versionSuffix = providers.gradleProperty("nebula.versionSuffix").orNull ?: ""
+val modsOn = (providers.gradleProperty("nebula.mods").orNull ?: "true").lowercase() !in setOf("false", "off")
 require(Regex("(-beta\\.[0-9]+)?").matches(versionSuffix)) { "nebula.versionSuffix is empty or -beta.<n>, not '$versionSuffix'" }
 val betaNumber = Regex("-beta\\.([0-9]+)").find(versionSuffix)?.groupValues?.get(1)?.toInt()
 require(betaNumber == null || betaNumber in 1..99) { "the beta's number is 1 to 99: $versionSuffix" }
