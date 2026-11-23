@@ -249,5 +249,11 @@ class Tablet(unittest.TestCase):
         self.assertNotIn("--pak", cmd)
 
 
+def main():
+    result = unittest.main(argv=[sys.argv[0]], exit=False, verbosity=1).result
+    print("agent_tour_test: %s (%d tests)" % ("pass" if result.wasSuccessful() else "FAIL", result.testsRun))
+    return 0 if result.wasSuccessful() else 1
+
+
 if __name__ == "__main__":
-    unittest.main(verbosity=0)
+    sys.exit(main())
