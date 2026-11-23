@@ -196,7 +196,7 @@ alone takes about 16).
   `byte_order_check.py`) and `python -X utf8 -I tools/gate/strictness.py --base origin/main --branch mend/M-00N`; each must
   pass. Then hand the branch to the gate yourself: `python -X utf8 -I tools/gate/gate.py land mend/M-00N --who "mend
   M-00N" --tablet R52WA0FXE5J --tablet-wait 30`, as a background command with no time limit. The agent records it
-  afterwards (`plan.py mend open ... --landed <commit>`).
+  afterwards (`plan.py mend open ... --landed <commit>`; when the mend was for a repair, that command ends the repair too).
 - A failure of your own change: find the cause, fix it, add the test that would have caught it, land once more.
   A second failure of any kind: stop and report it.
 - A failure that is not from your change (a result of the kind `tool` or `env` in a check you did not touch, a flake):

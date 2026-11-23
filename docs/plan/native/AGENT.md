@@ -236,7 +236,9 @@ that plays every stop of the game about once a day, or by a speed check). It com
 test alone, find the cause, fix the game, and `PLAN land R-00N`. If the cause is not in the game but in a
 test tool: a mend (section 9), `PLAN mend open R-00N "<title>" --check <the failed check>`. The repair ends by that mend and
 by nothing else: when `PLAN mend close M-00N <commit>` is given for a mend opened for a repair, the repair is closed by
-the mend's commit (the page shows it so) and `PLAN next` goes on. Never land an empty branch for it, never edit the
+the mend's commit (the page shows it so) and `PLAN next` goes on. A repair ends by its mend on every route: `PLAN mend
+open R-00N "<title>" --landed <commit>` (the mend was landed by hand) ends it too, and where a mend of the repair is recorded
+closed and the repair is still open, `PLAN repair end R-00N --mend M-00N` ends it. Never land an empty branch for it, never edit the
 list by hand. The mend's own landing runs the failed check as an extra check where the gate can add it (the
 sanitizer build and tour, stress, soak, replays/software, speed/anchor): that run is where you see the check pass
 (the helper's report names its run folder). For a check the gate cannot add (coverage), the helper's self-test is
@@ -516,7 +518,8 @@ a landing, or `PLAN tool "<what you ran, what it printed, what you needed>"` out
   The helper lands its fix as TOOL-MEND.md section 8 says for this case (`gate.py land` itself). When it reports
   `MENDED M-00N <commit>`: read the commit as in point 5, commit what you have, `git fetch origin`, `git rebase
   origin/main` on the step's branch (the mended `plan.py` comes with it), then record it: `PLAN mend open "<title>"
-  --landed <commit>`. A failed attempt is counted by you in the log: the second helper, then your own attempt, as
+  --landed <commit>` (when the fault met a repair: `PLAN mend open R-00N "<title>" --landed <commit>`, which ends the repair as `mend
+  close` does). A failed attempt is counted by you in the log: the second helper, then your own attempt, as
   in point 6; when the third fails too, the step tool cannot be used and the work is stopped (section 13) with
   the tool's line as the reason.
 

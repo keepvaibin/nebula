@@ -686,7 +686,7 @@ landing record is `landing-mend.tsv`, so it never meets the agent's own. `mend c
 that touches `tools/`, `docs/` or `.github/`; the waiting step is in work again and every step blocked `tool: M-00N` is open
 again. `mend failed M-00N "<why>"` counts the attempts on the sheet (the helper, a second helper, the agent itself): only the third
 failure blocks the step. `mend drop` ends a mend whose fault needs game code (not a tool fault). A mend opened for a repair (`mend open R-00N ...`) ends that repair
-when it is closed (`mend close`): the repair is `landed`, closed by the mend's commit, with the note `ended by mend M-00N`; its landing
+when it is closed (`mend close`): the repair is `landed`, closed by the mend's commit, with the note `ended by mend M-00N`; the same end is made by `mend open R-00N ... --landed <commit>` and by `repair end R-00N --mend M-00N` (a closed mend of that repair, the repair still `open` or `started`; refused for a mend that is not closed, a mend of another step, a repair that is landed already and a repair that waits for another, open mend); its landing
 (`mend land`) runs the failed check as an extra check where the gate can add it (`also_for_check` in `plan.py`: the sanitizer, stress, soak,
 replays/software, speed/anchor). `mend open ... --landed <commit>`
 records a mend that was landed by hand because `plan.py` itself was at fault. `mend list` lists them (mends.tsv in the live folder);

@@ -15,6 +15,13 @@ it guards broken (named in a phrase after the test).
   start_ahead_and_land_wait                  `start`, `ahead` or `land` went on while a mend was open
     a_third_mend_for_the_same_check_is_refused   the per-check limit of two
     landed_records_a_mend_made_by_hand         `mend open ... --landed` for a commit that is not on main, or a mend left open
+  repair end (a repair ends by its mend on every route: mend close, mend open --landed, repair end)
+    landed_for_a_repair_records_the_mend_and_ends_the_repair   `--landed R-00N` left the repair open (an open and a started one)
+    landed_refuses_a_repair_it_cannot_end_and_records_nothing  a mend was recorded for a missing or an ended repair
+    repair_end_ends_an_open_repair_and_a_started_one           no `repair end` command; the page, `repair list`, `status` or `next` still showed it
+    repair_end_refuses_a_mend_that_is_not_closed / _a_mend_of_another_step_and_a_missing_mend / _a_repair_that_is_landed_already /
+    _a_repair_that_waits_for_another_open_mend / _a_commit_that_is_not_on_main     each refusal let the repair be ended
+    a_flake_repair_ended_by_its_mend_ends_the_set_aside        the test stayed set aside after the end
   mend land
     mend_land_refuses_game_source_and_lands_a_tool_change   a mend branch that changed runtime/ was handed to the gate; the gate got no --who
   decide, alive, check, the heartbeat
@@ -386,6 +393,148 @@ class RepairMendTest(unittest.TestCase):
         options = self.calls[0][1]
         self.assertEqual(options[options.index("--also") + 1], "soak", options)
         self.assertIn("runs it as an extra check", text)
+
+
+class RepairEndTest(unittest.TestCase):
+    """A repair whose cause was a test tool is ended by its mend on every route: `mend close` (tested above), `mend open R-00N ... --landed
+    COMMIT` and `repair end R-00N --mend M-00N`. Every test has its own live folder (the fixture's); nothing of D:/NebulaWork/plan is touched."""
+
+    TITLE = "the step tool cannot end a repair"
+
+    def setUp(self):
+        self.t = Tree().__enter__()
+        self.addCleanup(self.t.__exit__)
+
+    def repair(self, started=False, check="build/windows-asan"):
+        row, _ = lv.add_repair(self.t.live, "nightly", "fail", check, "-", evidence="D:/x/evidence", note="a tool fault")
+        if started:
+            self.t.run(["start", row["id"]], expect=0)
+        return row["id"]
+
+    def closed_mend(self, step, name="tools/verify/doc_refs_allow.txt"):
+        """A mend recorded closed for `step` by a commit on main, and the repair not ended (the state the live list is in)."""
+        sha = tool_commit_on_main(self.t, name, "# %s\n" % name)
+        row = lv.add_mend(self.t.live, step, self.TITLE, "build/windows-asan", "closed", sha, "recorded after a landing by hand")
+        return row["id"], sha
+
+    def state_of(self, rid):
+        return next(r for r in lv.read_repairs(self.t.live) if r["id"] == rid)["state"]
+
+    def assert_ended(self, rid, sha, mid):
+        t = self.t
+        rep = next(r for r in lv.read_repairs(t.live) if r["id"] == rid)
+        self.assertEqual((rep["state"], rep["closed"]), ("landed", sha), "closed by the mend's commit")
+        self.assertIn("ended by mend %s (%s)" % (mid, self.TITLE), rep["note"])
+        self.assertNotIn(rid, lv.read_state(t.live), "nothing of it is in work")
+        code, text = t.run(["repair", "list"], expect=0)
+        self.assertIn("closed by " + sha, text)
+        code, text = t.run(["status"], expect=0)
+        self.assertNotIn("%s repair of" % rid, text, "status lists it in no work")
+        code, text = t.run(["next"], expect=0)
+        self.assertNotIn("REPAIR", text.splitlines()[0], "the repair is not given again")
+        self.assertIn("A.1", text, "the step that comes after is given")
+        static, data, landings, faults = plan.page_data(t.tree, t.live)
+        self.assertEqual([(r["state"], r["closed"]) for r in data["repairs"] if r["id"] == rid], [("landed", sha)])
+
+    def test_landed_for_a_repair_records_the_mend_and_ends_the_repair(self):
+        t = self.t
+        for started in (False, True):          # never started (the step tool was at fault before `start`), and started
+            with self.subTest(started=started):
+                rid = self.repair(started)
+                sha = tool_commit_on_main(t, "tools/verify/landed_%s.txt" % rid, "# a mend\n")
+                code, text = t.run(["mend", "open", rid, self.TITLE, "--landed", sha], expect=0)
+                self.assertIn("Repair %s is ended by the mend" % rid, text)
+                self.assertEqual(lv.read_mends(t.live)[-1]["step"], rid)
+                self.assert_ended(rid, sha, lv.read_mends(t.live)[-1]["id"])
+
+    def test_landed_refuses_a_repair_it_cannot_end_and_records_nothing(self):
+        t = self.t
+        sha = tool_commit_on_main(t)
+        self.assertEqual(t.run(["mend", "open", "R-099", self.TITLE, "--landed", sha])[0], 1, "no such repair")
+        self.assertEqual(lv.read_mends(t.live), [])
+        rid = self.repair()
+        t.run(["mend", "open", rid, self.TITLE, "--landed", sha], expect=0)
+        code, text = t.run(["mend", "open", rid, "again", "--landed", sha])
+        self.assertEqual(code, 1)
+        self.assertIn("landed already", text)
+        self.assertEqual(len(lv.read_mends(t.live)), 1, "the refused one is not recorded")
+
+    def test_repair_end_ends_an_open_repair_and_a_started_one(self):
+        t = self.t
+        for started in (False, True):
+            with self.subTest(started=started):
+                rid = self.repair(started)
+                mid, sha = self.closed_mend(rid, "tools/verify/end_%s.txt" % rid)
+                self.assertEqual(self.state_of(rid), "started" if started else "open")
+                code, text = t.run(["repair", "end", rid, "--mend", mid], expect=0)
+                self.assertIn("Repair %s is ended by mend %s" % (rid, mid), text)
+                self.assert_ended(rid, sha, mid)
+
+    def test_repair_end_refuses_a_mend_that_is_not_closed(self):
+        t = self.t
+        rid = self.repair(True)
+        t.run(["mend", "open", rid, self.TITLE], expect=0)
+        code, text = t.run(["repair", "end", rid, "--mend", "M-001"])
+        self.assertEqual(code, 1)
+        self.assertIn("mend M-001 is open, not closed", text)
+        self.assertEqual(self.state_of(rid), "started")
+        self.assertEqual(lv.read_state(t.live)[rid]["reason"], "waits for M-001", "nothing changed")
+
+    def test_repair_end_refuses_a_mend_of_another_step_and_a_missing_mend(self):
+        t = self.t
+        first, second = self.repair(), self.repair(check="soak")
+        mid, sha = self.closed_mend(first)
+        code, text = t.run(["repair", "end", second, "--mend", mid])
+        self.assertEqual(code, 1)
+        self.assertIn("was opened for %s, not for %s" % (first, second), text)
+        code, text = t.run(["repair", "end", second, "--mend", "M-099"])
+        self.assertEqual(code, 1)
+        self.assertIn("no mend M-099", text)
+        code, text = t.run(["repair", "end", "R-099", "--mend", mid])
+        self.assertEqual(code, 1)
+        self.assertIn("no repair R-099", text)
+        self.assertEqual([r["state"] for r in lv.read_repairs(t.live)], ["open", "open"])
+
+    def test_repair_end_refuses_a_repair_that_is_landed_already(self):
+        t = self.t
+        rid = self.repair()
+        mid, sha = self.closed_mend(rid)
+        t.run(["repair", "end", rid, "--mend", mid], expect=0)
+        code, text = t.run(["repair", "end", rid, "--mend", mid])
+        self.assertEqual(code, 1)
+        self.assertIn("is landed already (closed by %s)" % sha, text)
+
+    def test_repair_end_refuses_a_repair_that_waits_for_another_open_mend(self):
+        t = self.t
+        rid = self.repair(True)
+        mid, sha = self.closed_mend(rid)
+        t.run(["mend", "open", rid, "a second fault"], expect=0)
+        self.assertEqual(lv.read_state(t.live)[rid]["reason"], "waits for M-002")
+        code, text = t.run(["repair", "end", rid, "--mend", mid])
+        self.assertEqual(code, 1)
+        self.assertIn("waits for mend M-002, which is open", text)
+        code, text = t.run(["mend", "open", rid, "by hand", "--landed", sha])
+        self.assertEqual(code, 1, "the by-hand route refuses it too")
+        self.assertEqual(self.state_of(rid), "started")
+        self.assertEqual(len(lv.read_mends(t.live)), 2)
+
+    def test_repair_end_refuses_a_commit_that_is_not_on_main(self):
+        t = self.t
+        rid = self.repair()
+        row = lv.add_mend(t.live, rid, self.TITLE, "-", "closed", "0123456789abcdef0123456789abcdef01234567", "x")
+        code, text = t.run(["repair", "end", rid, "--mend", row["id"]])
+        self.assertEqual(code, 1)
+        self.assertEqual(self.state_of(rid), "open")
+
+    def test_a_flake_repair_ended_by_its_mend_ends_the_set_aside(self):
+        t = self.t
+        t.live.mkdir(parents=True, exist_ok=True)
+        aside = t.live / "set-aside.tsv"
+        aside.write_text("2026-11-20T10:00:00\tboot\td3d12\t3 flakes in 7 days\n", encoding="utf-8")
+        row, _ = lv.add_repair(t.live, "flake", "fail", "flake:boot", "d3d12", evidence="D:/x", note="boot set aside")
+        mid, sha = self.closed_mend(row["id"])
+        t.run(["repair", "end", row["id"], "--mend", mid], expect=0)
+        self.assertEqual(aside.read_text(encoding="utf-8").strip(), "", "the test counts again")
 
 
 class DecideAliveTest(unittest.TestCase):

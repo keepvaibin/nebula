@@ -5,7 +5,7 @@
                                          | owed ID "TEXT" | commands | note "TEXT" | note --clear
                                          | claim PACKAGE [--take-stale] | tool "TEXT" | toolfault --last --could-not "TEXT"
                                          | mend open|land|close|failed|drop|list ... | decide ID "WHAT" --because "WHY" | alive | check
-                                         | repair add --source S --kind K --check C ... | repair list
+                                         | repair add --source S --kind K --check C ... | repair list | repair end R-00N --mend M-00N
     (next, ahead, start, land, blocked, claim, tool, toolfault, status and commands take --agent 1|2; 1 is the default; ID is a step, or for
      start, land and blocked a repair such as R-003)
     (--no-push, before the command, or NEBULA_PLAN_NO_PUSH=1 in the environment: the progress branch is not pushed)
@@ -129,7 +129,12 @@ repair   `repair add --source nightly|stress|measure|github --kind fail|stress|w
          open repair of kind `fail` before any step (stress and worse repairs never come first and never block);
          `start R-003` makes the branch `native/repair-003` in the agent's folder; `land R-003` hands it to
          `gate.py land --also <its check>` and on a pass sets the repair `landed` with the commit; `blocked R-003 "WHY"`
-         sets it `set-aside` and `next` goes on with the steps. Agent 1's work only.
+         sets it `set-aside` and `next` goes on with the steps. Agent 1's work only. A repair whose cause was a test tool is ended by its
+         mend on every route, by one function: `mend close M-00N COMMIT` (the repair is `started`), `mend open R-00N "TITLE" --landed COMMIT`
+         (a mend landed by hand because plan.py itself was at fault) and `repair end R-00N --mend M-00N` (the mend is recorded closed and the
+         repair is still open). The repair becomes `landed`, closed by the mend's commit, with the note `ended by mend M-00N (TITLE)`; `repair
+         end` refuses a mend that is not closed, a mend of another step, a repair that is landed already and a repair that waits for another,
+         open mend.
 
 Exit codes: 0 done; 1 refused or failed; 2 the command was wrong; 3 the same failure three times; 4 a tool or
 machine fault only, or a branch that does not apply (the gate's "not judged": it does not count as a failure of the change).
@@ -3155,9 +3160,29 @@ def cmd_repair(a):
                 ", closed by " + r["closed"] if r["closed"] not in ("", "-") else ""))
             say("      evidence: %s%s" % (r["evidence"], "; " + r["note"] if r["note"] not in ("", "-") else ""))
         return 0
+    if a.repair_cmd == "end":
+        return repair_end(a)
     row, new = lv.add_repair(live, a.source, a.kind, a.check, a.renderer, a.step, a.commit, a.evidence, a.row, a.note)
     refresh_page(a)
     say(row["id"])                                   # the one line the nightly run reads: the repair's id, new or counted
+    return 0
+
+
+def repair_end(a):
+    """`repair end R-00N --mend M-00N`: the repair's cause was a test tool and the mend is closed (it was recorded without ending the repair)."""
+    m = mend_row(a, a.mend)
+    if m is None:
+        bad = "no mend %s (plan.py mend list)" % a.mend
+    else:
+        bad = repair_end_problem(a, a.id, m) or (mend_commit_problem(a, m["commit"]) if m["commit"] not in ("", "-") else "mend %s has no commit" % m["id"])
+    if bad:
+        say("plan.py: " + bad)
+        return 1
+    end_repair_by_mend(a, a.id, m["id"], m["title"], m["commit"])
+    refresh_page(a)
+    say("Repair %s is ended by mend %s (commit %s): its cause was a test tool, and nothing of the game was left to change." % (
+        a.id, m["id"], m["commit"][:9]))
+    say("Go on: `python -X utf8 -I %s next`." % plan_path(a))
     return 0
 
 
@@ -3278,6 +3303,54 @@ def commit_on_main(a, commit):
     return True, names
 
 
+def mend_commit_problem(a, commit, what=": it is not a mend"):
+    """None when `commit` is on origin/main and changes a tool or document path (a mend's commit); else the plain line that says why."""
+    ok, found = commit_on_main(a, commit)
+    if not ok:
+        return found
+    if not any(p.startswith(MEND_TOOL_PATHS) for p in found):
+        return "commit %s changes no tool or document path (%s)%s" % (commit, ", ".join(MEND_TOOL_PATHS), what)
+    return None
+
+
+def repair_end_problem(a, repair_id, mend):
+    """None when the repair may be ended by the mend, else the plain line that says why not. `mend`: its row in mends.tsv, or None for a mend
+    that is being recorded closed for this repair (mend open --landed). The repair is `open` or `started`; a started one that waits for
+    another, open mend is not ended by this one."""
+    live = live_dir(a.live)
+    rep = next((r for r in lv.read_repairs(live) if r["id"] == repair_id), None)
+    if rep is None:
+        return "no repair %s (plan.py repair list)" % repair_id
+    if mend is not None:
+        if mend["state"] != "closed":
+            return "mend %s is %s, not closed: a repair is ended only by a mend whose commit is on main (plan.py mend close %s <commit>)" % (
+                mend["id"], mend["state"], mend["id"])
+        if mend["step"] != repair_id:
+            return "mend %s was opened for %s, not for %s" % (mend["id"], "no step" if mend["step"] in ("", "-") else mend["step"], repair_id)
+    if rep["state"] not in ("open", "started"):
+        return "repair %s is %s already%s: only an open or a started repair is ended by a mend" % (
+            repair_id, rep["state"], (" (closed by %s)" % rep["closed"]) if rep["closed"] not in ("", "-") else "")
+    reason = (lv.read_state(live).get(repair_id) or {}).get("reason", "")
+    for other in lv.read_mends(live):
+        if other["state"] == "open" and reason == WAIT_REASON % other["id"] and (mend is None or other["id"] != mend["id"]):
+            return "repair %s waits for mend %s, which is open: finish that mend first (mend close, or mend failed)" % (repair_id, other["id"])
+    return None
+
+
+def end_repair_by_mend(a, repair_id, mend_id, title, commit):
+    """The one way a repair ends by a mend (mend close, mend open --landed, repair end): the repair is `landed`, closed by the mend's commit,
+    with the note `ended by mend M-00N (<title>)`, and it leaves state.tsv (a repair that was never started has no line there). The page,
+    `status`, `next` and `repair list` read repairs.tsv and state.tsv, so they show it closed by the mend. A repair of source flake also ends
+    the time its test was set aside, as a landing does. Returns the repair's row."""
+    live = live_dir(a.live)
+    state = lv.read_state(live)
+    lv.set_repair(live, repair_id, "landed", commit, note="ended by mend %s (%s)" % (mend_id, title))
+    lv.set_state_entry(live, repair_id, "landed", (state.get(repair_id) or {}).get("agent") or "1")
+    rep = next(r for r in lv.read_repairs(live) if r["id"] == repair_id)
+    end_aside(a, rep)
+    return rep
+
+
 def mend_open(a):
     live = live_dir(a.live)
     words = a.words
@@ -3290,16 +3363,20 @@ def mend_open(a):
         say("plan.py: a mend needs a title")
         return 1
     if a.landed:
-        ok, found = commit_on_main(a, a.landed)
-        if not ok:
-            say("plan.py: " + found)
-            return 1
-        if not any(p.startswith(MEND_TOOL_PATHS) for p in found):
-            say("plan.py: commit %s changes no tool or document path (%s)" % (a.landed, ", ".join(MEND_TOOL_PATHS)))
+        bad = mend_commit_problem(a, a.landed, "")
+        if bad is None and step and is_repair(step):
+            bad = repair_end_problem(a, step, None)          # nothing is recorded when the repair cannot be ended
+        if bad:
+            say("plan.py: " + bad)
             return 1
         row = lv.add_mend(live, step or "-", title, a.check or "-", "closed", a.landed, "recorded after a landing by hand (plan.py itself was at fault)")
+        if step and is_repair(step):
+            end_repair_by_mend(a, step, row["id"], title, a.landed)
         refresh_page(a)
         say("recorded %s as closed by %s (the sheet, if you wrote one: %s)" % (row["id"], a.landed, lv.sheet_path(live, row["id"]).as_posix()))
+        if step and is_repair(step):
+            say("Repair %s is ended by the mend: its cause was a test tool, and nothing of the game was left to change. Go on: `python -X utf8 -I %s next`." % (
+                step, plan_path(a)))
         return 0
     open_now = lv.open_mend(live)
     if open_now:
@@ -3355,12 +3432,9 @@ def mend_close(a):
     if m["state"] == "closed":
         say("plan.py: mend %s is closed already (commit %s)" % (a.id, m["commit"]))
         return 1
-    ok, found = commit_on_main(a, a.commit)
-    if not ok:
-        say("plan.py: " + found)
-        return 1
-    if not any(p.startswith(MEND_TOOL_PATHS) for p in found):
-        say("plan.py: commit %s changes no tool or document path (%s): it is not a mend" % (a.commit, ", ".join(MEND_TOOL_PATHS)))
+    bad = mend_commit_problem(a, a.commit)
+    if bad:
+        say("plan.py: " + bad)
         return 1
     lv.set_mend(live, a.id, "closed", a.commit)
     state = lv.read_state(live)
@@ -3368,10 +3442,11 @@ def mend_close(a):
     ended = None
     if waiting and is_repair(waiting):
         # A repair whose cause was a test tool has nothing of the game left to change: the mend ends it (the page shows it closed by the mend).
-        ended = next((r for r in lv.read_repairs(live) if r["id"] == waiting and r["state"] == "started"), None)
-        if ended is not None:
-            lv.set_repair(live, waiting, "landed", a.commit, note="ended by mend %s (%s)" % (a.id, m["title"]))
-            lv.set_state_entry(live, waiting, "landed", (state.get(waiting) or {}).get("agent") or "1")
+        why_not = repair_end_problem(a, waiting, mend_row(a, a.id))
+        if why_not is None:
+            ended = end_repair_by_mend(a, waiting, a.id, m["title"], a.commit)
+        else:
+            say("plan.py: mend %s is closed, but repair %s is not ended by it: %s" % (a.id, waiting, why_not))
     elif waiting and (state.get(waiting) or {}).get("state") == "started":
         lv.set_state_entry(live, waiting, "started", state[waiting]["agent"] or "1", "")
     reopened = []
@@ -3797,6 +3872,10 @@ def parser():
     ra.add_argument("--row", default="-", help="the ledger row")
     ra.add_argument("--note", required=True)
     ra.set_defaults(fn=cmd_repair)
+    rn = rsub.add_parser("end", help="a repair whose cause was a test tool is ended by its closed mend")
+    rn.add_argument("id", help="the repair, R-00N")
+    rn.add_argument("--mend", required=True, help="the closed mend that was opened for this repair, M-00N")
+    rn.set_defaults(fn=cmd_repair)
     rl = rsub.add_parser("list", help="the repairs, open ones first")
     rl.set_defaults(fn=cmd_repair)
     return p
