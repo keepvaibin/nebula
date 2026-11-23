@@ -154,9 +154,9 @@ void placing() {
     placed = place_window({kDisplayWindowed, "Side", 854u, 480u}, ids, displays, 0, 0);
     check(placed && !placed->fullscreen && placed->display == 1u && placed->client_width == 854u && placed->client_height == 480u,
           "windowed: the configured size on the named display");
-    placed = place_window({kDisplayWindowed, "Side", 3840u, 2160u}, ids, displays, 0, 31);
-    check(placed && placed->client_width == 1920u && placed->client_height == 1009u,
-          "windowed: limited to the usable area less the frame (1080 - 40 - 31)");
+    placed = place_window({kDisplayWindowed, "Side", 3840u, 2160u}, ids, displays, 16, 31);
+    check(placed && placed->client_width == 1904u && placed->client_height == 1009u,
+          "windowed: limited to the usable area less the frame (1920 - 16, 1080 - 40 - 31)");
     placed = place_window({kDisplayWindowed, "Main", 100u, 100u}, ids, displays, 0, 0);
     check(placed && placed->client_width == 320u && placed->client_height == 240u, "windowed: never below 320 x 240");
     check(!place_window({kDisplayBorderless, "Main", 1u, 1u}, {}, {}, 0, 0), "no displays: nowhere to place");
