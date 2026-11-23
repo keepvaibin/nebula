@@ -1,0 +1,21 @@
+{
+  "harness": 1,
+  "name": "lens-flare-hidden",
+  "about": "The sun behind a house shows no lens flare: arriving in EggStarGalaxy 1, at frame 100 the sun stands behind the house on the right, and how much of the flare shows is decided on the graphics card from the scene's depth at the sun's samples (S0.2.5, P-294; runtime/src/render/materials/flare_sight.hlsl). The mod test draw/2403-draw-points took the same picture, where the flare showed through the house on Direct3D 11 when the game read the picture's depth back. The picture is judged by the gate's approved pictures (tools/gate/pictures.py), outside the repository: a picture of the game is the game's content.",
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "limit_seconds": 240,
+  "steps": [
+    {
+      "at": 100,
+      "picture": "behind-house"
+    },
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": []
+}

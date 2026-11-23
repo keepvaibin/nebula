@@ -136,6 +136,9 @@ namespace Frame {
     void targetBeginPixels(const void* pKey, u32 width, u32 height, u32 clearRgba);
     void targetBeginOverFrame(const void* pKey, f32 across, f32 down, u32 clearRgba, const void* pFrameKey,
                               NebulaTargetChannels channels, const void* pDepthKey);
+    // The same into a target of a size in pixels.
+    void targetBeginPixelsOverFrame(const void* pKey, u32 width, u32 height, u32 clearRgba, const void* pFrameKey,
+                                    NebulaTargetChannels channels, const void* pDepthKey);
     void targetEnd(const void* pKey, NebulaTargetChannels channels = NEBULA_TARGET_RGBA);
     void clear(u32 clearRgba, u32 channels);
     void clearFrame(u32 clearRgba, u32 channels);

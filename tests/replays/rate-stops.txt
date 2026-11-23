@@ -6,6 +6,11 @@
 # (PhantomGalaxy 1, StarDustGalaxy 1) and at step 48 (SandClockGalaxy 1): the first actor that differs is a StarPieceShooter (the star
 # bit launcher, "発射用アクター") whose nerve's step is one lower at a rate of 2. The cause was not looked for further; the step that
 # finds it adds the three stops.
+#
+# Added at S0.2.5 (P-294): the launcher aimed at the pointer's world point, which came from the picture's depth answer, one a
+# picture (StarPieceShooter::calcShootGoalUsingPointingDepth); the pointer asks the scene in the step since S0.2.3, and the lens
+# flare's three actors, the other readers of the answers in these stops, are placed from the sun and the step's camera since S0.2.5.
+# No check of S0.2.5's landing plays this list: the long run's replays/rates is the first to judge the three.
 
 HoneyBeeKingdomGalaxy 1
 OceanRingGalaxy 1
@@ -24,3 +29,6 @@ HeavenlyBeachGalaxy 1
 KoopaBattleVs3Galaxy 1
 ReverseKingdomGalaxy 1
 TamakoroExLv1Galaxy 1
+PhantomGalaxy 1
+SandClockGalaxy 1
+StarDustGalaxy 1

@@ -226,6 +226,8 @@ typedef enum NebulaShaderId {
     NEBULA_SHADER_FRAME_DEPTH = 41, /* the frame's depth as the game reads it, averaged over the pass's pixel */
     NEBULA_SHADER_PARTICLE_INSTANCES = 42, /* the particle material's vertex stage for NEBULA_ITEM_INSTANCES draws */
     NEBULA_SHADER_GLYPH_INSTANCES = 43, /* the font material's vertex stage for CharWriter's instanced glyphs */
+    NEBULA_SHADER_FLARE_SIGHT = 44, /* LensFlareDirector: how much of its bright object shows, from the frame's depth */
+    NEBULA_SHADER_FLARE_BLEND = 45, /* LensFlareDirector: the frame with the flare and without it, mixed by that share */
     NEBULA_SHADER_COUNT
 } NebulaShaderId;
 

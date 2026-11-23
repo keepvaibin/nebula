@@ -992,6 +992,15 @@ namespace Frame {
         rPass.over_frame_channels = channels;
     }
 
+    void targetBeginPixelsOverFrame(const void* pKey, u32 width, u32 height, u32 clearRgba, const void* pFrameKey,
+                                    NebulaTargetChannels channels, const void* pDepthKey) {
+        targetBeginOverFrame(pKey, 0.0f, 0.0f, clearRgba, pFrameKey, channels, pDepthKey);
+        NebulaFramePass& rPass = store()->mPasses.mData[sOpenDraw];
+        rPass.width = width;
+        rPass.height = height;
+        rPass.pixels = 1;
+    }
+
     void targetEnd(const void*, NebulaTargetChannels channels) {
         Store* pStore = store();
         // Every pass into the target carries what its picture holds.

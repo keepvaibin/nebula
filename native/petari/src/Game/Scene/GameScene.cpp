@@ -548,7 +548,6 @@ void GameScene::draw3D() const {
     CategoryList::execute(MR::DrawType_PlayerSilhouette);
     SceneFunction::executeDrawSilhouetteAndFillShadow();
     SceneFunction::executeDrawAlphaShadow();
-    MR::setLensFlareDrawSyncToken();
     Frame::setPassAlpha(false);
     SceneFunction::executeDrawBufferListNormalOpa();
     SceneFunction::executeDrawListOpa();
@@ -572,6 +571,8 @@ void GameScene::draw3D() const {
     MR::loadLightPlayer();
     CategoryList::execute(MR::DrawType_PlayerIndirect);
     luma::draw::point(LUMA_DRAW_WORLD_AFTER);
+    // How much of the flare's bright object the whole scene leaves seen, while its depth stands.
+    MR::drawLensFlareSight();
     Frame::sceneEnd();
     luma::draw::post::stage(LUMA_DRAW_POST_WORLD);  // the mods' post programs over the scene (one load with none)
     MR::clearZBuffer();

@@ -4,6 +4,7 @@
 #include "Game/Util/Array.hpp"
 
 class BrightObjBase;
+class GameTexture;
 class TriggerChecker;
 
 class LensFlareModel : public LiveActor {
@@ -30,7 +31,7 @@ public:
 
     void notifyInArea();
 
-    f32 mFlareStrength;  // visibility from the bright object and the distance to the screen centre
+    f32 mFlareStrength;  // from the bright object's distance to the screen centre (how much of it shows: the sight)
     f32 mFadeLevel;  // 0 to 1
     f32 mFadeStep;  // fade level change per frame
     TriggerChecker* mAreaChecker;  // inside the lens flare area
@@ -79,30 +80,37 @@ public:
 
     virtual void movement() override;
     void pauseOff();
-    // The picture where the drawing has reached, as this frame's readback; the bright objects measure their
-    // visibility in it.
-    void setDrawSyncToken();
-    void readAnswers();
-    void reserveProbes();
     s32 checkArea();
     bool checkBrightObj(bool);
     void controlFlare(s32, bool);
+
+    // How much of the flare shows is decided on the graphics card, in the picture, and never read back: the sight pass
+    // after the scene writes the share of the object's samples nothing stands in front of, eased from the last frame's,
+    // into a 1 by 1 target (flare_sight.hlsl), and the flare is drawn as much as that share
+    // (beginFlareDraw/endFlareDraw, flare_blend.hlsl). Draw state alone: the step reads none of it.
+    bool isFlareShown() const;
+    void drawSight() const;
+    bool beginFlareDraw() const;
+    void endFlareDraw() const;
 
     LensFlareRing* mRing;
     LensFlareGlow* mGlow;
     LensFlareLine* mLine;
     MR::InlineArray< BrightObjBase*, 16 > mBrightObjArray;
     u32 mBrightObjCount;
-    struct NebulaScreenProbe* mProbes = nullptr;
-    u32 mProbeCapacity = 0;
-    u32 mAsker;  // the asker its probes carry
-    Vec2f mBrightCenter;  // bright centre of the first visible bright object
-    f32 mBrightLevel;  // its brightness
-    Vec2f mObjCenter;  // its centre
-    Vec2f mNowCenter;  // its centre this frame
+    s32 mSightObj;  // the bright object the flare is placed from, or -1
+    Vec2f mNowCenter;  // its centre on the screen
+    GameTexture* mSightTargets[2];  // the sight's share, written in turn: each frame reads the other's
+    GameTexture* mDepthKey;  // the frame's depth for the sight pass
+    GameTexture* mWithoutKey;  // the frame before the flare
+    GameTexture* mWithKey;  // the frame with it
 };
 
 namespace MR {
     void addBrightObj(BrightObjBase* pBrightObj);
-    void setLensFlareDrawSyncToken();
+    // After the scene, while its depth stands: the sight pass of the flare (LensFlareDirector::drawSight).
+    void drawLensFlareSight();
+    // Around the flare's models: the frame before them is kept, and they are mixed into it by the sight's share.
+    bool beginLensFlareDraw();
+    void endLensFlareDraw();
 };  // namespace MR

@@ -1,6 +1,5 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/MapObj/BrightObj.hpp"
-#include "Game/Render/FrameList.hpp"
 #include "Game/MapObj/Sun.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Screen/LensFlare.hpp"
@@ -18,9 +17,9 @@
 namespace {
     const static f32 sSunRadius = 3000.0f;
     const static f32 sSunModelScale = 100.0f;
-    // Each point is asked about a tenth of the radius in front of the sphere's surface. The object's own model is a
+    // Each sample's depth is a tenth of the radius in front of the sphere's surface. The object's own model is a
     // polygon sphere (corners on the sphere, faces inside it), and at the sun's distance one step of a float depth near
-    // 1 spans about 6 units (56 with the near plane at 10): asked at the surface itself, a point near a corner of the
+    // 1 spans about 6 units (56 with the near plane at 10): read at the surface itself, a point near a corner of the
     // model was hidden or seen by rounding, and the flare's points came and went as the camera moved. Anything that
     // really hides the object stands far nearer than this.
     const static f32 sSurfaceMargin = 0.1f;
@@ -62,46 +61,42 @@ namespace {
 
         return isOnScreen;
     }
+
+    // One sample: the point's place in the frame and the depth of `rFront`, the sphere's near surface in front of it.
+    bool calcSample(BrightSample* pSample, const Vec3f& rPoint, const Vec3f& rFront, const Pos3f& rView, const Proj3f& rProj) {
+        Vec2f screenPos;
+        pSample->mOnScreen = ::calcScreenPosition(&screenPos, rPoint, rView, rProj);
+        Vec2f framePos;
+        MR::convertScreenPosToFrame(&framePos, screenPos);
+        pSample->mFrameX = framePos.x;
+        pSample->mFrameY = framePos.y;
+        pSample->mDepth = ::calcDepth(rFront, rView, rProj);
+        return pSample->mOnScreen;
+    }
 };  // namespace
 
-BrightInfo::BrightInfo() {
-    reset();
-}
-
-void BrightInfo::write(const Vec2f& rBrightnessCenter, const Vec2f& rRealCenter, f32 brightness) {
-    mBrightnessCenter.set(rBrightnessCenter);
-    mRealCenter.set(rRealCenter);
-    mBright = brightness;
-}
-
-void BrightInfo::reset() {
-    mBrightnessCenter.zero();
-    mRealCenter.zero();
-    mBright = 0.0f;
-}
-
-BrightObjBase::BrightObjBase() : mInfo(), mBrightCenter(0.0f, 0.0f), mNowCenter(0.0f, 0.0f), mBrightness(), mDrawPos(0.0f, 0.0f, 0.0f), mDrawRadius(0.0f) {
+BrightObjBase::BrightObjBase() : mDrawPos(0.0f, 0.0f, 0.0f), mDrawRadius(0.0f) {
     MR::addBrightObj(this);
 }
 
-// The picture has been drawn with this frame's camera: the points of the sphere it shows are asked about with that camera.
-void BrightObjBase::checkVisibilityOfSphere(NebulaScreenProbe* pProbes) {
+// The sphere's samples as the scene's camera sees them: the step's camera when the step asks, the picture's when its draw
+// does (the same camera: the picture is drawn with the step's).
+u32 BrightObjBase::calcSamples(BrightSample* pSamples) const {
     const Pos3f& rView = MR::getCameraViewMtx();
     const Proj3f& rProj = MR::getCameraProjectionMtx();
     Vec3f drawPos(mDrawPos);
     Vec3f camDir(MR::getCamYdir());
     Vec3f drawDir(MR::getCamPos() - drawPos);
 
-    for (u32 idx = 0; idx < cProbeCount; idx++) {
-        pProbes[idx].x = -1.0f;
-        pProbes[idx].y = -1.0f;
-        pProbes[idx].user_x = 0.0f;
-        pProbes[idx].user_y = 0.0f;
-        pProbes[idx].user_z = 0.0f;
+    for (u32 idx = 0; idx < cSampleCount; idx++) {
+        pSamples[idx].mFrameX = 0.0f;
+        pSamples[idx].mFrameY = 0.0f;
+        pSamples[idx].mDepth = 0.0f;
+        pSamples[idx].mOnScreen = false;
     }
 
     if (MR::isNearZero(drawDir)) {
-        return;
+        return 0;
     }
 
     MR::normalize(&drawDir);
@@ -113,75 +108,38 @@ void BrightObjBase::checkVisibilityOfSphere(NebulaScreenProbe* pProbes) {
     Pos3f mtx;
     mtx.setTR(side, camDir, drawDir, drawPos);
 
-    // The first point is the centre: its screen position comes back as the flare's centre whether or not it shows.
-    Vec2f center;
-    ::calcScreenPosition(&center, drawPos, rView, rProj);
-    checkVisible(&pProbes[0], drawPos, rView, rProj);
-    pProbes[0].user_x = center.x;
-    pProbes[0].user_y = center.y;
-    // Each point's depth is the sphere's near surface in front of it.
-    pProbes[0].user_z = ::calcDepth(drawPos + drawDir * (mDrawRadius * (1.0f + ::sSurfaceMargin)), rView, rProj);
+    u32 onScreen = 0;
+    if (::calcSample(&pSamples[0], drawPos, drawPos + drawDir * (mDrawRadius * (1.0f + ::sSurfaceMargin)), rView, rProj)) {
+        onScreen++;
+    }
 
     for (u32 idx = 0; idx < 8; idx++) {
         f32 angle = idx * MR::pi() / 4.0f;
-        Vec3f innerProbe(MR::cos(angle), MR::sin(angle), 0.0f);
-        innerProbe.scale(mDrawRadius * 0.4f);
+        Vec3f innerPoint(MR::cos(angle), MR::sin(angle), 0.0f);
+        innerPoint.scale(mDrawRadius * 0.4f);
 
-        mtx.mult(innerProbe, innerProbe);
+        mtx.mult(innerPoint, innerPoint);
 
-        checkVisible(&pProbes[1 + idx], innerProbe, rView, rProj);
-        pProbes[1 + idx].user_z = ::calcDepth(innerProbe + drawDir * (mDrawRadius * (0.9165f + ::sSurfaceMargin)), rView, rProj);
+        if (::calcSample(&pSamples[1 + idx], innerPoint, innerPoint + drawDir * (mDrawRadius * (0.9165f + ::sSurfaceMargin)), rView,
+                         rProj)) {
+            onScreen++;
+        }
     }
 
     for (u32 idx = 0; idx < 8; idx++) {
         f32 angle = (idx + 0.5f) * MR::pi() / 4.0f;
-        Vec3f outerProbe(MR::cos(angle), MR::sin(angle), 0.0f);
-        outerProbe.scale(mDrawRadius * 0.7f);
+        Vec3f outerPoint(MR::cos(angle), MR::sin(angle), 0.0f);
+        outerPoint.scale(mDrawRadius * 0.7f);
 
-        mtx.mult(outerProbe, outerProbe);
+        mtx.mult(outerPoint, outerPoint);
 
-        checkVisible(&pProbes[9 + idx], outerProbe, rView, rProj);
-        pProbes[9 + idx].user_z = ::calcDepth(outerProbe + drawDir * (mDrawRadius * (0.7141f + ::sSurfaceMargin)), rView, rProj);
-    }
-}
-
-void BrightObjBase::checkVisible(NebulaScreenProbe* pProbe, const Vec3f& rTrans, const Pos3f& rViewMtx, const Proj3f& rProjMtx) {
-    Vec2f screenPos;
-
-    if (::calcScreenPosition(&screenPos, rTrans, rViewMtx, rProjMtx)) {
-        Vec2f frameBufferPos;
-        MR::convertScreenPosToFrame(&frameBufferPos, screenPos);
-        pProbe->x = frameBufferPos.x;
-        pProbe->y = frameBufferPos.y;
-        pProbe->user_x = screenPos.x;
-        pProbe->user_y = screenPos.y;
-    }
-}
-
-// The points' answers: how many of the sphere's points nothing drawn so far stands in front of.
-void BrightObjBase::setResult(const NebulaScreenProbe* pProbes) {
-    u32 bright = 0;
-    Vec2f objCenter(0.0f, 0.0f);
-
-    for (u32 idx = 0; idx < cProbeCount; idx++) {
-        if (pProbes[idx].x >= 0.0f && pProbes[idx].value >= pProbes[idx].user_z) {
-            bright++;
-            objCenter += Vec2f(pProbes[idx].user_x, pProbes[idx].user_y);
+        if (::calcSample(&pSamples[9 + idx], outerPoint, outerPoint + drawDir * (mDrawRadius * (0.7141f + ::sSurfaceMargin)), rView,
+                         rProj)) {
+            onScreen++;
         }
     }
 
-    const Vec2f center(pProbes[0].user_x, pProbes[0].user_y);
-    f32 ratio = static_cast< f32 >(bright) / cProbeCount;
-
-    if (bright != 0) {
-        mBrightCenter.set(Vec2f(objCenter * (1.0f / bright)));
-        mBrightness = ratio;
-        mNowCenter.set(center);
-    } else {
-        mBrightness = ratio;
-    }
-
-    mInfo.write(mBrightCenter, center, mBrightness);
+    return onScreen;
 }
 
 BrightObj::BrightObj(const char* pName) : LiveActor(pName), BrightObjBase(), mRadius(::sSunModelScale) {
@@ -203,10 +161,6 @@ void BrightObj::init(const TableIter& rIter) {
 void BrightObj::control() {
     mDrawPos.set(mPosition);
     mDrawRadius = mRadius;
-}
-
-void BrightObj::calcBrightInfo(NebulaScreenProbe* pProbes) {
-    BrightObjBase::checkVisibilityOfSphere(pProbes);
 }
 
 void BrightObj::getNowCenter(Vec2f* pDst) const {
@@ -236,16 +190,9 @@ void BrightSun::control() {
     mDrawRadius = ::sSunRadius;
 }
 
-void BrightSun::calcBrightInfo(NebulaScreenProbe* pProbes) {
-    // A sun not out gives no light: nothing it saw before it went stays on the screen.
-    if (MR::isDead(this)) {
-        mInfo.reset();
-        mBrightness = 0.0f;
-        pProbes[0].x = cNoProbes;
-        return;
-    }
-
-    checkVisibilityOfSphere(pProbes);
+// A sun not out gives no light.
+bool BrightSun::isShining() const {
+    return !MR::isDead(this);
 }
 
 void BrightSun::getNowCenter(Vec2f* pDst) const {
@@ -277,22 +224,6 @@ void BrightSun::controlSunModel() {
 }
 
 BrightObjBase::~BrightObjBase() {
-}
-
-const Vec2f* BrightObjBase::getCenter() const {
-    return &mInfo.mRealCenter;
-}
-
-const Vec2f* BrightObjBase::getBrightCenter() const {
-    return &mInfo.mBrightnessCenter;
-}
-
-f32 BrightObjBase::getBright() const {
-    return mInfo.mBright;
-}
-
-void BrightObjBase::getNowCenter(Vec2f* pDst) const {
-    pDst->set(mNowCenter);
 }
 
 void BrightSun::init(const TableIter& rIter) {
