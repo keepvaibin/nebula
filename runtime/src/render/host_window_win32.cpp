@@ -475,8 +475,7 @@ RECT windowed_rect_on_monitor(const MonitorInfo& monitor, unsigned width,
     const long frame_h = frame.bottom - frame.top;
     const long work_w = monitor.work_area.right - monitor.work_area.left;
     const long work_h = monitor.work_area.bottom - monitor.work_area.top;
-    const long client_w = std::clamp<long>(static_cast<long>(width), 320, std::max(320L, work_w - frame_w));
-    const long client_h = std::clamp<long>(static_cast<long>(height), 240, std::max(240L, work_h - frame_h));
+    const auto [client_w, client_h] = windowed_client_size(work_w, work_h, frame_w, frame_h, width, height);
     const long outer_w = client_w + frame_w;
     const long outer_h = client_h + frame_h;
     const long left = monitor.work_area.left + std::max(0L, (work_w - outer_w) / 2);

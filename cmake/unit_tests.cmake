@@ -84,6 +84,8 @@ galaxy_test(galaxy_stats_tests SOURCES ${rt}/stats_tests.cpp LIBS galaxy_runtime
 galaxy_test(galaxy_controls_tests SOURCES ${rt}/controls_tests.cpp LIBS galaxy_runtime_settings galaxy_native_input)
 galaxy_test(galaxy_keyboard_layout_tests SOURCES ${rt}/input/keyboard_layout_tests.cpp LIBS galaxy_runtime_settings)
 galaxy_test(galaxy_keyboard_state_tests SOURCES ${rt}/input/keyboard_state_tests.cpp)
+# A key event of a host whose keys are physical places (SDL) against the default layout: W A S D, Space and Control.
+galaxy_test(galaxy_key_event_tests SOURCES ${rt}/input/key_event_tests.cpp LIBS galaxy_runtime_settings)
 galaxy_test(galaxy_raw_mouse_tests SOURCES ${rt}/input/raw_mouse_tests.cpp)
 galaxy_test(galaxy_rumble_route_tests SOURCES ${rt}/input/rumble_route_tests.cpp ${rt}/input/rumble_route.cpp)
 galaxy_test(galaxy_wiimote_motion_tests SOURCES ${rt}/input/wiimote_motion_tests.cpp ${rt}/input/wiimote_motion.cpp)
@@ -109,6 +111,8 @@ galaxy_test(galaxy_luma_tests SOURCES ${rt}/luma_tests.cpp ${rt}/luma.cpp)
 galaxy_test(galaxy_luma_net_reach_tests SOURCES ${rt}/luma_net_reach_tests.cpp ${rt}/luma_net_reach.cpp)
 # A swap chain's size where the surface sets none (Wayland): follows the window (galaxy/render/vk/swapchain_extent.h).
 galaxy_test(galaxy_vk_swapchain_extent_tests SOURCES ${rt}/render/vk/swapchain_extent_tests.cpp)
+# The desktop SDL host's displays and the window's choice and placement (galaxy/render/desktop_display.h).
+galaxy_test(galaxy_desktop_display_tests SOURCES ${render_src}/desktop_display_tests.cpp)
 # Mod support in a build, and the settings pages it takes away (galaxy/mod_support.h).
 galaxy_test(galaxy_mod_support_tests SOURCES ${rt}/mod_support_tests.cpp)
 galaxy_test(galaxy_mods_tests SOURCES ${rt}/mods_tests.cpp ${rt}/game_module.cpp ${rt}/mod_xml.cpp ${rt}/mods.cpp ${rt}/mod_consent.cpp ${rt}/luma.cpp
