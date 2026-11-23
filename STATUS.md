@@ -1,20 +1,19 @@
 # Nebula native plan: status
 
-Written 2026-11-23 04:02. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-23 04:53. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
-Steps landed: 5 of 138 (4%).
+Steps landed: 6 of 138 (4%).
 
 Now: S0.2.1 since 01:06, queued 03:12 behind beta/mac-load; ahead: S0.2.2 written
 
-In work now:
-- S0.2.1 Landing A: drawing stops changing the game (agent 1)
+In work now: Nothing started.
 
 ## Packages
 
 | Package | Landed | Of |
 | --- | --- | --- |
 | S0.1 | 5 | 5 |
-| S0.2 | 0 | 6 |
+| S0.2 | 1 | 6 |
 | G6 | 0 | 8 |
 | S0.3 | 0 | 2 |
 | R1 | 0 | 4 |
@@ -42,6 +41,7 @@ In work now:
 
 | When | Step | Title | Code commit | Main commit |
 | --- | --- | --- | --- | --- |
+| 2026-11-23 04:53 | S0.2.1 | Landing A: drawing stops changing the game | 84a2f5a72 | 5695013af |
 | 2026-11-22 18:13 | S0.1.5 | Render data path step 2, second landing: `f4/e3-2b` and `f4/e3-2c` | 02d236b5c | fb2dfa855 |
 | 2026-11-22 17:13 | S0.1.4 | Render data path step 2, first landing: `f4/e3-2a` | d9dbc32ac | ce59efeb8 |
 | 2026-11-22 16:37 | S0.1.3 | Render data path step 1: `f4/e3-1a`, `f4/e3-1b`, `f4/e3-1c` | 809c419ff | 8be38b7b8 |
