@@ -211,7 +211,8 @@ esac
 echo "Nebula for Mac ($macs, macOS 12 or later)" > "$package/How to open Nebula.txt"
 cat >> "$package/How to open Nebula.txt" <<'TEXT'
 
-1. Move Nebula.app to your Applications folder.
+1. Unzip the download by opening it in the Finder (macOS's own unzip), and move Nebula.app to your Applications folder.
+   Another program's unzip can break the app's signature.
 2. Open it. macOS says it cannot check the app for malicious software (it is not from the App Store or a registered
    developer): choose Done, then open System Settings > Privacy & Security, scroll down, and choose "Open Anyway"
    next to Nebula. On macOS 14 or earlier you can instead Control-click the app and choose Open.
@@ -219,6 +220,15 @@ cat >> "$package/How to open Nebula.txt" <<'TEXT'
    game up from it, once. Then the game prepares its graphics for your Mac (a bar shows how far) and starts.
 
 The game's data, saves and settings are in ~/Library/Application Support/Nebula.
+
+If macOS will not open Nebula, or Nebula says that the system refused a part of it: macOS marks every downloaded file as
+coming from the internet, and it can refuse files with that mark that are not signed by Apple. Open Terminal and run the
+next line (change the folder if Nebula.app is not in Applications), then open Nebula again:
+
+    xattr -dr com.apple.quarantine /Applications/Nebula.app
+
+It only removes that mark from Nebula's files. If Nebula still does not start, send us the file
+~/Library/Application Support/Nebula/logs/game.log
 TEXT
 # No file's extended attributes go in: an unzip tool other than macOS's own writes them as "._" files inside the app,
 # which breaks its signature. The signature needs none of them.

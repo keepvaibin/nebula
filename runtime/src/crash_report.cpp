@@ -235,8 +235,16 @@ Report classify(const Facts& facts) noexcept {
         break;
     case Facts::Kind::Startup:
         if (text.starts_with("cannot load the game module") || text.starts_with("the game module")) {
-            set(r, "NEB-S03", "Nebula's files do not match",
-                "Install Nebula again, or update it, so that all of its files come from one version.");
+            // The host says which (game_module.h load_failure): the file is not there, or the system refused it.
+            if (has(text, ": the file is not there")) {
+                set(r, "NEB-S03", "A part of Nebula is missing", "Install Nebula again, so that all of its files are there.");
+            } else if (has(text, ": the system refused it")) {
+                set(r, "NEB-S03", "The system refused a part of Nebula",
+                    "Install Nebula again from the original download. If it happens again, report it with the report file.");
+            } else {
+                set(r, "NEB-S03", "Nebula's files do not match",
+                    "Install Nebula again, or update it, so that all of its files come from one version.");
+            }
         } else if (text.starts_with("cannot open") || text.starts_with("cannot map")) {
             set(r, "NEB-S01", "The game content was not found",
                 "Open Nebula Setup and choose Repair.");

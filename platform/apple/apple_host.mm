@@ -2,6 +2,8 @@
 // The host on Apple's systems, outside SDL (apple_host.h).
 #include "apple_host.h"
 
+#include "galaxy/game_module.h"
+
 #import <Foundation/Foundation.h>
 #include <TargetConditionals.h>
 #if TARGET_OS_OSX
@@ -46,18 +48,13 @@ fs::path default_data_folder() {
 }
 
 // The game module in the app: Contents/Frameworks on a Mac, Frameworks on an iPhone or iPad, else beside the program
-// (a build folder).
+// (a build folder). An app with no mod support holds the plain module only; module_in_app still names a path in Frameworks
+// for it (game_module.h), where the host takes the plain file beside it.
 fs::path default_module() {
     NSBundle* const bundle = NSBundle.mainBundle;
-    const fs::path frameworks = path_of(bundle.privateFrameworksPath);
-    std::error_code error;
-    for (const fs::path& candidate : {frameworks / "libsmg_game.dylib", frameworks / "smg_game.framework" / "smg_game"}) {
-        if (!frameworks.empty() && fs::exists(candidate, error)) {
-            return candidate;
-        }
-    }
     const fs::path program = path_of(bundle.executablePath);
-    return program.empty() ? fs::path{} : program.parent_path() / "libsmg_game.dylib";
+    return galaxy::game_module::module_in_app(path_of(bundle.privateFrameworksPath),
+                                              program.empty() ? fs::path{} : program.parent_path());
 }
 
 // The output to <data>/logs/game.log (the run before: game.previous.log) when no terminal, pipe or file takes it: an

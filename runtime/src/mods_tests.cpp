@@ -1112,12 +1112,54 @@ bool module_choice() {
     return ok;
 }
 
+// Where a Mac app's host looks for its game module, and what it says when the module does not load (game_module.h): the
+// beta's app (no mod support) holds libsmg_game_plain.dylib alone in Contents/Frameworks, and its start looked for the plain
+// module in Contents/MacOS instead (beta fault: NEB-S03 on a Mac).
+bool module_names() {
+    bool ok = true;
+    const fs::path root = galaxy::test_temp_path("nebula_mods_module_names");
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    const fs::path frameworks = root / "Nebula.app" / "Contents" / "Frameworks";
+    const fs::path program = root / "Nebula.app" / "Contents" / "MacOS";
+    fs::create_directories(frameworks, ec);
+    fs::create_directories(program, ec);
+    // An app with no mod support: the plain module only. Its rows module's name is in Frameworks, and the plain module is beside it.
+    write(frameworks / "libsmg_game_plain.dylib", "plain");
+    {
+        const fs::path named = galaxy::game_module::module_in_app(frameworks, program);
+        ok &= expect(named.parent_path() == frameworks, "no mod support: the module is named in Frameworks, not in the program's folder");
+        ok &= expect(galaxy::game_module::plain_beside(named) == frameworks / "libsmg_game_plain.dylib" && fs::exists(galaxy::game_module::plain_beside(named), ec),
+                     "no mod support: the plain module beside the name is the file in Frameworks");
+        ok &= expect(galaxy::game_module::choose_with(false, named, {}, {}, "", false, false, "", nullptr) == frameworks / "libsmg_game_plain.dylib",
+                     "no mod support: the start chooses the plain file");
+    }
+    // An app with both modules: the rows module.
+    write(frameworks / "libsmg_game.dylib", "rows");
+    ok &= expect(galaxy::game_module::module_in_app(frameworks, program) == frameworks / "libsmg_game.dylib", "both modules: the rows module");
+    // No Frameworks folder (a build folder): beside the program.
+    ok &= expect(galaxy::game_module::module_in_app(root / "none", program) == program / "libsmg_game.dylib", "no Frameworks folder: beside the program");
+    ok &= expect(galaxy::game_module::module_in_app({}, program) == program / "libsmg_game.dylib", "an empty Frameworks name: beside the program");
+
+    // The line the host stops with.
+    const std::string gone = galaxy::game_module::load_failure(program / "libsmg_game_plain.dylib", "dlopen: tried nothing");
+    ok &= expect(gone == "cannot load the game module libsmg_game_plain.dylib: the file is not there (Contents/MacOS)",
+                 "a module file that is not there: the line says so and names its folder by its last two names");
+    const std::string refused = galaxy::game_module::load_failure(frameworks / "libsmg_game_plain.dylib", "dlopen(x): code signature invalid");
+    ok &= expect(refused == "cannot load the game module libsmg_game_plain.dylib: the system refused it: dlopen(x): code signature invalid",
+                 "a file there that did not load: the system's own reason is in the line");
+    ok &= expect(galaxy::game_module::load_failure(frameworks / "libsmg_game_plain.dylib", "").find("it gave no reason") != std::string::npos,
+                 "a refusal with no reason says so");
+    fs::remove_all(root, ec);
+    return ok;
+}
+
 int main() {
     test_texture_categories();
     // Every test runs, whichever fail.
     const bool results[] = {texture_names(), xml(), importing(), code_patch_notes(), setting_overlaps(), patches_by_key_in_the_plan(), layer_only_mods(), layer_assets(), libraries_load_when_needed(), libraries_act_with_their_users_permissions(), galaxy_saves(),
                             luma_rules(), luma_import(), text_options(), crash_record_text(),
-                            crash_record_files(), module_choice()};
+                            crash_record_files(), module_choice(), module_names()};
     bool ok = true;
     for (const bool passed : results) ok = ok && passed;
     std::cout << (ok ? "mods tests passed" : "mods tests FAILED") << '\n';

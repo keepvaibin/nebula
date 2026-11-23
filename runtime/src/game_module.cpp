@@ -22,6 +22,37 @@ std::filesystem::path plain_beside(const std::filesystem::path& rows_module) {
     return plain;
 }
 
+std::filesystem::path module_in_app(const std::filesystem::path& frameworks, const std::filesystem::path& program_folder) {
+    std::error_code error;
+    if (!frameworks.empty()) {
+        for (const std::filesystem::path& candidate :
+             {frameworks / "libsmg_game.dylib", frameworks / "smg_game.framework" / "smg_game"}) {
+            if (std::filesystem::exists(candidate, error)) return candidate;
+        }
+        // No mod support: only the plain module is in the app. The name of the rows module beside it stands for both.
+        if (std::filesystem::exists(frameworks / "libsmg_game_plain.dylib", error)) return frameworks / "libsmg_game.dylib";
+    }
+    return program_folder.empty() ? std::filesystem::path{} : program_folder / "libsmg_game.dylib";
+}
+
+std::string load_failure(const std::filesystem::path& module, std::string_view system_text) {
+    const auto utf8 = [](const std::filesystem::path& path) {
+        const std::u8string text = path.u8string();
+        return std::string(reinterpret_cast<const char*>(text.data()), text.size());
+    };
+    std::string text = "cannot load the game module " + utf8(module.filename());
+    std::error_code error;
+    if (!std::filesystem::exists(module, error)) {
+        const std::filesystem::path folder = std::filesystem::absolute(module, error).parent_path();
+        text += ": the file is not there (" + (folder.has_parent_path() ? utf8(folder.parent_path().filename()) + "/" : std::string{}) +
+                utf8(folder.filename()) + ")";
+        return text;
+    }
+    text += ": the system refused it: ";
+    text += system_text.empty() ? std::string_view("it gave no reason") : system_text;
+    return text;
+}
+
 std::filesystem::path choose(const std::filesystem::path& rows_module, const std::filesystem::path& mods_folder,
                              const std::filesystem::path& mods_file, const std::string& game_id, bool need_rows,
                              bool safe, const std::string& kept, std::string* why) {
