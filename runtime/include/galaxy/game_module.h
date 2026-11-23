@@ -27,7 +27,7 @@ namespace galaxy::game_module {
 
 // The same with the rule for mod support given (mod_support.h): without it nothing is scanned and the plain module
 // is the answer whether or not its file is there (a build with no mod support never loads the rows module); `why` says so.
-[[nodiscard]] std::filesystem::path choose_with(bool mod_support, const std::filesystem::path& rows_module,
+[[nodiscard]] std::filesystem::path choose_with(bool with_mods, const std::filesystem::path& rows_module,
                                                 const std::filesystem::path& mods_folder, const std::filesystem::path& mods_file,
                                                 const std::string& game_id, bool need_rows, bool safe, const std::string& kept,
                                                 std::string* why);

@@ -583,6 +583,22 @@ jobs:
           app=$(find "$d/unpacked" -maxdepth 3 -name Nebula.app -type d | head -n 1)
           [ -n "$app" ] || { echo "the zip has no Nebula.app"; exit 1; }
           "$app/Contents/MacOS/Nebula" --start-check 300 --data "$d/data" --settings "$d/settings" --crash-dumps "$d"
+      # The app's Intel half, as far as this Apple silicon machine can start it (Rosetta). Told, not judged: no Intel Mac is
+      # among the runners, and Metal under Rosetta in a virtual machine may not start at all.
+      - name: Start check (the Intel half, through Rosetta; told, not judged)
+        continue-on-error: true
+        timeout-minutes: 8
+        env:
+          PREFIX: ${{ needs.release.outputs.prefix }}
+        run: |
+          arch -x86_64 /usr/bin/true 2>/dev/null || sudo softwareupdate --install-rosetta --agree-to-license || true
+          arch -x86_64 /usr/bin/true || { echo "Rosetta is not here: the Intel half is not started"; exit 1; }
+          d="$RUNNER_TEMP/start-intel"
+          mkdir -p "$d/data" "$d/settings" "$d/unpacked"
+          ditto -x -k "$RUNNER_TEMP/dist/$PREFIX-macOS.zip" "$d/unpacked"
+          app=$(find "$d/unpacked" -maxdepth 3 -name Nebula.app -type d | head -n 1)
+          lipo -archs "$app/Contents/MacOS/Nebula"
+          arch -x86_64 "$app/Contents/MacOS/Nebula" --start-check 300 --data "$d/data" --settings "$d/settings" --crash-dumps "$d"
       - name: The mod kit (a pre-release has none, a release has it)
         shell: bash
         run: |
