@@ -6,7 +6,7 @@ order	step	package	title	package_needs	card_file	state	commit
 5	S0.1.5	S0.1	Render data path step 2, second landing: `f4/e3-2b` and `f4/e3-2c`		03-NATIVE-STAGE-0.md	landed	02d236b5c
 6	S0.2.1	S0.2	Landing A: drawing stops changing the game	S0.1	03-NATIVE-STAGE-0.md	landed	84a2f5a72
 7	S0.2.2	S0.2	The scene query's form, written into the inventory before code	S0.1	03-NATIVE-STAGE-0.md	landed	e54a921e5
-8	S0.2.3	S0.2	Landing B, part 1: the pointer	S0.1	03-NATIVE-STAGE-0.md	open	
+8	S0.2.3	S0.2	Landing B, part 1: the pointer	S0.1	03-NATIVE-STAGE-0.md	landed	8861980d7
 9	S0.2.4	S0.2	Landing B, part 2: the talk balloon	S0.1	03-NATIVE-STAGE-0.md	open	
 10	S0.2.5	S0.2	Landing B, part 3: the lens flare	S0.1	03-NATIVE-STAGE-0.md	open	
 11	S0.2.6	S0.2	Landing B, part 4: the question-and-answer path is deleted	S0.1	03-NATIVE-STAGE-0.md	open	
