@@ -523,7 +523,7 @@ three. That run's laps through the long rule read: d3d11 +3.11 MB a lap (at most
 see: growth under the sight above; a rise of more than 32 MB between lap 2 and lap 6 (the old rule saw it; it is what warming up read at
 23 to 31); a rise that stays for 3 laps only and then falls back. Shown with a leak by the real gate: a leak of 5 MB a minute in the game process (recipe 8 of `docs/plan/native/TOOL-MEND-PLANTS.md`) is refused by the 30-minute form on all three renderers (d3d11 +65.0 MB, d3d12 +64.9, vulkan +57.5 above lap 2; run 20261122-203137-722379d9a-main); the long rule has no plant run of its own (a run of ten laps is two hours): its proof is its self-tests, the recorded laps of 11-22 and the ramps fed to it.
 
-**The coverage history's key (`tools/gate/coverage.py`; W long findings, 11-22).** `gate-runs/coverage-history.tsv` has one line a long run: the
+**The coverage history's key (`tools/gate/coverage.py`; W long findings, 11-22).** The file `coverage-history.tsv` in the gate's run folder (`D:/NebulaWork/build/gate-runs`) has one line a long run: the
 share of lines run, the key and the verdict. The key is the binaries' names and the suites whose counts were merged (`engine`, `tour`,
 `mods`): a long run with the mod suites off (since 11-21, `tools/gate/scope.tsv`) merges 18 engine tests and 102 tour stops, and its share
 (16.23 % on 11-22) is not that of a run with 548 mod tests too (22.07 %): each key has its own line. A run whose share is lower than the last

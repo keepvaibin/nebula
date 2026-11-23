@@ -2,7 +2,7 @@
 
 A mend that changes how a check judges (`docs/plan/native/TOOL-MEND.md` section 7) shows two things by the real gate: a
 clean main plus the mend passes the check, and the check's planted fault is refused again. This file holds the recipes.
-The seven were proved on 2026-11-22 by helper T11-B, each on a clean main, each refused. They are recipes, not patch
+Seven were proved on 2026-11-22 by helper T11-B, each on a clean main, each refused; an eighth (the soak's memory) by helper W on 11-22. They are recipes, not patch
 files: the code a plant sat in will be rewritten by the plan. Where a recipe names a function or a file, find the same
 place by its meaning in the tree you have; the commit that held each plant at that time is named so that
 `git show <commit>` shows it while the object store still has it.
@@ -37,7 +37,7 @@ each result that is not a pass, then `VERDICT fail`. The line that shows the ref
 the speed measure `KIND worse`, of the check named in the table. The same command on the clean tip must print
 `VERDICT pass` and no `KIND` line of that check.
 
-## The seven plants
+## The plants
 
 | # | Check | Kind of fault | Where it was planted | Command | The line that shows the refusal | Seconds |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -49,6 +49,7 @@ the speed measure `KIND worse`, of the check named in the table. The same comman
 | 5 | the graphics debug layer | a call that the layer reports and no picture shows | a Direct3D 11 buffer of 0 bytes made at the start of the presentation chain (`runtime/src/render/d3d11/post_process_d3d11.cpp`, in `PostProcessor::initialize`: `ByteWidth = 0`, constant buffer, result ignored); commit e9e9fdd61 | `--main --only validate/d3d11` | `validate/d3d11 FAIL 0 of 12 pass`; `KIND fail validate/d3d11 010-CannonFleetGalaxy-1 :: Direct3D debug layer error 66 ... ID3D11Device::CreateBuffer: The Dimensions are invalid. ByteWidth cannot be 0.` | 151 (3 checks; the check 78.9) |
 | 6 | the endurance run | a crash that comes after minutes of play | in `svc_frame_wait` (`native/host/host_main.cpp`) a static counter; at 18000 steps (5 minutes at 1/60 s) a write through a null pointer; commit 621bf41db | `--main --scope repo --also soak` | `soak FAIL` for each renderer, whose line begins with the crash (`crashed at 299.5 s: exception 0xC0000005 ... in stage FactoryGalaxy`; the soak names a crash or a hang first since 2026-11-22) and not with the laps of memory. | 378 (7 checks; the soak 300.9) |
 | 7 | the unit tests | an expected value changed | one `expect` in `runtime/src/work_cpu_tests.cpp`: `w.total() == 60` to `61` ("100 to 160: 60"); commit edf1ed555 | `--main --only unit/windows,unit/game` | `unit/windows FAIL 99% tests passed, 1 tests failed out of 99` | 28 (3 checks; the check 5.1) |
+| 8 | the endurance run's memory | a leak: memory allocated, written and kept, from the start of the run | in `svc_frame_wait` (`native/host/host_main.cpp`), at its start, a block of 87381 bytes taken with `malloc`, filled and kept, once every second of wall time (5 MB a minute), through a volatile pointer so that it is not dropped; commit 722379d9a on `plant/w-leak`. The rate is chosen for the short form: the third lap of a 30-minute run is half a lap, its median 9 minutes after the second's, so a leak is seen at about 3 MB a minute and not at 2 (the recorded clean run's samples plus a leak: +32 to +36 MB at 3, +25 to +30 at 2, bound 32) | `--main --scope repo --also soak` | `soak FAIL` on each renderer: `lap medians 667 732 797 MB; the most above lap 2: +65.0 MB (bound 32)` (d3d11), `+64.9` (d3d12), `+57.5` (vulkan); the clean side is the soak of the landing 20261122-125622-463d38612-main (+8.4, +12.9, +7.9) | 2523 (7 checks, the first build of its folder 681; the soak 1820). The two-hour judge (`judge_long`) has no plant run of its own |
 
 ## Which plant for which mend
 
@@ -58,7 +59,7 @@ the speed measure `KIND worse`, of the check named in the table. The same comman
 | the speed measure, its bands or its figures | 3 (and 3b when the mend touches the smallest cost the check sees) |
 | the sanitizer's build, run or report reading | 4, and 4b on the strictness check |
 | the validate lane, the debug layers' reading | 5 |
-| the soak, the endurance run, a lane's time limit | 6 |
+| the soak, the endurance run, a lane's time limit | 6; 8 when the memory judge changes |
 | the unit-test runner or its result reading | 7 |
 | the kind of a result (`tools/gate/kinds.py`), the three-failure rule, the landing queue | the plant of the check whose result passes through the part you changed; when you cannot tell, 1 and 7 |
 
