@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-23 01:05. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-23 01:06. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 5 of 138 (4%).
 
@@ -53,7 +53,7 @@ In work now: Nothing started.
 
 | Id | State | Kind | Check | Renderer | Traced to | Seen |
 | --- | --- | --- | --- | --- | --- | --- |
-| R-001 | started | fail | build/windows-asan | - | not traced | 1 |
+| R-001 | landed | fail | build/windows-asan | - | not traced | 1 |
 | R-002 | landed | fail | coverage | - | not traced | 1 |
 | R-003 | landed | fail | soak | - | not traced | 1 |
 
@@ -75,7 +75,7 @@ Nothing is blocked.
 | --- | --- | --- | --- | --- | --- | --- |
 | M-001 | closed | R-002 | coverage: the history's key holds the suites that ran, a run that fell is not the next bar | 0 | 0 | 2d7287334 |
 | M-002 | closed | R-003 | soak: a run of eight laps or more is judged from lap 6 (slope and lowest of the last laps), a spike is not growth | 0 | 0 | 2d7287334 |
-| M-003 | open | R-001 | build_windows.ps1 refuses a build folder configured with another NEBULA_SANITIZE instead of configuring it again | 0 | 117 | - |
+| M-003 | closed | R-001 | build_windows.ps1 refuses a build folder configured with another NEBULA_SANITIZE instead of configuring it again | 0 | 117 | c60999ee1 |
 
 ## Decisions (0)
 
