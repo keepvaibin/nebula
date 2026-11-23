@@ -185,6 +185,10 @@ class MendTest(unittest.TestCase):
         self.assertTrue(e["reason"].startswith("tool: M-001 my own attempt"), e["reason"])
         code, text = t.run(["next"], expect=0)
         self.assertNotIn("WAIT", text, "the agent goes on with the steps that do not need it")
+        static, data, landings, faults = plan.page_data(t.tree, t.live)
+        said = [q["question"] for q in data["owner"]]
+        self.assertIn("A test tool is at fault and three attempts did not mend it (M-001: a fault). The steps that need it wait; the other steps go on.", said)
+        self.assertIn("three attempts did not mend it (M-001: a fault)", plan.status_text(t.tree, t.work, live=t.live), "and the status text says it")
         self.assertEqual(t.run(["mend", "failed", "M-001", "again"])[0], 1, "nothing is open to fail")
 
     def test_the_third_failure_keeps_the_wait_when_the_step_cannot_be_blocked(self):
@@ -314,6 +318,74 @@ class MendLandTest(unittest.TestCase):
         code, text = t.run(["mend", "land", "M-001"])
         self.assertEqual(code, 1)
         self.assertIn("mend/M-001", text, "the folder is on main, not on the mend's branch")
+
+
+class RepairMendTest(unittest.TestCase):
+    """A repair whose cause is a test tool: a mend opened for it ends it (the page shows it closed by the mend); the mend's landing runs the
+    failed check as an extra check where the gate can."""
+
+    def setUp(self):
+        self.t = Tree().__enter__()
+        self.addCleanup(self.t.__exit__)
+        self.calls = []
+        patcher = mock.patch.object(plan, "LAND", self.fake_land)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def fake_land(self, folder, branch, tablet, wait, *rest):
+        self.calls.append((branch, list(rest[0]) if rest else []))
+        v = plan.Verdict(True, [("repo/code", "PASS", "ok")])
+        v.code, v.commit, v.gate_recorded = 0, "feedbeef0", True
+        return v
+
+    def started_repair(self, check="build/windows-asan"):
+        lv.add_repair(self.t.live, "nightly", "fail", check, "-", evidence="D:/x/evidence", note="the build folder was set up with another sanitizer")
+        self.t.run(["start", "R-001"], expect=0)
+
+    def test_a_mend_opened_for_a_repair_ends_it_when_it_is_closed(self):
+        t = self.t
+        self.started_repair()
+        code, text = t.run(["mend", "open", "R-001", "the build folder keeps another sanitizer setting", "--check", "build/windows-asan"], expect=0)
+        self.assertEqual(lv.read_state(t.live)["R-001"]["reason"], "waits for M-001")
+        self.assertIn("WAIT: mend M-001", t.run(["next"])[1])
+        sha = tool_commit_on_main(t)
+        code, text = t.run(["mend", "close", "M-001", sha], expect=0)
+        self.assertIn("Repair R-001 is ended by the mend", text)
+        rep = lv.read_repairs(t.live)[0]
+        self.assertEqual((rep["state"], rep["closed"]), ("landed", sha), "closed by the mend's commit")
+        self.assertIn("ended by mend M-001", rep["note"])
+        self.assertNotIn("R-001", lv.read_state(t.live), "nothing of it is in work")
+        code, text = t.run(["repair", "list"], expect=0)
+        self.assertIn("closed by " + sha, text)
+        code, text = t.run(["next"], expect=0)
+        self.assertNotIn("R-001", text.splitlines()[0], "the repair is not given again")
+        static, data, landings, faults = plan.page_data(t.tree, t.live)
+        self.assertEqual((data["repairs"][0]["state"], data["repairs"][0]["closed"]), ("landed", sha))
+
+    def test_a_repair_that_is_not_there_or_not_in_work_gets_no_mend(self):
+        t = self.t
+        self.assertEqual(t.run(["mend", "open", "R-099", "x"])[0], 1)
+        lv.add_repair(t.live, "nightly", "fail", "soak", "-", evidence="D:/x", note="n")
+        self.assertEqual(t.run(["mend", "open", "R-001", "x"])[0], 1, "an open repair is not in work yet: start it first")
+
+    def test_the_mends_landing_runs_the_failed_check_as_an_extra_check(self):
+        t = self.t
+        for check, expected in (("soak", "soak"), ("build/windows-asan", "sanitizer/tour"), ("stress/engine/d3d11", "stress"), ("coverage", None)):
+            self.assertEqual(plan.also_for_check(check), [expected] if expected else [], check)
+        self.started_repair("soak")
+        t.run(["mend", "open", "R-001", "the soak's folder", "--check", "soak"], expect=0)
+        t.git("checkout", "-q", "-b", "mend/M-001", "origin/main", cwd=t.tree)
+        (t.tree / "tools" / "verify" / "doc_refs_allow.txt").write_text("# narrower\n", encoding="utf-8")
+        log = t.tree / "docs" / "plan" / "strictness-log.tsv"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        log.write_text("\t".join(plan.strictness.LOG_COLUMNS) + "\n" + "\t".join(
+            ["2026-11-22", "tools/verify/doc_refs_allow.txt", "a comment", "a test", "TOOL-MEND.md 6", "M-001", "-"]) + "\n", encoding="utf-8")
+        t.git("add", "-A", cwd=t.tree)
+        t.git("commit", "-q", "-m", "a mend", cwd=t.tree)
+        code, text = t.run(["mend", "land", "M-001"], expect=0)
+        options = self.calls[0][1]
+        self.assertEqual(options[options.index("--also") + 1], "soak", options)
+        self.assertIn("runs it as an extra check", text)
 
 
 class DecideAliveTest(unittest.TestCase):

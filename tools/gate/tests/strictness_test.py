@@ -190,6 +190,14 @@ class StrictnessTest(unittest.TestCase):
         r.commit({"platform/sdl/host.cpp": "x\n"}, branch="mend/M-003")
         self.assertTrue(r.problems("mend/M-003"))
 
+    def test_a_step_with_pictures_change_adds_no_line_for_the_approved_pictures(self):
+        r = self.r
+        r.commit({"PICTURES-CHANGE.txt": "tour/010-CannonFleetGalaxy-1 * all :: the sky is another blue\n"})
+        self.assertEqual(r.problems("native/S0.2.1"), [], "the declaration is the step's; the gate approves the pictures itself, after its checks")
+        r.commit({"tests/pictures/approved.tsv": "# a row put in by hand\n"}, branch="b2")
+        lines = r.problems("native/S0.2.1")
+        self.assertTrue(lines and "tests/pictures/approved.tsv" in lines[0], "a hand-made change of the approved pictures needs its line: %s" % lines)
+
     def test_the_guard_guards_itself(self):
         r = self.r
         r.commit({"tools/gate/strictness.tsv": "pattern\tmode\twhere\thides\n"})

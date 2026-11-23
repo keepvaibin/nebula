@@ -1621,6 +1621,13 @@ def measure_step(g):
         kind, text = measure_reading(work, run_name, code)
         if kind == "pass":
             return True, text
+        gap = tablet_gap_lines(getattr(g.args, "live", ""))
+        if kind == "worse" and gap:
+            # The tablet was away for the landings in tablet-owed.tsv, so its history is older than the change that is judged: a figure worse
+            # against it is not this change's to answer for. The landing is owed; after the move a repair holds the loss and the history
+            # starts anew at this commit (rebase_tablet_after_gap).
+            g.tablet_gap = {"text": text, "landings": [l.split("\t")[1] if len(l.split("\t")) > 1 else "?" for l in gap]}
+            return False, tablet_gap_text(len(gap), text), None, "owed"
         if kind == "worse":
             return False, text, None, "worse"
         if kind == "left-out":
@@ -1827,6 +1834,53 @@ def measure_pc(g):
     if g.dry or landing_failed(g) or any(r["check"] == MEASURE_PC_CHECK for r in g.results):
         return
     g.check(MEASURE_PC_CHECK, pair_step(g, MEASURE_PC_CHECK, speedbase.BASE, "measure-pc", pair_renderers(g)), DATA)
+
+
+def tablet_gap_lines(live):
+    """The lines of tablet-owed.tsv in the live folder: one for each landing that owed the tablet's checks since a landing last played
+    them (the gap in the tablet's measure history). [] when there are none."""
+    path = pathlib.Path(live) / TABLET_OWED if live else None
+    try:
+        return [l for l in path.read_text(encoding="utf-8").splitlines() if l.strip()] if path is not None and path.is_file() else []
+    except OSError:
+        return []
+
+
+def tablet_gap_text(count, worse_text):
+    return ("the tablet's history is %d landing%s old (the tablet was away): %s; owed, not blamed on this change" % (
+        count, "" if count == 1 else "s", worse_text))
+
+
+def rebase_tablet_after_gap(g, args, run=subprocess.run):
+    """After the move of a landing whose tablet measure was worse against a history older than the change (tablet_gap): the history is
+    based anew at this landing's commit (`measure.py accept`, the tool's own restart of a baseline: the lines before it stop counting, its
+    worse marks become trusted), so that later landings are judged against the figures from here on, and one repair (source measure, kind
+    worse, check measure/step/tablet) holds the loss, with the gap's landings and the figures. Never fails the landing."""
+    gap = getattr(g, "tablet_gap", None)
+    if not gap:
+        return
+    history = str(pathlib.Path(args.work) / "measure-history.tsv")
+    try:
+        done = run([sys.executable, "-X", "utf8", "-I", str(MEASURE), "accept", "--commit", g.commit, "--renderer", "tablet", "--history", history],
+                   capture_output=True, text=True, timeout=300)
+        code, said = done.returncode, kinds.first_line((done.stdout or "") + (done.stderr or ""))
+    except (OSError, subprocess.TimeoutExpired) as error:
+        code, said = 2, "%s: %s" % (type(error).__name__, error)
+    print("gate.py: the tablet's history after a gap: %s (exit %d)" % (said, code), flush=True)
+    live = getattr(args, "live", "")
+    note = ("the tablet's speed measure was worse against a history older than the landings %s (the tablet was away) and was owed; the history "
+            "starts anew at %s; the loss since the last judged figures is held here: %s" % (", ".join(gap["landings"]), g.commit[:9], gap["text"]))
+    if code != 0:
+        note += " (the history was NOT restarted: %s)" % said
+    if not live:
+        return
+    cmd = [sys.executable, "-X", "utf8", "-I", str(stress.PLAN_TOOL), "--live", str(live), "repair", "add", "--source", "measure", "--kind", "worse",
+           "--check", MEASURE_TABLET_CHECK, "--renderer", "tablet", "--commit", g.commit[:9], "--evidence", str(g.work), "--note", note]
+    try:
+        made = run(cmd, capture_output=True, text=True, timeout=300, cwd=str(TREE))
+        print("gate.py: the tablet's loss: repair %s" % (((made.stdout or "").strip().splitlines() or ["not opened (exit %d)" % made.returncode])[-1]), flush=True)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        print("gate.py: the repair for the tablet's loss could not be opened: %s: %s" % (type(error).__name__, error), flush=True)
 
 
 def keep_measures(g, args):
@@ -4778,6 +4832,7 @@ def run_main(argv, left):
                 except OSError as e:
                     print("gate.py: the move was not written to history.tsv (%s: %s)" % (type(e).__name__, e), file=sys.stderr)
                 keep_measures(g, args)
+                rebase_tablet_after_gap(g, args)
                 keep_speed(g, landed, args)
                 summary = "passed, %s, main moved to %s" % (
                     "GitHub's jobs are read after the move" if pending_after else

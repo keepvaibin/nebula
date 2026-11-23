@@ -110,12 +110,18 @@ A mend makes a check see more or the same, never less. These are refused by the 
 - take a check out;
 - make a band, a ceiling, a tolerance or a count wider;
 - add to a list of known reports, known failures, known flakes or skipped files;
-- change or delete an existing test's expected value;
+- change or delete an existing test's expected value (what is said below of the tools' own self-tests is the one
+  case that is no loosening);
 - make a scope row run less;
 - change `tests/pictures/approved.tsv`.
 
 Not mended is better than a check that sees less. A mend that cannot be made without one of these is reported
 `NOT MENDED` with the reason.
+
+**Expected values.** A self-test of a tool whose expected value is the fault itself (the sheet's heading 3 names the
+document's section that says otherwise) is corrected, with its line in the strictness log (section 6), and that
+correction is the mend. An expected value of the game's own tests (the approved pictures, the replay references, the
+engine tests, the game's unit tests) is never changed by a mend.
 
 **The one exception.** A design document (`docs/engine/`) or the owner's rules (section 8 of `docs/plan/native/AGENT.md`
 and the rules it names) name the very thing the check refuses, and the sheet quotes both lines. Then the exception is
@@ -150,8 +156,8 @@ A landing whose diff meets the list must add, in the same landing, one line to `
 
 The check `repo/strictness` of the gate refuses a landing without the line, and names the file and the lines. `mend
 land` runs the same check first and refuses in seconds. Write the line when you change the file, with the text of what
-you changed. Your changed existing tests are the common case: a new expected value for a fault you mended is a change of
-an existing test and needs its line, with the document that says the old value was wrong.
+you changed. Your changed existing self-tests are the common case (section 5, "Expected values"): the line names the document
+that says the old value was wrong.
 
 ## 7. A changed judge is proven again
 

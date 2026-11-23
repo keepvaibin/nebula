@@ -31,6 +31,7 @@ TREE = HERE.parents[2]
 sys.path.insert(0, str(TREE / "tools" / "gate"))
 sys.path.insert(0, str(TREE / "tools" / "lumacore"))
 sys.path.insert(0, str(TREE / "tools" / "plan"))
+sys.path.insert(0, str(TREE / "tools" / "measure"))
 import gate  # noqa: E402
 import kinds  # noqa: E402
 import landing  # noqa: E402
@@ -74,6 +75,101 @@ class PlantTest(unittest.TestCase):
         self.assertIn("planted fault never leaves", main_push_guard.judge([line], ""))
         self.assertIsNone(main_push_guard.judge(["refs/heads/mend/M-001 %s refs/heads/mend/M-001 %s" % ("a" * 40, ZERO)], ""))
         self.assertIsNotNone(main_push_guard.judge(["refs/heads/main %s refs/heads/main %s" % ("a" * 40, ZERO)], ""), "main stays guarded")
+
+
+class TabletGapTest(unittest.TestCase):
+    """The tablet's measure after a gap (the tablet was away for landings that moved main): a figure worse against the old history is owed,
+    not the change's; after the move a repair holds it and the history starts anew at the landing."""
+
+    def fake_g(self, tmp):
+        import types
+        return types.SimpleNamespace(args=types.SimpleNamespace(live=str(tmp), tablet_wait=1), work=pathlib.Path(tmp), commit="abcdef123456",
+                                     bin=None, android_bin=None, pak=None, paks_text=lambda: "", measure_pending=[], tablet_gap=None)
+
+    def step_result(self, tmp, kind, owed_lines):
+        (pathlib.Path(tmp) / gate.TABLET_OWED).unlink(missing_ok=True)
+        if owed_lines:
+            (pathlib.Path(tmp) / gate.TABLET_OWED).write_text("".join(owed_lines), encoding="utf-8")
+        g = self.fake_g(tmp)
+        with mock.patch.object(gate, "test_apk", return_value=pathlib.Path(tmp) / "none.apk"), \
+                mock.patch.object(gate, "measure_command", return_value=["x"]), mock.patch.object(gate, "measure_limit", return_value=1), \
+                mock.patch.object(gate, "run", return_value=0), \
+                mock.patch.object(gate, "measure_reading", return_value=(kind, "worse: cpu_game_ms 3.9 (median 3.1, band 0.2)")):
+            out = gate.measure_step(g)(str(pathlib.Path(tmp) / "log.txt"))
+        return g, out
+
+    def test_worse_after_a_gap_is_owed_and_worse_without_one_is_worse(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            g, out = self.step_result(tmp, "worse", ["2026-11-22T10:00:00\tabc111222\tandroid/tablet\n", "2026-11-22T11:00:00\tdef333444\ttour/tablet\n"])
+            self.assertEqual((out[0], out[3]), (False, "owed"), out)
+            self.assertIn("the tablet's history is 2 landings old", out[1])
+            self.assertEqual(g.tablet_gap["landings"], ["abc111222", "def333444"])
+            self.assertIn("cpu_game_ms 3.9", g.tablet_gap["text"])
+            g, out = self.step_result(tmp, "worse", [])
+            self.assertEqual((out[0], out[3]), (False, "worse"), "no gap: the change answers for it, as before")
+            self.assertIsNone(g.tablet_gap)
+            g, out = self.step_result(tmp, "pass", ["2026-11-22T10:00:00\tabc111222\tandroid/tablet\n"])
+            self.assertTrue(out[0], "a pass is a pass")
+
+    def test_after_the_move_the_history_starts_anew_and_a_repair_holds_the_loss(self):
+        import types
+        calls = []
+
+        def run(command, **kw):
+            calls.append(command)
+            return mock.Mock(returncode=0, stdout="R-004\n" if "repair" in command else "measure: accepted from abcdef123456\n", stderr="")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            g = self.fake_g(tmp)
+            gate.rebase_tablet_after_gap(g, types.SimpleNamespace(work=tmp, live=tmp), run=run)
+            self.assertEqual(calls, [], "no gap: nothing is done")
+            g.tablet_gap = {"text": "worse: cpu_game_ms 3.9", "landings": ["abc111222", "def333444"]}
+            gate.rebase_tablet_after_gap(g, types.SimpleNamespace(work=tmp, live=tmp), run=run)
+        accept = calls[0]
+        self.assertEqual(accept[accept.index("accept"):accept.index("accept") + 5], ["accept", "--commit", "abcdef123456", "--renderer", "tablet"])
+        self.assertTrue(accept[-1].endswith("measure-history.tsv"))
+        repair = calls[1]
+        self.assertEqual(repair[repair.index("--source") + 1], "measure")
+        self.assertEqual(repair[repair.index("--kind") + 1], "worse")
+        self.assertEqual(repair[repair.index("--check") + 1], "measure/step/tablet")
+        note = repair[repair.index("--note") + 1]
+        self.assertIn("abc111222, def333444", note)
+        self.assertIn("cpu_game_ms 3.9", note)
+
+    def test_the_tools_own_accept_restarts_the_tablet_baseline_at_the_landing(self):
+        import band
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "measure-history.tsv"
+            rows = []
+            for commit, mark in (("old000001", "trusted"), ("old000002", "trusted"), ("abcdef123", "worse")):
+                row = band.row_of([commit, "2026-11-22 10:00", "tablet", "vulkan", "120", "120.0"])
+                row["cpu_game_ms"] = "3.1"
+                row["marks"] = "cpu_game_ms=" + mark
+                rows.append(row)
+            pc = band.row_of(["old000001", "2026-11-22 10:00", "pc", "vulkan", "240", "240.0"])
+            pc["marks"] = "cpu_game_ms=trusted"
+            rows.append(pc)
+            band.write_all(path, rows)
+            r = subprocess.run([sys.executable, "-X", "utf8", "-I", str(TREE / "tools" / "measure" / "measure.py"), "accept", "--commit", "abcdef123456",
+                                "--renderer", "tablet", "--history", str(path)], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            after = band.read_history(path)
+            marks = [band.parse_marks(x["marks"]).get("cpu_game_ms") for x in after]
+            self.assertEqual(marks, ["retired", "retired", "trusted", "trusted"], "the tablet's old lines stop counting, the worse line is the base; the PC's are not touched")
+
+
+class PicturesApprovalTest(unittest.TestCase):
+    def test_the_gates_own_approval_commit_comes_after_every_check_of_the_repository(self):
+        """The landing's approval of pictures (a commit that changes tests/pictures/approved.tsv) is made after the checks, on the tested
+        commit: repo/strictness never sees it, so a step with PICTURES-CHANGE.txt is not refused for it."""
+        import inspect
+        main = inspect.getsource(gate.run_main)
+        build = inspect.getsource(gate.build_part)
+        self.assertIn("repo_strictness(g)", build)
+        self.assertIn("build_part(g)", inspect.getsource(gate.run_checks))
+        self.assertLess(main.index("run_checks("), main.index("approve_pictures(g, commit)"), "the checks run first, the approval after them")
+        pictures_py = (TREE / "tools" / "gate" / "pictures.py").read_text(encoding="utf-8")
+        self.assertNotIn("strictness", pictures_py, "the approval does not ask the strictness check")
 
 
 class NoPromptTest(unittest.TestCase):

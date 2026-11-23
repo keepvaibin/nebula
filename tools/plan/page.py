@@ -37,6 +37,12 @@ OWNER = "owner:"          # a step blocked with a reason that begins so waits fo
 OLD_PAGE = "If this time is more than three hours old, the work has stopped: open the session and send the word continue."
 
 
+def mend_owner_text(m):
+    """What the page says of a mend that failed three times (there is no planner during the run: it waits for the owner)."""
+    return ("A test tool is at fault and three attempts did not mend it (%s: %s). The steps that need it wait; the other steps go on."
+            % (m["id"], m["title"]))
+
+
 def is_owner_question(reason):
     return (reason or "").strip().startswith(OWNER)
 
@@ -105,7 +111,8 @@ def make_data(steps, landings, state, claims, stale, faults, flakes, now, set_as
         "blocked": [{"step": s["step"], "agent": s.get("agent") or "1", "reason": reason_of(s, state)}
                     for s in steps if s["state"] == "blocked" and not is_owner_question(reason_of(s, state))],
         "owner": [{"step": s["step"], "title": s["title"], "question": reason_of(s, state)[len(OWNER):].strip()}
-                  for s in steps if s["state"] == "blocked" and is_owner_question(reason_of(s, state))],
+                  for s in steps if s["state"] == "blocked" and is_owner_question(reason_of(s, state))]
+                 + [{"step": "", "title": m["title"], "question": mend_owner_text(m)} for m in mends if m.get("state") == "failed"],
         "claims": [{"package": c["package"], "agent": c["agent"], "time": c["time"], "branch": c["branch"],
                     "stale": c["package"] in stale} for c in claims],
         "tool_faults": [{k: g[k] for k in ("signature", "count", "first_seen", "last_seen", "step", "agent", "kind", "check",

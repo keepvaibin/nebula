@@ -1168,10 +1168,10 @@ def status_text(tree, work_root=WORK_ROOT, at=None, live=None, agent="1", queue_
     out += ["", "## Blocked (%d)" % len(by["blocked"]), ""]
     out += ["- %s %s: %s" % (s["step"], s["title"], s["reason"] or reasons.get(s["step"], "(no reason written)"))
             for s in by["blocked"]] or ["- none"]
-    questions = owner_questions(steps)
+    mends = lv.read_mends(live_dir(live))
+    questions = owner_questions(steps, mends)
     out += ["", "## Waiting for the owner (%d)" % len(questions), ""]
     out += ["- %s %s: %s" % (q["step"], q["title"], q["question"]) for q in questions] or ["- none"]
-    mends = lv.read_mends(live_dir(live))
     out += ["", "## Tool mends (%d, %d open)" % (len(mends), sum(1 for m in mends if m["state"] == "open")), ""]
     out += ["- %s %s: step %s, %s%s" % (m["id"], m["state"], m["step"], m["title"], "" if m["commit"] in ("", "-") else ", commit " + m["commit"])
             for m in mends] or ["- none"]
@@ -3311,6 +3311,9 @@ def mend_open(a):
         if s is None and not is_repair(step):
             say("plan.py: no step %s" % step)
             return 1
+        if is_repair(step) and not any(r["id"] == step for r in lv.read_repairs(live)):
+            say("plan.py: no repair %s (plan.py repair list)" % step)
+            return 1
         if not entry or entry["state"] != "started":
             say("plan.py: %s is not in work (a mend waits for the step in work: plan.py start %s first), or open the mend with no step" % (step, step))
             return 1
@@ -3362,7 +3365,14 @@ def mend_close(a):
     lv.set_mend(live, a.id, "closed", a.commit)
     state = lv.read_state(live)
     waiting = m["step"] if m["step"] != "-" else ""
-    if waiting and (state.get(waiting) or {}).get("state") == "started":
+    ended = None
+    if waiting and is_repair(waiting):
+        # A repair whose cause was a test tool has nothing of the game left to change: the mend ends it (the page shows it closed by the mend).
+        ended = next((r for r in lv.read_repairs(live) if r["id"] == waiting and r["state"] == "started"), None)
+        if ended is not None:
+            lv.set_repair(live, waiting, "landed", a.commit, note="ended by mend %s (%s)" % (a.id, m["title"]))
+            lv.set_state_entry(live, waiting, "landed", (state.get(waiting) or {}).get("agent") or "1")
+    elif waiting and (state.get(waiting) or {}).get("state") == "started":
         lv.set_state_entry(live, waiting, "started", state[waiting]["agent"] or "1", "")
     reopened = []
     for step_id, e in state.items():
@@ -3370,11 +3380,16 @@ def mend_close(a):
             lv.set_state_entry(live, step_id, "open")
             reopened.append(step_id)
     refresh_page(a)
-    say("closed %s (commit %s). %s" % (a.id, a.commit[:9], ("Step %s is in work again." % waiting) if waiting else "No step was waiting."))
     plan = plan_path(a)
-    say("Now, in your work folder: `git fetch origin`; commit what you have (the folder must be clean); `git rebase origin/main` on the step's "
-        "branch, so that it is built on the mend (a conflict: AGENT.md section 9, point 2); then `python -X utf8 -I %s land %s`." % (
-            plan, waiting or "<the step>"))
+    if ended is not None:
+        say("closed %s (commit %s). Repair %s is ended by the mend: its cause was a test tool, and nothing of the game was left to change." % (
+            a.id, a.commit[:9], waiting))
+        say("Go on: `python -X utf8 -I %s next`." % plan)
+    else:
+        say("closed %s (commit %s). %s" % (a.id, a.commit[:9], ("%s is in work again." % waiting) if waiting else "No step was waiting."))
+        say("Now, in your work folder: `git fetch origin`; commit what you have (the folder must be clean); `git rebase origin/main` on the step's "
+            "branch, so that it is built on the mend (a conflict: AGENT.md section 9, Other code 4, point 1); then `python -X utf8 -I %s land %s`." % (
+                plan, waiting or "<the step>"))
     for step_id in reopened:
         say("Open again, blocked by this mend before: %s. `python -X utf8 -I %s next` gives it in its turn; `start %s` takes its branch up "
             "(rebase it onto origin/main, then land)." % (step_id, plan, step_id))
@@ -3433,9 +3448,9 @@ def mend_failed(a):
             return code
     lv.set_mend(live, a.id, "failed", note="attempt %d failed: %s" % (attempts, why), attempts=attempts)
     refresh_page(a)
-    say("BLOCKED: %s failed its third attempt and is listed as needing the planner%s." % (a.id, ("; step %s is blocked `%s`" % (step, BLOCKED_BY_MEND % a.id)) if step else ""))
-    say("NEXT: `python -X utf8 -I %s next` gives the steps that do not need it. A later `mend close %s <commit>` (a mend the planner makes) "
-        "opens the step again." % (plan, a.id))
+    say("BLOCKED: %s failed its third attempt%s. The page lists it under \"Waiting for the owner\"." % (a.id, ("; step %s is blocked `%s`" % (step, BLOCKED_BY_MEND % a.id)) if step else ""))
+    say("NEXT: `python -X utf8 -I %s next` gives the steps that do not need it. `mend close %s <commit>` opens the step again when a commit on "
+        "main mends the tool (the owner's message in this session names it, or `git log origin/main` shows it)." % (plan, a.id))
     return 0
 
 
@@ -3530,7 +3545,31 @@ def mend_land(a):
         return 0
 
     extra = ["--who", "mend %s" % a.id]
+    rep = next((r for r in lv.read_repairs(live) if r["id"] == m["step"]), None) if is_repair(m["step"]) else None
+    also = also_for_check(rep["check"]) if rep else []
+    if also:
+        # The mend was opened for a repair: the check that failed runs in this landing, as a repair's own landing has it (--also).
+        extra += ["--also", ",".join(also)]
+        if not join:
+            say("the repair %s failed in %s: this landing runs it as an extra check (%s)." % (rep["id"], rep["check"], ", ".join(also)))
+    elif rep and not join:
+        say("the repair %s failed in %s, which the gate cannot add to a landing: the landing runs the checks its files ask for, and the "
+            "mend's own self-test is the proof." % (rep["id"], rep["check"]))
     return hand_to_gate(a, folder, branch, branch, "mend", extra, passed, join=join)
+
+
+ALSO_OF_CHECK = (("build/windows-asan", "sanitizer/tour"), ("unit/game-asan", "sanitizer/tour"), ("tour-asan/", "sanitizer/tour"),
+                 ("mods-asan/", "sanitizer/tour"), ("stress/", "stress"), ("soak/long", "soak/long"), ("soak", "soak"),
+                 ("replays/software", "replays/software"), ("speed/anchor", "speed/anchor"))
+
+
+def also_for_check(check):
+    """The `--also` names that make the gate run a failed check of a repair in a landing ([] when it has none: the gate's list of what
+    a landing can add is ALSO_CHECKS and the main level's own checks; the nightly's sanitizer checks come with `sanitizer/tour`)."""
+    for prefix, name in ALSO_OF_CHECK:
+        if check == prefix or (prefix.endswith("/") and check.startswith(prefix)):
+            return [name]
+    return []
 
 
 def cmd_check(a):
@@ -3589,10 +3628,12 @@ def read_strictness_log(tree):
     return lv.read_rows(path, list(strictness.LOG_COLUMNS))
 
 
-def owner_questions(steps):
-    """[{step, title, question}] of the steps blocked with `owner: <the question>`: they wait for the owner, and the page lists them apart."""
-    return [{"step": s["step"], "title": s["title"], "question": s["reason"][len("owner:"):].strip()}
-            for s in steps if s["state"] == "blocked" and (s["reason"] or "").startswith("owner:")]
+def owner_questions(steps, mends=()):
+    """[{step, title, question}] of the steps blocked with `owner: <the question>` and the mends that failed three times: they wait for the
+    owner, and the page lists them apart."""
+    return ([{"step": s["step"], "title": s["title"], "question": s["reason"][len("owner:"):].strip()}
+             for s in steps if s["state"] == "blocked" and (s["reason"] or "").startswith("owner:")]
+            + [{"step": "-", "title": m["title"], "question": page.mend_owner_text(m)} for m in mends if m["state"] == "failed"])
 
 
 def run_state(a, at=None):

@@ -458,8 +458,9 @@ def set_pending_rerun(live, commit, text):
     return False
 
 
-def set_repair(live, repair_id, state, closed=None):
-    """The repair's state (and, for `landed`, the closing commit). Returns the row, or None when there is no such repair."""
+def set_repair(live, repair_id, state, closed=None, note=None):
+    """The repair's state (and, for `landed`, the closing commit; `note`: words added to its note). Returns the row, or None when there is no
+    such repair."""
     path = pathlib.Path(live) / "repairs.tsv"
     with locked(live):
         rows = read_repairs(live)
@@ -468,6 +469,8 @@ def set_repair(live, repair_id, state, closed=None):
                 r["state"] = state
                 if closed is not None:
                     r["closed"] = closed
+                if note:
+                    r["note"] = clean("%s; %s" % (r["note"], note))
                 write_rows(path, REPAIR_COLUMNS, rows)
                 return {k: clean(v) for k, v in r.items()}
     return None

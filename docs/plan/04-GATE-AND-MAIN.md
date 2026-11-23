@@ -654,7 +654,10 @@ references check, the code checks and the strictness check, then hands the branc
 landing record is `landing-mend.tsv`, so it never meets the agent's own. `mend close M-00N <commit>` needs a commit on `origin/main`
 that touches `tools/`, `docs/` or `.github/`; the waiting step is in work again and every step blocked `tool: M-00N` is open
 again. `mend failed M-00N "<why>"` counts the attempts on the sheet (the helper, a second helper, the agent itself): only the third
-failure blocks the step. `mend drop` ends a mend whose fault needs game code (not a tool fault). `mend open ... --landed <commit>`
+failure blocks the step. `mend drop` ends a mend whose fault needs game code (not a tool fault). A mend opened for a repair (`mend open R-00N ...`) ends that repair
+when it is closed (`mend close`): the repair is `landed`, closed by the mend's commit, with the note `ended by mend M-00N`; its landing
+(`mend land`) runs the failed check as an extra check where the gate can add it (`also_for_check` in `plan.py`: the sanitizer, stress, soak,
+replays/software, speed/anchor). `mend open ... --landed <commit>`
 records a mend that was landed by hand because `plan.py` itself was at fault. `mend list` lists them (mends.tsv in the live folder);
 the page shows each with its attempt. `decide <ID> "<what>" --because "<why>" [--doc "<file, section>"]` appends a row to
 `decisions.tsv` in the plan's folder (docs/plan/native). `check` runs what `land` checks before it queues (the ledger, the file references, the replay
@@ -678,6 +681,14 @@ against main; a `mend/*` branch may not change source files of the game, the eng
 files are free). The check runs in every landing, because `scope.tsv` puts the group `repo` in every row that can name a listed file
 (a self-test pins it). Outside the repository nothing is judged: the speed bands of the pair and the accepted slowdowns live in the
 gate-runs folder, and `pair-accept` is the owner's word only.
+
+**The tablet's measure after a gap.** `measure/step/tablet` compares with the median of the last ten trusted lines of the same key in
+`measure-history.tsv` (the band rule of `tools/measure/band.py`). While the tablet was away its checks were owed, so the history has no line for
+those landings (`tablet-owed.tsv` lists them). A figure `worse` against that older history, in the first landing after the gap, is `owed`
+(`the tablet's history is N landings old`), not `worse`. After the move the gate runs `measure.py accept --commit <this landing> --renderer
+tablet`, the tool's own restart of a baseline (the tablet's lines before it stop counting, its `worse` marks become trusted), and opens one
+repair (source `measure`, kind `worse`, check `measure/step/tablet`) that holds the loss with the gap's landings and the figures. The next
+landing is judged against the figures from this landing on.
 
 **Planted faults** (`TOOL-MEND-PLANTS.md`): a branch named `plant/...` is judged by a gate command without `--move`, is never pushed
 (the push guard refuses the ref) and is never landed (`gate.py land plant/...` is refused before anything is queued).
