@@ -133,6 +133,8 @@
 // Every host, the headless one too.
 #include "galaxy/content_viewport.h"
 #include "galaxy/platform_time.h"
+#include "galaxy/frame_due.h"
+#include "galaxy/start_watch.h"
 #include "galaxy/precise_wait.h"
 #if !defined(NEBULA_HOST_RENDERER)
 namespace galaxy::host {
@@ -438,6 +440,45 @@ void report_crash_facts(const fs::path& dump) {
     galaxy::sdl::show_fatal(message.c_str());
 #endif
 }
+
+// What the game thread is inside on the host's side when it can wait there: named in the log when a start stops (the main
+// loop's start watch), and by its own line when it took a second or more. A length of time only, so steady_clock.
+std::atomic<const char*> gHostWait{nullptr};
+class HostWait {
+public:
+    explicit HostWait(const char* what) noexcept : what_(what), began_(Clock::now()) { gHostWait.store(what, std::memory_order_release); }
+    HostWait(const HostWait&) = delete;
+    HostWait& operator=(const HostWait&) = delete;
+    ~HostWait() {
+        gHostWait.store(nullptr, std::memory_order_release);
+        const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - began_).count();
+        if (ms >= 1000) {
+            char text[160];
+            std::snprintf(text, sizeof(text), "stage: %s took %lld ms", what_, static_cast<long long>(ms));
+            log_line("host:", text);
+        }
+    }
+
+private:
+    const char* what_;
+    Clock::time_point began_;
+};
+
+#if defined(__APPLE__) && defined(NEBULA_HOST_RENDERER)
+// The language folder of the start's message (the table's column): the player's setting; Auto is English (the Mac host's own
+// messages are English until the system's language is read there, ledger P-106).
+const char* start_message_language() {
+    switch (galaxy::get_runtime_settings().language) {
+    case galaxy::GameLanguage::Japanese: return "JpJapanese";
+    case galaxy::GameLanguage::German: return "EuGerman";
+    case galaxy::GameLanguage::French: return "EuFrench";
+    case galaxy::GameLanguage::Spanish: return "UsSpanish";
+    case galaxy::GameLanguage::Italian: return "EuItalian";
+    case galaxy::GameLanguage::Dutch: return "EuDutch";
+    default: return "UsEnglish";
+    }
+}
+#endif
 
 [[noreturn]] void die(const char* format, ...) {
     char text[1024];
@@ -1128,17 +1169,16 @@ std::optional<galaxy::host::DisplayRefresh> display_refresh() {
     return known;
 }
 
-// The next frame's start after the one due at `start` (frame_phase.h).
-Clock::time_point next_frame_start(Clock::time_point start, std::chrono::nanoseconds period) {
+// The next frame's start after the one due at `start_ns` (the runtime's clock, nanoseconds; frame_phase.h).
+int64_t next_frame_start(int64_t start_ns, std::chrono::nanoseconds period) {
     static galaxy::host::FramePhase phase;
     static int64_t previous_ns = 0;
-    const int64_t start_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(start.time_since_epoch()).count();
     const int64_t present_ns = galaxy::render::g_last_present_ns.load(std::memory_order_relaxed);
     const int64_t work_ns = previous_ns != 0 && present_ns > previous_ns ? present_ns - previous_ns : 0;
     previous_ns = start_ns;
     const int64_t next_ns = phase.next_start(start_ns, work_ns, period.count(), display_refresh(),
                                              galaxy::render::g_in_between_on.load(std::memory_order_relaxed));
-    return start + std::chrono::nanoseconds(next_ns - start_ns);
+    return next_ns;
 }
 
 // Tells the OS about the player's presence (power_policy.h) when it changes: the process asks for efficiency (EcoQoS) while the
@@ -1175,9 +1215,14 @@ void svc_frame_wait(void*) {
 #if defined(NEBULA_HOST_RENDERER)
     galaxy::pacing::step_done();  // the game thread is back: the step's own work ends here
 #endif
+    const HostWait waiting("the frame wait");
     const auto display_period = std::chrono::nanoseconds(galaxy::kGameStepNs);
     static auto period = gBootFast.load(std::memory_order_relaxed) ? std::chrono::nanoseconds(kBootPeriod) : display_period;
-    static auto next = Clock::now() + period;
+    // The due moments are on the runtime's clock (frame_due.h): never a steady_clock value, which on a Mac that has slept
+    // is hours ahead of it.
+    static galaxy::FrameDue frame_due;
+    static uint32_t cut_logged = 0;
+    const auto clock_ns = [] { return galaxy::qpc_to_ns(galaxy::qpc_now()); };
 #if defined(NEBULA_HOST_SDL)
     static int64_t vsync_ns = 0;
     static uint32_t on_vsync = 0;
@@ -1200,17 +1245,25 @@ void svc_frame_wait(void*) {
         // The step's moment on the runtime's clock: the display's vsync it waited for, else the host clock's due time,
         // reached by a precise wait (precise_wait.h: a timer woken late would start the step late).
         std::int64_t due_qpc = 0;
+        // A moment too far ahead is a fault of a clock, never a wait: one line says it and the wait is one period.
+        const galaxy::FrameDue::Due kept = frame_due.due(clock_ns(), period.count());
+        if (kept.cut && cut_logged++ < 5u) {
+            char text[160];
+            std::snprintf(text, sizeof(text), "the next frame was due %lld ms ahead (at most %lld ms): the wait is cut to one period",
+                          static_cast<long long>(kept.ahead_ns / 1000000), static_cast<long long>(galaxy::FrameDue::kMostNs / 1000000));
+            log_line("host:", text);
+        }
 #if defined(NEBULA_HOST_SDL)
         const bool vsync = galaxy::sdl::wait_display_frame(period.count(), vsync_ns,
                                                            galaxy::render::g_in_between_on.load(std::memory_order_relaxed));
         if (vsync) {
             due_qpc = vsync_ns;
         } else {
-            due_qpc = galaxy::qpc_of(next);
+            due_qpc = galaxy::qpc_from_ns(kept.ns);
             galaxy::PreciseWait::for_this_thread().until(due_qpc);
         }
 #else
-        due_qpc = galaxy::qpc_of(next);
+        due_qpc = galaxy::qpc_from_ns(kept.ns);
 #if defined(_WIN32) && defined(NEBULA_HOST_RENDERER)
         galaxy::timeline::record(galaxy::timeline::Event::StepWaitBegin, static_cast<std::uint64_t>(due_qpc), 0u);
 #endif
@@ -1220,7 +1273,7 @@ void svc_frame_wait(void*) {
 #endif
 #endif
         if (wait_while_suspended()) {
-            next = Clock::now() + period;
+            frame_due.set_next(clock_ns() + period.count());
             continue;
         }
         // The last step's work (the game and render threads' busy wall time), to the performance hints (Android).
@@ -1230,18 +1283,17 @@ void svc_frame_wait(void*) {
         }
         // The hints' budget is the frame the clock keeps now (the short boot frame, then the game step).
         galaxy::host::perf_hint_set_target(period.count());
+        const std::int64_t now_ns = clock_ns();
 #if defined(_WIN32) && defined(NEBULA_HOST_RENDERER) && !defined(NEBULA_HOST_SDL)
-        next = next_frame_start(next, period);
+        frame_due.set_next(next_frame_start(frame_due.next(), period));
+        if (now_ns >= frame_due.next()) frame_due.set_next(now_ns + period.count());
 #else
-        next += period;
+        frame_due.waited(now_ns, period.count());
 #endif
-        const auto now = Clock::now();
-        if (now >= next) {
-            next = now + period;
-        }
+        [[maybe_unused]] const auto now = Clock::now();  // a length of time only (the pacing line's window)
 #if defined(NEBULA_HOST_SDL)
         if (vsync) {
-            next = now + period;  // the host's clock continues from the display's
+            frame_due.set_next(now_ns + period.count());  // the host's clock continues from the display's
             ++on_vsync;
         }
         // Every 10 s: how the frames were paced (the window's wall time, how many began on the display's vsync) and
@@ -2094,6 +2146,11 @@ void submit_frame_unchecked(bool present, bool black) {
 // walk and the present as the game's do. Exit 0: every frame was drawn and at least one picture shown; 3: the renderer
 // did not start; 4: no picture was shown; 5: the renderer kept a frame for 10 seconds. A crash ends it as a crash.
 int run_start_check(unsigned frames) {
+    // The two clocks the host knows, side by side (frame_due.h): equal on a machine that never slept (GitHub's), hours apart on a
+    // Mac that has. The program keeps its moments on the runtime's clock only.
+    std::printf("start check: clocks: steady_clock %lld ms, runtime clock %lld ms\n",
+                static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count()),
+                static_cast<long long>(galaxy::qpc_to_ns(galaxy::qpc_now()) / 1'000'000));
     try {
         galaxy::render::load_render_config_from_file();
     } catch (const std::exception& failure) {
@@ -4074,6 +4131,7 @@ void svc_speaker_samples(void*, uint32_t player, const int16_t* samples, uint32_
 // The game's sound (native_audio.h), on its audio thread. Headless, nothing is mixed.
 void svc_audio_setup(void*, NebulaVoice* voices, uint32_t count, const NebulaEffectLine* effects) {
 #if defined(NEBULA_HOST_RENDERER)
+    const HostWait waiting("opening the sound device");
     gAudio->setup(voices, count, effects, !deterministic_mode());
 #else
     (void)voices, (void)count, (void)effects;
@@ -4143,6 +4201,7 @@ void svc_audio_control(void*, uint32_t what, uint32_t value) {
     }
 #if defined(NEBULA_HOST_RENDERER)
     if (what == NEBULA_AUDIO_START) {
+        const HostWait waiting("starting the sound device");
         gAudio->start(audio_frame_tick);
     } else if (what == NEBULA_AUDIO_STOP) {
         gAudio->stop();
@@ -6124,7 +6183,7 @@ int main(int argc, char** argv) {
                    key == "--gpu-start-retry" || key == "--extension" || key == "--import" || key == "--imports-taken" ||
                    key == "--safe-start" || key == "--shipped-mods" || key == "--mod-dev" || key == "--renderer" || key == "--started-again" ||
                    key == "--start-again-of" || key == "--hidden" || key == "--no-focus" || key == "--gpu-driver" || key == "--gpu-driver-library" ||
-                   key == "--gpu-driver-hooks" || key == "--start-check" || key == "--module-check" ||
+                   key == "--gpu-driver-hooks" || key == "--start-check" ||
                    key == "--software-device") {
             // Read above, before anything uses them.
         } else if (key == "--seconds") {
@@ -6633,6 +6692,8 @@ int main(int argc, char** argv) {
     boot_mark("game started");
 
     const auto end = Clock::now() + std::chrono::duration<double>(seconds > 0 ? seconds : 1e9);
+    const auto watch_began = Clock::now();  // a length of time only
+    galaxy::StartWatch start_watch;
     bool first_frame = false;
     uint32_t reported = 0;
     auto next_report = Clock::now() + std::chrono::seconds(1);
@@ -6735,6 +6796,37 @@ int main(int argc, char** argv) {
 #endif
         next_report += std::chrono::seconds(1);
         const uint32_t frames = gGameFrames.load(std::memory_order_relaxed);
+        // A start that has stopped is said, never silent: the game thread that makes no frame, and (on a Mac, where the window is
+        // transparent until its first picture) a window that shows none.
+        {
+            bool picture_shown = true;
+#if defined(__APPLE__) && defined(NEBULA_HOST_RENDERER)
+            picture_shown = ::galaxy::launch_args().started_hidden || galaxy::apple::window_has_picture();
+#endif
+            const galaxy::StartWatch::Notice notice = start_watch.tick(
+                std::chrono::duration<double>(Clock::now() - watch_began).count(), frames, picture_shown, gSuspended);
+            const char* const inside = gHostWait.load(std::memory_order_acquire);
+            if (notice.log_no_frame) {
+                char text[256];
+                std::snprintf(text, sizeof(text), "the game thread has made no frame for %.0f s (frame %u); it is inside: %s",
+                              notice.no_frame_for_s, frames, inside != nullptr ? inside : "the game's own code, or a wait not named here");
+                log_line("host:", text);
+            }
+            if (notice.show_no_picture) {
+                char text[256];
+                std::snprintf(text, sizeof(text), "no picture has been shown after %.0f s (frame %u); the game thread is inside: %s",
+                              galaxy::StartWatch::kNoPictureS, frames, inside != nullptr ? inside : "the game's own code, or a wait not named here");
+                log_line("host:", text);
+#if defined(__APPLE__) && defined(NEBULA_HOST_RENDERER)
+                const char* const language = start_message_language();
+                const std::string body =
+                    std::string(galaxy::crash::translated("The start is taking longer than it should, or has stopped. You can wait, or close the window and start Nebula again. The log says where it stopped.", language)) +
+                    "\n\n" + text;
+                galaxy::apple::show_stalled_start(std::string(galaxy::crash::translated("Nebula has not shown a picture yet", language)).c_str(),
+                                                  body.c_str());
+#endif
+            }
+        }
 #if defined(_WIN32)
 #if defined(NEBULA_HOST_RENDERER)
         const bool rebuilding = galaxy::render::device_rebuilding();

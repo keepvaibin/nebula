@@ -1005,6 +1005,32 @@ void start_app() noexcept {
     }
 }
 
+// The game window is made transparent and shown by the renderer once its first picture reached it (show_window). Main thread.
+bool window_has_picture() noexcept {
+    return galaxy::sdl::g_window == nil || galaxy::sdl::g_window.alphaValue > 0.5;
+}
+
+// A start that has shown nothing for a while: the window is made visible (the system's full screen and the window's own
+// picture aside) and a message sheet says so, with the window still closable. Main thread; the game goes on behind it.
+void show_stalled_start(const char* title, const char* text) noexcept {
+    @autoreleasepool {
+        NSWindow* const window = galaxy::sdl::g_window;
+        if (window != nil) {
+            [window setAlphaValue:1.0];
+        }
+        std::fprintf(stderr, "[start] %s: %s\n", title, text);
+        NSAlert* const alert = [NSAlert new];
+        alert.alertStyle = NSAlertStyleWarning;
+        alert.messageText = @(title);
+        alert.informativeText = @(text);
+        if (window != nil) {
+            [alert beginSheetModalForWindow:window completionHandler:nil];
+        } else {
+            [alert runModal];
+        }
+    }
+}
+
 }  // namespace galaxy::apple
 
 namespace galaxy::sdl {

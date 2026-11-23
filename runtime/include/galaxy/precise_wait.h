@@ -134,11 +134,10 @@ private:
     std::int64_t margin_us_ = kFirstMarginUs;
 };
 
-// The moment a steady_clock time point names, on the qpc_now() clock: steady_clock counts the same ticks in
-// nanoseconds (Windows: QueryPerformanceCounter; elsewhere the monotonic clock qpc_now() reads).
-template <class TimePoint>
-[[nodiscard]] std::int64_t qpc_of(TimePoint when) noexcept {
-    const std::int64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(when.time_since_epoch()).count();
+// A moment on the qpc_now() clock given in nanoseconds of that clock (qpc_to_ns of a qpc_now() reading, plus lengths of
+// time), in qpc_now()'s ticks. Never a std::chrono::steady_clock value: on Apple steady_clock is CLOCK_MONOTONIC_RAW, which
+// counts the time the Mac sleeps, and qpc_now() is CLOCK_UPTIME_RAW, which does not (frame_due.h).
+[[nodiscard]] inline std::int64_t qpc_from_ns(std::int64_t ns) noexcept {
     const std::int64_t frequency = qpc_frequency();
     if (frequency == 1'000'000'000) return ns;
     return ns / 1'000'000'000 * frequency + ns % 1'000'000'000 * frequency / 1'000'000'000;

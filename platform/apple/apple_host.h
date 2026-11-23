@@ -27,4 +27,11 @@ void start_app() noexcept;
 // False: the player left without setting up, and the app ends. After launch_arguments, on the main thread.
 [[nodiscard]] bool ensure_game_data(int argc, char** argv);
 
+// The game window has shown its first picture (it is transparent until then). True when there is no window. Main thread.
+[[nodiscard]] bool window_has_picture() noexcept;
+
+// A start that has shown nothing for a while: the window is made visible and a message with `title` and `text` says so; the
+// window can be closed and the game goes on behind it. Main thread.
+void show_stalled_start(const char* title, const char* text) noexcept;
+
 }  // namespace galaxy::apple
