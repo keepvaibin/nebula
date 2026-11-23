@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The draw walker's plans (render/core/walk_plan.h) over made-up lists: which target runs are drawn first, where probes
-// are asked, which scene depth clears wait for the next pass. No GPU: a lookup gives each pipeline's state word and
+// The draw walker's plans (render/core/walk_plan.h) over made-up lists: which target runs are drawn first and which scene
+// depth clears wait for the next pass. No GPU: a lookup gives each pipeline's state word and
 // each texture table's textures.
 #include "render/core/walk_plan.h"
 #include "render/core/walk_plan_shape.h"
@@ -105,12 +105,6 @@ std::vector<EarlyTargets> targets_of(List& l) {
     return out;
 }
 
-std::vector<EarlyProbe> probes_of(List& l) {
-    std::vector<EarlyProbe> out{EarlyProbe{9u, 9u}};
-    plan_early_probes(l.done(), Lookup{}, out);
-    return out;
-}
-
 std::vector<std::uint32_t> late_clears_of(List& l) {
     std::vector<std::uint32_t> out{9u};
     plan_late_depth_clears(l.done(), Lookup{}, out);
@@ -170,11 +164,11 @@ void test_early_targets() {
         check(targets_of(l).empty(), "a target written in place before stays in place");
     }
     {
-        // A run with a pass other than draws and clears (a probe inside it).
+        // A run with a pass other than draws and clears (a native call inside it).
         List l;
         l.target(kTargetA, {{0u, 0u}});
-        l.pass(NEBULA_PASS_PROBE, NEBULA_LAYER_TARGET);
-        check(targets_of(l).empty(), "a run with a probe stays in place");
+        l.pass(NEBULA_PASS_NATIVE, NEBULA_LAYER_TARGET);
+        check(targets_of(l).empty(), "a run with a native call stays in place");
     }
     {
         // A target pass reading the open frame.
@@ -187,64 +181,6 @@ void test_early_targets() {
         List l;
         l.target(kTargetA, {{0u, 4u}});
         check(targets_of(l).size() == 1u, "images do not hold a run in place");
-    }
-}
-
-void test_early_probes() {
-    {
-        List l;
-        l.pass(NEBULA_PASS_SCENE_END);
-        l.pass(NEBULA_PASS_PROBE);
-        const auto plan = probes_of(l);
-        check(plan.size() == 1u && plan[0].after == 0u && plan[0].probe == 1u, "a probe right after the scene's end");
-    }
-    {
-        // Frame copies and draws that leave depth alone lie between: still asked at the scene's end.
-        List l;
-        l.pass(NEBULA_PASS_SCENE_END);
-        l.pass(NEBULA_PASS_COPY_FRAME);
-        l.draw({{0u, 0u}, {1u, 0u}});  // no depth, and a test without a write
-        l.clear(1u);                     // colour only
-        l.pass(NEBULA_PASS_PROBE);
-        const auto plan = probes_of(l);
-        check(plan.size() == 1u && plan[0].after == 0u && plan[0].probe == 4u, "back past copies to the scene's end");
-    }
-    {
-        // A depth write before the copy: asked after the copy.
-        List l;
-        l.pass(NEBULA_PASS_SCENE_END);
-        l.draw({{2u, 0u}});
-        l.pass(NEBULA_PASS_TAKE_FRAME);
-        l.pass(NEBULA_PASS_PROBE);
-        const auto plan = probes_of(l);
-        check(plan.size() == 1u && plan[0].after == 2u, "after the nearest copy when depth changed before it");
-    }
-    {
-        // A depth write with no copy after it: not early.
-        List l;
-        l.pass(NEBULA_PASS_SCENE_END);
-        l.draw({{2u, 0u}});
-        l.pass(NEBULA_PASS_PROBE);
-        check(probes_of(l).empty(), "a depth write between: asked in place");
-    }
-    {
-        // A depth clear on the screen between: not early; a target's depth clear is not the scene's.
-        List l;
-        l.pass(NEBULA_PASS_SCENE_END);
-        l.clear(4u, NEBULA_LAYER_TARGET);
-        l.draw({{2u, 0u}}, NEBULA_LAYER_TARGET);
-        l.pass(NEBULA_PASS_PROBE);
-        check(probes_of(l).size() == 1u, "a target's depth is not the scene's");
-        List m;
-        m.pass(NEBULA_PASS_SCENE_END);
-        m.clear(4u);
-        m.pass(NEBULA_PASS_PROBE);
-        check(probes_of(m).empty(), "a scene depth clear between: asked in place");
-    }
-    {
-        List l;
-        l.pass(NEBULA_PASS_PROBE);
-        check(probes_of(l).empty(), "a probe with nothing before it: in place");
     }
 }
 
@@ -275,12 +211,6 @@ void test_late_depth_clears() {
         l.clear(4u);
         l.target(kTargetA, {{0u, 0u}});
         check(late_clears_of(l).empty(), "a target pass after keeps it in place");
-    }
-    {
-        List l;
-        l.clear(4u);
-        l.pass(NEBULA_PASS_PROBE);
-        check(late_clears_of(l).empty(), "a probe after reads the depth");
     }
     {
         // Cleared again whole before anything reads it: both clears are late.
@@ -380,13 +310,11 @@ std::uint32_t test_recorded_file(const std::filesystem::path& path) {
             r.list.item_count = static_cast<std::uint32_t>(r.items.size());
             const RecordedLookup lookup{r};
             std::vector<EarlyTargets> targets;
-            std::vector<EarlyProbe> probes;
             std::vector<std::uint32_t> clears;
             plan_early_targets(r.list, lookup, targets);
-            plan_early_probes(r.list, lookup, probes);
             plan_late_depth_clears(r.list, lookup, clears);
             std::string made;
-            write_plans(targets, probes, clears, made);
+            write_plans(targets, clears, made);
             if (made != wanted) {
                 std::printf("FAIL: %s, list of frame %u: plans made\n%swritten\n%s", path.filename().string().c_str(),
                             r.list.game_frame, made.c_str(), wanted.c_str());
@@ -418,7 +346,6 @@ void test_recorded_lists() {
 
 int main() {
     test_early_targets();
-    test_early_probes();
     test_late_depth_clears();
     test_recorded_lists();
     if (failures == 0) {

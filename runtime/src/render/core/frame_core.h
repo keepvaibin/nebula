@@ -183,20 +183,13 @@ struct ListData {
     std::vector<std::uint32_t> item_before;
     bool motion_ready = false;
     bool coverage_counted = false;  // --diagnostics present-stats: its items counted in RenderCore::coverage_
-    // The list's screen probes are asked once, on its first real walk: a frame between lists (`between`) draws the scene at
-    // t < 1, not the camera the game's points were made with.
-    bool probes_done = false;
-    [[nodiscard]] bool probes_due(bool between) const noexcept { return !probes_done && !between; }
     std::vector<EyeMotion> eye_motions;        // an eye-space block's joints, in `joint_motion`'s place
 
     // The walk's plans (render/core/walk_plan.h), made at the list's first walk: target passes drawn before the list's
-    // other passes, probes asked right after an earlier pass (in list order), and clears of the scene's depth that
-    // nothing after them in the list reads or writes.
+    // other passes, and clears of the scene's depth that nothing after them in the list reads or writes.
     using EarlyTargets = core::EarlyTargets;
-    using EarlyProbe = core::EarlyProbe;
     bool targets_planned = false;
     std::vector<EarlyTargets> early_targets;
-    std::vector<EarlyProbe> early_probes;
     std::vector<std::uint32_t> late_depth_clears;
 
     // Read once from the list.

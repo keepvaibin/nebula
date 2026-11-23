@@ -24,7 +24,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 162u
+#define NEBULA_GAME_API_VERSION 163u
 
 /* The game's fixed step: nebula_game_run's loop runs this many steps a second (frame_wait paces them), whatever the
    display's rate; the host presents each or interpolates between them. */
@@ -850,13 +850,6 @@ typedef enum NebulaClearChannels {
     NEBULA_CLEAR_DEPTH = 4u
 } NebulaClearChannels;
 
-/* A point of the picture the game asks about (NEBULA_PASS_PROBE). */
-typedef struct NebulaScreenProbe {
-    float x, y;
-    float user_x, user_y, user_z;
-    float value; /* the depth, 0 near to 1 far */
-} NebulaScreenProbe;
-
 typedef struct NebulaHostServices {
     uint32_t version;
     uint32_t size;
@@ -1056,10 +1049,6 @@ typedef struct NebulaHostServices {
     uint32_t (*pipeline_register)(void* user, const NebulaPipelineDesc* desc, const NebulaLayoutInput* inputs);
     /* The frame's list. The renderer owns it until it sets `released`; nothing waits. */
     void (*submit_frame)(void* user, NebulaFrameList* list);
-    /* `channel`'s probes with their values as this frame's list of two frames before asked them (or the newest list
-       before that which asked some), at most `capacity`; how many (0 when none). The same answers at the same frame
-       whatever the GPU's speed: it waits for them when the GPU has not finished that frame yet. */
-    uint32_t (*probe_results)(void* user, uint32_t channel, NebulaScreenProbe* probes, uint32_t capacity);
     /* The players input_read serves (0 to this - 1), fixed for the session. */
     uint32_t (*input_players)(void* user);
     /* The player chose to pause the game when its window loses focus (runtime settings, focus_loss) and the window has: 1 once

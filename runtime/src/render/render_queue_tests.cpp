@@ -5,8 +5,6 @@
 #include <cstdint>
 #include <cstdio>
 
-using galaxy::render::probe_wait;
-using galaxy::render::ProbeWait;
 using galaxy::render::queue_place;
 
 namespace {
@@ -68,21 +66,6 @@ int main() {
     check(queued_by(kDepth, t0, t0, t0 + 2 * kStall) == kStalled, "held inside a list: the game runs ahead");
     check(queued_by(kDepth, 0, t0, t0 + 2 * kStall) == kStalled, "held outside a list: the game runs ahead");
     check(queued_by(kDepth, 0, t0, t0 + 1'700'000'000u) == kStalled, "held 1.7 s: the stalled depth, no more");
-    // The probe read: the answers are waited for until the deadline, and on no draw.native call that has held the render
-    // thread the stall time (the walk that answers them is behind it). A short call is waited on.
-    const std::uint64_t deadline = t0 + 2'000'000'000u;
-    check(probe_wait(t0, deadline, 0, kStall) == ProbeWait::Wait, "no answers yet, no call: wait");
-    check(probe_wait(deadline, deadline, 0, kStall) == ProbeWait::Late, "the deadline: the answers before them");
-    check(probe_wait(t0 + kStall - 1, deadline, t0, kStall) == ProbeWait::Wait, "a call under the stall time: wait");
-    check(probe_wait(t0 + kStall, deadline, t0, kStall) == ProbeWait::Held, "a call held the stall time: no wait");
-    // The game reads frame F's answers at F + 2: with a call held 1.7 s from frame F's walk, the reads after it end a
-    // stall time after the call began, not at its end.
-    std::uint64_t now = t0;
-    int looks = 0;
-    while (probe_wait(now, deadline, t0, kStall) == ProbeWait::Wait && looks++ < 1000) {
-        now += kStall / 4;
-    }
-    check(now <= t0 + kStall && now < t0 + 1'700'000'000u, "a held call: the read goes on within the stall time");
     if (failures != 0) {
         std::printf("%d failures\n", failures);
         return 1;

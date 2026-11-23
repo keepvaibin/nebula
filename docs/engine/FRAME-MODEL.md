@@ -70,8 +70,8 @@ the render thread until released) and the chunk's queued registry and texture wo
 5. A present-only chunk presents the cached picture again, or hands its moment to the in-between sequence (:1498-1516);
    with no slot clock (an unlimited rate) it presents again once the last present is done (:1527-1535).
 6. A render chunk is walked (`walk_frame`, :2141), and the lists older than the one before are released (1.2 item 5).
-7. On a lost device, `drop_device_state` (:1161) releases every queued and walked list (:1164-1180) and clears the walk,
-   the in-between sequence and the screen probes (:1185-1212), so no list stays held by a dead device.
+7. On a lost device, `drop_device_state` (:1161) releases every queued and walked list (:1164-1180) and clears the walk
+   and the in-between sequence (:1185-1212), so no list stays held by a dead device.
 
 ### 1.4 What the render thread waits for on the GPU
 
@@ -88,18 +88,18 @@ Outside a frame, `wait_for_gpu` drains the GPU at a window size change (:1955), 
 (:3371, :3419), an HDR switch (:4164), shutdown (:3114, :3141) and the pictures at exit (:6754). Those are allowed by the
 rules of part 2; the waits inside a frame are not, and are in the list (1.9). Metal drains at a window size change (`runtime/src/render/mtl/renderer_mtl_scene.mm:353`), the pictures at exit
 (`runtime/src/render/mtl/renderer_mtl_draw.mm:618`) and shutdown (`runtime/src/render/mtl/renderer_mtl.mm:366`). Vulkan drains the same way at window size changes,
-a swap chain's re-creation and shutdown (`runtime/src/render/vk/renderer_vk_frame.cpp:425`, `runtime/src/render/vk/renderer_vk.cpp:1062`, :3022, :1723),
+a swap chain's re-creation and shutdown (`runtime/src/render/vk/renderer_vk_frame.cpp:424`, `runtime/src/render/vk/renderer_vk.cpp:1062`, :3022, :1723),
 when FSR's swap chain is made anew (`runtime/src/render/vk/renderer_vk.cpp:1067`), when the surface is let go (:1449) and for the pictures
-at exit (`runtime/src/render/vk/renderer_vk_frame.cpp:3533`); Direct3D 11 at shutdown (`runtime/src/render/d3d11/renderer_d3d11.cpp:374`).
+at exit (`runtime/src/render/vk/renderer_vk_frame.cpp:3212`); Direct3D 11 at shutdown (`runtime/src/render/d3d11/renderer_d3d11.cpp:374`).
 
 With vsync off and a frame-rate cap, each renderer's `PresentPacer::pace` sleeps up to 2 ms toward the present's slot
 before it presents (`runtime/include/galaxy/render/renderer_common.h:181-202`; `renderer_d3d12.cpp:4311`, `runtime/src/render/vk/renderer_vk.cpp:2246`,
 `runtime/src/render/d3d11/renderer_d3d11.cpp:649`, `runtime/src/render/mtl/renderer_mtl.mm:736`): a wait of the render thread on the clock, not on the GPU,
 and pacing's (E6b).
 
-The game thread waits on the render thread at three places: queue room (1.2 item 3), the render thread idle (1.2 item
-6), and a screen probe's answers for frame F - 2 (`render_core.cpp:1585`, bounded by `kProbeWaitNs`), which waits only
-for that list's GPU work, as the list was walked when F - 1 superseded it (:1581-1584).
+The game thread waits on the render thread at two places: queue room (1.2 item 3) and the render thread idle (1.2 item
+6). A third, for frame F - 2's screen probe answers (N-1068), went with the whole question-and-answer path at S0.2.6:
+nothing of the step reads the picture.
 
 ### 1.5 What the game thread waits for
 
@@ -110,7 +110,6 @@ The game thread runs the game module's loop; each wait below is a call it makes 
 | The next step's moment | `svc_frame_wait` (:1133): the display's vertical blank on the SDL hosts (:1159), else a precise wait for the host clock's due time (:1176, `PreciseWait`), recorded as `StepWaitBegin`/`StepWaitEnd` | the step period (`kGameStepNs`) | pacing, every frame |
 | Suspended (minimised, or the system's suspend) | `wait_while_suspended` (:1027), from the step wait (:1181) | until resumed | by design |
 | Room in the render queue | `render_frame`'s wait (`render_core.cpp:595-626`, 1.2 item 3) | none of its own | every frame the render thread is behind |
-| A screen probe's answers | `svc_probe_results` (:2784) to `screen_probe_results` (`render_core.cpp:1585`) | `kProbeWaitNs` | only frames with probes |
 | The render thread idle | the output's shape latched (`svc_frame_begun`, :3224-3232, `wait_for_render_idle`) | none | a window or aspect change |
 | The last save request | `svc_save_wait` (:3491) to `StatusBoard::wait` (`runtime/src/save_files.cpp:179`) | none | the game's own `waitRequest` |
 | A file's bytes | `svc_asset_read` (:3144): a copy from the store's mapped view (`gPak.store.read`), so a page not in memory is read from the drive on this thread | the drive | loads |
@@ -220,7 +219,6 @@ with no row has a new one.
 | A present waits for every pipeline creation in flight (Direct3D 12) | `runtime/src/render/core/present_gate.h` | N-1067, E3 step 1 |
 | The sampler heap or array, full, waits for the whole GPU | `renderer_d3d12.cpp:1410`; `runtime/src/render/vk/renderer_vk_frame.cpp:2710`, :2729; `runtime/src/render/mtl/renderer_mtl_draw.mm:261` (each `reset_sampler_frame`) | P-048, P-056, P-066, E3 step 2 |
 | Size changes drain the whole GPU inside a frame | `renderer_d3d12.cpp:5019`, :5052, :5214 (the temporal upscaler), :1955; Vulkan's at size changes inside a frame (1.4) | P-028 (written for Direct3D 12 on engine/b; Vulkan's side open) |
-| The game thread waits for frame F - 2's probe answers | `render_core.cpp:1585` | N-1068, E4 |
 | The game thread waits for the whole render queue at an aspect change | `host_main.cpp:3228` | N-1081 |
 | A capture's readback waits for the GPU inside a frame | `renderer_d3d12.cpp:6889`, :6892 | N-1082 |
 | The game thread copies loads from the mapped store: a page not in memory is a drive read inside a step | `host_main.cpp:3144` (`svc_asset_read`) | N-1083 |
@@ -289,8 +287,8 @@ inventory's pass two (`CONSOLE-FREE.md` 2, 11-18) hold of the console's shape th
    pass) and made then, on the workers; a size change makes its targets beside the old ones and retires the old ones
    by the frame fence, as any other resource.
 2. The game thread waits for the render thread at one point only: room in the render queue, bounded by the queue's
-   depth. A picture's shape, a screen probe and a capture are answered later, by the frame they belong to, never by
-   holding the step.
+   depth. A picture's shape and a capture are answered later, by the frame they belong to, never by holding the
+   step. Nothing of the step asks the graphics card a question (the screen probes went at S0.2.6).
 3. The game thread reads no file inside a step: what a step loads was read ahead by the loader's thread.
 4. Each hand-over has one owner at a time and a release and acquire pair (1.2's list, the pipeline cells, the decoded
    textures); a debug build asserts the thread at each hand-over (`render_thread_only()`, `game_thread_only()`: neither
@@ -308,7 +306,7 @@ The threads stay as 1.1 lists them. What changes is what crosses between them:
 | Workers | render thread | made pipelines (atomic cells), uploaded geometry, decoded textures | as they are made; a draw whose form is not ready waits for it at load, never in a frame |
 | Game | render thread | per step: both poses of each object (transforms, joints), what changed in materials, the passes and what each reads and writes | once a step, in the frame list |
 | Render thread | GPU | one pass that makes each picture's matrices from both poses at t, then the frame as the planner ordered it | each picture |
-| Render thread | game | the released list; probe answers and pictures for the frame that asked | at release |
+| Render thread | game | the released list; pictures for the frame that asked | at release |
 
 ### 2.3 What the records must allow later
 
@@ -425,7 +423,7 @@ it. Pile A: the foundation does not touch its code; it comes after. Where this d
 | P-063 | B | F5, E4 | performance (D3D11 parity): D3D11 scene AA always copies the scene; D3 |  |
 | P-054 | B | F5, E4 | Vulkan waits for the GPU in the middle of a frame whenever it makes a  |  |
 | P-026 | B | F5, E4 | The present pass recreates its shader views every frame, and the post- |  |
-| N-1068 | B | F5, E4 | the game thread waits for frame F-2's screen probe answers (RenderCore | planner: not placed; rule 2: a probe is answered by the frame it belongs to |
+| N-1068 | B | F5, E4 | the game thread waits for frame F-2's screen probe answers (RenderCore | fixed at S0.2.6: the question-and-answer path is deleted, nothing waits and the planner has no part for it (plan decision 9) |
 | P-028 | B | F5, E4 (a size change makes new targets beside the old, retired by the fence) | Several size changes drain the whole GPU in the middle of a frame (`wa | planner: A; Direct3D 12 written on engine/b, Vulkan's drains at size changes (1.4) open |
 | P-030 | B | F5, E4 (a size change makes new targets beside the old, retired by the fence) | The frame-generation and FSR 3 paths call `vkDeviceWaitIdle` from the  | planner: not placed |
 | P-049 | B | F5, E4 (a size change makes new targets beside the old, retired by the fence) | DLSS is created on the render thread inside begin_frame, after a full  | planner: not placed |
@@ -585,8 +583,7 @@ before that group's landing.
 - For steps 1 to 4 and 6 the writer is the game thread: at a picture frame it writes the step's list twice from the
   same state, once per path, and submits both. Writing a list reads the step's state and writes only the list and the
   render caches; the step hash (`tools/verify/step_hash.py`) after a picture frame is the same with `paths both` as
-  without, and the gate checks that, so the second list changes no game state. The second list carries no probe pass:
-  probes are answered from the first, the run's default.
+  without, and the gate checks that, so the second list changes no game state.
 - For step 5 the list is the same: the render thread walks it twice, once with the CPU's matrices, once with the GPU
   pass. Because step 5 is about in-between pictures, its pictures include one at a fixed t between two frames, both
   walks at that t.
@@ -1317,10 +1314,10 @@ tour stop when nothing reads it back, pictures unchanged, GPU time by pass recor
 
 **Today.**
 
-1. The pass record. A pass is one of fourteen kinds (`nebula_frame_list.h:225-241`): draws, a clear, a copy of the
+1. The pass record. A pass is one of thirteen kinds (`nebula_frame_list.h:225-240`): draws, a clear, a copy of the
    frame (`COPY_FRAME`), the frame handed to a texture with a new picture after it (`TAKE_FRAME`), the scene's begin,
-   opaque end and end, three bloom kinds, a probe, show, a mod's post program and a native call. The record
-   (`:270-290`) holds a target key, the clear, a size, the channels, an over-frame texture and depth for a target
+   opaque end and end, three bloom kinds, show, a mod's post program and a native call (the probe kind went at S0.2.6).
+   The record (`:262-280`) holds a target key, the clear, a size, the channels, an over-frame texture and depth for a target
    pass that reads the frame, and the scene's camera and view. It names nothing it reads: what a draw pass samples is
    found by the host through each item's texture table.
 2. The game makes passes in its draw order through `Frame::` (`FrameList.hpp:134-167`). A frame of play
@@ -1336,11 +1333,10 @@ tour stop when nothing reads it back, pictures unchanged, GPU time by pass recor
    is one of these, or the shadow capture (`MarioShadow.cpp:404`), the galaxy map's capture
    (`GalaxyMapController.cpp:626`), the water filter's take (`WaterCameraFilter.cpp:126`) and the mods' views
    (`LumaDrawView.cpp:281`, `:319`, before the scene, `GameScene.cpp:520`).
-3. The walk (1.7 item 8) runs the passes in list order with three plans made once per list (`walk_plan.h`): a target
+3. The walk (1.7 item 8) runs the passes in list order with two plans made once per list (`walk_plan.h`): a target
    run that reads nothing written before it and is read by nothing before it is drawn first (`plan_early_targets`,
-   `:33-121`); a probe is asked at the scene's end or at the frame copy before it when nothing between changes the
-   depth (`plan_early_probes`, `:127-181`); a scene depth clear no later pass reads is left for the next pass to make
-   (`plan_late_depth_clears`, `:186-223`). `walk_plan_tests.cpp` (585cedcd6) tests the three on made-up lists.
+   `:28-115`); a scene depth clear no later pass reads is left for the next pass to make (`plan_late_depth_clears`,
+   `:121-157`). `walk_plan_tests.cpp` tests the two on made-up lists.
 4. Each renderer turns a target pass into a trade of its scene set for the target's set and back
    (`swap_target_set`, `renderer_d3d12.cpp:5554-5570`; `begin_target_pass` and `end_target_pass`, `:5572-5622`), with
    its own barriers written by hand at each end; Vulkan, Metal and Direct3D 11 have their own copies of the same trade
@@ -1380,8 +1376,8 @@ pure and tested with no GPU, as `walk_plan.h` is today; it replaces the three pl
 
 1. Versions. Each write of a key makes a new version; each read names the version current at its place in the list.
    The list's order is the game's meaning; the planner may move a pass only where every read still sees its version.
-2. Culling. A pass whose versions nothing reads is dropped, unless it shows, probes, calls native code, or writes a
-   target read in a later frame. A target's last version of a real frame is kept for the next frame by name (5).
+2. Culling. A pass whose versions nothing reads is dropped, unless it shows, calls native code, or writes a target
+   read in a later frame. A target's last version of a real frame is kept for the next frame by name (5).
    A frame copy that no visible draw reads is not made.
 3. Order. The list's order, as a stable topological sort with list position as its key; a pass that depends on
    nothing the open scene has written moves before the scene opens (`plan_early_targets`'s rule, now for every pass
@@ -1390,7 +1386,7 @@ pure and tested with no GPU, as `walk_plan.h` is today; it replaces the three pl
    one render pass instance. A break stays only where a pass samples a version the open instance is writing. Each
    instance's load and store come from the versions: clear where its first use clears, nothing loaded where no
    earlier version is read, stored only where a later instance or frame reads it; depth and stencil not stored after
-   the scene unless a probe, `draw.post` or `draw.native` reads them. A multisampled attachment resolves once, at the
+   the scene unless `draw.post` or `draw.native` reads them. A multisampled attachment resolves once, at the
    end of the last instance that writes it, only when its single-sample version is read; its multisampled contents
    are not stored unless a later instance loads them. An attachment neither loaded nor stored is transient: on a
    tiled GPU it lives in tile memory only (Metal's memoryless storage; Vulkan's transient attachment usage with
@@ -1417,9 +1413,8 @@ pure and tested with no GPU, as `walk_plan.h` is today; it replaces the three pl
    output are one instance writing the swap chain's picture (on tiled GPUs this is the gain; elsewhere it costs
    nothing). The bloom's chain keeps its taps; a phone setting for a shorter chain (the owner allowed it) is measured
    for time and for the picture's difference before it is offered.
-10. Probes. A probe pass is placed by the planner after the last write of the depth it reads (`plan_early_probes`'s
-    rule, generalized); its answers are copied into the frame slot's readback at that place. When the game reads
-    them is N-1068's (rule 2).
+10. Probes: none. S0.2.6 deleted the probe pass with the whole question-and-answer path, so the planner has no part for
+    depth questions (plan decision 9).
 
 **Rows.**
 
@@ -1435,7 +1430,6 @@ pure and tested with no GPU, as `walk_plan.h` is today; it replaces the three pl
 | P-021 | the cover's copy and the frame pass's draw folded into one | 6 |
 | P-026 | Direct3D 12's present views made every frame (built 11-18, 85eeb6d67): the planner's attachments keep their views | 4 |
 | P-028 (Vulkan), P-054, P-030, P-049, P-050, P-057 | size changes and the upscalers' and frame generation's contexts made beside the old, retired by the fence | 7 |
-| N-1068 | the probes' place in the plan; the game's read is the row's own | 2 |
 | N-1082 | a capture's readback answered by its frame later, through the planner's readback place | 2 |
 | P-044 (1) | the planner's test on recorded frame lists | 1 |
 | P-009, P-032 | the mods' post and native passes are passes every renderer is asked to run; HDR output is the show pass's format (2.6) | 2 |
@@ -1447,8 +1441,8 @@ both paths' pictures in one run:
 1. The records: each pass's read and write keys written by `Frame::`; a test that, over the tours' recorded lists, the
    stated sets equal what the host derives today through the tables and state words; P-044's recorded-list fixtures
    (pass kinds, keys, item counts and state words only, no game content) and their expected plans.
-2. The planner (versions, culling, order, names, probes) in core, under its tests; the walker runs its order. The
-   game's mirror target. `walk_plan.h`'s three plans deleted in this landing's last part.
+2. The planner (versions, culling, order, names) in core, under its tests; the walker runs its order. The
+   game's mirror target. `walk_plan.h`'s two plans deleted in this landing's last part.
 3. Instances, load and store, resolves and transient attachments, per backend through F3's layer.
 4. Barriers from the plan; each backend's set trade and hand barriers deleted.
 5. One instance under parallel recording.

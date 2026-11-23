@@ -19,10 +19,7 @@
 
 struct NebulaFrameList;
 
-struct NebulaScreenProbe;
-
 namespace galaxy::render {
-using ScreenProbe = ::NebulaScreenProbe;
 
 class TextureStore;
 namespace core {
@@ -106,10 +103,6 @@ void attach_frame_list(NebulaFrameList* list) noexcept;
 void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, const void* data, std::uint64_t size,
                         std::uint32_t width, std::uint32_t height);
 
-// Channel `channel`'s probes as the game's list of two frames before `game_frame` asked them
-// (nebula_game_api.h NebulaHostServices::probe_results; RenderCore::screen_probe_results).
-[[nodiscard]] std::uint32_t screen_probe_results(std::uint32_t channel, ScreenProbe* probes, std::uint32_t capacity,
-                                                 std::uint32_t game_frame);
 
 
 // Pumps window messages; the host's main loop calls it periodically.

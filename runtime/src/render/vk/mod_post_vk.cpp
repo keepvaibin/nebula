@@ -221,7 +221,6 @@ void RendererVk::record_mod_post(const ModPostProgram& program, ModPostConstants
     }
     const GpuPassScope pass_scope{*this, GpuPass::FramePass};
     end_scene_pass("mod_post");
-    settle_depth_clear();
     const unsigned samples = std::max(scene_.samples, 1u);
     const VkFormat format = scene_.color->format;
     const VkRenderPass pass = mod_post_pass(format, samples);
@@ -371,7 +370,6 @@ void RendererVk::record_native_call(const NebulaCall& call, LumaDrawNativeFrame&
     }
     const GpuPassScope pass_scope{*this, GpuPass::FramePass};
     end_scene_pass("native_call");
-    settle_depth_clear();
     const bool msaa = scene_.samples > 1u && scene_.ms_color;
     const vk::Texture& target = msaa ? *scene_.ms_color : *scene_.color;
     const vk::Texture* depth = scene_point ? (msaa ? scene_.ms_depth.get() : scene_.depth.get()) : nullptr;

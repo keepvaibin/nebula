@@ -19,6 +19,9 @@
     "save-files-again",
     "save-newer",
     "save-slow-exit",
-    "save-slow-exit-again"
+    "save-slow-exit-again",
+    "flare-window-phantom",
+    "flare-window-stardust",
+    "flare-window-eggstar"
   ]
 }

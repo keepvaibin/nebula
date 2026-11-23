@@ -251,7 +251,6 @@ namespace {
         Grown< u32 > mLightFollow;
         Grown< u32 > mCategories;  // pairs: the first item of a run of draws, and the category they are drawn as
         Grown< NebulaFrameConstants > mConstants;
-        Grown< NebulaScreenProbe > mProbes;
         Grown< u32 > mRingIndices;
         Grown< InstanceRow > mInstanceRows;
         Grown< NebulaCall > mNativeCalls;
@@ -309,12 +308,6 @@ namespace {
     u32 sSceneCamera = NEBULA_NONE32;
     u32 sSceneView = NEBULA_NONE32;
 
-    // The last asker given out. A probe set ends with one more point that shows nothing and carries its asker in user_x
-    // (a whole number a float holds exactly), so an answer finds its asker.
-    const u32 cLastAsker = 1u << 24;
-    u32 sProbeAskers;
-    Grown< NebulaScreenProbe > sProbeAnswers;
-
     void resetStore(Store* pStore) {
         pStore->mPasses.mCount = 0;
         pStore->mItems.mCount = 0;
@@ -326,7 +319,6 @@ namespace {
         pStore->mLightFollow.mCount = 0;
         pStore->mCategories.mCount = 0;
         pStore->mConstants.mCount = 0;
-        pStore->mProbes.mCount = 0;
         pStore->mRingIndices.mCount = 0;
         pStore->mInstanceRows.mCount = 0;
         pStore->mNativeCalls.mCount = 0;
@@ -482,7 +474,6 @@ namespace Frame {
         rList.constants = pStore->mConstants.mData;
         rList.ring_vertices = pStore->mRingVertices;
         rList.ring_indices = pStore->mRingIndices.mData;
-        rList.probes = pStore->mProbes.mData;
         rList.instance_rows = pStore->mInstanceRows.mData;
         rList.instance_row_count = pStore->mInstanceRows.mCount;
         rList.native_calls = pStore->mNativeCalls.mData;
@@ -496,7 +487,6 @@ namespace Frame {
         rList.light_count = pStore->mLights.mCount;
         rList.light_follow_count = pStore->mLightFollow.mCount;
         rList.constants_count = pStore->mConstants.mCount;
-        rList.probe_count = pStore->mProbes.mCount;
         rList.ring_vertex_bytes = pStore->mRingBytes;
         rList.ring_index_count = pStore->mRingIndices.mCount;
         rList.camera_epoch = sCuts;
@@ -1082,47 +1072,6 @@ namespace Frame {
 
     void show() {
         addPass(NEBULA_PASS_SHOW);
-    }
-
-    u32 newProbeAsker() {
-        sProbeAskers = sProbeAskers == cLastAsker ? 1u : sProbeAskers + 1u;
-        return sProbeAskers;
-    }
-
-    void probeScreen(u32 channel, u32 asker, const NebulaScreenProbe* pProbes, u32 count, bool compared) {
-        if (count == 0) {
-            return;
-        }
-        Store* pStore = store();
-        const u32 first = pStore->mProbes.mCount;
-        for (u32 i = 0; i < count; i++) {
-            NebulaScreenProbe& rProbe = pStore->mProbes.add();
-            rProbe = pProbes[i];
-            if (rProbe.x >= 0.0f) {
-                rProbe.x *= NEBULA_FRAME_UNITS;
-                rProbe.y *= NEBULA_FRAME_UNITS;
-            }
-        }
-        NebulaScreenProbe& rMark = pStore->mProbes.add();
-        rMark = NebulaScreenProbe{-1.0f, -1.0f, static_cast< f32 >(asker), 0.0f, 0.0f, 0.0f};
-        NebulaFramePass& rPass = addPass(NEBULA_PASS_PROBE);
-        rPass.probe_channel = channel;
-        rPass.arg0 = compared ? NEBULA_PROBE_COMPARED : NEBULA_PROBE_DEPTH;
-        rPass.first_probe = first;
-        rPass.probe_count = count + 1;
-    }
-
-    // The channel's latest answers if they answer this asker's probes; none before its first have come back.
-    u32 screenProbeResults(u32 channel, u32 asker, NebulaScreenProbe* pProbes, u32 capacity) {
-        if (sProbeAnswers.mRoom < capacity + 1) {
-            sProbeAnswers.reserve(capacity + 1);
-        }
-        const u32 done = host()->probe_results(host()->user, channel, sProbeAnswers.mData, capacity + 1);
-        if (done == 0 || sProbeAnswers.mData[done - 1].user_x != static_cast< f32 >(asker)) {
-            return 0;
-        }
-        memcpy(pProbes, sProbeAnswers.mData, (done - 1) * sizeof(NebulaScreenProbe));
-        return done - 1;
     }
 
     void sceneBegin(const f32 (*pView)[4]) {

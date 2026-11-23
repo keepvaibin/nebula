@@ -404,7 +404,7 @@ public:
     // scene target is a second target at the window's integer scale, so the 2D layer
     // renders at display resolution over the resampled scene. The two target
     // sets share layout and resource states and are swapped as a whole, so
-    // every scene target path (draws, clears, copies, probes) works unchanged on either.
+    // every scene target path (draws, clears, copies) works unchanged on either.
     // begin_output_scene returns false when the split is off or the scene target already
     // covers the window.
     [[nodiscard]] bool begin_output_scene(bool resolve_msaa_only = false);
@@ -604,11 +604,6 @@ public:
     // diagnostic buffers never suppress the required blit/presentation.
     bool present(const DisplayTexture* source, bool capture_backbuffer = false, bool black = false);
 
-    // Render-owner only. Each point's depth (0 near, 1 far) into slot `slot`'s readback, in the open frame where the
-    // stream is now; screen_probes_finished names the values, one float a point, once that frame's fence has passed.
-    // `compared` probes are answered with their depth too: the read breaks no render pass here.
-    [[nodiscard]] bool record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes, bool compared);
-    [[nodiscard]] const float* screen_probes_finished(std::size_t slot);  // throws when the device is gone
     // Writes every test capture whose frame the GPU has finished.
     void debug_log_backbuffer_readback();
     bool debug_copy_selected_display_to_readback(const DisplayTexture& source);
@@ -752,7 +747,7 @@ private:
     bool create_root_signature();
     bool create_sampler_heap();
     void reset_sampler_frame(); // only after this slot's fence completes
-    bool create_conversion_pipeline();  // the capture pipelines and the screen probes' compute pipeline
+    bool create_conversion_pipeline();  // the capture pipelines
     bool create_clear_pipeline();
     // Every variant of the renderer's own passes' pipelines the device can draw (the clear's per scene variant, the 2D
     // layer's per sample count, the depth resolve and copy) while the renderer starts (P-052): a frame never makes one.
@@ -910,7 +905,7 @@ private:
     D3D12_CPU_DESCRIPTOR_HANDLE scene_dsv_{};
     // The inactive scene target target set (the output-resolution one between frames).
     // MSAA: an scene target's draws and clears go to these multisampled targets (the set's rtv and dsv name them); its color
-    // and depth, which copies and probes read, are their resolves (resolve_scene).
+    // and depth, which copies read, are their resolves (resolve_scene).
     struct SceneMsaa {
         Microsoft::WRL::ComPtr<ID3D12Resource> color;
         Microsoft::WRL::ComPtr<ID3D12Resource> depth;
@@ -1353,19 +1348,6 @@ private:
     std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, kSceneVariantCount> clear_rgb_pipelines_;
     std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, kSceneVariantCount> clear_alpha_pipelines_;
 
-    // Screen probes (ScreenProbeCs): the values a slot's dispatch writes, copied to its readback, fenced with its frame.
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> probe_root_signature_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> probe_pipeline_;
-    struct ScreenProbeSlot {
-        Microsoft::WRL::ComPtr<ID3D12Resource> values;    // default heap, unordered access between dispatches
-        Microsoft::WRL::ComPtr<ID3D12Resource> readback;
-        const float* mapped = nullptr;
-        std::uint64_t bytes = 0;
-        std::uint64_t fence = 0;
-    };
-    std::vector<ScreenProbeSlot> probe_slots_;
-    // ScreenProbeSlot::fence of probes recorded in the open frame.
-    static constexpr std::uint64_t kProbesInFrame = ~std::uint64_t{0};
     static const std::uint8_t* pin_readback_mapping(ID3D12Resource* readback);
 
 };

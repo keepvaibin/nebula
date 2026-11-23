@@ -573,12 +573,6 @@ void RenderCore::render_frame(bool present_swap_chain, bool black) {
     chunk.list = std::exchange(producer_list_, nullptr);
     if (chunk.list != nullptr) {
         galaxy::bench::note_frame_list(chunk.list->item_count);
-        const NebulaFrameList& list = *chunk.list;
-        if (std::any_of(list.passes, list.passes + list.pass_count,
-                        [](const NebulaFramePass& pass) { return pass.kind == NEBULA_PASS_PROBE; })) {
-            const std::lock_guard guard(probe_answers_lock_);
-            probe_book_.expect(list.game_frame);
-        }
         const auto hold = device_gate_.hold();
         chunk.device_epoch = device_gate_.epoch();
         // Registries first: a table taken here names textures whose work is taken too.
@@ -1202,15 +1196,6 @@ void RenderCore::drop_device_state() {
     generated_written_.clear();
     scene_phase_ = target_open_ = temporal_scene_ = motion_scene_ = false;
     black_shown_ = picture_made_in_chunk_ = false;
-    probe_flights_ = {};
-    free_probe_slots_.clear();
-    next_probe_slot_ = 0u;
-    {
-        // Nothing asked before comes back: every frame waited for is settled as it stands.
-        const std::lock_guard guard(probe_answers_lock_);
-        probe_book_.settle_all();
-    }
-    probe_answers_cv_.notify_all();
     reset_monotonic_cadence(picture_made_cadence_);
     reset_monotonic_cadence(new_picture_shown_cadence_);
     last_presented_display_stamp_.store(~std::uint64_t{0}, std::memory_order_relaxed);
@@ -1341,7 +1326,6 @@ void RenderCore::render_loop() {
             if (device_gate_.lost_seen()) {
                 throw std::runtime_error("[render] device lost, seen by a service");
             }
-            poll_screen_probes();
         } catch (...) {
             std::lock_guard<std::mutex> lock(queue_mutex_);
             fail_queued_utilities(std::current_exception());
@@ -1379,7 +1363,6 @@ void RenderCore::render_loop() {
         bool overlay_idle = false;
         {
             std::unique_lock<std::mutex> lock(queue_mutex_);
-            const bool poll_probes = !probe_flights_.empty();
             // Draining for a stop, out of sight or behind another window: queued frames present without generated frames.
             interp_stopping_ = stop_render_thread_ || hidden || background;
             // A native overlay over a game showing no interpolated frames (the HOME Menu's paused game draws no 3D
@@ -1419,12 +1402,6 @@ void RenderCore::render_loop() {
                     interp_wait_until(due);
                     lock.lock();
                 }
-            } else if (poll_probes) {
-                // Fences are polled at the top of the loop, outside queue_mutex_:
-                // park for at most 1 ms, woken early by new work or a stop.
-                queue_cv_.wait_for(lock, std::chrono::milliseconds(1), [this] {
-                    return stop_render_thread_ || !frame_queue_.empty() || pictures_finish_asked_.load(std::memory_order_relaxed);
-                });
             } else {
                 // A service waiting for a new card can't reach this thread any other way (DeviceGate).
                 queue_cv_.wait_for(lock, std::chrono::milliseconds(hidden ? 100 : 250), [this] {
@@ -1469,7 +1446,6 @@ void RenderCore::render_loop() {
                 }
             } else if (frame_queue_.front().list != nullptr && frame_queue_.front().device_epoch != device_gate_.epoch()) {
                 // Made for the card that was lost.
-                probes_released(frame_queue_.front().list->game_frame);
                 nebula_frame_list_release(frame_queue_.front().list);
                 frame_queue_.pop_front();
                 queue_space_cv_.notify_all();
@@ -1589,189 +1565,6 @@ void RenderCore::render_loop() {
     }
 }
 
-// The answers of a fixed frame before this one (ProbeBook), so a fixed-step run reads the same answers at the same
-// step whatever the GPU's speed. Frame F - 2's list has been walked by the time frame F asks (the render thread walks
-// each list for real at its sequence's end, or when the next list, F - 1, supersedes it): the wait is for its GPU
-// work alone. Bounded, so a render thread that stopped never holds the game.
-std::uint32_t RenderCore::screen_probe_results(std::uint32_t channel, ScreenProbe* probes, std::uint32_t capacity,
-                                               std::uint32_t game_frame) {
-    std::unique_lock lock(probe_answers_lock_);
-    const std::uint64_t deadline = steady_now_ns() + kProbeWaitNs;
-    while (!probe_book_.ready(game_frame)) {
-        const std::uint64_t now = steady_now_ns();
-        const ProbeWait wait = probe_wait(now, deadline, native_call_started_ns_.load(std::memory_order_acquire), kRenderStallNs);
-        if (wait == ProbeWait::Wait) {
-            // Woken by answers; looked at again a stall time on, when a draw.native call may have held the thread that long.
-            probe_answers_cv_.wait_for(lock, std::chrono::nanoseconds(std::min(deadline - now, kRenderStallNs)));
-            continue;
-        }
-        if (probe_waits_logged_ < 4u) {
-            ++probe_waits_logged_;
-            if (wait == ProbeWait::Held) {
-                std::fprintf(stderr, "[render] frame %u: a draw.native function holds the render thread; the answers before frame %u's probes are used\n",
-                             game_frame, probe_book_.oldest_pending());
-            } else {
-                std::fprintf(stderr, "[render] frame %u: the probes of frame %u were not back within 2 s; the answers before them are used\n",
-                             game_frame, probe_book_.oldest_pending());
-            }
-        }
-        break;
-    }
-    std::uint32_t from = core::ProbeBook::kNone;
-    const std::uint32_t count = probe_book_.answers(channel, game_frame, probes, capacity, &from);
-    if (::galaxy::diagnosing(::galaxy::kDiagnoseProbeReads)) [[unlikely]] {
-        // Which frame's answers the step read, and their values (FNV-1a over the floats' bits), so two runs of one replay
-        // are compared read by read (ledger P-242).
-        std::uint64_t hash = 0xcbf29ce484222325ull;
-        for (std::uint32_t i = 0; i < count; ++i) {
-            std::uint32_t bits = 0u;
-            std::memcpy(&bits, &probes[i].value, sizeof(bits));
-            for (unsigned b = 0; b < 4u; ++b) {
-                hash = (hash ^ ((bits >> (b * 8u)) & 0xffu)) * 0x100000001b3ull;
-            }
-        }
-        std::fprintf(stderr, "[probe-read] frame %u channel %u from %d count %u values %016llx\n", game_frame, channel,
-                     from == core::ProbeBook::kNone ? -1 : static_cast<int>(from), count,
-                     static_cast<unsigned long long>(hash));
-    }
-    return count;
-}
-
-void RenderCore::probes_walked(std::uint32_t game_frame) {
-    {
-        const std::lock_guard guard(probe_answers_lock_);
-        probe_book_.walked(game_frame);
-    }
-    probe_answers_cv_.notify_all();
-}
-
-void RenderCore::probes_released(std::uint32_t game_frame) {
-    {
-        const std::lock_guard guard(probe_answers_lock_);
-        probe_book_.released(game_frame);
-    }
-    probe_answers_cv_.notify_all();
-}
-
-void RenderCore::record_screen_probes(std::uint32_t channel, const ScreenProbe* probes, std::uint32_t count, bool compared) {
-    if (count == 0u) return;
-    ScreenProbeFlight flight;
-    flight.channel = channel;
-    flight.count = count;
-    flight.game_frame = walk_.now->list->game_frame;
-    flight.slot = free_probe_slots_.empty() ? next_probe_slot_++ : free_probe_slots_.back();
-    if (!free_probe_slots_.empty()) free_probe_slots_.pop_back();
-    flight.probes.assign(probes, probes + count);
-    if (::galaxy::diagnosing(::galaxy::kDiagnoseProbeReads)) [[unlikely]] {
-        // What the walk asking these probes drew from (P-242): the points asked, the list's cameras, joints and
-        // constants (FNV-1a over their bytes), the walk's time and the scene's size, so two runs that read different
-        // answers for one frame show whether the game asked differently or the same list was drawn differently.
-        const auto fnv = [](std::uint64_t hash, const void* data, std::size_t bytes) {
-            const auto* p = static_cast<const std::uint8_t*>(data);
-            for (std::size_t i = 0; i < bytes; ++i) hash = (hash ^ p[i]) * 0x100000001b3ull;
-            return hash;
-        };
-        const NebulaFrameList& list = *walk_.now->list;
-        const std::uint64_t basis = 0xcbf29ce484222325ull;
-        std::uint64_t points = basis;
-        for (std::uint32_t i = 0; i < count; ++i) {
-            const float where[5] = {probes[i].x, probes[i].y, probes[i].user_x, probes[i].user_y, probes[i].user_z};
-            points = fnv(points, where, sizeof(where));
-        }
-        const std::uint64_t cameras = fnv(basis, list.cameras, list.camera_count * sizeof(NebulaFrameCamera));
-        std::uint64_t joints = basis;
-        for (std::uint32_t b = 0; b < list.block_count; ++b) {
-            const NebulaFrameBlock& block = list.blocks[b];
-            if (block.joints != nullptr) joints = fnv(joints, block.joints, block.joint_count * 3u * sizeof(float[4]));
-            joints = fnv(joints, block.base, sizeof(block.base));
-        }
-        std::uint64_t rows = basis;
-        for (std::uint32_t c = 0; c < list.constants_count; ++c) {
-            const NebulaFrameConstants& set = list.constants[c];
-            if (set.rows != nullptr) rows = fnv(rows, set.rows, (set.vertex_rows + set.pixel_rows) * sizeof(float[4]));
-        }
-        // The rest of the list (records of ids and numbers, no addresses): its items in the order the host left them,
-        // passes, views, lights, the ring's vertices and indices and the instances' rows.
-        const std::uint64_t items = fnv(basis, list.items, list.item_count * sizeof(NebulaFrameItem));
-        std::uint64_t layout = basis;
-        for (std::uint32_t p = 0; p < list.pass_count; ++p) {
-            // Field by field: the pass has padding after `load` and `reserved`.
-            const NebulaFramePass& pass = list.passes[p];
-            const std::uint32_t words[19] = {
-                std::uint32_t{pass.kind} | std::uint32_t{pass.layer} << 8 | std::uint32_t{pass.phase} << 16 |
-                    std::uint32_t{pass.clear_channels} << 24,
-                pass.target, pass.first_item, pass.item_count, pass.clear_rgba, pass.width, pass.height, pass.channels,
-                pass.arg0, pass.arg1, std::uint32_t{pass.pixels} | std::uint32_t{pass.load} << 8, pass.probe_channel,
-                pass.over_frame_texture, pass.over_frame_depth, pass.over_frame_channels, pass.first_probe,
-                pass.probe_count, pass.scene_camera, pass.scene_view};
-            layout = fnv(layout, words, sizeof(words));
-        }
-        for (std::uint32_t v = 0; v < list.view_count; ++v) {
-            const NebulaFrameView& view = list.views[v];  // its numbers and kind, not its reserved bytes
-            layout = fnv(layout, view.terms, offsetof(NebulaFrameView, orthographic) - offsetof(NebulaFrameView, terms) + 1u);
-        }
-        std::uint64_t lights = fnv(basis, list.light_sets, list.light_set_count * sizeof(NebulaFrameLightSet));
-        lights = fnv(lights, list.lights, list.light_count * sizeof(NebulaFrameLight));
-        lights = fnv(lights, list.light_follow, list.light_follow_count * sizeof(std::uint32_t));
-        std::uint64_t ring = fnv(basis, list.ring_vertices, static_cast<std::size_t>(list.ring_vertex_bytes));
-        ring = fnv(ring, list.ring_indices, list.ring_index_count * sizeof(std::uint32_t));
-        const std::uint64_t instances = fnv(basis, list.instance_rows, list.instance_row_count * sizeof(float[4]));
-        const auto scene = renderer_.scene_rectangle();
-        std::fprintf(stderr,
-                     "[probe-ask] frame %u channel %u count %u points %016llx cameras %016llx joints %016llx constants %016llx "
-                     "items %u %016llx layout %016llx lights %016llx ring %016llx instances %016llx blocks %u t %.4f "
-                     "between %d scene %ux%u walk %llu\n",
-                     flight.game_frame, channel, count, static_cast<unsigned long long>(points),
-                     static_cast<unsigned long long>(cameras), static_cast<unsigned long long>(joints),
-                     static_cast<unsigned long long>(rows), list.item_count, static_cast<unsigned long long>(items),
-                     static_cast<unsigned long long>(layout), static_cast<unsigned long long>(lights),
-                     static_cast<unsigned long long>(ring), static_cast<unsigned long long>(instances), list.block_count,
-                     walk_.time.t, walk_.between ? 1 : 0, scene.width, scene.height,
-                     static_cast<unsigned long long>(walk_.serial));
-    }
-    if (renderer_.record_screen_probes(flight.slot, flight.probes, compared)) {
-        {
-            const std::lock_guard guard(probe_answers_lock_);
-            probe_book_.flight(flight.game_frame);
-        }
-        probe_flights_.push_back(std::move(flight));
-    } else {
-        free_probe_slots_.push_back(flight.slot);
-    }
-}
-
-void RenderCore::poll_screen_probes() {
-    while (!probe_flights_.empty()) {
-        ScreenProbeFlight& flight = probe_flights_.front();
-        const float* const values = renderer_.screen_probes_finished(flight.slot);
-        if (values == nullptr) {
-            return;
-        }
-        for (std::uint32_t i = 0; i < flight.count; ++i) {
-            flight.probes[i].value = values[i];
-        }
-        if (::galaxy::diagnosing(::galaxy::kDiagnoseProbeReads)) [[unlikely]] {
-            // Each answer's bits (P-242): which of a flight's probes two runs answered differently.
-            std::string text;
-            char word[12];
-            for (std::uint32_t i = 0; i < flight.count; ++i) {
-                std::uint32_t bits = 0u;
-                std::memcpy(&bits, &values[i], sizeof(bits));
-                std::snprintf(word, sizeof(word), " %08x", bits);
-                text += word;
-            }
-            std::fprintf(stderr, "[probe-answer] frame %u channel %u%s\n", flight.game_frame, flight.channel, text.c_str());
-        }
-        {
-            const std::lock_guard guard(probe_answers_lock_);
-            probe_book_.answered(flight.game_frame, flight.channel, flight.probes.data(), flight.count);
-        }
-        probe_answers_cv_.notify_all();
-        free_probe_slots_.push_back(flight.slot);
-        probe_flights_.pop_front();
-    }
-}
-
 void RenderCore::present_black_picture(bool in_frame) {
     const DisplayTexture* layout = display_pictures_.latest();
     if (layout == nullptr || (black_shown_ && !native_settings_overlay_visible())) {
@@ -1884,7 +1677,6 @@ RenderCore::ListEntry& RenderCore::list_arrived(FrameChunk& chunk) {
         emptied(entry->data.light_set_before, kept.light_set_before);
         emptied(entry->data.eye_motions, kept.eye_motions);
         emptied(entry->data.early_targets, kept.early_targets);
-        emptied(entry->data.early_probes, kept.early_probes);
         emptied(entry->data.late_depth_clears, kept.late_depth_clears);
         emptied(entry->data.block_camera, kept.block_camera);
         emptied(entry->data.light_camera, kept.light_camera);
@@ -1911,7 +1703,6 @@ void RenderCore::release_lists_before(const ListEntry& entry) noexcept {
     while (lists_.size() > 1u && lists_.front().get() != entry.before && lists_.front().get() != &entry) {
         // The game writes the list's memory again once it sees the flag: every read of it comes first, on every CPU.
         std::atomic_thread_fence(std::memory_order_release);
-        probes_released(lists_.front()->data.list->game_frame);
         nebula_frame_list_release(lists_.front()->data.list);
         lists_[1]->before = nullptr;
         free_lists_.push_back(std::move(lists_.front()));

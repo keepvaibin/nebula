@@ -16,19 +16,14 @@
 
 namespace galaxy::render::core {
 
-// The plans as one line each: "plan targets" with first, end and scene of each run; "plan probes" with after and
-// probe; "plan clears" with each clear's pass.
-inline void write_plans(const std::vector<EarlyTargets>& targets, const std::vector<EarlyProbe>& probes,
-                        const std::vector<std::uint32_t>& clears, std::string& out) {
+// The plans as one line each: "plan targets" with first, end and scene of each run; "plan clears" with each clear's
+// pass.
+inline void write_plans(const std::vector<EarlyTargets>& targets, const std::vector<std::uint32_t>& clears,
+                        std::string& out) {
     char word[48];
     out += "plan targets";
     for (const EarlyTargets& run : targets) {
         std::snprintf(word, sizeof(word), " %u %u %u", run.first, run.end, run.scene);
-        out += word;
-    }
-    out += "\nplan probes";
-    for (const EarlyProbe& probe : probes) {
-        std::snprintf(word, sizeof(word), " %u %u", probe.after, probe.probe);
         out += word;
     }
     out += "\nplan clears";
@@ -41,7 +36,7 @@ inline void write_plans(const std::vector<EarlyTargets>& targets, const std::vec
 
 template <class Lookup>
 void write_plan_shape(const NebulaFrameList& list, const Lookup& lookup, const std::vector<EarlyTargets>& targets,
-                      const std::vector<EarlyProbe>& probes, const std::vector<std::uint32_t>& clears, std::string& out) {
+                      const std::vector<std::uint32_t>& clears, std::string& out) {
     char word[160];
     std::snprintf(word, sizeof(word), "list %u %u\n", list.game_frame, list.pass_count);
     out += word;
@@ -83,7 +78,7 @@ void write_plan_shape(const NebulaFrameList& list, const Lookup& lookup, const s
         }
         flush(run, run_state);
     }
-    write_plans(targets, probes, clears, out);
+    write_plans(targets, clears, out);
     out += "end\n";
 }
 

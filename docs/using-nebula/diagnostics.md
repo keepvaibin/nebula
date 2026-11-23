@@ -16,7 +16,7 @@ Files go to the `diagnostics` folder in Nebula's data folder, named with the pro
 | Name | Records |
 |---|---|
 | `constants-watch` | A test, on Direct3D 11: once a frame a small compute job reads a numbered piece of the constant ring and writes back what it saw; a wrong read prints one line starting `[constants] watch` with what was written and what was read, and the test runner fails the run. The gate turns it on for its Direct3D 11 runs (ledger P-332). |
-| `device-faults` | For a lost graphics device: the Direct3D 12 breadcrumbs and page faults (DRED), or the Vulkan vendor's fault data in `logs/device_fault_VENDOR_DEVICE.bin` beside the settings. |
+| `device-faults` | For a lost graphics device: the Direct3D 12 breadcrumbs and page faults (DRED), or the Vulkan vendor's fault data in `logs/device_fault_<vendor>_<device>.bin` beside the settings. |
 | `file-reads` | Each read and map of the game's files, and the sound clock, with the frame it happened in. |
 | `frame-tails` | A histogram of frame intervals every 2 seconds. |
 | `frame-times` | Each frame's time. |
@@ -27,7 +27,6 @@ Files go to the `diagnostics` folder in Nebula's data folder, named with the pro
 | `pipelines` | The pipelines the run created, written at exit to `pipelines-PROCESS-ID.bin`. `tools/dev/site_pipelines.py` reads it. |
 | `pointer-latency` | The time from the pointer selecting something to the picture that shows it. |
 | `present-stats` | Presented frames, new frames, and GPU and CPU times, each second. |
-| `probe-reads` | Each screen probe read of the game's step: its frame, its channel, the frame whose answers it got, and a hash of their values, so two runs of one replay are compared read by read. |
 | `frame-plans` | Every 60th frame list's shape (each pass's kind, target and what it reads, each run of like draws' pipeline state) and the plans the renderer made of it, in `frame-plans-<process>.txt`. No game content. A tour's file is a fixture of the walk plan test (`runtime/src/render/core/testdata/frame-plans`).
 | `programs-drawn` | Each pair of shader programs a draw asks for, once. A stage compiles only those. |
 | `profile` | The game thread and the render thread, each sampled each millisecond with its callers, until the run ends (10 minutes at most), in `game-profile-PROCESS-ID.txt` and `render-profile-PROCESS-ID.txt`. Each sample carries the timeline's clock. `tools/perf/game_profile.py` names the game module's functions from its link map; `--ranges` keeps the samples inside given stretches of the timeline. |

@@ -3,7 +3,7 @@
 //
 // The scene target is a colour target (A2B10G10R10) and a depth target (D32 float with stencil; D24S8 where the device lacks it or
 // its D32F clears are broken, DeviceQuirks::depth_d24) drawn through
-// one render pass; a scene target copy, screen probe or present ends that pass, and the next scene target operation begins it again. Between
+// one render pass; a scene target copy or present ends that pass, and the next scene target operation begins it again. Between
 // command buffers the scene target is always in its attachment layouts. kFramesInFlight frames are recorded ahead of the GPU,
 // each in two command buffers submitted together: the frame's texture uploads, then its draws (TextureStore never
 // writes a texture after a draw of the same frame read it, so the uploads may run first).
@@ -280,15 +280,8 @@ public:
     void note_scene_draw(std::uint32_t state) {
         scene_drawn_ = true;
         constexpr std::uint32_t depth_write = (1u << 10u) | (1u << 14u);
-        if (pending_depth_clear_ != 0u &&
-            (((state & (1u << 10u)) != 0u && (((state >> 11u) & 7u) != 7u || (state & (1u << 14u)) != 0u)) ||
-             ((state >> 20u) & 3u) != 0u)) {
-            settle_depth_clear();  // a draw that tests or writes depth or stencil sees it cleared
-        }
-        if ((state & depth_write) == depth_write) {
-            // Held probes read the depth as it was when they were asked: before this draw changes it.
-            if (!held_probe_slots_.empty()) settle_screen_probes();
-            if (scene_.samples > 1u) scene_.depth_dirty = true;
+        if ((state & depth_write) == depth_write && scene_.samples > 1u) {
+            scene_.depth_dirty = true;
         }
     }
     // A buffer of `bytes` zeros, for streams a mesh lacks.
@@ -343,11 +336,9 @@ public:
     // would end at begin_motion_scene for a transfer clear of the motion targets and the motion pass load them all again.
     // False when the scene will not run temporal here (clear_scene clears).
     [[nodiscard]] bool begin_cleared_motion_scene(std::uint32_t clear_rgba);
-    // A whole clear of the scene's depth (`clear_rgba`'s) that nothing later in the list reads or writes, asked while
-    // held probes keep the scene pass open: the pass goes on, where the clear would end it to read them first (a store
-    // and a load of the whole target on a tiled GPU). The depth is cleared as the next scene pass opens, or before
-    // anything reads or tests it (settle_depth_clear). False when the clear is clear_scene's.
-    [[nodiscard]] bool defer_scene_depth_clear(std::uint32_t clear_rgba);
+    // The walk's late depth clear (plan_late_depth_clears) is cleared where it stands: nothing holds the scene pass open
+    // past it (the held depth probes went with S0.2.6).
+    [[nodiscard]] bool defer_scene_depth_clear(std::uint32_t) noexcept { return false; }
     // Test builds: the motion vectors as colour over the 8-bit scene target (RendererD3D12's); nothing otherwise.
     void reset_temporal_history() noexcept { temporal_history_valid_ = false; }
     void set_present_game_frame(bool) noexcept {}
@@ -366,12 +357,6 @@ public:
         return measured_present_hz_.load(std::memory_order_relaxed);
     }
     [[nodiscard]] std::uint64_t frame_index() const noexcept { return frame_index_; }
-
-    // Each point's depth (0 near, 1 far) into slot `slot`'s readback, in the open frame where the stream is now;
-    // screen_probes_finished names the values, one float a point, once that frame's fence has passed. `compared` probes
-    // asked inside the scene target pass are answered there, by a depth test of each point (1 seen, 0 hidden).
-    [[nodiscard]] bool record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes, bool compared);
-    [[nodiscard]] const float* screen_probes_finished(std::size_t slot);
 
     // Test captures: the presented backbuffer as PPM files (paths from set_debug_capture_paths). Writes every capture
     // whose frame the GPU has finished.
@@ -909,21 +894,9 @@ private:
     bool scene_temporal_ = false;
     bool scene_motion_ = false;
     bool motion_cleared_ = false;  // begin_cleared_motion_scene opened the motion pass cleared for the next scene
-    // defer_scene_depth_clear's: the depth attachment, its clear, and the depth clear pass it opens with (1 keeps the
-    // stencil, 2 clears it; 0 none waiting).
-    const vk::Texture* pending_depth_ = nullptr;
-    SceneClearValues pending_depth_values_{};
-    unsigned pending_depth_clear_ = 0u;
-    [[nodiscard]] const vk::Texture* scene_depth_attachment() const noexcept {
-        return scene_.samples > 1u ? scene_.ms_depth.get() : scene_.depth.get();
-    }
-    [[nodiscard]] bool depth_clear_pending() const noexcept {
-        return pending_depth_clear_ != 0u && !target_pass_active_ && pending_depth_ == scene_depth_attachment();
-    }
-    void settle_depth_clear();
     void clear_depth_in_pass(float reversed_depth, const VkRect2D& rect);
-    void clear_depth_alone(float reversed_depth, unsigned mode);
-    std::array<std::array<VkRenderPass, 4>, 2> depth_alone_passes_{};  // [stencil cleared][log2 samples]
+    // The single-sample depth target alone (resolve_scene_depth): depth cleared, stencil loaded and stored.
+    VkRenderPass depth_alone_pass_ = VK_NULL_HANDLE;
     // The upscaler takes the generated frames (and the frame at t = 1) instead of the game frames.
     bool temporal_interp_ = false;
     // suspend_temporal_interpolation, and the settings it was decided at.
@@ -956,9 +929,6 @@ private:
     // The same into an RGBA16F picture (color_pass_wide_: the frame shown with float_scene_).
     VkPipeline conversion_pipeline_wide_ = VK_NULL_HANDLE;
     VkPipeline display_filter_pipeline_wide_ = VK_NULL_HANDLE;
-    // Screen probes (ScreenProbeCs): set {t0 the scene's depth, t1 the points with their count, u0 the values}.
-    VkDescriptorSetLayout probe_set_layout_ = VK_NULL_HANDLE;
-    VkPipelineLayout probe_layout_ = VK_NULL_HANDLE;
     // HDR output's 2D layer (begin_layer_2d): its set while the float set is live and the float set while it is, the
     // layer as it started (layer2d_base_, single-sample: what the merge compares with), and the merge's layout (t0 the
     // layer as drawn, t1 its start) and pipelines into the float scene pass, by log2 samples.
@@ -971,18 +941,12 @@ private:
     bool layer2d_failed_ = false;  // the merge could not be made: the 2D layer is drawn in the float scene
     std::uint64_t layer2d_used_step_ = 0u;  // idle_clock() when a frame last drew a 2D layer
     [[nodiscard]] VkPipeline layer2d_merge_pipeline(unsigned samples_log2);
-    VkPipeline probe_pipeline_ = VK_NULL_HANDLE;
     // The renderer's own draws into the scene target pass, per scene target sample count (log2), made at first use: masked clears,
     // and whole-colour and depth clears as draws (DeviceQuirks::clear_with_draw only; null otherwise), and the output scene's
     // first draw, the scene resampled as conversion_pipeline_ and display_filter_pipeline_ do (enter_output_scene).
     enum class SceneUtility : unsigned { ClearRgb, ClearAlpha, ClearRgba, ClearDepth, Conversion, DisplayFilter, Count };
     std::array<std::array<VkPipeline, kSceneVariantCount>, static_cast<std::size_t>(SceneUtility::Count)> scene_utility_pipelines_{};
     [[nodiscard]] VkPipeline scene_utility_pipeline(SceneUtility kind);
-    // A compared probe's test in the open scene target pass (by the pass's aux target, 0 to 3, and scene variant): the
-    // depth clear's shader at the point's depth, tested GREATER_OR_EQUAL against the reversed depth on the first sample,
-    // writing nothing, counted by an occlusion query.
-    std::array<std::array<VkPipeline, kSceneVariantCount>, 4> probe_test_pipelines_{};
-    [[nodiscard]] VkPipeline probe_test_pipeline();
     unsigned msaa_max_samples_ = 1u;  // create_layouts: the most the scene target's formats render and sample
     VkPipeline depth_resolve_pipeline_ = VK_NULL_HANDLE;
     VkPipeline blit_pipeline_ = VK_NULL_HANDLE;
@@ -1039,33 +1003,6 @@ private:
 
     // scene target copies.
     std::unordered_map<std::uint64_t, FramePassTarget> frame_pass_targets_;
-
-    // Screen probes: a slot's pixels (written here) and values (the dispatch writes, read back), fenced with its frame.
-    struct ProbeSlot {
-        std::shared_ptr<vk::Buffer> pixels;  // host-visible, coherent
-        std::shared_ptr<vk::Buffer> values;  // readback, a storage buffer
-        std::uint64_t capacity = 0;          // points both hold
-        std::uint64_t fence = 0;             // 0: idle
-        std::uint32_t held = 0;              // points asked while the scene pass was open, read when it ends
-        // Compared points tested in the scene target pass: a query each, the answers once the fence has passed.
-        VkQueryPool queries = VK_NULL_HANDLE;
-        std::uint32_t query_capacity = 0;
-        std::uint32_t tested = 0;            // points, 0 when the values buffer answers
-        std::vector<float> answers;          // 1 seen, 0 hidden; the points no draw tests are set as they are asked
-        std::vector<std::uint8_t> drawn;     // the points whose query decides
-    };
-    std::vector<ProbeSlot> probe_slots_;
-    // Depth probes (compared ones are tested in the pass) asked while the scene target pass is open wait for its end, which comes anyway (a tiled GPU stores and loads
-    // the whole target for each break): read then, or before the next draw or clear that writes depth, whichever is
-    // first, they see the depth they were asked about.
-    std::vector<std::size_t> held_probe_slots_;
-    void dispatch_screen_probes(std::size_t slot, std::uint32_t count);
-    [[nodiscard]] bool test_screen_probes(ProbeSlot& out, std::span<const ScreenProbe> probes);
-    void read_held_probes();
-    // Ends the scene pass for the held probes and opens it again as it was.
-    void settle_screen_probes();
-    // ProbeSlot::fence of probes recorded in the open frame.
-    static constexpr std::uint64_t kProbesInFrame = ~std::uint64_t{0};
 
     VkCommandPool utility_pool_ = VK_NULL_HANDLE;  // one-time submissions (run_one_time)
 

@@ -147,12 +147,6 @@ namespace Frame {
     void copyFrame(const void* pKey);
     void takeFrame(const void* pKey);
     void show();
-    // A new asker of the picture's depth: it reads only answers to the probes it sent, never ones another asker on its
-    // channel sent (the last scene's).
-    u32 newProbeAsker();
-    // `compared`: the asker only compares each value with its user_z (NEBULA_PROBE_COMPARED).
-    void probeScreen(u32 channel, u32 asker, const NebulaScreenProbe* pProbes, u32 count, bool compared = false);
-    u32 screenProbeResults(u32 channel, u32 asker, NebulaScreenProbe* pProbes, u32 capacity);
 
     void sceneBegin(const f32 (*pView)[4]);  // rows of the camera, then the player's up and 1, or zeros
     void opaqueEnd(const f32 (*pView)[4]);

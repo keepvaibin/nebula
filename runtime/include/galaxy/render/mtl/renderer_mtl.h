@@ -2,7 +2,7 @@
 // The renderer on Metal, with the interface RenderCore uses on RendererD3D12 and RendererVk.
 //
 // The scene target is a colour texture (RGB10A2) and a depth texture (Depth32Float_Stencil8) drawn through one render
-// command encoder, the scene pass; a scene target copy, screen probe or present ends that encoder, and the next scene
+// command encoder, the scene pass; a scene target copy or present ends that encoder, and the next scene
 // target operation begins another, loading what the last stored. kFramesInFlight frames are recorded ahead of the GPU.
 // A frame is a row of command buffers committed in order: the frame's texture uploads (a blit encoder), then its
 // draws; a pass recorded on several threads (parallel_record_*) runs inside the scene pass on a tile-based GPU, else in a
@@ -201,15 +201,8 @@ public:
     void note_scene_draw(std::uint32_t state) {
         scene_drawn_ = true;
         constexpr std::uint32_t depth_write = (1u << 10u) | (1u << 14u);
-        if (pending_depth_clear_ != 0u &&
-            (((state & (1u << 10u)) != 0u && (((state >> 11u) & 7u) != 7u || (state & (1u << 14u)) != 0u)) ||
-             ((state >> 20u) & 3u) != 0u)) {
-            settle_depth_clear();  // a draw that tests or writes depth or stencil sees it cleared
-        }
-        if ((state & depth_write) == depth_write) {
-            // Held probes read the depth as it was when they were asked: before this draw changes it.
-            if (!held_probe_slots_.empty()) settle_screen_probes();
-            if (scene_.samples > 1u) scene_.depth_dirty = true;
+        if ((state & depth_write) == depth_write && scene_.samples > 1u) {
+            scene_.depth_dirty = true;
         }
     }
     // A buffer of `bytes` zeros, for streams a mesh lacks.
@@ -250,7 +243,9 @@ public:
     [[nodiscard]] bool scene_temporal_begin(float& jitter_x, float& jitter_y);
     [[nodiscard]] bool begin_motion_scene();
     [[nodiscard]] bool begin_cleared_motion_scene(std::uint32_t clear_rgba);
-    [[nodiscard]] bool defer_scene_depth_clear(std::uint32_t clear_rgba);
+    // The walk's late depth clear (plan_late_depth_clears) is cleared where it stands: nothing holds the scene pass open
+    // past it (the held depth probes went with S0.2.6).
+    [[nodiscard]] bool defer_scene_depth_clear(std::uint32_t) noexcept { return false; }
     void reset_temporal_history() noexcept { temporal_history_valid_ = false; }
     void set_present_game_frame(bool) noexcept {}
     // A present rate above 60.
@@ -266,12 +261,6 @@ public:
 
     [[nodiscard]] double measured_present_hz() const noexcept { return measured_present_hz_.load(std::memory_order_relaxed); }
     [[nodiscard]] std::uint64_t frame_index() const noexcept { return frame_index_; }
-
-    // Each point's depth (0 near, 1 far) into slot `slot`'s readback, in the open frame where the stream is now;
-    // screen_probes_finished names the values once that frame's fence has passed. `compared` probes asked inside the
-    // scene pass are answered there, by a depth test of each point (1 seen, 0 hidden).
-    [[nodiscard]] bool record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes, bool compared);
-    [[nodiscard]] const float* screen_probes_finished(std::size_t slot);
 
     // Test captures: the presented picture as PPM files (paths from set_debug_capture_paths). Writes every capture
     // whose frame the GPU has finished.
@@ -344,9 +333,6 @@ private:
         // A draw's own tables this frame (no arrays): reused each frame.
         std::deque<mtl::BoundTextures> tables;
         std::size_t tables_used = 0;
-        // Visibility results for points tested in the frame's scene passes: one buffer a pass that tested any.
-        std::vector<std::shared_ptr<mtl::Buffer>> visibility;
-        std::size_t visibility_used = 0;
         // GPU start and end times of the frame's command buffers, written by their completion (seconds; 0: none).
         std::shared_ptr<std::array<std::atomic<double>, 2>> gpu_time;
         // With the passes timed (profile_frame_): the GPU's seconds on the frame's command buffers by the pass each was
@@ -458,7 +444,7 @@ private:
     [[nodiscard]] bool parallel_record_in_pass(const std::uint8_t* chunk_aux, unsigned chunk_count);
     // The scene pass's descriptor (an MTLRenderPassDescriptor*, the caller's to release) for the live set.
     [[nodiscard]] mtl::Object scene_pass_descriptor(unsigned aux, const SceneClearValues* clear, bool discard_color,
-                                                    unsigned clear_depth, mtl::Object visibility);
+                                                    unsigned clear_depth);
     [[nodiscard]] unsigned effective_draw_aux(unsigned aux) const noexcept {
         return aux == 4u ? 1u : aux == 3u ? (layer_window_ ? 3u : 2u) : aux;
     }
@@ -513,7 +499,6 @@ private:
     std::array<mtl::Object, static_cast<std::size_t>(DepthUse::Count)> depth_uses_{};  // id<MTLDepthStencilState>
     std::unordered_map<UtilityKey, mtl::Object, UtilityKeyHasher> utility_pipelines_;
     std::array<mtl::Object, static_cast<std::size_t>(mtl::UtilityShader::Count)> utility_functions_{};
-    mtl::Object probe_pipeline_ = nullptr;  // id<MTLComputePipelineState>
 
     // The scene target.
     FrameMap scene_map_{};     // the bound scene target's map: the part of it drawn in
@@ -597,17 +582,6 @@ private:
     bool scene_temporal_ = false;
     bool scene_motion_ = false;
     bool motion_cleared_ = false;
-    // defer_scene_depth_clear's: the depth attachment and its clear (1: waiting; the stencil is kept).
-    const mtl::Texture* pending_depth_ = nullptr;
-    SceneClearValues pending_depth_values_{};
-    unsigned pending_depth_clear_ = 0u;
-    [[nodiscard]] const mtl::Texture* scene_depth_attachment() const noexcept {
-        return scene_.samples > 1u ? scene_.ms_depth.get() : scene_.depth.get();
-    }
-    [[nodiscard]] bool depth_clear_pending() const noexcept {
-        return pending_depth_clear_ != 0u && !target_pass_active_ && pending_depth_ == scene_depth_attachment();
-    }
-    void settle_depth_clear();
     void clear_depth_in_pass(float reversed_depth, const gpu::Rect& rect);
     bool temporal_interp_ = false;
     struct TemporalInterpKey {
@@ -710,32 +684,6 @@ private:
     std::unordered_map<std::uint64_t, FramePassTarget> frame_pass_targets_;
     std::uint64_t frame_pass_color_key_ = 0u;
     std::uint64_t frame_pass_depth_key_ = 0u;
-
-    // Screen probes: a slot's pixels (written here) and values (the dispatch writes, read back), fenced with its frame.
-    struct ProbeSlot {
-        std::shared_ptr<mtl::Buffer> pixels;
-        std::shared_ptr<mtl::Buffer> values;
-        std::uint64_t capacity = 0;  // points both hold
-        std::uint64_t fence = 0;     // 0: idle
-        std::uint32_t held = 0;      // points asked while the scene pass was open, read when it ends
-        // Compared points tested in the scene pass: a visibility result each (eight bytes), read once the fence passed.
-        std::shared_ptr<mtl::Buffer> results;
-        std::uint64_t results_offset = 0;
-        std::uint32_t tested = 0;         // points, 0 when the values buffer answers
-        std::vector<float> answers;       // 1 seen, 0 hidden; the points no draw tests are set as they are asked
-        std::vector<std::uint8_t> drawn;  // the points whose result decides
-    };
-    std::vector<ProbeSlot> probe_slots_;
-    std::vector<std::size_t> held_probe_slots_;
-    // The open scene pass's visibility results: the buffer and how many it has taken.
-    std::shared_ptr<mtl::Buffer> pass_visibility_;
-    std::uint32_t pass_visibility_used_ = 0u;
-    static constexpr std::uint32_t kPassVisibilityResults = 1024u;
-    void dispatch_screen_probes(std::size_t slot, std::uint32_t count);
-    [[nodiscard]] bool test_screen_probes(ProbeSlot& out, std::span<const ScreenProbe> probes);
-    void read_held_probes();
-    void settle_screen_probes();
-    static constexpr std::uint64_t kProbesInFrame = ~std::uint64_t{0};
 
     // Captures and telemetry.
     std::string backbuffer_capture_path_;

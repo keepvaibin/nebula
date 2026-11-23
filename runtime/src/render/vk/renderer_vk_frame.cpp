@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The Vulkan renderer's scene target (renderer_vk.h): its targets, draws, clears, copies, screen probes and test captures.
+// The Vulkan renderer's scene target (renderer_vk.h): its targets, draws, clears, copies and test captures.
 
 #include "galaxy/render/program_table.h"
 #include "renderer_vk_internal.h"
@@ -200,7 +200,6 @@ bool RendererVk::create_scene_targets(const FrameMap& map, unsigned samples) {
     scene_ = std::move(made);
     // Dynamic resolution starts again from the whole of the new size (apply_dynamic_resolution).
     scene_map_ = frame_extent_ = scene_extent_ = scene_rectangle_ = map;
-    pending_depth_clear_ = 0u;
     if (scene_.samples > 1u) {
         std::cout << "[Renderer] scene target MSAA " << scene_.samples << "x\n";
     }
@@ -227,13 +226,13 @@ void RendererVk::resolve_scene_depth(VkCommandBuffer commands) {
                   VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
     const std::uint32_t width = scene_map_.width;
     const std::uint32_t height = scene_map_.height;
-    // The single-sample depth target alone (clear_depth_alone's pass: depth cleared, stencil loaded and stored). The draw
+    // The single-sample depth target alone (depth_alone_pass_: depth cleared, stencil loaded and stored). The draw
     // writes every pixel's depth with the compare ALWAYS, so the clear never survives; the scene colour is neither loaded
     // nor stored, as the scene pass did. A wide set shares this depth target (ensure_wide_set).
     vk::Texture& depth = *set.depth;
     if (depth.framebuffer == VK_NULL_HANDLE) {
         VkFramebufferCreateInfo info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
-        info.renderPass = depth_alone_passes_[0][0];
+        info.renderPass = depth_alone_pass_;
         info.attachmentCount = 1;
         info.pAttachments = &depth.target_view;
         info.width = depth.width;
@@ -244,7 +243,7 @@ void RendererVk::resolve_scene_depth(VkCommandBuffer commands) {
     VkClearValue clear{};
     clear.depthStencil = {0.0f, 0u};
     VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
-    begin.renderPass = depth_alone_passes_[0][0];
+    begin.renderPass = depth_alone_pass_;
     begin.framebuffer = depth.framebuffer;
     begin.renderArea = {{0, 0}, {width, height}};
     begin.clearValueCount = 1;
@@ -465,20 +464,6 @@ void RendererVk::begin_scene_pass_with(unsigned aux, const SceneClearValues* cle
         }
         end_scene_pass();
     }
-    if (depth_clear_pending()) {
-        if (clear != nullptr && (clear_depth != 0u || !discard_color || aux != 0u)) {
-            pending_depth_clear_ = 0u;  // this opening clears the depth itself
-        } else if (clear == nullptr && aux == 0u && (!discard_color || !target_pass_active_)) {
-            clear = &pending_depth_values_;  // the colour loads (or is replaced unread), the depth clears
-            clear_depth = std::exchange(pending_depth_clear_, 0u);
-        } else {
-            // No variant of this pass clears only the depth: one that does opens and ends first.
-            const SceneClearValues values = pending_depth_values_;
-            const unsigned mode = std::exchange(pending_depth_clear_, 0u);
-            begin_scene_pass_with(0u, &values, false, "settle_depth_clear", mode);
-            end_scene_pass("settle_depth_clear");
-        }
-    }
     const VkCommandBuffer commands = commands_;
     VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
     begin.renderPass = aux != 0u ? draw_layout_.aux_pass_for(scene_variant(), aux, clear != nullptr)
@@ -543,9 +528,6 @@ void RendererVk::end_scene_pass(const char* caller) {
     scene_pass_open_ = false;
     open_pass_mark_ = kNoPassMark;
     scene_pass_closed_by_ = caller;
-    if (!held_probe_slots_.empty()) {
-        read_held_probes();
-    }
     gpu_pass(current_pass_);
 }
 
@@ -588,20 +570,6 @@ void RendererVk::clear_scene(std::uint32_t clear_rgba,
         rect = VkRect2D{{scaled.left, scaled.top},
                         {static_cast<std::uint32_t>(scaled.right - scaled.left),
                          static_cast<std::uint32_t>(scaled.bottom - scaled.top)}};
-    }
-    if (depth_enable && depth_clear_pending()) {
-        const bool whole_depth = rect.offset.x == 0 && rect.offset.y == 0 &&
-                                 rect.extent.width == static_cast<std::uint32_t>(scene_w) &&
-                                 rect.extent.height == static_cast<std::uint32_t>(scene_h);
-        if (whole_depth) {
-            pending_depth_clear_ = 0u;  // replaced
-        } else {
-            settle_depth_clear();
-        }
-    }
-    if (depth_enable && !held_probe_slots_.empty()) {
-        // Held probes read the depth before the clear replaces it; the pass is closed for the clear's own opening.
-        end_scene_pass();
     }
     const SceneClearValues clear = make_scene_clear_values(clear_rgba, pixel_format);
     scene_.depth_dirty |= depth_enable && scene_.samples > 1u;
@@ -1241,73 +1209,6 @@ void RendererVk::clear_depth_in_pass(float reversed_depth, const VkRect2D& rect)
 }
 
 
-bool RendererVk::defer_scene_depth_clear(std::uint32_t clear_rgba) {
-    if (!scene_pass_open_ || held_probe_slots_.empty() || target_pass_active_) {
-        return false;
-    }
-    pending_depth_ = scene_depth_attachment();
-    pending_depth_values_ = make_scene_clear_values(clear_rgba, 0u);
-    pending_depth_clear_ = scene_utility_pipeline(SceneUtility::ClearDepth) != VK_NULL_HANDLE ? 1u : 2u;
-    return true;
-}
-
-// The waiting depth clear now: in the open pass once no held probe needs the depth it replaces; otherwise the pass ends
-// (the held probes read) and the next opening clears it, at once when no pass was open.
-void RendererVk::settle_depth_clear() {
-    if (!depth_clear_pending()) {
-        return;
-    }
-    if (scene_pass_open_ && held_probe_slots_.empty() && scene_pass_aux_ == 0u) {
-        pending_depth_clear_ = 0u;
-        scene_.depth_dirty |= scene_.samples > 1u;
-        clear_depth_in_pass(pending_depth_values_.reversed_depth, VkRect2D{{0, 0}, scene_part()});
-        return;
-    }
-    const bool open = scene_pass_open_;
-    const unsigned aux = scene_pass_aux_;
-    end_scene_pass("settle_depth_clear");
-    if (open) {
-        begin_scene_pass_with(aux);
-        return;
-    }
-    const SceneClearValues values = pending_depth_values_;
-    const unsigned mode = std::exchange(pending_depth_clear_, 0u);
-    if (!target_pass_active_) {
-        clear_depth_alone(values.reversed_depth, mode);
-        return;
-    }
-    begin_scene_pass_with(0u, &values, false, "settle_depth_clear", mode);
-    end_scene_pass("settle_depth_clear");
-}
-
-// With no pass open: a pass over the scene's depth target alone clears it (mode 1 keeps the stencil, 2 clears it), so the
-// colour is neither loaded nor stored as a scene pass opened for the clear would.
-void RendererVk::clear_depth_alone(float reversed_depth, unsigned mode) {
-    vk::Texture& depth = scene_.samples > 1u ? *scene_.ms_depth : *scene_.depth;
-    const unsigned samples_log2 = scene_samples_log2();
-    if (depth.framebuffer == VK_NULL_HANDLE) {
-        VkFramebufferCreateInfo info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
-        info.renderPass = depth_alone_passes_[0][samples_log2];
-        info.attachmentCount = 1;
-        info.pAttachments = &depth.target_view;
-        info.width = depth.width;
-        info.height = depth.height;
-        info.layers = 1;
-        vk::check(vkCreateFramebuffer(vk::Context::get().device(), &info, nullptr, &depth.framebuffer), "depth framebuffer");
-    }
-    VkClearValue value{};
-    value.depthStencil = {reversed_depth, 0u};  // reversed-Z, as clear_scene's
-    VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
-    begin.renderPass = depth_alone_passes_[mode - 1u][samples_log2];
-    begin.framebuffer = depth.framebuffer;
-    begin.renderArea = {{0, 0}, {depth.width, depth.height}};
-    begin.clearValueCount = 1;
-    begin.pClearValues = &value;
-    vkCmdBeginRenderPass(commands_, &begin, VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdEndRenderPass(commands_);
-    scene_.depth_dirty |= scene_.samples > 1u;
-}
-
 bool RendererVk::begin_cleared_motion_scene(std::uint32_t clear_rgba) {
     // scene_temporal_begin's conditions, which the scene's begin tests next.
     if (scene_pass_open_ || target_pass_active_ || output_scene_active_ || !temporal_ || !temporal_mode() ||
@@ -1392,7 +1293,6 @@ vk::TemporalUpscaleInputs RendererVk::temporal_inputs(const vk::Texture& color, 
 
 bool RendererVk::record_temporal_upscale(const FrameMap& output) {
     end_scene_pass();
-    settle_depth_clear();
     const GpuPassScope pass{*this, GpuPass::Upscale};
     // The scene's rectangle within the context's render size (dynamic resolution's step: the dispatch names the size it
     // reads).
@@ -1827,7 +1727,6 @@ void RendererVk::record_scene_ao() {
     const GpuPassScope pass{*this, GpuPass::SceneAo};
 
     end_scene_pass();
-    settle_depth_clear();
     if (scene_.samples > 1u) {
         resolve_scene_depth(commands_);
     }
@@ -2016,7 +1915,6 @@ void RendererVk::record_wide_end() {
     }
     const GpuPassScope pass{*this, GpuPass::Camera};
     end_scene_pass();
-    settle_depth_clear();
     SceneSet& set = wide_scene_;
     const bool per_sample = scene_.samples > 1u && vk::Context::get().sample_rate_shading();
     gpu::TextureRef wide = scene_.color;
@@ -2798,9 +2696,6 @@ VkFramebuffer RendererVk::framebuffer_for(vk::Texture& texture) {
 
 void RendererVk::transition_scene_for_sampling(VkCommandBuffer commands, bool depth, VkImage color_image) {
     if (depth) {
-        if (commands == commands_) {
-            settle_depth_clear();
-        }
         resolve_scene_depth(commands);
         image_barrier(commands, scene_.depth->image, depth_aspects(depth_format_),
                       VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, kDepthSampleLayout,
@@ -2974,7 +2869,6 @@ bool RendererVk::publish_scene_depth_copy(std::uint64_t key, TextureStore& textu
         dest.height = extent.height;
     }
     end_scene_pass();
-    settle_depth_clear();
     const VkCommandBuffer commands = commands_;
     resolve_scene_depth(commands);
     const VkImageAspectFlags aspects = depth_aspects(depth_format_);
@@ -3051,7 +2945,6 @@ void RendererVk::open_frame_for_pass(std::uint64_t color_key, std::uint8_t chann
         (void)publish_picture(color_key, size.width, size.height, scene_.color, channels, textures);
     }
     if (depth_key != 0u) {
-        settle_depth_clear();
         // Materials read their textures in the shader-read layout (TextureBackend).
         resolve_scene_depth(commands);
         image_barrier(commands, scene_.depth->image, depth_aspects(depth_format_),
@@ -3313,204 +3206,6 @@ bool RendererVk::draw_shown_frame_pass(const FramePassRequest& params, const Dis
         swap_scene_sets();
     }
     return made;
-}
-
-// One dispatch (ScreenProbeCs): each point's pixel (screen_probe_pixel) into the slot's pixels, the scene depth sampled
-// there into its values, which the CPU reads once the frame's fence has passed.
-bool RendererVk::record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes, bool compared) {
-    if (slot >= probe_slots_.size()) probe_slots_.resize(slot + 1u);
-    ProbeSlot& out = probe_slots_[slot];
-    if (out.fence != 0u || probes.empty()) {
-        return false;
-    }
-    out.tested = 0u;
-    settle_depth_clear();  // asked after a waiting clear: they see it
-    // Asked inside the scene target pass, compared points are tested there: the pass goes on, where reading the depth
-    // would end it (a store and a load of the whole target on a tiled GPU) before the next draw that writes depth.
-    if (compared && scene_pass_open_ && test_screen_probes(out, probes)) {
-        out.fence = kProbesInFrame;  // fenced at end_frame
-        return true;
-    }
-    vk::Context& context = vk::Context::get();
-    if (out.capacity < probes.size()) {
-        out.pixels = context.create_buffer(screen_probe_points_bytes(probes.size()), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                                           "screen probe pixels");
-        out.values = context.create_readback_buffer(probes.size() * sizeof(float), "screen probe values",
-                                                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
-        if (!out.pixels || !out.values) throw std::runtime_error("screen probe buffers unavailable");
-        out.capacity = probes.size();
-    }
-    // The slot is idle (fence 0): the GPU has finished with its pixels. The count goes with them (P-332).
-    write_screen_probe_points(probes, scene_map_, out.pixels->mapped);
-    out.fence = kProbesInFrame;  // fenced at end_frame
-    const auto count = static_cast<std::uint32_t>(probes.size());
-    if (scene_pass_open_) {
-        out.held = count;
-        held_probe_slots_.push_back(slot);
-        return true;
-    }
-    dispatch_screen_probes(slot, count);
-    return true;
-}
-
-void RendererVk::read_held_probes() {
-    std::vector<std::size_t> held;
-    held.swap(held_probe_slots_);
-    for (const std::size_t slot : held) {
-        ProbeSlot& out = probe_slots_[slot];
-        const std::uint32_t count = std::exchange(out.held, 0u);
-        if (count != 0u) {
-            dispatch_screen_probes(slot, count);
-        }
-    }
-    held.clear();
-    if (held_probe_slots_.empty()) {
-        held_probe_slots_.swap(held);  // keeps the capacity
-    }
-}
-
-void RendererVk::settle_screen_probes() {
-    if (!scene_pass_open_) {
-        read_held_probes();
-        return;
-    }
-    const unsigned aux = scene_pass_aux_;
-    end_scene_pass();
-    begin_scene_pass_with(aux);
-}
-
-// Each compared point (seen: the scene's depth there at or behind user_z) as a one-pixel draw of the depth clear's shader at
-// the point's reversed depth, 1 - user_z, depth-tested and writing nothing, in an occlusion query. A point the test cannot
-// place is answered as the depth read would: one in front of the near plane is seen, one behind the far plane or not on
-// the target hidden. The queries are reset in the frame's upload commands, which run before its draws.
-bool RendererVk::test_screen_probes(ProbeSlot& out, std::span<const ScreenProbe> probes) {
-    const VkPipeline pipeline = probe_test_pipeline();
-    if (pipeline == VK_NULL_HANDLE) {
-        return false;
-    }
-    const auto count = static_cast<std::uint32_t>(probes.size());
-    const VkDevice device = vk::Context::get().device();
-    if (out.query_capacity < count) {
-        if (out.queries != VK_NULL_HANDLE) {
-            vkDestroyQueryPool(device, out.queries, nullptr);  // idle: its frame has passed
-            out.queries = VK_NULL_HANDLE;
-            out.query_capacity = 0u;
-        }
-        VkQueryPoolCreateInfo info{VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
-        info.queryType = VK_QUERY_TYPE_OCCLUSION;
-        info.queryCount = std::max(count, 32u);
-        if (vkCreateQueryPool(device, &info, nullptr, &out.queries) != VK_SUCCESS) {
-            out.queries = VK_NULL_HANDLE;
-            return false;
-        }
-        out.query_capacity = info.queryCount;
-    }
-    vkCmdResetQueryPool(frames_[frame_slot_].uploads, out.queries, 0u, count);
-    out.answers.assign(count, 0.0f);
-    out.drawn.assign(count, 0u);
-    const VkCommandBuffer commands = commands_;
-    const float scene_w = static_cast<float>(scene_.color->width);
-    const float scene_h = static_cast<float>(scene_.color->height);
-    const VkViewport viewport{0.0f, scene_h, scene_w, -scene_h, 0.0f, 1.0f};
-    vkCmdSetViewport(commands, 0, 1, &viewport);
-    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-    for (std::uint32_t i = 0; i < count; ++i) {
-        const ScreenProbePixel pixel = screen_probe_pixel(probes[i], scene_map_);
-        const float user_z = probes[i].user_z;
-        if (pixel.x == ~0u) {
-            continue;  // 0, as the dispatch reads it
-        }
-        if (user_z <= 0.0f) {
-            out.answers[i] = 1.0f;  // any depth is at or behind it
-            continue;
-        }
-        if (!(user_z <= 1.0f)) {
-            continue;  // behind every depth, or not a number: hidden
-        }
-        const VkRect2D rect{{static_cast<std::int32_t>(pixel.x), static_cast<std::int32_t>(pixel.y)}, {1u, 1u}};
-        const float value[4] = {1.0f - user_z, 0.0f, 0.0f, 0.0f};
-        vkCmdSetScissor(commands, 0, 1, &rect);
-        vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(value), value);
-        vkCmdBeginQuery(commands, out.queries, i, 0u);
-        vkCmdDraw(commands, 3, 1, 0, 0);
-        vkCmdEndQuery(commands, out.queries, i);
-        out.drawn[i] = 1u;
-    }
-    out.tested = count;
-    reset_draw_bindings();
-    bind_scene();
-    return true;
-}
-
-// The probe dispatch, with the scene target pass closed: the depth sampled at each point into the slot's values.
-void RendererVk::dispatch_screen_probes(std::size_t slot, std::uint32_t count) {
-    ProbeSlot& out = probe_slots_[slot];
-    vk::Context& context = vk::Context::get();
-    const VkCommandBuffer commands = commands_;
-    resolve_scene_depth(commands);
-    const VkImageAspectFlags aspects = depth_aspects(depth_format_);
-    image_barrier(commands, scene_.depth->image, aspects, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                  kDepthSampleLayout,
-                  VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-                  VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                  VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
-
-    const VkDescriptorSet set = allocate_frame_set(probe_set_layout_);
-    const VkDescriptorImageInfo depth{VK_NULL_HANDLE, scene_.depth->view, kDepthSampleLayout};
-    const VkDescriptorBufferInfo pixels{out.pixels->buffer, 0, screen_probe_points_bytes(count)};
-    const VkDescriptorBufferInfo values{out.values->buffer, 0, count * sizeof(float)};
-    VkWriteDescriptorSet writes[3]{};
-    for (std::uint32_t i = 0; i < 3u; ++i) {
-        writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writes[i].dstSet = set;
-        writes[i].dstBinding = i;
-        writes[i].descriptorCount = 1;
-        writes[i].descriptorType = i == 0u ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    }
-    writes[0].pImageInfo = &depth;
-    writes[1].pBufferInfo = &pixels;
-    writes[2].pBufferInfo = &values;
-    vkUpdateDescriptorSets(context.device(), 3, writes, 0, nullptr);
-
-    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_COMPUTE, probe_pipeline_);
-    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_COMPUTE, probe_layout_, 0, 1, &set, 0, nullptr);
-    vkCmdDispatch(commands, (count + kScreenProbeGroup - 1u) / kScreenProbeGroup, 1, 1);
-
-    // The depth back to the scene pass, and the probe values to the host, in one call.
-    vk::BarriersVk after(commands);
-    after.image_scoped(scene_.depth->image, aspects, kDepthSampleLayout, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                       VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_NONE,
-                       VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-                       VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
-    after.buffer(out.values->buffer, 0u, VK_WHOLE_SIZE, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                 VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT, VK_PIPELINE_STAGE_2_HOST_BIT, VK_ACCESS_2_HOST_READ_BIT);
-    after.issue();
-    reset_draw_bindings();
-    bind_scene();
-}
-
-const float* RendererVk::screen_probes_finished(std::size_t slot) {
-    ProbeSlot& out = probe_slots_[slot];
-    if (out.fence == 0u || out.fence == kProbesInFrame || completed_fence_value() < out.fence) {
-        return nullptr;
-    }
-    if (out.tested != 0u) {
-        // A query reset and never begun stays unavailable: each drawn point is read alone.
-        const VkDevice device = vk::Context::get().device();
-        for (std::uint32_t i = 0; i < out.tested; ++i) {
-            std::uint64_t samples = 0u;
-            if (out.drawn[i] != 0u &&
-                vkGetQueryPoolResults(device, out.queries, i, 1u, sizeof(samples), &samples, sizeof(samples),
-                                      VK_QUERY_RESULT_64_BIT) == VK_SUCCESS) {
-                out.answers[i] = samples != 0u ? 1.0f : 0.0f;
-            }
-        }
-        out.fence = 0u;
-        return out.answers.data();
-    }
-    vk::Context::get().invalidate(*out.values);
-    out.fence = 0u;
-    return reinterpret_cast<const float*>(out.values->mapped);
 }
 
 void RendererVk::finish_pictures() {

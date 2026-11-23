@@ -252,7 +252,6 @@ bool RendererMtl::create_scene_targets(const FrameMap& map, unsigned samples) {
     scene_ = std::move(made);
     // Dynamic resolution starts again from the whole of the new size (apply_dynamic_resolution).
     scene_map_ = frame_extent_ = scene_extent_ = scene_rectangle_ = map;
-    pending_depth_clear_ = 0u;
     if (scene_.samples > 1u) {
         std::cout << "[Renderer] scene target MSAA " << scene_.samples << "x\n";
     }
@@ -372,7 +371,7 @@ void RendererMtl::apply_window_size() {
 // ---- the scene pass ----
 
 mtl::Object RendererMtl::scene_pass_descriptor(unsigned aux, const SceneClearValues* clear, bool discard_color,
-                                               unsigned clear_depth, mtl::Object visibility) {
+                                               unsigned clear_depth) {
     MTLRenderPassDescriptor* const descriptor = [MTLRenderPassDescriptor renderPassDescriptor];
     const bool multisampled = scene_.samples > 1u && aux == 0u;
     // Which of the pass's targets begin cleared: everything (a whole clear), the depth alone (`clear_depth`: the
@@ -418,9 +417,6 @@ mtl::Object RendererMtl::scene_pass_descriptor(unsigned aux, const SceneClearVal
             descriptor.colorAttachments[3].storeAction = MTLStoreActionStore;
         }
     }
-    if (visibility != nullptr) {
-        descriptor.visibilityResultBuffer = buffer_of(visibility);
-    }
     // The caller's now (it takes it back with a transfer).
     return (__bridge_retained void*)descriptor;
 }
@@ -437,20 +433,6 @@ void RendererMtl::begin_scene_pass_with(unsigned aux, const SceneClearValues* cl
         }
         end_scene_pass();
     }
-    if (depth_clear_pending()) {
-        if (clear != nullptr && (clear_depth != 0u || !discard_color || aux != 0u)) {
-            pending_depth_clear_ = 0u;  // this opening clears the depth itself
-        } else if (clear == nullptr && aux == 0u && !discard_color) {
-            clear = &pending_depth_values_;  // the colour loads, the depth clears
-            clear_depth = std::exchange(pending_depth_clear_, 0u);
-        } else {
-            // This opening cannot clear only the depth: one that does opens and ends first.
-            const SceneClearValues values = pending_depth_values_;
-            const unsigned mode = std::exchange(pending_depth_clear_, 0u);
-            begin_scene_pass_with(0u, &values, false, "settle_depth_clear", mode);
-            end_scene_pass("settle_depth_clear");
-        }
-    }
     scene_pass_aux_ = aux;
     // Loading a pass, tone mapping and occlusion compositing do not modify depth; native depth-writing draws and
     // explicit clears make the resolved depth stale.
@@ -459,23 +441,11 @@ void RendererMtl::begin_scene_pass_with(unsigned aux, const SceneClearValues* cl
     if (profile_frame_ && list_pass_ != GpuPass::Scene) {
         next_command_buffer(GpuPass::Scene);
     }
-    // Points tested in this pass (test_screen_probes) put their results here; a single-sample pass only.
-    if (scene_.samples == 1u && (!pass_visibility_ || pass_visibility_used_ != 0u)) {
-        Frame& frame = *frame_;
-        if (frame.visibility_used == frame.visibility.size()) {
-            frame.visibility.push_back(mtl::Context::get().create_buffer(std::uint64_t{kPassVisibilityResults} * 8u,
-                                                                        mtl::Storage::Shared, "probe results"));
-        }
-        pass_visibility_ = frame.visibility[frame.visibility_used++];
-        pass_visibility_used_ = 0u;
-    } else if (scene_.samples != 1u) {
-        pass_visibility_.reset();
-    }
     pass_width_ = scene_.color->width;
     pass_height_ = scene_.color->height;
     @autoreleasepool {
         MTLRenderPassDescriptor* const descriptor = (__bridge_transfer MTLRenderPassDescriptor*)scene_pass_descriptor(
-            aux, clear, discard_color, clear_depth, pass_visibility_ ? pass_visibility_->buffer : nullptr);
+            aux, clear, discard_color, clear_depth);
         id<MTLRenderCommandEncoder> pass = nil;
         if (parallel_scene_pass_) {
             id<MTLParallelRenderCommandEncoder> const parallel =
@@ -562,9 +532,6 @@ void RendererMtl::end_scene_pass(const char* caller) {
     encoder_.attach(nullptr, 0u, 0u);
     scene_pass_open_ = false;
     scene_pass_closed_by_ = caller;
-    if (!held_probe_slots_.empty()) {
-        read_held_probes();
-    }
     gpu_pass(current_pass_);
 }
 
@@ -606,17 +573,6 @@ void RendererMtl::clear_scene(std::uint32_t clear_rgba, bool color_enable, bool 
         rect = gpu::rect(scaled.left, scaled.top, scaled.right, scaled.bottom);
     }
     const bool whole = rect.left == 0 && rect.top == 0 && rect.right == scene_w && rect.bottom == scene_h;
-    if (depth_enable && depth_clear_pending()) {
-        if (whole) {
-            pending_depth_clear_ = 0u;  // replaced
-        } else {
-            settle_depth_clear();
-        }
-    }
-    if (depth_enable && !held_probe_slots_.empty()) {
-        // Held probes read the depth before the clear replaces it; the pass is closed for the clear's own opening.
-        end_scene_pass();
-    }
     const SceneClearValues clear = make_scene_clear_values(clear_rgba, pixel_format);
     scene_.depth_dirty |= depth_enable && scene_.samples > 1u;
     // The whole scene target, every channel, while the pass is closed (a copy-clear): the pass begins cleared.
@@ -659,43 +615,6 @@ void RendererMtl::clear_depth_in_pass(float reversed_depth, const gpu::Rect& rec
                  rect, value, sizeof(value), nullptr);
     reset_draw_bindings();
     bind_scene();
-}
-
-bool RendererMtl::defer_scene_depth_clear(std::uint32_t clear_rgba) {
-    if (!scene_pass_open_ || held_probe_slots_.empty() || target_pass_active_) {
-        return false;
-    }
-    pending_depth_ = scene_depth_attachment();
-    pending_depth_values_ = make_scene_clear_values(clear_rgba, 0u);
-    pending_depth_clear_ = 1u;
-    return true;
-}
-
-// The waiting depth clear now: in the open pass once no held probe needs the depth it replaces; otherwise the pass
-// ends (the held probes read) and the next opening clears it, at once when no pass was open.
-void RendererMtl::settle_depth_clear() {
-    if (!depth_clear_pending()) {
-        return;
-    }
-    if (scene_pass_open_ && held_probe_slots_.empty() && scene_pass_aux_ == 0u) {
-        pending_depth_clear_ = 0u;
-        scene_.depth_dirty |= scene_.samples > 1u;
-        const FrameMap part = scene_part();
-        clear_depth_in_pass(pending_depth_values_.reversed_depth,
-                            gpu::rect(0, 0, static_cast<std::int32_t>(part.width), static_cast<std::int32_t>(part.height)));
-        return;
-    }
-    const bool open = scene_pass_open_;
-    const unsigned aux = scene_pass_aux_;
-    end_scene_pass("settle_depth_clear");
-    if (open) {
-        begin_scene_pass_with(aux);
-        return;
-    }
-    const SceneClearValues values = pending_depth_values_;
-    const unsigned mode = std::exchange(pending_depth_clear_, 0u);
-    begin_scene_pass_with(0u, &values, false, "settle_depth_clear", mode);
-    end_scene_pass("settle_depth_clear");
 }
 
 FrameMap RendererMtl::output_frame_for_window() const {
@@ -1044,8 +963,6 @@ bool RendererMtl::publish_scene_depth_copy(std::uint64_t key, TextureStore& text
         dest.height = extent.height;
     }
     end_scene_pass();
-    settle_depth_clear();
-    end_scene_pass();
     resolve_scene_depth();
     // The whole picture is written (the pass drops what it held), each pixel the nearest depth of the drawn part.
     const FrameMap part = scene_part();
@@ -1097,7 +1014,6 @@ void RendererMtl::open_frame_for_pass(std::uint64_t color_key, std::uint8_t chan
         (void)publish_picture(color_key, size.width, size.height, scene_.color, channels, textures);
     }
     if (depth_key != 0u) {
-        settle_depth_clear();
         resolve_scene_depth();
         (void)publish_picture(depth_key, size.width, size.height, scene_.depth, 0u, textures);
     }

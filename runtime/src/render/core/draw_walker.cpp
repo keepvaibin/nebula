@@ -86,7 +86,7 @@ void write_frame_plan(const NebulaFrameList& list, const PlanLookup& lookup, con
         return;
     }
     std::string text;
-    core::write_plan_shape(list, lookup, now.early_targets, now.early_probes, now.late_depth_clears, text);
+    core::write_plan_shape(list, lookup, now.early_targets, now.late_depth_clears, text);
     std::ofstream file(folder / ("frame-plans-" + std::to_string(::galaxy::current_process_id()) + ".txt"),
                        std::ios::binary | std::ios::app);
     file << text;
@@ -1518,7 +1518,6 @@ void RenderCore::walk_list(ListData& now, ListData* before, const WalkTime& time
         now.targets_planned = true;
         const PlanLookup lookup{registries_};
         core::plan_early_targets(list, lookup, now.early_targets);
-        core::plan_early_probes(list, lookup, now.early_probes);
         core::plan_late_depth_clears(list, lookup, now.late_depth_clears);
         if (::galaxy::diagnosing(::galaxy::kDiagnoseFramePlans) && list.game_frame % kFramePlanEvery == 0u) [[unlikely]] {
             write_frame_plan(list, lookup, now);
@@ -1545,22 +1544,10 @@ void RenderCore::walk_list(ListData& now, ListData* before, const WalkTime& time
             continue;
         }
         walk_pass(now, p, target_channels);
-        for (const core::ListData::EarlyProbe& early : now.early_probes) {
-            if (early.after == p && list.passes[p].kind != NEBULA_PASS_SCENE_END && now.probes_due(walk_.between)) {
-                const NebulaFramePass& probe = list.passes[early.probe];
-                record_screen_probes(probe.probe_channel, list.probes + probe.first_probe, probe.probe_count,
-                                     probe.arg0 == NEBULA_PROBE_COMPARED);
-            }
-        }
     }
     if (target_open_) {
         walk_target_end(target_channels);
     }
-    // A generated frame asks nothing: its depth is the scene at t, and the points are the camera's at t = 1.
-    if (!now.probes_done && !walk_.between) {
-        probes_walked(now.list->game_frame);
-    }
-    now.probes_done = now.probes_done || !walk_.between;
 }
 
 void RenderCore::walk_pass(ListData& now, std::uint32_t p, std::uint32_t& target_channels) {
@@ -1667,30 +1654,12 @@ void RenderCore::walk_pass(ListData& now, std::uint32_t p, std::uint32_t& target
             walk_opaque_end(pass);
             break;
         case NEBULA_PASS_SCENE_END:
-            // The probes asked after the scene with its depth unchanged (plan_early_probes): while it is still bound.
-            if (now.probes_due(walk_.between)) {
-                for (const core::ListData::EarlyProbe& early : now.early_probes) {
-                    if (early.after == p) {
-                        const NebulaFramePass& probe = list.passes[early.probe];
-                        record_screen_probes(probe.probe_channel, list.probes + probe.first_probe, probe.probe_count,
-                                             probe.arg0 == NEBULA_PROBE_COMPARED);
-                    }
-                }
-            }
             walk_scene_end();
             break;
         case NEBULA_PASS_BLOOM_HOLD:
         case NEBULA_PASS_BLOOM_NORMAL:
         case NEBULA_PASS_BLOOM_SIMPLE:
             renderer_.game_bloom(pass.kind, pass.arg0, pass.arg1);
-            break;
-        case NEBULA_PASS_PROBE:
-            // On the list's real walk (probes_due), so the points and the depth are of one camera; some were asked earlier.
-            if (now.probes_due(walk_.between) && std::none_of(now.early_probes.begin(), now.early_probes.end(),
-                                                 [p](const core::ListData::EarlyProbe& early) { return early.probe == p; })) {
-                record_screen_probes(pass.probe_channel, list.probes + pass.first_probe, pass.probe_count,
-                                     pass.arg0 == NEBULA_PROBE_COMPARED);
-            }
             break;
         case NEBULA_PASS_SHOW:
             walk_show();
@@ -1816,15 +1785,7 @@ void RenderCore::walk_native(const NebulaFrameList& list, const NebulaFramePass&
             frame.projection[3u * 4u + c] = rows[3][c];
         }
     }
-    // The function's time is the mod's: the game's probe read does not wait on it once it holds the thread.
-    native_call_started_ns_.store(steady_now_ns(), std::memory_order_release);
-    try {
-        renderer_.record_native_call(call, frame, scene_point);
-    } catch (...) {
-        native_call_started_ns_.store(0u, std::memory_order_release);
-        throw;
-    }
-    native_call_started_ns_.store(0u, std::memory_order_release);
+    renderer_.record_native_call(call, frame, scene_point);
 }
 
 void RenderCore::walk_show() {

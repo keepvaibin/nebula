@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // RendererD3D11's scene target (renderer_d3d11.h): its sets and passes, clears, resolves, the target passes and the
-// pictures draws sample, copies of the frame, the output and wide scenes, where the renderer's parts meet the frame,
-// screen probes and the test captures.
+// pictures draws sample, copies of the frame, the output and wide scenes, where the renderer's parts meet the frame
+// and the test captures.
 //
 // Direct3D 11 has no render passes: the scene pass is the scene target bound with its draws recorded (gpu::Encoder),
 // replayed when it ends or the renderer draws in it (flush_draws). Every call here that reads or writes a target itself
@@ -1131,100 +1131,6 @@ void RendererD3D11::end_wide_scene() {
     scene_.color_dirty |= scene_.samples > 1u;
     reset_draw_bindings();
     bind_scene();
-}
-
-// ---- screen probes ----
-
-bool RendererD3D11::record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes, bool) {
-    if (slot >= probe_slots_.size()) {
-        probe_slots_.resize(slot + 1u);
-    }
-    ProbeSlot& out = probe_slots_[slot];
-    if (out.fence != 0u || probes.empty() || !scene_.depth) {
-        return false;
-    }
-    const auto count = static_cast<std::uint32_t>(probes.size());
-    ID3D11Device1* const device = d3d11::Context::get().device();
-    if (out.capacity < count) {
-        out = ProbeSlot{};
-        D3D11_BUFFER_DESC desc{};
-        desc.ByteWidth = static_cast<UINT>(screen_probe_points_bytes(count));
-        desc.Usage = D3D11_USAGE_DYNAMIC;
-        desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-        desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-        desc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
-        desc.StructureByteStride = sizeof(ScreenProbePixel);
-        bool made = SUCCEEDED(device->CreateBuffer(&desc, nullptr, &out.points)) &&
-                    SUCCEEDED(device->CreateShaderResourceView(out.points.Get(), nullptr, &out.points_view));
-        desc.ByteWidth = count * sizeof(float);
-        desc.Usage = D3D11_USAGE_DEFAULT;
-        desc.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
-        desc.CPUAccessFlags = 0u;
-        desc.StructureByteStride = sizeof(float);
-        made = made && SUCCEEDED(device->CreateBuffer(&desc, nullptr, &out.values)) &&
-               SUCCEEDED(device->CreateUnorderedAccessView(out.values.Get(), nullptr, &out.values_view));
-        desc.Usage = D3D11_USAGE_STAGING;
-        desc.BindFlags = 0u;
-        desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
-        desc.MiscFlags = 0u;
-        desc.StructureByteStride = 0u;
-        made = made && SUCCEEDED(device->CreateBuffer(&desc, nullptr, &out.readback));
-        if (!made) {
-            // No answers this time (P-062): the probes are asked again; a removed device is a device loss.
-            out = ProbeSlot{};
-            if (gpu::device_removed(device)) {
-                allocation_failed("the screen probe buffers");
-            }
-            return false;
-        }
-        out.capacity = count;
-    }
-    ID3D11DeviceContext1* const ctx = context();
-    // No command in flight reads the slot's buffers: its last answers were taken (fence 0) after their fence passed.
-    D3D11_MAPPED_SUBRESOURCE mapped{};
-    if (FAILED(ctx->Map(out.points.Get(), 0u, D3D11_MAP_WRITE_DISCARD, 0u, &mapped))) {
-        return false;
-    }
-    // The count with the points (write_screen_probe_points): the dispatch reads no constant (P-332).
-    write_screen_probe_points(probes, scene_map_, mapped.pData);
-    ctx->Unmap(out.points.Get(), 0u);
-
-    end_scene_pass();
-    resolve_scene_depth();  // depth alone
-    ID3D11ShaderResourceView* const views[2] = {scene_.depth->view.Get(), out.points_view.Get()};
-    ID3D11UnorderedAccessView* const values = out.values_view.Get();
-    ctx->CSSetShader(probe_cs_.Get(), nullptr, 0u);
-    ctx->CSSetShaderResources(0u, 2u, views);
-    ctx->CSSetUnorderedAccessViews(0u, 1u, &values, nullptr);
-    ctx->Dispatch((count + kScreenProbeGroup - 1u) / kScreenProbeGroup, 1u, 1u);
-    ID3D11ShaderResourceView* const no_views[2] = {};
-    ID3D11UnorderedAccessView* const no_values = nullptr;
-    ctx->CSSetShaderResources(0u, 2u, no_views);
-    ctx->CSSetUnorderedAccessViews(0u, 1u, &no_values, nullptr);
-    const D3D11_BOX box{0u, 0u, 0u, count * static_cast<UINT>(sizeof(float)), 1u, 1u};
-    ctx->CopySubresourceRegion(out.readback.Get(), 0u, 0u, 0u, 0u, out.values.Get(), 0u, &box);
-    out.count = count;
-    out.fence = kProbesInFrame;  // fenced at end_frame
-    return true;
-}
-
-const float* RendererD3D11::screen_probes_finished(std::size_t slot) {
-    if (slot >= probe_slots_.size()) {
-        return nullptr;
-    }
-    ProbeSlot& out = probe_slots_[slot];
-    if (out.fence == 0u || out.fence == kProbesInFrame || completed_fence_value() < out.fence) {
-        return nullptr;
-    }
-    out.fence = 0u;
-    D3D11_MAPPED_SUBRESOURCE mapped{};
-    if (FAILED(context()->Map(out.readback.Get(), 0u, D3D11_MAP_READ, 0u, &mapped))) {
-        return nullptr;
-    }
-    const auto* values = static_cast<const float*>(mapped.pData);
-    out.answers.assign(values, values + out.count);
-    context()->Unmap(out.readback.Get(), 0u);
-    return out.answers.data();
 }
 
 // ---- test captures ----
