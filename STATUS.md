@@ -1,12 +1,13 @@
 # Nebula native plan: status
 
-Written 2026-11-22 16:37.
+Written 2026-11-22 16:38.
 
 Steps landed: 3 of 138 (2%).
 
 Now: Stopped by R: S0.1.3 blocked (console census refuses the GX section names); S0.1.4 prepared on native/S0.1.4
 
-In work now: Nothing started.
+In work now:
+- S0.1.4 Render data path step 2, first landing: `f4/e3-2a` (agent 1)
 
 ## Packages
 
