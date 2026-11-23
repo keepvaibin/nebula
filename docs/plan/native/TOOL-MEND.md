@@ -5,7 +5,7 @@ a hook or a GitHub job is at fault, and the step it was working on cannot go on 
 one fault. The agent waits for you and does nothing else meanwhile. Nobody else is there: the owner is away and does not
 answer. Decide from this file, the sheet and the code, and say in your report what you decided.
 
-You get three lines: read this file, read the sheet at a path, your mend is M-00N. This file is everything else you
+You get four lines: read this file, read the sheet at a path, your mend is M-00N, report once, at the end. This file is everything else you
 need. Read it whole, then the sheet, then the manual of the tools, `docs/plan/04-GATE-AND-MAIN.md`, for the sections
 about the tool you will change.
 

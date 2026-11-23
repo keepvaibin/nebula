@@ -29,13 +29,7 @@ FIRST_STEP, LAST_STEP = 12, 138
 
 # What the test found in the cards when it was written (11-23), each a card that is to be mended; the cards are another helper's and the
 # planner's to change. A finding is the step and the text `proofs.problems` gives.
-KNOWN_FINDINGS = {
-    "R2.2": ["the game takes no option --diagnose"],
-    "G2.1": ["tools/gate/pace.py is a program the agent never runs (AGENT.md, Programs you never run)"],
-    "G2.2": ["tools/gate/pace.py is a program the agent never runs (AGENT.md, Programs you never run)"],
-    "G3.1": ["tools/gate/soak.py is a program the agent never runs (AGENT.md, Programs you never run)"],
-    "G4.3": ["loads.py is not a file on main (or its name is not one file's)"],
-}
+KNOWN_FINDINGS = {}
 
 
 def agent_md():
