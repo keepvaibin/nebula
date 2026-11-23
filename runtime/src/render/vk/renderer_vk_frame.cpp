@@ -913,6 +913,10 @@ void RendererVk::prepare_temporal_upscaler() {
             temporal_history_valid_ = false;
             if (temporal_) {
                 std::cout << "[Renderer] " << temporal_->name() << " " << rw << "x" << rh << " -> " << ow << "x" << oh << "\n";
+            } else if (kind != 5u) {
+                // The game goes on: the scene is drawn at the render size and shown without the upscaler (the reason is the
+                // line the upscaler printed when it gave up).
+                std::cout << "[Renderer] the temporal upscaler could not be made on this device: the game goes on without it\n";
             }
         }
         return;

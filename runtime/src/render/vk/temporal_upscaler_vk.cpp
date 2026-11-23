@@ -365,12 +365,6 @@ public:
         FfxErrorCode result = ffxFsr3UpscalerContextCreate(&context_, &description);
         if (result != FFX_OK) {
             std::cerr << "[fsr3] context creation failed: " << result << '\n';
-            VkPhysicalDeviceMemoryProperties memory{};
-            vkGetPhysicalDeviceMemoryProperties(physical, &memory);
-            for (uint32_t i = 0; i < memory.memoryTypeCount; ++i) {
-                std::cerr << "[fsr3] memory type " << i << ": flags 0x" << std::hex << memory.memoryTypes[i].propertyFlags << std::dec
-                          << " heap " << memory.memoryTypes[i].heapIndex << '\n';
-            }
             return false;
         }
         context_created_ = true;

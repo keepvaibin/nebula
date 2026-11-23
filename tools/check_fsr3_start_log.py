@@ -4,9 +4,11 @@
 
 The start check (native/host/host_main.cpp run_start_check) ran with `upscaler=fsr3` in its settings file. The log must say one of
   "[fsr3] context made: ..."   FSR 3 was made on the device (vk/temporal_upscaler_vk.cpp), or
-  "[vulkan] FSR 3 is not offered on this device: it lacks <what>"   the device lacks what it needs (vk/vk_context.cpp);
-the check says which, and fails when the log has neither, when the log says FSR 3 is not in the program ("[vulkan] features:" with
-no FSR 3 line at all is neither), or when FSR 3 started and failed ("[fsr3] ... failed"). Exit 0 told, 1 not, 2 no log.
+  "[vulkan] FSR 3 is not offered on this device: it lacks <what>"   the device lacks what it needs (vk/vk_context.cpp), or
+  "[fsr3] ... failed" with "the game goes on without it" and every frame drawn: the context could not be made on this device (the
+  runner's software renderer is one) and the game went on without the upscaler. That is told, not judged: ledger P-366.
+The check says which, and fails when the log has none of them (a program built without FSR 3), or when the context failed and the
+start check did not draw its frames. Exit 0 told, 1 not, 2 no log.
 """
 import pathlib
 import re
@@ -18,8 +20,12 @@ def judge(text):
     made = re.search(r"^\[fsr3\] context made: (.*)$", text, flags=re.M)
     lacks = re.search(r"^\[vulkan\] FSR 3 is not offered on this device: it lacks (.+)$", text, flags=re.M)
     failed = re.findall(r"^\[fsr3\] .*(?:failed|could not be made).*$", text, flags=re.M)
+    went_on = re.search(r"^\[Renderer\] the temporal upscaler could not be made on this device: the game goes on without it$", text, flags=re.M)
+    drawn = re.search(r"^start check: (\d+) frames drawn", text, flags=re.M)
     if failed:
-        return 1, "FSR 3 started and failed: " + "; ".join(failed[:3])
+        if went_on and drawn:
+            return 0, "FSR 3 could not make its context on this device (%s); the game went on without it and drew %s frames" % (failed[0], drawn.group(1))
+        return 1, "FSR 3 started and failed, and the game did not go on without it: " + "; ".join(failed[:3])
     if made:
         return 0, "FSR 3 was made on this device: " + made.group(1)
     if lacks:

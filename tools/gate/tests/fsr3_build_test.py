@@ -6,7 +6,7 @@ python -X utf8 -I tools/gate/tests/fsr3_build_test.py
   that holds the text FSR 3's code prints is passed; the same without it, a package with one processor short of it, a tar.gz with no
   files/nebula and an apk with no libmain.so are refused (exit 1, or 2 when the package cannot be read).
 - tools/check_fsr3_start_log.py: a start check's log that says FSR 3 was made, or names what the device lacks, is told; a log that says
-  nothing about FSR 3 (a program built without it) and one that says FSR 3 failed are refused.
+  nothing about FSR 3 (a program built without it) and one that says FSR 3 failed and does not go on without it are refused; one that went on without it is told.
 - cmake/fidelityfx_vk_shaders.cmake, configured by cmake alone: nebula_fsr3_left_out stops the configure when NEBULA_REQUIRE_FSR3 is ON
   (environment or variable, the variable first) and says so once otherwise; nebula_fidelityfx_android leaves FSR 3 out with its reason
   where the build runs on another system than Windows with no shader headers given (planted SDK folder, no download), and where
@@ -117,8 +117,10 @@ with tempfile.TemporaryDirectory(prefix="fsr3-build-") as folder:
     lacks = "[vulkan] FSR 3 is not offered on this device: it lacks shaderFloat16, subgroupSizeControl\nstart check: 600 frames drawn\n"
     nothing = "[vulkan] features: depth-clamp=1 temporal-upscaling=0\nstart check: 600 frames drawn\n"
     failed = "[vulkan] FSR 3: the device has what it needs\n[fsr3] context creation failed: -3\n"
+    went_on = failed + "[Renderer] the temporal upscaler could not be made on this device: the game goes on without it\nstart check: 600 frames drawn, 0 pictures shown\n"
     for name, text, want, word in (("made", made, 0, "was made"), ("lacks", lacks, 0, "lacks shaderFloat16, subgroupSizeControl"),
-                                   ("nothing", nothing, 1, "says nothing about FSR 3"), ("failed", failed, 1, "started and failed")):
+                                   ("nothing", nothing, 1, "says nothing about FSR 3"), ("failed", failed, 1, "did not go on without it"),
+                                   ("went_on", went_on, 0, "went on without it and drew 600 frames")):
         (tmp / (name + ".log")).write_text(text, encoding="utf-8")
         code, out = run_tool(LOG_TOOL, tmp / (name + ".log"))
         check(code == want and word in out, "a start log that %s: exit %d and '%s': %s" % (name, want, word, out))
