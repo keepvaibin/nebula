@@ -228,7 +228,12 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
           python -X utf8 -I tools/gate/pgo.py check $log
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($LASTEXITCODE -ne 0) {
+            # A pre-release (a version with a label) is built with the profile it has: the check says how stale it is and the
+            # build goes on (no promise on speed, a beta). A release stops here: its profile is made again first.
+            if ($env:NEBULA_VERSION_SUFFIX) { Write-Host "the profile is out of date: told, not judged, for a pre-release" }
+            else { exit $LASTEXITCODE }
+          }
           $out = Join-Path $env:RUNNER_TEMP 'out'
           $names = Join-Path $out 'names'
           New-Item -ItemType Directory -Force (Join-Path $out 'bin\x86-64-v2'), (Join-Path $names 'luma_types') | Out-Null
