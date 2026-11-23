@@ -70,6 +70,14 @@ The earlier order put four things in places that would have forced work to be do
    Main still writes and carries data that only shelved work read (N-1053, N-1054). The new material and frame
    records should not be designed around fields nothing reads.
 
+5. **The two surround steps come right after S0.2 (G6.2, G6.7).**
+   The owner (11-22) wants 3.1, 5.1 and 7.1 in the game's options and wants to try them early. G6.7 (the surround
+   law and the player's Speakers choice) needs G6.2 (the sends named as records) and nothing else; both need nothing
+   of S0.2 or S0.3 (their cards name no file those packages change), so they stand directly after the last step of
+   S0.2: orders 12 and 13 of `steps.tsv`. The rest of G6 keeps its place and waits for them (G6.1 at 115, G6.3 to
+   G6.6 at 116 to 119, G6.8 at 120). It does not go into a second beta: the owner (11-22): "just beta 1 so far", no
+   second beta is planned.
+
 Three smaller placements with the same reason:
 
 - **Views as records (P-254) before poses on the GPU (R5).** Step 5 computes each picture's matrices per view; it
@@ -125,6 +133,12 @@ P-260, P-214, P-261 (and the parts of P-219, P-293 and P-295 that belong to the 
 **S0.3 Dead fields left by shelved work come off main.** Rows: N-1053, N-1054.
 - For a player: nothing visible; slightly smaller files and frame data.
 - Proof: the cook's output and the frame list no longer hold them; pictures unchanged.
+
+**G6.2 and G6.7 stand here, before S0.3** (orders 12 and 13; their package G6 is described under Lane G). G6.2: a
+note's sends and the sound settings as typed records. G6.7: the surround law, and one "Speakers" setting in the sound
+options (Auto, Mono, Stereo, Encoded stereo, 3.1, 5.1, 7.1; a layout the device has no speakers for is not offered).
+- For a player: real surround on a device with more speakers, chosen or automatic; two-channel sound as made.
+- Proof: the law's tests (card G6.7), every choice against every device layout, the step's replay identical.
 
 ### Lane R. The picture
 
@@ -235,11 +249,12 @@ N-1084, P-034, P-042, P-078, P-163, P-274, P-311 to P-318, P-019, P-281.
 
 **G6 Sound.** Rows: P-186, P-221, P-222, P-223, P-224, P-227, P-228, P-225, P-226, P-271, P-219, P-193, P-037,
 P-071, P-072, P-286.
-- In this order: sequence data in host order; sends and settings as typed records; look-ups by map; bounds
-  checked at load; streams filled by a reader thread; a stream's end told by the game clock; then the surround
-  law (written in the inventory, proven by tests); then the device threads.
+- In this order: sends and settings as typed records (G6.2) and then the surround law with the player's Speakers
+  choice (G6.7), both directly after S0.2 (orders 12 and 13); then sequence data in host order; look-ups by map;
+  bounds checked at load; streams filled by a reader thread; a stream's end told by the game clock; then the
+  device threads.
 - For a player: no sound hitch from a drive read, no crackle on machines that need a larger buffer, real surround
-  on surround devices. Two-channel sound stays as made.
+  on surround devices, chosen in the options (3.1, 5.1, 7.1) or automatic. Two-channel sound stays as made.
 
 **G7 Text.** Rows: P-202, P-215, P-237, P-275, P-187, P-201.
 - Design: the inventory's five landings (messages parsed once into runs and tag records, then 32-bit characters).
@@ -252,7 +267,7 @@ P-071, P-072, P-286.
 **G9 Timing and small items.** Rows: P-203, P-206, P-268, P-306, P-208, P-211.
 - Movie cues fire when the movie passes them, so a hitch cannot skip one. The staff roll follows its music.
 
-G6 to G9 touch no other package's files. They are taken whenever the lane's main line waits for Lane R. (not used: one agent does every step)
+G6 to G9 touch no other package's files, except the settings files named in section 5 (G6.7's new row). They are taken whenever the lane's main line waits for Lane R. (not used: one agent does every step)
 
 ### The end
 
@@ -275,6 +290,7 @@ onto the result. (not used: one agent does every step)
 | `host_main.cpp` | R7 landing 7 | G2 landing 1, G3 landing 7 | G |
 | The clipping files (`ClippingJudge`, `ClippingActorHolder`) | none | G3 landing 2, G5 | G3 |
 | `LensFlare.cpp`, the probe code in the renderers | none after S0.2 | S0.2 | S0.2, before R touches the renderers |
+| `native_settings.cpp`, `runtime_settings.*`, `settings_table.tsv`, `NebulaText.tsv`, `NebulaSettingsMenu.cpp` | none | G6.7 (the Speakers row), G7.3, G9.5 | G6.7 (order 13); G7.3 and G9.5 read its row as it stands |
 
 ## 6. Decisions settled here, so the design has no open ends
 
@@ -303,6 +319,11 @@ The design file disagrees with itself in a few places. These are the answers the
 3. **S0.2 changes two answers the game gets:** what the pointer is over and whether a talk balloon is hidden are
    computed from the world instead of from the picture. You decided this on 11-19. Recorded plays are recorded
    again once after it.
+4. **Surround comes early (the owner, 11-22).** G6.2 and G6.7 stand directly after S0.2, so the Speakers setting
+   and real 3.1, 5.1 and 7.1 output can be tried before the rest of the sound work. Not in a second beta (his words
+   of 11-22: "just beta 1 so far"). The setting replaces "Sound output" (Mono, Stereo, Surround): Surround becomes
+   "Encoded stereo", the old key is read once, and a file that said `stereo` (the default every file wrote) becomes
+   Auto: a player on a surround device who never touched the row gets the device's speakers.
 
 ## 8. What this plan does not know
 
