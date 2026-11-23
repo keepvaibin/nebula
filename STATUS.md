@@ -1,20 +1,19 @@
 # Nebula native plan: status
 
-Written 2026-11-23 05:09. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-23 06:02. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
-Steps landed: 7 of 138 (5%).
+Steps landed: 8 of 138 (6%).
 
 Now: S0.2.3 (the pointer asks the scene) since 05:08, written ahead and committed, tour playing; ahead: nothing
 
-In work now:
-- S0.2.3 Landing B, part 1: the pointer (agent 1)
+In work now: Nothing started.
 
 ## Packages
 
 | Package | Landed | Of |
 | --- | --- | --- |
 | S0.1 | 5 | 5 |
-| S0.2 | 2 | 6 |
+| S0.2 | 3 | 6 |
 | G6 | 0 | 8 |
 | S0.3 | 0 | 2 |
 | R1 | 0 | 4 |
@@ -42,6 +41,7 @@ In work now:
 
 | When | Step | Title | Code commit | Main commit |
 | --- | --- | --- | --- | --- |
+| 2026-11-23 06:02 | S0.2.3 | Landing B, part 1: the pointer | 8861980d7 | 6544d38df |
 | 2026-11-23 05:08 | S0.2.2 | The scene query's form, written into the inventory before code | e54a921e5 | 37db1ddaa |
 | 2026-11-23 04:53 | S0.2.1 | Landing A: drawing stops changing the game | 84a2f5a72 | 5695013af |
 | 2026-11-22 18:13 | S0.1.5 | Render data path step 2, second landing: `f4/e3-2b` and `f4/e3-2c` | 02d236b5c | fb2dfa855 |
@@ -81,7 +81,7 @@ Nothing is blocked.
 | M-003 | closed | R-001 | build_windows.ps1 refuses a build folder configured with another NEBULA_SANITIZE instead of configuring it again | 0 | 117 | c60999ee1 |
 | M-004 | closed | S0.2.1 | the replay check cannot play a run at a time rate of 2 and compare its step hashes with a rate-1 run (S0.2.1 proof 2) | 0 | 94 | fb2b39bc6 |
 
-## Decisions (10)
+## Decisions (11)
 
 - 2026-11-23 S0.2.1: LoadSlice: 32 items a frame; an item is a phase of GameScene::initAfterScenarioChosen, the player, one placement made whole, one piece of FileSelector::initStep, or one Star Bit of the reserve (because the card asks for a fixed count of work and names no count; the count is a constant in one place, no player sees which frame of the load an item falls in, and the load worker (G3.7) replaces the slices)
 - 2026-11-23 S0.2.1: Drawing's random stream (MR::getDrawRandom) is seeded with the same seed as the game's stream, in setRandomSeedFromStageName and setFixedRandomSeed (because a fixed seed keeps the cosmetic numbers the same in every run of a replay and needs no new setting; the draw stream runs through the same sequence as the game's but is advanced only by drawing, so neither changes the other)
@@ -93,6 +93,7 @@ Nothing is blocked.
 - 2026-11-23 S0.2.3: StarPointerPeekZ, its members and MR::setStarPointerDrawSyncToken go in this step, with PointerInfo's mDrawReady and mZDepth; TDDraw::invProject stays for TalkDirector until S0.2.4 (because the card's What changes says StarPointerPeekZ goes here and its Old path said S0.2.6; once the pointer asks the scene nothing reads the class, and a dead copy is against the owner's rules (AGENT.md section 8); S0.2.6 deletes the probe path the class used)
 - 2026-11-23 S0.2.3: The query's pointer targets are the actors that took a StarPointerTarget, kept per scene in AllLiveActorGroup in that order; a target counts while its actor is alive, not clipped and its model not hidden, and a sphere that holds the camera is not hit (because INV section 3 names the targets' spheres but not which; these are the ones whose model the picture's depth could show, the list dies with the scene that made its actors, and walking only them keeps the step's cost small)
 - 2026-11-23 S0.2.3: The pointer asks the scene in the step where the game scene's camera is kept (StarPointerDirector::mIsUpdateTransHolder) and a pointer layout shows its pointer, with the pointer's view and projection matrices (StarPointerTransformHolder); the ray is StarPointerTarget::calcScreenPositionFromView read backwards (because the picture was asked only in the game scene's draw while a pointer was shown, so the point stays as it was elsewhere; the targets' own screen test uses those two matrices, so a target's sphere and its circle on the screen agree)
+- 2026-11-23 S0.2.4: TalkPeekZ goes with no scene query in its place, and TDDraw::invProject with it; proof 1 becomes the searches for TalkPeekZ, setTalkDirectorDrawSyncToken and invProject and the recorded plays' step hashes (because nothing in the tree reads TalkPeekZ::mWorldPos or mDepth (the balloon is placed by TalkMessageCtrl::updateBalloonPos from its actor), so a query would compute a value no one reads, a dead copy against the owner's rules (AGENT.md section 8); invProject had no other caller)
 
 ## Checks changed during the run (34)
 
