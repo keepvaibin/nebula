@@ -11,23 +11,6 @@ class TalkBalloonHolder;
 class TalkStateHolder;
 class TalkState;
 
-class TalkPeekZ {
-public:
-    TalkPeekZ();
-
-    // The depth at the balloon's point, from the picture where the drawing has reached (its readback channel).
-    void setDrawSyncToken();
-
-    static const u32 cReadbackChannel = 2;
-
-    f32 mDepth;  // the depth at the balloon's point, 0 near to 1 far
-    Vec2f mScreenPos;
-    Vec3f mWorldPos;
-    f32 mProjection[7];
-    f32 mViewport[6];
-    u32 mAsker;  // the asker its probes carry
-};
-
 class TalkDirector : public LayoutActor {
 public:
     // Flow-data branch results by index (TalkFunction::getBranchAstroGalaxyResult).
@@ -63,7 +46,6 @@ public:
     void exeWait();
 
     MR::Vector< MR::AssignableArray< TalkMessageCtrl* > > mMsgControls;
-    TalkPeekZ* mPeekZ;
     TalkBalloonHolder* mBalloonHolder;
     TalkStateHolder* mStateHolder;
     TalkMessageCtrl* mMsgCtrl;
@@ -90,7 +72,6 @@ namespace MR {
     void pauseOffTalkDirector();
     void balloonOffTalkDirector();
     void invalidateTalkDirector();
-    void setTalkDirectorDrawSyncToken();
     bool isActiveTalkBalloonShort();
     void endNPCTalkCamera(bool, s32);
 };  // namespace MR

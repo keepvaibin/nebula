@@ -350,36 +350,6 @@ namespace TDDraw {
         MR::setDefaultViewportAndScissor();
     }
 
-    void invProject(Vec3f* pDest, const Vec3f& rScreen, MtxPtr pView, const f32* pProjection, const f32* pViewport, bool normalizedZ) {
-        f32 screenZ;
-        if (!normalizedZ) {
-            screenZ = rScreen.z / 16777215.0f;
-        } else {
-            screenZ = rScreen.z;
-        }
-
-        f32 depth = screenZ - pViewport[5];
-        f32 w;
-        f32 projectedZ = (depth * pProjection[6]) / (depth + pProjection[5] * (pViewport[5] - pViewport[4]));
-        w = pProjection[5] / (pProjection[6] - projectedZ);
-        const f32 x = ((rScreen.x / MR::getScreenWidth() - (pViewport[0] + pViewport[2] / 2.0f)) / w) / (pViewport[2] / 2.0f);
-        const f32 y = (-(rScreen.y / MR::getScreenHeight() - (pViewport[1] + pViewport[3] / 2.0f)) / w) / (pViewport[3] / 2.0f);
-        Vec3f viewPos;
-        if (pProjection[0] == 0.0f) {
-            viewPos.z = (projectedZ - pProjection[6]) / pProjection[5];
-            viewPos.x = (x - viewPos.z * pProjection[2]) / pProjection[1];
-            viewPos.y = (y - viewPos.z * pProjection[4]) / pProjection[3];
-        } else {
-            viewPos.z = (projectedZ - pProjection[6]) / pProjection[5];
-            viewPos.x = (x - pProjection[2]) / pProjection[1];
-            viewPos.y = (y - pProjection[4]) / pProjection[3];
-        }
-
-        Mtx inverseView;
-        NebulaMtxInverse(pView, inverseView);
-        NebulaMtxMultVec(inverseView, viewPos, pDest);
-    }
-
     void project2D(Vec3f* pDest, const Vec3f& rPosition) {
         // The point in the camera's view, its perspective projection, then the viewport (left, top, width, height,
         // near, far).

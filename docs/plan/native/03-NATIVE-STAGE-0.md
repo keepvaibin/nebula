@@ -171,13 +171,13 @@ Today the game's step depends on how the picture was drawn and how fast the comp
 
 ### S0.2.4 Landing B, part 2: the talk balloon
 
-- **What changes.** Today `TalkPeekZ::setDrawSyncToken` reads the depth at the balloon's screen point (channel 2, one point, frame F - 2), unprojects it through the frame's projection and viewport into `mWorldPos`, then asks the next frame's depth at the point now. `TalkDirector`'s world point comes from the query kind of S0.2.2 instead; `TalkPeekZ` goes.
+- **What changes.** Today `TalkPeekZ::setDrawSyncToken` reads the depth at the balloon's screen point (channel 2, one point, frame F - 2), unprojects it through the frame's projection and viewport into `mWorldPos`, then asks the next frame's depth at the point now. `TalkDirector`'s world point comes from the query kind of S0.2.2 instead; `TalkPeekZ` goes. Found at S0.2.4: nothing reads `TalkPeekZ::mWorldPos` or `mDepth` (the balloon is placed by `TalkMessageCtrl::updateBalloonPos` from its actor), so `TalkPeekZ` goes with no query in its place, and `TDDraw::invProject` with its last caller (decided 11-23, `docs/plan/native/decisions.tsv`).
 - **Where.** `native/petari/src/Game/NPC/TalkDirector.cpp` (97-124 as at main; 100-124 as cited at 241395b49), `native/petari/include/Game/NPC/TalkDirector.hpp`. Both exist at 790626cb5.
 - **Rows.** P-294: the talk balloon part.
 - **Needs first.** S0.2.2
 - **Old path.** `TalkPeekZ`; deleted here, its game-side probe calls with it at S0.2.6.
 - **Proof.**
-  1. The balloon's world point equals the query's at every screen shape.
+  1. The balloon's world point equals the query's at every screen shape. Replaced at S0.2.4, as no balloon world point is read: `git grep` for `TalkPeekZ`, `setTalkDirectorDrawSyncToken` and `invProject` in `native` finds nothing, and the recorded plays give their step hashes.
   2. Step hashes of one recorded play equal on every renderer (landing B's proof, S0.2.6).
 - **For a player.** The balloon sits at the same world point on every screen shape.
 - **Read first.** nothing
