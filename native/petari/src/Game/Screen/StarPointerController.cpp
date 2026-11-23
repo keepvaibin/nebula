@@ -1,6 +1,5 @@
 #include "Game/Screen/StarPointerController.hpp"
 #include "Game/Screen/StarPointerDirector.hpp"
-#include "Game/Util/DirectDraw.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
@@ -11,7 +10,7 @@ namespace {
     const s32 hIsOutScreenCounter = 5;
 };  // namespace
 
-PointerInfo::PointerInfo() : mPos(0.0f, 0.0f), mInScreen(), mDrawReady(), mZDepth(), mViewDistZ() {
+PointerInfo::PointerInfo() : mPos(0.0f, 0.0f), mInScreen(), mViewDistZ() {
 }
 
 StarPointerController::StarPointerController()
@@ -28,17 +27,18 @@ void StarPointerController::initAndSetPort(s32 padChannel) {
     mPadChannel = padChannel;
 }
 
-void StarPointerController::movement(const f32* pProjectionParams, const f32* pViewportParams) {
-    storeDataFromCallback(pProjectionParams, pViewportParams);
+void StarPointerController::movement(bool isQueried) {
+    updateWorldPos(isQueried);
     storePastPointingData();
     updatePointerInfo();
 }
 
-void StarPointerController::storeDataFromCallback(const f32* pProjectionParams, const f32* pViewportParams) {
-    Vec3f v1(mInfo.mPos.x, mInfo.mPos.y, mInfo.mZDepth);
-
-    if (mInfo.mDrawReady == true) {
-        TDDraw::invProject(&mWorldPos, v1, MR::getStarPointerViewMtx(), pProjectionParams, pViewportParams, true);
+// The point of the world under the pointer and its view depth, from the scene query (docs/engine/CONSOLE-FREE.md,
+// section 3) with the step's camera; a pointer outside the screen keeps its last point.
+void StarPointerController::updateWorldPos(bool isQueried) {
+    if (isQueried && MR::isInRange(mInfo.mPos.x, 0.0f, MR::getScreenWidth() - 1) &&
+        MR::isInRange(mInfo.mPos.y, 0.0f, MR::getScreenHeight() - 1)) {
+        MR::calcScenePointUnderScreen(&mWorldPos, mInfo.mPos, MR::getStarPointerViewMtx(), MR::getStarPointerProjMtx());
         mInfo.mViewDistZ = calcViewDistanceZ(mWorldPos, MR::getStarPointerViewMtx());
     }
 
@@ -48,8 +48,6 @@ void StarPointerController::storeDataFromCallback(const f32* pProjectionParams, 
     } else {
         mOutScreenTime++;
     }
-
-    mInfo.mDrawReady = false;
 }
 
 void StarPointerController::storePastPointingData() {

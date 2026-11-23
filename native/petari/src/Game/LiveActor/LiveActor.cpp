@@ -483,6 +483,10 @@ void LiveActor::initStageSwitch(const TableIter& rIter) {
 }
 
 void LiveActor::initActorStarPointerTarget(f32 radius, const Vec3f* pTrans, MtxPtr pMtx, Vec3f offset) {
+    if (mStarPointerTarget == nullptr) {
+        MR::getAllLiveActorGroup()->registerPointerTarget(this);
+    }
+
     mStarPointerTarget = new StarPointerTarget(radius, pTrans, pMtx, offset);
 }
 

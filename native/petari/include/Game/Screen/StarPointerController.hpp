@@ -8,8 +8,6 @@ public:
 
     Vec2f mPos;
     bool mInScreen;
-    bool mDrawReady;
-    f32 mZDepth;  // 0 near to 1 far
     f32 mViewDistZ;
 };
 
@@ -19,8 +17,9 @@ public:
 
     bool isOutScreenLong() const;
     void initAndSetPort(s32);
-    void movement(const f32*, const f32*);
-    void storeDataFromCallback(const f32*, const f32*);
+    // isQueried: the scene is asked for the point under the pointer this step (StarPointerDirector::update).
+    void movement(bool isQueried);
+    void updateWorldPos(bool isQueried);
     void storePastPointingData();
     void calcPastPointingPosOnScreen(Vec2f*, s32) const;
     void updatePointerInfo();

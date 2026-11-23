@@ -162,7 +162,7 @@ Today the game's step depends on how the picture was drawn and how fast the comp
 - **Where.** `native/petari/src/Game/Screen/StarPointerController.cpp` (31-43; `movement` and `storeDataFromCallback`), `StarPointerDirector.cpp` (31-50 `update`; 151-177 `StarPointerPeekZ`), `native/petari/include/Game/Screen/StarPointerDirector.hpp` (20-21, `mProjectionParameters` and `mViewportParameters`), `native/petari/src/Game/Util/StarPointerUtil.cpp` (123, 564), `native/petari/src/Game/Util/DirectDraw.cpp` and `native/petari/include/Game/Util/DirectDraw.hpp` (`TDDraw::invProject`, 353-381 as cited at 241395b49). All exist at 790626cb5.
 - **Rows.** P-294: pointer part. P-219: the pointer half closes here (its movie-volume half is G6.6).
 - **Needs first.** S0.2.1, S0.2.2
-- **Old path.** `StarPointerPeekZ` and the pointer's reads of probe answers; deleted at S0.2.6.
+- **Old path.** `StarPointerPeekZ` and the pointer's reads of probe answers; deleted here, as "What changes" says (decided 11-23, `docs/plan/native/decisions.tsv`); the probe path they used goes at S0.2.6.
 - **Proof.**
   1. The pointer's world point is the same at every screen shape and resolution (INV proof column: P-191's four-screen proof; until then it is expected to differ wherever the pointer is used).
   2. Step hashes of one recorded play equal on every renderer (landing B's proof, S0.2.6).

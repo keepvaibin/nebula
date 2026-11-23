@@ -1,5 +1,4 @@
 #include "Game/Screen/StarPointerDirector.hpp"
-#include "Game/Render/FrameList.hpp"
 #include "Game/Util/MotionSignal.hpp"
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/Screen/StarPointerController.hpp"
@@ -7,6 +6,7 @@
 #include "Game/Screen/StarPointerLayout.hpp"
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemObjHolder.hpp"
+#include "Game/System/NebulaInput.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
@@ -16,15 +16,13 @@
 #include "Game/Util/StarPointerUtil.hpp"
 
 StarPointerDirector::StarPointerDirector()
-    : mIsUpdateTransHolder(), mIsAllowP1StarPieceShot(), mIsAllowP2StarPieceShot(), mControllers(), mStarPointerLayouts(), mTransHolder(), mPeekZ(),
+    : mIsUpdateTransHolder(), mIsAllowP1StarPieceShot(), mIsAllowP2StarPieceShot(), mControllers(), mStarPointerLayouts(), mTransHolder(),
       mGuidance(), mNozzleAimPos(0.0f, 0.0f, 0.0f) {
-    mPeekZ = new StarPointerPeekZ();
     mTransHolder = new StarPointerTransformHolder();
     mControllers = new StarPointerController[StarPointerFunction::getNumStarPointer()];
 
     for (s32 channel = 0; channel < StarPointerFunction::getNumStarPointer(); channel++) {
         mControllers[channel].initAndSetPort(channel);
-        mPeekZ->mInfos[channel] = &mControllers[channel].mInfo;
     }
 }
 
@@ -44,9 +42,13 @@ void StarPointerDirector::update() {
 
     mTransHolder->movement();
 
+    // The scene is asked for the point under each pointer where the game scene's camera is kept and a pointer is shown.
+    const bool isQueried = mIsUpdateTransHolder && mStarPointerLayouts != nullptr &&
+                           (getStarPointerLayout(PLAYER_1)->mIsPointerValid || getStarPointerLayout(PLAYER_2)->mIsPointerValid);
+
     for (s32 channel = 0; channel < StarPointerFunction::getNumStarPointer(); channel++) {
         if (MR::isConnectedInput(channel)) {
-            getStarPointerController(channel)->movement(mPeekZ->mProjectionParameters, mPeekZ->mViewportParameters);
+            getStarPointerController(channel)->movement(isQueried);
         }
 
         if (mStarPointerLayouts != nullptr) {
@@ -147,35 +149,6 @@ StarPointerTransformHolder::StarPointerTransformHolder() : mViewMtx(mtx_identity
 }
 
 void StarPointerTransformHolder::movement() {
-}
-
-StarPointerPeekZ::StarPointerPeekZ() : mAsker(Frame::newProbeAsker()) {
-    mInfos = new PointerInfo*[2];
-}
-
-void StarPointerPeekZ::setDrawSyncToken() {
-    Frame::getProjectionv(mProjectionParameters);
-    Frame::getViewportv(mViewportParameters);
-    // The depth under each pointer: what was asked last, and the picture drawn so far at where they are now.
-    NebulaScreenProbe probes[2]{};  // zeroed: with no answer back yet, the ask sends no unset field
-    const u32 count = StarPointerFunction::getNumStarPointer();
-    const u32 done = Frame::screenProbeResults(cReadbackChannel, mAsker, probes, count);
-    for (u32 channel = 0; channel < count; channel++) {
-        if (MR::isInRange(mInfos[channel]->mPos.x, 0.0f, MR::getScreenWidth() - 1) &&
-            MR::isInRange(mInfos[channel]->mPos.y, 0.0f, MR::getScreenHeight() - 1)) {
-            mInfos[channel]->mZDepth = channel < done && probes[channel].x >= 0.0f ? probes[channel].value : 0.0f;
-            mInfos[channel]->mDrawReady = true;
-
-            Vec2f pos;
-            MR::convertScreenPosToFrame(&pos, mInfos[channel]->mPos);
-            probes[channel].x = pos.x;
-            probes[channel].y = pos.y;
-        } else {
-            probes[channel].x = -1.0f;
-            probes[channel].y = -1.0f;
-        }
-    }
-    Frame::probeScreen(cReadbackChannel, mAsker, probes, count);
 }
 
 namespace StarPointerFunction {

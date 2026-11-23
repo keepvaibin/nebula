@@ -563,7 +563,6 @@ void GameScene::draw3D() const {
     CategoryList::execute(MR::DrawType_CaptureScreenIndirect);
     SceneFunction::executeDrawAfterIndirect();
     CategoryList::execute(MR::DrawType_PlayerSearchLight);
-    MR::setStarPointerDrawSyncToken();
     MR::setTalkDirectorDrawSyncToken();
     SceneFunction::executeDrawImageEffect();
     MR::loadViewMtx();
