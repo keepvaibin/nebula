@@ -158,7 +158,10 @@ options (Auto, Mono, Stereo, Encoded stereo, 3.1, 5.1, 7.1; a layout the device 
 
 **R2 Textures and samplers, the rest of step 2.** Rows: P-155, P-048, P-056, P-066, P-061, P-059, P-216, P-255.
 - A picture the game draws into is read through its own slot, so no texture list is copied each frame. The sampler
-  tables stop filling up and waiting for the whole graphics card. Texture records lose the console's header.
+  tables stop filling up and waiting for the whole graphics card, and the list that frees a replaced table after the
+  frame fence is written here once for the later steps (R7.7 uses it). The cook decides once whether a texture's levels
+  are authored. The console's texture header is not removed here: R4.0, R4.2, R4.6 and R10.1 take it off (P-155's parts,
+  placed in R2.5's table), and P-155 closes at the later of R4.9 and R10.2.
 - For a player: fewer rare long frames; less work per frame.
 - Design: FRAME-MODEL 2.10. Proof as written there (a counting test: each list is written once).
 
@@ -295,10 +298,10 @@ onto the result. (not used: one agent does every step)
 | `Model.cpp` | R1, R5 | G3 landing 4 | R5 |
 | `FrameList.cpp`, `nebula_frame_list.h` | R3.2, R4, R4v.1, R5.1, R6.1, R7.1 | G2 landings 6 and 7, G3 landing 6 | G2.6 and G2.7 (35, 36) first; different parts; whoever lands second moves |
 | `host_main.cpp` | R7 landing 7 | G2 landings 1 and 3, G6.7, G1.1 and G1.4, G3 landing 7 | G, in the order of `steps.tsv` (23, 25, 29, 30, 33, 83), then R7.7 (100) |
-| `host_window_sdl.cpp` | none | G2.3 (event pump, surface hand-over), G1.1 and G1.4, G2.9 (the vote) | G2.3 (25), then G1 (30, 33), then G2.9 (135) |
+| `host_window_sdl.cpp`, `GameActivity.java` | none | G2.3 (event pump, surface hand-over, the vote and the fall-back that read the step rate: moved from G2.9 on 11-23), G1.1 and G1.4 | G2.3 (25), then G1 (30, 33) |
 | The clipping files (`ClippingJudge`, `ClippingActorHolder`) | none | G3 landing 2, G5 | G3 |
 | `LensFlare.cpp`, the probe code in the renderers | none after S0.2 | S0.2 | S0.2, before R touches the renderers |
-| `native_settings.cpp`, `runtime_settings.*`, `settings_table.tsv`, `NebulaText.tsv`, `NebulaSettingsMenu.cpp`, `settings_graphics_page.cpp` | none | G2.3 and G2.5 (texts for a Linux mark and a missed target; their cards name no file), G6.7 (the Speakers row), G1.2 (the language list), G7.3, G9.5, G2.9 (P-364's text) | G2.3 and G2.5 (orders 25, 27), then G6.7 (29), then G1.2 (31); G7.3, G9.5 and G2.9 read their rows as they stand |
+| `native_settings.cpp`, `runtime_settings.*`, `settings_table.tsv`, `NebulaText.tsv`, `NebulaSettingsMenu.cpp`, `settings_graphics_page.cpp` | none | G2.3 and G2.5 (texts for a Linux mark and a missed target; their cards name `settings_display_page.cpp`, `settings_graphics_page.cpp`, `settings_table.tsv` and `NebulaText.tsv`, and the 14 cells), G6.7 (the Speakers row), G1.2 (the language list), G7.3, G9.5, G2.9 (P-364's text) | G2.3 and G2.5 (orders 25, 27), then G6.7 (29), then G1.2 (31); G7.3, G9.5 and G2.9 read their rows as they stand |
 
 Checked against `steps.tsv` on 11-23 (the order of the tablet's pacing before the surround steps): G2 landings 1 to 5 stand at 23 to 27, before R7 (94 to 101); `render_core.cpp` goes S0.2 (6 to 11), R1.2 (15), G2 (23 to 27, 35, 36), then R3 and R7; G1.1 (30) stands before G2.6 (35); no need of any step is placed after the step itself (`plan.py` read all 138), and places 37 to 138 are the same as before.
 
@@ -325,8 +328,8 @@ The design file disagrees with itself in a few places. These are the answers the
    the two-channel output is left unchanged, including the console's surround fold on stereo devices, and only the
    real surround output is reworked. This plan uses that reading.
 2. **The default frame rate** (P-042): decided (you, 11-22: "should be 60fps."). It is 60 on every system and
-   a player chooses a higher rate. G2 landing 9 keeps the Android fall-back and the surface vote on the step rate
-   and makes each setting show only where it acts.
+   a player chooses a higher rate. The Android fall-back and the surface vote read the step rate from G2 landing 3 (place 25);
+   landing 9 makes each setting show only where it acts.
 3. **S0.2 changes two answers the game gets:** what the pointer is over and whether a talk balloon is hidden are
    computed from the world instead of from the picture. You decided this on 11-19. Recorded plays are recorded
    again once after it.

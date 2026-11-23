@@ -1591,8 +1591,8 @@ at the picture's moment; every platform does the same or says on screen why not.
    versions say this exactly) is kept from the real frame, not drawn again. Each is measured per pass on the tablet
    first.
 9. Defaults (6.7). Decided 11-22 (the owner: "should be 60fps."): the default stays 60 on every system and a player
-   chooses a higher rate (P-042); the Android fall-back and the surface vote read the step rate and not the literal 61;
-   every setting on these pages shows only where it acts. The earlier recommendation, a 120 Hz display starting at 120,
+   chooses a higher rate (P-042); the Android fall-back and the surface vote read the step rate and not the literal 61
+   (done in landing 3 with the Android display model, 11-23); every setting on these pages shows only where it acts. The earlier recommendation, a 120 Hz display starting at 120,
    is withdrawn.
 
 **Rows.**
@@ -1609,7 +1609,7 @@ at the picture's moment; every platform does the same or says on screen why not.
 | P-078, P-163 | the pointer, the cursor and a mod's look read at the picture | 6 |
 | I-014 | every cut and warp stated; `camera_epoch` read by the host | 7 |
 | I-003 | the cost of a picture (with E3 step 5 and E4) | 8 |
-| P-042 | the default stays 60 (decided 11-22); the Android fall-back and the vote on the step rate | 9 |
+| P-042 | the default stays 60 (decided 11-22); the Android fall-back and the vote on the step rate are done in landing 3 (11-23) | 9 |
 | P-311 (M1), P-034 | the after-measure of aba64e331 on the PC; P-034's start check in the Mac job | 3 |
 | P-313 (M3) | traced with the timeline at a scene restart on Vulkan; fixed where it lies | 3 |
 | P-319 (T7) | the bloom's share on the tablet: E4's after-scene instance and the phone setting (2.15, landing 6) | E4 |

@@ -125,7 +125,7 @@ order	step	package	title	package_needs	card_file	state	commit
 124	G7.4	G7	Landing 4: code points through the font (P-187)	S0.1	05-NATIVE-LANE-G.md	open	
 125	G7.5	G7	Landing 5: version 1 and the in-text format deleted	S0.1	05-NATIVE-LANE-G.md	open	
 126	G8.1	G8	The save as named, sized records with a version (P-205, P-232)	S0.1	05-NATIVE-LANE-G.md	open	
-127	G8.2	G8	Bounded waits on the game thread (P-272, P-235)	S0.1	05-NATIVE-LANE-G.md	open	
+127	G8.2	G8	Bounded waits on the game thread (P-272, P-235)	S0.1,G2a	05-NATIVE-LANE-G.md	open	
 128	G8.3	G8	Table fields by index, a resource's size by its handle (P-189, P-233)	S0.1	05-NATIVE-LANE-G.md	open	
 129	G8.4	G8	Limits that grow, names without 16-bit hashes (P-192, P-148, P-204)	S0.1	05-NATIVE-LANE-G.md	open	
 130	G9.1	G9	Movie cues fire when the movie's place crosses them (P-203)	G6	05-NATIVE-LANE-G.md	open	
