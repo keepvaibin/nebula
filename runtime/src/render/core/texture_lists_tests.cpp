@@ -70,7 +70,8 @@ void test_fence() {
 void test_chunks() {
     TextureLists lists;
     Maker make;
-    std::vector<std::uint32_t> pairs(std::size_t{TextureLists::kChunkPairs} * 2u, 7u);
+    // Room for the longest list written below (a chunk's pairs and one more).
+    std::vector<std::uint32_t> pairs((std::size_t{TextureLists::kChunkPairs} + 1u) * 2u, 7u);
     const TextureLists::Place a = lists.write(pairs.data(), TextureLists::kChunkPairs - 2u, 0u, make);
     const std::uint64_t address = lists.address(a);
     const TextureLists::Place b = lists.write(pairs.data(), 4u, 0u, make);
