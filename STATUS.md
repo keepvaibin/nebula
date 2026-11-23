@@ -4,7 +4,7 @@ Written 2026-11-23 06:03. If this time is more than three hours old, the work ha
 
 Steps landed: 8 of 138 (6%).
 
-Now: S0.2.3 (the pointer asks the scene) since 05:08, written ahead and committed, tour playing; ahead: nothing
+Now: S0.2.4 (the talk balloon) landing since 06:05; S0.2.3 landed 06:03; ahead: S0.2.5 (the lens flare)
 
 In work now:
 - S0.2.4 Landing B, part 2: the talk balloon (agent 1)
