@@ -10,6 +10,7 @@
 #include "galaxy/whole_lines.h"
 #include "galaxy/render/present_clock.h"
 #include "galaxy/render/vk/streamline_vk.h"
+#include "galaxy/render/vk/swapchain_extent.h"
 #if defined(_WIN32)
 #include "galaxy/render/streamline_bridge.h"
 #endif
@@ -886,7 +887,10 @@ bool RendererVk::create_swapchain() {
     vk::check(caps_result, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
     VkExtent2D extent = caps.currentExtent;
     if (extent.width == UINT32_MAX) {
-        extent = {host_window::backbuffer_width, host_window::backbuffer_height};
+        // The surface sets no size (Wayland): the window's last size, else the one it had when it was made.
+        const vk::Extent2 chosen = vk::swapchain_extent({extent.width, extent.height}, {window_width_, window_height_},
+                                                {host_window::backbuffer_width, host_window::backbuffer_height});
+        extent = {chosen.width, chosen.height};
     }
     if (caps.maxImageExtent.width == 0u || caps.maxImageExtent.height == 0u ||
         (caps.currentExtent.width == 0u && caps.currentExtent.height == 0u)) {
@@ -2930,8 +2934,13 @@ void RendererVk::follow_window_and_resize() {
 #endif
     const std::uint64_t extent = host_window::pending_resize_extent.exchange(0u, std::memory_order_acq_rel);
     if (extent != 0u) {
-        const auto width = static_cast<std::uint32_t>(extent >> 32u);
-        const auto height = static_cast<std::uint32_t>(extent & 0xffffffffu);
+        const vk::Extent2 window = vk::unpack_window_extent(extent);
+        const std::uint32_t width = window.width;
+        const std::uint32_t height = window.height;
+        if (width != 0u && height != 0u) {
+            window_width_ = width;
+            window_height_ = height;
+        }
         if (width != swapchain_.extent.width || height != swapchain_.extent.height) {
             swapchain_dirty_ = true;
         }

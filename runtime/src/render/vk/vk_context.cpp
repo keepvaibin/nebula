@@ -929,7 +929,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     // both features.
     VkPhysicalDevicePresentIdFeaturesKHR present_id{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_FEATURES_KHR};
     VkPhysicalDevicePresentWaitFeaturesKHR present_wait{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR};
-    if (has_device_extension(physical_, VK_KHR_PRESENT_ID_EXTENSION_NAME) &&
+    if (!quirks_.no_present_wait && has_device_extension(physical_, VK_KHR_PRESENT_ID_EXTENSION_NAME) &&
         has_device_extension(physical_, VK_KHR_PRESENT_WAIT_EXTENSION_NAME)) {
         VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
         features.pNext = &present_id;
