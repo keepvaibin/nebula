@@ -56,11 +56,19 @@ def build_and_run(folder, extra=""):
     return exe, folder / "a.profdata"
 
 
-def report(exe, profile, out, root, history="", suites=None):
+def report(exe, profile, out, root, history=""):
     r = subprocess.run([sys.executable, "-X", "utf8", "-I", str(HERE.parent / "coverage.py"), "report", "--binary",
                         str(exe), "--profile", str(profile), "--work", str(out), "--root", str(root), "--history",
-                        str(history), "--commit", "abcdef123", "--llvm", str(LLVM)]
-                       + (["--suites", suites] if suites is not None else []), capture_output=True, text=True)
+                        str(history), "--commit", "abcdef123", "--llvm", str(LLVM)], capture_output=True, text=True)
+    return r.returncode, r.stdout + r.stderr
+
+
+def report_keyed(exe, profile, out, root, history, suites):
+    """The same report, with the suites that ran named (the history's key)."""
+    r = subprocess.run([sys.executable, "-X", "utf8", "-I", str(HERE.parent / "coverage.py"), "report", "--binary",
+                        str(exe), "--profile", str(profile), "--work", str(out), "--root", str(root), "--history",
+                        str(history), "--commit", "abcdef123", "--suites", suites, "--llvm", str(LLVM)],
+                       capture_output=True, text=True)
     return r.returncode, r.stdout + r.stderr
 
 
@@ -98,18 +106,18 @@ if coverage is not None:
         # the low share again after a run of the key that fell.
         exe, profile = build_and_run(t / "keyed")
         keyed = t / "keyed-history.tsv"
-        code, out = report(exe, profile, t / "k1", t, keyed, "engine,tour,mods")
+        code, out = report_keyed(exe, profile, t / "k1", t, keyed, "engine,tour,mods")
         check(code == 0 and coverage.read_history(keyed)[-1]["scope"].endswith("|engine,mods,tour"), "the key holds the suites, sorted: %s" % coverage.read_history(keyed))
         exe_big, profile_big = build_and_run(t / "keyed_big", EXTRA)
-        code, out = report(exe_big, profile_big, t / "k2", t, keyed, "engine,tour")
+        code, out = report_keyed(exe_big, profile_big, t / "k2", t, keyed, "engine,tour")
         check(code == 0 and "it fell" not in out, "fewer suites start their own line, a lower share is not a fall: %s" % out)
-        code, out = report(exe_big, profile_big, t / "k3", t, keyed, "engine,tour,mods")
+        code, out = report_keyed(exe_big, profile_big, t / "k3", t, keyed, "engine,tour,mods")
         check(code == 1 and "it fell from" in out, "the same suites with a lower share fall: %s" % out)
         rows = coverage.read_history(keyed)
         check([r["verdict"] for r in rows] == ["pass", "pass", "fell"], "the fall is written as one: %s" % [r["verdict"] for r in rows])
-        code, out = report(exe_big, profile_big, t / "k4", t, keyed, "engine,tour,mods")
+        code, out = report_keyed(exe_big, profile_big, t / "k4", t, keyed, "engine,tour,mods")
         check(code == 1 and "it fell from" in out, "a run that fell does not lower the next comparison: %s" % out)
-        code, out = report(exe, profile, t / "k5", t, keyed, "engine,tour,mods")
+        code, out = report_keyed(exe, profile, t / "k5", t, keyed, "engine,tour,mods")
         check(code == 0, "the share of the last run that passed holds: %s" % out)
         # A line from before the verdict column: a pass.
         old = t / "old-history.tsv"

@@ -3,10 +3,11 @@
 1. The test it writes is one the harness reads (luma_test.read_test): real time, process.memory every 30 seconds, a
    stage asked for at every stage's start after the first, the end at the last frame, input only inside the run.
 2. The judgment: flat memory passes; memory that keeps growing past the bound fails; the first lap's growth is left
-   out; a run of fewer than three laps cannot pass. A run of eight whole laps or more is judged from lap 6 (the growth
-   a lap of the laps from there on, at most 32 / (laps - 2) MB, and the lowest of the last three laps within 32 MB of
-   lap 6): the recorded laps of the long run of 11-22 pass, the same plus a ramp of 4 MB a lap are refused, a ramp
-   under the sight passes, a lap's spike that falls back passes and memory that stays is refused, for each run length.
+   out; a run of fewer than three laps cannot pass.
+   A run of eight whole laps or more is judged from lap 6 (the growth a lap of the laps from there on, at most
+   32 / (laps - 2) MB, and the lowest of the last three laps within 32 MB of lap 6): the recorded laps of the long run of
+   11-22 pass, the same plus a ramp of 4 MB a lap are refused, a ramp under the sight passes, a lap's spike that falls back
+   passes and memory that stays is refused, for each run length.
 3. The pause menu is a block of two presses with nothing between them, in the middle of a stage only (N-1089: a pointer and A sent
    into the open menu pressed its Settings button, the overlay stayed open, and the stage move that followed never got past its
    opening camera).
