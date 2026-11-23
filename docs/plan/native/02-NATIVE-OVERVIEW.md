@@ -227,7 +227,7 @@ P-077, P-083, P-220, P-288.
 - For a player: the same feel on every pad and screen; no dropped presses; no input stalls on a busy radio.
 
 **G2 How a picture reaches the display.** Rows: I-002, I-004, I-005, I-006, I-007, I-010, I-012, I-013, I-014,
-N-1084, P-034, P-042, P-078, P-163, P-274, P-311 to P-318, P-019, P-281, P-359, P-360.
+N-1084, P-034, P-042, P-078, P-163, P-274, P-311 to P-318, P-019, P-281, P-363, P-364.
 - For a player: even frame pacing at every refresh rate, less delay between a step and its picture, one governor
   that lowers resolution before it drops pictures, a pointer that moves at the display's rate.
 - Design: FRAME-MODEL 2.16, nine landings. Landings 1 to 5 (the tablet's pacing, orders 23 to 27) stand directly
@@ -298,7 +298,7 @@ onto the result. (not used: one agent does every step)
 | `host_window_sdl.cpp` | none | G2.3 (event pump, surface hand-over), G1.1 and G1.4, G2.9 (the vote) | G2.3 (25), then G1 (30, 33), then G2.9 (135) |
 | The clipping files (`ClippingJudge`, `ClippingActorHolder`) | none | G3 landing 2, G5 | G3 |
 | `LensFlare.cpp`, the probe code in the renderers | none after S0.2 | S0.2 | S0.2, before R touches the renderers |
-| `native_settings.cpp`, `runtime_settings.*`, `settings_table.tsv`, `NebulaText.tsv`, `NebulaSettingsMenu.cpp`, `settings_graphics_page.cpp` | none | G2.3 and G2.5 (texts for a Linux mark and a missed target; their cards name no file), G6.7 (the Speakers row), G1.2 (the language list), G7.3, G9.5, G2.9 (P-360's text) | G2.3 and G2.5 (orders 25, 27), then G6.7 (29), then G1.2 (31); G7.3, G9.5 and G2.9 read their rows as they stand |
+| `native_settings.cpp`, `runtime_settings.*`, `settings_table.tsv`, `NebulaText.tsv`, `NebulaSettingsMenu.cpp`, `settings_graphics_page.cpp` | none | G2.3 and G2.5 (texts for a Linux mark and a missed target; their cards name no file), G6.7 (the Speakers row), G1.2 (the language list), G7.3, G9.5, G2.9 (P-364's text) | G2.3 and G2.5 (orders 25, 27), then G6.7 (29), then G1.2 (31); G7.3, G9.5 and G2.9 read their rows as they stand |
 
 Checked against `steps.tsv` on 11-23 (the order of the tablet's pacing before the surround steps): G2 landings 1 to 5 stand at 23 to 27, before R7 (94 to 101); `render_core.cpp` goes S0.2 (6 to 11), R1.2 (15), G2 (23 to 27, 35, 36), then R3 and R7; G1.1 (30) stands before G2.6 (35); no need of any step is placed after the step itself (`plan.py` read all 138), and places 37 to 138 are the same as before.
 
