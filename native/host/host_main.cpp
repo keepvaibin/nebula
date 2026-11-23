@@ -5164,7 +5164,7 @@ void svc_app_restart(void*) {
 
 // The mod tools (run_mods_tool): the first argument names one.
 bool is_mods_tool(std::string_view first) {
-    return galaxy::mod_support() && first == "--import-mod" || first == "--list-mods" || first == "--remove-mod";
+    return galaxy::mod_support() && (first == "--import-mod" || first == "--list-mods" || first == "--remove-mod");
 }
 
 // The launch arguments a mods tool takes too: the folders it works in.

@@ -28,10 +28,10 @@ std::filesystem::path choose(const std::filesystem::path& rows_module, const std
     return choose_with(mod_support(), rows_module, mods_folder, mods_file, game_id, need_rows, safe, kept, why);
 }
 
-std::filesystem::path choose_with(bool mod_support, const std::filesystem::path& rows_module, const std::filesystem::path& mods_folder,
+std::filesystem::path choose_with(bool with_mods, const std::filesystem::path& rows_module, const std::filesystem::path& mods_folder,
                                   const std::filesystem::path& mods_file, const std::string& game_id, bool need_rows,
                                   bool safe, const std::string& kept, std::string* why) {
-    if (!mod_support) {
+    if (!with_mods) {
         if (why != nullptr) *why = "plain (this build has no mod support)";
         return plain_beside(rows_module);
     }
