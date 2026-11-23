@@ -45,7 +45,7 @@ int main() {
     // A moment so far ahead is cut to one period, said by `cut` and `ahead_ns`; the wait is then one period, not 5 hours.
     {
         galaxy::FrameDue clock;
-        const std::int64_t now = 40 * 1'000'000'000;
+        const std::int64_t now = std::int64_t{40} * 1'000'000'000;
         clock.set_next(now + 5 * kHour);  // what the conversion of a steady_clock time point gave
         const auto due = clock.due(now, kPeriod);
         expect(due.cut, "a moment 5 hours ahead is cut");
