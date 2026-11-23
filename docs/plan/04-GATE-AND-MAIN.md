@@ -225,8 +225,8 @@ declares it. A picture with no approved copy is `new`: it never fails a run.
   that stop on the other discs' Direct3D 11 and Vulkan, whose rows only the long run compares otherwise, so that each sibling
   row that differs is declared and approved in the same landing and none goes stale (checks `tour-<disc>/<renderer>` and
   `pictures/tour-<disc>/<renderer>`; a run of some stops does not fail the stops it did not play). The long run keeps its own
-  picture checks. `tools/gate/agent_tour.py` plays any part of this set (`--set landing`, `--set whole`, or `--renderer`,
-  `--disc` and `--stops`) and prints `fail` with the name of each picture that differs and no line declares.
+  picture checks. `tools/gate/agent_tour.py` plays any part of this set (what a landing takes, the whole set, or the renderers, discs
+  and stops asked for; its own header lists its options) and prints `fail` with the name of each picture that differs and no line declares.
 - *What a run leaves.* In its folder: `new-pictures.tsv` (one line for each new or declared picture, complete enough to be its
   approved row), the pictures' files and the sheet to look at, `D:/NebulaWork/build/gate-runs/<run folder>/new-pictures/sheet/review.html`. The summary prints the count
   and the sheet's path.
