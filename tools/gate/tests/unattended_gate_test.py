@@ -208,8 +208,10 @@ class MeasureWaitTest(unittest.TestCase):
         return folder
 
     def run_wait(self, lock, *extra):
+        # The gate sets NEBULA_NO_MEASURE_WAIT for what it starts (a landing's harness/self too): the program is run as the agent runs it.
+        env = {k: v for k, v in os.environ.items() if k not in ("NEBULA_NO_MEASURE_WAIT", "NEBULA_MEASURE_LOCK", "NEBULA_MEASURE_WAIT_MINUTES")}
         return subprocess.run([sys.executable, "-X", "utf8", "-I", str(TREE / "tools" / "gate" / "measure_wait.py"), "--lock", str(lock),
-                               "--minutes", "0.01", "--every", "0.2", *extra], capture_output=True, text=True, timeout=60)
+                               "--minutes", "0.01", "--every", "0.2", *extra], capture_output=True, text=True, timeout=60, env=env)
 
     def test_measure_wait_stop(self):
         with tempfile.TemporaryDirectory() as tmp:
