@@ -1,8 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-22 22:43. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-22 23:00. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 5 of 138 (4%).
+
+Now: S0.1.1 to S0.1.5 landed (main fb2dfa855); R five steps done; next: S0.2.1
 
 In work now: Nothing started.
 
@@ -37,19 +39,27 @@ In work now: Nothing started.
 
 ## Last 10 landings
 
-None yet.
+| When | Step | Title | Code commit | Main commit |
+| --- | --- | --- | --- | --- |
+| 2026-11-22 18:13 | S0.1.5 | Render data path step 2, second landing: `f4/e3-2b` and `f4/e3-2c` | 02d236b5c | fb2dfa855 |
+| 2026-11-22 17:13 | S0.1.4 | Render data path step 2, first landing: `f4/e3-2a` | d9dbc32ac | ce59efeb8 |
+| 2026-11-22 16:37 | S0.1.3 | Render data path step 1: `f4/e3-1a`, `f4/e3-1b`, `f4/e3-1c` | 809c419ff | 8be38b7b8 |
+| 2026-11-22 14:25 | S0.1.2 | Documents | 59bdb8776 | 2c5dbb271 |
+| 2026-11-22 14:17 | S0.1.1 | Land `rows/p022c` and `rows/p022d` as one batch | 83b537af7 | 463d38612 |
 
 ## Repairs
 
-1 open of kind fail, 1 in all.
+2 open of kind fail, 3 in all.
 
 | Id | State | Kind | Check | Renderer | Traced to | Seen |
 | --- | --- | --- | --- | --- | --- | --- |
-| R-001 | open | fail | tour/d3d12 | d3d12 | step S1.1 commit abc | 2 |
+| R-001 | open | fail | build/windows-asan | - | not traced | 1 |
+| R-003 | open | fail | soak | - | not traced | 1 |
+| R-002 | landed | fail | coverage | - | not traced | 1 |
 
 ## For the owner to check by hand
 
-Nothing is owed.
+- S0.1.2 Documents: P-096: on the tablet, set up the game once more over an installed one, and once with the setup cut off (close the app mid-copy); then start the launcher: the old game stays playable until the new one is whole, and nothing is left behind (no game.pak.new, no half copy). (agent 1, 2026-11-22 14:18)
 
 ## Waiting for the owner
 
@@ -61,7 +71,10 @@ Nothing is blocked.
 
 ## Tool mends
 
-No tool was mended.
+| Id | State | Step | Title | Attempts | Minutes | Commit |
+| --- | --- | --- | --- | --- | --- | --- |
+| M-001 | closed | R-002 | coverage: the history's key holds the suites that ran, a run that fell is not the next bar | 0 | 0 | 2d7287334 |
+| M-002 | closed | R-003 | soak: a run of eight laps or more is judged from lap 6 (slope and lowest of the last laps), a spike is not growth | 0 | 0 | 2d7287334 |
 
 ## Decisions (0)
 
@@ -82,4 +95,10 @@ None.
 
 ## Tool faults
 
-0 tool faults recorded.
+1 tool fault recorded.
+
+The last 20:
+
+| When | Step | Test | What happened | What the agent could not do |
+| --- | --- | --- | --- | --- |
+| 2026-11-22 14:33 | - | (by hand) | plan.py land S0.1.3 ended code 4 (not judged): gate.py's push check refused main's move because tools/verify/console_census.py's closed group fifo counts 31 (the card's section names GXMT, GXTG, GXTM, GXWP in native/include/nebula_model.h, runtime/src/render/core/model_sections_tests.cpp, crates/nebula-import/src/cook/model_write.rs); it is a certain refusal of the change, reported as not judged; plan.py toolfault --last then said: agent 1 has no tool fault recorded | - |
