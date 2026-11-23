@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-22 23:00. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-22 23:08. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 5 of 138 (4%).
 
@@ -49,11 +49,11 @@ In work now: Nothing started.
 
 ## Repairs
 
-1 open of kind fail, 3 in all.
+0 open of kind fail, 3 in all.
 
 | Id | State | Kind | Check | Renderer | Traced to | Seen |
 | --- | --- | --- | --- | --- | --- | --- |
-| R-001 | open | fail | build/windows-asan | - | not traced | 1 |
+| R-001 | started | fail | build/windows-asan | - | not traced | 1 |
 | R-002 | landed | fail | coverage | - | not traced | 1 |
 | R-003 | landed | fail | soak | - | not traced | 1 |
 
