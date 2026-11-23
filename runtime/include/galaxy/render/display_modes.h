@@ -1,7 +1,9 @@
 #pragma once
 
 // Monitors and their display modes, for the display settings (monitor, fullscreen resolution and refresh rate) and
-// the internal-resolution cap. The monitor list is Windows-only.
+// the internal-resolution cap. The monitor list is Windows-only; a display's mode and the two rules that order the modes
+// and list their resolutions are every desktop host's (the SDL host reads its displays into the same rules,
+// desktop_display.h).
 
 #if defined(_WIN32)
 #include "galaxy/windows_api.h"
@@ -17,7 +19,6 @@
 
 namespace galaxy::render {
 
-#if defined(_WIN32)
 struct DisplayModeInfo {
     unsigned width = 0;
     unsigned height = 0;
@@ -26,6 +27,39 @@ struct DisplayModeInfo {
     [[nodiscard]] bool operator==(const DisplayModeInfo&) const = default;
 };
 
+// A display's modes in the order the settings list them: the largest picture first, then the wider, then the faster.
+inline void sort_display_modes(std::vector<DisplayModeInfo>& modes) {
+    std::sort(modes.begin(), modes.end(), [](const DisplayModeInfo& a, const DisplayModeInfo& b) {
+        const std::uint64_t area_a = std::uint64_t{a.width} * a.height;
+        const std::uint64_t area_b = std::uint64_t{b.width} * b.height;
+        if (area_a != area_b) return area_a > area_b;
+        if (a.width != b.width) return a.width > b.width;
+        return a.refresh_hz > b.refresh_hz;
+    });
+}
+
+// The distinct resolutions of a display's modes, in the modes' order (largest first once they are sorted).
+[[nodiscard]] inline std::vector<std::pair<unsigned, unsigned>> distinct_resolutions(
+    const std::vector<DisplayModeInfo>& modes) {
+    std::vector<std::pair<unsigned, unsigned>> out;
+    for (const DisplayModeInfo& mode : modes) {
+        const std::pair<unsigned, unsigned> size{mode.width, mode.height};
+        if (std::find(out.begin(), out.end(), size) == out.end()) {
+            out.push_back(size);
+        }
+    }
+    return out;
+}
+
+// The client size of a window on a display: the wanted size limited to the area a window may take (the work area) less its
+// frame, and never below 320 x 240.
+[[nodiscard]] inline std::pair<long, long> windowed_client_size(long work_width, long work_height, long frame_width,
+                                                                long frame_height, unsigned width, unsigned height) {
+    return {std::clamp<long>(static_cast<long>(width), 320, std::max(320L, work_width - frame_width)),
+            std::clamp<long>(static_cast<long>(height), 240, std::max(240L, work_height - frame_height))};
+}
+
+#if defined(_WIN32)
 struct MonitorInfo {
     std::wstring device;   // GDI device name, e.g. \\.\DISPLAY2
     std::string name;      // monitor's own name (EDID), UTF-8; may be empty

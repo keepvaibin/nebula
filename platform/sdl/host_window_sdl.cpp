@@ -10,6 +10,7 @@
 #include "galaxy/steam_controller.h"
 #include "galaxy/controller_hid.h"
 #include "galaxy/input/host_input.h"
+#include "galaxy/input/key_positions.h"
 #include "galaxy/mod_import.h"
 #include "galaxy/native_settings_pad.h"
 #include "galaxy/render_api.h"
@@ -20,6 +21,7 @@
 #include <deque>
 #include "sdl_host.h"
 
+#include "galaxy/render/desktop_display.h"
 #include "galaxy/render/display_modes.h"
 #include "galaxy/render/host_window.h"
 #if defined(NEBULA_GPU_METAL)
@@ -48,6 +50,12 @@ namespace galaxy::render::vk {
 #if defined(__APPLE__)
 #include <TargetConditionals.h>
 #endif
+// The desktop hosts (Linux, and the SDL build on a Mac): the window follows the settings' display mode and display, the
+// settings list the real displays, and the system's pointer is hidden over the game. Android's and iOS's window is the
+// system's full screen one.
+#if !defined(__ANDROID__) && !(defined(__APPLE__) && TARGET_OS_IPHONE)
+#define NEBULA_SDL_DESKTOP 1
+#endif
 #if defined(NEBULA_GPU_METAL)
 #include <SDL3/SDL_metal.h>
 #else
@@ -73,7 +81,10 @@ namespace galaxy::render::vk {
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
+#include <string>
 #include <thread>
+#include <vector>
 
 namespace galaxy::sdl {
 
@@ -448,14 +459,13 @@ void set_key(int vk, bool down) {
     if (vk <= 0 || vk > 0xFF) {
         return;
     }
-    g_input.keys.set_key(static_cast<std::uint8_t>(vk), down);
+    // A scancode is a physical place, so virtual_key's letter is also the letter at that place on a US keyboard, which is
+    // what the default layout binds movement, Z, C, the shake and the pointer keys to (input_bindings.h KeyPosition: W A S D
+    // are where the hand rests, whatever the keyboard prints on them). Without it those keys did nothing on these hosts.
+    galaxy::input::apply_physical_key_event(g_input.keys, vk, down);
     if (down) {
         g_last_input.store(kLastKeyboard, std::memory_order_relaxed);
     }
-    // The runtime's bindings name the generic modifier keys too.
-    if (vk == VK_LSHIFT || vk == VK_RSHIFT) g_input.keys.set_key(VK_SHIFT, down);
-    if (vk == VK_LCONTROL || vk == VK_RCONTROL) g_input.keys.set_key(VK_CONTROL, down);
-    if (vk == VK_LMENU || vk == VK_RMENU) g_input.keys.set_key(VK_MENU, down);
 }
 
 // The unified layout's scheme for an SDL gamepad, as the Windows host names the same controllers: Switch 2 controllers
@@ -1056,10 +1066,246 @@ void finger_event(std::uint64_t id, float x, float y, bool down, bool up) {
     }
 }
 
+#if defined(NEBULA_SDL_DESKTOP)
+namespace desktop = galaxy::render::desktop_display;
+
+// The displays as SDL lists them, in pixels, and the ids the settings keep for them. Read on SDL's thread (its display and
+// window calls are its own); handed to the other threads through g_displays.
+struct DesktopDisplays {
+    std::vector<desktop::Display> list;  // in the settings' order: the primary display first
+    std::vector<std::string> ids;        // list's ids (desktop::display_ids)
+    long frame_width = 0;                // the window's frame in pixels; 0 where the system draws none or has not said
+    long frame_height = 0;
+};
+std::mutex g_displays_mutex;
+DesktopDisplays g_displays;                      // guarded by g_displays_mutex
+std::atomic<bool> g_displays_dirty{true};        // a display was added, removed or changed: read them again (SDL's events)
+std::atomic<double> g_window_display_hz{0.0};    // the refresh rate of the display the window is on, from SDL's thread
+std::optional<desktop::Choice> g_placed;         // what the window was last placed for (SDL's thread)
+desktop::Pixels g_fullscreen_pixels{};           // the display's own pixels while the window is, or is about to be, full screen
+bool g_cursor_hidden = false;                    // the system's pointer is hidden over the window (SDL's thread)
+bool g_logged_window = false;
+bool g_logged_full = false;
+int g_logged_width = 0;
+int g_logged_height = 0;
+
+DesktopDisplays read_displays() {
+    DesktopDisplays out;
+    int count = 0;
+    SDL_DisplayID* const found = SDL_GetDisplays(&count);
+    const SDL_DisplayID primary = SDL_GetPrimaryDisplay();
+    for (int i = 0; found != nullptr && i < count; ++i) {
+        const SDL_DisplayID id = found[i];
+        const SDL_DisplayMode* const desktop_mode = SDL_GetDesktopDisplayMode(id);
+        if (desktop_mode == nullptr) {
+            continue;
+        }
+        const SDL_DisplayMode* const current = SDL_GetCurrentDisplayMode(id);
+        // A mode's size is in the system's units, and its density turns them into pixels (Wayland at 150 %: 1707 x 960 at 1.4997 is
+        // the display's 2560 x 1440).
+        const float density = desktop_mode->pixel_density > 0.0f ? desktop_mode->pixel_density : 1.0f;
+        desktop::Display display;
+        display.handle = id;
+        if (const char* const name = SDL_GetDisplayName(id)) {
+            display.name = name;
+        }
+        SDL_Rect bounds{};
+        SDL_Rect usable{};
+        (void)SDL_GetDisplayBounds(id, &bounds);
+        if (!SDL_GetDisplayUsableBounds(id, &usable) || usable.w <= 0 || usable.h <= 0) {
+            usable = bounds;
+        }
+        display.x = bounds.x;
+        display.y = bounds.y;
+        display.width = desktop::pixels_of(desktop_mode->w, density);
+        display.height = desktop::pixels_of(desktop_mode->h, density);
+        display.refresh_hz = static_cast<double>((current != nullptr ? current : desktop_mode)->refresh_rate);
+        display.usable_width = desktop::pixels_of(usable.w, density);
+        display.usable_height = desktop::pixels_of(usable.h, density);
+        display.primary = id == primary;
+        std::vector<desktop::RawMode> raw;
+        int mode_count = 0;
+        SDL_DisplayMode** const modes = SDL_GetFullscreenDisplayModes(id, &mode_count);
+        for (int m = 0; modes != nullptr && m < mode_count; ++m) {
+            raw.push_back({modes[m]->w, modes[m]->h, modes[m]->pixel_density, modes[m]->refresh_rate});
+        }
+        SDL_free(modes);
+        display.modes = desktop::modes_of(raw, {display.width, display.height, desktop::whole_hz(display.refresh_hz)});
+        out.list.push_back(std::move(display));
+    }
+    SDL_free(found);
+    desktop::order_displays(out.list);
+    out.ids = desktop::display_ids(out.list);
+    if (g_window != nullptr) {
+        int top = 0;
+        int left = 0;
+        int bottom = 0;
+        int right = 0;
+        if (SDL_GetWindowBordersSize(g_window, &top, &left, &bottom, &right)) {
+            const double density = std::max(1.0f, SDL_GetWindowPixelDensity(g_window));
+            out.frame_width = std::lround(static_cast<double>(left + right) * density);
+            out.frame_height = std::lround(static_cast<double>(top + bottom) * density);
+        }
+    }
+    return out;
+}
+
+// Reads the displays again and hands them over; true when the list is not the one before (a display added, removed or
+// changed: the window is placed again).
+bool refresh_displays(DesktopDisplays& now) {
+    now = read_displays();
+    const std::lock_guard<std::mutex> lock(g_displays_mutex);
+    const bool changed = g_displays.list != now.list;
+    g_displays = now;
+    return changed;
+}
+
+DesktopDisplays shared_displays() {
+    const std::lock_guard<std::mutex> lock(g_displays_mutex);
+    return g_displays;
+}
+
+// Puts the window where the settings say, on SDL's thread. SDL's rules (SDL_video.c, SDL_waylandwindow.c, SDL_x11window.c):
+// a full screen window without a display mode of its own is the desktop's borderless one, and it goes to the display its
+// position names (SDL_SetWindowPosition with SDL_WINDOWPOS_CENTERED_DISPLAY, which also tells Wayland the output, where a
+// window cannot place itself); a window already full screen on another display leaves full screen first; on a window that
+// is not shown yet the calls only note the state, which is applied when it is shown. The calls return before the system has
+// finished (X11 and Wayland answer later): SDL_SyncWindow waits for it, and the size events (SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED,
+// SDL_EVENT_WINDOW_ENTER_FULLSCREEN) are what the swap chain follows.
+void place_on_display(const desktop::Placement& placement, const DesktopDisplays& displays) {
+    SDL_Window* const window = g_window;
+    if (window == nullptr || placement.display >= displays.list.size()) {
+        return;
+    }
+    const desktop::Display& display = displays.list[placement.display];
+    const SDL_DisplayID target = display.handle;
+    const bool full_now = (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0u;
+    if (placement.fullscreen) {
+        if (full_now && SDL_GetDisplayForWindow(window) != target) {
+            (void)SDL_SetWindowFullscreen(window, false);
+            (void)SDL_SyncWindow(window);
+        }
+        (void)SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED_DISPLAY(target), SDL_WINDOWPOS_CENTERED_DISPLAY(target));
+        (void)SDL_SetWindowFullscreen(window, true);
+        g_fullscreen_pixels = {display.width, display.height};
+    } else {
+        if (full_now) {
+            (void)SDL_SetWindowFullscreen(window, false);
+            (void)SDL_SyncWindow(window);
+        }
+        g_fullscreen_pixels = {};
+        // The window's size is in the system's units: the configured pixels over the density the display's windows have.
+        const SDL_DisplayMode* const mode = SDL_GetDesktopDisplayMode(target);
+        const double density = mode != nullptr && mode->pixel_density > 0.0f
+                                   ? static_cast<double>(mode->pixel_density)
+                                   : static_cast<double>(std::max(1.0f, SDL_GetWindowPixelDensity(window)));
+        (void)SDL_SetWindowSize(window, static_cast<int>(desktop::window_points(placement.client_width, density)),
+                                static_cast<int>(desktop::window_points(placement.client_height, density)));
+        (void)SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED_DISPLAY(target), SDL_WINDOWPOS_CENTERED_DISPLAY(target));
+    }
+    (void)SDL_SyncWindow(window);
+    const std::string& id = displays.ids[placement.display];
+    if (placement.fullscreen) {
+        std::fprintf(stderr, "[window] asked for borderless full screen on %s (%u x %u pixels)\n", id.c_str(), display.width,
+                     display.height);
+    } else {
+        std::fprintf(stderr, "[window] asked for a window of %u x %u pixels on %s\n", placement.client_width,
+                     placement.client_height, id.c_str());
+    }
+}
+
+// The window follows the settings (a change of display mode, display or window size, or a display added, removed or changed),
+// at most every 50 ms, as RendererVk::reconcile_display_state does at a frame boundary on Windows. SDL's thread.
+void follow_display_settings() {
+    if (g_window == nullptr || galaxy::render::host_window::hidden_window_mode_enabled()) {
+        return;
+    }
+    static std::uint64_t s_last_ms = 0;
+    const std::uint64_t now_ms = galaxy::steady_ms();
+    if (now_ms - s_last_ms < 50u && !g_displays_dirty.load(std::memory_order_relaxed)) {
+        return;
+    }
+    s_last_ms = now_ms;
+    DesktopDisplays displays;
+    bool changed = false;
+    if (g_displays_dirty.exchange(false, std::memory_order_acq_rel)) {
+        changed = refresh_displays(displays);
+    } else {
+        displays = shared_displays();
+    }
+    // The rate of the display the window is on, for the frame rate rows and the pacing (read here: SDL's calls are its thread's).
+    if (const SDL_DisplayMode* const mode = SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(g_window)); mode != nullptr) {
+        g_window_display_hz.store(static_cast<double>(mode->refresh_rate), std::memory_order_relaxed);
+    }
+    const SDL_WindowFlags flags = SDL_GetWindowFlags(g_window);
+    const bool full = (flags & SDL_WINDOW_FULLSCREEN) != 0u;
+    galaxy::render::host_window::borderless_active.store(full, std::memory_order_release);
+    int width = 0;
+    int height = 0;
+    {
+        const std::lock_guard<std::mutex> lock(g_input_mutex);
+        width = g_input.window_width;
+        height = g_input.window_height;
+    }
+    // The window's state is told when it is shown (before, it only has what it will be) and each time it changes.
+    if ((flags & SDL_WINDOW_HIDDEN) == 0u &&
+        (!g_logged_window || full != g_logged_full || width != g_logged_width || height != g_logged_height)) {
+        g_logged_window = true;
+        g_logged_full = full;
+        g_logged_width = width;
+        g_logged_height = height;
+        std::fprintf(stderr, "[window] %s %d x %d pixels\n", full ? "borderless full screen" : "windowed", width, height);
+    }
+    const desktop::Choice wanted = desktop::choice_of(galaxy::render::get_render_config(), false);
+    if (!desktop::must_place(g_placed, wanted, changed)) {
+        return;
+    }
+    const std::optional<desktop::Placement> placement =
+        desktop::place_window(wanted, displays.ids, displays.list, displays.frame_width, displays.frame_height);
+    g_placed = wanted;
+    if (placement) {
+        place_on_display(*placement, displays);
+    }
+}
+
+// The system's pointer is hidden while the game's window has the focus (the game draws its own pointer); SDL hides it over
+// the window's picture only, so the frame, another window and the desktop show the system's.
+void update_os_cursor() {
+    if (g_window == nullptr || galaxy::render::host_window::hidden_window_mode_enabled()) {
+        return;
+    }
+    bool focused = false;
+    {
+        const std::lock_guard<std::mutex> lock(g_input_mutex);
+        focused = g_input.window_focused;
+    }
+    const bool hidden = desktop::os_cursor_hidden(focused, g_background.load(std::memory_order_acquire));
+    if (hidden != g_cursor_hidden) {
+        g_cursor_hidden = hidden;
+        (void)(hidden ? SDL_HideCursor() : SDL_ShowCursor());
+        std::fprintf(stderr, "[window] the system's pointer is %s\n", hidden ? "hidden" : "shown");
+    }
+}
+#endif
+
 void update_window_size() {
     int width = 0;
     int height = 0;
     if (g_window != nullptr && SDL_GetWindowSizeInPixels(g_window, &width, &height) && width > 0 && height > 0) {
+#if defined(NEBULA_SDL_DESKTOP)
+        if (g_fullscreen_pixels.width != 0u) {
+            // Full screen is the display's own pixels. Not yet shown, the window has no full screen size to report; then it
+            // is the system's size, which a scale rounds to whole points and so can be a pixel off the display's.
+            const desktop::Pixels picture =
+                (SDL_GetWindowFlags(g_window) & SDL_WINDOW_HIDDEN) != 0u
+                    ? g_fullscreen_pixels
+                    : desktop::fullscreen_pixels(g_fullscreen_pixels,
+                                                 {static_cast<unsigned>(width), static_cast<unsigned>(height)},
+                                                 static_cast<double>(SDL_GetWindowPixelDensity(g_window)));
+            width = static_cast<int>(picture.width);
+            height = static_cast<int>(picture.height);
+        }
+#endif
         g_input.window_width = width;
         g_input.window_height = height;
     }
@@ -1162,6 +1408,10 @@ void run_requests() {
 
 void pump_events(int timeout_ms) noexcept {
     SDL_Event event;
+#if defined(NEBULA_SDL_DESKTOP)
+    follow_display_settings();
+    update_os_cursor();
+#endif
     // A mod's first-person look: the window holds the mouse while it is in front (SDL's relative mode hides the cursor
     // and gives motion only).
     if (g_window != nullptr) {
@@ -1264,6 +1514,21 @@ void pump_events(int timeout_ms) noexcept {
             break;
         case SDL_EVENT_WINDOW_RESTORED:
             g_background.store(false, std::memory_order_release);
+            break;
+#endif
+#if defined(NEBULA_SDL_DESKTOP)
+        // A display added, removed or changed (its mode, place, scale or usable area), or the window shown (its frame is known
+        // then): the displays are read again and the window is placed again if they differ.
+        case SDL_EVENT_DISPLAY_ORIENTATION:
+        case SDL_EVENT_DISPLAY_ADDED:
+        case SDL_EVENT_DISPLAY_REMOVED:
+        case SDL_EVENT_DISPLAY_MOVED:
+        case SDL_EVENT_DISPLAY_DESKTOP_MODE_CHANGED:
+        case SDL_EVENT_DISPLAY_CURRENT_MODE_CHANGED:
+        case SDL_EVENT_DISPLAY_CONTENT_SCALE_CHANGED:
+        case SDL_EVENT_DISPLAY_USABLE_BOUNDS_CHANGED:
+        case SDL_EVENT_WINDOW_SHOWN:
+            g_displays_dirty.store(true, std::memory_order_release);
             break;
 #endif
         case SDL_EVENT_WINDOW_MOUSE_ENTER:
@@ -1705,7 +1970,13 @@ namespace galaxy::render::host_window {
 
 unsigned backbuffer_width = 0;
 unsigned backbuffer_height = 0;
+// Whether the window is borderless full screen: Android's and iOS's is from the start, a desktop window says so as it is
+// (follow_display_settings).
+#if defined(NEBULA_SDL_DESKTOP)
+std::atomic<bool> borderless_active{false};
+#else
 std::atomic<bool> borderless_active{true};
+#endif
 std::atomic<bool> move_size_active{false};
 std::atomic<bool> quit_request{false};
 std::atomic<std::uint64_t> pending_resize_extent{0u};
@@ -1714,6 +1985,34 @@ std::timed_mutex surface_use;
 
 OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_height) {
     const bool hidden = hidden_window_mode_enabled();
+#if defined(NEBULA_SDL_DESKTOP)
+    // The displays, the mode and the display the settings name: the window is made at the configured size on that display,
+    // and made borderless full screen on it before it is shown (a start with the default setting is full screen, as on
+    // Windows). A hidden test window is made as before.
+    galaxy::sdl::DesktopDisplays displays;
+    galaxy::sdl::desktop::Choice wanted;
+    std::optional<galaxy::sdl::desktop::Placement> placement;
+    if (!hidden) {
+        (void)galaxy::sdl::refresh_displays(displays);
+        galaxy::sdl::g_displays_dirty.store(false, std::memory_order_release);
+        for (std::size_t i = 0; i < displays.list.size(); ++i) {
+            const galaxy::sdl::desktop::Display& display = displays.list[i];
+            std::fprintf(stderr, "[display] %s: %u x %u pixels, %u Hz%s\n", displays.ids[i].c_str(), display.width, display.height,
+                         galaxy::sdl::desktop::whole_hz(display.refresh_hz), display.primary ? ", primary" : "");
+        }
+        wanted = galaxy::sdl::desktop::choice_of(get_render_config(), false);
+        // The window as a window first: its size when it leaves full screen is the configured one.
+        galaxy::sdl::desktop::Choice as_window = wanted;
+        as_window.mode = kDisplayWindowed;
+        if (const auto windowed = galaxy::sdl::desktop::place_window(as_window, displays.ids, displays.list, 0, 0)) {
+            const SDL_DisplayMode* const mode = SDL_GetDesktopDisplayMode(displays.list[windowed->display].handle);
+            const double density = mode != nullptr && mode->pixel_density > 0.0f ? static_cast<double>(mode->pixel_density) : 1.0;
+            window_width = static_cast<int>(galaxy::sdl::desktop::window_points(windowed->client_width, density));
+            window_height = static_cast<int>(galaxy::sdl::desktop::window_points(windowed->client_height, density));
+        }
+        placement = galaxy::sdl::desktop::place_window(wanted, displays.ids, displays.list, 0, 0);
+    }
+#endif
 #if defined(NEBULA_GPU_METAL)
     SDL_WindowFlags flags = SDL_WINDOW_METAL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
 #else
@@ -1732,7 +2031,13 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
     if (hidden || kShownWithFirstPicture) {
         flags |= SDL_WINDOW_HIDDEN;
     }
-    SDL_Window* window = SDL_CreateWindow("Nebula", std::max(window_width, 320), std::max(window_height, 240), flags);
+#if defined(NEBULA_SDL_DESKTOP)
+    const bool sized_by_settings = !hidden && placement.has_value();
+#else
+    constexpr bool sized_by_settings = false;
+#endif
+    SDL_Window* window = SDL_CreateWindow("Nebula", sized_by_settings ? std::max(window_width, 1) : std::max(window_width, 320),
+                                          sized_by_settings ? std::max(window_height, 1) : std::max(window_height, 240), flags);
     if (window == nullptr) {
         std::fprintf(stderr, "[window] SDL_CreateWindow failed: %s\n", SDL_GetError());
         return {};
@@ -1740,6 +2045,15 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
     {
         std::lock_guard<std::mutex> lock(galaxy::sdl::g_input_mutex);
         galaxy::sdl::g_window = window;
+    }
+#if defined(NEBULA_SDL_DESKTOP)
+    if (placement) {
+        galaxy::sdl::place_on_display(*placement, displays);
+        galaxy::sdl::g_placed = wanted;
+    }
+#endif
+    {
+        std::lock_guard<std::mutex> lock(galaxy::sdl::g_input_mutex);
         galaxy::luma_input::set_text_entry_available(true);
         galaxy::sdl::update_window_size();
         backbuffer_width = static_cast<unsigned>(galaxy::sdl::g_input.window_width);
@@ -1753,6 +2067,14 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
 }
 
 void close_game_window(WindowOwner& owner) noexcept {
+#if defined(NEBULA_SDL_DESKTOP)
+    if (galaxy::sdl::g_cursor_hidden) {
+        (void)SDL_ShowCursor();
+        galaxy::sdl::g_cursor_hidden = false;
+    }
+    galaxy::sdl::g_placed.reset();
+    galaxy::sdl::g_fullscreen_pixels = {};
+#endif
     if (owner.window != nullptr) {
         SDL_DestroyWindow(static_cast<SDL_Window*>(owner.window));
         owner.window = nullptr;
@@ -1784,6 +2106,12 @@ double display_refresh_hz(NativeWindow window) noexcept {
     if (const double vsync = galaxy::sdl::display_refresh_hz(); vsync > 1.0) {
         return std::round(vsync);
     }
+#if defined(NEBULA_SDL_DESKTOP)
+    // The rate of the display the window is on, read on SDL's thread (its display calls are not for the render thread).
+    if (const double hz = galaxy::sdl::g_window_display_hz.load(std::memory_order_relaxed); hz > 1.0) {
+        return hz;
+    }
+#endif
     const SDL_DisplayMode* mode = SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(static_cast<SDL_Window*>(window)));
     return mode != nullptr && mode->refresh_rate > 1.0f ? static_cast<double>(mode->refresh_rate) : 0.0;
 }
@@ -1805,6 +2133,30 @@ bool present_grid(std::int64_t& slot_ns, std::int64_t& period_ns, std::int64_t& 
 
 // What the settings menu asks of its platform (host_window.h).
 std::vector<SettingsMonitor> settings_monitors() {
+#if defined(NEBULA_SDL_DESKTOP)
+    // The real displays, as the Windows host lists them: each one's id (what config.ini keeps), name, pixels of its desktop mode,
+    // refresh rate, the largest window it takes and the resolutions it offers.
+    if (const galaxy::sdl::DesktopDisplays displays = galaxy::sdl::shared_displays(); !displays.list.empty()) {
+        std::vector<SettingsMonitor> monitors;
+        for (std::size_t i = 0; i < displays.list.size(); ++i) {
+            const galaxy::sdl::desktop::Display& display = displays.list[i];
+            SettingsMonitor monitor;
+            monitor.id = displays.ids[i];
+            monitor.name = display.name;
+            monitor.width = display.width;
+            monitor.height = display.height;
+            monitor.refresh_hz = galaxy::sdl::desktop::whole_hz(display.refresh_hz);
+            const auto largest = galaxy::sdl::desktop::max_client_size(display.usable_width, display.usable_height,
+                                                                       displays.frame_width, displays.frame_height);
+            monitor.max_client_width = largest.first;
+            monitor.max_client_height = largest.second;
+            monitor.primary = display.primary;
+            monitor.resolutions = distinct_resolutions(display.modes);
+            monitors.push_back(std::move(monitor));
+        }
+        return monitors;
+    }
+#endif
     const galaxy::sdl::InputState state = galaxy::sdl::input_state();
     SettingsMonitor monitor;
     monitor.id = "display";

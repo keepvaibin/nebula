@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
+#include "galaxy/input/key_codes.h"
 #include "galaxy/input_bindings.h"
 
 namespace galaxy::input {
@@ -35,4 +36,25 @@ struct KeyPositionMap {
     }
     return table;
 }
+
+// A key event of a host whose keys are physical places (SDL's scancodes): the level of the key as a virtual key and, for a letter
+// key, of the letter's place. The default keyboard layout binds movement, Z, C, the shake and the pointer keys to places
+// (KeyPosition), so an event that sets the key alone moves nothing. `position`: the letter at the key's place on a US keyboard,
+// 0 for a key that is not a letter. The generic modifier keys follow the left and right ones, as the bindings name them.
+inline void apply_key_event(KeyboardMouseLevels& levels, int vk, int position, bool down) noexcept {
+    if (position >= 'A' && position <= 'Z') levels.set_position(static_cast<std::uint8_t>(position), down);
+    if (vk <= 0 || vk > 0xFF) return;
+    levels.set_key(static_cast<std::uint8_t>(vk), down);
+    if (vk == keys::LSHIFT || vk == keys::RSHIFT) levels.set_key(keys::SHIFT, down);
+    if (vk == keys::LCONTROL || vk == keys::RCONTROL) levels.set_key(keys::CONTROL, down);
+    if (vk == keys::LMENU || vk == keys::RMENU) levels.set_key(keys::MENU, down);
+}
+
+
+// The same for a host whose virtual keys are themselves the physical places (SDL: a scancode names the place, and its letter
+// is the letter at that place on a US keyboard): the position of a letter key is its own letter.
+inline void apply_physical_key_event(KeyboardMouseLevels& levels, int vk, bool down) noexcept {
+    apply_key_event(levels, vk, vk >= 'A' && vk <= 'Z' ? vk : 0, down);
+}
+
 }  // namespace galaxy::input

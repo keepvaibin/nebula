@@ -91,14 +91,7 @@ BOOL CALLBACK collect_monitor(HMONITOR monitor, HDC, LPRECT, LPARAM user) {
     if (entry.modes.empty()) {
         entry.modes.push_back(entry.current);
     }
-    std::sort(entry.modes.begin(), entry.modes.end(),
-              [](const DisplayModeInfo& a, const DisplayModeInfo& b) {
-                  const std::uint64_t area_a = std::uint64_t{a.width} * a.height;
-                  const std::uint64_t area_b = std::uint64_t{b.width} * b.height;
-                  if (area_a != area_b) return area_a > area_b;
-                  if (a.width != b.width) return a.width > b.width;
-                  return a.refresh_hz > b.refresh_hz;
-              });
+    sort_display_modes(entry.modes);
     list.push_back(std::move(entry));
     return TRUE;
 }
@@ -215,14 +208,7 @@ const MonitorInfo* find_monitor(
 }
 
 std::vector<std::pair<unsigned, unsigned>> monitor_resolutions(const MonitorInfo& monitor) {
-    std::vector<std::pair<unsigned, unsigned>> out;
-    for (const DisplayModeInfo& mode : monitor.modes) {
-        const std::pair<unsigned, unsigned> size{mode.width, mode.height};
-        if (std::find(out.begin(), out.end(), size) == out.end()) {
-            out.push_back(size);
-        }
-    }
-    return out;
+    return distinct_resolutions(monitor.modes);
 }
 
 }  // namespace galaxy::render

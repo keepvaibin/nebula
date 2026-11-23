@@ -2084,6 +2084,11 @@ int run_start_check(unsigned frames) {
     }
     for (unsigned frame = 0u; frame < frames; ++frame) {
         galaxy::render::pump_messages();
+#if defined(NEBULA_HOST_SDL)
+        // The window's events, as the host's main loop takes them: the window follows its settings (borderless full screen),
+        // and the pointer is hidden while it has the focus. The check reads both from the log.
+        galaxy::sdl::pump_events(0);
+#endif
         NebulaFrameList& list = lists[frame % 3u];
         const auto asked = std::chrono::steady_clock::now();
         while (nebula_frame_list_released(&list) == 0u) {
