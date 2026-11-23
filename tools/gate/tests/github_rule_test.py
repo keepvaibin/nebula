@@ -53,6 +53,7 @@ REAL_RUN_NAMES = [
     "Linux", "Rust tests (windows-2022)", "Rust tests (ubuntu-24.04)", "Windows game modules",
     "Windows (three renderers, unit tests)", "Linux sanitizers (thread)", "Linux sanitizers (address,undefined)",
     "Linux unit tests", "Mac", "Android (arm64-v8a)", "Android (x86_64)", "Android start check (x86_64 emulator)",
+    "FSR 3 shaders (Windows)",
 ]
 
 COUNTER = [1000]
@@ -212,10 +213,10 @@ class Rule(unittest.TestCase):
         r, c = make(lambda sha: [run(44901217388, "gate/x", all_green()), run(44896266079, "test/t8a-github", branch)])
         kind, detail, reading = r.wait(120, sleep=c.sleep)
         self.assertEqual((kind, c.slept), ("pass", 0), detail)
-        self.assertEqual(len(reading.green), 7)
+        self.assertEqual(len(reading.green), len(MUSTS))
         self.assertEqual((reading.pending, r.unknown, r.warnings()), ([], [], []))
         r2, c2 = make(lambda sha: [run(2, "test/t8a-github", branch)])
-        self.assertEqual(r2.read().pending, [MUSTS[6]], "the skipped name is not what is waited for")
+        self.assertEqual(r2.read().pending, MUSTS[6:], "the skipped name is not what is waited for")
 
     def test_unknown_job_that_ran_still_counts(self):
         for state in (job("Mac (Intel)"), job("Mac (Intel)", conclusion="failure"), running("Mac (Intel)")):

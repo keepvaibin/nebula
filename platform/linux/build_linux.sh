@@ -4,12 +4,16 @@
 # renderer (nebula, libSDL3.so), the game module with and without the function rows (libsmg_game.so,
 # libsmg_game_plain.so) and its self-description, and the game importer (nebula-import, libnebula_import.so).
 #
-#   platform/linux/build_linux.sh -d <deps> -l <llvm> -w <work folder> [-j <jobs>] [-n]
+#   platform/linux/build_linux.sh -d <deps> -l <llvm> -w <work folder> [-s <FSR 3 shaders>] [-j <jobs>] [-n]
 #
 #   <deps>   the dependency checkouts platform/sdl/CMakeLists.txt names (SDL3, glslang-src, Vulkan-Headers, volk,
 #            VulkanMemoryAllocator)
 #   <llvm>   LLVM 21 or later, whose clang and lld build everything (platform/linux/llvm-toolchain.cmake): the game
 #            module's row generator needs its libclang
+#   -s       FidelityFX's Vulkan shader headers, made on Windows (cmake/ffx-vk-shaders, the workflows' step
+#            .github/actions/ffx-vk-shaders): with them the program holds AMD's FSR 3. Without them it does not, and says so once.
+#            A build that makes a package (the environment variable NEBULA_REQUIRE_FSR3=ON, as release.yml and check.yml set it)
+#            stops without them.
 #   -j       how many compiles run at once (default: the build tool's own choice)
 #   -n       a build with no mod support (CMake NEBULA_MODS=OFF; the environment variable NEBULA_MODS=OFF does the same): only
 #            the plain game module (libsmg_game_plain.so), no function rows, no self-description
@@ -25,20 +29,22 @@ deps=
 llvm=
 work=
 jobs=
+shaders=
 nomods=
 [ "${NEBULA_MODS:-}" = OFF ] && nomods=1
-while getopts "d:l:w:j:n" option; do
+while getopts "d:l:w:s:j:n" option; do
     case "$option" in
     d) deps=$OPTARG ;;
     l) llvm=$OPTARG ;;
     w) work=$OPTARG ;;
+    s) shaders=$OPTARG ;;
     j) jobs="--parallel $OPTARG" ;;
     n) nomods=1 ;;
-    *) sed -n '7,15p' "$0" >&2; exit 2 ;;
+    *) sed -n '7,19p' "$0" >&2; exit 2 ;;
     esac
 done
 if [ -z "$deps" ] || [ -z "$llvm" ] || [ -z "$work" ]; then
-    sed -n '7,15p' "$0" >&2
+    sed -n '7,19p' "$0" >&2
     exit 2
 fi
 # Every CMake project reads this (cmake/nebula_options.cmake).
@@ -46,8 +52,22 @@ if [ -n "$nomods" ]; then NEBULA_MODS=OFF; export NEBULA_MODS; fi
 for tool in clang clang++ ld.lld; do
     [ -x "$llvm/bin/$tool" ] || { echo "build_linux.sh: no $tool in $llvm/bin" >&2; exit 2; }
 done
+# FSR 3 (cmake/fidelityfx_android.cmake): its shader headers come from the Windows step of the workflow's run.
+case "${NEBULA_REQUIRE_FSR3:-}" in
+ON | on | 1 | TRUE | true | YES | yes | Y | y) require_fsr3=1 ;;
+*) require_fsr3= ;;
+esac
+if [ -n "$shaders" ] && [ ! -f "$shaders/nebula-luma16.txt" ]; then
+    echo "build_linux.sh: $shaders holds no nebula-luma16.txt: it is not FidelityFX's shader folder (cmake/ffx-vk-shaders)" >&2
+    exit 2
+fi
+if [ -z "$shaders" ] && [ -n "$require_fsr3" ]; then
+    echo "build_linux.sh: this build makes a package, which holds AMD's FSR 3, and no -s <FidelityFX shader headers> was given (they are made on Windows: .github/actions/ffx-vk-shaders)" >&2
+    exit 2
+fi
 mkdir -p "$work"
 deps=$(cd "$deps" && pwd)
+[ -z "$shaders" ] || shaders=$(cd "$shaders" && pwd)
 llvm=$(cd "$llvm" && pwd)
 work=$(cd "$work" && pwd)
 
@@ -59,7 +79,7 @@ toolchain="-DCMAKE_TOOLCHAIN_FILE=$here/llvm-toolchain.cmake"
 
 # The host: the SDL program, which makes its shader tools first (platform/sdl/CMakeLists.txt NEBULA_HOST_TOOLS).
 # shellcheck disable=SC2086
-cmake -S "$root/platform/sdl" -B "$work/host" -G Ninja -DCMAKE_BUILD_TYPE=Release $toolchain "-DNEBULA_DEPS=$deps"
+cmake -S "$root/platform/sdl" -B "$work/host" -G Ninja -DCMAKE_BUILD_TYPE=Release $toolchain "-DNEBULA_DEPS=$deps" ${shaders:+"-DNEBULA_FFX_VK_SHADERS=$shaders"}
 # shellcheck disable=SC2086
 cmake --build "$work/host" --target main $jobs
 

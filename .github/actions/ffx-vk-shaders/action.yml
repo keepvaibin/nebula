@@ -1,0 +1,29 @@
+name: FidelityFX Vulkan shaders (Windows)
+description: >-
+  Makes FidelityFX's Vulkan shader headers into `folder` (cmake/ffx-vk-shaders): the SDK's shader compiler runs on Windows
+  only, so a Windows job makes them and the Linux job of the same run takes them as NEBULA_FFX_VK_SHADERS. The maker is the
+  one the Android build runs (cmake/fidelityfx_vk_shaders.cmake). Needs the repository checked out.
+inputs:
+  folder:
+    description: Where the headers are put.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Vulkan headers
+      shell: bash
+      run: sh tools/fetch_build_deps.sh "$RUNNER_TEMP/deps"
+    - name: The shaders
+      shell: pwsh
+      env:
+        FOLDER: ${{ inputs.folder }}
+      run: |
+        $headers = Get-ChildItem (Join-Path $env:RUNNER_TEMP 'deps') -Directory -Filter 'Vulkan-Headers-*' | Select-Object -First 1
+        if (-not $headers) { Write-Output "tools/fetch_build_deps.sh left no Vulkan-Headers folder"; exit 1 }
+        $out = $env:FOLDER.Replace([string][char]92, '/')
+        $include = $headers.FullName.Replace([string][char]92, '/') + '/include'
+        cmake -S cmake/ffx-vk-shaders -B (Join-Path $env:RUNNER_TEMP 'ffx-maker') "-DNEBULA_VULKAN_HEADERS=$include" "-DNEBULA_FFX_OUT=$out"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        if (-not (Test-Path (Join-Path $env:FOLDER 'nebula-luma16.txt'))) { Write-Output "no nebula-luma16.txt in $env:FOLDER"; exit 1 }
+        $size = (Get-ChildItem $env:FOLDER -File | Measure-Object Length -Sum).Sum
+        Write-Output ("{0:N0} bytes in {1} files" -f $size, (Get-ChildItem $env:FOLDER -File).Count)

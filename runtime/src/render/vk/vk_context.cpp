@@ -1040,22 +1040,40 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     VkPhysicalDevice16BitStorageFeatures storage16{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES};
     VkPhysicalDeviceSubgroupSizeControlFeaturesEXT subgroup{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES_EXT};
     VkPhysicalDeviceSeparateDepthStencilLayoutsFeaturesKHR separate{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SEPARATE_DEPTH_STENCIL_LAYOUTS_FEATURES_KHR};
-    if (fsr3_compiled() && core_12 && has_device_extension(physical_, VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME) &&
-        has_device_extension(physical_, VK_EXT_SUBGROUP_SIZE_CONTROL_EXTENSION_NAME) &&
-        has_device_extension(physical_, VK_KHR_SEPARATE_DEPTH_STENCIL_LAYOUTS_EXTENSION_NAME) &&
-        has_device_extension(physical_, VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME) &&
-        available.independentBlend == VK_TRUE && available.shaderInt16 == VK_TRUE &&
-        available.shaderStorageImageWriteWithoutFormat == VK_TRUE &&
-        available.shaderStorageImageExtendedFormats == VK_TRUE) {
+    // What keeps it off this device, named in the log (an upscaler the settings do not offer says why there).
+    std::string fsr3_lacks;
+    bool fsr3_device = fsr3_compiled();
+    const auto fsr3_needs = [&fsr3_lacks, &fsr3_device](bool present, const char* what) {
+        if (!present) {
+            fsr3_device = false;
+            fsr3_lacks += (fsr3_lacks.empty() ? "" : ", ") + std::string(what);
+        }
+        return present;
+    };
+    if (fsr3_device) {
+        fsr3_needs(core_12, "Vulkan 1.2");
+        for (const char* extension : {VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME, VK_EXT_SUBGROUP_SIZE_CONTROL_EXTENSION_NAME,
+                                      VK_KHR_SEPARATE_DEPTH_STENCIL_LAYOUTS_EXTENSION_NAME, VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME}) {
+            fsr3_needs(has_device_extension(physical_, extension), extension);
+        }
+        fsr3_needs(available.independentBlend == VK_TRUE, "independentBlend");
+        fsr3_needs(available.shaderInt16 == VK_TRUE, "shaderInt16");
+        fsr3_needs(available.shaderStorageImageWriteWithoutFormat == VK_TRUE, "shaderStorageImageWriteWithoutFormat");
+        fsr3_needs(available.shaderStorageImageExtendedFormats == VK_TRUE, "shaderStorageImageExtendedFormats");
+    }
+    if (fsr3_device) {
         float16.pNext = &storage16;
         storage16.pNext = &subgroup;
         subgroup.pNext = &separate;
         VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
         features.pNext = &float16;
         vkGetPhysicalDeviceFeatures2(physical_, &features);
-        temporal_upscaling_ = float16.shaderFloat16 == VK_TRUE && storage16.storageBuffer16BitAccess == VK_TRUE &&
-                              subgroup.subgroupSizeControl == VK_TRUE && subgroup.computeFullSubgroups == VK_TRUE &&
-                              separate.separateDepthStencilLayouts == VK_TRUE;
+        fsr3_needs(float16.shaderFloat16 == VK_TRUE, "shaderFloat16");
+        fsr3_needs(storage16.storageBuffer16BitAccess == VK_TRUE, "storageBuffer16BitAccess");
+        fsr3_needs(subgroup.subgroupSizeControl == VK_TRUE, "subgroupSizeControl");
+        fsr3_needs(subgroup.computeFullSubgroups == VK_TRUE, "computeFullSubgroups");
+        fsr3_needs(separate.separateDepthStencilLayouts == VK_TRUE, "separateDepthStencilLayouts");
+        temporal_upscaling_ = fsr3_device;
         if (temporal_upscaling_) {
             enabled.shaderInt16 = VK_TRUE;
             device_extensions.push_back(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME);
@@ -1064,6 +1082,13 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
             device_extensions.push_back(VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME);
             enabled.shaderStorageImageWriteWithoutFormat = VK_TRUE;
             enabled.shaderStorageImageExtendedFormats = VK_TRUE;
+        }
+    }
+    if (fsr3_compiled()) {
+        if (temporal_upscaling_) {
+            std::fprintf(stderr, "[vulkan] FSR 3: the device has what it needs\n");
+        } else {
+            std::fprintf(stderr, "[vulkan] FSR 3 is not offered on this device: it lacks %s\n", fsr3_lacks.c_str());
         }
     }
     depth_clamp_ = available.depthClamp == VK_TRUE;

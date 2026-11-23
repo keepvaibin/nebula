@@ -30,3 +30,14 @@ endif()
 if(NOT NEBULA_MODS)
     add_compile_definitions(NEBULA_NO_MODS=1)
 endif()
+
+# NEBULA_REQUIRE_FSR3 is set by a build that makes a package (the release workflow's and the check workflow's Windows, Linux and
+# Android jobs; not the Mac's, whose upscaler is MetalFX). OFF (default): a build may leave AMD's FSR 3 out and says so once.
+# ON: leaving it out stops the configure with the reason (cmake/fidelityfx_vk_shaders.cmake, nebula_fsr3_left_out).
+if(NOT DEFINED NEBULA_REQUIRE_FSR3)
+    set(nebula_require_fsr3_default OFF)
+    if(DEFINED ENV{NEBULA_REQUIRE_FSR3})
+        set(nebula_require_fsr3_default "$ENV{NEBULA_REQUIRE_FSR3}")
+    endif()
+    set(NEBULA_REQUIRE_FSR3 "${nebula_require_fsr3_default}" CACHE BOOL "A package build: leaving FSR 3 out is an error")
+endif()
