@@ -389,6 +389,13 @@ jobs:
           mkdir -p "$d/data" "$d/settings"
           "$WORK/Nebula.app/Contents/MacOS/Nebula" --start-check 300 --data "$d/data" --settings "$d/settings" \
             --crash-dumps "$d"
+      # The program finds its game module and the system loads it (the start check above does not load it), and the app's files
+      # name no library outside the system and the app (release.yml has the same checks on the packed zip).
+      - name: Module check and the app's files
+        timeout-minutes: 5
+        run: |
+          sh platform/apple/check_module.sh "$WORK/Nebula.app" "$RUNNER_TEMP/module-check"
+          python3 -X utf8 -I tools/check_macos_app.py "$WORK/Nebula.app" --mods
 
   android:
     name: Android (${{ matrix.abi }})

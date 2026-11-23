@@ -603,6 +603,15 @@ jobs:
           # The name the Mac app's update looks for (update_install_macos.mm): Nebula-Beta-macOS.zip for a beta.
           cp "$WORK/Nebula-macOS.zip" "$RUNNER_TEMP/dist/$PREFIX-macOS.zip"
           python3 tools/release_manifest.py "$RUNNER_TEMP/dist/$PREFIX-macOS.zip" "$VERSION"
+      # No library outside the system and the app in any half (it is there on GitHub's Mac, with Xcode, and not on a player's),
+      # the minimum macOS, the signature and its entitlements: tools/check_macos_app.py reads the zip's files.
+      - name: The app's files (no library outside the system and the app, both processors, the signature)
+        env:
+          PREFIX: ${{ needs.release.outputs.prefix }}
+        run: |
+          mode=--mods
+          [ "$NEBULA_MODS" = OFF ] && mode=--no-mods
+          python3 -X utf8 -I tools/check_macos_app.py "$RUNNER_TEMP/dist/$PREFIX-macOS.zip" $mode
       - name: Start check (the app as unpacked, Metal)
         timeout-minutes: 5
         env:
@@ -614,6 +623,14 @@ jobs:
           app=$(find "$d/unpacked" -maxdepth 3 -name Nebula.app -type d | head -n 1)
           [ -n "$app" ] || { echo "the zip has no Nebula.app"; exit 1; }
           "$app/Contents/MacOS/Nebula" --start-check 300 --data "$d/data" --settings "$d/settings" --crash-dumps "$d"
+      # The program finds its game module and the system loads it, as at a start (the start check above does not load it): the
+      # beta's app looked for its plain module in Contents/MacOS and passed every check but a player's start. The same script
+      # shows the check refusing a module that is not there and a file that is no module.
+      - name: Module check (the app as unpacked)
+        timeout-minutes: 5
+        run: |
+          app=$(find "$RUNNER_TEMP/start/unpacked" -maxdepth 3 -name Nebula.app -type d | head -n 1)
+          sh platform/apple/check_module.sh "$app" "$RUNNER_TEMP/module-check"
       # The app's Intel half, as far as this Apple silicon machine can start it (Rosetta). Told, not judged: no Intel Mac is
       # among the runners, and Metal under Rosetta in a virtual machine may not start at all.
       - name: Start check (the Intel half, through Rosetta; told, not judged)
@@ -630,6 +647,7 @@ jobs:
           app=$(find "$d/unpacked" -maxdepth 3 -name Nebula.app -type d | head -n 1)
           lipo -archs "$app/Contents/MacOS/Nebula"
           arch -x86_64 "$app/Contents/MacOS/Nebula" --start-check 300 --data "$d/data" --settings "$d/settings" --crash-dumps "$d"
+          sh platform/apple/check_module.sh "$app" "$d/module-check" "arch -x86_64"
       - name: The mod kit (a pre-release has none, a release has it)
         shell: bash
         run: |
@@ -663,6 +681,9 @@ jobs:
     runs-on: macos-15-intel
     timeout-minutes: 30
     steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release.outputs.ref }}
       - uses: actions/download-artifact@v8
         with:
           name: macos-universal
@@ -682,6 +703,8 @@ jobs:
           [ -n "$app" ] || { echo "the zip has no Nebula.app"; exit 1; }
           lipo -archs "$app/Contents/MacOS/Nebula"
           "$app/Contents/MacOS/Nebula" --start-check 300 --data "$d/data" --settings "$d/settings" --crash-dumps "$d"
+          # Its game module loads on this Intel processor (the first start of a player is this).
+          sh platform/apple/check_module.sh "$app" "$d/module-check"
 
   # The release app is arm64 only and no runner starts it; its code is the test app's, which check.yml's emulator job
   # starts (--start-check through tools/lumacore/luma_test_android.py).

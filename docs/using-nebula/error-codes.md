@@ -57,7 +57,7 @@ Texture packs and movies change no game code. A crash in the game with only thes
 |---|---|---|
 | NEB-S01 | Nebula could not find or open the game content, `game.pak`. | Open Nebula Setup and choose **Repair**. |
 | NEB-S02 | The game content is damaged. | Run Nebula Setup again to rebuild it from your disc image. |
-| NEB-S03 | Nebula's files do not match each other: the game module is missing or from another version. | Install or update Nebula again. |
+| NEB-S03 | The game module is missing, the system refused to load it, or it is from another version of Nebula. The title says which ("A part of Nebula is missing", "The system refused a part of Nebula", "Nebula's files do not match"), and the report's **Technical details** name the file and, when the system refused it, the system's own reason. | Install or update Nebula again, from the original download. If the system refused it, report it with the report file. On a Mac, see **How to open Nebula.txt** in the download. |
 | NEB-S04 | The graphics card could not start the game. | Update the graphics driver. If your computer has two graphics cards, choose the other one in **Settings** > **SYSTEM** > **GRAPHICS CARD**. |
 | NEB-S05 | Nebula could not read its settings file. | Rename `config.ini` in Nebula's settings folder, then start Nebula to use the default settings. |
 | NEB-S06 | Nebula was started with arguments it does not know. | Start Nebula from its shortcut or app menu entry. |

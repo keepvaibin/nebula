@@ -750,18 +750,58 @@ fs::path default_module_path(const fs::path& program_folder) {
 #endif
 }
 
+#if defined(_WIN32)
+// The system's text of an error code (GetLastError), in UTF-8, without its line end.
+std::string windows_error_text(DWORD code) {
+    wchar_t* wide = nullptr;
+    const DWORD length = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                                        nullptr, code, 0, reinterpret_cast<LPWSTR>(&wide), 0, nullptr);
+    std::string text;
+    if (length != 0u && wide != nullptr) {
+        std::wstring_view view(wide, length);
+        while (!view.empty() && (view.back() == L'\r' || view.back() == L'\n' || view.back() == L' ')) view.remove_suffix(1);
+        const int size = WideCharToMultiByte(CP_UTF8, 0, view.data(), static_cast<int>(view.size()), nullptr, 0, nullptr, nullptr);
+        if (size > 0) {
+            text.resize(static_cast<std::size_t>(size));
+            WideCharToMultiByte(CP_UTF8, 0, view.data(), static_cast<int>(view.size()), text.data(), size, nullptr, nullptr);
+        }
+    }
+    if (wide != nullptr) LocalFree(wide);
+    char number[32];
+    std::snprintf(number, sizeof(number), "error %lu", static_cast<unsigned long>(code));
+    return text.empty() ? std::string(number) : text + " (" + number + ")";
+}
+#endif
+
+// Loads the module and says why when the system will not (game_module.h load_failure). nullptr: it did not load, and
+// `why` is the line to stop with.
+void* open_module(const fs::path& path, std::string& why) {
+#if defined(_WIN32)
+    void* module = LoadLibraryW(path.wstring().c_str());
+    const std::string system_text = module == nullptr ? windows_error_text(GetLastError()) : std::string{};
+#else
+    // Global: find_function (a native plugin's hook) finds the game's functions here.
+    void* module = dlopen(path.string().c_str(), RTLD_NOW | RTLD_GLOBAL);
+    std::string system_text;
+    if (module == nullptr) {
+        const char* const reason = dlerror();
+        system_text = reason != nullptr ? reason : "";
+    }
+#endif
+    if (module == nullptr) why = galaxy::game_module::load_failure(path, system_text);
+    return module;
+}
+
 void load_module(const fs::path& path) {
     std::error_code absolute_error;
     const fs::path absolute = fs::absolute(path, absolute_error);
     gModuleFolder = (absolute_error ? path : absolute).parent_path();
-#if defined(_WIN32)
-    void* module = LoadLibraryW(path.wstring().c_str());
-#else
-    // Global: find_function (a native plugin's hook) finds the game's functions here.
-    void* module = dlopen(path.string().c_str(), RTLD_NOW | RTLD_GLOBAL);
-#endif
+    std::string why;
+    void* const module = open_module(path, why);
     if (module == nullptr) {
-        die("cannot load the game module %s", utf8_of(path.filename()).c_str());
+        // The whole path in the log (the line the report quotes names the file and its folder's last two names).
+        log_line("game module:", ("tried " + utf8_of(absolute_error ? path : absolute)).c_str());
+        die("%s", why.c_str());
     }
     gModule.attach = reinterpret_cast<decltype(gModule.attach)>(find_symbol(module, "nebula_game_attach"));
     gModule.run = reinterpret_cast<decltype(gModule.run)>(find_symbol(module, "nebula_game_run"));
@@ -6064,6 +6104,7 @@ int main(int argc, char** argv) {
     [[maybe_unused]] bool benchmark = false;  // --benchmark 1: benchmark.h's run, then exit
     fs::path benchmark_out;
     [[maybe_unused]] int home = 0;  // --home 1: the home screen at the title's hold
+    bool module_check = false;  // --module-check 1: the game module loads as a start would load it, then exit
     for (int i = 1; i + 1 < argc; i += 2) {
         const std::string key = argv[i];
         if (key == "--pak") {
@@ -6077,11 +6118,13 @@ int main(int argc, char** argv) {
                    key == "--gpu-start-retry" || key == "--extension" || key == "--import" || key == "--imports-taken" ||
                    key == "--safe-start" || key == "--shipped-mods" || key == "--mod-dev" || key == "--renderer" || key == "--started-again" ||
                    key == "--start-again-of" || key == "--hidden" || key == "--no-focus" || key == "--gpu-driver" || key == "--gpu-driver-library" ||
-                   key == "--gpu-driver-hooks" || key == "--start-check" ||
+                   key == "--gpu-driver-hooks" || key == "--start-check" || key == "--module-check" ||
                    key == "--software-device") {
             // Read above, before anything uses them.
         } else if (key == "--seconds") {
             seconds = std::atof(argv[i + 1]);
+        } else if (key == "--module-check") {
+            module_check = std::atoi(argv[i + 1]) != 0;
         } else if (key == "--home") {
             home = std::atoi(argv[i + 1]) != 0 ? 1 : 0;
         } else if (key == "--benchmark") {
@@ -6091,6 +6134,20 @@ int main(int argc, char** argv) {
         } else {
             die("unknown option %s", key.c_str());
         }
+    }
+    if (module_check) {
+        // The package's check that the program finds its game module and the system loads it: the module a start with no
+        // mod's code would load (no disc, no mods folder), through the same open_module as a start. A module that does not
+        // load ends the process with the reason (die). No window, no renderer, no game files.
+        if (module.empty()) module = default_module();
+        std::string how;
+        const fs::path chosen = galaxy::game_module::choose_with(galaxy::mod_support(), module, fs::path{}, fs::path{}, "",
+                                                                 false, false, "", &how);
+        load_module(chosen);
+        std::printf("module check: %s loaded (%s)\n", utf8_of(chosen.filename()).c_str(), how.c_str());
+        std::fflush(stdout);
+        galaxy::whole_lines::flush();
+        std::_Exit(0);
     }
 #if defined(NEBULA_HOST_RENDERER)
     if (const unsigned frames = ::galaxy::launch_args().start_check; frames != 0u) {

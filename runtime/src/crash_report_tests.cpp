@@ -156,6 +156,22 @@ int main() {
     expect(startup("cannot open D:/Nebula/content/game.pak") == "NEB-S01", "missing content");
     expect(startup("D:/x/game.pak: boot.bin points past the partition") == "NEB-S02", "damaged content");
     expect(startup("cannot load the game module smg_game.dll") == "NEB-S03", "missing module");
+    {
+        // The two lines the host's load_failure writes (game_module.h, tested in mods_tests.cpp): each says its case.
+        Facts missing;
+        missing.kind = Facts::Kind::Startup;
+        missing.text = "cannot load the game module libsmg_game_plain.dylib: the file is not there (Contents/MacOS)";
+        const Report gone = classify(missing);
+        expect(std::string(gone.code) == "NEB-S03" && std::string(gone.title) == "A part of Nebula is missing",
+               "a module file that is not there");
+        Facts refused;
+        refused.kind = Facts::Kind::Startup;
+        refused.text = "cannot load the game module libsmg_game_plain.dylib: the system refused it: dlopen(x): code signature invalid";
+        const Report no = classify(refused);
+        expect(std::string(no.code) == "NEB-S03" && std::string(no.title) == "The system refused a part of Nebula" &&
+                   std::strstr(no.detail, "code signature invalid") != nullptr,
+               "a module file the system refused: the reason is in the detail");
+    }
     expect(startup("the game module's API version differs from the host's (15)") == "NEB-S03", "module version");
     expect(startup("the renderer did not start: no adapter") == "NEB-S04", "no renderer");
     expect(startup("the settings did not load: bad value") == "NEB-S05", "settings");

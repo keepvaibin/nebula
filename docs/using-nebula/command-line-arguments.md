@@ -17,7 +17,7 @@ The Start menu shortcut on Windows and `nebula-launch` on Linux pass `--pak` and
 |---|---|---|
 | `--pak FILE` | The game content, `game.pak`. Required. | None |
 | `--saves FOLDER` | The saves folder. Required, except with `--benchmark 1`. | None |
-| `--module FILE` | The game module. | `smg_game.dll` (`libsmg_game.so` on Linux and Android, `libsmg_game.dylib` on macOS) beside the executable |
+| `--module FILE` | The game module. | `smg_game.dll` (`libsmg_game.so` on Linux and Android, `libsmg_game.dylib` on macOS) beside the executable (on macOS in the app's `Contents/Frameworks`). Without mod support only the plain module, `smg_game_plain`, is shipped: the game module's name is then the name it would have, and the plain module is the file beside it |
 | `--data FOLDER` | Nebula's data folder: shader caches, crash dumps, downloaded libraries in `vendor`, and the settings unless `--settings` names another folder. | `%LOCALAPPDATA%\Nebula` on Windows; `$XDG_DATA_HOME/Nebula`, else `~/.local/share/Nebula`, elsewhere |
 | `--settings FOLDER` | The folder that holds `config.ini` and `runtime_settings.ini`, with `Movies`, `TextureDumps` and `mods` beside them. | The data folder |
 | `--crash-dumps FOLDER` | Crash dumps and crash reports. | `crashes` in the data folder |
@@ -32,6 +32,7 @@ The Start menu shortcut on Windows and `nebula-launch` on Linux pass `--pak` and
 | `--safe-start 1` | Turns every mod off for this start only. Your choices on the **Mods** page stay as they are for the next start. Holding <kbd>Shift</kbd> while Nebula starts does the same. |
 | `--seconds N` | Ends the game after N seconds. |
 | `--start-check N` | Checks that the program starts, without the game's files. Opens the window and the renderer, draws and shows N frames of a blank picture, then exits. Exits with 0 when at least one picture was shown, 3 when the renderer did not start, 4 when no picture was shown, and 5 when the renderer stopped taking frames. Only this check may use a software renderer, and only when no graphics card runs the renderer. `--pak` and `--saves` are not needed. |
+| `--module-check 1` | Checks that the program finds its game module and the system loads it, as a start does: no game files, no window, no renderer. Prints `module check: FILE loaded (...)` and exits with 0. When the module is not there or the system refuses it, it stops with the reason (exit 3, and the report's NEB-S03). Packages are checked with it (`platform/apple/check_module.sh`). |
 | `--hidden 1` | Linux and macOS. Starts without a window and never reads your keyboard, mouse or controllers. Test tools use it. On Windows, a start with a hidden window does the same. |
 | `--no-focus 1` | Windows. The game window never asks for the keyboard focus: it is shown without being made the active window, and the game runs as it does with the focus (it never pauses, mutes or slows down because another program is in front). Test tools use it for runs with a visible window, so a run does not take your keys. Other systems accept it and ignore it. |
 
