@@ -170,6 +170,23 @@ class Rows(unittest.TestCase):
     def test_paths_with_backslashes_match(self):
         self.assertEqual(plan("docs\\plan\\a.md").groups, ["repo"])
 
+    def test_the_site_is_repo_only(self):
+        """A change that holds only files of website/ (a post's pictures, a page's json) runs the repository checks and is not full;
+        beside a game file it adds nothing to what the game file brings."""
+        for paths in (("website/content/blog/x/a.jpg", "website/content/pages/home.json"), ("website/content/blog/x/index.md",),
+                      ("website/index.html", "website/scripts/render-blog.mjs", "website/package-lock.json")):
+            p = plan(*paths)
+            self.assertFalse(p.full, paths)
+            self.assertEqual(p.groups, ["repo"], paths)
+            self.assertEqual(scope.check_patterns(p.groups), ["repo/*"], paths)
+        game = plan("runtime/src/audio/mixer.cpp")
+        both = plan("website/content/pages/home.json", "runtime/src/audio/mixer.cpp")
+        self.assertEqual(both.groups, game.groups)
+        self.assertFalse(both.full)
+        self.assertTrue(plan("website/a.jpg", "installer/b.ps1").full, "a file of the site does not excuse one no row names")
+        self.assertTrue(scope.path_matches("website/content/blog/x/a.jpg", "website/**"))
+        self.assertFalse(scope.path_matches("websites/a.jpg", "website/**"))
+
     def test_patterns(self):
         self.assertTrue(scope.path_matches("docs/a/b/c.md", "docs/**"))
         self.assertTrue(scope.path_matches("a/b/c.md", "*.md"), "a pattern with no folder names a file anywhere")

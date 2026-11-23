@@ -62,6 +62,8 @@ tests/pictures/**	repo
 tests/measure/**	repo
 tests/pace/**	repo
 tests/mods/**	repo
+# The site is built, tested and published by its own workflow (.github/workflows/website.yml); nothing of the game is built from website/.
+website/**	repo
 .github/**	repo,github-first
 # The build of every platform is described by the CMake files; the Metal renderer, the Apple and the Linux parts are built by
 # GitHub's Mac and Linux jobs only (the unit tests that only Linux builds too). Their other groups are what each file had before.
