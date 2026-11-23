@@ -98,10 +98,11 @@ function Invoke-Logged([string]$Log, [scriptblock]$Command) {
 }
 
 $jni = Join-Path $android "jniLibs"
-# The game module that carries the mod rows: not in an app with no mod support, unless it is a test build.
+# The game module that carries the mod rows: not in an app with no mod support, unless it is a test build. (Typed arrays: a
+# one-name result of an if would be a string, and splatting a string passes its characters.)
 $rowsModule = (-not $NoMods) -or ($Harness -ne "")
-$gameTargets = if ($rowsModule) { @("smg_game", "smg_game_plain") } else { @("smg_game_plain") }
-$hostTargets = if ($NoMods) { @("main") } else { @("main", "nebula_mods") }
+[string[]]$gameTargets = if ($rowsModule) { @("smg_game", "smg_game_plain") } else { @("smg_game_plain") }
+[string[]]$hostTargets = if ($NoMods) { @("main") } else { @("main", "nebula_mods") }
 foreach ($abi in $Abis -split ",") {
     $triple = @{ "arm64-v8a" = "aarch64-linux-android"; "x86_64" = "x86_64-linux-android" }[$abi]
     if (-not $triple) { throw "unknown ABI $abi" }
