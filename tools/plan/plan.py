@@ -198,7 +198,7 @@ STATE_COMMIT = "Plan: step %s landed"    # the subject of the tool's own commit:
 
 # The extra checks a step's proof asks for (docs/plan/native/step-checks.tsv): the nightly's parts, which `gate.py land --also` takes.
 STEP_CHECKS_FILE = "step-checks.tsv"
-ALSO_CHECKS = ("stress", "sanitizer/tour", "soak", "soak/long", "replays/software", "speed/anchor")
+ALSO_CHECKS = ("stress", "sanitizer/tour", "soak", "soak/long", "replays/software", "speed/anchor", "replays/rates")
 
 # A replay reference (tests/replays/*.tsv) changes only where the card says so (T14 item 5).
 REPLAY_DIR = "tests/replays/"
@@ -3635,7 +3635,7 @@ def mend_land(a):
 
 ALSO_OF_CHECK = (("build/windows-asan", "sanitizer/tour"), ("unit/game-asan", "sanitizer/tour"), ("tour-asan/", "sanitizer/tour"),
                  ("mods-asan/", "sanitizer/tour"), ("stress/", "stress"), ("soak/long", "soak/long"), ("soak", "soak"),
-                 ("replays/software", "replays/software"), ("speed/anchor", "speed/anchor"))
+                 ("replays/software", "replays/software"), ("speed/anchor", "speed/anchor"), ("replays/rates", "replays/rates"))
 
 
 def also_for_check(check):

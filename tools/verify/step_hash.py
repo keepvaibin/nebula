@@ -20,6 +20,10 @@ first actor in it, say where it does.
         unless --some), or against another work folder's runs of the same tests (a renderer or a device against
         Direct3D 12).
 
+A run whose plan sets a world rate (luma_test.py: the test key `rate`) hashes after every world step, not once a frame, and each hash.step
+fact names its `step`: the count of world steps hashed from the first. These runs are read by that number (read_facts), so a run at a
+rate of 2 and one at a rate of 1 are compared at equal world steps; tools/gate/replays_rates.py is the check that does.
+
 Exit status: 0 when every pair has hashes and they are all the same, 1 otherwise.
 """
 import argparse
@@ -52,7 +56,9 @@ RECORDED_WINDOW = (1280, 720)
 
 
 def read_facts(folder):
-    """{frame: hash} and {frame: [actor records]} of one run folder's facts.jsonl."""
+    """{step: (hash, actors)} and {frame: [actor records]} of one run folder's facts.jsonl. A step is its frame (the game ran
+    one step a frame), or, in a run that set the world's rate (the plan's `rate`), the `step` its hash.step fact names: the
+    count of world steps hashed from the first, so a frame that ran two steps gives two."""
     steps, actors = {}, {}
     path = pathlib.Path(folder) / "facts.jsonl"
     if not path.is_file():
@@ -63,7 +69,7 @@ def read_facts(folder):
         except ValueError:
             continue
         if f.get("key") == "hash.step":
-            steps[f["frame"]] = (f["value"]["h"], f["value"]["actors"])
+            steps[f["value"].get("step", f["frame"])] = (f["value"]["h"], f["value"]["actors"])
         elif f.get("key") == "hash.actor":
             actors.setdefault(f["frame"], []).append(f["value"])
     return steps, actors

@@ -329,7 +329,7 @@ def read_test(folder, types=None):
     keys_known(t, "", {"harness", "name", "about", "proves", "mods", "code", "language", "seed", "continue_from",
                        "renderers", "limit_seconds", "bare", "save", "stage", "player", "steps", "expect",
                        "faults", "hide_game_files", "safe_start", "device", "ends", "starts", "fresh", "window",
-                       "time", "visible", "settings", "diagnostics", "disc", "memory", "saves", "clock"})
+                       "time", "visible", "settings", "diagnostics", "disc", "memory", "saves", "clock", "rate"})
     for key in ("harness", "name", "about", "steps", "expect"):
         if key not in t:
             raise HarnessError("the test has no %s" % key)
@@ -371,6 +371,9 @@ def read_test(folder, types=None):
     memory = whole(t, "memory", "", 1) if "memory" in t else None
     if memory is not None and memory > 3600:
         raise HarnessError("memory is 1 to 3600 seconds")
+    # "rate": the world clock's rate from the run's first step, in thousandths of real time, a whole number of steps a frame
+    # (1000, 2000 ... 16000); the plan then counts world steps (read_rate, read_steps).
+    rate = read_rate(t, bare)
     # A visible window (pacing measurements only; every other run is hidden).
     visible = boolean(t, "visible", "") if "visible" in t else False
     # Settings for the run, as tools/verify/settings_args.py takes them (GALAXY_VSYNC_INTERVAL=1), and the test
@@ -533,7 +536,7 @@ def read_test(folder, types=None):
         if not (folder / saves).is_dir() or not any((folder / saves).iterdir()):
             raise HarnessError("saves: the test has no folder %s with files in it" % saves)
     setup = read_setup(t, bare, seed, language, classes)
-    steps = read_steps(t, bare, classes)
+    steps = read_steps(t, bare, classes, rate)
     expect, not_here = read_expect(t, bare, steps, folder)
     if ends != "end" and not any(c["kind"] == "log" and c["pattern"].startswith("crash: ") for c in expect):
         raise HarnessError("a test that ends in a crash expects its crash line: a log expectation starting \"crash: \"")
@@ -543,7 +546,7 @@ def read_test(folder, types=None):
             "expect": expect,
             "has_stage": "stage" in t, "hidden": hidden, "safe_start": safe_start, "device": device, "ends": ends,
             "time": clock, "clock": clock_from, "visible": visible, "settings": run_settings, "diagnostics": diagnostics,
-            "starts": starts, "fresh": fresh, "not_here": not_here, "disc": disc, "memory": memory}
+            "starts": starts, "fresh": fresh, "not_here": not_here, "disc": disc, "memory": memory, "rate": rate}
 
 
 def read_setup(t, bare, seed, language, classes):
@@ -673,7 +676,51 @@ def read_check(c, path, keys):
     return op, value, within
 
 
-def read_steps(t, bare, classes):
+RATE_LEAST, RATE_MOST, RATE_REAL = 1, 16000, 1000  # the time service's (native/include/luma_time.h)
+
+
+def read_rate(t, bare):
+    """The test's "rate" (None without one): the world clock's rate in thousandths, 1 to 16000 as the time service takes it,
+    and a whole number of steps a frame (a multiple of 1000), because the plan's times are then world steps and a step that
+    is not a frame's first cannot be told apart from it by the controls, which are read once a frame."""
+    if "rate" not in t:
+        return None
+    if bare:
+        raise HarnessError("a bare test has no rate")
+    rate = whole(t, "rate", "", 1)
+    if not RATE_LEAST <= rate <= RATE_MOST:
+        raise HarnessError("rate must be 1 to 16000, thousandths of real time (the time service's range), not %d" % rate)
+    if rate % RATE_REAL:
+        raise HarnessError("rate must be a whole number of steps a frame: 1000, 2000 ... 16000, not %d" % rate)
+    return rate
+
+
+def frame_of(step, rate, path):
+    """The test-clock frame that begins with world step `step` at `rate` (None: the plan is in frames). The rate is set in
+    frame 0, which runs one step (step 0) and takes effect from frame 1: frame f >= 1 runs steps (f - 1) * k + 1 to f * k
+    (k steps a frame). A step that is not the first of a frame cannot be asked for: the controls are read once a frame."""
+    if rate is None or step == 0:
+        return step
+    k = rate // RATE_REAL
+    if (step - 1) % k:
+        raise HarnessError("%s: world step %d does not begin a frame at a rate of %d (a frame begins with step 0, 1, %d, %d ...)" % (
+            path, step, rate, 1 + k, 1 + 2 * k))
+    return (step - 1) // k + 1
+
+
+def span_frames(first, steps, rate, path):
+    """The frames of a run of `steps` world steps from `first` (None for a step that waits: its start is not known). At a rate
+    the run must end where a frame ends, and a run after a wait must be a whole number of frames."""
+    if rate is None:
+        return steps
+    if first is None:
+        if steps % (rate // RATE_REAL):
+            raise HarnessError("%s: %d world steps are not a whole number of frames at a rate of %d" % (path, steps, rate))
+        return steps // (rate // RATE_REAL)
+    return frame_of(first + steps, rate, path) - frame_of(first, rate, path)
+
+
+def read_steps(t, bare, classes, rate=None):
     steps = t["steps"]
     if not isinstance(steps, list) or not steps:
         raise HarnessError("steps must be a list with an end step")
@@ -697,8 +744,10 @@ def read_steps(t, bare, classes):
         if ("at" in s) == ("after" in s):
             raise HarnessError("%s needs at or after, not both" % path)
         step = {"action": action, "at": None, "after": None, "timeout": 600}
+        first = None
         if "at" in s:
-            step["at"] = whole(s, "at", path, 0)
+            first = whole(s, "at", path, 0)
+            step["at"] = frame_of(first, rate, path + ".at")
             if "timeout" in s:
                 raise HarnessError("%s: timeout belongs with after" % path)
         else:
@@ -741,16 +790,16 @@ def read_steps(t, bare, classes):
         if action == "hold":
             if not isinstance(v, list) or not v or not all(isinstance(b, str) and b in BUTTONS for b in v):
                 raise HarnessError("%s.hold must list buttons of %s" % (path, " ".join(sorted(BUTTONS))))
-            step["line"] = "hold %s %d" % ("+".join(v), whole(s, "frames", path, 1))
+            step["line"] = "hold %s %d" % ("+".join(v), span_frames(first, whole(s, "frames", path, 1), rate, path + ".frames"))
         elif action == "stick" or action == "pointer":
             if not (isinstance(v, list) and len(v) == 2 and all(isinstance(n, (int, float)) and not isinstance(n, bool) for n in v)):
                 raise HarnessError("%s.%s must be two numbers" % (path, action))
             low = -1 if action == "stick" else 0
             if not all(low <= n <= 1 for n in v):
                 raise HarnessError("%s.%s: each is %d to 1" % (path, action, low))
-            step["line"] = "%s %r %r %d" % (action, float(v[0]), float(v[1]), whole(s, "frames", path, 1))
+            step["line"] = "%s %r %r %d" % (action, float(v[0]), float(v[1]), span_frames(first, whole(s, "frames", path, 1), rate, path + ".frames"))
         elif action == "shake":
-            step["line"] = "shake %d" % whole(s, "shake", path, 1)
+            step["line"] = "shake %d" % span_frames(first, whole(s, "shake", path, 1), rate, path + ".shake")
         elif action == "key":
             if v not in KEYS:
                 raise HarnessError("%s.key must be one of %s" % (path, " ".join(sorted(KEYS))))
@@ -870,6 +919,9 @@ def read_steps(t, bare, classes):
         out.append(step)
     if ends != 1:
         raise HarnessError("the test has %d end steps; it needs exactly one" % ends)
+    if rate is not None:
+        # The first step of the run (frame 0) sets the world's rate; it takes effect from the next frame.
+        out.insert(0, {"action": "rate", "at": 0, "after": None, "timeout": 600, "line": "game rate %d" % rate})
     return out
 
 

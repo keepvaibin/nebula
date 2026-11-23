@@ -53,7 +53,7 @@ land BRANCH [BRANCH ...] | land --queue: the landing queue (tools/gate/landing.p
          halves the batch to find the branch at fault. Exit 0 landed, 1 fail, 2 not judged, 3 the same failure three times.
 --scope GROUPS|auto|full: with --main (--move too), only the checks of these groups; what `land` runs on the batch's tip.
 --also NAMES: with --scope, and with `land` (a step's proof that asks for more): more checks, by name (comma-separated): the
-         nightly's parts in ALSO_PARTS (stress, sanitizer/tour, soak, soak/long, replays/software, speed/anchor: the pair against
+         nightly's parts in ALSO_PARTS (stress, sanitizer/tour, soak, soak/long, replays/software, replays/rates, speed/anchor: the pair against
          the anchor), or any check of the main level.
          They run after the checks the groups need have passed (a failed landing runs none), before measure/step/pc, one after
          another, as the nightly run runs them (every stop of a tour), so a landing with --also runs its groups' checks at that
@@ -134,6 +134,7 @@ import long_parts  # noqa: E402
 import machine  # noqa: E402
 import noprompt  # noqa: E402
 import pictures as picture_tool  # noqa: E402
+import replays_rates  # noqa: E402
 import replays_software  # noqa: E402
 import scope  # noqa: E402
 import speedbase  # noqa: E402
@@ -4215,6 +4216,30 @@ def replays_software_check(g):
     return fn
 
 
+def replays_rates_part(g):
+    """Each recorded stop played at a world rate of 1 and of 2 (tools/gate/replays_rates.py), after the other checks: one check
+    `replays/rates`. It plays on the graphics card, when every lane is done."""
+    if not g.wanted("replays/rates", DATA) or g.dry:
+        return
+    g.check("replays/rates", replays_rates_check(g), DATA)
+
+
+def replays_rates_check(g):
+    """The script plays every recorded stop twice and ends with its KIND lines and a VERDICT; its result.json names every stop, which
+    become this check's tests."""
+    def fn(log):
+        out = g.work / "replays-rates"
+        shutil.rmtree(out, ignore_errors=True)
+        code = run([sys.executable, "-X", "utf8", "-I", HERE / "replays_rates.py", "run", "--bin", g.bin, "--work", out, "--who", "gate",
+                    "--commit", g.commit], log, env={"LUMA_TEST_PAKS": g.paks_text()}, cwd=g.args.build_root)
+        found = replays_rates.cases_of(out)
+        if found is None:
+            return False, "no result.json: %s" % last_line(pathlib.Path(log).read_text(encoding="utf-8", errors="replace")), None, "tool"
+        results, detail = found
+        return code == 0, detail, kinds.Cases(results)
+    return fn
+
+
 class AlsoPart:
     def __init__(self, run, checks):
         self.run, self.checks = run, checks
@@ -4226,6 +4251,7 @@ ALSO_PARTS = {
     "soak": AlsoPart(lambda g: soak_part(g, "soak", SOAK_SHORT_MINUTES), ("soak",)),
     "soak/long": AlsoPart(lambda g: soak_part(g, "soak/long", g.args.soak_minutes), ("soak/long",)),
     "replays/software": AlsoPart(lambda g: replays_software_part(g), ("replays/software",)),
+    "replays/rates": AlsoPart(lambda g: replays_rates_part(g), ("replays/rates",)),
     "speed/anchor": AlsoPart(lambda g: anchor_part(g), ("speed/anchor",)),
 }
 # Two lengths of one soak: they share a work folder and a log, so a landing asks for one.

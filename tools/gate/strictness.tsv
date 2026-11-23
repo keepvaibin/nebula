@@ -29,3 +29,4 @@ tools/audit_repo.ps1	any	block:$AllowedBinaries,$ForbiddenExtensions,$ForbiddenB
 tools/**/tests/**	removed	*	a changed or deleted line of an existing self-test can make it pass what it refused
 tools/lumacore/harness_*_test.py	removed	*	a changed or deleted line of an existing self-test can make it pass what it refused
 tools/lumacore/*_fixture_test.py	removed	*	a changed or deleted line of an existing self-test can make it pass what it refused
+tests/replays/rate-stops.txt	removed	*	a removed line takes a stop out of the rate check (replays/rates)
