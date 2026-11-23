@@ -15,6 +15,7 @@
 #include "galaxy/mod_xml.h"
 #include "galaxy/mod_crash.h"
 #include "galaxy/mods.h"
+#include "galaxy/game_module.h"
 
 #include <archive.h>
 #include <archive_entry.h>
@@ -1065,12 +1066,58 @@ bool text_options() {
 
 }  // namespace
 
+// The game module the start loads (game_module.h): the rows module only when a mod's code needs it, and never in a build with
+// no mod support, with or without the plain module's file and whatever the mods folder holds.
+bool module_choice() {
+    bool ok = true;
+    const fs::path root = galaxy::test_temp_path("nebula_mods_module_choice");
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    const fs::path rows = root / "bin" / "smg_game.bin";
+    const fs::path plain = galaxy::game_module::plain_beside(rows);
+    ok &= expect(plain.filename() == "smg_game_plain.bin" && plain.parent_path() == rows.parent_path(), "the plain module is beside the rows one");
+    // A mod that is on, with code for this system.
+    std::string platforms;
+    for (const char* platform : {"windows-x64", "windows-arm64", "linux-x64", "linux-arm64", "macos-arm64", "macos-x64", "android-arm64", "android-x64"}) {
+        platforms += std::string(platforms.empty() ? "" : ",") + '"' + platform + '"';
+        write(root / "mods" / "code-mod" / "code" / platform / "mod.dll", platform);
+        write(root / "mods" / "code-mod" / "code" / platform / "mod.so", platform);
+        write(root / "mods" / "code-mod" / "code" / platform / "mod.dylib", platform);
+    }
+    write(root / "mods" / "code-mod" / "luma.json",
+          R"({"format":"1.0","id":"code-mod","name":"n","version":"1.0.0","game":{"id":"RMG"},"code":{"platforms":[)" + platforms +
+              R"(]},"layers":[{"name":"base"}]})");
+    write(root / "mods.ini", "[code-mod]\nenabled=1\norder=1\n");
+    galaxy::mods::set_dev_mods({"code-mod"});  // a dev mod's code needs no answer of the player's
+    const auto choose = [&](bool support, bool with_mods) {
+        std::string why;
+        const fs::path chosen = galaxy::game_module::choose_with(support, rows, with_mods ? root / "mods" : fs::path{}, root / "mods.ini",
+                                                                 "RMGE01", false, false, "", &why);
+        return std::pair<fs::path, std::string>{chosen, why};
+    };
+    write(plain, "plain");
+    ok &= expect(choose(true, true).first == rows, "a mod with code on: the rows module");
+    ok &= expect(choose(true, false).first == plain, "no mods folder: the plain module");
+    {
+        const auto [chosen, why] = choose(false, true);
+        ok &= expect(chosen == plain && why.find("no mod support") != std::string::npos,
+                     "no mod support, a mod with code on: the plain module, and the log line says why");
+    }
+    fs::remove(plain, ec);
+    ok &= expect(choose(true, false).first == rows, "mod support, no plain file: the rows module (a development build)");
+    ok &= expect(choose(false, true).first == plain && choose(false, false).first == plain,
+                 "no mod support, no plain file: still never the rows module");
+    galaxy::mods::set_dev_mods({});
+    fs::remove_all(root, ec);
+    return ok;
+}
+
 int main() {
     test_texture_categories();
     // Every test runs, whichever fail.
     const bool results[] = {texture_names(), xml(), importing(), code_patch_notes(), setting_overlaps(), patches_by_key_in_the_plan(), layer_only_mods(), layer_assets(), libraries_load_when_needed(), libraries_act_with_their_users_permissions(), galaxy_saves(),
                             luma_rules(), luma_import(), text_options(), crash_record_text(),
-                            crash_record_files()};
+                            crash_record_files(), module_choice()};
     bool ok = true;
     for (const bool passed : results) ok = ok && passed;
     std::cout << (ok ? "mods tests passed" : "mods tests FAILED") << '\n';

@@ -176,6 +176,11 @@ int main(int argc, char** argv) {
               compare_versions("", "0.0.0") < 0,
           "versions: numbers, a release after its betas, beta numbers");
     check(is_beta("2.1.0-beta.3") && is_beta("2.1.0-BETA.3") && !is_beta("2.1.0"), "beta channel by its -beta. label");
+    // The 2.0.0 beta (tag v2.0.0-beta.1): a compare of the three numbers alone would call it 2.0.0.
+    check(compare_versions("2.0.0", "2.0.0-beta.1") > 0 && compare_versions("2.0.0-beta.1", "2.0.0") < 0 &&
+              compare_versions("2.0.0-beta.2", "2.0.0-beta.1") > 0 && compare_versions("2.0.0-beta.1", "1.0.2") > 0 &&
+              is_beta("2.0.0-beta.1") && !is_beta("2.0.0"),
+          "2.0.0-beta.1 is a beta, below 2.0.0 and above 1.0.2");
 
     // Listing selection.
     bool is_list = false;
@@ -196,6 +201,15 @@ int main(int argc, char** argv) {
               !takes("2.0.8", "2.0.9-beta.1"),
           "channels: a beta takes betas and releases, a release takes releases");
     check(!select_newer(listing("2.0.7-beta.1", "x"), "2.0.8-beta.1", kRelease, kAsset, is_list), "an older beta is not offered");
+    // The beta's player is later offered the true 2.0.0 (with the release's package); a 1.0.2 player is not offered the beta, and
+    // a beta is not offered again to the player of that beta.
+    found = select_newer(listing("2.0.0", "x", std::string(kRelease)), "2.0.0-beta.1", kRelease, kAsset, is_list);
+    check(is_list && found && found->version == "2.0.0", "a 2.0.0-beta.1 install is offered 2.0.0");
+    check(!select_newer(listing("2.0.0-beta.1", "x"), "1.0.2", kRelease, kAsset, is_list) && is_list && !takes("1.0.2", "2.0.0-beta.1"),
+          "a 1.0.2 install is not offered 2.0.0-beta.1");
+    found = select_newer(listing("2.0.0", "x", std::string(kRelease)), "1.0.2", kRelease, kAsset, is_list);
+    check(is_list && found && found->version == "2.0.0", "a 1.0.2 install is offered 2.0.0");
+    check(!select_newer(listing("2.0.0-beta.1", "x"), "2.0.0-beta.1", kRelease, kAsset, is_list), "a beta is not offered to its own install");
     check(!select_newer("{\"message\": \"API rate limit exceeded\"}", "2.0.8-beta.1", kRelease, kAsset, is_list) && !is_list,
           "a rate limit's message is no listing");
     check(!select_newer("<html>Sign in to the network</html>", "2.0.8-beta.1", kRelease, kAsset, is_list) && !is_list, "a captive portal's page is no listing");

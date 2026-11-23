@@ -79,27 +79,8 @@ size_t ExtractTree(const wstring& prefix, const wstring& folder, const CancelTok
 
 // ---- versions ----------------------------------------------------------------------------------------------------
 
-static std::vector<long long> VersionKey(const wstring& version) {
-    std::vector<long long> key(5, 0);
-    if (version.empty()) return key;
-    size_t dash = version.find(L'-');
-    auto numbers = Split(dash == wstring::npos ? version : version.substr(0, dash), L'.');
-    for (size_t i = 0; i < 3 && i < numbers.size(); i++) ParseInt(numbers[i], key[i]);
-    key[3] = dash == wstring::npos ? 1 : 0;
-    if (dash != wstring::npos) {
-        wstring rest = version.substr(dash + 1);
-        size_t dot = rest.rfind(L'.');
-        if (dot != wstring::npos) ParseInt(rest.substr(dot + 1), key[4]);
-    }
-    return key;
-}
-
-int CompareVersions(const wstring& a, const wstring& b) {
-    auto x = VersionKey(a), y = VersionKey(b);
-    for (size_t i = 0; i < x.size(); i++)
-        if (x[i] != y[i]) return x[i] < y[i] ? -1 : 1;
-    return 0;
-}
+// The order is release_channel.h's, which the unit tests run.
+int CompareVersions(const wstring& a, const wstring& b) { return CompareReleaseVersions(a, b); }
 
 bool IsBetaVersion(const wstring& version) { return IFind(version, L"-beta.") != wstring::npos; }
 
@@ -400,8 +381,12 @@ namespace {
 // What a version folder holds (each from the package).
 const wchar_t* const kNativeFiles[] = {
     L"Nebula.exe", L"Nebula-x86-64-v2.exe", L"NebulaVk.exe", L"NebulaVk-x86-64-v2.exe", L"NebulaD11.exe",
-    L"NebulaD11-x86-64-v2.exe", L"smg_game.dll", L"smg_game_plain.dll", L"x86-64-v2\\smg_game.dll",
-    L"x86-64-v2\\smg_game_plain.dll", L"nebula_import.dll", L"nebula-import.exe", L"dxc\\dxc.exe",
+    L"NebulaD11-x86-64-v2.exe",
+#if !defined(NEBULA_NO_MODS)
+    // The game module that carries the mod rows: a package with no mod support (build-native-setup.ps1 -NoMods) has none.
+    L"smg_game.dll", L"x86-64-v2\\smg_game.dll",
+#endif
+    L"smg_game_plain.dll", L"x86-64-v2\\smg_game_plain.dll", L"nebula_import.dll", L"nebula-import.exe", L"dxc\\dxc.exe",
     L"dxc\\dxcompiler.dll", L"dxc\\dxil.dll", L"dxc\\LICENSE-MS.txt", L"dxc\\LICENCE-MIT.txt", L"dxc\\LICENSE-LLVM.txt",
     L"glslang\\glslang.exe", L"glslang\\LICENSE.txt", L"D3D12\\D3D12Core.dll", L"D3D12\\LICENSE.txt", L"LICENSE",
     L"THIRD-PARTY-NOTICES.md", L"README.md"};
@@ -956,6 +941,7 @@ std::vector<wstring> Register(const InstallLayout& layout, const wstring& versio
         nebula.Set(L"InstallRoot", layout.root);
         for (const wchar_t* name : {L"LumaLinkWindow", L"LumaLinkCommand", L"LumaLinkPath"}) nebula.Delete(name);
     }
+#if !defined(NEBULA_NO_MODS)
     // Double-clicking a mod's file adds it; Nebula is also listed under Open with, beside LumaLink.
     {
         Key extension(L"Software\\Classes\\.luma");
@@ -979,6 +965,7 @@ std::vector<wstring> Register(const InstallLayout& layout, const wstring& versio
         Key open(wstring(L"Software\\Classes\\") + kLinkScheme + L"\\shell\\open\\command");
         open.Set(nullptr, L"\"" + starter + L"\" --import \"%1\"");
     }
+#endif
     {
         Key uninstall(kUninstallKey);
         uninstall.Set(L"DisplayName", L"Nebula");

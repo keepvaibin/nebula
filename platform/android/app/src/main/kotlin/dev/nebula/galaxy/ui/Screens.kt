@@ -187,7 +187,10 @@ fun NebulaApp(model: LauncherModel, onShareLog: () -> Unit) {
                 Screen.Licenses -> LicenseScreen(model)
             }
         }
-        if (dropHover) DropHint(setUp = model.screen != Screen.Welcome && model.screen != Screen.Disc)
+        // The hint for a file dragged in names mods once the game is set up (disc image, saves, Mii files and mods): an app
+        // with no mod support shows it only for the disc image, which setup takes.
+        val settingUp = model.screen == Screen.Welcome || model.screen == Screen.Disc
+        if (dropHover && (BuildConfig.MODS || settingUp)) DropHint(setUp = !settingUp)
     }
     model.modResult?.let { result ->
         AlertDialog(
@@ -564,7 +567,7 @@ private fun HomeScreen(model: LauncherModel, onPlay: () -> Unit) {
                 PrimaryAction(stringResource(R.string.Play), Icons.Rounded.PlayArrow, onPlay, Modifier.fillMaxWidth(), tall = true)
                 Gap(20.dp)
                 GlassCard(Modifier.fillMaxWidth(), padding = androidx.compose.foundation.layout.PaddingValues(vertical = 6.dp)) {
-                    NavigationRow(Icons.Rounded.Tune, stringResource(R.string.Settings), stringResource(R.string.SettingsHint)) { model.screen = Screen.Settings }
+                    NavigationRow(Icons.Rounded.Tune, stringResource(R.string.Settings), if (BuildConfig.MODS) stringResource(R.string.SettingsHint) else null) { model.screen = Screen.Settings }
                     HorizontalDivider(color = Night.GlassEdge, modifier = Modifier.padding(horizontal = 20.dp))
                     NavigationRow(Icons.Rounded.Info, stringResource(R.string.AboutNebula), stringResource(R.string.AboutHint, BuildConfig.VERSION_NAME)) { model.screen = Screen.About }
                 }
@@ -712,20 +715,22 @@ private fun SettingsScreen(
                     ) { model.screen = Screen.MotionTest }
                 }
 
-                SectionTitle(stringResource(R.string.Mods))
-                GlassCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp), padding = androidx.compose.foundation.layout.PaddingValues(vertical = 4.dp)) {
-                    val progress = model.modProgress
-                    NavigationRow(
-                        Icons.Rounded.Add,
-                        stringResource(R.string.ImportMod),
-                        if (progress != null) stringResource(R.string.Importing, (progress * 100).roundToInt())
-                        else stringResource(R.string.ImportModHint),
-                    ) { if (progress == null) onChooseMod() }
-                    if (progress != null) {
-                        LinearProgressIndicator(
-                            progress = { progress },
-                            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 14.dp),
-                        )
+                if (BuildConfig.MODS) {
+                    SectionTitle(stringResource(R.string.Mods))
+                    GlassCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp), padding = androidx.compose.foundation.layout.PaddingValues(vertical = 4.dp)) {
+                        val progress = model.modProgress
+                        NavigationRow(
+                            Icons.Rounded.Add,
+                            stringResource(R.string.ImportMod),
+                            if (progress != null) stringResource(R.string.Importing, (progress * 100).roundToInt())
+                            else stringResource(R.string.ImportModHint),
+                        ) { if (progress == null) onChooseMod() }
+                        if (progress != null) {
+                            LinearProgressIndicator(
+                                progress = { progress },
+                                modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 14.dp),
+                            )
+                        }
                     }
                 }
 

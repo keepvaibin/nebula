@@ -120,7 +120,8 @@ if [ -z "$portable" ]; then
     share=${XDG_DATA_HOME:-$HOME/.local/share}
     mkdir -p "$share/applications" "$share/mime/packages" "$share/icons/hicolor/256x256/apps" "$HOME/.local/bin"
     sed "s#^Exec=nebula-launch#Exec=\"$root/nebula-launch\"#" "$here/dev.nebula.galaxy.desktop" > "$share/applications/dev.nebula.galaxy.desktop"
-    cp "$here/dev.nebula.galaxy.xml" "$share/mime/packages/dev.nebula.galaxy.xml"
+    # The .luma type: a package with no mod support has no type file.
+    [ ! -f "$here/dev.nebula.galaxy.xml" ] || cp "$here/dev.nebula.galaxy.xml" "$share/mime/packages/dev.nebula.galaxy.xml"
     cp "$here/dev.nebula.galaxy.png" "$share/icons/hicolor/256x256/apps/dev.nebula.galaxy.png"
     ln -sf "$root/nebula-launch" "$HOME/.local/bin/nebula-launch"
     command -v update-mime-database >/dev/null 2>&1 && update-mime-database "$share/mime" >/dev/null 2>&1 || true

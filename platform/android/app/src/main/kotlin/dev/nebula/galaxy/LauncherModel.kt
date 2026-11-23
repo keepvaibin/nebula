@@ -185,7 +185,8 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
                 }
                 kinds[DropKind.Saves]?.firstOrNull()?.let { importSaves(it) }
                 kinds[DropKind.Miis]?.let { importMiis(it) }
-                kinds[DropKind.Mod]?.forEach { importMod(it) }
+                // An app with no mod support takes no mod.
+                if (BuildConfig.MODS) kinds[DropKind.Mod]?.forEach { importMod(it) }
             }
         }
     }

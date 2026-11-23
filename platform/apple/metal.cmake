@@ -49,7 +49,7 @@ target_compile_features(galaxy_render_mtl PUBLIC cxx_std_20)
 # The game's version, from the main project's file (as platform/sdl reads it for its own targets).
 file(STRINGS "${nebula_root}/CMakeLists.txt" nebula_apple_project_line REGEX "^project\\(Nebula VERSION ")
 string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" nebula_apple_version "${nebula_apple_project_line}")
-target_compile_definitions(galaxy_render_mtl PUBLIC NEBULA_GPU_METAL NEBULA_VERSION="${nebula_apple_version}")
+target_compile_definitions(galaxy_render_mtl PUBLIC NEBULA_GPU_METAL NEBULA_VERSION="${nebula_apple_version}${NEBULA_VERSION_SUFFIX}")
 if(TARGET nebula_archive)
     target_compile_definitions(galaxy_render_mtl PUBLIC NEBULA_MOD_IMPORT=1)
     target_link_libraries(galaxy_render_mtl PUBLIC nebula_archive)

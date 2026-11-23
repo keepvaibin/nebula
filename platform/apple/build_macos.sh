@@ -4,7 +4,7 @@
 # host, the game module beside it. Nothing of another system's is in the app.
 #
 #   build_macos.sh -t <tools> -w <work folder> [-a "x86_64 arm64"] [-r] [-s <macOS SDK>] [-j <jobs>] [-x <Xcode>]
-#                  [-m <shipped mods>]
+#                  [-m <shipped mods>] [-n]
 #
 #   <tools>  holds toolchain/llvm (LLVM 19+), toolchain/libcxx (build_libcxx.sh's output) and deps (the dependency
 #            checkouts platform/apple/CMakeLists.txt names). cmake, ninja and cargo are taken from PATH.
@@ -16,6 +16,9 @@
 #            the programs are then compiled into the app's Metal libraries.
 #   -m       a folder of the .luma files that come with the game (LumaKit, installer/lumakit): the app carries them in
 #            Contents/Resources/luma/mods, where the game installs them from at start.
+#   -n       an app with no mod support (CMake NEBULA_MODS=OFF; the environment variable NEBULA_MODS=OFF does the same): only
+#            the plain game module, no LumaKit (-m is refused), no .luma type, mod archive type or nebula: link in the
+#            Info.plist, no microphone or camera entitlement and no usage text.
 set -eu
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -29,7 +32,9 @@ sdk=
 jobs=
 xcode=
 shipped=
-while getopts "t:w:a:rs:j:x:m:" option; do
+nomods=
+[ "${NEBULA_MODS:-}" = OFF ] && nomods=1
+while getopts "t:w:a:rs:j:x:m:n" option; do
     case "$option" in
     t) tools=$OPTARG ;;
     w) work=$OPTARG ;;
@@ -38,12 +43,19 @@ while getopts "t:w:a:rs:j:x:m:" option; do
     j) jobs="--parallel $OPTARG" ;;
     x) xcode=$OPTARG ;;
     m) shipped=$OPTARG ;;
-    *) sed -n '6,19p' "$0" >&2; exit 2 ;;
+    n) nomods=1 ;;
+    *) sed -n '6,23p' "$0" >&2; exit 2 ;;
     esac
 done
 if [ -z "$tools" ] || [ -z "$work" ]; then
-    sed -n '6,19p' "$0" >&2
+    sed -n '6,23p' "$0" >&2
     exit 2
+fi
+if [ -n "$nomods" ]; then
+    # Every CMake project reads this (cmake/nebula_options.cmake).
+    NEBULA_MODS=OFF
+    export NEBULA_MODS
+    [ -z "$shipped" ] || { echo "build_macos.sh: -n (no mod support) and -m (the shipped mods) do not go together" >&2; exit 2; }
 fi
 if [ -n "$shipped" ] && ! ls "$shipped"/*.luma > /dev/null 2>&1; then
     echo "the shipped mods folder has no .luma file: $shipped" >&2
@@ -68,8 +80,13 @@ for arch in $ordered; do
     # shellcheck disable=SC2086
     cmake -S "$root/native" -B "$work/macos-$arch/game" $common -DNEBULA_LTO=ON
     # shellcheck disable=SC2086
-    # Both game modules: the host loads libsmg_game_plain.dylib unless a mod's code needs the rows.
-    cmake --build "$work/macos-$arch/game" --target smg_game smg_game_plain $jobs
+    # Both game modules: the host loads libsmg_game_plain.dylib unless a mod's code needs the rows (no mod support: the
+    # plain one only).
+    if [ -n "$nomods" ]; then
+        cmake --build "$work/macos-$arch/game" --target smg_game_plain $jobs
+    else
+        cmake --build "$work/macos-$arch/game" --target smg_game smg_game_plain $jobs
+    fi
     tree="$work/macos-$arch/host"
     if [ "$arch" = "$host_arch" ]; then
         # shellcheck disable=SC2086
@@ -110,13 +127,15 @@ if [ $# -gt 1 ]; then
     done
     # shellcheck disable=SC2086
     lipo -create $programs -output "$app/Contents/MacOS/Nebula"
-    # shellcheck disable=SC2086
-    lipo -create $modules -output "$app/Contents/Frameworks/libsmg_game.dylib"
+    if [ -z "$nomods" ]; then
+        # shellcheck disable=SC2086
+        lipo -create $modules -output "$app/Contents/Frameworks/libsmg_game.dylib"
+    fi
     # shellcheck disable=SC2086
     lipo -create $plains -output "$app/Contents/Frameworks/libsmg_game_plain.dylib"
 else
     cp "$work/macos-$1/host/Nebula" "$app/Contents/MacOS/Nebula"
-    cp "$work/macos-$1/game/libsmg_game.dylib" "$app/Contents/Frameworks/libsmg_game.dylib"
+    [ -n "$nomods" ] || cp "$work/macos-$1/game/libsmg_game.dylib" "$app/Contents/Frameworks/libsmg_game.dylib"
     cp "$work/macos-$1/game/libsmg_game_plain.dylib" "$app/Contents/Frameworks/libsmg_game_plain.dylib"
 fi
 
@@ -136,9 +155,17 @@ if [ -n "$shipped" ]; then
 fi
 
 version=$(sed -n 's/^project(Nebula VERSION \([0-9.]*\).*/\1/p' "$root/CMakeLists.txt")
-sed "s/@NEBULA_VERSION@/$version/g" "$here/Info.macos.plist.in" > "$app/Contents/Info.plist"
-# The Info.plist's player texts in every language the game ships.
-python3 "$root/tools/package_text.py" apple "$app/Contents/Resources"
+# The system reads the three numbers as the app's version (a pre-release label is no part of CFBundleShortVersionString);
+# the game's own version, with the label, is in the program (NEBULA_VERSION).
+if [ -n "$nomods" ]; then
+    # No mod support: the Info.plist has no .luma type, mod archive type, nebula: link or usage text.
+    sed "s/@NEBULA_VERSION@/$version/g" "$here/Info.macos.plist.in" | sed '/<!-- mods:begin/,/<!-- mods:end -->/d' > "$app/Contents/Info.plist"
+    python3 "$root/tools/package_text.py" apple "$app/Contents/Resources" --no-mods
+else
+    sed "s/@NEBULA_VERSION@/$version/g" "$here/Info.macos.plist.in" > "$app/Contents/Info.plist"
+    # The Info.plist's player texts in every language the game ships.
+    python3 "$root/tools/package_text.py" apple "$app/Contents/Resources"
+fi
 
 # The icon: every size of the iconset from the 1024 px picture.
 iconset="$work/Nebula.iconset"
@@ -162,9 +189,11 @@ fi
 # The hardened runtime, with Nebula.entitlements: the app is refused everything the system guards that it does not
 # name there, without the player being asked (the microphone above all, which macOS otherwise asks for whenever the
 # sound goes to a device that also has inputs).
-codesign --force --options runtime --sign - "$app/Contents/Frameworks/libsmg_game.dylib"
+[ -n "$nomods" ] || codesign --force --options runtime --sign - "$app/Contents/Frameworks/libsmg_game.dylib"
 codesign --force --options runtime --sign - "$app/Contents/Frameworks/libsmg_game_plain.dylib"
-codesign --force --options runtime --entitlements "$here/Nebula.entitlements" --sign - "$app"
+entitlements="$here/Nebula.entitlements"
+[ -z "$nomods" ] || entitlements="$here/Nebula-no-mods.entitlements"
+codesign --force --options runtime --entitlements "$entitlements" --sign - "$app"
 # A signature that does not hold over every file is what makes macOS call a downloaded app "damaged".
 codesign --verify --deep --strict "$app"
 
