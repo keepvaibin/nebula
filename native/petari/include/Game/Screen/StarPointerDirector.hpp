@@ -5,22 +5,6 @@
 
 class StarPointerController;
 class StarPointerLayout;
-class PointerInfo;
-
-class StarPointerPeekZ {
-public:
-    StarPointerPeekZ();
-
-    // The depth under each pointer, from the picture where the drawing has reached (its readback channel).
-    void setDrawSyncToken();
-
-    static const u32 cReadbackChannel = 1;
-
-    PointerInfo** mInfos;
-    f32 mProjectionParameters[7];
-    f32 mViewportParameters[6];
-    u32 mAsker;  // the asker its probes carry
-};
 
 class StarPointerTransformHolder {
 public:
@@ -76,7 +60,6 @@ public:
     StarPointerController* mControllers;
     StarPointerLayout* mStarPointerLayouts;
     StarPointerTransformHolder* mTransHolder;
-    StarPointerPeekZ* mPeekZ;
     StarPointerGuidance* mGuidance;
     Vec3f mNozzleAimPos;
 };

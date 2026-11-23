@@ -63,6 +63,11 @@ namespace MR {
     Vec2f* getStarPointerScreenVelocity(s32);
     void getStarPointerWorldVelocityDirection(Vec3f*, s32);
     Vec3f* getStarPointerWorldPosUsingDepth(s32);
+    // The scene query (docs/engine/CONSOLE-FREE.md, section 3): the point of the world under a screen point, from the
+    // camera of the view and projection given, with no picture read back. The ray through the point meets the map's
+    // collision and the spheres of the pointer targets that are drawn; the nearest hit is the answer. With no hit, the
+    // point where the ray meets the camera's far distance.
+    void calcScenePointUnderScreen(Vec3f*, const Vec2f&, MtxPtr, Mtx44Ptr);
     void calcStarPointerWorldPointingPos(Vec3f*, const Vec3f&, s32);
     void calcStarPointerWorldPointingPosInsideEdge(Vec3f*, const Vec3f&, s32);
     bool calcStarPointerPosOnPlane(Vec3f*, const Vec3f&, const Vec3f&, s32, bool);
@@ -114,7 +119,6 @@ namespace MR {
     bool isEnableStarPointerShootStarPiece(s32);
     bool isStarPointer2PTransparencyMode();
     bool isStarPointer1PInvalid2PValidMode();
-    void setStarPointerDrawSyncToken();
     bool requestBlueStarGuidance();
     bool requestTicoSeedGuidance(s32);
     bool requestTicoSeedGuidance();
