@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-23 04:53. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-23 04:54. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 6 of 138 (4%).
 
-Now: S0.2.1 since 01:06, queued 03:12 behind beta/mac-load; ahead: S0.2.2 written
+Now: S0.2.2 since 04:55 (S0.2.1 landed 04:53); ahead: S0.2.3 next
 
 In work now:
 - S0.2.2 The scene query's form, written into the inventory before code (agent 1)
