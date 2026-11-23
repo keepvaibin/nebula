@@ -207,7 +207,33 @@ FfxResource ffx_image(const TemporalImage& image, const wchar_t* name, FfxResour
 VKAPI_ATTR void VKAPI_CALL no_label_begin(VkCommandBuffer, const VkDebugUtilsLabelEXT*) {}
 VKAPI_ATTR void VKAPI_CALL no_label_end(VkCommandBuffer) {}
 
+// A compute pipeline the device refuses is the one failure of context creation that names nothing (the SDK returns one error code
+// for all of them): the result and the subgroup size the stage asked for are logged here.
+PFN_vkCreateComputePipelines g_create_compute_pipelines = nullptr;
+
+VKAPI_ATTR VkResult VKAPI_CALL logged_create_compute_pipelines(VkDevice device, VkPipelineCache cache, uint32_t count,
+                                                               const VkComputePipelineCreateInfo* infos,
+                                                               const VkAllocationCallbacks* allocator, VkPipeline* pipelines) {
+    const VkResult result = g_create_compute_pipelines(device, cache, count, infos, allocator, pipelines);
+    if (result != VK_SUCCESS) {
+        unsigned subgroup = 0u;
+        for (const auto* next = static_cast<const VkBaseInStructure*>(count != 0u ? infos[0].stage.pNext : nullptr); next != nullptr;
+             next = next->pNext) {
+            if (next->sType == VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO_EXT) {
+                subgroup = reinterpret_cast<const VkPipelineShaderStageRequiredSubgroupSizeCreateInfoEXT*>(next)->requiredSubgroupSize;
+            }
+        }
+        std::cerr << "[fsr3] vkCreateComputePipelines returned " << static_cast<int>(result) << " (the stage asked for subgroup size "
+                  << subgroup << ", 0 is none)\n";
+    }
+    return result;
+}
+
 VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL ffx_device_proc(VkDevice device, const char* name) {
+    if (std::strcmp(name, "vkCreateComputePipelines") == 0) {
+        g_create_compute_pipelines = reinterpret_cast<PFN_vkCreateComputePipelines>(vkGetDeviceProcAddr(device, name));
+        return g_create_compute_pipelines != nullptr ? reinterpret_cast<PFN_vkVoidFunction>(logged_create_compute_pipelines) : nullptr;
+    }
     if (std::strcmp(name, "vkCmdBeginDebugUtilsLabelEXT") == 0) {
         return reinterpret_cast<PFN_vkVoidFunction>(no_label_begin);
     }
