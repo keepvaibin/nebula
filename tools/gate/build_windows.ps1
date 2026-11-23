@@ -74,7 +74,8 @@ if ($Sccache -and (Test-Path $Sccache)) {
     $launch = "-DCMAKE_C_COMPILER_LAUNCHER=`"$Sccache`" -DCMAKE_CXX_COMPILER_LAUNCHER=`"$Sccache`" "
     $cacheBefore = (& $Sccache --show-stats --stats-format json 2>$null | ConvertFrom-Json)
 }
-# A build folder configured with another launcher (or none) is configured again with this one.
+# A build folder configured with another launcher (or none) is configured again with this one; the game folder also when it holds other
+# sanitizers or another coverage setting than asked (Game-Config-Differs, build_steps.ps1).
 function Launcher-Differs([string]$Folder) {
     if (-not (Test-Path "$Folder/CMakeCache.txt")) { return $false }
     $line = Select-String -Path "$Folder/CMakeCache.txt" -Pattern '^CMAKE_CXX_COMPILER_LAUNCHER:[A-Z]+=(.*)$' | Select-Object -First 1
@@ -98,18 +99,16 @@ function Drop-Shared-Objects([string]$Folder) {
 # The game modules (both), the headless host, the self-description and the services list.
 $game = "$Root/game"
 Drop-Shared-Objects $game
-if (-not (Test-Path "$game/build.ninja") -or (Launcher-Differs $game)) {
+if (-not (Test-Path "$game/build.ninja") -or (Launcher-Differs $game) -or (Game-Config-Differs $game $Sanitize ([bool]$Coverage))) {
     Step "game configure" ("`"$cmake`" -S `"$Tree/native`" -B `"$game`" -G Ninja -DCMAKE_MAKE_PROGRAM=`"$ninja`" $launch" +
         "-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=`"$Llvm/clang.exe`" -DCMAKE_CXX_COMPILER=`"$Llvm/clang++.exe`" " +
         "-DCMAKE_RC_COMPILER=`"$Llvm/llvm-rc.exe`" -DNEBULA_PETARI_DIR=`"$Tree/native/petari`" " +
         "-DNEBULA_SANITIZE=`"$Sanitize`" -DNEBULA_COVERAGE=$(if ($Coverage) { 'ON' } else { 'OFF' })") "$Root/game.configure.log"
 }
-$configured = (Select-String -Path "$game/CMakeCache.txt" -Pattern '^NEBULA_SANITIZE:STRING=(.*)$' -ErrorAction SilentlyContinue |
-    Select-Object -First 1)
-$have = if ($configured) { $configured.Matches[0].Groups[1].Value } else { "" }
-if ($have -ne $Sanitize) { "game: $game was configured with NEBULA_SANITIZE='$have', asked for '$Sanitize'"; exit 1 }
-$counted = [bool](Select-String -Path "$game/CMakeCache.txt" -Pattern '^NEBULA_COVERAGE:BOOL=ON$' -Quiet -ErrorAction SilentlyContinue)
-if ($counted -ne [bool]$Coverage) { "game: $game was configured with NEBULA_COVERAGE=$counted, asked for $([bool]$Coverage)"; exit 1 }
+# After configuring, a folder that still holds other settings than asked is refused: a build never runs with other ones, silently.
+$config = Get-Game-Config $game
+if ($config.Sanitize -ne $Sanitize) { "game: $game was configured with NEBULA_SANITIZE='$($config.Sanitize)', asked for '$Sanitize'"; exit 1 }
+if ($config.Counted -ne [bool]$Coverage) { "game: $game was configured with NEBULA_COVERAGE=$($config.Counted), asked for $([bool]$Coverage)"; exit 1 }
 # The game and the MSVC build run side by side, each with half the jobs.
 $half = [Math]::Max(2, [int]($Jobs / 2))
 $gameWatch = [Diagnostics.Stopwatch]::StartNew()
