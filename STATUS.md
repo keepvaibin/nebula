@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-23 01:06. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-23 01:34. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 5 of 138 (4%).
 
@@ -77,12 +77,17 @@ Nothing is blocked.
 | M-001 | closed | R-002 | coverage: the history's key holds the suites that ran, a run that fell is not the next bar | 0 | 0 | 2d7287334 |
 | M-002 | closed | R-003 | soak: a run of eight laps or more is judged from lap 6 (slope and lowest of the last laps), a spike is not growth | 0 | 0 | 2d7287334 |
 | M-003 | closed | R-001 | build_windows.ps1 refuses a build folder configured with another NEBULA_SANITIZE instead of configuring it again | 0 | 117 | c60999ee1 |
+| M-004 | open | S0.2.1 | the replay check cannot play a run at a time rate of 2 and compare its step hashes with a rate-1 run (S0.2.1 proof 2) | 0 | 0 | - |
 
-## Decisions (0)
+## Decisions (5)
 
-None.
+- 2026-11-23 S0.2.1: LoadSlice: 32 items a frame; an item is a phase of GameScene::initAfterScenarioChosen, the player, one placement made whole, one piece of FileSelector::initStep, or one Star Bit of the reserve (because the card asks for a fixed count of work and names no count; the count is a constant in one place, no player sees which frame of the load an item falls in, and the load worker (G3.7) replaces the slices)
+- 2026-11-23 S0.2.1: Drawing's random stream (MR::getDrawRandom) is seeded with the same seed as the game's stream, in setRandomSeedFromStageName and setFixedRandomSeed (because a fixed seed keeps the cosmetic numbers the same in every run of a replay and needs no new setting; the draw stream runs through the same sequence as the game's but is advanced only by drawing, so neither changes the other)
+- 2026-11-23 S0.2.1: A message's sound tags are started by the talk former's step walk (TalkTextFormer, a silent print of the text box while it is drawn) and never by the draw; text outside a talk former starts no tag sound (because the step makes the decision (P-214); the silent print walks the same characters and alphas the draw did, so a talk sounds as before; the message pak is compressed so other texts with sound tags could not be counted (a risk named in P-214's note))
+- 2026-11-23 S0.2.1: The galaxy map's capture is prepared in calcAnim (the step) and recorded by the next draw from what the step stored; at a time rate above 1 the layouts are recorded as the last step of the frame left them (because P-214: the step decides and stores, the draw only records; a capture with several steps before one draw cannot show more than one of them)
+- 2026-11-23 S0.2.1: The settings menu's galaxy select names are answered from GameSystem::updateSceneController before the sequence's update, once the system archive is loaded, without a scene (because P-261 offers the names asked at the step's start or served without the scene; the system update runs once per step in every scene, so the menu gets them in the title as in a galaxy)
 
-## Checks changed during the run (12)
+## Checks changed during the run (28)
 
 - 2026-11-22 S0.1.3 tools/verify/console_census.py: the open group gx_sections counts the four section names GXMT, GXTG, GXTM and GXWP with a ceiling of 31, and the closed group fifo excludes only those four whole words (allowed by docs/engine/FRAME-MODEL.md section 2.9)
 - 2026-11-22 U-unattended tools/gate/main_push_guard.py: the guard also refuses a push of a branch named plant/... (allowed by docs/plan/native/TOOL-MEND-PLANTS.md, how a plant is kept from ever landing)
@@ -96,6 +101,22 @@ None.
 - 2026-11-22 U-unattended tools/gate/tests/scope_test.py: the repository checks of a run now include repo/strictness (allowed by docs/plan/04-GATE-AND-MAIN.md section 17)
 - 2026-11-22 Y-beta-build .github/workflows/check.yml: the Mac job builds both processors (build_macos.sh -a "x86_64 arm64", libc++ for both under one cache key, the x86_64 Rust target); the Linux start check runs with the Khronos validation layer (--gpu-validation 1) and fails on a [VK-LIVE-ERR] line (allowed by briefs/Y-beta-build.md pieces 1 and 5, and the planner's message of 2026-11-22 21:58 (item 6))
 - 2026-11-22 Y-beta-build .github/workflows/release.yml: the version step also gives mod support and the version's label to every package job; the lumakit job runs only with mod support (the jobs that need it go on when it is skipped); a dry run can be told its version; the Mac job builds both processors with the compiler check.yml pins, and its package is kept for the Intel Mac job; the Linux start check runs with the validation layer; the pgo check of a pre-release tells and goes on; every package is checked by tools/check_mod_support_package.py (allowed by briefs/Y-beta-build.md pieces 1 to 3 and the planner's message of 2026-11-22 21:58 (items 4 to 7))
+- 2026-11-23 S0.2.1 tests/replays/001-BattleShipGalaxy-1.tsv: the step hashes recorded again from a Direct3D 12 tour run of step S0.2.1 (step_hash.py record); they differ from step 0 (allowed by the card, docs/plan/native/03-NATIVE-STAGE-0.md, step S0.2.1)
+- 2026-11-23 S0.2.1 tests/replays/016-CosmosGardenGalaxy-1.tsv: the step hashes recorded again from a Direct3D 12 tour run of step S0.2.1 (step_hash.py record); they differ from step 0 (allowed by the card, docs/plan/native/03-NATIVE-STAGE-0.md, step S0.2.1)
+- 2026-11-23 S0.2.1 tests/replays/022-EggStarGalaxy-1.tsv: the step hashes recorded again from a Direct3D 12 tour run of step S0.2.1 (step_hash.py record); they differ from step 0 (allowed by the card, docs/plan/native/03-NATIVE-STAGE-0.md, step S0.2.1)
+- 2026-11-23 S0.2.1 tests/replays/027-FactoryGalaxy-1.tsv: the step hashes recorded again from a Direct3D 12 tour run of step S0.2.1 (step_hash.py record); they differ from step 0 (allowed by the card, docs/plan/native/03-NATIVE-STAGE-0.md, step S0.2.1)
+- 2026-11-23 S0.2.1 tests/replays/035-HeavenlyBeachGalaxy-1.tsv: the step hashes recorded again from a Direct3D 12 tour run of step S0.2.1 (step_hash.py record); they differ from step 0 (allowed by the card, docs/plan/native/03-NATIVE-STAGE-0.md, step S0.2.1)
+- 2026-11-23 S0.2.1 tests/replays/042-HellProminenceGalaxy-1.tsv: the step hashes recorded again from a Direct3D 12 tour run of step S0.2.1 (step_hash.py record); they differ from step 0 (allowed by the card, docs/plan/native/03-NATIVE-STAGE-0.md, step S0.2.1)
+- 2026-11-23 S0.2.1 tests/replays/048-HoneyBeeKingdomGalaxy-1.tsv: the step hashes recorded again from a Direct3D 12 tour run of step S0.2.1 (step_hash.py record); they differ from step 0 (allowed by the card, docs/plan/native/03-NATIVE-STAGE-0.md, step S0.2.1)
+- 2026-11-23 S0.2.1 tests/replays/054-IceVolcanoGalaxy-1.tsv: the step hashes recorded again from a Direct3D 12 tour run of step S0.2.1 (step_hash.py record); they differ from step 0 (allowed by the card, docs/plan/native/03-NATIVE-STAGE-0.md, step S0.2.1)
+- 2026-11-23 S0.2.1 tests/replays/058-KoopaBattleVs1Galaxy-1.tsv: the step hashes recorded again from a Direct3D 12 tour run of step S0.2.1 (step_hash.py record); the same to step 501, then other hashes for steps 502 to 513, then the recorded hash d0a1420de34b747e from step 514 (it was from step 502) (allowed by the card, docs/plan/native/03-NATIVE-STAGE-0.md, step S0.2.1)
+- 2026-11-23 S0.2.1 tests/replays/066-OceanPhantomCaveGalaxy-4.tsv: the step hashes recorded again from a Direct3D 12 tour run of step S0.2.1 (step_hash.py record); they differ from step 0 (allowed by the card, docs/plan/native/03-NATIVE-STAGE-0.md, step S0.2.1)
+- 2026-11-23 S0.2.1 tests/replays/068-OceanRingGalaxy-1.tsv: the step hashes recorded again from a Direct3D 12 tour run of step S0.2.1 (step_hash.py record); they differ from step 0 (allowed by the card, docs/plan/native/03-NATIVE-STAGE-0.md, step S0.2.1)
+- 2026-11-23 S0.2.1 tests/replays/078-ReverseKingdomGalaxy-1.tsv: the step hashes recorded again from a Direct3D 12 tour run of step S0.2.1 (step_hash.py record); they differ from step 0 (allowed by the card, docs/plan/native/03-NATIVE-STAGE-0.md, step S0.2.1)
+- 2026-11-23 S0.2.1 tests/replays/085-SandClockGalaxy-1.tsv: the step hashes recorded again from a Direct3D 12 tour run of step S0.2.1 (step_hash.py record); they differ from step 0 (allowed by the card, docs/plan/native/03-NATIVE-STAGE-0.md, step S0.2.1)
+- 2026-11-23 S0.2.1 tests/replays/090-StarDustGalaxy-1.tsv: the step hashes recorded again from a Direct3D 12 tour run of step S0.2.1 (step_hash.py record); they differ from step 0 (allowed by the card, docs/plan/native/03-NATIVE-STAGE-0.md, step S0.2.1)
+- 2026-11-23 S0.2.1 tests/replays/095-SurfingLv1Galaxy-1.tsv: the step hashes recorded again from a Direct3D 12 tour run of step S0.2.1 (step_hash.py record); they differ from step 0 (allowed by the card, docs/plan/native/03-NATIVE-STAGE-0.md, step S0.2.1)
+- 2026-11-23 S0.2.1 tests/replays/097-TamakoroExLv1Galaxy-1.tsv: the step hashes recorded again from a Direct3D 12 tour run of step S0.2.1 (step_hash.py record); they differ from step 0 (allowed by the card, docs/plan/native/03-NATIVE-STAGE-0.md, step S0.2.1)
 
 ## Tool faults
 
