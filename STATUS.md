@@ -1,10 +1,13 @@
 # Nebula native plan: status
 
-Written 2026-11-22 15:52.
+Written 2026-11-22 16:02.
 
 Steps landed: 2 of 138 (1%).
 
-In work now: Nothing started.
+Now: Stopped by R: S0.1.3 blocked (console census refuses the GX section names); S0.1.4 prepared on native/S0.1.4
+
+In work now:
+- S0.1.3 Render data path step 1: `f4/e3-1a`, `f4/e3-1b`, `f4/e3-1c` (agent 1)
 
 ## Packages
 
@@ -37,19 +40,18 @@ In work now: Nothing started.
 
 ## Last 10 landings
 
-None yet.
+| When | Step | Title | Code commit | Main commit |
+| --- | --- | --- | --- | --- |
+| 2026-11-22 14:25 | S0.1.2 | Documents | 59bdb8776 | 2c5dbb271 |
+| 2026-11-22 14:17 | S0.1.1 | Land `rows/p022c` and `rows/p022d` as one batch | 83b537af7 | 463d38612 |
 
 ## Repairs
 
-0 open of kind fail, 1 in all.
-
-| Id | State | Kind | Check | Renderer | Traced to | Seen |
-| --- | --- | --- | --- | --- | --- | --- |
-| R-001 | open | stress | stress/tour/d3d11/3 | d3d11 | commit abc | 2 |
+No repair recorded.
 
 ## For the owner to check by hand
 
-Nothing is owed.
+- S0.1.2 Documents: P-096: on the tablet, set up the game once more over an installed one, and once with the setup cut off (close the app mid-copy); then start the launcher: the old game stays playable until the new one is whole, and nothing is left behind (no game.pak.new, no half copy). (agent 1, 2026-11-22 14:18)
 
 ## Blocked
 
@@ -57,4 +59,10 @@ Nothing is blocked.
 
 ## Tool faults
 
-0 tool faults recorded.
+1 tool fault recorded.
+
+The last 20:
+
+| When | Step | Test | What happened | What the agent could not do |
+| --- | --- | --- | --- | --- |
+| 2026-11-22 14:33 | - | (by hand) | plan.py land S0.1.3 ended code 4 (not judged): gate.py's push check refused main's move because tools/verify/console_census.py's closed group fifo counts 31 (the card's section names GXMT, GXTG, GXTM, GXWP in native/include/nebula_model.h, runtime/src/render/core/model_sections_tests.cpp, crates/nebula-import/src/cook/model_write.rs); it is a certain refusal of the change, reported as not judged; plan.py toolfault --last then said: agent 1 has no tool fault recorded | - |
