@@ -320,6 +320,9 @@ class DecideAliveTest(unittest.TestCase):
     def setUp(self):
         self.t = Tree().__enter__()
         self.addCleanup(self.t.__exit__)
+        patcher = mock.patch.object(plan, "QUEUE_FILE", str(self.t.dir / "queue.tsv"))      # never the gate's real queue
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def test_decide_writes_its_row(self):
         t = self.t
@@ -446,6 +449,15 @@ class LandingTest(unittest.TestCase):
         self.assertIn("The step's code is %s." % code_commit, t.git("log", "-1", "--format=%b", cwd=t.folder()))
         self.assertNotIn(first_code, t.git("log", "-1", "--format=%b", cwd=t.folder()))
 
+    def test_land_refuses_a_step_branch_that_changes_gate_py_without_its_card(self):
+        t = self.t
+        t.commit("A.1", "the gate in a step", {"tools/gate/gate.py": "# changed\n"})
+        code, text = t.run(["land", "A.1"])
+        self.assertEqual(code, 1)
+        self.assertIn("its card does not name them: tools/gate/gate.py", text)
+        self.assertEqual(self.calls, [], "nothing was queued")
+        self.assertEqual(t.git("log", "-1", "--format=%s", cwd=t.folder()), "the gate in a step", "and no state commit was made")
+
     def test_the_speed_figures_are_kept_with_the_step(self):
         t = self.t
         self.verdict = plan.Verdict(True, [("repo/code", "PASS", "ok"), ("measure/step/pc", "PASS", "ok: d3d12 cpu_work_ms 6.4 (median 6.9)"),
@@ -545,8 +557,21 @@ class PageTest(unittest.TestCase):
         self.assertIn("with a ledger row", text)
 
 
+def test_names(args):
+    """The test names asked for on the command line; the harness's own option --work FOLDER is not one."""
+    out, skip = [], False
+    for a in args:
+        if skip:
+            skip = False
+        elif a == "--work":
+            skip = True
+        elif not a.startswith("--work="):
+            out.append(a)
+    return out
+
+
 def main():
-    result = unittest.main(argv=[sys.argv[0]], exit=False, verbosity=1).result
+    result = unittest.main(argv=[sys.argv[0]] + test_names(sys.argv[1:]), exit=False, verbosity=1).result
     print("plan_mend_test: %s (%d tests)" % ("pass" if result.wasSuccessful() else "FAIL", result.testsRun))
     return 0 if result.wasSuccessful() else 1
 

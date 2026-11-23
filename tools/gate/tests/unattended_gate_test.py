@@ -248,8 +248,21 @@ class SignInTest(unittest.TestCase):
         self.assertNotIn("signin", plan.page_data(tree, live)[1], "a landing after it: signed in again")
 
 
+def test_names(args):
+    """The test names asked for on the command line; the harness's own option --work FOLDER is not one."""
+    out, skip = [], False
+    for a in args:
+        if skip:
+            skip = False
+        elif a == "--work":
+            skip = True
+        elif not a.startswith("--work="):
+            out.append(a)
+    return out
+
+
 def main():
-    result = unittest.main(argv=[sys.argv[0]], exit=False, verbosity=1).result
+    result = unittest.main(argv=[sys.argv[0]] + test_names(sys.argv[1:]), exit=False, verbosity=1).result
     print("unattended_gate_test: %s (%d tests)" % ("pass" if result.wasSuccessful() else "FAIL", result.testsRun))
     return 0 if result.wasSuccessful() else 1
 

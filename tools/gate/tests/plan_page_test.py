@@ -466,7 +466,7 @@ class StatusTextTest(unittest.TestCase):
         self.assertEqual((landed, total), (3, 8))
         lines = text.splitlines()
         self.assertEqual(lines[0], "# Nebula native plan: status")
-        self.assertIn("Written 2026-11-20 12:00.", lines)
+        self.assertIn("Written 2026-11-20 12:00. " + page.OLD_PAGE, lines)
         self.assertIn("Steps landed: 3 of 8 (38%).", lines)
         self.assertIn("In work now:", lines)
         self.assertIn("- S1.1 Step number 3 (agent 2)", lines)
@@ -512,7 +512,7 @@ class StatusTextTest(unittest.TestCase):
         self.assertEqual(text, "\n".join([
             "# Nebula native plan: status",
             "",
-            "Written 2026-11-20 12:00.",
+            "Written 2026-11-20 12:00. " + page.OLD_PAGE,
             "",
             "Steps landed: 2 of 8 (25%).",
             "",
@@ -543,9 +543,25 @@ class StatusTextTest(unittest.TestCase):
             "",
             "Nothing is owed.",
             "",
+            "## Waiting for the owner",
+            "",
+            "Nothing waits for the owner.",
+            "",
             "## Blocked",
             "",
             "- S3.1 Step number 7: needs the owner | now",
+            "",
+            "## Tool mends",
+            "",
+            "No tool was mended.",
+            "",
+            "## Decisions (0)",
+            "",
+            "None.",
+            "",
+            "## Checks changed during the run (0)",
+            "",
+            "None.",
             "",
             "## Tool faults",
             "",

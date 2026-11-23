@@ -4,6 +4,7 @@
                                          | ahead
                                          | owed ID "TEXT" | commands | note "TEXT" | note --clear
                                          | claim PACKAGE [--take-stale] | tool "TEXT" | toolfault --last --could-not "TEXT"
+                                         | mend open|land|close|failed|drop|list ... | decide ID "WHAT" --because "WHY" | alive | check
                                          | repair add --source S --kind K --check C ... | repair list
     (next, ahead, start, land, blocked, claim, tool, toolfault, status and commands take --agent 1|2; 1 is the default; ID is a step, or for
      start, land and blocked a repair such as R-003)
@@ -56,7 +57,10 @@ land     Can be run again at any time and never resets the work folder. The tool
          The extra checks of docs/plan/native/step-checks.tsv go to the gate as --also. Otherwise:
          Refuses unless every ledger row the card closes whole is `fixed` with a proof that names a test, a search or a
          measure, and every row it only advances has a dated note written by this branch; checks the file and line
-         references in the changed documents and the commit messages (tools/verify/doc_refs.py); then hands the branch
+         references in the changed documents and the commit messages (tools/verify/doc_refs.py), the repository's code checks, the
+         strictness check (tools/gate/strictness.py) and the rule that a step changes a test tool, a GitHub job, approved.tsv, steps.tsv
+         or step-checks.tsv only where its card names the file; a new landing takes the tool's own earlier state commit off the branch
+         first; after a pass it prints the speed checks' lines and keeps them with the step; then hands the branch
          to the gate: ONE call, `gate.py land native/<id>` (the landing queue of tools/gate/landing.py: it runs the checks
          the changed paths need, in a batch with whatever else waits, and moves main). Reads the gate's `KIND` and
          `VERDICT` lines and its exit code: 0 landed, 1 fail, 2 not judged (a tool or the machine, a branch that does
@@ -80,6 +84,20 @@ claim    Claims a package for the agent; a stale claim of the other agent is tak
          left as it is).
 tool     Writes a tool fault into BLOCKED.md under "tools" and into tool-faults.tsv. The step is not blocked.
 toolfault --last --could-not "TEXT": the sentence on what the agent's last tool fault stopped it from doing.
+mend     A tool at fault is mended by one helper while the agent waits (docs/plan/native/TOOL-MEND.md, AGENT.md section 9). `mend open
+         [ID] "TITLE" [--last] [--check C]` writes the fault sheet (live folder, mends/M-00N.md) and puts the step in work into the
+         state `waits for M-00N` (still started, never blocked); one mend is open at a time, and while it is, `next`, `start`, `ahead` and
+         `land` answer `WAIT: mend M-00N is open`. `mend land M-00N` is the helper's: from its own folder on the branch mend/M-00N, the
+         references check, the code checks and the strictness check, then the gate with `--who "mend M-00N"` (its landing record is
+         landing-mend.tsv). `mend close M-00N COMMIT`: the commit is on origin/main and touches tools/, docs/ or .github/; the step goes on,
+         the steps blocked `tool: M-00N` are open again. `mend failed M-00N "WHY"` counts the attempts on the sheet (the helper, a second
+         helper, the agent itself) and prints what comes next; the third blocks the step `tool: M-00N`. `mend drop M-00N "FILES"`: the
+         fault needs game code, no tool fault, the step is the agent's again. `mend open ... --landed COMMIT` records a mend landed by
+         hand (plan.py itself was at fault). `mend list`. State: mends.tsv in the live folder.
+decide   `decide ID "WHAT" --because "WHY" [--doc "FILE, SECTION"]` appends a row to docs/plan/native/decisions.tsv of the plan tree.
+alive    One word: `working` (a command in the last three hours, or a landing or mend landing in the gate's line), `ended` (a note that
+         begins Done or Stopped, or every step landed) or `stale`. Every other command writes the time into heartbeat.txt (live folder).
+check    What `land` checks before it queues, on the agent's work folder as it is, every refusal at once; nothing is committed or queued.
 status   Writes STATUS.md and prints it: steps landed, started, blocked, claims, the last five landings, the next step.
          The agent runs it at every start and after every context compaction; it is the only memory it needs.
 page     Writes the progress files into the live folder (page.py), from steps.tsv, the live state, the tool faults and

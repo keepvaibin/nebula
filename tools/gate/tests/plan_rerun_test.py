@@ -150,7 +150,7 @@ class StateCommitTest(RerunBase):
         self.land(expect=0)
         self.assertEqual(self.subjects()[:3], [STATE_SUBJECT, "fix: the repair", "A.1: the code"], "the earlier state commit was taken off (E1)")
         rows = lambda ref: plan.find(plan.parse_base(self.t.git("show", ref + ":docs/plan/native/steps.tsv", cwd=self.folder), ref), "A.1")
-        self.assertEqual((rows("HEAD")["state"], rows("HEAD")["commit"]), ("landed", fix))
+        self.assertEqual((rows("HEAD")["state"], rows("HEAD")["commit"]), ("landed", self.t.git("rev-parse", "--short=9", "HEAD~1", cwd=self.folder)))
         self.assertNotEqual(rows("HEAD")["commit"], code_commit, "and no commit names the first code commit as the step's")
         self.assertEqual(self.t.git("show", "HEAD", "--name-only", "--format=", cwd=self.folder), "docs/plan/native/steps.tsv")
 

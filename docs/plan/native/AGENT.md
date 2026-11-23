@@ -185,8 +185,8 @@ written: `PLAN blocked <ID> "<what is done, what is left, what stands in the way
 | Code | It means | Do this |
 | --- | --- | --- |
 | 0 | Landed. Main has your step. | Section 4.3, first row. |
-| 1 | Refused, or a check failed. The lines starting `KIND` name each failed check and test; the line `result: <folder>\result.json` before them names the folder of the run. | A refusal names what is missing (a ledger row, an invented file reference, an uncommitted change, the wrong branch): supply it. A rule of the repository (the console census, the cast check, the byte-order check, the pre-push hook) refuses in this code too, in seconds, before anything is queued, with the check's own lines (the census: its group and the files with their counts): change the code, never land it unchanged. For a failed test: open its run folder, read the log and the pictures, and find the cause in your change before you edit anything. Fix the game, never the test (unless the card changes what the test checks, or the test is one your own step added and a tool shows it is wrong by itself: on 11-22 a sanitizer report sat inside the test's own code, and the test was corrected). Commit, land again. Never land the same commit twice hoping for another result (the one exception is under `worse` below). |
-| 2 | The step tool did not do the command. Its line starts `plan.py:` and says why: the command or the id was wrong, a file of the plan cannot be read, or git failed. | A wrong command or id: correct it. A message `ledger line <N>: ...` names a line of `docs/plan/ledger.tsv` by its number: you wrote that line; give it exactly the 7 tab-separated columns, commit, and give the command again. Anything else: give the same command once more. The same line again: section 9, "When a tool fails", point 5. |
+| 1 | Refused, or a check failed. The lines starting `KIND` name each failed check and test; the line `result: <folder>\result.json` before them names the folder of the run. | A refusal names what is missing (a ledger row, an invented file reference, an uncommitted change, the wrong branch): supply it. A rule of the repository (the console census, the cast check, the byte-order check, the strictness check, the rule on test tools and GitHub's jobs, the pre-push hook) refuses in this code too, in seconds, before anything is queued, with the check's own lines (the census: its group and the files with their counts): change the code, never land it unchanged. One exception: when what it refuses is the very thing a design document or the owner's rules prescribe by name (the census and the model file's section names, 11-22), the check is at fault, not the step: a mend (section 9), after you have quoted the check's line and the document's line on the sheet. For a failed test: open its run folder, read the log and the pictures, and find the cause in your change before you edit anything. Fix the game, never the test (unless the card changes what the test checks, or the test is one your own step added and a tool shows it is wrong by itself: on 11-22 a sanitizer report sat inside the test's own code, and the test was corrected). Commit, land again. Never land the same commit twice hoping for another result (the one exception is under `worse` below). |
+| 2 | The step tool did not do the command. Its line starts `plan.py:` and says why: the command or the id was wrong, a file of the plan cannot be read, or git failed. | A wrong command or id: correct it. A message `ledger line <N>: ...` names a line of `docs/plan/ledger.tsv` by its number: you wrote that line; give it exactly the 7 tab-separated columns, commit, and give the command again. Anything else: give the same command once more. The same line again: section 9, "When `PLAN` itself is at fault". |
 | 3 | The same failure three times in a row. | Stop working on it. `PLAN blocked <ID> "<what fails and what you tried, in two sentences>"`. Then `PLAN next`. |
 | 4 | Not judged: a test tool or the machine failed, or your branch no longer applies to main. Nothing is wrong with your step as far as anyone knows. | Section 9, "When a tool fails". |
 
@@ -369,7 +369,7 @@ work at the same time.
 
 | Check | What it proves |
 | --- | --- |
-| repository checks | no forbidden content, every script parses, the code rules, the settings table matches the code (the file and line references of your documents and commit messages are read by `PLAN land` before the gate, not here) |
+| repository checks | no forbidden content, every script parses, the code rules, the settings table matches the code, no check was made to see less without its line in the strictness log (the file and line references of your documents and commit messages are read by `PLAN land` before the gate, not here) |
 | Windows build, unit tests, a start on each renderer | it builds and starts |
 | engine tests with their pictures (one renderer, or three) | each part of the engine draws and behaves as approved |
 | the tour: 12 stops of the game (every stop when the step has an extra check), pictures and replays | the game plays exactly as recorded, on each renderer |
@@ -401,7 +401,9 @@ process you did not start, never remove a lock, never stop a landing or the long
   cost because it is small.
 - The Vulkan debug layer is not installed on this PC: that one check is left out with one line. Direct3D's
   layers run.
-- There is one tablet. A device that is away makes its checks `owed`; nothing is yours to do.
+- There is one tablet. A device that is away makes its checks `owed`; nothing is yours to do, and no tool plays them
+  by themselves: the long run's tablet pieces find what they would have found, up to a day later. The page says
+  "Tablet away since <time>: <n> checks owed" while it lasts.
 - Nothing checks what needs a person or other hardware (section 11's last point).
 
 ### When a tool fails: the mend
@@ -576,7 +578,7 @@ that is not yours and names the fault. Then, in the work folder:
 1. `git fetch origin`; commit what you have on the branch you are on (section 4.3, last part), so that the folder is clean.
 2. `PLAN start <ID>`: the step is `started` again on its own branch, which the folder now has checked out. A step
    written ahead on top of it keeps its branch and its ahead entry.
-3. `git rebase origin/main` on that branch, so that the step is built on the mend (a conflict: section 9, point 2).
+3. `git rebase origin/main` on that branch, so that the step is built on the mend (a conflict: section 9, "Other code 4", point 1).
 4. `PLAN land <ID>` as in section 4.1 point 8. The queue's old row of the step (waiting, "not judged") is replaced
    by the new call; nothing is removed by hand.
 5. While it plays: `PLAN ahead`. The commits of the step written ahead are moved onto the step's new tip (section 4.3).
