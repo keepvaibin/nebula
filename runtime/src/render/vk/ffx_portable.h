@@ -1,13 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Forced into FidelityFX's sources where the compiler is not MSVC: the few Microsoft library calls they use.
+// Forced into FidelityFX's sources where the compiler is not MSVC: the few Microsoft library calls they use, and the standard headers
+// the sources use without naming them (ffx_vk.cpp calls memset and memcpy and includes no header for them: the Linux build stopped there).
 #pragma once
+#include <algorithm>
+#include <cassert>
+#include <climits>
+#include <cmath>
 #include <codecvt>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <cwchar>
 #include <locale>
 #include <string>
+#include <string.h>
 
 #include <FidelityFX/host/ffx_util.h>
 
