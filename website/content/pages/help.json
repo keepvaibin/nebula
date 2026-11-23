@@ -118,6 +118,6 @@
     }
   },
   "messages": {
-    "downloadCountTitle": "GitHub release-asset downloads across {releases} releases. Not unique players."
+    "downloadCountTitle": "Downloads of Nebula for every system across {releases} releases. Not unique players."
   }
 }

@@ -34,7 +34,7 @@
       "label_1": "Platforms",
       "emphasis_2": "14",
       "label_2": "Languages",
-      "title_1": "Total GitHub release-asset downloads, not unique players.",
+      "title_1": "Total downloads of Nebula for every system, not unique players.",
       "label_3": "Total downloads",
       "title_2": "Stars on the Nebula GitHub repository.",
       "label_5": "GitHub stars"
@@ -175,7 +175,7 @@
     }
   },
   "messages": {
-    "downloadCountTitle": "GitHub release-asset downloads across {releases} releases. Not unique players.",
+    "downloadCountTitle": "Downloads of Nebula for every system across {releases} releases. Not unique players.",
     "formWord": "✧ Form the word",
     "releaseWord": "✧ Release the word",
     "gathering": "Star bits are gathering into Nebula.",
