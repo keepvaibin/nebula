@@ -1155,7 +1155,7 @@ class Also(unittest.TestCase):
     """--also by name."""
 
     CHECKS = {"stress": "stress/engine/d3d12", "sanitizer/tour": "tour-asan/d3d12", "soak": "soak", "soak/long": "soak/long",
-              "replays/software": "replays/software", "speed/anchor": "speed/anchor"}
+              "replays/software": "replays/software", "speed/anchor": "speed/anchor", "replays/rates": "replays/rates"}
     # A name of the table whose part is not on main (every part is today): the landing refuses it. A plant, as the table's own
     # entry for `replays/software` was before package T9.
     UNBUILT = {"future/part": gate.AlsoPart(None, ("future/part",))}
@@ -1173,7 +1173,7 @@ class Also(unittest.TestCase):
             g, w = self.run_also([name])
             self.assertIsNotNone(w.row(g, check), "%s: %s" % (name, [r["check"] for r in g.results]))
             self.assertEqual(w.row(g, check)["state"], "pass", name)
-        self.assertEqual(sorted(gate.ALSO_PARTS), ["replays/software", "sanitizer/tour", "soak", "soak/long", "speed/anchor", "stress"])
+        self.assertEqual(sorted(gate.ALSO_PARTS), ["replays/rates", "replays/software", "sanitizer/tour", "soak", "soak/long", "speed/anchor", "stress"])
         self.assertTrue(all(part.run is not None for part in gate.ALSO_PARTS.values()), "every name of the table is built")
 
     def test_the_soaks_ask_for_their_lengths(self):

@@ -240,7 +240,7 @@ the mend's commit (the page shows it so) and `PLAN next` goes on. A repair ends 
 open R-00N "<title>" --landed <commit>` (the mend was landed by hand) ends it too, and where a mend of the repair is recorded
 closed and the repair is still open, `PLAN repair end R-00N --mend M-00N` ends it. Never land an empty branch for it, never edit the
 list by hand. The mend's own landing runs the failed check as an extra check where the gate can add it (the
-sanitizer build and tour, stress, soak, replays/software, speed/anchor): that run is where you see the check pass
+sanitizer build and tour, stress, soak, replays/software, replays/rates, speed/anchor): that run is where you see the check pass
 (the helper's report names its run folder). For a check the gate cannot add (coverage), the helper's self-test is
 the proof.
 
@@ -401,7 +401,7 @@ work at the same time.
 | the debug layers (renderer changes) | no misuse of the graphics API |
 | Android build; on the tablet a start, a speed measure, and for Vulkan and Android changes the 12 stops | it runs on a real device as it does on the PC |
 | the speed check on the PC | the game's and the renderer's work for one step is not slower than the last judged build's (both builds run side by side) |
-| extra checks, only where the card's proof needs them: under load (`stress`), the memory-fault build (`sanitizer/tour`), the endurance run (`soak`, `soak/long`), the software graphics device (`replays/software`), the comparison with the build of the plan's start (`speed/anchor`) | listed by `PLAN next` when your step has one |
+| extra checks, only where the card's proof needs them: under load (`stress`), the memory-fault build (`sanitizer/tour`), the endurance run (`soak`, `soak/long`), the software graphics device (`replays/software`), a time rate of 2 against a rate of 1 (`replays/rates`), the comparison with the build of the plan's start (`speed/anchor`) | listed by `PLAN next` when your step has one |
 
 A failed test is run again alone, and on main's build, before the landing judges: that is where the kinds
 `flake` and `main` come from. You never need to run a test "once more to see".

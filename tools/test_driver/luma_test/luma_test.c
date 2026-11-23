@@ -6,6 +6,7 @@
    not take is answered as failed, naming it, so the test ends as setup-failed instead of proving nothing. */
 #include <luma.h>
 #include <luma_harness.h>
+#include <luma_time.h>
 
 typedef struct Vec3 {
     float x, y, z;
@@ -14,6 +15,7 @@ typedef struct Vec3 {
 static const LumaCore* core;
 static const LumaMod* self;
 static const LumaHarness* harness;
+static const LumaTimeService* time_service; /* the world clock's rate (the plan's `rate` line) */
 
 /* The game's functions, by name and signature as the game's source writes them. */
 static const LumaFunction* change_stage;    /* void MR::requestChangeStageInGameMoving(const char *, s32) */
@@ -1394,6 +1396,11 @@ static void do_read(const Words* w) {
 
 static int hashing;
 static int32_t hashed_frame = -1;
+/* A `rate` line was given: the hash is written after each world step (on_step_end), not once a frame, and each hash.step
+   fact says its step: the count of hashed steps from the first, so a run at a rate of 2 and a run at a rate of 1 are read
+   at equal world steps (tools/verify/step_hash.py). */
+static int rate_mode;
+static int64_t hashed_steps;
 
 static uint64_t fnv(uint64_t h, const void* bytes, uint32_t size) {
     const unsigned char* const b = (const unsigned char*)bytes;
@@ -1501,8 +1508,16 @@ static void hash_step(int detail) {
     put_hex(&o, h);
     put(&o, ",\"actors\":");
     put_int(&o, actors);
+    if (rate_mode) {
+        put(&o, ",\"step\":");
+        put_int(&o, hashed_steps++);
+    }
     put(&o, "}");
     fact("hash.step", &o);
+    if (rate_mode) {
+        /* How many world steps are hashed, as a number a plan can wait for (a step's `after` reads numbers, not objects). */
+        fact_int("hash.steps", hashed_steps);
+    }
 }
 
 static void do_line(const char* line) {
@@ -1597,6 +1612,28 @@ static void do_line(const char* line) {
         }
         return;
     }
+    if (same(w.word[0], "rate") && w.count == 2u) {
+        /* The world clock's rate in thousandths, from the next frame (services/time.md set_rate); from here the step
+           hash is written after each world step. */
+        int good = 0;
+        const int64_t n = to_int(w.word[1], &good);
+        if (!good || n < (int64_t)LUMA_TIME_RATE_LEAST || n > (int64_t)LUMA_TIME_RATE_MOST) {
+            finish(0, "rate: a whole number from 1 to 16000");
+            return;
+        }
+        if (time_service == 0) {
+            finish(0, "rate: the game has no time service 1.0");
+            return;
+        }
+        if (time_service->set_rate(self, (uint32_t)n) != LUMA_OK) {
+            finish(0, "rate: the time service did not take it");
+            return;
+        }
+        rate_mode = 1;
+        fact_int("rate.set", n);
+        finish(1, 0);
+        return;
+    }
     finish(0, "not a line the game half knows");
 }
 
@@ -1634,9 +1671,21 @@ static int32_t on_frame(LumaCall* call, void* user) {
         }
         do_line(line);
     }
-    /* Once a step, after its lines: the state the step left. */
-    if (hashing && frame_now >= 0 && frame_now != hashed_frame) {
+    /* Once a step, after its lines: the state the step left. At a rate (rate_mode) each world step writes its own, in
+       on_step_end. */
+    if (hashing && !rate_mode && frame_now >= 0 && frame_now != hashed_frame) {
         hashed_frame = frame_now;
+        hash_step(0);
+    }
+    return 0;
+}
+
+/* Before the animation of each world step (GameSystem::frameLoop: update, then calcAnim; a rate's extra steps and the
+   skip's too), where the hash of the one-step frame was always written: after the step's update and the plan's lines. */
+static int32_t on_step_end(LumaCall* call, void* user) {
+    (void)call;
+    (void)user;
+    if (hashing && rate_mode && frame_now >= 0) {
         hash_step(0);
     }
     return 0;
@@ -1720,6 +1769,9 @@ static const LumaImport imports[] = {
     LUMA_FUNCTION(input_disabled, "MarioModule::isInputDisable", "bool() const"),
     LUMA_HOOK_ON("Mario::checkKeyLock", "void()", LUMA_AFTER, on_key_lock),
     LUMA_HOOK_ON("GameSystem::update", "void()", LUMA_AFTER, on_frame),
+    LUMA_HOOK_ON("GameSystem::calcAnim", "void()", LUMA_BEFORE, on_step_end),
+    /* Optional: only a test with a rate needs it; without it the line `rate` fails, naming the service. */
+    {LUMA_IMPORT_SERVICE, LUMA_OPTIONAL, LUMA_TIME_NAME, "1.0", &time_service, 0, 0, 0},
 };
 
 LUMA_MOD(imports, start, 0);
