@@ -156,6 +156,20 @@ namespace Ui {
         writer.Print(mTextBuf, mTextLen);
     }
 
+    void TextBox::PrintSilent() {
+        if (!mTextBuf || !mpFont || !mpMaterial) {
+            return;
+        }
+
+        WideTextWriter writer;
+        writer.SetSilent(true);
+
+        Rect textRect = GetTextDrawRect(&writer);
+
+        writer.SetCursor(textRect.left, textRect.top);
+        writer.Print(mTextBuf, mTextLen);
+    }
+
     u32 TextBox::GetStringBufferLength() const {
         if (mTextBufBytes == 0) {
             return 0;

@@ -32,6 +32,18 @@ namespace MR {
     /// @return The pseudorandom integer.
     s32 getRandom(s32 min, s32 max);
 
+    /// @brief The next number of drawing's own stream within the right-open unit interval: noise only a picture shows (a
+    /// spin ring's wobble, the wall shade, the dark mask). The game's stream (getRandom) is advanced by the step alone, so
+    /// how many pictures were drawn never changes what the game does (P-249).
+    /// @return The pseudorandom floating-point number.
+    f32 getDrawRandom();
+
+    /// @brief The next integer of drawing's own stream within the half-open interval `[min, max)` (getDrawRandom).
+    /// @param min The inclusive minimum integer.
+    /// @param max The exclusive maximum integer.
+    /// @return The pseudorandom integer.
+    s32 getDrawRandom(s32 min, s32 max);
+
     /// @brief Computes the next pseudorandom floating-point number within the half-open interval `[0.0f, 360.0f)`.
     /// @return The pseudorandom number of degrees.
     f32 getRandomDegree();

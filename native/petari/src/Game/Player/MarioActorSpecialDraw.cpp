@@ -366,7 +366,7 @@ void MarioActor::updateRandomTexture(f32 distance) {
         for (u32 x = 0; x < 8; x++) {
             s32 alpha = pixel[1] / 17;
 
-            if (MR::getRandom() < probability) {
+            if (MR::getDrawRandom() < probability) {
                 alpha += 4;
             } else {
                 alpha--;
@@ -566,7 +566,7 @@ void MarioActor::drawSpinEffect() const {
     for (u32 i = 0; i <= 64; i++) {
         Vec3f point(direction);
         point.setLength(mSpinEffectRadius);
-        point += mMario->mHeadVec * MR::getRandom() * 10.0f;
+        point += mMario->mHeadVec * MR::getDrawRandom() * 10.0f;
 
         if (i) {
             TDDraw::drawLine(site3, center + previous, center + point, 0xFFFFFF20);
@@ -582,7 +582,7 @@ void MarioActor::drawSpinEffect() const {
     for (u32 i = 0; i <= 64; i++) {
         Vec3f point(direction);
         point.setLength(mSpinEffectRadius);
-        point += mMario->mHeadVec * MR::getRandom() * 10.0f;
+        point += mMario->mHeadVec * MR::getDrawRandom() * 10.0f;
         f32 wave = MR::sin((((mFrameCount + i) & 31) / 32.0f) * FloatUtil::PI());
         f32 square = wave * wave;
         u32 alpha = 160.0f * (square * square);
@@ -637,8 +637,8 @@ void MarioActor::updateDarkMask(u16 unused) {
     u8* previous = mMaskTextures[mMaskIndex]->image();
     mMaskIndex = 1 - mMaskIndex;
     u8* image = mMaskTextures[mMaskIndex]->image();
-    u8 x = MR::getRandom(0, 8);
-    u8 y = MR::getRandom(0, 8);
+    u8 x = MR::getDrawRandom(0, 8);
+    u8 y = MR::getDrawRandom(0, 8);
     s32 index = 2 * (x + y * 8);
     image[index] = 0;
     image[index + 1] = 255;

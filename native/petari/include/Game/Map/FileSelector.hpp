@@ -38,7 +38,7 @@ public:
 
     virtual ~FileSelector() override;
     virtual void init(const TableIter& rIter) override;
-    virtual bool initStep(const TableIter& rIter, uint64_t deadline) override;
+    virtual bool initStep(const TableIter& rIter, LoadSlice& rSlice) override;
     virtual void appear() override;
     virtual void kill() override;
     virtual void control() override;

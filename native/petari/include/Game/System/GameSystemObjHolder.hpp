@@ -45,5 +45,7 @@ public:
     MessageHolder* mMessageHolder;
     StarPointerDirector* mStarPointerDirector;
     FastRandom mRandom;
+    // Drawing's own stream (MR::getDrawRandom): seeded with the game's, never advancing it (P-249).
+    FastRandom mDrawRandom;
     u32 mLanguage;
 };

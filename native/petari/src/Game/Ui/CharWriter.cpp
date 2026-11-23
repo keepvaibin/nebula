@@ -107,7 +107,7 @@ namespace {
 namespace Ui {
     CharWriter::LoadingTexture CharWriter::mLoadingTexture;
 
-    CharWriter::CharWriter() : mAlpha(255), mIsWidthFixed(false), mFixedWidth(0), mFont(NULL) {
+    CharWriter::CharWriter() : mAlpha(255), mIsWidthFixed(false), mFixedWidth(0), mFont(NULL), mIsSilent(false) {
         mLoadingTexture.Reset();
         ResetColorMapping();
         SetGradationMode(GRADMODE_NONE);
@@ -148,6 +148,10 @@ namespace Ui {
     }
 
     void CharWriter::Setup() {
+        if (mIsSilent) {
+            return;
+        }
+
         ResetTextureCache();
 
         if ((mColorMapping.min != 0x00000000u) || (mColorMapping.max != 0xFFFFFFFFu)) {
@@ -242,7 +246,9 @@ namespace Ui {
             left = widths.left * mScale.x;
         }
 
-        PrintGlyph(mCursorPos.x + left, mCursorPos.y, mCursorPos.z, glyph);
+        if (!mIsSilent) {
+            PrintGlyph(mCursorPos.x + left, mCursorPos.y, mCursorPos.z, glyph);
+        }
 
         mCursorPos.x += width;
 

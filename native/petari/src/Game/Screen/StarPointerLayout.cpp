@@ -542,24 +542,42 @@ void StarPointerLayout::calcAnim() {
     mNumber->calcAnim();
 }
 
-void StarPointerLayout::draw() const {
+bool StarPointerLayout::isShown() const {
     if (!isAppear()) {
-        mBlur->hideAll();
-        return;
+        return false;
     }
 
     if (mPadChannel == PLAYER_1 && MR::isStarPointer1PInvalid2PValidMode()) {
-        mBlur->hideAll();
-        return;
+        return false;
     }
 
     if (mPadChannel == PLAYER_1) {
         // A finger on a menu is its own pointer. Everything the pointer does still happens.
         const u32 touch = NebulaHost::option(NEBULA_OPTION_TOUCH_POINTER);
         if (touch == 3 || (touch == 2 && NebulaUi::isSharpScreenShown())) {
-            mBlur->hideAll();
-            return;
+            return false;
         }
+    }
+
+    return true;
+}
+
+bool StarPointerLayout::isDecorationShown() const {
+    return !(mPointerKind == StarPointerKind_HandPointer || mPointerKind == StarPointerKind_2 || mPointerKind == StarPointerKind_FingerPointer ||
+             (mPointerKind == StarPointerKind_5 && MR::isHeldJump(mPadChannel)));
+}
+
+// After the step's movement (StarPointerDirector::update): a blur the draw will not show starts again from the pointer
+// when it is shown next (changeToStarPointer reads the hidden points), however many steps a frame runs.
+void StarPointerLayout::updateBlurShown() {
+    if (!isShown() || !isDecorationShown()) {
+        mBlur->hideAll();
+    }
+}
+
+void StarPointerLayout::draw() const {
+    if (!isShown()) {
+        return;
     }
 
     MotionSignal::drawObject(mDrawSlot, mMotionEpoch);
@@ -569,9 +587,7 @@ void StarPointerLayout::draw() const {
 }
 
 void StarPointerLayout::drawDecoration() const {
-    if (mPointerKind == StarPointerKind_HandPointer || mPointerKind == StarPointerKind_2 || mPointerKind == StarPointerKind_FingerPointer ||
-        (mPointerKind == StarPointerKind_5 && MR::isHeldJump(mPadChannel))) {
-        mBlur->hideAll();
+    if (!isDecorationShown()) {
         return;
     }
 

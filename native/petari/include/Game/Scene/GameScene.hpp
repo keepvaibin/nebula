@@ -19,6 +19,9 @@ public:
     virtual void draw() const override;
     virtual void calcAnim() override;
 
+    // The settings' galaxy select's names, answered by the system each frame (GameSystem::updateSceneController).
+    static void answerGalaxySelectNames();
+
     void notifyEndScenarioStarter();
     void requestPlayMovieDemo();
     void requestStartGameOverDemo();

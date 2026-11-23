@@ -80,13 +80,16 @@ namespace MR {
     }
 
     void setRandomSeedFromStageName() {
-        getGameSystemObjHolder()->mRandom.mSeed = sFixedRandomSeed != 0 ? sFixedRandomSeed : getHashCode(getCurrentStageName());
+        const u32 seed = sFixedRandomSeed != 0 ? sFixedRandomSeed : getHashCode(getCurrentStageName());
+        getGameSystemObjHolder()->mRandom.mSeed = seed;
+        getGameSystemObjHolder()->mDrawRandom.mSeed = seed;
     }
 
     void setFixedRandomSeed(u32 seed) {
         sFixedRandomSeed = seed;
         if (seed != 0) {
             getGameSystemObjHolder()->mRandom.mSeed = seed;
+            getGameSystemObjHolder()->mDrawRandom.mSeed = seed;
         }
     }
 

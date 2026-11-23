@@ -69,9 +69,6 @@ void MoviePlayerSimple::draw() const {
 
     drawBands(x, y, width, height);
     MovieDraw::setLinearFilter(true);
-    if (playing) {
-        mStream->pickFrameAtPosition();
-    }
     mStream->drawCurrentFrame(x, y, width, height);
 }
 
@@ -156,11 +153,15 @@ void MoviePlayerSimple::exeSimpleOff() {
 void MoviePlayerSimple::exeOpen() {
     mStream->open(mMovieName);
     mStream->start(mLoop);
+    // The first frame, shown from this step on (as the draw after the open picked it).
+    mStream->pickFrameAtPosition();
     setNerve(GET_NERVE_ANON(MoviePlayerSimplePlaying));
     appear();
 }
 
-// The movie's place is its sound's (fed ahead here), or the game's steps for one with none; draw shows the frame there.
+// The movie's place is its sound's (fed ahead here), or the game's steps for one with none. The step picks the frame
+// at that place (P-214), so subtitles, rumble and the close read the same frame however many steps a picture shows;
+// draw only shows it.
 void MoviePlayerSimple::exePlaying() {
     if (mStream->hasSound()) {
         mStream->feedSound(0);
@@ -171,7 +172,10 @@ void MoviePlayerSimple::exePlaying() {
     if (!mLoop && mStream->getPosition() >= mStream->getTotalFrame()) {
         stop();
         setNerve(GET_NERVE_ANON(MoviePlayerSimpleOff));
+        return;
     }
+
+    mStream->pickFrameAtPosition();
 }
 
 void MoviePlayerSimple::exeSimpleSuspend() {

@@ -127,6 +127,10 @@ namespace Ui {
             mFont = &font;
         }
 
+        void SetSilent(bool silent) {
+            mIsSilent = silent;
+        }
+
         const Font* GetFont() const {
             return mFont;
         }
@@ -210,5 +214,7 @@ namespace Ui {
         bool mIsWidthFixed;
         f32 mFixedWidth;
         const Font* mFont;
+        // A silent writer (TextBox::PrintSilent) moves its cursor as it would print and draws nothing.
+        bool mIsSilent;
     };
 }  // namespace Ui

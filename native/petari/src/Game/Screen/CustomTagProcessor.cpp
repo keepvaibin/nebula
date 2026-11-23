@@ -308,6 +308,7 @@ CustomTagProcessor::CustomTagProcessor(Ui::TextBox* textBox)
     mIsInfo = false;
 
     mNoCharSpace = true;
+    mIsSoundPass = false;
 
     mTextBox = textBox;
 }
@@ -476,7 +477,8 @@ CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroup(Ui::Rect* rect
 }
 
 CustomTagProcessor::Operation CustomTagProcessor::exeSoundGroup(Ui::Rect* rect, const MessageEditorMessageTag& tag, ContextType* /*context*/) {
-    if (rect || mIsText || !mAlphaCtrl.alpha()) {
+    // Played in the step's walk of the text alone (mIsSoundPass), where its character's fade has begun.
+    if (rect || mIsText || !mIsSoundPass || !mAlphaCtrl.alpha()) {
         return OPERATION_NO_CHAR_SPACE;
     }
 

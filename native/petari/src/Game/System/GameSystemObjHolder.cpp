@@ -21,7 +21,7 @@
 #include "Game/Util/StringUtil.hpp"
 
 GameSystemObjHolder::GameSystemObjHolder()
-    : mObjHolder(), mParticleResHolder(), mCaptureScreenDirector(), mScreenPreserver(), mAudioSystem(), mPlayerInputs(), mMessageHolder(), mStarPointerDirector(), mRandom(0), mLanguage(MR::decideLanguage()) {
+    : mObjHolder(), mParticleResHolder(), mCaptureScreenDirector(), mScreenPreserver(), mAudioSystem(), mPlayerInputs(), mMessageHolder(), mStarPointerDirector(), mRandom(0), mDrawRandom(0), mLanguage(MR::decideLanguage()) {
     initNameObj();
     MR::addArchive(AssetFolder::mount("/NebulaData/ErrorMessageArchive", Arenas::permanent()), Arenas::permanent(), "ErrorMessageArchive");
 }

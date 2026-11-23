@@ -1,6 +1,7 @@
 #include <stdint.h>
 #pragma once
 
+class LoadSlice;
 class NameObj;
 
 #include "Game/System/NebulaList.hpp"
@@ -59,7 +60,7 @@ public:
 
     void sort();
     void initPlacement();
-    bool initPlacementStep(uint64_t deadline);
+    bool initPlacementStep(LoadSlice& rSlice);
     void insert(const Identifier&, const TableIter&);
     SameIdSet* find(const Identifier&) const;
     SameIdSet* createSameIdSet(const Identifier&);
@@ -77,6 +78,10 @@ public:
     SameIdSet* mSetArray;
     SameIdSet** mOrderedSetArray;  // the first mSetNum are set
     int mCount;
+    // The sets by name and shape id (P-260): open addressing with linear probing, a power-of-two table at most half
+    // full; a slot holds a set's place in mSetArray, or -1. find() reads it instead of walking every set.
+    s32* mSetSlots;
+    u32 mSetSlotMask;
     s32 mSetNum = 0;
     s32 mPlacementSet = 0;
     NebulaListLink< Index >* mPlacementLink = nullptr;

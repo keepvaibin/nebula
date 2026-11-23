@@ -18,7 +18,7 @@ public:
 
     void initAfterScenarioSelected();
     void initPlacement();
-    bool initPlacementStep(uint64_t deadline);
+    bool initPlacementStep(LoadSlice& rSlice);
     TableIter getCommonPathPointInfo(const Table** ppInfo, int index) const;
     TableIter getCommonPathPointInfoFromRailDataIndex(const Table** ppInfo, int index) const;
     s32 getCommonPathInfoElementNum() const;

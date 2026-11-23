@@ -23,6 +23,9 @@ namespace Ui {
 
         virtual ~TextBox() override;
         virtual void DrawSelf(const DrawInfo& drawInfo) override;
+        // The text walked as DrawSelf prints it, with nothing drawn: the tag processor meets every character and tag where
+        // the draw would (the step's half of a message's sound tags, CustomTagProcessor, P-214).
+        void PrintSilent();
         virtual const Color8 GetVtxColor(u32) const override;
         virtual void SetVtxColor(u32, Color8) override;
         virtual u8 GetVtxColorElement(u32) const override;
