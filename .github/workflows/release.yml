@@ -469,16 +469,30 @@ jobs:
       - name: Start check (the package as unpacked, Vulkan on Mesa's software renderer, on a virtual display, with the validation layer)
         shell: bash
         run: |
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends mesa-vulkan-drivers vulkan-validationlayers xvfb xauth
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends mesa-vulkan-drivers vulkan-validationlayers xvfb xauth openbox
           d="$RUNNER_TEMP/start"
           mkdir -p "$d/data" "$d/settings" "$d/unpacked"
           for package in "$RUNNER_TEMP"/dist/*.tar.gz; do tar -C "$d/unpacked" -xzf "$package"; done
           nebula=$(find "$d/unpacked" -path '*/files/nebula' -type f | head -n 1)
           [ -n "$nebula" ] || { echo "the package has no files/nebula"; exit 1; }
-          SDL_AUDIO_DRIVER=dummy timeout 300 xvfb-run -a "$nebula" --start-check 300 --gpu-validation 1 \
+          # What a person sees first in the unpacked folder is the installer: install.sh and README.txt (whose first line says what
+          # to start) and the two folders; the start script is in support/, which install.sh copies to the install folder.
+          top=$(dirname "$(dirname "$nebula")")
+          listing=$(LC_ALL=C ls -A "$top" | tr '\n' ' ')
+          [ "$listing" = "README.txt files install.sh support " ] || { echo "the package's top folder holds: $listing"; exit 1; }
+          head -n 1 "$top/README.txt" | grep -q 'install.sh' || { echo "the first line of README.txt does not say what to start"; exit 1; }
+          [ -f "$top/support/nebula-launch" ] && [ -f "$top/support/VERSION" ] || { echo "support/ lacks nebula-launch or VERSION"; exit 1; }
+          # A screen of 1920 x 1080 with a window manager (openbox).
+          SDL_AUDIO_DRIVER=dummy timeout 300 xvfb-run -a -s "-screen 0 1920x1080x24" sh -c 'openbox >/dev/null 2>&1 & sleep 2; exec "$0" "$@"' \
+            "$nebula" --start-check 300 --gpu-validation 1 \
             --data "$d/data" --settings "$d/settings" --crash-dumps "$d" 2>&1 | tee "$d/start.log"
           grep -c 'VK-LIVE-WARN' "$d/start.log" || true
           if grep -q 'VK-LIVE-ERR' "$d/start.log"; then grep 'VK-LIVE-ERR' "$d/start.log" | sort | uniq -c | head -n 20; exit 1; fi
+          # The default setting is borderless full screen, and a window manager is there to carry it out: the window must say it is
+          # full screen at the screen's size (1920 x 1080), and the system's pointer must be hidden while it has the focus.
+          for line in 'borderless full screen 1920 x 1080 pixels' "the system's pointer is hidden"; do
+            grep -q "$line" "$d/start.log" || { echo "the start log has no line '$line':"; grep -e '^\[window\]' -e '^\[display\]' "$d/start.log" || true; exit 1; }
+          done
           # What the package needs of the player's system: the newest glibc and libstdc++ versions any of its files asks for (the
           # notes name them), file by file in the log.
           folder=$(dirname "$nebula")
