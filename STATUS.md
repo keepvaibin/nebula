@@ -49,11 +49,12 @@ In work now: Nothing started.
 
 ## Repairs
 
-1 open of kind fail, 1 in all.
+2 open of kind fail, 2 in all.
 
 | Id | State | Kind | Check | Renderer | Traced to | Seen |
 | --- | --- | --- | --- | --- | --- | --- |
 | R-001 | open | fail | build/windows-asan | - | not traced | 1 |
+| R-002 | open | fail | coverage | - | not traced | 1 |
 
 ## For the owner to check by hand
 
