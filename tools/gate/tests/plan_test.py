@@ -656,7 +656,7 @@ class LandTest(LandBase):
         self.assertIn("could not be read", text)
         self.assertIn("plan.py blocked A.1 \"tool: the card's Rows line cannot be read\", then plan.py next.", text)
 
-    def test_a_failed_landing_is_not_landed_keeps_its_state_commit_and_is_counted(self):
+    def test_a_failed_landing_is_not_landed_takes_its_state_commit_off_and_is_counted(self):
         code_commit = self.ready()
         self.verdict = plan.Verdict(False, [("repo/code", "PASS", "ok"), ("tour/d3d12", "FAIL", "replay step 0 differs")],
                                     [("tour/d3d12", "FAIL", "replay step 0 differs")])
@@ -666,8 +666,8 @@ class LandTest(LandBase):
         self.assertIn("FAIL  tour/d3d12: replay step 0 differs", text)
         self.assertIn("1 time in a row", text)
         folder = self.t.folder("A.1")
-        self.assertEqual(self.t.git("rev-parse", "--short=9", "HEAD~1", cwd=folder), code_commit, "nothing is undone: the state commit stays")
-        self.assertEqual(plan.find(plan.read_base(folder), "A.1")["state"], "landed", "the branch holds the state commit")
+        self.assertEqual(self.t.git("rev-parse", "--short=9", "HEAD", cwd=folder), code_commit, "the state commit is off: the branch is at the code")
+        self.assertEqual(plan.find(plan.read_base(folder), "A.1")["state"], "open", "the branch says nothing is landed")
         self.assertEqual(plan.find(plan.read_steps(self.t.tree), "A.1")["state"], "started")
         self.assertEqual(lv.read_landings(self.t.live), [])
         self.assertEqual(failures.Store(self.t.store).count("native/A.1"), 1)

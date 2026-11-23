@@ -4,9 +4,9 @@ You do the native plan: 138 steps, one after another, alone, until every step is
 file before your first command, and again after every context compaction. Where this file and a step's card
 disagree about WHAT to build, the card wins. Where they disagree about HOW to work, this file wins.
 
-You work alone, with one exception: when a test tool is at fault you start ONE helper to mend it (section 9),
-wait for it, and write no step code meanwhile. Never a helper for a step's code, never two helpers at once,
-never another session. The owner is away and is not a programmer of this code: do not ask him anything and
+You work alone, with one exception: when a test tool is at fault you start ONE helper to mend it (section 9) and
+wait for it; meanwhile you write the step after the one in work, and hand nothing in. Never a helper for a step's
+code, never two helpers at once, never another session. The owner is away and is not a programmer of this code: do not ask him anything and
 never wait for him. Decide from the card, the design and the code (section 7), and write down what you decided
 and why with `PLAN decide`.
 
@@ -100,8 +100,14 @@ Every step is built on the one before it, and nothing reaches main that its land
    the build. Do not run the full test set yourself: the landing runs exactly what is needed, once. `PLAN check`
    runs what `land` checks before it queues anything (the ledger, the file references, the replay rule, the
    console census and the other code checks, the strictness check, the rule on test tools and GitHub's jobs) on
-   the work folder as it stands, prints every thing that would refuse the step at once, and queues nothing:
-   run it while you write and again before you land.
+   the work folder as it stands, prints every thing that would refuse the step at once, and queues nothing.
+   Whole, it also builds the game (your build command) and runs every unit test that GitHub's Check runs and
+   that can run on this PC: the Windows unit tests, the game's own unit tests and the Rust tests. A unit test of
+   a part you did not touch can fail on your change (on 11-23 `galaxy_launch_args_tests` did, after a diagnostic
+   bit was left empty): that is why you need not guess which ones to run. What it cannot run it names, as `not
+   proven here` (GitHub's Linux, Mac and sanitizer jobs and the unit tests only they build): a name there is
+   not a pass. `PLAN check --no-units` is the quick form for while you write; run the whole one before you
+   land, and again after any change that follows a failure of it.
 6. Audit it before the machine does. Read your whole change once, line by line (`git diff origin/main`), as a
    reviewer who did not write it: each of the four renderers has its part; nothing of the old path is left
    that the card removes; nothing is changed that the card does not name; every new text is in 14 languages;
@@ -162,7 +168,7 @@ Do not wait for a landing with empty hands.
 | --- | --- |
 | passed (code 0) | Log line, progress page. `PLAN next`. It gives `NEXT: <M>` with `PREPARED AHEAD`: `PLAN start <M>`. Your commits on `<M>` are taken up on top of main. (Uncommitted changes to tracked files stop `start`: it says to commit first, because main holds `<N>` under other commits and `<M>`'s have to be moved; commit as below and give the command again. Files git does not track stay as they are.) Go on where you were in 4.1. |
 | passed, and `PLAN next` gives a REPAIR first | Commit what you have of `<M>` (below). `PLAN start R-00N`, do the repair (section 6). `<M>`'s branch is kept and comes back with `PLAN next` after it. |
-| failed (code 1) | `<N>` comes first. Commit what you have of `<M>` (below). `git checkout native/<N>`. Find and fix the fault (section 5), commit, `PLAN land <N>` again. Then `PLAN ahead` again: it puts `<M>`'s commits on top of the mended `<N>`, and you go on with `<M>`. If your fix changed something `<M>` builds on, read `<M>`'s change again. |
+| failed (code 1) | `<N>` comes first. Commit what you have of `<M>` (below). `git checkout native/<N>`: the tool has taken its own commit `Plan: step <N> landed` off the branch (a failed landing leaves no commit that says `landed`), and `PLAN land <N>` makes it again. Find and fix the fault (section 5), commit, `PLAN land <N>` again. Then `PLAN ahead` again: it puts `<M>`'s commits on top of the mended `<N>`, and you go on with `<M>`. If your fix changed something `<M>` builds on, read `<M>`'s change again. |
 | the same failure three times (code 3) | Commit what you have of `<M>` (below). `PLAN blocked <N> "..."` (section 5). Then `PLAN next`. If it gives `<M>`: `PLAN start <M>` puts `<M>`'s commits on main without `<N>`'s; what you wrote may lean on `<N>`: read your whole change against main (`git diff origin/main`) and mend it before you go on. If it gives another step, `<M>`'s branch stays as it is for later. |
 | not judged (code 4) | Section 9, "When a tool fails". Landing `<N>` once more works from `<M>`'s branch as long as `<N>` needs no new commit; your work on `<M>` goes on meanwhile. Where `<N>` itself must change (its branch no longer applies to main): commit what you have of `<M>` (below), `git checkout native/<N>`, do it, `PLAN land <N>`, then `PLAN ahead` again. |
 
@@ -297,7 +303,10 @@ evidence is gone, a count is off for a reason the code shows) is replaced by an 
 dropped. A detail the card leaves open is chosen. Each of these is one line,
 `PLAN decide <ID> "<what>" --because "<why>" [--doc "<file, section>"]`, which writes
 `docs/plan/native/decisions.tsv` (commit it with the step), and the card's text is corrected in the same landing
-where it was wrong. The page lists the decisions.
+where it was wrong. The page lists the decisions. A decision that turns out wrong is corrected by a later one that
+names it: `PLAN decide <ID> "<what>" --because "<why>" --replaces <N>` (`PLAN decide <ID> --list` prints the numbers
+of the step's decisions). The file keeps both, the page and `--list` show the newest. Never edit `decisions.tsv`
+by hand.
 
 A choice between two designs that no player can notice is yours: choose by section 8 (the modern form, never
 slower, all four renderers) and record it with `PLAN decide`. Only what a player could see, hear or feel
@@ -314,7 +323,9 @@ session is an order; an answer to such a question is written in your log and the
   nothing on this PC will catch a mistake in it before the landing.
 - The game plays exactly as before unless the card says otherwise. The recorded replays (`tests/replays/`)
   prove it. Record a replay reference again only when the card says the replay changes, with the command
-  `PLAN start` prints, and say "replay reference" in the commit message. In every other step a replay that
+  `PLAN start` prints. A branch that changes a file under `tests/replays/` needs the words "replay reference"
+  in a commit message of the landing: `PLAN check` and `PLAN land` refuse it without them. A step that records
+  nothing needs no such words. In every other step a replay that
   differs means your change altered the game: find why. A recorded replay is a place that can make a check see
   less: the step adds one line for each changed file to `docs/plan/strictness-log.tsv` in the same landing (see
   section 9, the top).
@@ -377,6 +388,14 @@ lists every file and line the document names that does not exist. `PLAN land` ru
 `.md`, `.txt` and `.rst` file and on your commit messages before it hands the branch to the gate, so make it
 pass first.
 
+**Programs you never run.** These start the game or hold the machine, outside your commands. The landing runs what it needs
+of them, and a card's proof that names one is met by the landing's check of the same name, or by the nearest form of
+your own commands (say which, with `PLAN decide`):
+
+- `tools/gate/gate.py`, `tools/gate/pace.py`, `tools/gate/soak.py`, `tools/gate/stress.py`, `tools/gate/sanitizer.py`
+- `tools/gate/replays_rates.py`, `tools/gate/replays_software.py`, `tools/measure/measure.py`, `tools/verify/size_probe.py`
+- `tools/lumacore/luma_test.py` and `tools/lumacore/luma_test_android.py` (command 3 runs the first for you), and everything in `tools/test_driver/`
+
 **The game data.** Commands 3 and 4 carry the game data they run on (`--pak`): the US disc's data for your
 folder's store version and importer, found by the tools. A step that changes the importer
 (`crates/nebula-import/`) or the store version (`runtime/include/galaxy/store_version.inc`) has no data yet.
@@ -434,9 +453,16 @@ process you did not start, never remove a lock, never stop a landing or the long
 
 ### When a tool fails: the mend
 
-While a mend is open you wait: `PLAN next`, `start`, `ahead` and `land` all answer `WAIT: mend M-00N is open`, you
-start no step, write nothing ahead and land nothing, and the step that met the fault is taken up again only when
-main holds the mend. Only `mend ...`, `status`, `page`, `note`, `alive` and `check` work meanwhile.
+While a mend is open the step that met the fault waits, and you hand nothing in: `PLAN start` and `land` answer
+`WAIT: mend M-00N is open`, and the step is taken up again only when main holds the mend. You do not sit idle
+meanwhile: `PLAN ahead` writes the step after the one in work, on top of its branch, exactly as in 4.2 (read,
+change, build, prove, audit, ledger, commit; no `start`, no `land`, no push). The exception is a step the mend
+touches: when the mend's sheet names a file that step's card names (its "Where"), or the helper's branch
+`mend/M-00N` changes one, `ahead` says so and refuses; then there is nothing to write, and you end the turn
+(section 13). `mend ...`, `status`, `page`, `note`, `alive`, `check`, `ahead` and `decide` work meanwhile; `next`
+prints the wait and what to do. When main holds the mend (section 9, "The mend, step by step", point 5), the step
+that met the fault goes on first: rebase it, `PLAN land` it, and `PLAN ahead` again moves what you wrote onto its
+new tip.
 
 **When a tool is at fault.** Only with evidence of one of these kinds:
 
@@ -477,14 +503,16 @@ a landing, or `PLAN tool "<what you ran, what it printed, what you needed>"` out
 2. Fill the sheet's five headings (what I ran; what the tool said, with the run folder or the command's output;
    what it should have said and which document and section says so; the files I believe are at fault; what must
    stay refused after the mend). Quote the lines of the documents.
-3. Start ONE helper: the Agent tool, model `sonnet`, with these three lines: `Read <your work folder>/docs/plan/native/TOOL-MEND.md
-   whole.` / `Read the fault sheet at D:/NebulaWork/plan/native/mends/M-00N.md.` / `Your mend is M-00N.` (`mend open`
-   prints them filled in.) You write no step code and start nothing else while it works.
-4. When the Agent tool gives the helper's result at once, read it. When it runs the helper in the background, end
-   the turn with one line ("waiting for the helper of M-00N"): that is a reason to end a turn, with those of
-   section 13. Go on when the result arrives. At a wake-up while the helper still works (it started less than three
-   hours ago, or a landing of `mend/M-00N` waits or runs in the gate's line) there is nothing to do: end the turn again
-   with the same one line.
+3. Start ONE helper: the Agent tool, model `sonnet`, in the background, with these four lines: `Read <your work folder>/docs/plan/native/TOOL-MEND.md
+   whole.` / `Read the fault sheet at D:/NebulaWork/plan/native/mends/M-00N.md.` / `Your mend is M-00N.` / `Report once, at your
+   end: MENDED M-00N <main's commit> or NOT MENDED M-00N. Send no progress note before it.` (`mend open` prints them filled
+   in.) The helper sends one message, at its end; nothing it does before wakes you. You start nothing else beside it.
+4. While the helper works, write the step after the one in work: `PLAN ahead` (above). A progress note that does reach you
+   (a helper that does not follow its fourth line) is no result: go on writing, and do not answer it. When there is nothing
+   to write (`ahead` says so, or says the mend touches that step's file), end the turn with one line ("waiting for the
+   helper of M-00N"): that is a reason to end a turn, with those of section 13. Go on when the result arrives. At a wake-up
+   while the helper still works (it started less than three hours ago, or a landing of `mend/M-00N` waits or runs in the
+   gate's line) go on writing, or end the turn again with the same one line.
 5. `MENDED M-00N <commit>`: read the commit against TOOL-MEND.md section 5 (`git show --stat <commit>`, the changed
    judging lines, the new self-test, the lines in `docs/plan/strictness-log.tsv`). A loosening that no document
    allows: open the next mend at once to take it back. Else `PLAN mend close M-00N <commit>` (the commit must be on
@@ -495,7 +523,7 @@ a landing, or `PLAN tool "<what you ran, what it printed, what you needed>"` out
 6. `NOT MENDED M-00N`, or no result three hours after the helper started (the wake-up finds this): look at the
    gate's line (`D:/NebulaWork/plan/landing-queue.tsv`) for a landing of `mend/M-00N`: while one waits or runs,
    never start a second writer. Then `PLAN mend failed M-00N "<why>"`. It counts the attempts on the sheet and says
-   what comes next: after the first, `SECOND HELPER` (one new Sonnet helper, the same three lines, the first one's
+   what comes next: after the first, `SECOND HELPER` (one new Sonnet helper, the same four lines, the first one's
    notes are on the sheet); after the second, `YOUR OWN ATTEMPT` (you mend it yourself, by TOOL-MEND.md to the
    letter: the same folder `Nebula-mend`, the same branch, the same sheet, the same three hours of your own work,
    the same proofs, the same landing `PLAN mend land M-00N`; read the file whole first, nothing in it is relaxed for
@@ -514,7 +542,7 @@ a landing, or `PLAN tool "<what you ran, what it printed, what you needed>"` out
   text into your log instead and go on.
 - `start`, `land`, `next`, `blocked`, `mend ...`: the mend is made by hand. List `D:/NebulaWork/plan/native/mends` and take
   the next free number; write the sheet there with your file-writing tool (the five headings, the line the tool
-  printed, the traceback), start the helper with the same three lines, and write a log line `mend M-00N by hand`.
+  printed, the traceback), start the helper with the same four lines, and write a log line `mend M-00N by hand`.
   The helper lands its fix as TOOL-MEND.md section 8 says for this case (`gate.py land` itself). When it reports
   `MENDED M-00N <commit>`: read the commit as in point 5, commit what you have, `git fetch origin`, `git rebase
   origin/main` on the step's branch (the mended `plan.py` comes with it), then record it: `PLAN mend open "<title>"
@@ -637,7 +665,7 @@ then says `ended`), the page (section 12), `CronDelete` of the wake-up job, a lo
 most six lines for the owner: what is on main (the count from `PLAN status`), what is blocked and why (one line
 each), what waits for the owner, where the page is. (Stopped because the step tool itself cannot be used: leave out
 the note and the page, write the log line and the six lines.) These are the only reasons for which you end your
-turn: done; stopped; the one line while a helper of a mend works in the background (section 9); and the one line
+turn: done; stopped; the one line while a helper of a mend works in the background and there is nothing to write meanwhile (section 9, point 4); and the one line
 `waiting: ...` while a landing cannot be judged for the environment (code 4 of the kind `env`, section 9) or while GitHub
 needs a sign-in (section 5), after the next step is written ahead. The wake-up job fires only while the session is
 idle: a turn that goes on is never woken, so these waits end the turn. No release, tag or upload is ever made by you.
@@ -649,7 +677,7 @@ idle: a turn that goes on is never woken, so these waits end the turn. No releas
 3. `PLAN status`: what is landed, what is in work, whether a landing is running, what is prepared ahead, whether a
    mend is open. `PLAN mend list`: a mend that is open and whose helper started less than three hours ago, or with a landing of
    `mend/M-00N` that waits or runs in the gate's line (`D:/NebulaWork/plan/landing-queue.tsv`): the helper works;
-   there is nothing to do, end the turn again with the one line. One that started more than three hours ago, with no
+   write the step after the one in work (`PLAN ahead`), or when there is nothing to write end the turn again with the one line. One that started more than three hours ago, with no
    landing of `mend/M-00N` in the gate's line: its helper is gone; go on as section 9 point 6 says
    (`PLAN mend failed M-00N "no result"`).
 4. `git -C D:/NebulaWork/MarioGalaxyRecomp/Nebula-native status` and `git -C ... log --oneline -5`: which

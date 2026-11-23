@@ -116,10 +116,12 @@ class RerunBase(unittest.TestCase):
         return lv.read_record(self.t.live, 1)
 
     def after_a_failed_landing(self):
-        """The ledger the card wants, a failed landing (the state commit stays on the branch); returns (code commit, state tip)."""
+        """The ledger the card wants, a failed landing whose state commit stays on the branch (the tool did not get to take it off, as in a
+        landing that was cut off; the tool takes it off after a failure itself: plan_after_trial_test); returns (code commit, state tip)."""
         code_commit = ready_a1(self.t)
         self.results = [failed_verdict()]
-        self.assertEqual(self.land()[0], 1)
+        with mock.patch.object(plan, "state_commit_after", lambda *args: None):
+            self.assertEqual(self.land()[0], 1)
         self.calls.clear()
         return code_commit, self.head()
 
@@ -131,15 +133,16 @@ class StateCommitTest(RerunBase):
         ready_a1(self.t)
         self.results = [failed_verdict()]
         self.assertEqual(self.land()[0], 1)
-        tip = self.head()
-        self.assertEqual(self.subjects()[0], STATE_SUBJECT)
+        code_tip = self.head()
+        self.assertEqual(self.subjects()[0], "A.1: the code", "the failed landing took its state commit off")
         self.assertEqual(self.land()[0], 1)
-        self.assertEqual(self.head(), tip, "the second try made no commit")
-        self.assertEqual(len(self.state_commits()), 1)
+        self.assertEqual(self.head(), code_tip, "the second try took its own off again")
+        self.assertEqual(len(self.state_commits()), 0)
         self.results = [passed_verdict()]
         self.land(expect=0)
-        self.assertEqual(len(self.state_commits()), 1, "and the pass made none either")
-        self.assertEqual([c["head"] for c in self.calls], [tip, tip, tip], "the gate was always given the same tip")
+        self.assertEqual(len(self.state_commits()), 1, "and the pass made one, once")
+        self.assertEqual([self.t.git("rev-parse", "%s^" % c["head"], cwd=self.folder) for c in self.calls], [code_tip] * 3,
+                         "the gate was always given a state commit on the same code commit")
 
     def test_fix_commits_on_top_of_a_state_commit_get_a_second_one_that_names_the_new_code_commit(self):
         code_commit = ready_a1(self.t)
@@ -170,12 +173,18 @@ class StateCommitTest(RerunBase):
         before = len(self.state_commits())
         self.results = [passed_verdict()]
         self.land(expect=0)
-        self.assertEqual(len(self.state_commits()), before, "the tool's own earlier one went, its new one came; the other commit stays")
+        self.assertEqual(len(self.state_commits()), before + 1, "the other commit stays, and the tool made its own on top of it")
 
 
 # ---- A2: what is landed is what origin/main says ----------------------------------------------------------------------
 
 class LandedIsWhatMainSaysTest(RerunBase):
+    def leave_a_state_commit(self):
+        """The tool's own commit on the branch, as a landing that was cut off before the tool could end it leaves one."""
+        plan.set_state(self.folder, "A.1", "landed", self.head()[:9], track=False)
+        self.t.git("add", "docs/plan/native/steps.tsv", cwd=self.folder)
+        self.t.git("commit", "-q", "-m", STATE_SUBJECT + "\n\nThe step's code is %s.\n" % self.head()[:9], cwd=self.folder)
+
     def run_from_folder(self, args):
         """plan.py with the work folder as the tree it reads, as an agent runs its own copy."""
         from plan_fixture import run
@@ -185,7 +194,9 @@ class LandedIsWhatMainSaysTest(RerunBase):
         ready_a1(self.t)
         self.results = [failed_verdict()]
         self.land()
-        self.assertEqual(plan.find(plan.read_base(self.folder), "A.1")["state"], "landed", "the branch says landed")
+        self.assertEqual(plan.find(plan.read_base(self.folder), "A.1")["state"], "open", "the branch says nothing of it: its landing failed")
+        self.leave_a_state_commit()
+        self.assertEqual(plan.find(plan.read_base(self.folder), "A.1")["state"], "landed", "a commit a cut-off landing left: the branch says landed")
         code, text = self.run_from_folder(["next"])
         self.assertTrue(text.startswith("IN WORK: A.1"), text[:60])
         code, text = self.run_from_folder(["status"])
@@ -199,6 +210,7 @@ class LandedIsWhatMainSaysTest(RerunBase):
         ready_a1(self.t)
         self.results = [failed_verdict()]
         self.land()
+        self.leave_a_state_commit()
         git_run("push", "-q", "origin", "native/A.1:main", cwd=str(self.folder))
         code, text = self.run_from_folder(["status"])
         self.assertIn("Steps landed: 1 of 5.", text)
@@ -231,7 +243,7 @@ class RecordTest(RerunBase):
             self.land()
             seen = self.calls[0]["record"]
             self.assertEqual((seen["step"], seen["branch"], seen["tip"], seen["pid"]),
-                             ("A.1", "native/A.1", self.head(), str(os.getpid())))
+                             ("A.1", "native/A.1", self.calls[0]["head"], str(os.getpid())))
             self.assertTrue(lv.parse_stamp(seen["time"]))
             self.assertIsNone(lv.read_record(self.t.live, 1), "removed when the gate has answered")
 
@@ -644,7 +656,8 @@ class ReplayGuardTest(RerunBase):
         code, text = self.t.run(["start", "A.2"])
         self.assertEqual(code, 0, text)
         self.assertIn("record the reference with: " + plan.REPLAY_RECORD, text)
-        self.assertIn('must contain the words "replay reference"', text)
+        self.assertIn(plan.REPLAY_WORDS_RULE, text)
+        self.assertIn('changes a file under tests/replays/ needs a commit message with the words "replay reference"', text)
         self.t.landed("A.2")
         code, text = self.t.run(["start", "C.1"])
         self.assertNotIn("record the reference", text)

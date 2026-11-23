@@ -4,11 +4,13 @@
                                          | ahead
                                          | owed ID "TEXT" | commands | note "TEXT" | note --clear
                                          | claim PACKAGE [--take-stale] | tool "TEXT" | toolfault --last --could-not "TEXT"
-                                         | mend open|land|close|failed|drop|list ... | decide ID "WHAT" --because "WHY" | alive | check
+                                         | mend open|land|close|failed|drop|list ... | decide ID "WHAT" --because "WHY" [--replaces N] | decide ID --list
+                                         | alive | check [--no-units] [--no-build]
                                          | repair add --source S --kind K --check C ... | repair list | repair end R-00N --mend M-00N
     (next, ahead, start, land, blocked, claim, tool, toolfault, status and commands take --agent 1|2; 1 is the default; ID is a step, or for
      start, land and blocked a repair such as R-003)
-    (--no-push, before the command, or NEBULA_PLAN_NO_PUSH=1 in the environment: the progress branch is not pushed)
+    (--no-push, before the command, or NEBULA_PLAN_NO_PUSH=1 in the environment: the progress branch is not pushed; --build-root FOLDER, before the
+     command: where the build folders are, for the self-tests and the plants)
     Each agent runs the copy in its own work folder: `D:/NebulaWork/MarioGalaxyRecomp/Nebula-native/tools/plan/plan.py` for agent 1,
     `.../Nebula-native-2/tools/plan/plan.py` for agent 2. A command with an --agent that does not match the folder its file is in
     (when that folder is one of those two) is refused with one line that names the right file. From any other tree (the tests, a
@@ -49,8 +51,10 @@ start    One work folder for each agent, kept: agent 1 works in `D:/NebulaWork/M
          folder, sets the step `started` and claims its package for the agent. Also refuses a step whose needs are not
          landed, a package another agent holds, and for agent 2 a package that is not on its list.
 land     Can be run again at any time and never resets the work folder. The tool's own commit (`Plan: step X landed`, only
-         steps.tsv) is made once: a tip that already is it is handed over as it is, and fix commits on top of one get a second
-         that names the newer code commit. A landing record (live folder, `landing-<agent>.tsv`) stands while the gate has the
+         steps.tsv) is made for the landing, and taken off the branch again when the landing does not pass (failed, stopped or not
+         judged: only a landing not judged while the folder is on a step written ahead keeps it, to be handed over again from there),
+         so that no commit says `landed` for a step that is not on main. One left by a landing that was cut off: a tip that already is it is
+         handed over as it is, and fix commits on top of one get it taken off and a new one made, naming the newer code commit. A landing record (live folder, `landing-<agent>.tsv`) stands while the gate has the
          branch: `land` then joins ("joined the landing of X, in the queue since HH:MM"), `status` and `next` begin with
          "LANDING RUNNING: ...", `start` refuses. When origin/main already holds the step: "LANDED (found on main)". A branch that
          changes tests/replays/ lands only if the card says the replay changes, and a commit message says "replay reference".
@@ -86,18 +90,26 @@ tool     Writes a tool fault into BLOCKED.md under "tools" and into tool-faults.
 toolfault --last --could-not "TEXT": the sentence on what the agent's last tool fault stopped it from doing.
 mend     A tool at fault is mended by one helper while the agent waits (docs/plan/native/TOOL-MEND.md, AGENT.md section 9). `mend open
          [ID] "TITLE" [--last] [--check C]` writes the fault sheet (live folder, mends/M-00N.md) and puts the step in work into the
-         state `waits for M-00N` (still started, never blocked); one mend is open at a time, and while it is, `next`, `start`, `ahead` and
-         `land` answer `WAIT: mend M-00N is open`. `mend land M-00N` is the helper's: from its own folder on the branch mend/M-00N, the
+         state `waits for M-00N` (still started, never blocked); one mend is open at a time, and while it is, `next`, `start` and `land`
+         answer `WAIT: mend M-00N is open`; `ahead` writes the step after the one in work on top of its branch (it refuses when the mend's
+         sheet or its branch mend/M-00N names a file that step's card names, or when the mend waits for no step). The helper's prompt is
+         four lines: the last asks for one report, at its end. `mend land M-00N` is the helper's: from its own folder on the branch mend/M-00N, the
          references check, the code checks and the strictness check, then the gate with `--who "mend M-00N"` (its landing record is
          landing-mend.tsv). `mend close M-00N COMMIT`: the commit is on origin/main and touches tools/, docs/ or .github/; the step goes on,
          the steps blocked `tool: M-00N` are open again. `mend failed M-00N "WHY"` counts the attempts on the sheet (the helper, a second
          helper, the agent itself) and prints what comes next; the third blocks the step `tool: M-00N`. `mend drop M-00N "FILES"`: the
          fault needs game code, no tool fault, the step is the agent's again. `mend open ... --landed COMMIT` records a mend landed by
          hand (plan.py itself was at fault). `mend list`. State: mends.tsv in the live folder.
-decide   `decide ID "WHAT" --because "WHY" [--doc "FILE, SECTION"]` appends a row to docs/plan/native/decisions.tsv of the plan tree.
+decide   `decide ID "WHAT" --because "WHY" [--doc "FILE, SECTION"] [--replaces N]` appends a row to docs/plan/native/decisions.tsv of the plan
+         tree; `--replaces N` names an earlier decision of the step (`ID#N`, as `decide ID --list` prints them) that this one corrects: the file
+         keeps both, the page and `--list` show the newest.
 alive    One word: `working` (a command in the last three hours, or a landing or mend landing in the gate's line), `ended` (a note that
          begins Done or Stopped, or every step landed) or `stale`. Every other command writes the time into heartbeat.txt (live folder).
 check    What `land` checks before it queues, on the agent's work folder as it is, every refusal at once; nothing is committed or queued.
+         Whole, it also builds (the agent's own build command) and runs the unit tests GitHub's Check runs that can run on this PC: ctest over
+         the Windows build and the game's, and the Rust tests (units.py); a failing one is refused by name with its own lines, and what only
+         GitHub's other jobs run is named as `not proven here`. `--no-units` skips all of it, `--no-build` skips the build.
+         On a step written ahead it counts that step's own commits, not those of the step below it.
 status   Writes STATUS.md and prints it: steps landed, started, blocked, claims, the last five landings, the next step.
          The agent runs it at every start and after every context compaction; it is the only memory it needs.
 page     Writes the progress files into the live folder (page.py), from steps.tsv, the live state, the tool faults and
@@ -172,6 +184,7 @@ import page  # noqa: E402
 import noprompt  # noqa: E402
 import scope  # noqa: E402
 import strictness  # noqa: E402
+import units  # noqa: E402
 
 GIT = "C:/Program Files/Git/cmd/git.exe"
 NATIVE = "docs/plan/native"
@@ -205,6 +218,11 @@ REPLAY_DIR = "tests/replays/"
 REPLAY_ALLOWED = re.compile(r"re-?record|recorded again|replay changes|new reference", re.I)
 REPLAY_REFUSAL = "the replay differs and this step's card does not say it may: the change altered the game; find why"
 REPLAY_WORDS = "replay reference"
+# What `start` tells the agent about the words is what `replay_problems` refuses, and nothing more: it refuses a branch that changes a file
+# under tests/replays/ when no commit message of the landing has the words. A step whose card allows the change and that records nothing is
+# not asked for them.
+REPLAY_WORDS_RULE = ("A branch that changes a file under %s needs a commit message with the words \"%s\"; `check` and `land` refuse it "
+                     "without them. A step that records no replay reference needs no such words." % (REPLAY_DIR, REPLAY_WORDS))
 # How a replay reference is recorded: step_hash.py's `record` takes the work folder of a luma_test.py run in which the tour played
 # every recorded stop with the hash on, and writes one tests/replays/<stop>.tsv for each. T10 proves this command by a real run.
 REPLAY_RECORD = "python -X utf8 -I tools/verify/step_hash.py record <work folder of the tour run> --out tests/replays"
@@ -1049,10 +1067,15 @@ def game_pak(tree):
 PAK_OF = game_pak                        # tests put their own in here
 
 
+def build_folder(a, agent):
+    """The agent's build folder: <the build root>/<the work folder's name> (`--build-root`, default BUILD_ROOT)."""
+    return "%s/%s" % (getattr(a, "build_root", None) or BUILD_ROOT, AGENT_FOLDERS[str(agent)])
+
+
 def commands_text(a, agent):
     """The block of the agent's commands filled in for its folder (one text, the same for `start` and `commands`)."""
     folder = work_folder(a.work_root, agent).as_posix()
-    build = "%s/%s" % (BUILD_ROOT, AGENT_FOLDERS[str(agent)])
+    build = build_folder(a, agent)
     pak = PAK_OF(a.tree)
     if pak is None:
         pak = ("<the US game.pak is not made: python -X utf8 -I %s/tools/gate/gamedata.py make %s --importer %s/bins/nebula-import.exe>"
@@ -1804,16 +1827,86 @@ def say_ahead_in_next(a, steps, rec):
         say("AHEAD POSSIBLE: %s %s; plan.py ahead%s" % (nxt["step"], nxt["title"], agent_flag(agent_of(a))))
 
 
+MEND_FILES_HEADING = "## The files I believe are at fault"
+FILE_WORD = re.compile(r"[\w.@+-]+(?:/[\w.@+-]+)+/?|[\w+-]+\.[A-Za-z][\w]*")
+
+
+def mend_record(a, steps, mend, folder):
+    """The landing record `ahead` works from while a mend is open: the item the mend waits for (a step or a repair in work) and the tip of its
+    branch. None when the mend waits for no item or the branch is not there."""
+    ident = mend["step"]
+    if ident in ("", "-"):
+        return None
+    tip = commit_of(folder, "refs/heads/" + item_branch(ident)) if folder.is_dir() else ""
+    return {"step": ident, "tip": tip, "branch": item_branch(ident), "time": mend["opened"]} if tip else None
+
+
+def mend_files(a, mend, folder):
+    """The files a mend touches, as far as is known: the paths its fault sheet lists under `The files I believe are at fault`, and the files
+    its branch mend/M-00N changes against origin/main once the helper has committed on it."""
+    found = []
+    sheet = lv.sheet_path(live_dir(a.live), mend["id"])
+    if sheet.is_file():
+        text = sheet.read_text(encoding="utf-8", errors="replace")
+        if MEND_FILES_HEADING in text:
+            part = text.split(MEND_FILES_HEADING, 1)[1].split("\n## ", 1)[0]
+            part = "\n".join(l for l in part.splitlines() if not l.strip().startswith("(path and function"))
+            found += [m.group(0).rstrip("/") for m in FILE_WORD.finditer(part)]
+    branch = "refs/heads/mend/" + mend["id"]
+    for repo in (folder, pathlib.Path(a.tree)):
+        if repo.is_dir() and commit_of(repo, branch):
+            found += git(repo, "diff", "--name-only", "origin/main...%s" % branch).stdout.split()
+            break
+    return sorted(set(found))
+
+
+def touches(mend_path, card_path):
+    """Whether a path a mend touches and a path a card names are the same file, one holds the other (a folder), or the mend names the card's file by
+    its name alone."""
+    a, b = mend_path.strip("/"), card_path.strip("/")
+    return a == b or a.startswith(b + "/") or b.startswith(a + "/") or ("/" not in a and b.rsplit("/", 1)[-1] == a)
+
+
+def mend_ahead_refusal(a, steps, mend, rec):
+    """Why `ahead` may not write while mend `mend` is open ("" when it may): the mend waits for no item, or it touches a file that the step to be
+    written touches."""
+    if rec is None:
+        return ("The mend waits for no step in work, so there is nothing to write the next step on top of: nothing is written, started or landed "
+                "while it is open. `python -X utf8 -I %s next` says what to do." % plan_path(a))
+    folder = work_folder(a.work_root, agent_of(a))
+    item = ahead_item(a, steps, rec)
+    done = item[1] if item and item[0] == "step" else None
+    nxt = following(a, steps, done)
+    if nxt is None:
+        return ""
+    mine = mend_files(a, mend, folder)
+    theirs = card_paths(card_text(a.tree, nxt), a.tree)
+    clash = sorted({m for m in mine for c in theirs if touches(m, c)})
+    if clash:
+        return ("The mend touches %s, which step %s touches (its card's Where): nothing is written for it until main holds the mend. "
+                "`python -X utf8 -I %s next` says what to do." % (", ".join(clash[:6]), nxt["step"], plan_path(a)))
+    return ""
+
+
 def cmd_ahead(a):
     """`ahead`: while the landing of N plays, the branch native/<M> of the step that follows N, on top of the tip the landing was given
     (made at the first call; at a later one moved onto the new tip of N when N was mended and landed again), and what `next` prints
     for a step. It changes no step's state, makes no claim and pushes nothing."""
-    if mend_blocks(a):
-        return 1
     fetch_main_landed(a)
     agent = agent_of(a)
     steps = read_steps(a.tree, a.live)
+    folder = work_folder(a.work_root, agent)
     rec = landing_of(a)
+    mend = lv.open_mend(live_dir(a.live))
+    if mend is not None:
+        # A helper mends a tool: the step in work waits and nothing is landed, but the step after it is written meanwhile, on top of the
+        # tip of the step in work, unless the mend touches a file that step touches (AGENT.md section 9).
+        rec = rec or mend_record(a, steps, mend, folder)
+        why = mend_ahead_refusal(a, steps, mend, rec)
+        if why:
+            say("WAIT: mend %s is open: %s" % (mend["id"], mend["title"]))
+            say(why)
+            return 1
     item = ahead_item(a, steps, rec)
     if item is None:
         say(AHEAD_REFUSAL)
@@ -1821,7 +1914,6 @@ def cmd_ahead(a):
         return 1
     kind, row, n_id = item
     done = row if kind == "step" else None
-    folder = work_folder(a.work_root, agent)
     n_branch = item_branch(n_id)
     live = live_dir(a.live)
     entry = ahead_entry(a)
@@ -1889,7 +1981,11 @@ def cmd_ahead(a):
                 return 1
         n_tip = commit_of(folder, "refs/heads/" + n_branch) or commit_of(folder, rec["tip"])
         base = entry["base"]
-        if n_tip != base and not is_ancestor(folder, n_tip, "refs/heads/" + branch):
+        # N's tip is where M's commits must stand; they stand on `base`. They move when N's tip is not under M, and also when the commit
+        # between N's tip and `base` was taken off N (a landing that did not pass takes its state commit off): then N's tip is under `base`.
+        dropped = (n_tip != base and commit_of(folder, base) and is_ancestor(folder, n_tip, base)
+                   and is_ancestor(folder, base, "refs/heads/" + branch))
+        if n_tip != base and (dropped or not is_ancestor(folder, n_tip, "refs/heads/" + branch)):
             if not commit_of(folder, base):
                 say("plan.py: the commit %s that %s was written on is no longer in this repository, so its commits cannot be moved. "
                     "%s is kept as it is; nothing is deleted." % (base[:9], branch, branch))
@@ -1912,6 +2008,8 @@ def cmd_ahead(a):
     print_step_body(a, nxt)
     say()
     say(commands_text(a, agent))
+    if mend is not None:
+        say("Mend %s is open: nothing is landed and nothing is handed in until main holds it. `python -X utf8 -I %s next` says when." % (mend["id"], plan_path(a)))
     say("Do not land it. When %s has landed: plan.py start %s%s" % (n_id, m_id, agent_flag(agent)))
     if moved:
         say("moved the %d commits of %s onto %s" % (moved, branch, base[:9]))
@@ -2345,7 +2443,7 @@ def cmd_start(a):
     if replay_allowed(card_text(a.tree, s)):
         say("This step's card says its replay reference may change. Once the change is made and the tour has played every recorded "
             "stop, record the reference with: %s" % REPLAY_RECORD)
-        say("A commit message of the landing must contain the words \"%s\"." % REPLAY_WORDS)
+        say(REPLAY_WORDS_RULE)
     say()
     say(commands_text(a, agent))
     return 0
@@ -2456,11 +2554,11 @@ def work_folder_problem(a, folder, branch):
     return ""
 
 
-def refs_problems(folder):
-    """The invented file and line references of the changed documents and the commit messages: [line]."""
+def refs_problems(folder, base="origin/main"):
+    """The invented file and line references of the changed documents and the commit messages after `base`: [line]."""
     allow = doc_refs.read_allow(folder / "tools" / "verify" / "doc_refs_allow.txt")
-    bad = doc_refs.check_files([folder / d for d in changed_documents(folder)], folder, allow)
-    bad += doc_refs.check_text("the commit messages", commit_messages(folder), folder, allow, message=True)
+    bad = doc_refs.check_files([folder / d for d in changed_documents(folder, base)], folder, allow)
+    bad += doc_refs.check_text("the commit messages", commit_messages(folder, base), folder, allow, message=True)
     return bad
 
 
@@ -2491,7 +2589,8 @@ def code_check_problems(folder):
 def hand_to_gate(a, folder, branch, label, agent, extra, on_pass, join=False, tip=None):
     """ONE call of the gate (LAND) for a step or a repair, and what follows: a pass calls `on_pass(verdict, seconds, summary)`
     and returns its exit code; anything else prints the verdict and returns 1 (a failure), 3 (the same failure three times) or
-    4 (a tool or the machine: not judged). Nothing is undone: a state commit made before stays on the branch.
+    4 (a tool or the machine: not judged). The callers take the tool's own state commit off the branch again when the landing did not
+    pass (state_commit_after): no commit says `landed` for a step that is not on main.
 
     The landing record (live.write_record) is written just before the gate is called and removed when it has answered. `join`:
     the gate already has this branch in its queue (an earlier call, cut): its record is left as it is, nothing is pushed, and the
@@ -2569,20 +2668,93 @@ def later_commits(folder, tip, ref="HEAD"):
     return git(folder, "log", "--format=%h %s", "%s..%s" % (tip, ref)).stdout.strip().splitlines()
 
 
+def take_state_commit_off(folder, branch, tip):
+    """The tool's own commit `Plan: step X landed` (`tip`) off `branch`, after a landing that did not pass: no commit says `landed` for a
+    step that is not on main. Returns (done, line). When the commit is the branch's tip the branch ref moves to its parent (`update-ref`, only
+    while the branch still is `tip`: nothing is reset, no file of the folder is written but steps.tsv, which the commit changed and nothing
+    else, and which is put back from the new HEAD when the folder is on the branch; uncommitted changes of other files stay as they are).
+    Commits after it (made while the landing played): the folder on the branch with no uncommitted change moves them onto the parent;
+    else the commit stays, and the line says so (the next `land` takes it off, drop_state_commits)."""
+    parent = commit_of(folder, tip + "^")
+    here = commit_of(folder, "refs/heads/" + branch)
+    if not parent or not here:
+        return False, ""
+    on = head_branch(folder) == branch
+    if here == tip:
+        moved = git(folder, "update-ref", "refs/heads/" + branch, parent, tip).returncode == 0
+        if moved and on:
+            git(folder, "checkout", "HEAD", "--", "%s/steps.tsv" % NATIVE)
+        return moved, ""
+    if on and not tracked_changes(folder) and not move_commits(folder, parent, tip, branch):
+        return True, ""
+    return False, ("the commit `%s` (%s) is still on %s under later commits; the next `land` takes it off" % (
+        git_out(folder, "log", "-1", "--format=%s", tip), tip[:9], branch))
+
+
+
+def state_commit_after(a, folder, branch, step_id, tip, code):
+    """What follows a landing that did not pass (`code` is not 0): the tool's own state commit that was handed to the gate (`tip`) goes
+    off the branch, so that no commit says `landed` for a step that is not on main (the next landing makes it again). One case keeps it:
+    not judged (4) while the folder is on the step written ahead, where `land` hands the same tip over again from there (land_from_ahead)."""
+    if code == 0 or not tip or not is_state_commit(folder, tip, step_id):
+        return
+    if code == 4 and ahead_here(a):
+        return
+    parent = commit_of(folder, tip + "^")
+    done, line = take_state_commit_off(folder, branch, tip)
+    if done:
+        say("The commit `%s` is off %s: %s is not on main." % (STATE_COMMIT % step_id, branch, step_id))
+        move_ahead_off(a, folder, step_id, tip, parent)
+    elif line:
+        say("NOTE: " + line)
+
+
+def move_ahead_off(a, folder, step_id, tip, parent):
+    """The step M written ahead of `step_id` was cut from `tip`, the commit just taken off: its own commits move onto `parent` (the folder is on
+    M with no uncommitted change; else a line says `ahead` does it), so that no branch of the agent holds a commit that says `landed` for a step
+    that is not on main."""
+    entry = ahead_entry(a)
+    if not entry or entry["after"] != step_id or entry["base"] != tip:
+        return
+    branch = "native/" + entry["step"]
+    if not branch_exists(folder, "refs/heads/" + branch) or not is_ancestor(folder, tip, "refs/heads/" + branch):
+        return
+    if head_branch(folder) != branch or tracked_changes(folder):
+        say("NOTE: %s stands on the commit that was taken off; `plan.py ahead` moves it onto %s's tip once your changes are committed." % (branch, step_id))
+        return
+    why = move_commits(folder, parent, tip, branch)
+    if why:
+        say("NOTE: the commits of %s could not be moved off it (%s); `plan.py ahead` says what to do." % (branch, why))
+        return
+    lv.write_ahead(live_dir(a.live), agent_of(a), entry["step"], step_id, parent, entry["handed"])
+    say("The commits of %s stand on %s's tip again." % (branch, step_id))
+
+
 def replay_allowed(card):
     return bool(card and REPLAY_ALLOWED.search(card))
 
 
-def replay_problems(folder, allowed):
+def own_base(a, folder, s):
+    """Where the commits of step `s` begin on the folder's HEAD: `origin/main`, or for a step written ahead (ahead's entry names this step)
+    the commit it was written on, so that the commits of the step below it, which are on that branch until it has landed, are not counted
+    as this step's (`check` on native/<M> while N plays)."""
+    entry = ahead_entry(a)
+    if entry and entry["step"] == s["step"] and commit_of(folder, entry["base"]) and is_ancestor(folder, entry["base"], "HEAD"):
+        return entry["base"]
+    return "origin/main"
+
+
+def replay_problems(folder, allowed, base="origin/main"):
     """Why a branch that changes a reference under tests/replays/ may not land ([text], empty when it may): the card must say the
-    replay changes (`allowed`), and a commit message of the landing must contain the words "replay reference"."""
-    names = git(folder, "diff", "--name-only", "origin/main...HEAD").stdout.splitlines()
+    replay changes (`allowed`), and a commit message of the landing must contain the words "replay reference". Only the branch's own
+    commits count: those after `base` (origin/main, or the step below a step written ahead: own_base)."""
+    names = git(folder, "diff", "--name-only", "%s...HEAD" % base).stdout.splitlines()
     files = [n for n in names if n.startswith(REPLAY_DIR)]
     if not files:
         return []
     if not allowed:
         return [REPLAY_REFUSAL] + ["  changed: " + f for f in files]
-    if REPLAY_WORDS not in commit_messages(folder).lower():
+    if REPLAY_WORDS not in commit_messages(folder, base).lower():
         return ["the branch changes the replay reference (%s), and no commit message of the landing contains the words \"%s\"" % (
             ", ".join(files), REPLAY_WORDS)]
     return []
@@ -2691,7 +2863,9 @@ def land_from_ahead(a, s, folder, branch, entry):
         def passed(verdict, seconds, summary):
             return finish_landing(a, s, code_commit, verdict, seconds, summary)
 
-        return hand_to_gate(a, folder, branch, a.id, agent, also_options(a, a.id), passed, tip=tip)
+        code = hand_to_gate(a, folder, branch, a.id, agent, also_options(a, a.id), passed, tip=tip)
+        state_commit_after(a, folder, branch, a.id, tip, code)
+        return code
     say("plan.py: " + ahead_branch_line(folder, entry, branch, a.id))
     return 1
 
@@ -2738,6 +2912,8 @@ def join_landing(a, s, folder, branch, rec):
 
     code = hand_to_gate(a, folder, branch, a.id, agent, also_options(a, a.id), passed, join=True)
     here = commit_of(folder, "refs/heads/" + branch) or git_out(folder, "rev-parse", "HEAD")
+    if not (code in (1, 4) and here != tip):
+        state_commit_after(a, folder, branch, a.id, tip, code)
     if code in (1, 4) and here != tip:
         say("the landing that was running judged an older commit (%s); landing the present one (%s) now" % (tip[:9], here[:9]))
         on_ahead = ahead_here(a)
@@ -2814,10 +2990,10 @@ PROTECTED_TOOLS = ("tools/gate/", "tools/plan/", "tools/measure/", "tools/verify
 # step list and extra checks) unless the step's card names the file.
 
 
-def branch_changes(folder, step_id=None):
-    """[path] changed by the commits of the folder's HEAD that are not on origin/main, without the tool's own state commit of a step
-    (it changes steps.tsv and nothing else)."""
-    out = git(folder, "log", "--no-merges", "--format=%x01%s", "--name-only", "origin/main..HEAD")
+def branch_changes(folder, step_id=None, base="origin/main"):
+    """[path] changed by the commits of the folder's HEAD that are not on `base` (origin/main), without the tool's own state commit of a
+    step (it changes steps.tsv and nothing else)."""
+    out = git(folder, "log", "--no-merges", "--format=%x01%s", "--name-only", "%s..HEAD" % base)
     paths, skip = [], False
     for line in out.stdout.splitlines():
         if line.startswith("\x01"):
@@ -2827,10 +3003,11 @@ def branch_changes(folder, step_id=None):
     return paths
 
 
-def protected_problems(folder, card, what):
-    """[line] for the files of PROTECTED_TOOLS the branch changes and the card does not name ("" card: no card names anything)."""
+def protected_problems(folder, card, what, base="origin/main"):
+    """[line] for the files of PROTECTED_TOOLS the branch changes after `base` and the card does not name ("" card: no card names
+    anything)."""
     out = []
-    for path in branch_changes(folder):
+    for path in branch_changes(folder, base=base):
         if not any(path == p or (p.endswith("/") and path.startswith(p)) for p in PROTECTED_TOOLS):
             continue
         if card and (path in card or path.rsplit("/", 1)[-1] in card):
@@ -2844,10 +3021,10 @@ def protected_problems(folder, card, what):
             "name the file in the card if the card is wrong."]
 
 
-def strictness_problems(folder, branch, what):
-    """[line] of what the strictness check refuses on the folder's branch (tools/gate/strictness.py): empty when nothing."""
+def strictness_problems(folder, branch, what, base="origin/main"):
+    """[line] of what the strictness check refuses on the folder's branch after `base` (tools/gate/strictness.py): empty when nothing."""
     try:
-        lines = strictness.problems_for(folder, "origin/main", "HEAD", branch)
+        lines = strictness.problems_for(folder, base, "HEAD", branch)
     except strictness.StrictnessError as error:
         return ["plan.py: strictness.py could not judge %s: %s" % (what, error)]
     if not lines:
@@ -2880,11 +3057,12 @@ def prechecks(a, s, folder, branch, first_only=True):
         if problems and refused(["plan.py: step %s does not land yet. The ledger (%s) must say:" % (s["step"], LEDGER)] + ["  " + p for p in problems]):
             return groups
     # 2. Invented references in the changed documents and the commit messages.
-    bad = refs_problems(folder)
+    base = own_base(a, folder, s)
+    bad = refs_problems(folder, base)
     if bad and refused(["plan.py: a file or line named in the documents or the commit messages does not exist:"] + ["  " + l for l in bad]):
         return groups
     # 3. A replay reference changes only where the card says so.
-    bad = replay_problems(folder, replay_allowed(card_text(folder, s)))
+    bad = replay_problems(folder, replay_allowed(card_text(folder, s)), base)
     if bad and refused(["plan.py: " + bad[0]] + list(bad[1:])):
         return groups
     # 3b. The repository's code checks (the console census, the cast check, the byte-order check) on the folder's tree: a refusal here is
@@ -2894,11 +3072,11 @@ def prechecks(a, s, folder, branch, first_only=True):
                         "checks). Nothing was committed or queued. Change the code, commit, and land again:" % s["step"]] + list(bad)):
         return groups
     # 3c. A place that can make a check see less changes only with its line in the strictness log.
-    bad = strictness_problems(folder, branch, "step %s" % s["step"])
+    bad = strictness_problems(folder, branch, "step %s" % s["step"], base)
     if bad and refused(bad):
         return groups
     # 3d. The test tools, GitHub's jobs and the plan's lists change only where the card names the file.
-    bad = protected_problems(folder, card_text(folder, s), "step %s" % s["step"])
+    bad = protected_problems(folder, card_text(folder, s), "step %s" % s["step"], base)
     if bad and refused(bad):
         return groups
     return groups
@@ -2964,7 +3142,10 @@ def begin_landing(a, s, folder, branch):
     def passed(verdict, seconds, summary):
         return finish_landing(a, s, code_commit, verdict, seconds, summary)
 
-    return hand_to_gate(a, folder, branch, a.id, agent, also_options(a, a.id), passed)
+    handed = git_out(folder, "rev-parse", "HEAD")
+    code = hand_to_gate(a, folder, branch, a.id, agent, also_options(a, a.id), passed)
+    state_commit_after(a, folder, branch, a.id, handed, code)
+    return code
 
 
 def repair_ledger_problem(row_id, ledger):
@@ -3225,18 +3406,19 @@ def minutes_since(stamp_text, at=None):
 def mend_prompt(a, mend_id):
     return ["Read %s/%s/TOOL-MEND.md whole." % (pathlib.Path(a.tree).as_posix(), NATIVE),
             "Read the fault sheet at %s." % lv.sheet_path(live_dir(a.live), mend_id).as_posix(),
-            "Your mend is %s." % mend_id]
+            "Your mend is %s." % mend_id,
+            "Report once, at your end: `MENDED %s <main's commit>` or `NOT MENDED %s`. Send no progress note before it." % (mend_id, mend_id)]
 
 
 def mend_blocks(a):
-    """While a mend is open the agent starts no step, writes nothing ahead and lands nothing (AGENT.md section 9): `start`, `ahead` and
-    `land` answer WAIT, as `next` does. True when one is open."""
+    """While a mend is open the agent starts no step and lands nothing (AGENT.md section 9): `start` and `land` answer WAIT, as `next` does.
+    The step after the one in work may be written meanwhile (`ahead`: cmd_ahead). True when a mend is open."""
     m = lv.open_mend(live_dir(a.live))
     if m is None:
         return False
     say("WAIT: mend %s is open: %s" % (m["id"], m["title"]))
-    say("Nothing is started, written ahead or landed while a mend is open: the step goes on only when main holds the mend. `python -X utf8 -I %s next` "
-        "says what to do now." % plan_path(a))
+    say("Nothing is started or landed while a mend is open: the step goes on only when main holds the mend. `python -X utf8 -I %s ahead` writes the "
+        "step after it meanwhile; `python -X utf8 -I %s next` says what to do now." % (plan_path(a), plan_path(a)))
     return True
 
 
@@ -3245,15 +3427,17 @@ def say_mend_wait(a, m):
     sheet = lv.sheet_path(live_dir(a.live), m["id"])
     plan = plan_path(a)
     say("WAIT: mend %s is open: %s" % (m["id"], m["title"]))
-    say("Step in work: %s. Opened %s, %d minutes ago. Nothing else is given while a mend is open." % (
+    say("Step in work: %s. Opened %s, %d minutes ago. Nothing is started or landed while a mend is open." % (
         m["step"] if m["step"] != "-" else "none", lv.parse_stamp(m["opened"]).strftime("%H:%M") if lv.parse_stamp(m["opened"]) else m["opened"],
         minutes_since(m["opened"])))
     say()
     say("What to do (AGENT.md section 9):")
     say("1. The sheet is %s; its five headings are filled in." % sheet.as_posix())
-    say("2. A helper (the Agent tool, model sonnet, one at a time) is started with these three lines, and you wait for it:")
+    say("2. A helper (the Agent tool, model sonnet, one at a time) is started with these lines; it reports once, at its end:")
     for l in mend_prompt(a, m["id"]):
         say("     " + l)
+    say("   Meanwhile you write the step after the one in work: `python -X utf8 -I %s ahead` (it hands nothing in; it refuses when the mend touches a file "
+        "that step touches). Nothing is landed until main holds the mend." % plan)
     say("3. MENDED <commit>: read the commit against TOOL-MEND.md section 5, then `python -X utf8 -I %s mend close %s <commit>`." % (plan, m["id"]))
     say("   NOT MENDED, or no result %d hours after its start: look at the gate's line for a landing of `mend/%s` (never two writers); then "
         "`python -X utf8 -I %s mend failed %s \"<why>\"`: it counts the attempts on the sheet (now %s of %d) and says what comes next: "
@@ -3412,7 +3596,7 @@ def mend_open(a):
         lv.set_state_entry(live, step, "started", (lv.read_state(live).get(step) or {}).get("agent") or "1", WAIT_REASON % row["id"])
     refresh_page(a)
     say("opened %s: %s" % (row["id"], title))
-    say("The fault sheet is %s. Fill in its five headings, then start ONE helper (the Agent tool, model sonnet) with these three lines and wait:" % sheet.as_posix())
+    say("The fault sheet is %s. Fill in its five headings, then start ONE helper (the Agent tool, model sonnet) with these lines and wait (it reports once, at its end):" % sheet.as_posix())
     for l in mend_prompt(a, row["id"]):
         say("  " + l)
     say("%s is not blocked and its time is not counted against the three-failures and four-hours rules while the mend is open." % (step or "No step"))
@@ -3501,7 +3685,7 @@ def mend_failed(a):
         refresh_page(a)
         say("attempt %d of %d of %s failed; the step keeps waiting." % (attempts, lv.MEND_ATTEMPTS, a.id))
         if attempts == 1:
-            say("SECOND HELPER: start one new Sonnet helper with the same three lines; the first helper's notes are on the sheet under "
+            say("SECOND HELPER: start one new Sonnet helper with the same lines; the first helper's notes are on the sheet under "
                 "\"Attempt 1\" and it reads them there:")
             for l in mend_prompt(a, a.id):
                 say("  " + l)
@@ -3652,7 +3836,8 @@ def cmd_check(a):
     committed or queued."""
     agent = agent_of(a)
     folder = work_folder(a.work_root, agent)
-    if not folder.is_dir():
+    own_folder = folder.is_dir()
+    if not own_folder:
         folder = pathlib.Path(a.tree)
     on = head_branch(folder)
     item = branch_item(on) if on else None
@@ -3662,39 +3847,105 @@ def cmd_check(a):
         say("plan.py: the folder %s is on %s, which is no step's branch (native/<ID>); check is for a step in work" % (folder.as_posix(), on or "no branch"))
         return 1
     groups = prechecks(a, s, folder, on, first_only=False)
+    info = []
+    if getattr(a, "no_units", False):
+        info.append("unit tests: not run (--no-units); run `check` whole before `land`")
+    elif not own_folder:
+        info.append("unit tests: not run (the agent's work folder %s is not there; they are run in it)" % work_folder(a.work_root, agent).as_posix())
+    else:
+        # GitHub's Check runs the unit tests: so does this, every one that can run on this PC (units.py); the rest is named as not proven here.
+        failed, info = units.check(folder, build_folder(a, agent), build_first=not getattr(a, "no_build", False))
+        groups = groups + failed
     if not groups:
         say("check: nothing of what `land %s` checks before it queues refuses %s as it stands (the gate's own checks are still to come)." % (s["step"], on))
-        return 0
-    say("check: %d thing%s would refuse `land %s`:" % (len(groups), "" if len(groups) == 1 else "s", s["step"]))
-    for g in groups:
+    else:
+        say("check: %d thing%s would refuse `land %s`:" % (len(groups), "" if len(groups) == 1 else "s", s["step"]))
+        for g in groups:
+            say()
+            for l in g:
+                say(l)
+    if info:
         say()
-        for l in g:
+        for l in info:
             say(l)
-    return 1
+    return 1 if groups else 0
+
+
+DECISION_COLUMNS = ["date", "step", "what", "because", "doc", "replaces"]
+
+
+def numbered_decisions(tree):
+    """[row] of every row of decisions.tsv, each with `number` (`<step>#<n>`: n counts the step's rows in the file's order, from 1) and
+    `replaced_by` (the number of the later row that names it in its `replaces`, or "")."""
+    rows = lv.read_rows(native(tree) / "decisions.tsv", DECISION_COLUMNS)
+    count = {}
+    for r in rows:
+        count[r["step"]] = count.get(r["step"], 0) + 1
+        r["number"] = "%s#%d" % (r["step"], count[r["step"]])
+        r["replaced_by"] = ""
+    by = {r["number"]: r for r in rows}
+    for r in rows:
+        old = by.get(r["replaces"])
+        if old is not None:
+            old["replaced_by"] = r["number"]
+    return rows
+
+
+def decision_number(text, step_id):
+    """`3` or `S0.2.1#3` as the number of a decision: `<step>#<n>` (a bare n is the step's own)."""
+    text = (text or "").strip()
+    return text if "#" in text else "%s#%s" % (step_id, text)
 
 
 def cmd_decide(a):
-    """A decision of the agent (AGENT.md section 7): one line of docs/plan/native/decisions.tsv, which lands with the step."""
-    cols = ["date", "step", "what", "because", "doc"]
+    """A decision of the agent (AGENT.md section 7): one line of docs/plan/native/decisions.tsv, which lands with the step. A later decision
+    replaces an earlier one by naming its number (`--replaces`): the file keeps both, the page and `--list` show the newest. `--list`: the
+    step's decisions as they stand, with their numbers."""
     steps = read_steps(a.tree, a.live)
     if find(steps, a.id) is None and not is_repair(a.id):
         say("plan.py: no step %s" % a.id)
         return 1
-    row = [datetime.date.today().isoformat(), a.id, " ".join(a.what.split()), " ".join(a.because.split()), " ".join((a.doc or "-").split())]
-    if not row[2] or not row[3]:
+    rows = numbered_decisions(a.tree)
+    if a.list:
+        shown = [r for r in rows if r["step"] == a.id and not r["replaced_by"]]
+        for r in shown:
+            say("%s  %s: %s (because %s)%s" % (r["number"], r["date"], r["what"], r["because"], ("  [replaces %s]" % r["replaces"]) if r["replaces"] else ""))
+        if not shown:
+            say("%s has no decision." % a.id)
+        return 0
+    what = " ".join((a.what or "").split())
+    because = " ".join((a.because or "").split())
+    if not what or not because:
         say("plan.py: a decision has a text and a reason")
         return 1
+    replaces = ""
+    if a.replaces:
+        replaces = decision_number(a.replaces, a.id)
+        old = next((r for r in rows if r["number"] == replaces), None)
+        if old is None:
+            say("plan.py: no decision %s to replace (plan.py decide %s --list shows the numbers)" % (replaces, a.id))
+            return 1
+        if old["replaced_by"]:
+            say("plan.py: decision %s is replaced already, by %s: replace that one" % (replaces, old["replaced_by"]))
+            return 1
+    row = [datetime.date.today().isoformat(), a.id, what, because, " ".join((a.doc or "-").split()), replaces]
     path = native(a.tree) / "decisions.tsv"
-    text = path.read_text(encoding="utf-8") if path.exists() else "\t".join(cols) + "\n"
-    atomic_write(path, text.rstrip("\n") + "\n" + "\t".join(row) + "\n")
-    say("decided: %s: %s (because %s) -> %s; it lands with the step: commit the file." % (a.id, row[2], row[3], path.as_posix()))
+    text = path.read_text(encoding="utf-8") if path.exists() else "\t".join(DECISION_COLUMNS) + "\n"
+    first, _, rest = text.partition("\n")
+    if replaces and "replaces" not in first.split("\t"):
+        text = "\t".join(DECISION_COLUMNS) + "\n" + rest             # the file's old rows have five cells: a short row reads as no replaces
+    line = "\t".join(row if replaces else row[:5])
+    atomic_write(path, text.rstrip("\n") + "\n" + line + "\n")
+    number = "%s#%d" % (a.id, sum(1 for r in rows if r["step"] == a.id) + 1)
+    say("decided %s: %s: %s (because %s) -> %s%s; it lands with the step: commit the file." % (
+        number, a.id, what, because, path.as_posix(), (", replacing %s" % replaces) if replaces else ""))
     return 0
 
 
 def read_decisions(tree):
-    """[{date, step, what, because, doc}] of the plan tree's decisions.tsv (a missing file has none)."""
-    path = native(tree) / "decisions.tsv"
-    return lv.read_rows(path, ["date", "step", "what", "because", "doc"])
+    """[{date, step, what, because, doc, replaces, number}] of the plan tree's decisions.tsv that stand: a decision a later one replaces is not
+    among them (a missing file has none)."""
+    return [r for r in numbered_decisions(tree) if not r["replaced_by"]]
 
 
 def read_strictness_log(tree):
@@ -3777,6 +4028,7 @@ def parser():
     p = argparse.ArgumentParser(prog="plan.py", description=__doc__.split("\n")[0])
     p.add_argument("--tree", default=str(TREE), help="the plan tree (default: the tree this file is in)")
     p.add_argument("--work-root", default=WORK_ROOT)
+    p.add_argument("--build-root", default=BUILD_ROOT, help="the folder the agents' build folders are in (the self-tests and plants use their own)")
     p.add_argument("--live", default=LIVE, help="the live folder (claims, state, tool faults, the page)")
     p.add_argument("--failures", default=FAILURES, help="the three-failure store")
     p.add_argument("--queue-file", default=QUEUE_FILE, help="the gate's landing queue (a landing record is read against it)")
@@ -3853,12 +4105,19 @@ def parser():
     md.set_defaults(fn=cmd_mend)
     dc = sub.add_parser("decide", parents=[who], help="a decision of the agent: one line of docs/plan/native/decisions.tsv")
     dc.add_argument("id")
-    dc.add_argument("what")
-    dc.add_argument("--because", required=True)
+    dc.add_argument("what", nargs="?", help="the decision, in one sentence")
+    dc.add_argument("--because", help="the reason (required with a decision)")
     dc.add_argument("--doc", default="", help="the file and section that settle it")
+    dc.add_argument("--replaces", default="", metavar="N", help="the number of an earlier decision this one corrects (N, or <step>#N): "
+                    "the file keeps both, the page shows this one")
+    dc.add_argument("--list", action="store_true", help="the step's decisions that stand, with their numbers; changes nothing")
     dc.set_defaults(fn=cmd_decide)
     sub.add_parser("alive", parents=[who], help="one word: working, ended or stale").set_defaults(fn=cmd_alive)
-    sub.add_parser("check", parents=[who], help="what `land` checks before it queues, on the folder as it is: nothing is queued").set_defaults(fn=cmd_check)
+    ck = sub.add_parser("check", parents=[who], help="what `land` checks before it queues, and the unit tests GitHub's Check runs that this PC "
+                        "can run, on the folder as it is: nothing is queued")
+    ck.add_argument("--no-units", action="store_true", help="only what `land` checks before it queues (quick, while you write); run `check` whole before `land`")
+    ck.add_argument("--no-build", action="store_true", help="run the unit tests of the build folder as it stands, without building first (the self-tests use it)")
+    ck.set_defaults(fn=cmd_check)
     rp = sub.add_parser("repair", help="what is found wrong after a landing: add one, list them")
     rsub = rp.add_subparsers(dest="repair_cmd", required=True)
     ra = rsub.add_parser("add", help="write a repair (the nightly run calls this) and print its id")

@@ -225,11 +225,11 @@ class MendTest(unittest.TestCase):
         t = self.t
         t.run(["start", "A.1"], expect=0)
         t.run(["mend", "open", "A.1", "a fault"], expect=0)
-        for command in (["start", "C.1"], ["ahead"], ["land", "A.1"]):
+        for command in (["start", "C.1"], ["land", "A.1"]):
             code, text = t.run(command)
             self.assertEqual(code, 1, command)
             self.assertIn("WAIT: mend M-001 is open: a fault", text, command)
-            self.assertIn("Nothing is started, written ahead or landed", text)
+            self.assertIn("Nothing is started or landed", text)
         self.assertEqual(plan.find(plan.read_steps(t.tree, t.live), "C.1")["state"], "open", "nothing was started")
         for command in (["status"], ["page"], ["note", "x"], ["alive"], ["mend", "list"]):
             self.assertNotIn("WAIT: mend", t.run(command)[1], command)
@@ -657,6 +657,9 @@ class LandingTest(unittest.TestCase):
 
     def test_a_new_landing_takes_the_earlier_state_commit_off(self):
         t = self.t
+        keep = mock.patch.object(plan, "state_commit_after", lambda *args: None)     # a landing the tool did not end (cut off): its commit is left
+        keep.start()
+        self.addCleanup(keep.stop)
         self.assertEqual(t.run(["land", "A.1"])[0], 1)
         self.assertEqual(len(self.state_commits()), 1)
         first_code = t.git("log", "-1", "--format=%b", cwd=t.folder())

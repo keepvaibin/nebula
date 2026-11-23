@@ -126,10 +126,12 @@ class AheadBase(unittest.TestCase):
         self.queue.unlink()
 
     def failed_landing(self):
-        """The ledger the card wants and a failed landing (its state commit stays on the branch): the tip that was handed over."""
+        """The ledger the card wants and a failed landing whose state commit stays on the branch (the tool did not get to take it off, as in a
+        landing that was cut off: the tool itself takes it off after a failure, which plan_after_trial_test proves): the tip that was handed over."""
         ready_a1(self.t)
         self.results = [failed_verdict()]
-        self.assertEqual(self.land()[0], 1)
+        with mock.patch.object(plan, "state_commit_after", lambda *args: None):
+            self.assertEqual(self.land()[0], 1)
         self.calls.clear()
         return self.rev("HEAD")
 
@@ -375,7 +377,8 @@ class LandFromAheadTest(AheadBase):
         self.t.git("checkout", "-q", "native/A.1", cwd=self.folder)
         fix = self.t.commit("A.1", "fix: the repair", {"n.txt": "n\n"})
         self.results = [failed_verdict()]
-        self.land()
+        with mock.patch.object(plan, "state_commit_after", lambda *args: None):     # the landing is cut off: its state commit stays
+            self.land()
         new = self.rev("HEAD")
         fix = self.t.git("rev-parse", "--short=9", "HEAD~1", cwd=self.folder)     # the fix commit as the landing put it on the branch (E1)
         self.assertEqual(self.entry()["handed"], new, "a landing given from the step's branch is the tip the entry remembers")
@@ -411,7 +414,7 @@ class LandFromAheadTest(AheadBase):
         self.assertIn("NOT LANDED: A.1.", text)
         self.assertEqual(self.status(), before)
         self.assertEqual(self.on(), "native/A.2")
-        self.assertEqual(self.rev("refs/heads/native/A.1"), new)
+        self.assertEqual(self.rev("refs/heads/native/A.1"), self.rev(new + "^"), "the failed landing's state commit is off native/A.1; nothing else moved")
 
     def test_a_landing_that_passed_while_the_folder_went_to_the_ahead_branch_ends_there_and_leaves_the_tree_as_it_was(self):
         """The command that handed the landing over is not cut: `ahead` switches the folder while it waits, and it ends there."""
