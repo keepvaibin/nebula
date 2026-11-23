@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
-#include "galaxy/input/key_codes.h"
 #include "galaxy/input_bindings.h"
 
 namespace galaxy::input {
@@ -42,12 +41,16 @@ struct KeyPositionMap {
 // (KeyPosition), so an event that sets the key alone moves nothing. `position`: the letter at the key's place on a US keyboard,
 // 0 for a key that is not a letter. The generic modifier keys follow the left and right ones, as the bindings name them.
 inline void apply_key_event(KeyboardMouseLevels& levels, int vk, int position, bool down) noexcept {
+    // The virtual-key numbers of the shift, control and alt keys (input/key_codes.h names them; that file is not included here, as
+    // a Windows host includes this one after windows.h, whose DELETE it cannot take).
+    constexpr int kShift = 0x10, kControl = 0x11, kMenu = 0x12;
+    constexpr int kLeftShift = 0xA0, kRightShift = 0xA1, kLeftControl = 0xA2, kRightControl = 0xA3, kLeftMenu = 0xA4, kRightMenu = 0xA5;
     if (position >= 'A' && position <= 'Z') levels.set_position(static_cast<std::uint8_t>(position), down);
     if (vk <= 0 || vk > 0xFF) return;
     levels.set_key(static_cast<std::uint8_t>(vk), down);
-    if (vk == keys::LSHIFT || vk == keys::RSHIFT) levels.set_key(keys::SHIFT, down);
-    if (vk == keys::LCONTROL || vk == keys::RCONTROL) levels.set_key(keys::CONTROL, down);
-    if (vk == keys::LMENU || vk == keys::RMENU) levels.set_key(keys::MENU, down);
+    if (vk == kLeftShift || vk == kRightShift) levels.set_key(kShift, down);
+    if (vk == kLeftControl || vk == kRightControl) levels.set_key(kControl, down);
+    if (vk == kLeftMenu || vk == kRightMenu) levels.set_key(kMenu, down);
 }
 
 

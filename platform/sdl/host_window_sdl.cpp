@@ -1995,6 +1995,10 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
     if (!hidden) {
         (void)galaxy::sdl::refresh_displays(displays);
         galaxy::sdl::g_displays_dirty.store(false, std::memory_order_release);
+        // Which session SDL is in (x11 or wayland), for a report.
+        const char* const driver = SDL_GetCurrentVideoDriver();
+        std::fprintf(stderr, "[display] SDL video driver %s, %zu display%s\n", driver != nullptr ? driver : "unknown", displays.list.size(),
+                     displays.list.size() == 1u ? "" : "s");
         for (std::size_t i = 0; i < displays.list.size(); ++i) {
             const galaxy::sdl::desktop::Display& display = displays.list[i];
             std::fprintf(stderr, "[display] %s: %u x %u pixels, %u Hz%s\n", displays.ids[i].c_str(), display.width, display.height,

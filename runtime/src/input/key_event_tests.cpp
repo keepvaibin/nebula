@@ -3,6 +3,7 @@
 // against the default keyboard layout: W A S D move, Space is A, Control is Z. The layout binds the letters to places
 // (KeyPosition), so a host that sets only the key's own level (what the SDL host did) moves nothing with them while
 // Space and Control, which are keys, still work.
+#include "galaxy/input/key_codes.h"
 #include "galaxy/input/key_positions.h"
 
 #include <iostream>
