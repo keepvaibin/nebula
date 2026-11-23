@@ -1,12 +1,13 @@
 # Nebula native plan: status
 
-Written 2026-11-23 06:02. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-23 06:03. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 8 of 138 (6%).
 
 Now: S0.2.3 (the pointer asks the scene) since 05:08, written ahead and committed, tour playing; ahead: nothing
 
-In work now: Nothing started.
+In work now:
+- S0.2.4 Landing B, part 2: the talk balloon (agent 1)
 
 ## Packages
 
