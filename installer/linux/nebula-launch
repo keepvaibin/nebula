@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Starts the installed Nebula (install.sh put this script in the install folder): the version current.json names,
 # with the game and the saves folder. Arguments go to the game (the menu entry's --import <file or link>).
+# What the game prints goes to <data>/logs/game.log (the run before: game.previous.log) unless a terminal takes it: a game
+# started from the menu writes to nothing anyone reads otherwise, and a tester has nothing to attach. The Mac app and the
+# Android app keep the same file.
 set -eu
 self=$(readlink -f "$0" 2>/dev/null || printf '%s' "$0")
 root=$(cd "$(dirname "$self")" && pwd)
@@ -14,4 +17,8 @@ data=$root
 # The menu entry started with no file or link: no --import.
 [ "$#" = 1 ] && [ "$1" = "--import" ] && shift
 export LD_LIBRARY_PATH="$root/versions/$version${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+if [ ! -t 2 ] && mkdir -p "$data/logs" 2>/dev/null; then
+    [ ! -f "$data/logs/game.log" ] || mv -f "$data/logs/game.log" "$data/logs/game.previous.log" 2>/dev/null || true
+    exec "$program" --pak "$root/content/game.pak" --saves "$data/saves" "$@" > "$data/logs/game.log" 2>&1
+fi
 exec "$program" --pak "$root/content/game.pak" --saves "$data/saves" "$@"

@@ -8,8 +8,12 @@ endpoint="${NEBULA_DIAG_ENDPOINT:-}"
 key="${NEBULA_DIAG_PUBLIC_KEY:-}"
 out="$(dirname "$0")/../runtime/include/galaxy/diag_endpoint_local.h"
 
+# In a workflow job, the job's summary says which it was (the notes promise the benchmark's Send button).
+summary() { [[ -z "${GITHUB_STEP_SUMMARY:-}" ]] || echo "$1" >> "$GITHUB_STEP_SUMMARY"; }
+
 if [[ -z "$endpoint" && -z "$key" ]]; then
     echo "No diagnostics address: this build sends no reports."
+    summary "Diagnostics address: none, this build sends no reports"
     exit 0
 fi
 if [[ ! "$endpoint" =~ ^https://[A-Za-z0-9.-]+(/[A-Za-z0-9._/-]*)?$ ]]; then
@@ -33,3 +37,4 @@ inline constexpr char kPublicKey[] = "$key";
 }  // namespace galaxy::diag
 EOF
 echo "Diagnostics address written."
+summary "Diagnostics address written: this build offers the benchmark's Send to developer"

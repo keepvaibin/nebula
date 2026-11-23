@@ -298,13 +298,18 @@ jobs:
         with:
           path: ${{ runner.temp }}/sccache
           key: ${{ steps.cache.outputs.key }}
-      - name: Start check (Vulkan on Mesa's software renderer, on a virtual display)
+      - name: Start check (Vulkan on Mesa's software renderer, on a virtual display, with the validation layer)
+        shell: bash
         run: |
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends mesa-vulkan-drivers xvfb xauth
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends mesa-vulkan-drivers vulkan-validationlayers xvfb xauth
           d="$RUNNER_TEMP/start"
           mkdir -p "$d/data" "$d/settings"
-          SDL_AUDIO_DRIVER=dummy timeout 300 xvfb-run -a "$RUNNER_TEMP/work/bin/nebula" --start-check 300 \
-            --data "$d/data" --settings "$d/settings" --crash-dumps "$d"
+          # The Khronos layer checks every Vulkan call of the start (instance, device, swap chain, present) against the rules:
+          # an error it prints ([VK-LIVE-ERR]) fails the step.
+          SDL_AUDIO_DRIVER=dummy timeout 300 xvfb-run -a "$RUNNER_TEMP/work/bin/nebula" --start-check 300 --gpu-validation 1 \
+            --data "$d/data" --settings "$d/settings" --crash-dumps "$d" 2>&1 | tee "$d/start.log"
+          grep -c 'VK-LIVE-WARN' "$d/start.log" || true
+          if grep -q 'VK-LIVE-ERR' "$d/start.log"; then grep 'VK-LIVE-ERR' "$d/start.log" | sort | uniq -c | head -n 20; exit 1; fi
 
   macos:
     name: Mac

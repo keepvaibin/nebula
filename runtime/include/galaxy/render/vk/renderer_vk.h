@@ -697,6 +697,10 @@ private:
     VkSurfaceKHR surface_ = VK_NULL_HANDLE;
     Swapchain swapchain_;
     bool swapchain_dirty_ = false;
+    // The window's size as its last resize message said (follow_window_and_resize; 0 before any): a surface that reports no
+    // size (Wayland) is made at it (swapchain_extent.h). Render thread only.
+    std::uint32_t window_width_ = 0u;
+    std::uint32_t window_height_ = 0u;
     bool surface_lost_ = false;  // the driver reported it: made again from the window at the next frame
     bool driver_confirmed_ = false;  // a frame was shown: an imported driver works (launch_args gpu_driver)
     std::uint32_t swap_image_ = UINT32_MAX;  // acquired for this frame's present
