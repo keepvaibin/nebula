@@ -13,6 +13,9 @@ Each test was seen to fail with the thing it guards broken (named in a phrase af
   white_space_is_not_a_change                        a reformatted line; a blank line added
   a_mend_branch_may_not_change_game_source           runtime/ source in a mend/* branch (refused); CMake, a script, a tool (free); the same
                                                      file in a native/* branch (not this rule's)
+  a_comma_after_the_last_name_is_not_a_removal       a test added after the last, so the old last line gains a comma (free); the last,
+                                                     a middle and a changed name taken out (refused); a comma beside a real removal
+                                                     (the removal counts); seen failing with the comma filter off, and with it free for all
   the_guard_guards_itself                            a line taken out of strictness.tsv; a change of strictness.py
   the_real_table                                     every row parses; every block names a place that exists; every named file is in a
                                                      scope row that runs `repo` (so the check runs where it must)
@@ -197,6 +200,37 @@ class StrictnessTest(unittest.TestCase):
         r.commit({"tests/pictures/approved.tsv": "# a row put in by hand\n"}, branch="b2")
         lines = r.problems("native/S0.2.1")
         self.assertTrue(lines and "tests/pictures/approved.tsv" in lines[0], "a hand-made change of the approved pictures needs its line: %s" % lines)
+
+    SUITE = '{\n  "harness": 1,\n  "tests": [\n    "boot",\n    "start",\n    "end"\n  ]\n}\n'
+
+    def with_suite(self):
+        r = self.r
+        r.write({"tests/engine/suite.json": self.SUITE})
+        r.git("add", "-A")
+        r.git("commit", "-q", "-m", "base with a suite")
+        r.git("update-ref", "refs/remotes/origin/main", "HEAD")
+
+    def test_a_comma_after_the_last_name_is_not_a_removal(self):
+        r = self.r
+        self.with_suite()
+        # A test added after the last: the old last line gains a comma. The name is still in the list.
+        r.commit({"tests/engine/suite.json": self.SUITE.replace('    "end"\n', '    "end",\n    "new"\n')})
+        self.assertEqual(r.problems(), [], "the comma is no removed test")
+        # The last test taken out: the comma of the one before goes too; the removed name is refused.
+        r.commit({"tests/engine/suite.json": self.SUITE.replace('    "start",\n    "end"\n', '    "start"\n')}, branch="b2")
+        lines = r.problems()
+        self.assertTrue(lines and "tests/engine/suite.json" in lines[0] and "1 removed line" in lines[0], lines)
+        self.assertIn('"end"', " ".join(lines), "the removed name is the one named")
+        # A test taken out of the middle, and one changed to another name.
+        r.commit({"tests/engine/suite.json": self.SUITE.replace('    "start",\n', "")}, branch="b3")
+        self.assertTrue(r.problems(), "a name removed from the middle")
+        r.commit({"tests/engine/suite.json": self.SUITE.replace('    "start",', '    "stop",')}, branch="b4")
+        self.assertTrue(r.problems(), "a name changed to another")
+        # A comma changed on one line while another name is taken out in the same hunk: only the taken name counts.
+        r.commit({"tests/engine/suite.json": self.SUITE.replace('    "boot",\n    "start",\n    "end"\n',
+                                                                '    "boot"\n    "end",\n    "z"\n')}, branch="b5")
+        lines = r.problems()
+        self.assertTrue(lines and "removed line" in lines[0] and '"start"' in " ".join(lines), lines)
 
     def test_the_guard_guards_itself(self):
         r = self.r

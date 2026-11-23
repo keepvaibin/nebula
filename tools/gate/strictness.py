@@ -13,7 +13,7 @@ The line names the file in its second column.
             assignment, up to its closing bracket) in the old or the new text of the file
   hides     one sentence on what a change to it could hide
 
-Pure additions to a file in mode `removed` are free. The log only grows: a removed or changed line of it is refused. A branch named
+Pure additions to a file in mode `removed` are free, and so is a line given back with a comma added or taken off at its end. The log only grows: a removed or changed line of it is refused. A branch named
 `mend/*` may not change files of the game, the engine, the importer or the platform code (the four folders of GAME_FOLDERS); the build
 files in them (CMake, scripts, gradle, toml) are free. Blank lines and white space are not changes. Exit 0 when nothing is refused, 1
 with the lines. Python standard library only; the git calls are the tool's own, nothing is written.
@@ -79,12 +79,33 @@ def read_table(path=TABLE):
 # ---- the diff --------------------------------------------------------------------------------------------------------
 
 class Changes:
-    """One file's changed lines: `removed` [(old line number, text)] and `added` [(new line number, text)]."""
+    """One file's changed lines: `removed` [(old line number, text)] and `added` [(new line number, text)]. `comma_only`: the old line
+    numbers of the removed lines that a line added in the same hunk gives back with a comma added or taken off at its end
+    (`"boot"` and `"boot",`): the line stays in the list, only the list's punctuation moved."""
 
     def __init__(self, path):
         self.path = path
         self.removed, self.added = [], []
+        self.comma_only = set()
         self.new_file = self.deleted = False
+        self.hunk_removed, self.hunk_added = [], []
+
+    def end_hunk(self):
+        """Pairs the lines of the hunk just read that differ by a final comma alone (one removed line for one added line)."""
+        spare = list(self.hunk_added)
+        for number, text in self.hunk_removed:
+            for other in spare:
+                if text.rstrip() != other[1].rstrip() and without_comma(text) == without_comma(other[1]):
+                    self.comma_only.add(number)
+                    spare.remove(other)
+                    break
+        self.hunk_removed, self.hunk_added = [], []
+
+
+def without_comma(text):
+    """A line without its trailing white space and one final comma."""
+    text = text.rstrip()
+    return text[:-1].rstrip() if text.endswith(",") else text
 
 
 HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
@@ -110,6 +131,8 @@ def diff_changes(tree, base, head, git=GIT):
     out, cur, old_no, new_no = {}, None, 0, 0
     old_name = None
     for line in r.stdout.splitlines():
+        if cur is not None and line.startswith(("diff --git ", "@@")):
+            cur.end_hunk()
         if line.startswith("diff --git "):
             cur, old_name = None, None
         elif line.startswith("--- "):
@@ -125,10 +148,14 @@ def diff_changes(tree, base, head, git=GIT):
                 old_no, new_no = int(m.group(1)), int(m.group(3))
         elif cur is not None and line.startswith("-") and not line.startswith("---"):
             cur.removed.append((old_no, line[1:]))
+            cur.hunk_removed.append((old_no, line[1:]))
             old_no += 1
         elif cur is not None and line.startswith("+") and not line.startswith("+++"):
             cur.added.append((new_no, line[1:]))
+            cur.hunk_added.append((new_no, line[1:]))
             new_no += 1
+    if cur is not None:
+        cur.end_hunk()
     return out
 
 
@@ -179,6 +206,10 @@ def counted(rows, ch, tree, base_start, head, git=GIT):
     old_text = new_text = None
     for row in matching_rows(rows, ch.path):
         removed = ch.removed if row["mode"] in ("removed", "any") else []
+        if row["mode"] == "removed":
+            # A name that is still in the list with a comma after it (a name added below it) or none (the one below it taken out) is
+            # not a removed name: the line it was is given back.
+            removed = [(n, t) for n, t in removed if n not in ch.comma_only]
         added = ch.added if row["mode"] in ("added", "any") else []
         if row["where"] != "*":
             names = row["where"][len("block:"):].split(",")

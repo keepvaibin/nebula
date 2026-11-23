@@ -31,11 +31,19 @@ a picture passes when its pixels are the approved picture's, bit for bit. A fixe
 on one adapter and driver (measured: every tour picture of two gate runs identical on Direct3D 12, Vulkan and Direct3D 11),
 so any changed pixel is a change in what the game shows.
 
-A change that is meant is declared in PICTURES-CHANGE.txt at the root of the branch, one line each:
-    <test path or pattern> <picture or *> <renderer or all> :: <reason>        (shell-style *; the test path is
-    suite/test, as the listing prints it: engine/boot, tour/010-CannonFleetGalaxy-1, tour-RMGP01/*)
+A change that is meant is declared in PICTURES-CHANGE.txt at the root of the branch, one line each, naming a picture by its
+suite and stop, its place, renderer and disc:
+    <suite>/<stop> <picture> <place> <renderer> <disc> :: <reason>
+Each of the five words is a shell-style pattern; `*` (or `all`) is any. The suite is the test's own place without the disc
+(engine, tour, tour@1280x720: a stop of the tour of any disc is tour/<NNN-Stage-N>, the tour's own name without the disc prefix);
+the picture is arrive, after or the name an engine test gives it; the place is pc or tablet; the renderer d3d12, vulkan or d3d11;
+the disc RMGE01 (the US disc, and every engine test), RMGP01 or RMGJ01. Examples:
+    tour/010-CannonFleetGalaxy-1 arrive pc vulkan RMGE01 :: the sky is another blue
+    tour/010-CannonFleetGalaxy-1 * * * * :: the same stop on every renderer, disc and place
+    engine/boot title pc * RMGE01 :: the title's fade is eased
 A differing picture that a line names is new, not changed; one that no line names fails; a line that names no differing picture
-is unused (the gate makes the landing tool: a stale declaration).
+is unused (the gate makes the landing tool: a stale declaration). The gate plays every stop a line names on every renderer, disc
+and place the approved list has a row for, so a line can name any of them.
 
 check: one row per picture. Exit 1 when a picture is changed or missing, or the runs are of another adapter or driver.
 New and declared pictures go to <new-out>/entries.tsv (one line each, complete enough to become its approved row) with
@@ -225,9 +233,31 @@ class DeclarationError(Exception):
     pass
 
 
+DECLARATION_FORM = ("`<suite>/<stop> <picture> <place> <renderer> <disc> :: <reason>` (five words, then the reason; `*` is any: "
+                    "for example `tour/010-CannonFleetGalaxy-1 arrive pc vulkan RMGE01 :: the sky is another blue`)")
+DISCS = ("RMGE01", "RMGP01", "RMGJ01")
+US_DISC = "RMGE01"
+DISC_SUFFIX = re.compile(r"-(RMGP01|RMGJ01)$")
+DISC_PREFIX = re.compile(r"^(RMGP01|RMGJ01)-")
+
+
+def disc_of(suite, test=""):
+    """The disc a picture belongs to: the other discs' tours are suites `tour-<disc>`; every other test is the US disc's."""
+    m = DISC_SUFFIX.search(suite.split("@", 1)[0])
+    return m.group(1) if m else US_DISC
+
+
+def stop_name(suite, test):
+    """The suite and test a declaration names a picture by: the suite without its disc and the test without its disc prefix
+    (`tour-RMGJ01` / `RMGJ01-010-CannonFleetGalaxy-1` is `tour/010-CannonFleetGalaxy-1`)."""
+    base, at, window = suite.partition("@")
+    return "%s%s%s/%s" % (DISC_SUFFIX.sub("", base), at, window, DISC_PREFIX.sub("", test))
+
+
 def read_declarations(path):
-    """[(line number, test pattern, picture pattern, renderer pattern, reason)] of a PICTURES-CHANGE.txt (none for a file that
-    is not there). A line that is not `<test> <picture> <renderer> :: <reason>` is a DeclarationError."""
+    """[(line number, test pattern, picture pattern, place pattern, renderer pattern, disc pattern, reason)] of a PICTURES-CHANGE.txt
+    (none for a file that is not there). A line that is not `<suite>/<stop> <picture> <place> <renderer> <disc> :: <reason>` is a
+    DeclarationError (a line of the form before places and discs were named, three words, says so)."""
     path = pathlib.Path(path) if path else None
     if path is None or not path.is_file():
         return []
@@ -237,29 +267,40 @@ def read_declarations(path):
             continue
         head, sep, reason = line.partition(" :: ")
         words = head.split()
-        if not sep or len(words) != 3 or not reason.strip():
-            raise DeclarationError("%s line %d: expected `<test path or pattern> <picture or *> <renderer or all> :: <reason>`"
-                                   % (path.name, n))
-        out.append((n, words[0], words[1], words[2], reason.strip()))
+        if not sep or len(words) != 5 or not reason.strip():
+            raise DeclarationError("%s line %d: expected %s%s" % (
+                path.name, n, DECLARATION_FORM,
+                "; a line of three words names no place and no disc" if sep and len(words) == 3 else ""))
+        out.append((n,) + tuple(words) + (reason.strip(),))
     return out
 
 
-def declared_by(declarations, suite, test, picture, renderer):
+def any_pattern(value, pattern):
+    return pattern in ("*", "all") or fnmatch.fnmatchcase(value, pattern)
+
+
+def declared_by(declarations, place, suite, test, picture, renderer):
     """The declarations that name a picture (all of them, to mark each used)."""
+    named, disc = stop_name(suite, test), disc_of(suite, test)
     hits = []
     for d in declarations:
-        _, test_pattern, picture_pattern, renderer_pattern, _ = d
-        if ((fnmatch.fnmatchcase("%s/%s" % (suite, test), test_pattern) or fnmatch.fnmatchcase(test, test_pattern))
-                and fnmatch.fnmatchcase(picture, picture_pattern)
-                and (renderer_pattern == "all" or fnmatch.fnmatchcase(renderer, renderer_pattern))):
+        _, test_pattern, picture_pattern, place_pattern, renderer_pattern, disc_pattern, _ = d
+        if (fnmatch.fnmatchcase(named, test_pattern) and fnmatch.fnmatchcase(picture, picture_pattern)
+                and any_pattern(place, place_pattern) and any_pattern(renderer, renderer_pattern) and any_pattern(disc, disc_pattern)):
             hits.append(d)
     return hits
+
+
+def declared_stops(declarations, tour_tests):
+    """The stops of the US tour (`tour_tests`: the test names NNN-Stage-N, in the tour's order) that a declaration names, in the
+    tour's order: the stops whose pictures the landing must play on every renderer and disc that has a row for them."""
+    return [t for t in tour_tests if any(fnmatch.fnmatchcase("tour/" + t, d[1]) for d in declarations)]
 
 
 def unused_declarations(changes_path, entries):
     """The declarations (line, text) that no differing picture of `entries` (a landing's new-pictures lines) uses."""
     used = {int(n) for e in entries if e["kind"] == "declared" for n in str(e["declaration"]).split(",") if n}
-    return [(d[0], "%s %s %s :: %s" % d[1:]) for d in read_declarations(changes_path) if d[0] not in used]
+    return [(d[0], "%s %s %s %s %s :: %s" % (d[1:5] + (d[5], d[6]))) for d in read_declarations(changes_path) if d[0] not in used]
 
 
 # --- Judging -------------------------------------------------------------------------------------------------------------
@@ -302,7 +343,7 @@ def judge(args, manifest=None):
             if have is None:
                 item.update(kind="new", message="no approved picture")
                 continue
-            hits = declared_by(declarations, r.suite, r.test, png.stem, r.renderer)
+            hits = declared_by(declarations, r.place, r.suite, r.test, png.stem, r.renderer)
             source = store_path(args.store, have[2])
             if not source.exists():
                 item.update(kind="changed", message="the approved picture %s is not in the store %s" % (have[2][:12], args.store))
@@ -317,7 +358,7 @@ def judge(args, manifest=None):
                             message="%d of %d pixels, largest difference %d" % (int((d > 0).sum()), w * h, int(d.max())))
             if hits:
                 item["declaration"] = [d[0] for d in hits]
-                item.update(kind="declared", message="declared: %s (%s line %d)" % (hits[0][4], CHANGES_NAME, hits[0][0])
+                item.update(kind="declared", message="declared: %s (%s line %d)" % (hits[0][6], CHANGES_NAME, hits[0][0])
                             + "; " + item["message"])
     if getattr(args, "complete", False):
         suites = {(r.place, r.suite, r.renderer) for r in runs}

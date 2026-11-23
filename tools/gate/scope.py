@@ -44,6 +44,12 @@ GROUPS = {
               "compared with Direct3D 12's)",
               ["tour/d3d12", "tour/vulkan", "tour/d3d11", "pictures/tour/*", "replays/d3d12", "replays/vulkan",
                "replays/d3d11", "pictures/declared"]),
+    "pictures": ("every picture the main level compares: the engine tests and every stop of the tour on the three renderers, the "
+                 "two other discs' tours on Direct3D 12, the tablet's 12 stops (the groups engine3, tour3 and tablet12 come with it), "
+                 "and the pictures/declared check; the landing is of the main level, with these checks only. Every stop its "
+                 "PICTURES-CHANGE.txt names is also played on the other discs' Direct3D 11 and Vulkan, which the long run compares",
+                 ["pictures/*", "engine/*", "tour/*", "replays/d3d12", "replays/vulkan", "replays/d3d11",
+                  "pictures/declared"]),
     "validate": ("the 12-stop tour on the three renderers with the graphics API's debug layer on (a layer that is not "
                  "installed on this PC is left out with one line)",
                  ["validate/*"]),
@@ -77,6 +83,10 @@ GROUP_NAMES = tuple(GROUPS)
 # The speed measure's groups (package B8, tools/gate/gate.py measure/step/pc and measure/step/tablet): a plan that holds an engine or a
 # tour group gets measure_pc; one that holds the Android build besides gets measure_tablet. No row of the table names them.
 GAME_GROUPS = ("engine1", "engine3", "tour1", "tour3")
+# A group that brings others with it: `pictures` is the main level's picture checks, whose tablet part is the group tablet12.
+BRINGS = {"pictures": ("engine3", "tour3", "tablet12")}
+# The group of a change that can move a picture of the game: the landing takes every picture the main level compares.
+PICTURES = "pictures"
 # A pseudo-group a row may name: it makes the run full, as a file no row names does.
 FULL = "full"
 # A row may also name `-full`: for the files that row matches, a `full` that another row brought is taken away (a narrow row for
@@ -111,6 +121,11 @@ class Plan:
 
     def __init__(self, groups, full, unmatched, why):
         self.groups, self.full, self.unmatched, self.why = list(groups), full, list(unmatched), why
+
+    @property
+    def takes_pictures(self):
+        """Whether the landing of this plan compares every picture the main level does (the group `pictures`, or a full run)."""
+        return self.full or PICTURES in self.groups
 
     def text(self):
         if self.full:
@@ -201,6 +216,14 @@ def path_matches(path, pattern):
     return bool(glob_regex(pattern).match(path))
 
 
+def expand(groups):
+    """The groups with those each one brings (BRINGS), as a set."""
+    out = set(groups)
+    for name in list(out):
+        out.update(BRINGS.get(name, ()))
+    return out
+
+
 def measure_groups(groups):
     """The speed measure's groups a plan of `groups` gets: measure_pc when it holds an engine or a tour group, and measure_tablet
     too when it holds the Android build as well. None otherwise."""
@@ -227,6 +250,7 @@ def plan_for(paths, table):
             full = True
         wanted.update(g for g in brought if g not in (FULL, NOT_FULL))
         why[path] = brought
+    wanted = expand(wanted)
     wanted.update(measure_groups(wanted))
     ordered = [g for g in GROUP_NAMES if g in wanted]
     return Plan(ordered, full, unmatched, why)
@@ -236,7 +260,7 @@ def with_group(plan, name):
     """The plan with the group `name` added (a full plan has every group already)."""
     if plan.full or name in plan.groups:
         return plan
-    return Plan([g for g in GROUP_NAMES if g in set(plan.groups) | {name}], False, plan.unmatched, plan.why)
+    return Plan([g for g in GROUP_NAMES if g in expand(set(plan.groups) | {name})], False, plan.unmatched, plan.why)
 
 
 def github_form(plan):
@@ -257,7 +281,7 @@ def groups_from_text(text):
     bad = [g for g in names if g not in GROUPS]
     if bad:
         raise ScopeError(["not a group: %s (%s)" % (", ".join(bad), ", ".join(GROUP_NAMES))])
-    return [g for g in GROUP_NAMES if g in names], False
+    return [g for g in GROUP_NAMES if g in expand(names)], False
 
 
 # The checks ---------------------------------------------------------------------------------------------------------

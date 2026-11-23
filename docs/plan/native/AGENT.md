@@ -330,10 +330,25 @@ session is an order; an answer to such a question is written in your log and the
   differs means your change altered the game: find why. A recorded replay is a place that can make a check see
   less: the step adds one line for each changed file to `docs/plan/strictness-log.tsv` in the same landing (see
   section 9, the top).
-- When a step is meant to change a picture, declare it: a file `PICTURES-CHANGE.txt` at the root of the
-  branch, one line each, `<test path or pattern> <picture or *> <renderer or all> :: <reason>`. Look at each
-  changed picture yourself first (the run's sheet) and be able to say why it changed. The landing approves
-  declared and new pictures by itself. A picture that differs and is not declared fails.
+- A step that can move a picture is judged against every picture the main level compares, at its landing: anything
+  compiled into the game or read by it when it runs (`native/`, `runtime/`, the shaders, the SDL host, the importer that
+  cooks the game's data), the recordings, and the tests and tools that play the tours. That is every stop of the tour on
+  the three renderers of the US disc, both other discs on Direct3D 12 and the tablet's 12 stops. No picture may differ
+  from its approved one unless the step declares it in the same landing; a difference nobody declared fails, whichever
+  renderer, disc or place it is on. Before you hand in, play that set: the `tour` command of `PLAN commands` with
+  `--set landing` in place of `--renderer d3d12` (`--tablet`, `--apk` and `--android-bin` of your Android test build add
+  the tablet's pictures; it plays side by side, `--jobs` at a time). `agent_tour.py` compares every picture it played and
+  prints `fail`, with the name of each picture that differs and is not declared and the line to write for it. A step that
+  cannot move a picture (documents, plan data, tools that are not part of the game) is compared against none.
+- Declare a picture that is meant to change in a file `PICTURES-CHANGE.txt` at the root of the branch, one line each,
+  `<suite>/<stop> <picture> <place> <renderer> <disc> :: <reason>`: the suite and stop as `agent_tour.py` prints them
+  (`tour/010-CannonFleetGalaxy-1`, `engine/boot`), the picture (`arrive`, `after`, or `*`), the place (`pc` or `tablet`),
+  the renderer (`d3d12`, `vulkan`, `d3d11`) and the disc (`RMGE01` the US disc, `RMGP01`, `RMGJ01`); `*` stands for any
+  of them. Name every renderer, disc and place the picture changes on, for example `tour/010-CannonFleetGalaxy-1 * * * *
+  :: the sky is another blue`. The landing plays each stop a line names on the other discs' Direct3D 11 and Vulkan as
+  well and refuses a difference there that no line names; it refuses a line that no differing picture uses. Look at each
+  changed picture yourself first (the run's sheet) and be able to say why it changed. The landing approves declared and
+  new pictures by itself.
 - The old path goes in the step the card names for it. Leave no switch, no fallback and no dead copy behind
   unless the card names one.
 - New code has the form the card and the design give, never the console's form made to compile. "The console
@@ -417,7 +432,7 @@ work at the same time.
 | repository checks | no forbidden content, every script parses, the code rules, the settings table matches the code, no check was made to see less without its line in the strictness log (the file and line references of your documents and commit messages are read by `PLAN land` before the gate, not here) |
 | Windows build, unit tests, a start on each renderer | it builds and starts |
 | engine tests with their pictures (one renderer, or three) | each part of the engine draws and behaves as approved |
-| the tour: 12 stops of the game (every stop when the step has an extra check), pictures and replays | the game plays exactly as recorded, on each renderer |
+| the tour: 12 stops of the game (every stop when the step has an extra check; every stop on every renderer, the other discs and the tablet's 12 stops when the step can move a picture), pictures and replays | the game plays exactly as recorded, on each renderer, and no picture differs that the step did not declare |
 | the debug layers (renderer changes) | no misuse of the graphics API |
 | Android build; on the tablet a start, a speed measure, and for Vulkan and Android changes the 12 stops | it runs on a real device as it does on the PC |
 | the speed check on the PC | the game's and the renderer's work for one step is not slower than the last judged build's (both builds run side by side) |

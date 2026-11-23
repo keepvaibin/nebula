@@ -51,6 +51,11 @@ def stops_with_save():
     return out
 
 
+def test_names():
+    """The US tour's test names NNN-Stage-N, in the list's order (a disc's tests carry its prefix besides)."""
+    return ["%03d-%s-%d" % (i + 1, stage, scenario) for i, stage, scenario in stops()]
+
+
 def test_for(index, stage, scenario, disc=None, window=None):
     r = random.Random(20261116 + index)
     steps = [{"at": 30, "picture": "arrive"}]

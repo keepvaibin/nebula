@@ -1429,7 +1429,7 @@ class ScopeTest(unittest.TestCase):
 
     def test_the_union_of_several_rows(self):
         out = self.checks("native/petari/a.cpp", "runtime/src/render/a.cpp", "crates/nebula-import/src/x.rs")
-        self.assertEqual([l.split(":")[0] for l in out[:-1]], ["repo", "build", "unit", "start", "engine1", "engine3", "tour1", "tour3", "validate", "import", "android", "github", "measure_pc", "measure_tablet"])
+        self.assertEqual([l.split(":")[0] for l in out[:-1]], ["repo", "build", "unit", "start", "engine3", "tour3", "pictures", "validate", "import", "android", "tablet12", "github", "measure_pc", "measure_tablet"])
         self.assertIn("tour/vulkan", out[-1])
 
     def test_a_path_no_row_names_runs_everything(self):

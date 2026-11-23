@@ -21,6 +21,13 @@
 # runtime/include), the importer (crates/nebula-import) and, in the test build, the test driver (tools/test_driver). GitHub's own two
 # Android builds are `nightly` (tools/gate/github_jobs.tsv): this machine proves the build.
 #
+# `pictures` is on every row whose files can move a picture the tests compare: what is compiled into the game or read by it when
+# it runs (native/, runtime/, the SDL host, the importer that cooks the game's data), the recordings and the tests and tools that play
+# the tours (tests/engine, tests/replays, tools/test_driver, the runner, the tour writer, the step hash), and PICTURES-CHANGE.txt.
+# A landing with it is of the main level and takes every picture that level compares (the engine tests and every stop of the tour on
+# the three renderers, the two other discs on Direct3D 12, the tablet's 12 stops); a stop its PICTURES-CHANGE.txt names is also played
+# on the other discs' Direct3D 11 and Vulkan. A landing without it (documents, plan data, tools that are not part of the game) takes
+# no picture. A file no row names makes the run full, which takes them too.
 # `measure_pc` and `measure_tablet` (the speed measure of the play route) are on no row: scope.py adds them to every plan that holds
 # an engine or a tour group (`measure_pc`), and, with the Android build in it, `measure_tablet`. The other levels do not get them.
 #
@@ -37,25 +44,25 @@ docs/**	repo
 *.md	repo
 docs/plan/ledger.tsv	repo
 tests/pictures/approved.tsv	repo
-PICTURES-CHANGE.txt	repo
+PICTURES-CHANGE.txt	repo,pictures
 tools/**	repo,tools
-tools/test_driver/**	build,unit,start,engine1,tour1,android,github
-tools/lumacore/luma_test.py	engine1,tour1
+tools/test_driver/**	build,unit,start,pictures,android,github
+tools/lumacore/luma_test.py	pictures
 tools/lumacore/luma_test_android.py	android,tablet12
-tools/gate/gate_tour.py	tour1
-tools/verify/step_hash.py	tour1
-tools/verify/tours/**	tour1
-native/**	repo,build,unit,start,engine1,tour1,android,github
-runtime/src/render/**	repo,build,unit,start,engine3,tour3,validate,android,github
-runtime/include/galaxy/render/**	repo,build,unit,start,engine3,tour3,validate,android,github
-runtime/**	repo,build,unit,start,engine1,tour1,android,github
-platform/sdl/**	repo,build,unit,start,engine1,tour1,android,github
-crates/nebula-import/**	repo,import,android,github
+tools/gate/gate_tour.py	pictures
+tools/verify/step_hash.py	pictures
+tools/verify/tours/**	pictures
+native/**	repo,build,unit,start,pictures,android,github
+runtime/src/render/**	repo,build,unit,start,pictures,validate,android,github
+runtime/include/galaxy/render/**	repo,build,unit,start,pictures,validate,android,github
+runtime/**	repo,build,unit,start,pictures,android,github
+platform/sdl/**	repo,build,unit,start,pictures,android,github
+crates/nebula-import/**	repo,import,pictures,android,github
 platform/android/**	android,tablet12,github
 runtime/src/render/vk/**	android,tablet12,github
-tests/engine/**	repo,build,engine3
+tests/engine/**	repo,build,pictures
 tests/android/**	repo,android,tablet12,github
-tests/replays/**	repo,build,tour1
+tests/replays/**	repo,build,pictures
 tests/unit/**	repo,build,unit,github
 cmake/unit_tests.cmake	repo,build,unit,github-first,-full
 tests/pictures/**	repo

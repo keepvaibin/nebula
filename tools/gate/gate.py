@@ -357,6 +357,7 @@ class Gate:
         self.cases = {}
         self.picture_jobs = []
         self.picture_calls = []
+        self.partial = set()          # (label, renderer) of the tours that play only the stops a declaration names: no picture of theirs is missing
         self.new_pictures = []
         self.runs_held = False
         self.tree = TREE
@@ -2238,7 +2239,7 @@ def picture_result(g, label, renderer, place, log, keep_new=True):
     cmd = [sys.executable, "-X", "utf8", "-I", HERE / "pictures.py", "check", "--runs", work, "--renderer", renderer,
            "--place", place, "--manifest", pathlib.Path(g.tree) / picture_tool.MANIFEST_NAME, "--store", PICTURE_STORE,
            "--changes", pathlib.Path(g.tree) / picture_tool.CHANGES_NAME]
-    if g.level not in SHORT_LEVELS:
+    if g.level not in SHORT_LEVELS and (label, renderer) not in g.partial:
         cmd.append("--complete")
     if keep_new:
         cmd += ["--new-out", g.work / "new-pictures" / tag]
@@ -3414,9 +3415,12 @@ def engine_lane(g, r):
     return lane
 
 
-def tour_lane(g, tour, label, r, needs=DATA, pieced=None):
-    """One tour on one renderer, with its pictures. `pieced`: the long run played its stops in pieces (PiecedRun); this reads them."""
+def tour_lane(g, tour, label, r, needs=DATA, pieced=None, partial=False):
+    """One tour on one renderer, with its pictures. `pieced`: the long run played its stops in pieces (PiecedRun); this reads them.
+    `partial`: the tour holds only some stops (a sibling play): the pictures of the others are not missing."""
     def lane():
+        if partial:
+            g.partial.add((label, r))
         g.check("%s/%s" % (label, r), harness(g, tour, r, label, pieced=pieced), needs)
         g.picture_jobs.append(("pictures/%s/%s" % (label, r), label, r, ("%s/%s" % (label, r),)))
     return lane
@@ -3581,13 +3585,29 @@ def stress_lane(g):
     return lane
 
 
-def write_tours(g, stops, region_stops):
-    """The tour and the other discs' tours: {label: suite.json}."""
+def write_tours(g, stops, region_stops, siblings=None):
+    """The tour and the other discs' tours: {label: suite.json}. `siblings`: the stops ("Stage N") of PICTURES-CHANGE.txt that the other
+    discs play on the renderers their main-level tour does not (sibling_stops): each disc's tour of those, as `sibling-<disc>`."""
     tours = {"tour": gate_tour.write(g.work / "tour", stops)}
     step_hash.with_hash(tours["tour"].parent)
     for disc in REGION_DISCS:
         tours["tour-%s" % disc] = gate_tour.write(g.work / ("tour-%s" % disc), region_stops, disc)
+        if siblings:
+            tours["sibling-%s" % disc] = gate_tour.write(g.work / ("sibling-%s" % disc), siblings, disc)
     return tours
+
+
+def sibling_stops(g):
+    """The stops the tree's PICTURES-CHANGE.txt names that the other discs must also play on Direct3D 11 and Vulkan, as "Stage N" (the
+    long run compares those rows; a landing's main level plays the other discs on Direct3D 12 only): [] when no line names a stop, or
+    when the file cannot be read (the picture checks say so)."""
+    try:
+        declarations = picture_tool.read_declarations(pathlib.Path(g.tree) / picture_tool.CHANGES_NAME)
+    except picture_tool.DeclarationError:
+        return []
+    names = gate_tour.test_names()
+    wanted = set(picture_tool.declared_stops(declarations, names))
+    return ["%s %d" % (stage, scenario) for name, (_, stage, scenario) in zip(names, gate_tour.stops()) if name in wanted]
 
 
 def replay_part(g, renderers):
@@ -4299,7 +4319,9 @@ def run_checks(args, known=None, planned=None, selected=None, dry=False):
     if level != "long" and g.mods != "off" and not MOD_TESTS.exists():
         g.missing("mods", "the mod tests are not in the tree (tools/lumacore/mod_tests.py, mods M0)")
     soak = start_soak(g) if level in ("long", "final") and not g.dry and g.wanted("soak", DATA) else None
-    tours = write_tours(g, QUICK_STOPS if short else None, QUICK_REGION_STOPS if short else None)
+    # A stop PICTURES-CHANGE.txt names is also played by the other discs on the renderers their tour does not play (sibling_stops).
+    siblings = sibling_stops(g) if level == "main" else []
+    tours = write_tours(g, QUICK_STOPS if short else None, QUICK_REGION_STOPS if short else None, siblings)
     # Region discs: Direct3D 12 at the quick and main levels; every renderer in the long run and the final check.
     region_renderers = RENDERERS if level in ("long", "final") else ("d3d12",)
     if level == "long":
@@ -4322,6 +4344,9 @@ def run_checks(args, known=None, planned=None, selected=None, dry=False):
             def region_lane(disc=disc):
                 for r in region_renderers:
                     tour_lane(g, tours["tour-%s" % disc], "tour-%s" % disc, r, DATA + ("data/%s" % disc,))()
+                for r in RENDERERS if siblings else ():
+                    if r not in region_renderers:
+                        tour_lane(g, tours["sibling-%s" % disc], "tour-%s" % disc, r, DATA + ("data/%s" % disc,), partial=True)()
             lanes.append(region_lane)
         if mods_on(g):
             lanes += [mods_lane(g, r) for r in renderers]
@@ -4417,6 +4442,12 @@ def also_problem(args, also, known, planned):
         parts.append("--also names no check the gate knows: %s. The checks a landing can run are: %s" % (
             ", ".join(unknown), ", ".join(sorted(set(main_needs) | set(ALSO_PARTS)))))
     return "; ".join(parts)
+
+
+def landing_level(plan, also):
+    """The level a landing of a plan that is not full has: its own (LAND_LEVEL: the 12 quick stops) unless the plan can move a picture (the
+    group `pictures`: every picture the main level compares) or asks for checks by name (the nightly's depth), which are of the main level."""
+    return "main" if also or plan.takes_pictures else LAND_LEVEL
 
 
 def landing_selection(args, plan, also, known, planned):
@@ -4622,9 +4653,14 @@ def run_main(argv, left):
         except scope.ScopeError as error:
             return refuse("tools/gate/scope.tsv or --scope is wrong:\n  " + "\n  ".join(error.problems))
         print("gate.py: scope: " + "; ".join(scope.describe(plan)), flush=True)
-        if not plan.full and not also:
-            args.mode = LAND_LEVEL
-        elif also and not plan.full:
+        if not plan.full and plan.takes_pictures:
+            print("gate.py: the change can move a picture: the landing is of the main level and takes every picture that level compares "
+                  "(the engine tests and every stop of the tour on the three renderers, the two other discs on Direct3D 12, the tablet's "
+                  "12 stops%s)" % (", and every stop a PICTURES-CHANGE.txt line names on the other discs' Direct3D 11 and Vulkan"
+                                   if (pathlib.Path(TREE) / picture_tool.CHANGES_NAME).is_file() else ""), flush=True)
+        if not plan.full:
+            args.mode = landing_level(plan, also)
+        if also and not plan.full:
             print("gate.py: and, asked for by name: %s. The landing keeps the main level so that they run as the nightly run runs "
                   "them (every stop of a tour)." % ", ".join(also), flush=True)
     if args.move and (args.mode not in ("main", LAND_LEVEL) or patterns or args.no_build):

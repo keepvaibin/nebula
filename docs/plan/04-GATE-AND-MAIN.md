@@ -208,10 +208,25 @@ declares it. A picture with no approved copy is `new`: it never fails a run.
   adapter and driver that place's `machine` row names for the renderer. The PC's and the tablet's Vulkan pictures are two sets
   of rows. A run on an adapter or driver no row names is `env`, and its pictures are not judged.
 - *Declaring a change.* The branch has a file `PICTURES-CHANGE.txt` at its root, one line for each picture or pattern:
-  `<test path or pattern> <picture or *> <renderer or all> :: <reason>` (shell-style `*`; the test path is `suite/test` as the
-  run's lines print it, for example `tour/010-CannonFleetGalaxy-1`). A differing picture a line names is `new`; one no line
-  names is `fail`. A line that names no differing picture is stale: the check `pictures/declared` of a main gate is `tool`
-  (`env` when the tablet's pictures were not taken, since they cannot be told from it).
+  `<suite>/<stop> <picture> <place> <renderer> <disc> :: <reason>`. Each of the five words is a shell-style pattern, and `*` or
+  `all` is any. The suite and stop are the test's own place and name without the disc (`tour/010-CannonFleetGalaxy-1`,
+  `engine/boot`; a stop of the tour of any disc is `tour/<NNN-Stage-N>`), the picture is `arrive`, `after` or an engine test's
+  own name, the place is `pc` or `tablet`, the renderer `d3d12`, `vulkan` or `d3d11`, the disc `RMGE01` (the US disc and every
+  engine test), `RMGP01` or `RMGJ01`. A line of three words (the form before places and discs were named) is an error that says
+  so. A differing picture a line names is `new`; one no line names is `fail`. A line that names no differing picture is stale:
+  the check `pictures/declared` of a main gate is `tool` (`env` when the tablet's pictures were not taken, since they cannot be
+  told from it).
+- *Every picture a landing can move is compared, and a declared stop is played everywhere.* A landing whose changed paths can
+  move a picture (the group `pictures` of `tools/gate/scope.tsv`: what is compiled into the game or read by it when it runs, the
+  shaders, the cooked data's makers, the recordings and the tests and tools that play the tours; a path no row names) is of the
+  main level and takes every picture that level compares: the engine tests and every stop of the tour on the three renderers of the
+  US disc, both other discs on Direct3D 12, the tablet's 12 stops, and `pictures/declared`. A landing that cannot (documents,
+  plan data, tools that are not part of the game) takes none. For every stop `PICTURES-CHANGE.txt` names, the landing also plays
+  that stop on the other discs' Direct3D 11 and Vulkan, whose rows only the long run compares otherwise, so that each sibling
+  row that differs is declared and approved in the same landing and none goes stale (checks `tour-<disc>/<renderer>` and
+  `pictures/tour-<disc>/<renderer>`; a run of some stops does not fail the stops it did not play). The long run keeps its own
+  picture checks. `tools/gate/agent_tour.py` plays any part of this set (`--set landing`, `--set whole`, or `--renderer`,
+  `--disc` and `--stops`) and prints `fail` with the name of each picture that differs and no line declares.
 - *What a run leaves.* In its folder: `new-pictures.tsv` (one line for each new or declared picture, complete enough to be its
   approved row), the pictures' files and the sheet to look at, `D:/NebulaWork/build/gate-runs/<run folder>/new-pictures/sheet/review.html`. The summary prints the count
   and the sheet's path.
@@ -429,11 +444,13 @@ one folder changes nothing the second time.
 This section is what the tools do now. Where it differs from an older section above, this section is right.
 
 **Checks by what changed.** `tools/gate/scope.tsv` maps path patterns to groups of checks (`tools/gate/scope.py` names the
-groups once: `repo`, `tools`, `build`, `unit`, `start`, `engine1`, `engine3`, `tour1`, `tour3`, `validate`, `import`, `android`, `tablet12`).
+groups once: `repo`, `tools`, `build`, `unit`, `start`, `engine1`, `engine3`, `tour1`, `tour3`, `pictures`, `validate`, `import`, `android`, `tablet12`).
 The group `repo` (the cheap repository checks) is in every run, whatever the rows say. Every row a changed file matches adds its groups; a landing runs the union over all changed files (`git diff --name-only` from the
 merge base with `origin/main`). A change of documents only runs `repo`, with no build, so it lands in minutes. A change to the
-game runs the build, the unit tests, a start on each renderer and the 12-stop tour on Direct3D 12 with its pictures and replays.
-A change to the renderers runs the engine tests and the tour on all three, and `validate` (below). A file that no row names makes the run `full`:
+game, the engine, the SDL host, the importer, the test driver or the recordings (anything that can move a picture, the group `pictures`) runs the build,
+the unit tests, a start on each renderer and, as a landing of the main level, every picture check of that level (section 9, "Pictures"): every
+stop of the tour on the three renderers, the other discs on Direct3D 12 and the tablet's 12 stops, with their replays.
+A change to the renderers also runs `validate` (below). A file that no row names makes the run `full`:
 everything the main gate runs on the native game (every renderer's engine tests and 102-stop tour, the other discs, the Android
 build and the tablet's short part). The full set on three renderers, three discs and the tablet is also the nightly run's first
 part. `python -X utf8 -I tools/gate/scope.py --base origin/main` prints the groups and the checks of the branch you are in.

@@ -78,7 +78,10 @@ import landing_test as lt  # noqa: E402
 import scope  # noqa: E402
 import speedbase  # noqa: E402
 
-TABLE = scope.read_table()
+# The speed measure's tests need a plan that has the game's groups at the landing level, the Android build and no tablet part: the table
+# of the real tree with `native/**` as it was before the group `pictures` (which takes every picture of the main level and the tablet).
+TABLE = scope.parse(scope.TABLE.read_text(encoding="utf-8").replace(
+    "native/**\trepo,build,unit,start,pictures,android,github", "native/**\trepo,build,unit,start,engine1,tour1,android,github"))
 
 FAKE_MEASURE = '''
 import json, os, pathlib, sys, time
@@ -314,7 +317,7 @@ class Gates:
     def land(self, plan, also=(), tablet="T"):
         """The landing's selection and run, as main() does them: (the Gate, the args)."""
         args = gate.parser().parse_args(self.argv(tablet, also))
-        args.mode = gate.LAND_LEVEL if not also else "main"
+        args.mode = gate.landing_level(plan, also)
         selected = gate.landing_selection(args, plan, list(also), {}, {})
         with contextlib.redirect_stdout(io.StringIO()) as out:
             g = gate.run_checks(args, {}, {}, selected)
@@ -551,8 +554,8 @@ class Pair(unittest.TestCase):
         self.assertEqual(gate.pair_renderers(G({"tour/d3d11", "engine/d3d12"})), ["d3d12", "d3d11"])
         self.assertEqual(gate.pair_renderers(G({"engine/vulkan"})), ["d3d12", "vulkan"])
         self.assertEqual(gate.pair_renderers(G({"start/vulkan", "pictures/tour/d3d11"})), ["d3d12"], "a start or a picture is no play")
-        # engine1 and tour1 run d3d12 only; engine3 the three
-        for paths, want in ((NATIVE, "d3d12"), (ENGINE_ONLY, "d3d12,d3d11,vulkan"), (("tests/replays/x.tsv",), "d3d12")):
+        # engine1 and tour1 run d3d12 only; engine3 and the group pictures the three
+        for paths, want in ((NATIVE, "d3d12"), (ENGINE_ONLY, "d3d12,d3d11,vulkan"), (("tests/replays/x.tsv",), "d3d12,d3d11,vulkan")):
             g, w = self.go(plan=paths)
             runs = [c for c in w.runs() if c["run"] == "pair"][0]["args"]
             self.assertEqual(runs[runs.index("--runs") + 1], want, paths)
@@ -968,13 +971,17 @@ class Where(unittest.TestCase):
     def test_the_plan_decides_what_is_measured(self):
         cases = [(NATIVE, True, True), (ENGINE_ONLY, True, False), (("tests/replays/x.tsv",), True, False),
                  (("platform/android/app/build.gradle",), False, False), (("tools/gate/x.py",), False, False),
-                 (("crates/nebula-import/src/lib.rs",), False, False), (("docs/plan/x.md",), False, False)]
+                 (("docs/plan/x.md",), False, False)]
         for paths, pc, tablet in cases:
             plan = scope.plan_for(list(paths), TABLE)
             self.assertEqual(("measure_pc" in plan.groups, "measure_tablet" in plan.groups), (pc, tablet), paths)
             g, w, _ = self.run_plan(paths)
             self.assertEqual((w.row(g, PC) is not None, w.row(g, TABLET) is not None), (pc, tablet), (paths, g.printed))
             self.assertEqual({c["run"] for c in w.runs()}, ({"pair"} if pc else set()) | ({"tablet"} if tablet else set()), paths)
+        # An importer change can move a picture (the group `pictures`), so its plan has both measures; the run of it is not played here (the
+        # collision proof of its group has no disc image in this fake world).
+        importer = scope.plan_for(["crates/nebula-import/src/lib.rs"], TABLE)
+        self.assertEqual(("measure_pc" in importer.groups, "measure_tablet" in importer.groups), (True, True))
         full = scope.groups_from_text("full")[0]
         self.assertIn("measure_pc", full)
         self.assertIn("measure_tablet", full)

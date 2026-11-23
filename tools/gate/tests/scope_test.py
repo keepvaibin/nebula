@@ -7,6 +7,12 @@ graphics card or a tablet.
   repo_in_every_run         the repository checks are in every plan, whatever a row names (scope.ALWAYS)
   repo_group_is_in_every_run  the repository checks are in every plan, whatever a row names (scope.ALWAYS)
   union_of_rows             a change of several files runs the union of every row each file matches, whatever the order
+  a_change_that_can_move_a_picture_takes_the_set   the paths of the game, the engine, the host, the importer, the test driver, the runner,
+                            the tour and its recordings and PICTURES-CHANGE.txt take the group `pictures` (and the tablet's 12 stops);
+                            documents, plan data, the gate's own tools and the unit tests take none
+  the_group_brings_the_tablet_and_the_main_levels_checks  `--scope pictures` is engine3, tour3, pictures and tablet12
+  the_set_is_every_picture_check_of_the_main_level  what the group selects (every renderer, both other discs on Direct3D 12, the tablet's
+                            part, the declared check) and what it leaves out; a sibling play is taken by its name
   github_group              the group `github` (no local check: read after the move) is on the rows of code, the test driver, the
                             renderers, the importer, Android and the unit tests, and `github-first` (waited for before the move) on
                             `.github/**` and in the full run; documents, tools, test data and pictures have neither (the forms and
@@ -50,25 +56,25 @@ class Rows(unittest.TestCase):
         cases = [
             (("docs/plan/04-GATE-AND-MAIN.md", "README.md", "docs/plan/ledger.tsv"), ["repo"]),
             (("tests/pictures/approved.tsv",), ["repo"]),
-            (("PICTURES-CHANGE.txt",), ["repo"]),
+            (("PICTURES-CHANGE.txt",), ["repo", "engine3", "tour3", "pictures", "tablet12"]),
             (("tools/plan/plan.py", "tools/gate/gate.py"), ["repo", "tools"]),
-            (("native/petari/src/Game/Foo.cpp",), ["repo", "build", "unit", "start", "engine1", "tour1", "android", "github"]),
-            (("runtime/src/render/renderer_common.cpp",), ["repo", "build", "unit", "start", "engine1", "engine3", "tour1", "tour3", "validate", "android", "github"]),
-            (("runtime/include/galaxy/render/renderer.h",), ["repo", "build", "unit", "start", "engine1", "engine3", "tour1", "tour3", "validate", "android", "github"]),
-            (("runtime/src/audio/mixer.cpp",), ["repo", "build", "unit", "start", "engine1", "tour1", "android", "github"]),
-            (("platform/sdl/host.cpp",), ["repo", "build", "unit", "start", "engine1", "tour1", "android", "github"]),
-            (("crates/nebula-import/src/lib.rs",), ["repo", "import", "android", "github"]),
+            (("native/petari/src/Game/Foo.cpp",), ["repo", "build", "unit", "start", "engine3", "tour3", "pictures", "android", "tablet12", "github"]),
+            (("runtime/src/render/renderer_common.cpp",), ["repo", "build", "unit", "start", "engine3", "tour3", "pictures", "validate", "android", "tablet12", "github"]),
+            (("runtime/include/galaxy/render/renderer.h",), ["repo", "build", "unit", "start", "engine3", "tour3", "pictures", "validate", "android", "tablet12", "github"]),
+            (("runtime/src/audio/mixer.cpp",), ["repo", "build", "unit", "start", "engine3", "tour3", "pictures", "android", "tablet12", "github"]),
+            (("platform/sdl/host.cpp",), ["repo", "build", "unit", "start", "engine3", "tour3", "pictures", "android", "tablet12", "github"]),
+            (("crates/nebula-import/src/lib.rs",), ["repo", "engine3", "tour3", "pictures", "import", "android", "tablet12", "github"]),
             (("platform/android/app/build.gradle",), ["repo", "android", "tablet12", "github"]),   # repo: in every run (scope.ALWAYS)
-            (("runtime/src/render/vk/renderer_vk.cpp",), ["repo", "build", "unit", "start", "engine1", "engine3", "tour1", "tour3",
+            (("runtime/src/render/vk/renderer_vk.cpp",), ["repo", "build", "unit", "start", "engine3", "tour3", "pictures",
                                                           "validate", "android", "tablet12", "github"]),
-            (("tests/engine/boot/test.json",), ["repo", "build", "engine3"]),
+            (("tests/engine/boot/test.json",), ["repo", "build", "engine3", "tour3", "pictures", "tablet12"]),
             (("tests/android/walk/test.json",), ["repo", "android", "tablet12", "github"]),
-            (("tests/replays/stage.txt",), ["repo", "build", "tour1"]),
+            (("tests/replays/stage.txt",), ["repo", "build", "engine3", "tour3", "pictures", "tablet12"]),
             # The list of the unit-test programs: the unit tests and the build, no game group, not full (no Android build).
             (("cmake/unit_tests.cmake",), ["repo", "build", "unit", "github-first"]),
             (("tests/mods/anim/test.json",), ["repo"]),
-            (("tools/test_driver/luma_test/luma_test.c",), ["repo", "tools", "build", "unit", "start", "engine1", "tour1", "android", "github"]),
-            (("tools/lumacore/luma_test.py",), ["repo", "tools", "engine1", "tour1"]),
+            (("tools/test_driver/luma_test/luma_test.c",), ["repo", "tools", "build", "unit", "start", "engine3", "tour3", "pictures", "android", "tablet12", "github"]),
+            (("tools/lumacore/luma_test.py",), ["repo", "tools", "engine3", "tour3", "pictures", "tablet12"]),
             # The tablet's own runner: the Android build and the tablet's part, no PC tour and no GitHub part (it is no game code).
             (("tools/lumacore/luma_test_android.py",), ["repo", "tools", "android", "tablet12"]),
         ]
@@ -79,6 +85,40 @@ class Rows(unittest.TestCase):
             # Android build too (scope.measure_groups; gate_line_test.py has the cases by name).
             want = list(want) + scope.measure_groups(want)
             self.assertEqual(p.groups, [g for g in scope.GROUP_NAMES if g in want], paths)
+
+    def test_a_change_that_can_move_a_picture_takes_the_set(self):
+        """The rule of brief AF: a path that can move a picture takes the group `pictures` (and the tablet's 12 stops with it); a
+        document, plan data or a tool that is not part of the game takes none; a path no row names is full, which takes them too."""
+        moves = [("native/petari/src/Game/Foo.cpp",), ("runtime/src/audio/a.cpp",), ("runtime/src/render/a.cpp",),
+                 ("runtime/include/galaxy/render/a.h",), ("platform/sdl/a.cpp",), ("crates/nebula-import/src/a.rs",),
+                 ("tools/test_driver/luma_test/a.c",), ("tools/lumacore/luma_test.py",), ("tools/gate/gate_tour.py",),
+                 ("tools/verify/step_hash.py",), ("tools/verify/tours/tour_enterable.txt",), ("tests/engine/a/test.json",),
+                 ("tests/replays/a.tsv",), ("PICTURES-CHANGE.txt",), ("somewhere/no/row/names.bin",)]
+        for paths in moves:
+            p = plan(*paths)
+            self.assertTrue(p.takes_pictures, paths)
+            if not p.full:
+                for name in ("pictures", "engine3", "tour3", "tablet12"):
+                    self.assertIn(name, p.groups, paths)
+        stays = [("docs/plan/04-GATE-AND-MAIN.md",), ("README.md",), ("docs/plan/ledger.tsv",), ("tools/gate/gate.py",),
+                 ("tools/gate/pictures.py",), ("tools/gate/scope.tsv",), ("tools/plan/plan.py",), ("tests/pictures/approved.tsv",),
+                 ("tests/mods/a/test.json",), ("tests/measure/a.json",), ("tests/pace/a.json",), ("tests/unit/a.cpp",),
+                 ("cmake/unit_tests.cmake",), (".github/workflows/check.yml",), ("platform/android/app/a.kt",)]
+        for paths in stays:
+            p = plan(*paths)
+            self.assertFalse(p.takes_pictures, paths)
+            self.assertNotIn("pictures", p.groups, paths)
+            self.assertFalse(any(g in p.groups for g in ("engine3", "tour3")), "no PC picture is taken: %s" % (paths,))
+
+    def test_the_group_brings_the_tablet_and_the_main_levels_checks(self):
+        groups, full = scope.groups_from_text("pictures")
+        self.assertFalse(full)
+        self.assertEqual(groups, [g for g in scope.GROUP_NAMES if g in ("engine3", "tour3", "pictures", "tablet12")])
+        self.assertTrue(scope.Plan(groups, False, [], {}).takes_pictures)
+        self.assertFalse(scope.Plan(["repo"], False, [], {}).takes_pictures)
+        self.assertTrue(scope.Plan([], True, [], {}).takes_pictures, "a full run takes every picture the main level does")
+        added = scope.with_group(plan("docs/a.md"), "pictures")
+        self.assertIn("tablet12", added.groups)
 
     def test_github_group(self):
         # The group `github` switches GitHub's part of a landing on (package T8a); it stands for no local check.
@@ -120,8 +160,9 @@ class Rows(unittest.TestCase):
                       ("crates/nebula-import/src/a.rs",)):
             groups = plan(*paths).groups
             self.assertIn("android", groups, paths)
-            if paths[0] not in ("runtime/src/render/vk/a.cpp",):
-                self.assertNotIn("tablet12", groups, "the build only, not the tablet: %s" % (paths,))
+            # Every one of them can move a picture, so it takes the tablet's 12 stops with the pictures (the group `pictures`).
+            self.assertIn("tablet12", groups, paths)
+            self.assertIn("pictures", groups, paths)
         for paths in (("docs/a.md",), ("tools/gate/gate.py",), ("tests/unit/a.cpp",), ("tests/engine/a/test.json",),
                       ("tools/lumacore/luma_test.py",)):
             self.assertNotIn("android", plan(*paths).groups, paths)
@@ -132,7 +173,8 @@ class Rows(unittest.TestCase):
         paths = ["docs/a.md", "crates/nebula-import/src/x.rs", "runtime/src/audio/a.cpp", "platform/android/app/a.kt"]
         a = plan(*paths)
         self.assertEqual(a.groups, [g for g in scope.GROUP_NAMES if g in (
-            "repo", "build", "unit", "start", "engine1", "tour1", "import", "android", "tablet12", "github", "measure_pc", "measure_tablet")])
+            "repo", "build", "unit", "start", "engine3", "tour3", "pictures", "import", "android", "tablet12", "github", "measure_pc",
+            "measure_tablet")])
         self.assertEqual(plan(*reversed(paths)).groups, a.groups)
         self.assertEqual(plan("docs/a.md", "native/b.cpp").groups, plan("native/b.cpp").groups,
                          "a document beside code adds nothing of its own")
@@ -238,7 +280,7 @@ class Groups(unittest.TestCase):
     def setUp(self):
         known, planned, _ = gate.read_lists()
         args = gate.parser().parse_args(["--main", "--tablet", "T"])
-        args.mode = gate.LAND_LEVEL
+        args.mode = "main"      # the main level registers every name a landing's level does, and the other discs' tours
         self.dry = gate.run_checks(args, known, planned, dry=True)
         self.needs = self.dry.needs
 
@@ -261,6 +303,25 @@ class Groups(unittest.TestCase):
         tablet = scope.select(self.needs, ["tablet12"])
         self.assertTrue({"tablet/prepare", "build/android", "tour/tablet", "tablet/remove", "tour/tablet-pc", "build/windows",
                          "data/RMGE01"} <= tablet, "the tablet's part needs the data too")
+
+    def test_the_set_is_every_picture_check_of_the_main_level(self):
+        """The group `pictures` selects the main level's picture checks and what they need, and takes a sibling play (a stop a
+        declaration names, on another disc's Direct3D 11 or Vulkan) by its name; it leaves the other checks of a landing out."""
+        chosen = scope.select(self.needs, scope.groups_from_text("pictures")[0])
+        must = {"engine/d3d12", "engine/vulkan", "engine/d3d11", "pictures/engine/vulkan", "tour/d3d12", "tour/vulkan", "tour/d3d11",
+                "pictures/tour/d3d11", "tour-RMGP01/d3d12", "tour-RMGJ01/d3d12", "pictures/tour-RMGP01/d3d12",
+                "pictures/tour-RMGJ01/d3d12", "replays/d3d12", "replays/vulkan", "replays/d3d11", "tour/tablet", "pictures/tablet",
+                "tablet/prepare", "build/android", "pictures/declared", "data/RMGP01", "data/RMGJ01", "build/windows"}
+        self.assertTrue(must <= chosen, sorted(must - chosen))
+        for left_out in ("validate/d3d12", "unit/windows", "start/vulkan", "rust", "import/collision/RMGE01", "repo/audit"):
+            self.assertNotIn(left_out, chosen)
+        needs = dict(self.needs)
+        needs["tour-RMGP01/vulkan"] = {"build/windows", "data/RMGE01", "data/RMGP01"}
+        needs["pictures/tour-RMGP01/vulkan"] = {"tour-RMGP01/vulkan"}
+        needs["pictures/declared"] = set(needs["pictures/declared"]) | {"pictures/tour-RMGP01/vulkan"}
+        again = scope.select(needs, scope.groups_from_text("pictures")[0])
+        self.assertTrue({"tour-RMGP01/vulkan", "pictures/tour-RMGP01/vulkan"} <= again)
+        self.assertNotIn("tour-RMGP01/vulkan", scope.select(needs, scope.groups_from_text("tour3")[0]), "the other groups do not")
 
     def test_validate_is_in_every_renderer_landing_and_nowhere_else(self):
         """T12: the debug layers' lane (validate/<renderer>, the 12-stop tour with the layer on) belongs to the two renderer rows."""

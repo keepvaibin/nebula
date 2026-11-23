@@ -150,7 +150,11 @@ class Commands(Base):
         work = pathlib.Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, work, True)
         calls = []
-        with mock.patch.object(agent_tour.subprocess, "run", lambda cmd, **k: calls.append(cmd) or mock.Mock(returncode=0, stdout="abc123def\n")):
+        # The pictures of the runs are agent_tour_test.py's: here one picture is the same.
+        same = [{"kind": "same", "key": "tour/x/vulkan/arrive", "place": "pc", "suite": "tour", "test": "x", "renderer": "vulkan",
+                 "picture": "arrive"}]
+        with mock.patch.object(agent_tour, "judge", lambda a, unit, folder: same), \
+                mock.patch.object(agent_tour.subprocess, "run", lambda cmd, **k: calls.append(cmd) or mock.Mock(returncode=0, stdout="abc123def\n")):
             with contextlib.redirect_stdout(io.StringIO()):
                 code = agent_tour.main(["--bin", "B/bins", "--pak", PAK, "--work", str(work), "--renderer", "vulkan"])
         self.assertEqual(code, 0)
@@ -165,7 +169,8 @@ class Commands(Base):
         self.assertEqual(len(suite["tests"]), 12)
         first = json.loads((work / "tour" / suite["tests"][0] / "test.json").read_text(encoding="utf-8"))
         self.assertIn({"at": 0, "hash": "on"}, first["steps"], "the step hash is on from the first step")
-        with mock.patch.object(agent_tour.subprocess, "run", lambda cmd, **k: mock.Mock(returncode=1, stdout="")):
+        with mock.patch.object(agent_tour, "judge", lambda a, unit, folder: same), \
+                mock.patch.object(agent_tour.subprocess, "run", lambda cmd, **k: mock.Mock(returncode=1, stdout="")):
             with contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(agent_tour.main(["--bin", "B/bins", "--pak", PAK, "--work", str(work / "two"), "--stops", "recorded"]), 1)
         self.assertEqual(len(json.loads((work / "two" / "tour" / "suite.json").read_text(encoding="utf-8"))["tests"]), 20)

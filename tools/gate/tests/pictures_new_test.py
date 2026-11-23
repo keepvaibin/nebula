@@ -226,7 +226,7 @@ def main():
     # --- a second check that is not all pass moves nothing --------------------------------------------------------
     w = case("second")
     try:
-        tested = w.declare("tour/001-AAA-1 * d3d12 :: not needed")
+        tested = w.declare("tour/001-AAA-1 * pc d3d12 RMGE01 :: not needed")
         g = w.gate()
         w.run(g, "001-AAA-1", A)
         w.check(g)
@@ -259,7 +259,7 @@ def main():
         check(verdict == "fail" and code == 1 and "new picture" not in text, "the run is VERDICT fail", text)
 
         # declared for arrive only: arrive is new, after still fails
-        w.declare("tour/001-AAA-1 arrive d3d12 :: the sky changed")
+        w.declare("tour/001-AAA-1 arrive pc d3d12 RMGE01 :: the sky changed")
         g = w.gate()
         w.run(g, "001-AAA-1", B)
         row = w.check(g)
@@ -268,7 +268,7 @@ def main():
               "a declared picture is new, an undeclared one beside it still fails", str(by))
 
         # declared for both: approved, its old row replaced, the declaration file removed in the same commit
-        tested = w.declare("tour/* * all :: the sky changed", "# a comment")
+        tested = w.declare("tour/* * * * * :: the sky changed", "# a comment")
         old = w.rows()
         g = w.gate()
         w.run(g, "001-AAA-1", B)
@@ -296,7 +296,7 @@ def main():
         g = w.gate()
         w.run(g, "001-AAA-1", A)
         w.approve(g)
-        w.declare("tour/001-AAA-1 * d3d12 :: the sky changed", "tour/999-ZZZ-9 * all :: a stale line")
+        w.declare("tour/001-AAA-1 * pc d3d12 RMGE01 :: the sky changed", "tour/999-ZZZ-9 * * all * :: a stale line")
         g = w.gate()
         w.run(g, "001-AAA-1", B)
         w.check(g)
