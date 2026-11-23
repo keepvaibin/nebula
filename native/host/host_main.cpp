@@ -49,6 +49,7 @@
 #include "galaxy/luma_fs_service.h"
 #include "galaxy/luma_input_service.h"
 #include "galaxy/luma_mods_service.h"
+#include "galaxy/mod_support.h"
 #include "galaxy/mods.h"
 #include "galaxy/mod_crash.h"
 #include <luma_input.h>
@@ -5163,7 +5164,7 @@ void svc_app_restart(void*) {
 
 // The mod tools (run_mods_tool): the first argument names one.
 bool is_mods_tool(std::string_view first) {
-    return first == "--import-mod" || first == "--list-mods" || first == "--remove-mod";
+    return galaxy::mod_support() && first == "--import-mod" || first == "--list-mods" || first == "--remove-mod";
 }
 
 // The launch arguments a mods tool takes too: the folders it works in.
@@ -5879,7 +5880,7 @@ int main(int argc, char** argv) {
     }
 #endif
     read_launch_args(argc, argv);
-    galaxy::mods::set_dev_mods(::galaxy::launch_args().mod_dev);
+    if (galaxy::mod_support()) galaxy::mods::set_dev_mods(::galaxy::launch_args().mod_dev);
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
 #if defined(NEBULA_DIAG_REPORTS)
     const bool report_mode = argc >= 2 && galaxy::diag::is_command_mode(argv[1]);
@@ -6134,7 +6135,8 @@ int main(int argc, char** argv) {
 #if defined(NEBULA_HOST_RENDERER)
         fs::path mods_folder;
         const fs::path settings_folder = galaxy::runtime_settings_folder();
-        if (!settings_folder.empty()) {
+        // A build with no mod support makes no mods folder and reads none (galaxy/mod_support.h).
+        if (galaxy::mod_support() && !settings_folder.empty()) {
             fs::create_directories(settings_folder / "mods", error);
             galaxy::mods::apply_pending_updates(settings_folder / "mods");
             mods_folder = settings_folder / "mods";
@@ -6221,7 +6223,7 @@ int main(int argc, char** argv) {
                 reinterpret_cast<NebulaSaveImportRead>(find_symbol(gModule.module, "nebula_save_import_read")));
         }
         galaxy::luma_mods::set_save_half({kept_save_ids, kept_save_bytes, forget_save});
-        if (!settings_folder.empty()) {
+        if (galaxy::mod_support() && !settings_folder.empty()) {
             fs::create_directories(settings_folder / "mods", error);
             // Updates imported while their mod's folder was in use take its place before anything reads the mods.
             galaxy::mods::apply_pending_updates(settings_folder / "mods");

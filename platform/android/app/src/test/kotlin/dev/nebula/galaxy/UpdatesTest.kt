@@ -75,6 +75,27 @@ class UpdatesTest {
         assertNull("an empty listing", Updates.selectNewer("[]", "2.0.0"))
     }
 
+    // The 2.0.0 beta (tag v2.0.0-beta.1): its player is later offered the true 2.0.0, a 1.0.2 player is not offered the beta.
+    @Test
+    fun theTwoZeroZeroBeta() {
+        assertTrue(Updates.compareVersions("2.0.0", "2.0.0-beta.1") > 0)
+        assertTrue(Updates.compareVersions("2.0.0-beta.1", "2.0.0") < 0)
+        assertTrue(Updates.compareVersions("2.0.0-beta.2", "2.0.0-beta.1") > 0)
+        assertTrue(Updates.compareVersions("2.0.0-beta.1", "1.0.2") > 0)
+        assertTrue(Updates.isBeta("2.0.0-beta.1") && !Updates.isBeta("2.0.0"))
+        assertEquals("Nebula-Beta-Android.apk", Updates.assetName("2.0.0-beta.1"))
+        val json = listOf(
+            release("v2.0.0-beta.1", "Nebula-Beta-Android.apk", "https://h/b1", "https://h/b1.sig"),
+            release("v2.0.0", "Nebula-Android.apk", "https://h/200", "https://h/200.sig"),
+        ).joinToString(",", "[", "]")
+        assertEquals("2.0.0", Updates.selectNewer(json, "2.0.0-beta.1")?.version)
+        assertEquals("2.0.0", Updates.selectNewer(json, "1.0.2")?.version)
+        val onlyBeta = "[" + release("v2.0.0-beta.1", "Nebula-Beta-Android.apk", "https://h/b1", "https://h/b1.sig") + "]"
+        assertNull("a 1.0.2 install is not offered the beta", Updates.selectNewer(onlyBeta, "1.0.2"))
+        assertNull("a beta install is not offered itself", Updates.selectNewer(onlyBeta, "2.0.0-beta.1"))
+        assertTrue(!Updates.takes("1.0.2", "2.0.0-beta.1") && Updates.takes("2.0.0-beta.1", "2.0.0"))
+    }
+
     @Test
     fun aBetaInstallIsOfferedItsFinalRelease() {
         val json = listOf(

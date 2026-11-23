@@ -3,7 +3,10 @@ ships (the columns of NebulaText.tsv). These are the texts the system shows for 
 iOS's questions before a mod first reaches the microphone, the camera or the local network, and the name of a .luma
 in a file manager. A package cannot change them after release, so they ship in every language now.
 
-  package_text.py apple <Resources folder>   writes <lang>.lproj/InfoPlist.strings for each language (build_macos.sh)
+  package_text.py apple <Resources folder> [--no-mods]
+                                             writes <lang>.lproj/InfoPlist.strings for each language (build_macos.sh);
+                                             with --no-mods (an app with no mod support) the files have no string: all
+                                             four are about mods
   package_text.py linux [--check]            writes (or checks) platform/linux/dev.nebula.galaxy.xml, the shared MIME
                                              type of *.luma with its name in each language
 """
@@ -60,12 +63,12 @@ def strings_text(value):
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
-def apple(resources):
+def apple(resources, no_mods=False):
     rows = read()
     for column, (lproj, _) in LANGS.items():
         folder = pathlib.Path(resources) / (lproj + ".lproj")
         folder.mkdir(parents=True, exist_ok=True)
-        text = "".join("%s = %s;\n" % (strings_text(key), strings_text(rows[row][column])) for key, row in APPLE)
+        text = "" if no_mods else "".join("%s = %s;\n" % (strings_text(key), strings_text(rows[row][column])) for key, row in APPLE)
         (folder / "InfoPlist.strings").write_text(text, encoding="utf-16")  # UTF-16 with its mark, as CFBundle reads
     print("InfoPlist.strings in %d languages" % len(LANGS))
 
@@ -101,8 +104,8 @@ def linux(check):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 3 and sys.argv[1] == "apple":
-        apple(sys.argv[2])
+    if len(sys.argv) in (3, 4) and sys.argv[1] == "apple" and sys.argv[3:] in ([], ["--no-mods"]):
+        apple(sys.argv[2], len(sys.argv) == 4)
     elif len(sys.argv) in (2, 3) and sys.argv[1] == "linux" and sys.argv[2:] in ([], ["--check"]):
         linux(len(sys.argv) == 3)
     else:

@@ -5,24 +5,30 @@
 # links opening in Nebula) or as a portable folder, in the layout LumaLink reads (current.json, versions/<version>,
 # content/game.pak). The game ships no test parts (tools/release_check.ps1); LumaLink's Setup has the test kit.
 #
-#   installer/package-linux.sh --bin <folder> --version <version> [--shipped <folder>] [--output <folder>]
+#   installer/package-linux.sh --bin <folder> --version <version> [--shipped <folder>] [--output <folder>] [--no-mods]
 #
 # --bin      a Linux build's program folder: nebula, libsmg_game.so, libsmg_game_plain.so, libSDL3.so.0,
 #            nebula-import, libnebula_import.so, and the game's self-description (luma/ or the files it is made of)
 # --shipped  the mods the game comes with (*.luma: LumaKit), installed in luma/mods
 # --output   where the package goes (default: dist/)
+# --no-mods  a package with no mod support (also set by the environment variable NEBULA_MODS=OFF): no libsmg_game.so
+#            (the game module that carries the mod rows), no luma/ folder (self-description, SDK, LumaKit), no .luma file
+#            type and no nebula:// link in the menu entry
 set -eu
 
 bin=
 version=
 shipped=
 output=
+nomods=
+[ "${NEBULA_MODS:-}" = OFF ] && nomods=1
 while [ $# -gt 0 ]; do
     case $1 in
         --bin) bin=${2:?}; shift 2 ;;
         --version) version=${2:?}; shift 2 ;;
         --shipped) shipped=${2:?}; shift 2 ;;
         --output) output=${2:?}; shift 2 ;;
+        --no-mods) nomods=1; shift ;;
         *) echo "package-linux.sh: unknown argument $1" >&2; exit 2 ;;
     esac
 done
@@ -43,9 +49,11 @@ work=$(mktemp -d "${TMPDIR:-/tmp}/nebula-package.XXXXXX")
 trap 'rm -rf "$work"' EXIT INT TERM
 pkg=$work/$name
 files=$pkg/files
-mkdir -p "$files/luma"
+mkdir -p "$files"
 
-for f in nebula libsmg_game.so libsmg_game_plain.so nebula-import libnebula_import.so; do
+modules="libsmg_game.so libsmg_game_plain.so"
+[ -z "$nomods" ] || modules=libsmg_game_plain.so
+for f in nebula $modules nebula-import libnebula_import.so; do
     [ -f "$bin/$f" ] || { echo "package-linux.sh: $bin has no $f" >&2; exit 1; }
     cp "$bin/$f" "$files/"
 done
@@ -53,26 +61,35 @@ cp -P "$bin"/libSDL3.so* "$files/" 2>/dev/null || { echo "package-linux.sh: $bin
 for f in libnebula_test_extension.so luma-test.so; do
     [ -f "$bin/$f" ] && echo "package-linux.sh: $f is a test part: left out"
 done
-# The self-description LumaLink and the game read from luma/.
-if [ -d "$bin/luma" ]; then
-    cp -R "$bin/luma/." "$files/luma/"
-else
-    for f in luma_types.json luma_functions.json luma_numbers.json smg_game.luma-placement.json smg_game.luma-self.json luma_services.json; do
-        [ -f "$bin/$f" ] && cp "$bin/$f" "$files/luma/"
-    done
-fi
-rm -rf "$files/luma/test"
-mkdir -p "$files/luma/sdk"
-cp "$repo"/native/include/luma*.h "$repo"/native/include/luma*.ld "$files/luma/sdk/" 2>/dev/null || cp "$repo"/native/include/luma*.h "$files/luma/sdk/"
-if [ -n "$shipped" ]; then
-    mkdir -p "$files/luma/mods"
-    cp "$shipped"/*.luma "$files/luma/mods/"
+# The self-description LumaLink and the game read from luma/ (a package with no mod support has none of it).
+if [ -z "$nomods" ]; then
+    mkdir -p "$files/luma"
+    if [ -d "$bin/luma" ]; then
+        cp -R "$bin/luma/." "$files/luma/"
+    else
+        for f in luma_types.json luma_functions.json luma_numbers.json smg_game.luma-placement.json smg_game.luma-self.json luma_services.json; do
+            [ -f "$bin/$f" ] && cp "$bin/$f" "$files/luma/"
+        done
+    fi
+    rm -rf "$files/luma/test"
+    mkdir -p "$files/luma/sdk"
+    cp "$repo"/native/include/luma*.h "$repo"/native/include/luma*.ld "$files/luma/sdk/" 2>/dev/null || cp "$repo"/native/include/luma*.h "$files/luma/sdk/"
+    if [ -n "$shipped" ]; then
+        mkdir -p "$files/luma/mods"
+        cp "$shipped"/*.luma "$files/luma/mods/"
+    fi
 fi
 for f in LICENSE THIRD-PARTY-NOTICES.md README.md; do cp "$repo/$f" "$files/"; done
 
 cp "$here/linux/install.sh" "$here/linux/uninstall.sh" "$here/linux/nebula-launch" "$pkg/"
 chmod 755 "$pkg/install.sh" "$pkg/uninstall.sh" "$pkg/nebula-launch" "$files/nebula" "$files/nebula-import"
-cp "$repo/platform/linux/dev.nebula.galaxy.desktop" "$repo/platform/linux/dev.nebula.galaxy.xml" "$pkg/"
+if [ -z "$nomods" ]; then
+    cp "$repo/platform/linux/dev.nebula.galaxy.desktop" "$repo/platform/linux/dev.nebula.galaxy.xml" "$pkg/"
+else
+    # The menu entry without the .luma type and the nebula:// link (and no type file to install).
+    sed -e 's#^Exec=nebula-launch --import %u#Exec=nebula-launch#' -e '/^MimeType=/d' -e '/^# .*\.luma/d' \
+        "$repo/platform/linux/dev.nebula.galaxy.desktop" > "$pkg/dev.nebula.galaxy.desktop"
+fi
 printf '%s\n' "$version" > "$pkg/VERSION"
 # The icon: the largest picture in installer/assets/nebula.ico (each is a PNG or a BMP; the PNG is taken).
 python3 - "$repo/installer/assets/nebula.ico" "$pkg/dev.nebula.galaxy.png" <<'EOF'

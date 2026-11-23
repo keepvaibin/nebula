@@ -4,13 +4,15 @@
 # renderer (nebula, libSDL3.so), the game module with and without the function rows (libsmg_game.so,
 # libsmg_game_plain.so) and its self-description, and the game importer (nebula-import, libnebula_import.so).
 #
-#   platform/linux/build_linux.sh -d <deps> -l <llvm> -w <work folder> [-j <jobs>]
+#   platform/linux/build_linux.sh -d <deps> -l <llvm> -w <work folder> [-j <jobs>] [-n]
 #
 #   <deps>   the dependency checkouts platform/sdl/CMakeLists.txt names (SDL3, glslang-src, Vulkan-Headers, volk,
 #            VulkanMemoryAllocator)
 #   <llvm>   LLVM 21 or later, whose clang and lld build everything (platform/linux/llvm-toolchain.cmake): the game
 #            module's row generator needs its libclang
 #   -j       how many compiles run at once (default: the build tool's own choice)
+#   -n       a build with no mod support (CMake NEBULA_MODS=OFF; the environment variable NEBULA_MODS=OFF does the same): only
+#            the plain game module (libsmg_game_plain.so), no function rows, no self-description
 #
 # The program folder is <work>/bin. The host and the game module are the players' builds, with ThinLTO
 # (platform/sdl/CMakeLists.txt NEBULA_HOST_IPO, native/CMakeLists.txt NEBULA_LTO).
@@ -23,19 +25,24 @@ deps=
 llvm=
 work=
 jobs=
-while getopts "d:l:w:j:" option; do
+nomods=
+[ "${NEBULA_MODS:-}" = OFF ] && nomods=1
+while getopts "d:l:w:j:n" option; do
     case "$option" in
     d) deps=$OPTARG ;;
     l) llvm=$OPTARG ;;
     w) work=$OPTARG ;;
     j) jobs="--parallel $OPTARG" ;;
-    *) sed -n '7,13p' "$0" >&2; exit 2 ;;
+    n) nomods=1 ;;
+    *) sed -n '7,15p' "$0" >&2; exit 2 ;;
     esac
 done
 if [ -z "$deps" ] || [ -z "$llvm" ] || [ -z "$work" ]; then
-    sed -n '7,13p' "$0" >&2
+    sed -n '7,15p' "$0" >&2
     exit 2
 fi
+# Every CMake project reads this (cmake/nebula_options.cmake).
+if [ -n "$nomods" ]; then NEBULA_MODS=OFF; export NEBULA_MODS; fi
 for tool in clang clang++ ld.lld; do
     [ -x "$llvm/bin/$tool" ] || { echo "build_linux.sh: no $tool in $llvm/bin" >&2; exit 2; }
 done
@@ -56,11 +63,16 @@ cmake -S "$root/platform/sdl" -B "$work/host" -G Ninja -DCMAKE_BUILD_TYPE=Releas
 # shellcheck disable=SC2086
 cmake --build "$work/host" --target main $jobs
 
-# The game module: both builds of it, the self-description and the services list.
+# The game module: both builds of it, the self-description and the services list (no mod support: the plain build only).
 # shellcheck disable=SC2086
 cmake -S "$root/native" -B "$work/game" -G Ninja -DCMAKE_BUILD_TYPE=Release $toolchain -DNEBULA_LTO=ON
-# shellcheck disable=SC2086
-cmake --build "$work/game" --target smg_game smg_game_plain luma_self_description luma_services_file $jobs
+if [ -n "$nomods" ]; then
+    # shellcheck disable=SC2086
+    cmake --build "$work/game" --target smg_game_plain $jobs
+else
+    # shellcheck disable=SC2086
+    cmake --build "$work/game" --target smg_game smg_game_plain luma_self_description luma_services_file $jobs
+fi
 
 # The importer: the program Setup's import runs and the library the game cooks mods' files with. The source paths it
 # keeps (panic texts) name no build machine's folders.
@@ -81,11 +93,14 @@ cp "$work/host/nebula" "$bin/nebula"
 # SDL's library is built beside the program (platform/sdl/CMakeLists.txt), which finds it in its own folder.
 [ -e "$work/host/libSDL3.so.0" ] || { echo "build_linux.sh: the host build has no libSDL3.so.0" >&2; exit 1; }
 cp -P "$work/host"/libSDL3.so* "$bin/"
-cp "$work/game/libsmg_game.so" "$work/game/libsmg_game_plain.so" "$bin/"
+cp "$work/game/libsmg_game_plain.so" "$bin/"
 cp "$work/cargo/dist/nebula-import" "$work/cargo/dist/libnebula_import.so" "$bin/"
-cp -R "$work/game/luma/." "$bin/luma/"
-for file in luma_types/luma_types.json luma_types/luma_functions.json luma_types/luma_numbers.json \
-    luma_types/luma_services.json smg_game.luma-placement.json smg_game.luma-self.json; do
-    cp "$work/game/$file" "$bin/luma/"
-done
+if [ -z "$nomods" ]; then
+    cp "$work/game/libsmg_game.so" "$bin/"
+    cp -R "$work/game/luma/." "$bin/luma/"
+    for file in luma_types/luma_types.json luma_types/luma_functions.json luma_types/luma_numbers.json \
+        luma_types/luma_services.json smg_game.luma-placement.json smg_game.luma-self.json; do
+        cp "$work/game/$file" "$bin/luma/"
+    done
+fi
 echo "$bin"

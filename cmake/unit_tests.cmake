@@ -107,7 +107,9 @@ galaxy_test(galaxy_precise_wait_tests SOURCES ${rt}/precise_wait_tests.cpp)
 # Mods.
 galaxy_test(galaxy_luma_tests SOURCES ${rt}/luma_tests.cpp ${rt}/luma.cpp)
 galaxy_test(galaxy_luma_net_reach_tests SOURCES ${rt}/luma_net_reach_tests.cpp ${rt}/luma_net_reach.cpp)
-galaxy_test(galaxy_mods_tests SOURCES ${rt}/mods_tests.cpp ${rt}/mod_xml.cpp ${rt}/mods.cpp ${rt}/mod_consent.cpp ${rt}/luma.cpp
+# Mod support in a build, and the settings pages it takes away (galaxy/mod_support.h).
+galaxy_test(galaxy_mod_support_tests SOURCES ${rt}/mod_support_tests.cpp)
+galaxy_test(galaxy_mods_tests SOURCES ${rt}/mods_tests.cpp ${rt}/game_module.cpp ${rt}/mod_xml.cpp ${rt}/mods.cpp ${rt}/mod_consent.cpp ${rt}/luma.cpp
     ${rt}/mod_import.cpp ${rt}/texture_categories.cpp ${rt}/dolphin_pack.cpp ${rt}/asset_store.cpp LIBS galaxy_atomic_file nebula_archive)
 # The consent store (docs/modding/concepts/permissions.md): answers, digests and their round trip through the mod settings.
 galaxy_test(galaxy_mod_consent_tests SOURCES ${rt}/mod_consent_tests.cpp ${rt}/mod_consent.cpp ${rt}/mods.cpp ${rt}/mod_xml.cpp

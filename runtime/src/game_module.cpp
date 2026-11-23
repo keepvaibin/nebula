@@ -2,6 +2,7 @@
 // The choice between the two game modules at start (game_module.h).
 #include "galaxy/game_module.h"
 
+#include "galaxy/mod_support.h"
 #include "galaxy/mods.h"
 
 #include <atomic>
@@ -24,6 +25,16 @@ std::filesystem::path plain_beside(const std::filesystem::path& rows_module) {
 std::filesystem::path choose(const std::filesystem::path& rows_module, const std::filesystem::path& mods_folder,
                              const std::filesystem::path& mods_file, const std::string& game_id, bool need_rows,
                              bool safe, const std::string& kept, std::string* why) {
+    return choose_with(mod_support(), rows_module, mods_folder, mods_file, game_id, need_rows, safe, kept, why);
+}
+
+std::filesystem::path choose_with(bool mod_support, const std::filesystem::path& rows_module, const std::filesystem::path& mods_folder,
+                                  const std::filesystem::path& mods_file, const std::string& game_id, bool need_rows,
+                                  bool safe, const std::string& kept, std::string* why) {
+    if (!mod_support) {
+        if (why != nullptr) *why = "plain (this build has no mod support)";
+        return plain_beside(rows_module);
+    }
     std::string reason;
     if (need_rows) {
         reason = "--luma-describe reads the rows";
