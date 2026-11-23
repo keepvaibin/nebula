@@ -126,6 +126,19 @@ with tempfile.TemporaryDirectory(prefix="release-workflow-") as folder:
     check("workflow_dispatch" in WORKFLOW and "      version:\n        description: A dry run's version" in WORKFLOW,
           "a dry run can be told its version")
 
+    # ---- the Mac job takes the compiler check.yml pins; the Linux start check runs the validation layer; the notes hold measured
+    # numbers, not placeholders
+    macos = job_text("macos")
+    check("brew install llvm" not in macos and "LLVM-$LLVM_VERSION-macOS-ARM64.tar.xz" in macos,
+          "the Mac job takes the pinned compiler of check.yml, not Homebrew's newest")
+    check("runs-on: macos-15-intel" in job_text("macos-intel"), "the Intel Mac's start check runs on an Intel Mac")
+    linux = job_text("linux")
+    check("--gpu-validation 1" in linux and "vulkan-validationlayers" in linux and "VK-LIVE-ERR" in linux,
+          "the Linux start check runs the validation layer and fails on its errors")
+    check("GLIBC_" in linux and "GITHUB_STEP_SUMMARY" in linux, "the Linux job prints the glibc and libstdc++ the program needs")
+    notes = (TREE / ".github" / "release-notes" / "2.0.0-beta.1.md").read_text(encoding="utf-8")
+    check("_LINUX" not in notes, "the beta's notes hold the measured glibc and libstdc++, not a placeholder")
+
     # ---- cmake/nebula_options.cmake
     # Visual Studio's cmake first (the build's own): another on the PATH may be an MSYS one, which reads Windows paths its own way.
     candidates = [str(p) for p in pathlib.Path("C:/Program Files").glob(

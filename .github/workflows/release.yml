@@ -466,16 +466,32 @@ jobs:
           for package in "$RUNNER_TEMP"/dist/*.tar.gz; do
             python3 tools/release_manifest.py "$package" "$VERSION"
           done
-      - name: Start check (the package as unpacked, Vulkan on Mesa's software renderer, on a virtual display)
+      - name: Start check (the package as unpacked, Vulkan on Mesa's software renderer, on a virtual display, with the validation layer)
+        shell: bash
         run: |
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends mesa-vulkan-drivers xvfb xauth
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends mesa-vulkan-drivers vulkan-validationlayers xvfb xauth
           d="$RUNNER_TEMP/start"
           mkdir -p "$d/data" "$d/settings" "$d/unpacked"
           for package in "$RUNNER_TEMP"/dist/*.tar.gz; do tar -C "$d/unpacked" -xzf "$package"; done
           nebula=$(find "$d/unpacked" -path '*/files/nebula' -type f | head -n 1)
           [ -n "$nebula" ] || { echo "the package has no files/nebula"; exit 1; }
-          SDL_AUDIO_DRIVER=dummy timeout 300 xvfb-run -a "$nebula" --start-check 300 \
-            --data "$d/data" --settings "$d/settings" --crash-dumps "$d"
+          SDL_AUDIO_DRIVER=dummy timeout 300 xvfb-run -a "$nebula" --start-check 300 --gpu-validation 1 \
+            --data "$d/data" --settings "$d/settings" --crash-dumps "$d" 2>&1 | tee "$d/start.log"
+          grep -c 'VK-LIVE-WARN' "$d/start.log" || true
+          if grep -q 'VK-LIVE-ERR' "$d/start.log"; then grep 'VK-LIVE-ERR' "$d/start.log" | sort | uniq -c | head -n 20; exit 1; fi
+          # What the program needs of the player's system: the newest glibc and libstdc++ versions it asks for (the notes name them).
+          glibc=$(objdump -T "$nebula" | grep -o 'GLIBC_[0-9.]*' | sort -V | tail -n 1)
+          glibcxx=$(objdump -T "$nebula" | grep -o 'GLIBCXX_[0-9.]*' | sort -V | tail -n 1)
+          echo "nebula needs $glibc and ${glibcxx:-no GLIBCXX}"
+          for library in "$(dirname "$nebula")"/*.so*; do
+            [ -f "$library" ] || continue
+            printf '%s: %s %s\n' "$(basename "$library")" "$(objdump -T "$library" 2>/dev/null | grep -o 'GLIBC_[0-9.]*' | sort -V | tail -n 1)" \
+              "$(objdump -T "$library" 2>/dev/null | grep -o 'GLIBCXX_[0-9.]*' | sort -V | tail -n 1)"
+          done
+          {
+            echo "### The Linux program needs"
+            echo "glibc $glibc, libstdc++ ${glibcxx:-none} (objdump -T of nebula)"
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: The mod kit (a pre-release has none, a release has it)
         shell: bash
         run: |
@@ -523,26 +539,31 @@ jobs:
         run: |
           echo "TOOLS=$HOME/nebula-tools" >> "$GITHUB_ENV"
           echo "WORK=$HOME/nebula-work" >> "$GITHUB_ENV"
-          brew install llvm ninja
-          llvm="$(brew --prefix llvm)"
+          brew install ninja
+          # The compiler check.yml pins (LLVM_VERSION), not Homebrew's newest: the tag builds with the path every landing builds.
+          llvm="$HOME/nebula-tools/toolchain/llvm"
+          mkdir -p "$llvm"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/llvm.tar.xz" \
+            "https://github.com/llvm/llvm-project/releases/download/llvmorg-$LLVM_VERSION/LLVM-$LLVM_VERSION-macOS-ARM64.tar.xz"
+          tar -xJf "$RUNNER_TEMP/llvm.tar.xz" -C "$llvm" --strip-components=1
+          rm "$RUNNER_TEMP/llvm.tar.xz"
+          test "$("$llvm/bin/llvm-config" --version)" = "$LLVM_VERSION"
+          # The row generator's libclang (native/CMakeLists.txt: a cross build looks under LLVM_ROOT).
           echo "LLVM_ROOT=$llvm" >> "$GITHUB_ENV"
-          echo "BREW_LLVM_VERSION=$("$llvm/bin/llvm-config" --version)" >> "$GITHUB_ENV"
-          mkdir -p "$HOME/nebula-tools/toolchain"
-          ln -sfn "$llvm" "$HOME/nebula-tools/toolchain/llvm"
           rustup target add aarch64-apple-darwin x86_64-apple-darwin
       - name: Restore libc++
         id: libcxx-cache
         uses: actions/cache/restore@v6
         with:
           path: ~/nebula-tools/toolchain/libcxx
-          key: libcxx-macos-universal-${{ env.BREW_LLVM_VERSION }}-${{ hashFiles('platform/apple/build_libcxx.sh') }}
+          key: libcxx-macos-universal-${{ env.LLVM_VERSION }}-${{ hashFiles('platform/apple/build_libcxx.sh') }}
       - name: Build libc++
         if: steps.libcxx-cache.outputs.cache-hit != 'true'
         run: |
           src="$RUNNER_TEMP/llvm-src"
           mkdir -p "$src"
           curl -fsSL --retry 3 -o "$RUNNER_TEMP/llvm-project.tar.xz" \
-            "https://github.com/llvm/llvm-project/releases/download/llvmorg-$BREW_LLVM_VERSION/llvm-project-$BREW_LLVM_VERSION.src.tar.xz"
+            "https://github.com/llvm/llvm-project/releases/download/llvmorg-$LLVM_VERSION/llvm-project-$LLVM_VERSION.src.tar.xz"
           tar -xJf "$RUNNER_TEMP/llvm-project.tar.xz" -C "$src" --strip-components 1
           # One for each processor of the universal app (Intel and Apple silicon).
           for arch in arm64 x86_64; do
@@ -612,12 +633,13 @@ jobs:
           for package in "$RUNNER_TEMP"/dist/*.zip; do
             python3 -X utf8 -I tools/check_mod_support_package.py "$package" $mode
           done
-      - name: Keep it (dry run)
-        if: needs.release.outputs.publish != 'true'
+      # Kept in a dry run, and for a day in a release run: the Intel Mac's start check below takes it from here.
+      - name: Keep it (dry run) and hand it to the Intel check
         uses: actions/upload-artifact@v7
         with:
           name: macos-universal
           path: ${{ runner.temp }}/dist/*
+          retention-days: ${{ needs.release.outputs.publish == 'true' && 1 || 90 }}
           if-no-files-found: error
       - name: Add it to the release
         if: needs.release.outputs.publish == 'true'
@@ -625,6 +647,34 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.release.outputs.tag }}
         run: gh release upload "$TAG" "$RUNNER_TEMP"/dist/* --repo "$GITHUB_REPOSITORY" --clobber
+
+  # The Mac app's Intel half on an Intel Mac (GitHub's last Intel image): the universal app as packed, started to its first
+  # pictures on Metal. The macos job above starts only its Apple silicon half (and the Intel half through Rosetta, told).
+  macos-intel:
+    name: Mac app on an Intel Mac
+    needs: [release, macos]
+    runs-on: macos-15-intel
+    timeout-minutes: 30
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: macos-universal
+          path: ${{ runner.temp }}/dist
+      - name: Start check (the app as unpacked, Metal, an Intel processor)
+        timeout-minutes: 10
+        env:
+          PREFIX: ${{ needs.release.outputs.prefix }}
+        run: |
+          uname -m
+          sysctl -n machdep.cpu.brand_string
+          system_profiler SPDisplaysDataType | head -n 20 || true
+          d="$RUNNER_TEMP/start"
+          mkdir -p "$d/data" "$d/settings" "$d/unpacked"
+          ditto -x -k "$RUNNER_TEMP/dist/$PREFIX-macOS.zip" "$d/unpacked"
+          app=$(find "$d/unpacked" -maxdepth 3 -name Nebula.app -type d | head -n 1)
+          [ -n "$app" ] || { echo "the zip has no Nebula.app"; exit 1; }
+          lipo -archs "$app/Contents/MacOS/Nebula"
+          "$app/Contents/MacOS/Nebula" --start-check 300 --data "$d/data" --settings "$d/settings" --crash-dumps "$d"
 
   # The release app is arm64 only and no runner starts it; its code is the test app's, which check.yml's emulator job
   # starts (--start-check through tools/lumacore/luma_test_android.py).

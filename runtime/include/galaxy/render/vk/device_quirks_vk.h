@@ -65,10 +65,17 @@ struct DeviceQuirks {
     // No pipeline cache file is read or written (MoltenVK compiles every shader of a cache it is given as it reads it,
     // on the thread that made the cache; Metal keeps what it compiled itself).
     bool no_cache_file = false;
+    // The device is not asked for VK_KHR_present_id and VK_KHR_present_wait (frames are bounded by their fences): NVIDIA's own
+    // driver outside Windows. Users report programs frozen inside vkQueuePresentKHR on its Linux versions 570 to 590 (NVIDIA's
+    // developer forum, threads on the 570.123 to 590.48 drivers; NVIDIA named no cause), and no version is known to be free of it
+    // that a tester has run both ways. Bound it by driver version, or lift it, once a tester with such a card has (ledger).
+    bool no_present_wait = false;
 };
 
 [[nodiscard]] DeviceIdentity identify(VkPhysicalDevice physical, bool has_driver_properties);
 [[nodiscard]] DeviceQuirks quirks_for(const DeviceIdentity& identity);
+// The same for a system given (the tests run both): `windows` is whether the program runs on Windows.
+[[nodiscard]] DeviceQuirks quirks_for(const DeviceIdentity& identity, bool windows);
 [[nodiscard]] const char* driver_kind_name(DriverKind kind) noexcept;
 // "Adreno (TM) 840, Qualcomm proprietary 512.842.19 (Driver Build: ...), Vulkan 1.4"
 [[nodiscard]] std::string describe(const DeviceIdentity& identity);

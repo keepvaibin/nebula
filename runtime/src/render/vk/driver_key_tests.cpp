@@ -91,6 +91,30 @@ bool quirks_follow_the_driver() {
     return ok;
 }
 
+// NVIDIA's own driver outside Windows is not asked for present wait (frozen presents reported on its Linux versions): the
+// table says so there, for every version, and on Windows, and for every other driver, it does not.
+bool nvidia_on_linux_has_no_present_wait() {
+    const auto with = [](DriverKind kind, std::uint32_t major, bool windows) {
+        DeviceIdentity id;
+        id.driver = kind;
+        id.driver_version = {major, 0u, 0u};
+        return quirks_for(id, windows);
+    };
+    bool ok = true;
+    for (const std::uint32_t version : {535u, 570u, 580u, 590u, 595u, 610u}) {
+        ok &= expect(with(DriverKind::NvidiaProprietary, version, false).no_present_wait, "NVIDIA on Linux, any version: no present wait");
+        ok &= expect(!with(DriverKind::NvidiaProprietary, version, true).no_present_wait, "NVIDIA on Windows keeps present wait");
+    }
+    for (const DriverKind other : {DriverKind::AmdProprietary, DriverKind::MesaOther, DriverKind::IntelProprietary,
+                                   DriverKind::QualcommProprietary, DriverKind::MoltenVK, DriverKind::SwiftShader}) {
+        ok &= expect(!with(other, 590u, false).no_present_wait && !with(other, 590u, true).no_present_wait,
+                     "every other driver keeps present wait, on either system");
+    }
+    ok &= expect(galaxy::render::vk::describe(with(DriverKind::NvidiaProprietary, 590u, false)).find("no-present-wait") != std::string::npos,
+                 "the log names the workaround");
+    return ok;
+}
+
 // VMA is told the version both the instance and the device have (P-058): 1.1 before, whatever they were.
 bool the_allocator_gets_the_version_in_use() {
     using galaxy::render::vk::allocator_api_version;
@@ -113,6 +137,7 @@ int main() {
     bool ok = true;
     ok &= the_allocator_gets_the_version_in_use();
     ok &= quirks_follow_the_driver();
+    ok &= nvidia_on_linux_has_no_present_wait();
     ok &= the_key_holds_every_part();
     ok &= different_devices_and_drivers_have_different_keys();
     ok &= the_key_is_safe_in_a_file_name();
