@@ -316,6 +316,30 @@ jobs:
           for line in 'borderless full screen 1920 x 1080 pixels' "the system's pointer is hidden"; do
             grep -q "$line" "$d/start.log" || { echo "the start log has no line '$line':"; grep -e '^\[window\]' -e '^\[display\]' "$d/start.log" || true; exit 1; }
           done
+      - name: Start check on Wayland (weston's headless compositor, 1920 x 1080 pixels at a scale of 2)
+        shell: bash
+        run: |
+          # SDL takes Wayland, as it does in a Wayland session: the output is 1920 x 1080 pixels at a scale of 2, so the display's
+          # desktop mode is 960 x 540 points at a density of 2, and the borderless window must come out at the display's 1920 x 1080
+          # pixels. A headless compositor has no keyboard, so the pointer's hiding is not looked at here.
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends weston
+          d="$RUNNER_TEMP/start-wayland"
+          mkdir -p "$d/data" "$d/settings" "$d/run"
+          chmod 700 "$d/run"
+          export XDG_RUNTIME_DIR="$d/run"
+          weston --backend=headless --width=1920 --height=1080 --scale=2 --socket=nebula-wayland --idle-time=0 > "$d/weston.log" 2>&1 &
+          weston_pid=$!
+          for _ in $(seq 1 50); do [ -S "$XDG_RUNTIME_DIR/nebula-wayland" ] && break; sleep 0.2; done
+          [ -S "$XDG_RUNTIME_DIR/nebula-wayland" ] || { echo "weston did not start:"; cat "$d/weston.log"; exit 1; }
+          status=0
+          WAYLAND_DISPLAY=nebula-wayland SDL_VIDEODRIVER=wayland SDL_AUDIO_DRIVER=dummy timeout 300 "$RUNNER_TEMP/work/bin/nebula" --start-check 300 \
+            --gpu-validation 1 --data "$d/data" --settings "$d/settings" --crash-dumps "$d" 2>&1 | tee "$d/start.log" || status=$?
+          kill "$weston_pid" 2>/dev/null || true
+          [ "$status" = 0 ] || { echo "the start check ended with $status; weston said:"; cat "$d/weston.log"; exit 1; }
+          if grep -q 'VK-LIVE-ERR' "$d/start.log"; then grep 'VK-LIVE-ERR' "$d/start.log" | sort | uniq -c | head -n 20; exit 1; fi
+          for line in 'SDL video driver wayland' 'borderless full screen 1920 x 1080 pixels'; do
+            grep -q "$line" "$d/start.log" || { echo "the start log has no line '$line':"; grep -e '^\[window\]' -e '^\[display\]' "$d/start.log" || true; exit 1; }
+          done
 
   macos:
     name: Mac
