@@ -2084,9 +2084,10 @@ int run_start_check(unsigned frames) {
     }
     for (unsigned frame = 0u; frame < frames; ++frame) {
         galaxy::render::pump_messages();
-#if defined(NEBULA_HOST_SDL)
+#if defined(NEBULA_HOST_SDL) && !defined(NEBULA_HOST_APPLE)
         // The window's events, as the host's main loop takes them: the window follows its settings (borderless full screen),
-        // and the pointer is hidden while it has the focus. The check reads both from the log.
+        // and the pointer is hidden while it has the focus. The check reads both from the log. Not on the Mac, whose host has
+        // its own window and is not looked at this way (its pump would toggle the window's full screen in this check).
         galaxy::sdl::pump_events(0);
 #endif
         NebulaFrameList& list = lists[frame % 3u];
