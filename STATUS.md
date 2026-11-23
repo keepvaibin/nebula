@@ -1,10 +1,8 @@
 # Nebula native plan: status
 
-Written 2026-11-23 10:25. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-23 12:05. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 11 of 138 (8%).
-
-Now: S0.2.6 landed at 10:25; the trial of S0.2.1 to S0.2.6 ends here: nothing in work, nothing ahead, G6.2 not started
 
 In work now: Nothing started.
 
@@ -14,12 +12,12 @@ In work now: Nothing started.
 | --- | --- | --- |
 | S0.1 | 5 | 5 |
 | S0.2 | 6 | 6 |
-| G6 | 0 | 8 |
 | S0.3 | 0 | 2 |
 | R1 | 0 | 4 |
 | R2 | 0 | 5 |
-| G1 | 0 | 5 |
 | G2 | 0 | 9 |
+| G6 | 0 | 8 |
+| G1 | 0 | 5 |
 | R3 | 0 | 13 |
 | R4 | 0 | 10 |
 | R4v | 0 | 2 |
@@ -39,33 +37,19 @@ In work now: Nothing started.
 
 ## Last 10 landings
 
-| When | Step | Title | Code commit | Main commit |
-| --- | --- | --- | --- | --- |
-| 2026-11-23 10:25 | S0.2.6 | Landing B, part 4: the question-and-answer path is deleted | 3eaa95375 | d324dc52e |
-| 2026-11-23 08:09 | S0.2.5 | Landing B, part 3: the lens flare | 21ccecf7b | 424c3e541 |
-| 2026-11-23 06:19 | S0.2.4 | Landing B, part 2: the talk balloon | 2423dde4f | 27172e772 |
-| 2026-11-23 06:02 | S0.2.3 | Landing B, part 1: the pointer | 8861980d7 | 6544d38df |
-| 2026-11-23 05:08 | S0.2.2 | The scene query's form, written into the inventory before code | e54a921e5 | 37db1ddaa |
-| 2026-11-23 04:53 | S0.2.1 | Landing A: drawing stops changing the game | 84a2f5a72 | 5695013af |
-| 2026-11-22 18:13 | S0.1.5 | Render data path step 2, second landing: `f4/e3-2b` and `f4/e3-2c` | 02d236b5c | fb2dfa855 |
-| 2026-11-22 17:13 | S0.1.4 | Render data path step 2, first landing: `f4/e3-2a` | d9dbc32ac | ce59efeb8 |
-| 2026-11-22 16:37 | S0.1.3 | Render data path step 1: `f4/e3-1a`, `f4/e3-1b`, `f4/e3-1c` | 809c419ff | 8be38b7b8 |
-| 2026-11-22 14:25 | S0.1.2 | Documents | 59bdb8776 | 2c5dbb271 |
+None yet.
 
 ## Repairs
 
-1 open of kind fail, 4 in all.
+1 open of kind fail, 1 in all.
 
 | Id | State | Kind | Check | Renderer | Traced to | Seen |
 | --- | --- | --- | --- | --- | --- | --- |
-| R-004 | open | fail | coverage | - | not traced | 1 |
-| R-002 | landed | fail | coverage | - | not traced | 1 |
-| R-001 | confirmed | fail | build/windows-asan | - | not traced | 1 |
-| R-003 | confirmed | fail | soak | - | not traced | 1 |
+| R-001 | open | fail | tour/d3d12 | d3d12 | step S1.1 commit abc | 1 |
 
 ## For the owner to check by hand
 
-- S0.1.2 Documents: P-096: on the tablet, set up the game once more over an installed one, and once with the setup cut off (close the app mid-copy); then start the launcher: the old game stays playable until the new one is whole, and nothing is left behind (no game.pak.new, no half copy). (agent 1, 2026-11-22 14:18)
+Nothing is owed.
 
 ## Waiting for the owner
 
@@ -77,12 +61,7 @@ Nothing is blocked.
 
 ## Tool mends
 
-| Id | State | Step | Title | Attempts | Minutes | Commit |
-| --- | --- | --- | --- | --- | --- | --- |
-| M-001 | closed | R-002 | coverage: the history's key holds the suites that ran, a run that fell is not the next bar | 0 | 0 | 2d7287334 |
-| M-002 | closed | R-003 | soak: a run of eight laps or more is judged from lap 6 (slope and lowest of the last laps), a spike is not growth | 0 | 0 | 2d7287334 |
-| M-003 | closed | R-001 | build_windows.ps1 refuses a build folder configured with another NEBULA_SANITIZE instead of configuring it again | 0 | 117 | c60999ee1 |
-| M-004 | closed | S0.2.1 | the replay check cannot play a run at a time rate of 2 and compare its step hashes with a rate-1 run (S0.2.1 proof 2) | 0 | 94 | fb2b39bc6 |
+No tool was mended.
 
 ## Decisions (23)
 
@@ -110,7 +89,7 @@ Nothing is blocked.
 - 2026-11-23 S0.2.6: Proof 4: the replays are not recorded again; the recorded tour on this step's build gives all 20 recordings' step hashes (step_hash.py check: 20 of 20 the same over 600 steps, D:/NebulaWork/build/Nebula-native/runs/tour) (because The game step stopped reading answers at S0.2.5, whose landing recorded the four changed replays once for every renderer; recording identical files again would change nothing, and a replay recorded without a change is a place a check sees less)
 - 2026-11-23 S0.2.6: The diagnostics frame-plans and constants-watch move down to bits 19 and 20, so the bits stay without a gap after probe-reads is deleted; this replaces the part of the Read first (d) decision that left bit 19 unused (because --diagnostics takes names only (launch_args.h diagnostics_from_text), so no command line reads a bit number and a moved bit reads no old line wrongly; galaxy_launch_args_tests holds that every bit up to the last has a name, and the first landing failed it on GitHub's Linux jobs)
 
-## Checks changed during the run (38)
+## Checks changed during the run (47)
 
 - 2026-11-22 S0.1.3 tools/verify/console_census.py: the open group gx_sections counts the four section names GXMT, GXTG, GXTM and GXWP with a ceiling of 31, and the closed group fifo excludes only those four whole words (allowed by docs/engine/FRAME-MODEL.md section 2.9)
 - 2026-11-22 U-unattended tools/gate/main_push_guard.py: the guard also refuses a push of a branch named plant/... (allowed by docs/plan/native/TOOL-MEND-PLANTS.md, how a plant is kept from ever landing)
@@ -150,13 +129,16 @@ Nothing is blocked.
 - 2026-11-23 S0.2.5 tests/replays/073-PhantomGalaxy-1.tsv: the step hashes recorded again from a Direct3D 12 tour run of step S0.2.5 (step_hash.py record); they differ from step 0 (allowed by the card, docs/plan/native/03-NATIVE-STAGE-0.md, step S0.2.5)
 - 2026-11-23 S0.2.5 tests/replays/085-SandClockGalaxy-1.tsv: the step hashes recorded again from a Direct3D 12 tour run of step S0.2.5 (step_hash.py record); they differ from step 0 (allowed by the card, docs/plan/native/03-NATIVE-STAGE-0.md, step S0.2.5)
 - 2026-11-23 S0.2.5 tests/replays/090-StarDustGalaxy-1.tsv: the step hashes recorded again from a Direct3D 12 tour run of step S0.2.5 (step_hash.py record); they differ from step 0 (allowed by the card, docs/plan/native/03-NATIVE-STAGE-0.md, step S0.2.5)
+- 2026-11-23 AF tools/gate/scope.tsv: the rows of every path that can move a picture (native, runtime and its render folders, platform/sdl, the importer, the test driver, the runner, the tour writer, the step hash, the tour list, tests/engine, tests/replays) name the group `pictures` in place of engine1, tour1 and engine3; PICTURES-CHANGE.txt names it too (allowed by docs/plan/04-GATE-AND-MAIN.md section 9 (Pictures), the planner's brief AF)
+- 2026-11-23 AF tools/gate/strictness.py: a removed line that a line added in the same hunk gives back with a comma added or taken off at its end is not counted as removed (mode removed only) (allowed by docs/plan/04-GATE-AND-MAIN.md section 9 (Pictures), the planner's brief AF)
+- 2026-11-23 AF tools/gate/tests/scope_test.py: the expected groups of the rows for game code, the renderers, the host, the importer, the test driver, the runner, tests/engine and tests/replays name `pictures`, `engine3`, `tour3` and `tablet12`; the groups' own check runs on the main level's names (allowed by docs/plan/04-GATE-AND-MAIN.md section 9 (Pictures), the planner's brief AF)
+- 2026-11-23 AF tools/gate/tests/gate_line_test.py: the speed measure's tests build their plans from the real table with the row of native/** as it was before the group `pictures`; the renderers of a plan of tests/replays are the three; an importer plan has both measures; a landing's level comes from gate.landing_level (allowed by docs/plan/04-GATE-AND-MAIN.md section 9 (Pictures), the planner's brief AF)
+- 2026-11-23 AF tools/gate/tests/landing_test.py: the groups of the union of a game, a render and a documents branch name `pictures` and `tablet12` (allowed by docs/plan/04-GATE-AND-MAIN.md section 9 (Pictures), the planner's brief AF)
+- 2026-11-23 AF tools/gate/tests/plan_test.py: the groups of the union of a native, a render and an importer path name `pictures` and `tablet12` (allowed by docs/plan/04-GATE-AND-MAIN.md section 9 (Pictures), the planner's brief AF)
+- 2026-11-23 AF tools/gate/tests/plan_commands_test.py: the tour command's test gives agent_tour.py the pictures of its runs (one picture the same) in place of runs that took none (allowed by docs/plan/04-GATE-AND-MAIN.md section 9 (Pictures), the planner's brief AF)
+- 2026-11-23 AF tools/gate/tests/pictures_new_test.py: the declaration lines of the cases have the five words (place, renderer and disc named) (allowed by docs/plan/04-GATE-AND-MAIN.md section 9 (Pictures), the planner's brief AF)
+- 2026-11-23 AF tests/pictures/approved.tsv: 626 rows of the other two discs on Direct3D 11 (314) and Vulkan (312) take the picture the tour of main 53eb71017 draws: each lies from the approved Direct3D 12 picture of the same disc, stop and picture within the gap that renderer had before the trial (Direct3D 11: 19 pixels at most, 1 level, none over 15; Vulkan: 32993 pixels, 230 levels, 13 over 15) (allowed by docs/plan/04-GATE-AND-MAIN.md section 9 (Pictures), the planner's brief AF part 2)
 
 ## Tool faults
 
-1 tool fault recorded.
-
-The last 20:
-
-| When | Step | Test | What happened | What the agent could not do |
-| --- | --- | --- | --- | --- |
-| 2026-11-22 14:33 | - | (by hand) | plan.py land S0.1.3 ended code 4 (not judged): gate.py's push check refused main's move because tools/verify/console_census.py's closed group fifo counts 31 (the card's section names GXMT, GXTG, GXTM, GXWP in native/include/nebula_model.h, runtime/src/render/core/model_sections_tests.cpp, crates/nebula-import/src/cook/model_write.rs); it is a certain refusal of the change, reported as not judged; plan.py toolfault --last then said: agent 1 has no tool fault recorded | - |
+0 tool faults recorded.
