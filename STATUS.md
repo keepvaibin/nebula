@@ -4,7 +4,7 @@ Written 2026-11-23 06:20. If this time is more than three hours old, the work ha
 
 Steps landed: 9 of 138 (7%).
 
-Now: S0.2.4 (the talk balloon) landing since 06:05; S0.2.3 landed 06:03; ahead: S0.2.5 (the lens flare)
+Now: S0.2.5 since 06:21 (the lens flare decided on the graphics card); ahead: nothing
 
 In work now:
 - S0.2.5 Landing B, part 3: the lens flare (agent 1)
