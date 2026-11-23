@@ -36,7 +36,7 @@ are never a tool fault. Report `NOT MENDED M-00N` with that line and stop.
   Shell scripts never call `cmd.exe /d /c` (Git Bash turns the switches into paths).
 - Commits are plain: `git commit -F <a fresh message file>`. Never a hook bypass. No attribution lines of any kind (no
   Co-Authored-By, no session or agent lines). No path of a person's own folder on the PC in any committed text.
-  Main moves only through the gate: `mend land` (section 7), never a push.
+  Main moves only through the gate: `mend land` (section 8), never a push.
 - Never touch the branches `mods/*`, `link/*`, `app/*`, `ray-tracing`, `f-rt-*`, nor `native/*` (the agent's) nor
   `plant/*` of another helper. Never change files in the owner's own checkout, in `Nebula-landing`, in `Nebula-long`,
   in `Nebula-native` (the agent's folder) or in another helper's folder.
