@@ -183,10 +183,7 @@ jobs:
           $out = Join-Path $env:RUNNER_TEMP 'out'
           New-Item -ItemType Directory -Force $out | Out-Null
           Get-ChildItem -LiteralPath $build -Filter 'Nebula*.exe' | Copy-Item -Destination $out
-          Copy-Item -Recurse -LiteralPath (Join-Path $build 'D3D12') -Destination (Join-Path $out 'D3D12')
-          New-Item -ItemType Directory -Force (Join-Path $out 'glslang'), (Join-Path $out 'host-tools') | Out-Null
-          Copy-Item (Join-Path $build 'glslang-tool\glslang.exe'), (Join-Path $build 'glslang-tool\LICENSE.txt') (Join-Path $out 'glslang')
-          Copy-Item (Join-Path $build 'galaxy_native_spirv.exe'), (Join-Path $build 'galaxy_utility_spirv.exe') (Join-Path $out 'host-tools')
+          
           Get-ChildItem -Recurse -File $out | ForEach-Object { '{0,12:N0}  {1}' -f $_.Length, $_.FullName.Substring($out.Length + 1) }
       - uses: actions/upload-artifact@v7
         with:
