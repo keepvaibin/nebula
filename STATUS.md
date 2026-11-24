@@ -1,8 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-23 19:35. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-23 20:08. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
-Steps landed: 12 of 138 (9%).
+Steps landed: 13 of 138 (9%).
+
+Now: S0.3.2 since 18:50 (S0.3.1 landed 18:49); ahead: nothing
 
 In work now: Nothing started.
 
@@ -12,7 +14,7 @@ In work now: Nothing started.
 | --- | --- | --- |
 | S0.1 | 5 | 5 |
 | S0.2 | 6 | 6 |
-| S0.3 | 1 | 2 |
+| S0.3 | 2 | 2 |
 | R1 | 0 | 4 |
 | R2 | 0 | 5 |
 | G2 | 0 | 9 |
@@ -37,19 +39,33 @@ In work now: Nothing started.
 
 ## Last 10 landings
 
-None yet.
+| When | Step | Title | Code commit | Main commit |
+| --- | --- | --- | --- | --- |
+| 2026-11-23 20:08 | S0.3.2 | Remove what is left | c975566fd | ba2b58cf1 |
+| 2026-11-23 18:49 | S0.3.1 | Search main for what the rows name | d0c611857 | 053bc9c98 |
+| 2026-11-23 10:25 | S0.2.6 | Landing B, part 4: the question-and-answer path is deleted | 3eaa95375 | d324dc52e |
+| 2026-11-23 08:09 | S0.2.5 | Landing B, part 3: the lens flare | 21ccecf7b | 424c3e541 |
+| 2026-11-23 06:19 | S0.2.4 | Landing B, part 2: the talk balloon | 2423dde4f | 27172e772 |
+| 2026-11-23 06:02 | S0.2.3 | Landing B, part 1: the pointer | 8861980d7 | 6544d38df |
+| 2026-11-23 05:08 | S0.2.2 | The scene query's form, written into the inventory before code | e54a921e5 | 37db1ddaa |
+| 2026-11-23 04:53 | S0.2.1 | Landing A: drawing stops changing the game | 84a2f5a72 | 5695013af |
+| 2026-11-22 18:13 | S0.1.5 | Render data path step 2, second landing: `f4/e3-2b` and `f4/e3-2c` | 02d236b5c | fb2dfa855 |
+| 2026-11-22 17:13 | S0.1.4 | Render data path step 2, first landing: `f4/e3-2a` | d9dbc32ac | ce59efeb8 |
 
 ## Repairs
 
-1 open of kind fail, 1 in all.
+0 open of kind fail, 4 in all.
 
 | Id | State | Kind | Check | Renderer | Traced to | Seen |
 | --- | --- | --- | --- | --- | --- | --- |
-| R-001 | open | fail | tour/d3d12 | d3d12 | step S1.1 commit abc | 2 |
+| R-002 | landed | fail | coverage | - | not traced | 1 |
+| R-004 | landed | fail | coverage | - | not traced | 1 |
+| R-001 | confirmed | fail | build/windows-asan | - | not traced | 1 |
+| R-003 | confirmed | fail | soak | - | not traced | 1 |
 
 ## For the owner to check by hand
 
-Nothing is owed.
+- S0.1.2 Documents: P-096: on the tablet, set up the game once more over an installed one, and once with the setup cut off (close the app mid-copy); then start the launcher: the old game stays playable until the new one is whole, and nothing is left behind (no game.pak.new, no half copy). (agent 1, 2026-11-22 14:18)
 
 ## Waiting for the owner
 
@@ -61,9 +77,15 @@ Nothing is blocked.
 
 ## Tool mends
 
-No tool was mended.
+| Id | State | Step | Title | Attempts | Minutes | Commit |
+| --- | --- | --- | --- | --- | --- | --- |
+| M-001 | closed | R-002 | coverage: the history's key holds the suites that ran, a run that fell is not the next bar | 0 | 0 | 2d7287334 |
+| M-002 | closed | R-003 | soak: a run of eight laps or more is judged from lap 6 (slope and lowest of the last laps), a spike is not growth | 0 | 0 | 2d7287334 |
+| M-003 | closed | R-001 | build_windows.ps1 refuses a build folder configured with another NEBULA_SANITIZE instead of configuring it again | 0 | 117 | c60999ee1 |
+| M-004 | closed | S0.2.1 | the replay check cannot play a run at a time rate of 2 and compare its step hashes with a rate-1 run (S0.2.1 proof 2) | 0 | 94 | fb2b39bc6 |
+| M-005 | closed | R-004 | Coverage measured a program that could not open the game data: its build folder held objects of another tree | 0 | 0 | f9b350784185c77e18d4822f7b13cd8b1381a33e |
 
-## Decisions (29)
+## Decisions (32)
 
 - 2026-11-23 S0.2.1: LoadSlice: 32 items a frame; an item is a phase of GameScene::initAfterScenarioChosen, the player, one placement made whole, one piece of FileSelector::initStep, or one Star Bit of the reserve (because the card asks for a fixed count of work and names no count; the count is a constant in one place, no player sees which frame of the load an item falls in, and the load worker (G3.7) replaces the slices)
 - 2026-11-23 S0.2.1: Drawing's random stream (MR::getDrawRandom) is seeded with the same seed as the game's stream, in setRandomSeedFromStageName and setFixedRandomSeed (because a fixed seed keeps the cosmetic numbers the same in every run of a replay and needs no new setting; the draw stream runs through the same sequence as the game's but is advanced only by drawing, so neither changes the other)
@@ -94,6 +116,9 @@ No tool was mended.
 - 2026-11-23 S0.3.2: Kept, with their reason in docs/plan/native/S0.3.1-SEARCH.md section 4: the typed kind RaytracingAccelerationStructure among the resources an added shader may not declare; the graphics feature name ray_tracing in the validator's tests; the tests that an old settings file's ray tracing keys are ignored and that no settings row offers it; tools/lumacore/capabilities.json's text of material.environment; the generated texture levels (because A refusal of a real HLSL type carries no tracer data; a mod's feature name is the mods' (out of this work); the setting tests guard old files and the settings page; capabilities.json is part of the test runner (tools/test_driver/test_kit.py RUNNER), which a step does not change (AGENT.md section 9); the card leaves the levels to R2.3)
 - 2026-11-23 S0.3.2: The identity hooks ENV_FETCH, AMBIENT_TERM and program_fog_curve's unread curve stay; ledger row P-368 names them for the program forms' step (because They are not in S0.3.1's table, which the card makes this step's list, and removing them changes the text of nearly every generated program, which R3.9 (shader forms: the cooked programs) rewrites)
 - 2026-11-23 S0.3.2: Proof 1 is shown by the program texts, not by a new build of the programs: the step's importer writes the US disc's 2524 texts with the names of table.tsv, and the 2401 kept texts in runtime/src/render/programs are the same byte for byte (line ends evened); tools/dev/build_programs.py is not run and table.tsv is not written again (because build_programs.py groups by compiling each text; with every text the same, its grouping and table.tsv cannot change, so the same texts prove the same program set more directly than a rebuild; the US pak cooked by this importer is also the same byte for byte as the store-40 pak of 11-19 (D:/NebulaWork/build/us-pak-40))
+- 2026-11-23 R1.1: The Vulkan bloom and post-process pipelines are made at the start each on a std::async worker, joined in RendererVk::initialize before the first frame, as Direct3D 12's passes are (renderer_d3d12.cpp, prepare on std::async, joined before the start ends); the post-process self-test runs after the join on the render thread, before any frame, as Direct3D 12's does in PostProcessor::initialize (because FM 1.9's rule is that the render thread never compiles and never waits for the whole GPU inside a frame; a wait at the start is allowed (FM 1.8, Direct3D 12's self-test); the self-test needs Context's buffers, textures and a submission, which the render thread owns)
+- 2026-11-23 R1.1: Left as they are: a change of the scene's format for HDR output (set_wide, then prepare_pipelines, between frames after a GPU wait) and a change of the SMAA quality (apply_settings) still make their pipelines when they happen (because both are settings changes, not a first use in play, and Direct3D 12's same two paths (PostProcessor::set_wide, apply_settings) do the same; the card names only the first-frame builds)
+- 2026-11-23 R1.1: Proof 2 (a cold and a warm start on Vulkan) is shown by two Vulkan tour runs of one stop (command 4 with --renderer vulkan), each logging '[pipelines] Vulkan's passes made at the start in N ms' and the self-test line before the first frame; the Direct3D 12 figures of proof 1 (the MSAA 4x stage run, 408 pictures) belong to the landed commits caa9ca1e7 and e68b6cd6c, and today's are the two tests and the landing's pictures (because Vulkan's pipeline cache (shared_pipeline_cache) does not tell a pipeline loaded from one made, so the start's time is the figure the log can give; no engine test command runs on Vulkan)
 
 ## Checks changed during the run (57)
 
@@ -157,4 +182,10 @@ No tool was mended.
 
 ## Tool faults
 
-0 tool faults recorded.
+1 tool fault recorded.
+
+The last 20:
+
+| When | Step | Test | What happened | What the agent could not do |
+| --- | --- | --- | --- | --- |
+| 2026-11-22 14:33 | - | (by hand) | plan.py land S0.1.3 ended code 4 (not judged): gate.py's push check refused main's move because tools/verify/console_census.py's closed group fifo counts 31 (the card's section names GXMT, GXTG, GXTM, GXWP in native/include/nebula_model.h, runtime/src/render/core/model_sections_tests.cpp, crates/nebula-import/src/cook/model_write.rs); it is a certain refusal of the change, reported as not judged; plan.py toolfault --last then said: agent 1 has no tool fault recorded | - |
