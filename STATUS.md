@@ -6,7 +6,8 @@ Steps landed: 16 of 138 (12%).
 
 Now: in work: writer writing package R1 from R1.4
 
-In work now: Nothing started.
+In work now:
+- R1.4 P-065 (Metal): the renderer's own shader texts compiled at build (agent 1)
 
 ## Packages
 
