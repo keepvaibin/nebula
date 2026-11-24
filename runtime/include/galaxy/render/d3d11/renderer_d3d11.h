@@ -264,8 +264,10 @@ public:
     // before a process that ends without the shutdown).
     void finish_pictures();
 
-    [[nodiscard]] gpu::Device* device() const noexcept { return d3d11::Context::get().device(); }
-    [[nodiscard]] const FrameMap& frame_map() const noexcept { return scene_map_; }
+[[nodiscard]] gpu::Device* device() const noexcept {
+    return static_cast<gpu::Device*>(d3d11::Context::get().device());
+}
+[[nodiscard]] const FrameMap& frame_map() const noexcept { return scene_map_; }
     // The bound scene target's allocated size: the render size while dynamic resolution draws the scene in a part of it
     // (frame_map, the step's rectangle), else frame_map itself. Pictures for the game and target passes take this size.
     [[nodiscard]] const FrameMap& frame_extent() const noexcept { return frame_extent_; }
@@ -311,8 +313,10 @@ public:
     // For the renderer's parts (post chain, bloom, occlusion, camera): the immediate context with no scene pass open
     // and every recorded draw run (flush_draws, end_scene_pass); a part leaves its own state bound, and the renderer
     // binds its own again (encoder_.reset, bound_).
-    [[nodiscard]] ID3D11DeviceContext1* context() const noexcept { return d3d11::Context::get().immediate(); }
-    using GpuPass = ::galaxy::render::GpuPass;
+[[nodiscard]] ID3D11DeviceContext1* context() const noexcept {
+    return static_cast<ID3D11DeviceContext1*>(d3d11::Context::get().immediate());
+}    
+using GpuPass = ::galaxy::render::GpuPass;
     static constexpr unsigned kGpuPassSlots = 256u;
 
 private:
