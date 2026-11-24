@@ -3,10 +3,11 @@
 Nebula is an unofficial native port of **Super Mario Galaxy** for Windows, Linux, macOS and Android. You need your
 own copy of the game.
 
-The latest release is [Nebula 1.0.2](https://github.com/keepvaibin/nebula/releases/latest) (Windows). This branch
-(`main`) is Nebula 2.
+The stable release is [Nebula 1.0.2](https://github.com/keepvaibin/nebula/releases/tag/v1.0.2) (Windows). The beta of Nebula 2 is
+[2.0.0-beta.1](https://github.com/keepvaibin/nebula/releases/tag/v2.0.0-beta.1) (Windows, Linux, macOS, Android). This branch (`main`) is Nebula 2.
 
-[Download](https://github.com/keepvaibin/nebula/releases/latest) ·
+[Download 1.0.2](https://github.com/keepvaibin/nebula/releases/tag/v1.0.2) ·
+[Download the beta](https://github.com/keepvaibin/nebula/releases/tag/v2.0.0-beta.1) ·
 [Install](docs/using-nebula/installing-nebula.md) ·
 [Controls](docs/using-nebula/keyboard-and-controller-controls.md) ·
 [Modding](docs/modding/index.md) ·

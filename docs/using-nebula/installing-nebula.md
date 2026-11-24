@@ -11,7 +11,7 @@ Nebula plays Super Mario Galaxy from your own disc image. The installer reads th
 
 ## Installing Nebula on Windows
 
-1. Download `Nebula-Setup.exe` from the [latest release](https://github.com/keepvaibin/nebula/releases/latest).
+1. Download `Nebula-Setup.exe` from the [Nebula 1.0.2 release](https://github.com/keepvaibin/nebula/releases/tag/v1.0.2).
 
    The file is not code-signed, so Windows SmartScreen shows "Unknown publisher". Click **More info**, then **Run anyway**.
 
