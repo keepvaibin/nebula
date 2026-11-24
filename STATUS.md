@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-24 03:29. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 03:48. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 16 of 138 (12%).
 
@@ -68,6 +68,7 @@ In work now:
 
 - S0.1.2 Documents: P-096: on the tablet, set up the game once more over an installed one, and once with the setup cut off (close the app mid-copy); then start the launcher: the old game stays playable until the new one is whole, and nothing is left behind (no game.pak.new, no half copy). (agent 1, 2026-11-22 14:18)
 - R1.2 P-010: a stage's pipelines made while it loads, a draw never compiles: Real-time play on a cold cache (delete nothing yours; a new install folder): enter three galaxies for the first time and compare the frame times with R1.1's build under --diagnostics timeline; no PipelineMissed event and no frame longer than its neighbours after each stage's first picture (agent 1, 2026-11-23 21:16)
+- R1.4 P-065 (Metal): the renderer's own shader texts compiled at build: On a Mac (and an iPhone when its app exists): start the game and turn on bloom, the post-process (SMAA and FXAA) and ambient occlusion, then MetalFX and SGSR 2: the log shows '[metal] renderer shaders: N from utility.metallib, 0 compiled from their text' and no hitch the first time each is used (agent 1, 2026-11-24 03:48)
 
 ## Waiting for the owner
 
@@ -89,7 +90,7 @@ Nothing is blocked.
 | M-006 | closed | - | the step tier and section check; a passing tool fault played once more; a waiter left not judged runs itself | 0 | 95 | 2911f6429 |
 | M-007 | closed | - | the section-at-a-time roles: a whole section ahead, wait, hand-off sheets, hard reports, the live page | 0 | 80 | 9ed09cfec |
 
-## Decisions (45)
+## Decisions (49)
 
 - 2026-11-23 S0.2.1: LoadSlice: 32 items a frame; an item is a phase of GameScene::initAfterScenarioChosen, the player, one placement made whole, one piece of FileSelector::initStep, or one Star Bit of the reserve (because the card asks for a fixed count of work and names no count; the count is a constant in one place, no player sees which frame of the load an item falls in, and the load worker (G3.7) replaces the slices)
 - 2026-11-23 S0.2.1: Drawing's random stream (MR::getDrawRandom) is seeded with the same seed as the game's stream, in setRandomSeedFromStageName and setFixedRandomSeed (because a fixed seed keeps the cosmetic numbers the same in every run of a replay and needs no new setting; the draw stream runs through the same sequence as the game's but is advanced only by drawing, so neither changes the other)
@@ -136,6 +137,10 @@ Nothing is blocked.
 - 2026-11-23 R1.3: A Present that waits for a creation in play (from the first picture with a scene, no load waiting) writes one log line with its wait and the creations in flight (the first 100 of a run), beside the timeline events GateWaitBegin and GateWaitEnd; galaxy_gpu_sampler_tests proves a held Present is counted in play and not during a load (because the tours record no timeline (agent_tour.py has no diagnostics option), so proof 1 counts these lines in the tours' logs, as R1.2 counted its miss line; proof 2's naming in the timeline is kept as it was)
 - 2026-11-23 R1.3: Proof 1 on Vulkan and the tablet is R1.2's count (no line 'missed by a draw in play', no line 'registered after the first picture'); the gate's count is Direct3D 12's (because the read-first question answered from the code: only pipelines_d3d12.cpp takes CreationScope and only renderer_d3d12.cpp takes PresentScope, so Vulkan, Direct3D 11 and Metal have no gate and a creation there never holds a picture)
 - 2026-11-23 R1.3: A settings change in play still queues its new forms at once (prepare), made by the workers at the lowest priority while the settings view shows them as preparing; a Direct3D 12 Present can wait for them, and such a wait is logged (because the row names a later settings change as one of the two creations left in play; holding the new forms until the next load would leave the changed setting's draws out until then, which a player sees)
+- 2026-11-24 R1.4: One build tool writes the texts: platform/apple/tools/utility_msl.cpp, which already wrote the header of MSL texts, also writes utility_msl.bin (each text once, with its FNV-1a 64 hash); the card's test is a second build program, utility_msl_check.cpp, run at every Apple build that makes the tools (because Read first (a): one tool does it; the test needs the runtime's own list (runtime utility_msl.cpp), which the tool cannot link, as that file includes the header the tool writes)
+- 2026-11-24 R1.4: A text's function in utility.metallib is u<FNV-1a 64 of its bytes, 16 hex digits>::m, each text in a namespace of its own with its main0 named m and its includes moved to the file's head; the library is MSL 2.4 without fast math, as the runtime's compiles were (because compile_metallib.py already names the programs' functions p<n>::m in namespaces; a hash of the text needs no table between build and run, and a static_assert and the script both check the published FNV-1a value of 'abc')
+- 2026-11-24 R1.4: MetalFX's depth copy is two texts in utility_msl.h (kDepthCopyVsMsl, kDepthCopyPsMsl), each a main0, its fragment input marked [[stage_in]], compiled as the others (MSL 2.4, no fast math) instead of the system's default options (because one text one function is the library's rule; the copy writes a depth it reads, which no arithmetic setting changes)
+- 2026-11-24 R1.4: Pipeline states at the start as Vulkan's R1.1: the functions and the renderer's own pipelines on one worker, bloom and post-process on two more, ambient occlusion and the scene camera on the render thread meanwhile, each for every scene pass (8-bit and wide colour at each sample count the device supports, the texture targets' pass for bloom), joined before the first frame, the self-test after the join; keys beyond these (a picture's own format, a target pass's clears, passes with extra targets) and SGSR 2's and the depth copy's pipelines stay at first use, made from functions already taken (because the card's parts ask that no compile stay in a frame and that the states be made at the start as P-052 does; Vulkan's R1.1 made the same set and left its scene utility pipelines of other variants to first use; a pipeline state from a library function is no text compile)
 
 ## Checks changed during the run (69)
 
