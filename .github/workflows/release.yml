@@ -222,8 +222,8 @@ jobs:
           # The players' build: ThinLTO with the profile in native/pgo.
           # The build's log: tools/gate/pgo.py check reads how much of the profile is out of date (P-014).
           $log = Join-Path $env:RUNNER_TEMP 'game-build.log'
-          $targets = 'smg_game_plain'
-          # , 'smg_game'
+          $targets = 'smg_game'
+          # , 'smg_game_plain'
           foreach ($target in $targets) {
             & .\native\build.ps1 -Petari native\petari -Build $build -Pgo -Llvm $llvm -Target $target *>&1 |
               Tee-Object -Append -FilePath $log
@@ -238,8 +238,8 @@ jobs:
           }
           $out = Join-Path $env:RUNNER_TEMP 'out'
           New-Item -ItemType Directory -Force (Join-Path $out 'bin') | Out-Null
-          Copy-Item (Join-Path $build 'smg_game_plain.dll') (Join-Path $out 'bin')
-          # Copy-Item (Join-Path $build 'smg_game.dll') (Join-Path $out 'bin')
+          # Copy-Item (Join-Path $build 'smg_game_plain.dll') (Join-Path $out 'bin')
+          Copy-Item (Join-Path $build 'smg_game.dll') (Join-Path $out 'bin')
       - uses: actions/upload-artifact@v7
         with:
           name: windows-game
