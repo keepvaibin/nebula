@@ -86,6 +86,7 @@ Nothing is blocked.
 | M-004 | closed | S0.2.1 | the replay check cannot play a run at a time rate of 2 and compare its step hashes with a rate-1 run (S0.2.1 proof 2) | 0 | 94 | fb2b39bc6 |
 | M-005 | closed | R-004 | Coverage measured a program that could not open the game data: its build folder held objects of another tree | 0 | 0 | f9b350784185c77e18d4822f7b13cd8b1381a33e |
 | M-006 | closed | - | the step tier and section check; a passing tool fault played once more; a waiter left not judged runs itself | 0 | 95 | 2911f6429 |
+| M-007 | open | - | the section-at-a-time roles: a whole section ahead, wait, hand-off sheets, hard reports, the live page | 0 | 0 | - |
 
 ## Decisions (45)
 
