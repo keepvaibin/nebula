@@ -1,13 +1,12 @@
 # Nebula native plan: status
 
-Written 2026-11-24 08:31. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 09:14. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
-Steps landed: 20 of 138 (14%).
+Steps landed: 21 of 138 (15%).
 
 Now: in work: lander landing R2.1 to R2.5
 
-In work now:
-- R2.4 The player's swapped images (agent 1)
+In work now: Nothing started.
 
 ## Packages
 
@@ -17,7 +16,7 @@ In work now:
 | S0.2 | 6 | 6 |
 | S0.3 | 2 | 2 |
 | R1 | 4 | 4 |
-| R2 | 3 | 5 |
+| R2 | 4 | 5 |
 | G2 | 0 | 9 |
 | G6 | 0 | 8 |
 | G1 | 0 | 5 |
@@ -42,6 +41,7 @@ In work now:
 
 | When | Step | Title | Code commit | Main commit |
 | --- | --- | --- | --- | --- |
+| 2026-11-24 09:14 | R2.4 | The player's swapped images | d034370b1 | aa1e98a03 |
 | 2026-11-24 08:31 | R2.3 | P-059: the cook decides "authored levels" once | 720958ef9 | 31fa52e92 |
 | 2026-11-24 07:34 | R2.2 | The sampler tables stop filling: P-048, P-056, P-066, P-061 | 63c679c5f | 4f085e54d |
 | 2026-11-24 06:56 | R2.1 | A target is read through its own slot; the walk-level counting test | 9519e05d7 | 8c7031e10 |
@@ -51,7 +51,6 @@ In work now:
 | 2026-11-23 21:08 | R1.1 | P-052: the renderers' own pipelines at start | 6ded5f481 | cd1dc8cae |
 | 2026-11-23 20:08 | S0.3.2 | Remove what is left | c975566fd | ba2b58cf1 |
 | 2026-11-23 18:49 | S0.3.1 | Search main for what the rows name | d0c611857 | 053bc9c98 |
-| 2026-11-23 10:25 | S0.2.6 | Landing B, part 4: the question-and-answer path is deleted | 3eaa95375 | d324dc52e |
 
 ## Repairs
 
