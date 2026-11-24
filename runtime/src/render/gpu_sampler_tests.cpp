@@ -163,10 +163,30 @@ int main() {
     {
         // A draw's pipeline that is not made is never built on the draw's thread (Pipelines::missing; an empty entry's build
         // would be refused and counted in failures): null, counted once, and queued for the workers. No worker runs here.
-        core::Pipelines pipelines;
+        // Before play (no picture with a scene) the draw waits for its worker instead, and is let go when the workers stop.
         const core::PipelineEntry missing{};
         const std::uint64_t narrow = 0xFFFF0000u;
         const std::uint64_t wide = (std::uint64_t{1} << 32u) | 0xFFFF0000u;
+        {
+            core::Pipelines starting;
+            std::atomic<bool> returned{false};
+            std::thread draw([&] {
+                (void)starting.get(narrow, missing, 0, 0);
+                returned.store(true);
+            });
+            for (int i = 0; i < 2000 && starting.misses() == 0u; ++i) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            const bool waited = starting.misses() == 1u && starting.pending() == 1u && !returned.load();
+            starting.shutdown();
+            draw.join();
+            passed &= expect(waited && returned.load() && starting.failures() == 0u,
+                             "before play a draw waits for its missing pipeline's worker, and is let go when the workers stop");
+        }
+        core::Pipelines pipelines;
+        pipelines.scene_drawn();
+        pipelines.picture_shown();
         const bool left_out = pipelines.get(narrow, missing, 0, 0) == nullptr && pipelines.get(wide, missing, 0, 0) == nullptr;
         passed &= expect(left_out && pipelines.misses() == 2u && pipelines.pending() == 2u && pipelines.failures() == 0u,
                          "a missing pipeline is left out, counted and queued, never built by the draw");

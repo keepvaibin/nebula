@@ -149,8 +149,8 @@ private:
     // A draw's pipeline that is not made: never built on the draw's thread. The first time a form is missed it is counted and
     // recorded (timeline PipelineMissed), and either linked at once from parts (build_fast: Vulkan with graphics pipeline
     // libraries, the optimised link queued behind) or queued at the front of the workers' queue as an urgent job. Null then,
-    // and the draw is left out until a later picture finds the cell filled; with wait_for_missing_ the draw waits for the
-    // urgent job instead. Refused forms are null at once.
+    // and the draw is left out until a later picture finds the cell filled; with wait_for_missing_, and before play (no
+    // picture with a scene yet), the draw waits for the urgent job instead. Refused forms are null at once.
     gpu::Pipeline* missing(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux);
     // The first draw that missed `form` (its urgent_ entry made under lock_ with the bit): counted, recorded, logged once a
     // scene has been shown, then linked and published, or queued at the front. Erases the urgent_ entry when nothing is queued.

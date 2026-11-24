@@ -757,7 +757,11 @@ at the normal priority; the deferred job later finds the cell filled. A scene's 
 asks the host `NEBULA_OPTION_SCENE_PIPELINES` each step: 1 while the queue and the registered-but-not-queued pipelines
 are not empty (`pipeline_progress`), at most 60 s. With fixed steps the game never waits (the frames waited would be the
 machine's): the render thread makes the queue before its next picture (`drain_pipelines`), and a draw that still misses
-waits for its worker, so two runs draw alike. A form the game registers only at its first draw (a site, a per-object state) is
+waits for its worker, so two runs draw alike. Before play (no picture with a scene yet: the start's set is being made, on a
+new driver cache for a third of a second and more) a draw that misses waits for its worker in the same way: the start
+waits for that set anyway, and no picture of the start leaves a draw out (R1.2's first landing: on a new driver cache the
+first draw of the system setup was left out; `engine/save-slow-exit` counted one lost draw, the tablet's `android/walk`
+three and its speed route thirteen). A form the game registers only at its first draw (a site, a per-object state) is
 made before play only when the cook's list names it (`crates/nebula-import/data/site_pipelines.txt`): the line
 "registered after the first picture, not in the cook's list" (`Pipelines::note_registered`) and the line "missed by a draw
 in play" end with the record to add there (P-371).
