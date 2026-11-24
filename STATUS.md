@@ -189,6 +189,6 @@ The last 20:
 
 | When | Step | Test | What happened | What the agent could not do |
 | --- | --- | --- | --- | --- |
-| 2026-11-23 20:39 | R1.1 | vulkan | approved on Adreno (TM) 740 driver 512.676.1; these runs: Adreno (TM) 740 driver 512.676.1, unknown driver | - |
+| 2026-11-23 20:39 | R1.1 | vulkan | approved on Adreno (TM) 740 driver 512.676.1; these runs: Adreno (TM) 740 driver 512.676.1, unknown driver | R1.1 was not judged: the tablet's tour could not start (run-as gave no folder), so R1.1 waited a second landing |
 | 2026-11-23 20:39 | R1.1 | 010-CannonFleetGalaxy-1 | harness-error: the runner raised RuntimeError: run-as dev.nebula.galaxy.test gave no folder (is the test app installed, and debuggable?): | - |
 | 2026-11-22 14:33 | - | (by hand) | plan.py land S0.1.3 ended code 4 (not judged): gate.py's push check refused main's move because tools/verify/console_census.py's closed group fifo counts 31 (the card's section names GXMT, GXTG, GXTM, GXWP in native/include/nebula_model.h, runtime/src/render/core/model_sections_tests.cpp, crates/nebula-import/src/cook/model_write.rs); it is a certain refusal of the change, reported as not judged; plan.py toolfault --last then said: agent 1 has no tool fault recorded | - |
