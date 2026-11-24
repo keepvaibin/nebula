@@ -6,7 +6,8 @@ Steps landed: 17 of 138 (12%).
 
 Now: in work: writer writing package R2 from R2.1
 
-In work now: Nothing started.
+In work now:
+- R2.1 A target is read through its own slot; the walk-level counting test (agent 1)
 
 ## Packages
 
