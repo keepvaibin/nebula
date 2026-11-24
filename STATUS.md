@@ -2,11 +2,12 @@
 
 Written 2026-11-24 14:02. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
-Steps landed: 24 of 138 (17%).
+Steps landed: 24 of 145 (17%).
 
 Now: in work: writer writing package G2 from G2.3.1
 
-In work now: Nothing started.
+In work now:
+- G2.3.1 Landing 3a: the display model; Windows (agent 1)
 
 ## Packages
 
@@ -17,7 +18,7 @@ In work now: Nothing started.
 | S0.3 | 2 | 2 |
 | R1 | 4 | 4 |
 | R2 | 5 | 5 |
-| G2 | 2 | 9 |
+| G2 | 2 | 16 |
 | G6 | 0 | 8 |
 | G1 | 0 | 5 |
 | R3 | 0 | 13 |
@@ -170,7 +171,7 @@ Nothing is blocked.
 - 2026-11-24 G2.2: A sequence with no generated pictures takes no lead (because a lead places pictures between two frames; at 60 (k = 1) and for a stopping or capped-to-none sequence every picture is the frame itself, as the card's limit of 60 says)
 - 2026-11-24 G2.2: On locked vblanks a sequence's reference moves to the first vblank at or after it, not the nearest (because the reference is its step's moment plus the delay, about 1.3 ms before a vblank under the host's frame phase; at 480 Hz that is over half a vblank (at 360 Hz with a slightly longer delay too), so the nearest vblank lies before the list arrives and the sequence's first picture would be late or two in one refresh; the first at or after keeps t = 1 on a refresh at every rate)
 
-## Checks changed during the run (70)
+## Checks changed during the run (72)
 
 - 2026-11-22 S0.1.3 tools/verify/console_census.py: the open group gx_sections counts the four section names GXMT, GXTG, GXTM and GXWP with a ceiling of 31, and the closed group fifo excludes only those four whole words (allowed by docs/engine/FRAME-MODEL.md section 2.9)
 - 2026-11-22 U-unattended tools/gate/main_push_guard.py: the guard also refuses a push of a branch named plant/... (allowed by docs/plan/native/TOOL-MEND-PLANTS.md, how a plant is kept from ever landing)
@@ -242,6 +243,8 @@ Nothing is blocked.
 - 2026-11-24 M-007 tools/gate/tests/plan_page_test.py: the node driver's document has the element source, and its fetch stand-ins keep the addresses they were given (allowed by the owner's order in the session of 11-23 (one section at a time on Opus, a Sonnet agent lands and makes the simple fixes, the hard ones go back to Opus; the page live; approved 'Yes, build it'); docs/plan/native/AGENT.md section 15)
 - 2026-11-24 M-007 tools/gate/tests/plan_fixture.py: Tree turns plan.HANDOFF_REQUIRED off for every test that uses it (allowed by the owner's order in the session of 11-23 (one section at a time on Opus, a Sonnet agent lands and makes the simple fixes, the hard ones go back to Opus; the page live; approved 'Yes, build it'); docs/plan/native/AGENT.md section 15)
 - 2026-11-24 R1.4 .github/workflows/check.yml: the Mac start check keeps its command on one line with the output piped to start.log (set -o pipefail), and fails unless the log has the line "[metal] renderer shaders: N from utility.metallib, 0 compiled from their text, 0 failed" and no "renderer shader compiled from its text" line (allowed by docs/plan/native/04-NATIVE-LANE-R.md section R1.4 (P-065))
+- 2026-11-24 G2.3 split tools/gate/tests/plan_cards_test.py: the real cards read are those of places 12 to 145, not 12 to 138 (LAST_STEP, the function cards_12_to_145, the count test now 134 cards) (allowed by the planner's split of G2.3 on 11-24, after its writer blocked it (PLAN blocked G2.3: nine pieces and proofs a writer may not run); docs/plan/native/02-NATIVE-OVERVIEW.md, the order checked against steps.tsv)
+- 2026-11-24 G2.3 split tools/gate/tests/plan_test.py: the real plan is read as 145 steps in orders 1 to 145 and 145 card headings, not 138 (three tests and the docstring) (allowed by the planner's split of G2.3 on 11-24, after its writer blocked it (PLAN blocked G2.3: nine pieces and proofs a writer may not run); docs/plan/native/02-NATIVE-OVERVIEW.md, the order checked against steps.tsv)
 
 ## Tool faults
 
