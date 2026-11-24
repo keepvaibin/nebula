@@ -1,13 +1,12 @@
 # Nebula native plan: status
 
-Written 2026-11-23 18:35. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-23 18:49. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
-Steps landed: 11 of 138 (8%).
+Steps landed: 12 of 138 (9%).
 
 Now: S0.2.6 landed at 10:25; the trial of S0.2.1 to S0.2.6 ends here: nothing in work, nothing ahead, G6.2 not started
 
-In work now:
-- S0.3.1 Search main for what the rows name (agent 1)
+In work now: Nothing started.
 
 ## Packages
 
@@ -15,7 +14,7 @@ In work now:
 | --- | --- | --- |
 | S0.1 | 5 | 5 |
 | S0.2 | 6 | 6 |
-| S0.3 | 0 | 2 |
+| S0.3 | 1 | 2 |
 | R1 | 0 | 4 |
 | R2 | 0 | 5 |
 | G2 | 0 | 9 |
@@ -42,6 +41,7 @@ In work now:
 
 | When | Step | Title | Code commit | Main commit |
 | --- | --- | --- | --- | --- |
+| 2026-11-23 18:49 | S0.3.1 | Search main for what the rows name | d0c611857 | 053bc9c98 |
 | 2026-11-23 10:25 | S0.2.6 | Landing B, part 4: the question-and-answer path is deleted | 3eaa95375 | d324dc52e |
 | 2026-11-23 08:09 | S0.2.5 | Landing B, part 3: the lens flare | 21ccecf7b | 424c3e541 |
 | 2026-11-23 06:19 | S0.2.4 | Landing B, part 2: the talk balloon | 2423dde4f | 27172e772 |
@@ -51,7 +51,6 @@ In work now:
 | 2026-11-22 18:13 | S0.1.5 | Render data path step 2, second landing: `f4/e3-2b` and `f4/e3-2c` | 02d236b5c | fb2dfa855 |
 | 2026-11-22 17:13 | S0.1.4 | Render data path step 2, first landing: `f4/e3-2a` | d9dbc32ac | ce59efeb8 |
 | 2026-11-22 16:37 | S0.1.3 | Render data path step 1: `f4/e3-1a`, `f4/e3-1b`, `f4/e3-1c` | 809c419ff | 8be38b7b8 |
-| 2026-11-22 14:25 | S0.1.2 | Documents | 59bdb8776 | 2c5dbb271 |
 
 ## Repairs
 
@@ -86,7 +85,7 @@ Nothing is blocked.
 | M-004 | closed | S0.2.1 | the replay check cannot play a run at a time rate of 2 and compare its step hashes with a rate-1 run (S0.2.1 proof 2) | 0 | 94 | fb2b39bc6 |
 | M-005 | closed | R-004 | Coverage measured a program that could not open the game data: its build folder held objects of another tree | 0 | 0 | f9b350784185c77e18d4822f7b13cd8b1381a33e |
 
-## Decisions (23)
+## Decisions (24)
 
 - 2026-11-23 S0.2.1: LoadSlice: 32 items a frame; an item is a phase of GameScene::initAfterScenarioChosen, the player, one placement made whole, one piece of FileSelector::initStep, or one Star Bit of the reserve (because the card asks for a fixed count of work and names no count; the count is a constant in one place, no player sees which frame of the load an item falls in, and the load worker (G3.7) replaces the slices)
 - 2026-11-23 S0.2.1: Drawing's random stream (MR::getDrawRandom) is seeded with the same seed as the game's stream, in setRandomSeedFromStageName and setFixedRandomSeed (because a fixed seed keeps the cosmetic numbers the same in every run of a replay and needs no new setting; the draw stream runs through the same sequence as the game's but is advanced only by drawing, so neither changes the other)
@@ -111,6 +110,7 @@ Nothing is blocked.
 - 2026-11-23 S0.2.6: Proof 3 (the game thread's share in the old wait near zero) is shown by the search that the wait does not exist (svc_probe_results, screen_probe_results, kProbeWaitNs and StarPointerPeekZ::setDrawSyncToken: no hit in runtime, native) and by the landing's measure/step/pc, not by a new profile (because A profile plays the game outside the agent's commands (AGENT.md section 9) and the a3-prof folder is an old run's, not a tool; with the waiting function deleted its share is zero by construction, a stronger proof than a sampled near-zero)
 - 2026-11-23 S0.2.6: Proof 4: the replays are not recorded again; the recorded tour on this step's build gives all 20 recordings' step hashes (step_hash.py check: 20 of 20 the same over 600 steps, D:/NebulaWork/build/Nebula-native/runs/tour) (because The game step stopped reading answers at S0.2.5, whose landing recorded the four changed replays once for every renderer; recording identical files again would change nothing, and a replay recorded without a change is a place a check sees less)
 - 2026-11-23 S0.2.6: The diagnostics frame-plans and constants-watch move down to bits 19 and 20, so the bits stay without a gap after probe-reads is deleted; this replaces the part of the Read first (d) decision that left bit 19 unused (because --diagnostics takes names only (launch_args.h diagnostics_from_text), so no command line reads a bit number and a moved bit reads no old line wrongly; galaxy_launch_args_tests holds that every bit up to the last has a name, and the first landing failed it on GitHub's Linux jobs)
+- 2026-11-23 S0.3.1: The step's log of the card is the file docs/plan/native/S0.3.1-SEARCH.md, landed with the step (because The card names no file for the counts; S0.3.2 removes by this list and its proof 4 searches again for each name, so the list must be on main, not in the agent's own log outside the repository)
 
 ## Checks changed during the run (57)
 
