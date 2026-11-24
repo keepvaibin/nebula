@@ -255,6 +255,11 @@ private:
     [[nodiscard]] ID3D11Buffer* dynamic_scratch(unsigned index, std::size_t bytes) noexcept;
     [[nodiscard]] ID3D11Buffer* copy_scratch(unsigned index) noexcept;
     void bind_scratch(unsigned stages, UINT slot, ID3D11Buffer* buffer) noexcept;
+    // A DYNAMIC buffer of at least `bytes` that upload_written packs a buffer's written runs into and copies them out of.
+    [[nodiscard]] ID3D11Buffer* upload_scratch(std::size_t bytes) noexcept;
+    ComPtr<ID3D11Buffer> upload_scratch_;
+    std::size_t upload_scratch_bytes_ = 0u;
+    std::vector<std::pair<std::uint64_t, std::uint64_t>> upload_runs_;  // upload_written's runs: byte begin and end
 
     // The constant ring. Places count up through every byte ever handed out (ring_written_), a place's offset in the
     // buffer is its count modulo the size. A mark: the count reached by the pieces of the commands a fence value covers.

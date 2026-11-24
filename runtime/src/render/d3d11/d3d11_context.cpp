@@ -87,7 +87,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool debug_layer) {
         for (const ComPtr<IDXGIAdapter1>& adapter : adapters) {
             DXGI_ADAPTER_DESC1 d{};
             if (SUCCEEDED(adapter->GetDesc1(&d)) && (d.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) == 0u) {
-                choices.push_back(GpuChoice{gpu_identity(d.VendorId, d.DeviceId, d.SubsysId), narrow(d.Description)});
+                choices.push_back(GpuChoice{gpu_identity(d.VendorId, d.DeviceId, d.SubSysId), narrow(d.Description)});
             }
         }
         record_gpu_choices(std::move(choices));
@@ -97,7 +97,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool debug_layer) {
     if (!chosen_gpu.empty()) {
         const auto chosen = [&](const ComPtr<IDXGIAdapter1>& a) {
             DXGI_ADAPTER_DESC1 d{};
-            return SUCCEEDED(a->GetDesc1(&d)) && gpu_identity(d.VendorId, d.DeviceId, d.SubsysId) == chosen_gpu;
+            return SUCCEEDED(a->GetDesc1(&d)) && gpu_identity(d.VendorId, d.DeviceId, d.SubSysId) == chosen_gpu;
         };
         const bool present = std::any_of(adapters.begin(), adapters.end(), chosen);
         std::stable_partition(adapters.begin(), adapters.end(), chosen);
@@ -232,6 +232,8 @@ void Context::shutdown() noexcept {
     dynamic_scratch_ = {};
     dynamic_scratch_bytes_ = {};
     copy_scratch_ = {};
+    upload_scratch_.Reset();
+    upload_scratch_bytes_ = 0u;
     ring_bytes_ = 0u;
     ring_written_ = ring_done_ = 0u;
     ring_marks_.clear();
@@ -522,7 +524,7 @@ Buffer::~Buffer() {
 void Context::upload_written() {
     std::lock_guard guard(buffers_mutex_);
     std::vector<void*>& pages = written_pages_;
-    static const bool full_upload = std::getenv("NEBULA_D3D11_FULL_UPLOAD") != nullptr;
+    static const bool full_upload = GetEnvironmentVariableA("NEBULA_D3D11_FULL_UPLOAD", nullptr, 0u) != 0u;
     if (pages.size() < 4096u) {
         pages.resize(4096u);
     }
@@ -539,8 +541,6 @@ void Context::upload_written() {
         ULONG_PTR count = pages.size();
         DWORD page_bytes = 4096u;
         // Every written page since the last call; read and reset in one call, so a write after it is seen next time.
-        // Each run of consecutive pages is one boxed UpdateSubresource per video-memory buffer (Direct3D 11.0: no buffer
-        // here is a constant buffer, whose box 11.0 refuses).
         if (full_upload) {
             // Diagnostic (NEBULA_D3D11_FULL_UPLOAD=1): drain the written pages, then push the whole buffer if any was written.
             bool dirty = false;
@@ -560,6 +560,9 @@ void Context::upload_written() {
             }
             continue;
         }
+        // The runs of consecutive written pages (byte ranges of the buffer).
+        upload_runs_.clear();
+        std::uint64_t total = 0u;
         while (GetWriteWatch(WRITE_WATCH_FLAG_RESET, buffer->shadow, buffer->size, pages.data(), &count, &page_bytes) == 0u) {
             std::size_t i = 0;
             while (i < count) {
@@ -570,13 +573,8 @@ void Context::upload_written() {
                 }
                 const std::uint64_t begin = static_cast<std::uint64_t>(first - buffer->shadow);
                 const std::uint64_t end = std::min<std::uint64_t>(begin + (j - i) * page_bytes, buffer->size);
-                for (const ComPtr<ID3D11Buffer>& made : buffer->gpu) {
-                    if (made == nullptr) {
-                        continue;
-                    }
-                    const D3D11_BOX box{static_cast<UINT>(begin), 0u, 0u, static_cast<UINT>(end), 1u, 1u};
-                    immediate_->UpdateSubresource(made.Get(), 0u, &box, buffer->shadow + begin, 0u, 0u);
-                }
+                upload_runs_.emplace_back(begin, end);
+                total += end - begin;
                 i = j;
             }
             if (count < pages.size()) {
@@ -584,7 +582,64 @@ void Context::upload_written() {
             }
             count = pages.size();
         }
+        if (upload_runs_.empty()) {
+            continue;
+        }
+        // Direct3D 11.0's boxed UpdateSubresource of a buffer is not trusted (this path replaced it): the runs are packed
+        // into a DYNAMIC buffer written with Map DISCARD (a new one for each upload, so no copy still to run reads what
+        // is overwritten), and each run is copied from it into every video-memory copy with CopySubresourceRegion.
+        ID3D11Buffer* const upload = upload_scratch(static_cast<std::size_t>(total));
+        D3D11_MAPPED_SUBRESOURCE mapped{};
+        if (upload == nullptr || FAILED(immediate_->Map(upload, 0u, D3D11_MAP_WRITE_DISCARD, 0u, &mapped))) {
+            for (const ComPtr<ID3D11Buffer>& made : buffer->gpu) {
+                if (made != nullptr) {
+                    immediate_->UpdateSubresource(made.Get(), 0u, nullptr, buffer->shadow, 0u, 0u);
+                }
+            }
+            continue;
+        }
+        std::uint64_t packed = 0u;
+        for (const auto& [begin, end] : upload_runs_) {
+            std::memcpy(static_cast<std::byte*>(mapped.pData) + packed, buffer->shadow + begin, static_cast<std::size_t>(end - begin));
+            packed += end - begin;
+        }
+        immediate_->Unmap(upload, 0u);
+        for (const ComPtr<ID3D11Buffer>& made : buffer->gpu) {
+            if (made == nullptr) {
+                continue;
+            }
+            packed = 0u;
+            for (const auto& [begin, end] : upload_runs_) {
+                const D3D11_BOX box{static_cast<UINT>(packed), 0u, 0u, static_cast<UINT>(packed + (end - begin)), 1u, 1u};
+                immediate_->CopySubresourceRegion(made.Get(), 0u, static_cast<UINT>(begin), 0u, 0u, upload, 0u, &box);
+                packed += end - begin;
+            }
+        }
     }
+}
+
+ID3D11Buffer* Context::upload_scratch(std::size_t bytes) noexcept {
+    if (bytes == 0u) {
+        return nullptr;
+    }
+    if (upload_scratch_ == nullptr || upload_scratch_bytes_ < bytes) {
+        std::size_t want = std::size_t{1} << 20u;
+        while (want < bytes) {
+            want <<= 1u;
+        }
+        D3D11_BUFFER_DESC desc{};
+        desc.ByteWidth = static_cast<UINT>(want);
+        desc.Usage = D3D11_USAGE_DYNAMIC;
+        desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;  // a dynamic buffer needs a bind flag; it is only ever copied from
+        desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+        ComPtr<ID3D11Buffer> made;
+        if (FAILED(device_->CreateBuffer(&desc, nullptr, &made))) {
+            return nullptr;
+        }
+        upload_scratch_ = std::move(made);
+        upload_scratch_bytes_ = want;
+    }
+    return upload_scratch_.Get();
 }
 
 // The ring is an arena in system memory (d3d11_context.h); `ring_` is a one-constant buffer that only gives the places a
