@@ -98,7 +98,7 @@ public:
                        std::uint32_t width, std::uint32_t height, unsigned levels, const std::uint64_t* offsets,
                        const std::uint32_t* pitches);
     // The immediate context while a frame is being recorded (the render thread's); null between frames.
-    void set_upload_list(ID3D11DeviceContext1* context) noexcept { upload_list_ = context; }
+    void set_upload_list(ID3D11DeviceContext* context) noexcept { upload_list_ = context; }
     [[nodiscard]] bool has_upload_list() const noexcept { return upload_list_ != nullptr; }
 
     // One context: nothing is uploaded beside the frame.
@@ -111,10 +111,10 @@ public:
     [[nodiscard]] HeapStats heap_stats() const noexcept { return stats_; }
 
 private:
-    ID3D11Device1* device_ = nullptr;
+    ID3D11Device* device_ = nullptr;
     std::vector<ID3D11ShaderResourceView*> views_;  // by slot (not owned: the texture keeps its view), or null
     std::shared_ptr<d3d11::Texture> null_texture_;
-    ID3D11DeviceContext1* upload_list_ = nullptr;
+    ID3D11DeviceContext* upload_list_ = nullptr;
     HeapStats stats_{};
 };
 

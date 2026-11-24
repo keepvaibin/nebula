@@ -114,7 +114,7 @@ bool RendererD3D11::initialize(int window_width, int window_height, const FrameM
         set_mod_post_compiler(&compile_mod_post_stage, false);
         set_mod_post_motion(false);
         reset_sampler_frame();
-        ID3D11Device1* const d3d = d3d11::Context::get().device();
+        ID3D11Device* const d3d = d3d11::Context::get().device();
         if (!bloom_.initialize(d3d)) {
             std::cerr << "[game-bloom] off on this device; the game's own chain draws it\n";
         }
@@ -152,8 +152,7 @@ bool RendererD3D11::create_device() {
     }
     const d3d11::DeviceCaps& caps = context.caps();
     std::cout << "[gpu] adapter=\"" << context.device_name() << "\" api=d3d11 feature-level=" << std::hex
-              << static_cast<unsigned>(caps.level) << std::dec << " flip-model=" << (caps.flip_model ? 1 : 0)
-              << " tearing=" << (caps.tearing ? 1 : 0) << '\n';
+              << static_cast<unsigned>(caps.level) << std::dec << " swap-chain=dxgi1.0\n";
     // Every draw binds its own table of sixteen maps: the programs' bound-table form.
     program_use_bound_tables(true);
     draw_layout_ = d3d11::RenderLayout{};
@@ -162,7 +161,7 @@ bool RendererD3D11::create_device() {
 }
 
 bool RendererD3D11::create_states() {
-    ID3D11Device1* const device = d3d11::Context::get().device();
+    ID3D11Device* const device = d3d11::Context::get().device();
     const auto check = [](HRESULT hr, const char* what) {
         if (FAILED(hr)) {
             throw std::runtime_error(std::string("the renderer's ") + what + " could not be made");
@@ -269,48 +268,42 @@ bool RendererD3D11::wants_hdr() const {
     return false;
 }
 
-// A flip-model swap chain of kSwapChainBuffers 8-bit buffers at the window's size, a waitable object and a latency of one
-// frame (renderer_d3d12.cpp create_swap_chain), tearing where the system offers it so that VSync off presents at once.
+// A DXGI 1.0 swap chain (WDDM 1.1: Windows 7 has no CreateSwapChainForHwnd, flip model, waitable object or tearing):
+// kSwapChainBuffers 8-bit buffers at the window's size, discarded on present, and a frame latency of one frame set on
+// the DXGI 1.1 device (IDXGIDevice1).
 bool RendererD3D11::create_swap_chain() {
     d3d11::Context& context = d3d11::Context::get();
-    const d3d11::DeviceCaps& caps = context.caps();
-    DXGI_SWAP_CHAIN_DESC1 scd{};
-    scd.BufferCount = kSwapChainBuffers;
-    scd.Width = std::max(host_window::backbuffer_width, 1u);
-    scd.Height = std::max(host_window::backbuffer_height, 1u);
-    scd.Format = swap_format_;
-    scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    // FLIP_DISCARD from Windows 10; FLIP_SEQUENTIAL before it.
-    scd.SwapEffect = caps.flip_model ? DXGI_SWAP_EFFECT_FLIP_DISCARD : DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+    DXGI_SWAP_CHAIN_DESC scd{};
+    scd.BufferDesc.Width = std::max(host_window::backbuffer_width, 1u);
+    scd.BufferDesc.Height = std::max(host_window::backbuffer_height, 1u);
+    scd.BufferDesc.Format = swap_format_;
     scd.SampleDesc.Count = 1;
-    scd.Scaling = DXGI_SCALING_STRETCH;
-    scd.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
-    scd.Flags = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT | (caps.tearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0u);
-    tearing_ = caps.tearing;
-    d3d11::ComPtr<IDXGISwapChain1> chain;
-    if (FAILED(context.factory()->CreateSwapChainForHwnd(context.device(), window_, &scd, nullptr, nullptr, &chain)) ||
-        FAILED(chain.As(&swap_chain_))) {
+    scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    scd.BufferCount = kSwapChainBuffers;
+    scd.OutputWindow = window_;
+    scd.Windowed = TRUE;
+    scd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+    tearing_ = false;
+    if (FAILED(context.factory()->CreateSwapChain(context.device(), &scd, &swap_chain_))) {
         init_error_ = "the swap chain could not be made";
         std::cerr << "[Renderer] " << init_error_ << '\n';
         return false;
     }
     context.factory()->MakeWindowAssociation(window_, DXGI_MWA_NO_ALT_ENTER);
-    if (FAILED(swap_chain_->SetMaximumFrameLatency(1u))) {
+    d3d11::ComPtr<IDXGIDevice1> dxgi_device;
+    if (FAILED(context.device()->QueryInterface(IID_PPV_ARGS(&dxgi_device))) || FAILED(dxgi_device->SetMaximumFrameLatency(1u))) {
         std::cerr << "[present] SetMaximumFrameLatency failed\n";
     }
-    frame_latency_waitable_ = swap_chain_->GetFrameLatencyWaitableObject();
+    frame_latency_waitable_ = nullptr;
     {
-        static int logged_tearing = -1;
-        if (logged_tearing != (tearing_ ? 1 : 0)) {
-            logged_tearing = tearing_ ? 1 : 0;
-            std::cerr << "[present] flip-model swap chain, "
-                      << (tearing_ ? "VSync off presents with ALLOW_TEARING (no wait for the display)"
-                                   : "VSync off still waits for the compositor (tearing not offered here)")
-                      << ", VSync on: Present(1..4) paced by the latency object" << '\n';
+        static bool logged = false;
+        if (!logged) {
+            logged = true;
+            std::cerr << "[present] DXGI 1.0 swap chain (WDDM 1.1): VSync off presents without waiting, VSync on: Present(1..4)\n";
         }
     }
-    swap_width_ = scd.Width;
-    swap_height_ = scd.Height;
+    swap_width_ = scd.BufferDesc.Width;
+    swap_height_ = scd.BufferDesc.Height;
     swap_vsync_ = wants_vsync();
     d3d11::ComPtr<ID3D11Texture2D> buffer;
     if (FAILED(swap_chain_->GetBuffer(0u, IID_PPV_ARGS(&buffer))) ||
@@ -330,8 +323,8 @@ bool RendererD3D11::resize_swap_chain(std::uint32_t width, std::uint32_t height)
     context()->OMSetRenderTargets(0u, nullptr, nullptr);
     backbuffer_rtv_.Reset();
     context()->Flush();
-    DXGI_SWAP_CHAIN_DESC1 desc{};
-    swap_chain_->GetDesc1(&desc);
+    DXGI_SWAP_CHAIN_DESC desc{};
+    swap_chain_->GetDesc(&desc);
     if (FAILED(swap_chain_->ResizeBuffers(kSwapChainBuffers, width, height, swap_format_, desc.Flags))) {
         std::cerr << "[Renderer] resize: ResizeBuffers failed\n";
         return false;
@@ -527,7 +520,7 @@ void RendererD3D11::begin_frame() {
         if (frame.timed) {
             D3D11_QUERY_DATA_TIMESTAMP_DISJOINT disjoint{};
             UINT64 start = 0u, end = 0u;
-            ID3D11DeviceContext1* const ctx = context();
+            ID3D11DeviceContext* const ctx = context();
             if (ctx->GetData(frame.disjoint.Get(), &disjoint, sizeof(disjoint), D3D11_ASYNC_GETDATA_DONOTFLUSH) == S_OK &&
                 !disjoint.Disjoint && disjoint.Frequency != 0u &&
                 ctx->GetData(frame.frame_time[0].Get(), &start, sizeof(start), D3D11_ASYNC_GETDATA_DONOTFLUSH) == S_OK &&
@@ -557,7 +550,7 @@ void RendererD3D11::begin_frame() {
     retire_ring_.release(frame_slot_);
     reset_sampler_frame();
     // The frame's GPU time: always for the scene's average (interpolation_gpu_cost_ms), a query pair a frame.
-    ID3D11Device1* const device = d3d11::Context::get().device();
+    ID3D11Device* const device = d3d11::Context::get().device();
     if (!frame.disjoint) {
         D3D11_QUERY_DESC query{D3D11_QUERY_TIMESTAMP_DISJOINT, 0u};
         frame.timed = SUCCEEDED(device->CreateQuery(&query, &frame.disjoint));
@@ -620,7 +613,7 @@ std::uint64_t RendererD3D11::end_frame(bool present_swap_chain, SubmissionCallba
     if (mirrored_store_ != nullptr) {
         mirrored_store_->backend().set_upload_list(nullptr);
     }
-    ID3D11DeviceContext1* const ctx = context();
+    ID3D11DeviceContext* const ctx = context();
     if (constants_watch_ != nullptr) {
         constants_watch_->frame(ctx);  // fenced by this frame's signal below
     }
@@ -634,7 +627,7 @@ std::uint64_t RendererD3D11::end_frame(bool present_swap_chain, SubmissionCallba
     if (presenting) {
         const RenderConfig cfg = get_render_config();
         const UINT vsync = present_sync_interval(std::min(2u, cfg.vsync_interval), cfg.max_fps);
-        const UINT flags = vsync == 0u && tearing_ ? DXGI_PRESENT_ALLOW_TEARING : 0u;
+        const UINT flags = 0u;  // DXGI_PRESENT_ALLOW_TEARING is DXGI 1.5
         // Interpolation presents on the render core's slot clock; otherwise the pacer holds presents to the cap.
         const float paced_fps = paced_present_rate(presented_max_fps(cfg), cfg.vsync_interval, variable_refresh_, display_refresh_hz_);
         pace_wait_ms = interpolation_mode() ? 0.0 : present_pacer_.pace(variable_refresh_ ? 0u : cfg.vsync_interval, paced_fps);
@@ -785,7 +778,7 @@ void RendererD3D11::read_pass_times(Frame& frame, UINT64 frequency, UINT64 frame
         return;
     }
     std::array<UINT64, kGpuPassSlots + 1u> ticks{};
-    ID3D11DeviceContext1* const ctx = context();
+    ID3D11DeviceContext* const ctx = context();
     for (unsigned i = 0u; i < marks; ++i) {
         if (ctx->GetData(frame.pass_queries[i].Get(), &ticks[i], sizeof(UINT64), D3D11_ASYNC_GETDATA_DONOTFLUSH) != S_OK) {
             return;
@@ -923,13 +916,9 @@ void RendererD3D11::bind_constants(unsigned slot, gpu::Address address, bool ver
     if (count == 0u) {
         buffer = nullptr;
     }
-    ID3D11DeviceContext1* const ctx = context();
-    if (vertex) {
-        ctx->VSSetConstantBuffers1(slot, 1u, &buffer, &first, &count);
-    }
-    if (pixel) {
-        ctx->PSSetConstantBuffers1(slot, 1u, &buffer, &first, &count);
-    }
+    // Direct3D 11.0 has no binding at an offset: the window is copied into the slot's own constant buffer.
+    d3d11::Context::get().bind_buffer_window((vertex ? d3d11::kVertexConstants : 0u) | (pixel ? d3d11::kPixelConstants : 0u), slot,
+                                             buffer, first, count);
 }
 
 void RendererD3D11::bind_rows(gpu::Address rows, gpu::Address instances) {
@@ -953,12 +942,11 @@ void RendererD3D11::flush_draws() {
     device.upload_written();
     // The draws go to the scene target: a multisampled one's resolve is stale from here.
     scene_.color_dirty |= scene_.samples > 1u;
-    ID3D11DeviceContext1* const ctx = context();
-    const auto bind_root = [this, ctx](UINT first) {
-        ID3D11Buffer* const root = root_buffer_.Get();
-        const UINT count = 16u;  // a DrawRoot's 256 bytes (program.hlsli cbuffer Draw)
-        ctx->VSSetConstantBuffers1(3u, 1u, &root, &first, &count);
-        ctx->PSSetConstantBuffers1(3u, 1u, &root, &first, &count);
+    ID3D11DeviceContext* const ctx = context();
+    const auto bind_root = [this, &device](UINT first) {
+        // a DrawRoot's 256 bytes (program.hlsli cbuffer Draw), from the constant ring's arena
+        device.bind_place(d3d11::kVertexConstants | d3d11::kPixelConstants, 3u,
+                          d3d11::Context::ConstantPlace{root_buffer_.Get(), first, 16u});
     };
     // The pass starts with the last root bound (a draw before the pass's first Root keeps it), then each Root its own.
     root_first_.assign(pass_ops_.size(), 0u);
@@ -990,17 +978,13 @@ void RendererD3D11::flush_draws() {
             break;
         case gpu::DrawOp::Kind::Material: {
             // b1 the vertex stage's material, b2 the pixel stage's (a written program's both stages read b2).
-            ID3D11Buffer* buffers[2] = {};
-            UINT first[2] = {};
-            UINT count[2] = {};
             for (unsigned i = 0; i < 2u; ++i) {
                 const d3d11::Context::BufferOffset at = device.resolve(op.a[i]);
-                count[i] = at.buffer != nullptr ? constants_in(at.buffer->size, at.offset) : 0u;
-                buffers[i] = count[i] != 0u ? at.buffer->bound(d3d11::BufferUse::Constants) : nullptr;
-                first[i] = static_cast<UINT>(at.offset / 16u);
+                const UINT count = at.buffer != nullptr ? constants_in(at.buffer->size, at.offset) : 0u;
+                device.bind_buffer_window(d3d11::kVertexConstants | d3d11::kPixelConstants, 1u + i,
+                                          count != 0u ? at.buffer->bound(d3d11::BufferUse::Constants) : nullptr,
+                                          static_cast<UINT>(at.offset / 16u), count);
             }
-            ctx->VSSetConstantBuffers1(1u, 2u, buffers, first, count);
-            ctx->PSSetConstantBuffers1(1u, 2u, buffers, first, count);
             break;
         }
         case gpu::DrawOp::Kind::Root:
@@ -1115,7 +1099,7 @@ void RendererD3D11::replay_draws(std::uint8_t aux, const gpu::DrawOp* ops, std::
 void RendererD3D11::utility_draw(Utility shader, ID3D11ShaderResourceView* source, const void* constants, std::size_t constant_bytes,
                                  const D3D11_VIEWPORT& viewport, const gpu::Rect& rect, std::uint8_t write_mask, DepthUse depth) {
     flush_draws();
-    ID3D11DeviceContext1* const ctx = context();
+    ID3D11DeviceContext* const ctx = context();
     if (constants != nullptr && constant_bytes != 0u) {
         d3d11::bind_place(ctx, d3d11::kPixelConstants, 0u,
                           d3d11::Context::get().put_constants(constants, std::min<std::size_t>(constant_bytes, 256u)));
@@ -1334,7 +1318,7 @@ gpu::Address RendererD3D11::zero_stream(std::uint32_t bytes) {
 // The picture as the window shows it: black, then the picture in its content rectangle.
 void RendererD3D11::draw_presented_picture(ID3D11RenderTargetView* target, const d3d11::Texture& picture, unsigned width,
                                            unsigned height, const galaxy::ContentViewport& content) {
-    ID3D11DeviceContext1* const ctx = context();
+    ID3D11DeviceContext* const ctx = context();
     constexpr float kBlack[4] = {0.0f, 0.0f, 0.0f, 1.0f};
     ctx->ClearRenderTargetView(target, kBlack);
     if (present_black_) {

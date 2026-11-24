@@ -9,7 +9,10 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <new>
+#include <utility>
 #include <iostream>
 
 namespace galaxy::render::d3d11 {
@@ -46,6 +49,17 @@ void set_name(ID3D11DeviceChild* object, const char* name) {
     }
 }
 
+// A texture or view that could not be made, said (the first few): a texture that is missing draws as the null one.
+void log_texture_failure(const char* step, const char* name, DXGI_FORMAT format, std::uint32_t width, std::uint32_t height,
+                         std::uint32_t bind, HRESULT hr) {
+    static int said = 0;
+    if (said++ >= 40) {
+        return;
+    }
+    std::cout << "[gpu] texture " << (name != nullptr ? name : "?") << ' ' << width << 'x' << height << " format=" << static_cast<unsigned>(format)
+              << " bind=0x" << std::hex << bind << ": " << step << " failed 0x" << static_cast<unsigned>(hr) << std::dec << '\n';
+}
+
 std::uint64_t round_up(std::uint64_t value, std::uint64_t step) {
     return (value + step - 1u) / step * step;
 }
@@ -62,25 +76,19 @@ bool Context::initialize(const std::string& chosen_gpu, bool debug_layer) {
         return true;
     }
     failure_.clear();
-    if (FAILED(CreateDXGIFactory2(debug_layer ? DXGI_CREATE_FACTORY_DEBUG : 0u, IID_PPV_ARGS(&factory_))) &&
-        FAILED(CreateDXGIFactory2(0u, IID_PPV_ARGS(&factory_)))) {
+    // WDDM 1.1 (Windows 7): DXGI 1.1 is all there is, so the factory is an IDXGIFactory1 (CreateDXGIFactory1 is in
+    // Windows Vista SP2 / 7's dxgi.dll) and the swap chain is the bit-block-transfer one (create_swap_chain).
+    ComPtr<IDXGIFactory1> factory1;
+    if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory1)))) {
         failure_ = "No DXGI factory";
         return false;
     }
-    // Adapters in the system's order for performance where DXGI 1.6 gives it, else its plain order; software ones never.
+    factory_ = factory1;
+    // Adapters in DXGI's plain order (EnumAdapters1: DXGI 1.1); software ones never, but by the start check.
     std::vector<ComPtr<IDXGIAdapter1>> adapters;
-    ComPtr<IDXGIFactory6> factory6;
-    if (SUCCEEDED(factory_.As(&factory6))) {
+    {
         ComPtr<IDXGIAdapter1> adapter;
-        for (UINT i = 0; factory6->EnumAdapterByGpuPreference(i, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,
-                                                             IID_PPV_ARGS(&adapter)) != DXGI_ERROR_NOT_FOUND;
-             ++i) {
-            adapters.push_back(adapter);
-            adapter.Reset();
-        }
-    } else {
-        ComPtr<IDXGIAdapter1> adapter;
-        for (UINT i = 0; factory_->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
+        for (UINT i = 0; factory1->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
             adapters.push_back(adapter);
             adapter.Reset();
         }
@@ -118,8 +126,9 @@ bool Context::initialize(const std::string& chosen_gpu, bool debug_layer) {
             continue;
         }
         const std::string name = narrow(desc.Description);
-        static constexpr D3D_FEATURE_LEVEL kLevels[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1,
-                                                        D3D_FEATURE_LEVEL_10_0};
+        // Feature level 11_0 is asked for alone: a runtime without Direct3D 11.1 (Windows 7 without the Platform Update, and
+        // every WDDM 1.1 driver) refuses a list that names 11_1 with E_INVALIDARG, and no level above 11_0 is used.
+        static constexpr D3D_FEATURE_LEVEL kLevels[] = {D3D_FEATURE_LEVEL_11_0};
         UINT flags = debug_layer ? D3D11_CREATE_DEVICE_DEBUG : 0u;
         ComPtr<ID3D11Device> device;
         ComPtr<ID3D11DeviceContext> context;
@@ -135,19 +144,10 @@ bool Context::initialize(const std::string& chosen_gpu, bool debug_layer) {
         if (FAILED(hr)) {
             continue;
         }
-        // What the renderer needs (d3d11_refusal: feature level 11_0, the 11.1 interfaces, constant buffers bound at an
-        // offset and written in part, as the draws' rows live in shared buffers); the renderer check judges every card
-        // by the same rule.
+        // What the renderer needs (d3d11_refusal: feature level 11_0); the renderer check judges every card by the same rule.
         D3D11Facts facts;
         facts.device = true;
         facts.feature_level = static_cast<unsigned>(level);
-        ComPtr<ID3D11Device1> device1;
-        ComPtr<ID3D11DeviceContext1> context1;
-        facts.device1 = SUCCEEDED(device.As(&device1)) && SUCCEEDED(context.As(&context1));
-        D3D11_FEATURE_DATA_D3D11_OPTIONS options{};
-        facts.constant_buffer_offsets =
-            facts.device1 && SUCCEEDED(device1->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS, &options, sizeof(options))) &&
-            options.ConstantBufferOffsetting && options.ConstantBufferPartialUpdate;
         if (const RendererRefusal refusal = d3d11_refusal(facts); refusal != RendererRefusal::kNone) {
             refused = name + ": " + (refusal == RendererRefusal::kFeatureLevel
                                          ? "feature level " + std::string(level_name(level)) + ", 11_0 needed"
@@ -156,17 +156,18 @@ bool Context::initialize(const std::string& chosen_gpu, bool debug_layer) {
             continue;
         }
         adapter_ = adapter;
-        device_ = device1;
-        immediate_ = context1;
+        device_ = device;
+        immediate_ = context;
         device_name_ = name;
         caps_ = DeviceCaps{};
         caps_.level = level;
         caps_.vendor = desc.VendorId;
         caps_.dedicated_bytes = desc.DedicatedVideoMemory;
         caps_.unified_memory = unified_memory(desc.DedicatedVideoMemory);
-        caps_.no_overwrite_constants = options.MapNoOverwriteOnDynamicConstantBuffer != FALSE;
+        caps_.flip_model = false;
+        caps_.tearing = false;
         // The debug layer's messages, read back each frame (report_messages): Direct3D 11 has no callback.
-        if ((flags & D3D11_CREATE_DEVICE_DEBUG) != 0u && SUCCEEDED(device1.As(&info_queue_))) {
+        if ((flags & D3D11_CREATE_DEVICE_DEBUG) != 0u && SUCCEEDED(device.As(&info_queue_))) {
             info_queue_->SetMessageCountLimit(4096u);
         }
         std::cout << "[gpu] d3d11 debug-layer=" << (info_queue_ != nullptr ? 1 : 0) << '\n';
@@ -187,13 +188,6 @@ bool Context::initialize(const std::string& chosen_gpu, bool debug_layer) {
         factory_.Reset();
         return false;
     }
-    ComPtr<IDXGIFactory4> factory4;
-    caps_.flip_model = SUCCEEDED(factory_.As(&factory4));
-    ComPtr<IDXGIFactory5> factory5;
-    BOOL tearing = FALSE;
-    caps_.tearing = SUCCEEDED(factory_.As(&factory5)) &&
-                    SUCCEEDED(factory5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &tearing, sizeof(tearing))) &&
-                    tearing != FALSE;
     // The most samples every scene format takes.
     caps_.max_samples = 1u;
     for (const unsigned samples : {2u, 4u, 8u}) {
@@ -207,32 +201,51 @@ bool Context::initialize(const std::string& chosen_gpu, bool debug_layer) {
             caps_.max_samples = samples;
         }
     }
+    // Which formats the compute passes write (typed UAV stores) and read: Direct3D 11.0 guarantees only the 32-bit
+    // single-channel ones, so a driver may refuse the others (a pass that needs one is then without its texture).
+    for (const auto& [format, label] : {std::pair{DXGI_FORMAT_R32_FLOAT, "r32f"}, std::pair{DXGI_FORMAT_R16_FLOAT, "r16f"},
+                                       std::pair{DXGI_FORMAT_R16G16_FLOAT, "rg16f"},
+                                       std::pair{DXGI_FORMAT_R16G16B16A16_FLOAT, "rgba16f"},
+                                       std::pair{DXGI_FORMAT_R8G8B8A8_UNORM, "rgba8"},
+                                       std::pair{DXGI_FORMAT_R10G10B10A2_UNORM, "rgb10a2"}}) {
+        D3D11_FEATURE_DATA_FORMAT_SUPPORT2 support{format, 0u};
+        UINT basic = 0u;
+        (void)device_->CheckFormatSupport(format, &basic);
+        const bool have2 = SUCCEEDED(device_->CheckFeatureSupport(D3D11_FEATURE_FORMAT_SUPPORT2, &support, sizeof(support)));
+        std::cout << "[gpu] format " << label << ": uav=" << ((basic & D3D11_FORMAT_SUPPORT_TYPED_UNORDERED_ACCESS_VIEW) != 0u ? 1 : 0)
+                  << " store=" << (have2 && (support.OutFormatSupport2 & D3D11_FORMAT_SUPPORT2_UAV_TYPED_STORE) != 0u ? 1 : 0)
+                  << " load=" << (have2 && (support.OutFormatSupport2 & D3D11_FORMAT_SUPPORT2_UAV_TYPED_LOAD) != 0u ? 1 : 0)
+                  << " blend=" << ((basic & D3D11_FORMAT_SUPPORT_BLENDABLE) != 0u ? 1 : 0)
+                  << " msaa=" << ((basic & D3D11_FORMAT_SUPPORT_MULTISAMPLE_RENDERTARGET) != 0u ? 1 : 0) << '\n';
+    }
     // The frame fence: ID3D11Fence where the runtime and driver have it (Direct3D 11.4), else event queries.
-    ComPtr<ID3D11Device5> device5;
-    if (SUCCEEDED(device_.As(&device5)) && SUCCEEDED(device5->CreateFence(0u, D3D11_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence_)))) {
-        fence_event_ = CreateEventW(nullptr, FALSE, FALSE, nullptr);
-    } else {
-        fence_.Reset();
-        fence_queries_.resize(8u);
-        D3D11_QUERY_DESC query{D3D11_QUERY_EVENT, 0u};
-        for (ComPtr<ID3D11Query>& q : fence_queries_) {
-            if (FAILED(device_->CreateQuery(&query, &q))) {
-                failure_ = "No event queries";
-                shutdown();
-                return false;
+    {
+        ComPtr<ID3D11Device5> device5;
+        if (SUCCEEDED(device_.As(&device5)) && SUCCEEDED(device5->CreateFence(0u, D3D11_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence_)))) {
+            fence_event_ = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+        } else {
+            fence_.Reset();
+            fence_queries_.resize(8u);
+            D3D11_QUERY_DESC query{D3D11_QUERY_EVENT, 0u};
+            for (ComPtr<ID3D11Query>& q : fence_queries_) {
+                if (FAILED(device_->CreateQuery(&query, &q))) {
+                    failure_ = "No event queries";
+                    shutdown();
+                    return false;
+                }
             }
         }
     }
     submitted_ = completed_ = 0u;
-    // The constant ring (d3d11_context.h): written in place where the device maps it NO_OVERWRITE.
-    ring_mapped_writes_ = caps_.no_overwrite_constants;
+    // The constant ring (d3d11_context.h): an arena in system memory, copied into each slot's own constant buffer when a
+    // piece is bound. (WRITE_NO_OVERWRITE on a constant buffer, and bindings at an offset, are Direct3D 11.1's.)
     if (!make_constant_ring(kConstantRingBytes)) {
         failure_ = "No constant buffer for the draws' constants";
         shutdown();
         return false;
     }
     std::cout << "[gpu] Direct3D 11 on " << device_name_ << ", feature level " << level_name(caps_.level)
-              << (fence_ != nullptr ? ", fence" : ", event queries") << (caps_.tearing ? ", tearing" : "") << '\n';
+              << (fence_ != nullptr ? ", fence" : ", event queries") << ", 11_0 (constants copied into slot buffers)\n";
     return true;
 }
 
@@ -243,10 +256,16 @@ void Context::shutdown() noexcept {
     }
     report_messages();
     ring_.Reset();
+    ring_arena_.clear();
+    ring_arena_.shrink_to_fit();
+    dynamic_scratch_ = {};
+    dynamic_scratch_bytes_ = {};
+    copy_scratch_ = {};
+    upload_scratch_.Reset();
+    upload_scratch_bytes_ = 0u;
     ring_bytes_ = 0u;
     ring_written_ = ring_done_ = 0u;
     ring_marks_.clear();
-    ring_copy_ = {};
     info_queue_.Reset();
     fence_queries_.clear();
     fence_.Reset();
@@ -379,7 +398,8 @@ std::shared_ptr<Texture> Context::create_texture(std::uint32_t width, std::uint3
     desc.Usage = D3D11_USAGE_DEFAULT;
     desc.BindFlags = bind;
     auto texture = std::make_shared<Texture>();
-    if (FAILED(device_->CreateTexture2D(&desc, initial, &texture->texture))) {
+    if (const HRESULT hr = device_->CreateTexture2D(&desc, initial, &texture->texture); FAILED(hr)) {
+        log_texture_failure("CreateTexture2D", name, format, width, height, bind, hr);
         return {};
     }
     set_name(texture->texture.Get(), name);
@@ -392,7 +412,8 @@ std::shared_ptr<Texture> Context::create_texture(std::uint32_t width, std::uint3
                                                                    : DXGI_FORMAT_R32_FLOAT;
         view.ViewDimension = ms ? D3D11_SRV_DIMENSION_TEXTURE2DMS : D3D11_SRV_DIMENSION_TEXTURE2D;
         view.Texture2D.MipLevels = desc.MipLevels;
-        if (FAILED(device_->CreateShaderResourceView(texture->texture.Get(), &view, &texture->view))) {
+        if (const HRESULT hr = device_->CreateShaderResourceView(texture->texture.Get(), &view, &texture->view); FAILED(hr)) {
+            log_texture_failure("shader resource view", name, format, width, height, bind, hr);
             return {};
         }
         if (depth && format != DXGI_FORMAT_D32_FLOAT) {
@@ -405,7 +426,8 @@ std::shared_ptr<Texture> Context::create_texture(std::uint32_t width, std::uint3
         D3D11_RENDER_TARGET_VIEW_DESC view{};
         view.Format = format;
         view.ViewDimension = ms ? D3D11_RTV_DIMENSION_TEXTURE2DMS : D3D11_RTV_DIMENSION_TEXTURE2D;
-        if (FAILED(device_->CreateRenderTargetView(texture->texture.Get(), &view, &texture->target))) {
+        if (const HRESULT hr = device_->CreateRenderTargetView(texture->texture.Get(), &view, &texture->target); FAILED(hr)) {
+            log_texture_failure("render target view", name, format, width, height, bind, hr);
             return {};
         }
     }
@@ -413,7 +435,8 @@ std::shared_ptr<Texture> Context::create_texture(std::uint32_t width, std::uint3
         D3D11_DEPTH_STENCIL_VIEW_DESC view{};
         view.Format = format;
         view.ViewDimension = ms ? D3D11_DSV_DIMENSION_TEXTURE2DMS : D3D11_DSV_DIMENSION_TEXTURE2D;
-        if (FAILED(device_->CreateDepthStencilView(texture->texture.Get(), &view, &texture->depth))) {
+        if (const HRESULT hr = device_->CreateDepthStencilView(texture->texture.Get(), &view, &texture->depth); FAILED(hr)) {
+            log_texture_failure("depth stencil view", name, format, width, height, bind, hr);
             return {};
         }
         if ((bind & D3D11_BIND_SHADER_RESOURCE) != 0u) {
@@ -425,7 +448,8 @@ std::shared_ptr<Texture> Context::create_texture(std::uint32_t width, std::uint3
         D3D11_UNORDERED_ACCESS_VIEW_DESC view{};
         view.Format = format;
         view.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
-        if (FAILED(device_->CreateUnorderedAccessView(texture->texture.Get(), &view, &texture->storage))) {
+        if (const HRESULT hr = device_->CreateUnorderedAccessView(texture->texture.Get(), &view, &texture->storage); FAILED(hr)) {
+            log_texture_failure("unordered access view", name, format, width, height, bind, hr);
             return {};
         }
     }
@@ -475,8 +499,11 @@ ID3D11Buffer* Buffer::bound(BufferUse use) {
         D3D11_BUFFER_DESC desc{};
         desc.ByteWidth = static_cast<UINT>(size);
         desc.Usage = D3D11_USAGE_DEFAULT;
+        // Constants: no bind flags. The buffer is only the source of the windows copied into the slots' constant buffers
+        // (Context::bind_buffer_window), and a buffer that is not a constant buffer takes UpdateSubresource's box on
+        // Direct3D 11.0 (a constant buffer must be written whole there).
         desc.BindFlags = use == BufferUse::Geometry    ? D3D11_BIND_VERTEX_BUFFER | D3D11_BIND_INDEX_BUFFER
-                         : use == BufferUse::Constants ? D3D11_BIND_CONSTANT_BUFFER
+                         : use == BufferUse::Constants ? 0u
                                                        : D3D11_BIND_SHADER_RESOURCE;
         if (use == BufferUse::Rows) {
             desc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
@@ -531,6 +558,7 @@ Buffer::~Buffer() {
 void Context::upload_written() {
     std::lock_guard guard(buffers_mutex_);
     std::vector<void*>& pages = written_pages_;
+    static const bool full_upload = GetEnvironmentVariableA("NEBULA_D3D11_FULL_UPLOAD", nullptr, 0u) != 0u;
     if (pages.size() < 4096u) {
         pages.resize(4096u);
     }
@@ -547,56 +575,126 @@ void Context::upload_written() {
         ULONG_PTR count = pages.size();
         DWORD page_bytes = 4096u;
         // Every written page since the last call; read and reset in one call, so a write after it is seen next time.
-        while (GetWriteWatch(WRITE_WATCH_FLAG_RESET, buffer->shadow, buffer->size, pages.data(), &count, &page_bytes) == 0u) {
-            if (count != 0u) {
-                // Runs of adjacent pages, each one UpdateSubresource1 into every video-memory buffer made.
-                std::size_t i = 0;
-                while (i < count) {
-                    const auto* first = static_cast<const std::byte*>(pages[i]);
-                    std::size_t j = i + 1u;
-                    while (j < count && static_cast<const std::byte*>(pages[j]) ==
-                                            static_cast<const std::byte*>(pages[j - 1u]) + page_bytes) {
-                        ++j;
-                    }
-                    const std::uint64_t begin = static_cast<std::uint64_t>(first - buffer->shadow);
-                    const std::uint64_t end = std::min<std::uint64_t>(begin + (j - i) * page_bytes, buffer->size);
-                    for (std::size_t use = 0; use < buffer->gpu.size(); ++use) {
-                        if (buffer->gpu[use] == nullptr) {
-                            continue;
-                        }
-                        // Constant buffers are written in 16-byte steps (ConstantBufferPartialUpdate); pages are aligned.
-                        const D3D11_BOX box{static_cast<UINT>(begin), 0u, 0u, static_cast<UINT>(end), 1u, 1u};
-                        immediate_->UpdateSubresource1(buffer->gpu[use].Get(), 0u, &box, buffer->shadow + begin, 0u, 0u,
-                                                       D3D11_COPY_NO_OVERWRITE);
-                    }
-                    i = j;
+        if (full_upload) {
+            // Diagnostic (NEBULA_D3D11_FULL_UPLOAD=1): drain the written pages, then push the whole buffer if any was written.
+            bool dirty = false;
+            while (GetWriteWatch(WRITE_WATCH_FLAG_RESET, buffer->shadow, buffer->size, pages.data(), &count, &page_bytes) == 0u) {
+                dirty = dirty || count != 0u;
+                if (count < pages.size()) {
+                    break;
                 }
+                count = pages.size();
+            }
+            if (dirty) {
+                for (const ComPtr<ID3D11Buffer>& made : buffer->gpu) {
+                    if (made != nullptr) {
+                        immediate_->UpdateSubresource(made.Get(), 0u, nullptr, buffer->shadow, 0u, 0u);
+                    }
+                }
+            }
+            continue;
+        }
+        // The runs of consecutive written pages (byte ranges of the buffer).
+        upload_runs_.clear();
+        std::uint64_t total = 0u;
+        while (GetWriteWatch(WRITE_WATCH_FLAG_RESET, buffer->shadow, buffer->size, pages.data(), &count, &page_bytes) == 0u) {
+            std::size_t i = 0;
+            while (i < count) {
+                const auto* first = static_cast<const std::byte*>(pages[i]);
+                std::size_t j = i + 1u;
+                while (j < count && static_cast<const std::byte*>(pages[j]) == static_cast<const std::byte*>(pages[j - 1u]) + page_bytes) {
+                    ++j;
+                }
+                const std::uint64_t begin = static_cast<std::uint64_t>(first - buffer->shadow);
+                const std::uint64_t end = std::min<std::uint64_t>(begin + (j - i) * page_bytes, buffer->size);
+                upload_runs_.emplace_back(begin, end);
+                total += end - begin;
+                i = j;
             }
             if (count < pages.size()) {
                 break;
             }
-            // More pages than the array holds: the rest after a second call (the first reset only those it returned).
             count = pages.size();
+        }
+        if (upload_runs_.empty()) {
+            continue;
+        }
+        // Direct3D 11.0's boxed UpdateSubresource of a buffer is not trusted (this path replaced it): the runs are packed
+        // into a DYNAMIC buffer written with Map DISCARD (a new one for each upload, so no copy still to run reads what
+        // is overwritten), and each run is copied from it into every video-memory copy with CopySubresourceRegion.
+        ID3D11Buffer* const upload = upload_scratch(static_cast<std::size_t>(total));
+        D3D11_MAPPED_SUBRESOURCE mapped{};
+        if (upload == nullptr || FAILED(immediate_->Map(upload, 0u, D3D11_MAP_WRITE_DISCARD, 0u, &mapped))) {
+            for (const ComPtr<ID3D11Buffer>& made : buffer->gpu) {
+                if (made != nullptr) {
+                    immediate_->UpdateSubresource(made.Get(), 0u, nullptr, buffer->shadow, 0u, 0u);
+                }
+            }
+            continue;
+        }
+        std::uint64_t packed = 0u;
+        for (const auto& [begin, end] : upload_runs_) {
+            std::memcpy(static_cast<std::byte*>(mapped.pData) + packed, buffer->shadow + begin, static_cast<std::size_t>(end - begin));
+            packed += end - begin;
+        }
+        immediate_->Unmap(upload, 0u);
+        for (const ComPtr<ID3D11Buffer>& made : buffer->gpu) {
+            if (made == nullptr) {
+                continue;
+            }
+            packed = 0u;
+            for (const auto& [begin, end] : upload_runs_) {
+                const D3D11_BOX box{static_cast<UINT>(packed), 0u, 0u, static_cast<UINT>(packed + (end - begin)), 1u, 1u};
+                immediate_->CopySubresourceRegion(made.Get(), 0u, static_cast<UINT>(begin), 0u, 0u, upload, 0u, &box);
+                packed += end - begin;
+            }
         }
     }
 }
 
+ID3D11Buffer* Context::upload_scratch(std::size_t bytes) noexcept {
+    if (bytes == 0u) {
+        return nullptr;
+    }
+    if (upload_scratch_ == nullptr || upload_scratch_bytes_ < bytes) {
+        std::size_t want = std::size_t{1} << 20u;
+        while (want < bytes) {
+            want <<= 1u;
+        }
+        D3D11_BUFFER_DESC desc{};
+        desc.ByteWidth = static_cast<UINT>(want);
+        desc.Usage = D3D11_USAGE_DYNAMIC;
+        desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;  // a dynamic buffer needs a bind flag; it is only ever copied from
+        desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+        ComPtr<ID3D11Buffer> made;
+        if (FAILED(device_->CreateBuffer(&desc, nullptr, &made))) {
+            return nullptr;
+        }
+        upload_scratch_ = std::move(made);
+        upload_scratch_bytes_ = want;
+    }
+    return upload_scratch_.Get();
+}
+
+// The ring is an arena in system memory (d3d11_context.h); `ring_` is a one-constant buffer that only gives the places a
+// non-null ConstantPlace::buffer to tell a piece from a refusal.
 bool Context::make_constant_ring(std::size_t bytes) {
     D3D11_BUFFER_DESC desc{};
-    desc.ByteWidth = static_cast<UINT>(bytes);
+    desc.ByteWidth = 16u;
     desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-    desc.Usage = ring_mapped_writes_ ? D3D11_USAGE_DYNAMIC : D3D11_USAGE_DEFAULT;
-    desc.CPUAccessFlags = ring_mapped_writes_ ? D3D11_CPU_ACCESS_WRITE : 0u;
-    ComPtr<ID3D11Buffer> ring;
-    if (FAILED(device_->CreateBuffer(&desc, nullptr, &ring))) {
+    desc.Usage = D3D11_USAGE_DEFAULT;
+    ComPtr<ID3D11Buffer> token;
+    if (FAILED(device_->CreateBuffer(&desc, nullptr, &token))) {
         return false;
     }
-    // The old ring lives on while recorded commands or bindings name it (the runtime holds it until then): every
-    // place in the new one is free.
-    ring_ = std::move(ring);
+    try {
+        ring_arena_.assign(bytes, std::byte{0});
+    } catch (const std::bad_alloc&) {
+        return false;
+    }
+    ring_ = std::move(token);
     ring_bytes_ = bytes;
     ++ring_generation_;
-    ring_fresh_ = true;
     ring_written_ = 0u;
     ring_done_ = 0u;
     ring_marks_.clear();
@@ -605,21 +703,19 @@ bool Context::make_constant_ring(std::size_t bytes) {
 
 std::byte* Context::begin_constants(std::size_t bytes, ConstantPlace& place) {
     place = {};
-    if (ring_ == nullptr || bytes == 0u) {
+    if (ring_ == nullptr || ring_arena_.empty() || bytes == 0u) {
         return nullptr;
     }
     const std::size_t size = (bytes + 255u) & ~std::size_t{255u};
-    while (size > ring_bytes_ / 4u) {
-        if (ring_bytes_ >= kConstantRingMostBytes || !make_constant_ring(ring_bytes_ * 2u)) {
-            return nullptr;
-        }
+    if (size > ring_bytes_ / 4u) {
+        return nullptr;  // the arena does not grow
     }
     // The piece in one run: a tail too short for it stays unused this time round.
     std::uint64_t start = ring_written_;
     if (start % ring_bytes_ + size > ring_bytes_) {
         start += ring_bytes_ - start % ring_bytes_;
     }
-    // Last time round these bytes held pieces up to `needed`: the commands that read them must have run.
+    // Last time round these bytes held pieces up to `needed`: the commands recorded while they were bound must have run.
     if (start + size > ring_bytes_) {
         const std::uint64_t needed = start + size - ring_bytes_;
         const auto retire = [this] {
@@ -634,52 +730,31 @@ std::byte* Context::begin_constants(std::size_t bytes, ConstantPlace& place) {
             retire();
         }
         if (ring_done_ < needed) {
-            if (ring_bytes_ < kConstantRingMostBytes) {
-                // Commands still waiting read the whole ring: a larger one holds every frame in flight.
-                if (!make_constant_ring(ring_bytes_ * 2u)) {
-                    return nullptr;
+            // The first mark past `needed`; its commands not yet submitted (this frame's own): submitted now.
+            std::uint64_t fence = submitted_ + 1u;
+            for (const RingMark& mark : ring_marks_) {
+                if (mark.written >= needed) {
+                    fence = mark.fence;
+                    break;
                 }
-                start = 0u;
-            } else {
-                // The first mark past `needed`; its commands not yet submitted (this frame's own): submitted now.
-                std::uint64_t fence = submitted_ + 1u;
-                for (const RingMark& mark : ring_marks_) {
-                    if (mark.written >= needed) {
-                        fence = mark.fence;
-                        break;
-                    }
-                }
-                if (fence > submitted_) {
-                    fence = signal();
-                }
-                if (!wait(fence)) {
-                    return nullptr;
-                }
-                retire();
-                if (ring_done_ < needed) {
-                    return nullptr;
-                }
+            }
+            if (fence > submitted_) {
+                fence = signal();
+            }
+            if (!wait(fence)) {
+                return nullptr;
+            }
+            retire();
+            if (ring_done_ < needed) {
+                return nullptr;
             }
         }
     }
     const std::size_t at = static_cast<std::size_t>(start % ring_bytes_);
-    std::byte* data = nullptr;
-    if (ring_mapped_writes_) {
-        D3D11_MAPPED_SUBRESOURCE mapped{};
-        if (FAILED(immediate_->Map(ring_.Get(), 0u, ring_fresh_ ? D3D11_MAP_WRITE_DISCARD : D3D11_MAP_WRITE_NO_OVERWRITE, 0u,
-                                   &mapped))) {
-            return nullptr;
-        }
-        data = static_cast<std::byte*>(mapped.pData) + at;
-    } else {
-        ring_copy_.resize(size);
-        data = ring_copy_.data();
-    }
-    ring_fresh_ = false;
     ring_piece_at_ = at;
     ring_piece_bytes_ = size;
     ring_written_ = start + size;
-    // The commands that read the piece are recorded from here until the next signal: its value covers them.
+    // The commands that bind the piece are recorded from here until the next signal: its value covers them.
     const std::uint64_t fence = submitted_ + 1u;
     if (!ring_marks_.empty() && ring_marks_.back().fence == fence) {
         ring_marks_.back().written = ring_written_;
@@ -689,17 +764,11 @@ std::byte* Context::begin_constants(std::size_t bytes, ConstantPlace& place) {
     place.buffer = ring_.Get();
     place.first = static_cast<UINT>(at / 16u);
     place.count = static_cast<UINT>(size / 16u);
-    return data;
+    return ring_arena_.data() + at;
 }
 
 void Context::end_constants() {
-    if (ring_mapped_writes_) {
-        immediate_->Unmap(ring_.Get(), 0u);
-        return;
-    }
-    const D3D11_BOX box{static_cast<UINT>(ring_piece_at_), 0u, 0u, static_cast<UINT>(ring_piece_at_ + ring_piece_bytes_), 1u,
-                        1u};
-    immediate_->UpdateSubresource1(ring_.Get(), 0u, &box, ring_copy_.data(), 0u, 0u, D3D11_COPY_NO_OVERWRITE);
+    // Nothing to do: the arena is plain memory, read when the piece is bound.
 }
 
 Context::ConstantPlace Context::put_constants(const void* data, std::size_t bytes) {
@@ -715,6 +784,111 @@ Context::ConstantPlace Context::put_constants(const void* data, std::size_t byte
     std::memset(at + bytes, 0, static_cast<std::size_t>(place.count) * 16u - bytes);
     end_constants();
     return place;
+}
+
+ID3D11Buffer* Context::dynamic_scratch(unsigned index, std::size_t bytes) noexcept {
+    if (index >= kScratchSlots || bytes == 0u || bytes > 65536u) {
+        return nullptr;
+    }
+    std::size_t want = 256u;
+    while (want < bytes) {
+        want <<= 1u;
+    }
+    if (dynamic_scratch_[index] == nullptr || dynamic_scratch_bytes_[index] < want) {
+        D3D11_BUFFER_DESC desc{};
+        desc.ByteWidth = static_cast<UINT>(want);
+        desc.Usage = D3D11_USAGE_DYNAMIC;
+        desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+        desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+        ComPtr<ID3D11Buffer> made;
+        if (FAILED(device_->CreateBuffer(&desc, nullptr, &made))) {
+            return nullptr;
+        }
+        dynamic_scratch_[index] = std::move(made);
+        dynamic_scratch_bytes_[index] = want;
+    }
+    return dynamic_scratch_[index].Get();
+}
+
+ID3D11Buffer* Context::copy_scratch(unsigned index) noexcept {
+    if (index >= kScratchSlots) {
+        return nullptr;
+    }
+    if (copy_scratch_[index] == nullptr) {
+        D3D11_BUFFER_DESC desc{};
+        desc.ByteWidth = kMostBoundConstants * 16u;
+        desc.Usage = D3D11_USAGE_DEFAULT;
+        desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+        ComPtr<ID3D11Buffer> made;
+        if (FAILED(device_->CreateBuffer(&desc, nullptr, &made))) {
+            return nullptr;
+        }
+        copy_scratch_[index] = std::move(made);
+    }
+    return copy_scratch_[index].Get();
+}
+
+void Context::bind_scratch(unsigned stages, UINT slot, ID3D11Buffer* buffer) noexcept {
+    if ((stages & kVertexConstants) != 0u) {
+        immediate_->VSSetConstantBuffers(slot, 1u, &buffer);
+    }
+    if ((stages & kPixelConstants) != 0u) {
+        immediate_->PSSetConstantBuffers(slot, 1u, &buffer);
+    }
+}
+
+void Context::bind_place(unsigned stages, UINT slot, const ConstantPlace& place) noexcept {
+    if (slot >= kComputeScratch || place.buffer == nullptr || place.count == 0u) {
+        bind_scratch(stages, slot, nullptr);
+        return;
+    }
+    const std::size_t bytes = static_cast<std::size_t>(std::min<UINT>(place.count, 4096u)) * 16u;
+    ID3D11Buffer* const scratch = dynamic_scratch(slot, bytes);
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    if (scratch == nullptr || FAILED(immediate_->Map(scratch, 0u, D3D11_MAP_WRITE_DISCARD, 0u, &mapped))) {
+        bind_scratch(stages, slot, nullptr);
+        return;
+    }
+    auto* const out = static_cast<std::byte*>(mapped.pData);
+    std::memcpy(out, ring_arena_.data() + static_cast<std::size_t>(place.first) * 16u, bytes);
+    if (dynamic_scratch_bytes_[slot] > bytes) {
+        std::memset(out + bytes, 0, dynamic_scratch_bytes_[slot] - bytes);
+    }
+    immediate_->Unmap(scratch, 0u);
+    bind_scratch(stages, slot, scratch);
+}
+
+void Context::bind_compute_place(const ConstantPlace& place, bool clear_after) noexcept {
+    ID3D11Buffer* const none = nullptr;
+    immediate_->CSSetConstantBuffers(0u, 1u, &none);
+    if (place.buffer == nullptr || place.count == 0u || clear_after) {
+        return;
+    }
+    const std::size_t bytes = static_cast<std::size_t>(std::min<UINT>(place.count, 4096u)) * 16u;
+    ID3D11Buffer* const scratch = dynamic_scratch(kComputeScratch, bytes);
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    if (scratch == nullptr || FAILED(immediate_->Map(scratch, 0u, D3D11_MAP_WRITE_DISCARD, 0u, &mapped))) {
+        return;
+    }
+    auto* const out = static_cast<std::byte*>(mapped.pData);
+    std::memcpy(out, ring_arena_.data() + static_cast<std::size_t>(place.first) * 16u, bytes);
+    if (dynamic_scratch_bytes_[kComputeScratch] > bytes) {
+        std::memset(out + bytes, 0, dynamic_scratch_bytes_[kComputeScratch] - bytes);
+    }
+    immediate_->Unmap(scratch, 0u);
+    immediate_->CSSetConstantBuffers(0u, 1u, &scratch);
+}
+
+void Context::bind_buffer_window(unsigned stages, UINT slot, ID3D11Buffer* source, UINT first, UINT count) noexcept {
+    ID3D11Buffer* const scratch = slot < kComputeScratch && source != nullptr && count != 0u ? copy_scratch(slot) : nullptr;
+    if (scratch == nullptr) {
+        bind_scratch(stages, slot, nullptr);
+        return;
+    }
+    const UINT n = std::min(count, kMostBoundConstants);
+    const D3D11_BOX box{first * 16u, 0u, 0u, (first + n) * 16u, 1u, 1u};
+    immediate_->CopySubresourceRegion(scratch, 0u, 0u, 0u, 0u, source, 0u, &box);
+    bind_scratch(stages, slot, scratch);
 }
 
 std::uint64_t Context::register_address(Buffer* buffer) {

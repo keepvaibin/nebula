@@ -46,10 +46,9 @@ void test_rules() {
     check(d3d12_refusal({true, 2u, 0x60u}) == RendererRefusal::kNone, "d3d12: tier 2 and 6.0 run");
 
     check(d3d11_refusal({}) == RendererRefusal::kNoDevice, "d3d11: no device");
-    check(d3d11_refusal({true, 0xa100u, true, true}) == RendererRefusal::kFeatureLevel, "d3d11: 10_1");
-    check(d3d11_refusal({true, 0xb000u, false, true}) == RendererRefusal::kNoD3D11_1, "d3d11: no 11.1 runtime");
-    check(d3d11_refusal({true, 0xb100u, true, false}) == RendererRefusal::kConstantBufferOffsets, "d3d11: no offsets");
-    check(d3d11_refusal({true, 0xb000u, true, true}) == RendererRefusal::kNone, "d3d11: 11_0 runs");
+    check(d3d11_refusal({true, 0xa100u}) == RendererRefusal::kFeatureLevel, "d3d11: 10_1");
+    check(d3d11_refusal({true, 0xb000u}) == RendererRefusal::kNone, "d3d11: 11_0 runs (WDDM 1.1)");
+    check(d3d11_refusal({true, 0xb100u}) == RendererRefusal::kNone, "d3d11: 11_1 runs");
 
     constexpr std::uint32_t v10 = 1u << 22u;
     constexpr std::uint32_t v11 = (1u << 22u) | (1u << 12u);

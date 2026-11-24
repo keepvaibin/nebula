@@ -30,7 +30,7 @@ constexpr DXGI_FORMAT kDistanceFormat = DXGI_FORMAT_R32_FLOAT;
 
 }  // namespace
 
-bool AmbientOcclusion::initialize(ID3D11Device1* device) {
+bool AmbientOcclusion::initialize(ID3D11Device* device) {
     shutdown();
     device_ = device;
     if (device_ == nullptr) {
@@ -114,7 +114,7 @@ void AmbientOcclusion::trim_idle() {
 
 // `count` elements of `stride` bytes (at least one element: an empty list still binds a buffer) into `rows`, copied in
 // after the commands recorded before (the last frame's passes read their own).
-bool AmbientOcclusion::upload(ID3D11DeviceContext1* context, Rows& rows, const void* data, std::uint32_t count,
+bool AmbientOcclusion::upload(ID3D11DeviceContext* context, Rows& rows, const void* data, std::uint32_t count,
                               std::uint32_t stride) {
     const std::uint32_t needed = std::max(count, 1u);
     if (!rows.buffer || rows.capacity < needed) {
@@ -147,7 +147,7 @@ bool AmbientOcclusion::upload(ID3D11DeviceContext1* context, Rows& rows, const v
 
 // One compute pass: t1 the occlusion it reads (t0 the depth, t2 the distances, t3-t4 the models stay bound), u0 its
 // output. Its output's old inputs are let go first (Direct3D 11 nulls a view bound for reading and writing at once).
-void AmbientOcclusion::dispatch(ID3D11DeviceContext1* context, ID3D11ComputeShader* shader,
+void AmbientOcclusion::dispatch(ID3D11DeviceContext* context, ID3D11ComputeShader* shader,
                                 ID3D11ShaderResourceView* occlusion, Texture& output, unsigned width, unsigned height) {
     ID3D11ShaderResourceView* const none = nullptr;
     context->CSSetShaderResources(1u, 1u, &none);
@@ -158,7 +158,7 @@ void AmbientOcclusion::dispatch(ID3D11DeviceContext1* context, ID3D11ComputeShad
     context->Dispatch((width + 7u) / 8u, (height + 7u) / 8u, 1u);
 }
 
-bool AmbientOcclusion::record(ID3D11DeviceContext1* context, const Inputs& in) {
+bool AmbientOcclusion::record(ID3D11DeviceContext* context, const Inputs& in) {
     if (!ready_ || in.depth == nullptr || !in.depth->view || in.color == nullptr || in.width == 0u || in.height == 0u ||
         in.objects == nullptr) {
         return false;
@@ -195,7 +195,10 @@ bool AmbientOcclusion::record(ID3D11DeviceContext1* context, const Inputs& in) {
     context->OMSetRenderTargets(0u, nullptr, nullptr);
     ID3D11UnorderedAccessView* const no_storage = nullptr;
     {
-        const ComputeConstants bound(context, constants);  // the three passes', emptied after the last
+        // The three passes' constants; emptied after the last. On FL 11_0 the Context copies the piece into its own
+        // scratch buffer (bind_compute_place falls back to it when scratch is null).
+        const ComputeConstants bound(nullptr, constants);
+
         ID3D11ShaderResourceView* const fixed[5] = {in.depth->view.Get(), nullptr, nullptr, objects_.view.Get(),
                                                     tiles_.view.Get()};
         context->CSSetShaderResources(0u, 5u, fixed);
@@ -216,7 +219,7 @@ bool AmbientOcclusion::record(ID3D11DeviceContext1* context, const Inputs& in) {
     context->OMSetRenderTargets(1u, &color, nullptr);
     ID3D11ShaderResourceView* const inputs[2] = {in.depth->view.Get(), denoised_->view.Get()};
     context->PSSetShaderResources(0u, 2u, inputs);
-    bind_place(context, kVertexConstants | kPixelConstants, 0u, constants);
+    Context::get().bind_place(kVertexConstants | kPixelConstants, 0u, constants);
     context->IASetInputLayout(nullptr);
     context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     context->VSSetShader(apply_vs_.Get(), nullptr, 0u);

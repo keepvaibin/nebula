@@ -52,7 +52,7 @@ int main() {
         passed &= expect(watch.initialize(context.device(), bytes), "the watch's objects are made");
     }
     if (passed) {
-        ID3D11DeviceContext1* const immediate = context.immediate();
+        ID3D11DeviceContext* const immediate = context.immediate();
         // Frames as the renderer runs them: each compares the reads before it and writes a piece numbered 1, 2, 3.
         for (int frame = 0; frame < 3; ++frame) {
             watch.frame(immediate);

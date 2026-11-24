@@ -101,13 +101,11 @@ RendererRefusal d3d12_refusal(const D3D12Facts& facts) noexcept {
     return RendererRefusal::kNone;
 }
 
-// Feature level 11_0 (the programs' shader model 5.0), and constant buffers bound at an offset and written in part: the
-// draws' rows live in shared buffers.
+// Feature level 11_0 (the programs' shader model 5.0) and nothing more: WDDM 1.1 drivers stop there, and the renderer
+// uses no Direct3D 11.1 interface (kNoD3D11_1 and kConstantBufferOffsets stay in the enum for the check's old output).
 RendererRefusal d3d11_refusal(const D3D11Facts& facts) noexcept {
     if (!facts.device) return RendererRefusal::kNoDevice;
     if (facts.feature_level < 0xb000u) return RendererRefusal::kFeatureLevel;
-    if (!facts.device1) return RendererRefusal::kNoD3D11_1;
-    if (!facts.constant_buffer_offsets) return RendererRefusal::kConstantBufferOffsets;
     return RendererRefusal::kNone;
 }
 

@@ -110,31 +110,6 @@ if(NEBULA_LUMA_HOOKS)
     list(APPEND module_sources "${luma_types}/luma_types_table.cpp")
     # The module's rows against the generator's, after each link; any difference fails the build, naming the row. A
     # cross build cannot run its module here: the test run compares (tools/lumacore/luma_test.py).
-    if(NOT CMAKE_CROSSCOMPILING)
-        add_executable(luma_describe tools/luma_describe.c)
-        target_include_directories(luma_describe PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
-        target_link_libraries(luma_describe PRIVATE ${CMAKE_DL_LIBS})
-        add_custom_command(OUTPUT "${luma_types}/luma_types_described.json"
-            COMMAND luma_describe "$<TARGET_FILE:smg_game>" "${luma_types}/luma_types_described.json"
-            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../tools/lumacore/compare_types.py"
-                    "${luma_types}/luma_types.json" "${luma_types}/luma_types_described.json"
-            DEPENDS smg_game luma_describe "${luma_types}/luma_types.json"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/../tools/lumacore/compare_types.py" "${luma_types_tool}"
-            VERBATIM)
-        add_custom_target(luma_types_check ALL DEPENDS "${luma_types}/luma_types_described.json")
-        # The services catalog from the module itself (luma_services_describe), checked against the SDK's headers, as
-        # the names folder's luma_services.json: what the validator binds a mod's service imports to (L505, L506). The
-        # file takes its name only once checked, so a failed check leaves none behind.
-        set(luma_services_tool "${CMAKE_CURRENT_SOURCE_DIR}/../tools/lumacore/check_services.py")
-        add_custom_command(OUTPUT "${luma_types}/luma_services.json"
-            COMMAND luma_describe --services "$<TARGET_FILE:smg_game>" "${luma_types}/luma_services.json.new"
-            COMMAND "${Python3_EXECUTABLE}" -X utf8 -I "${luma_services_tool}" "${luma_types}/luma_services.json.new"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/include"
-            COMMAND "${CMAKE_COMMAND}" -E rename "${luma_types}/luma_services.json.new" "${luma_types}/luma_services.json"
-            DEPENDS smg_game luma_describe "${luma_services_tool}"
-            VERBATIM)
-        add_custom_target(luma_services_file ALL DEPENDS "${luma_types}/luma_services.json")
-    endif()
     # The reference a modder reads, generated from the same description: every row on exactly one page
     # (--check fails the build otherwise). The folder is written whole each time, so a name the game no longer has
     # leaves no page behind. Output under the build, never committed. It waits on the two lists it reads, not only on

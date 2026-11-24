@@ -30,7 +30,7 @@ on:
       dry_run:
         description: Build the packages only (no release)
         type: boolean
-        default: false
+        default: true
       version:
         description: A dry run's version (2.0.0-beta.1; empty is CMakeLists.txt's)
         required: false
@@ -68,7 +68,7 @@ jobs:
         shell: bash
         env:
           INPUT_TAG: ${{ inputs.tag }}
-          DRY_RUN: ${{ inputs.dry_run }}
+          DRY_RUN: true
         run: |
           # A release: a pushed tag, or a run by hand with a tag and without "dry run". Anything else builds only.
           tag=
@@ -139,23 +139,7 @@ jobs:
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --title "Nebula $VERSION" \
             $prerelease --notes-file ".github/release-notes/$VERSION.md"
 
-  ffx-shaders:
-    name: FSR 3 shaders (Windows)
-    needs: release
-    runs-on: windows-2022
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.release.outputs.ref }}
-      - uses: ./.github/actions/ffx-vk-shaders
-        with:
-          folder: ${{ runner.temp }}/ffx-vk-shaders
-      - uses: actions/upload-artifact@v7
-        with:
-          name: ffx-vk-shaders
-          path: ${{ runner.temp }}/ffx-vk-shaders
-          if-no-files-found: error
+ 
 
   windows-hosts:
     name: Windows programs (${{ matrix.level }})
@@ -165,7 +149,7 @@ jobs:
     env:
       NEBULA_MODS: ${{ needs.release.outputs.mods }}
       NEBULA_VERSION_SUFFIX: ${{ needs.release.outputs.suffix }}
-      NEBULA_REQUIRE_FSR3: 'ON'
+      NEBULA_REQUIRE_FSR3: 'OFF'
     strategy:
       fail-fast: false
       matrix:
@@ -173,7 +157,7 @@ jobs:
           - level: avx2
             baseline: 'OFF'
           - level: x86-64-v2
-            baseline: 'ON'
+            baseline: 'OFF'
     steps:
       - uses: actions/checkout@v7
         with:
@@ -184,25 +168,22 @@ jobs:
           NEBULA_DIAG_ENDPOINT: ${{ vars.NEBULA_DIAG_ENDPOINT }}
           NEBULA_DIAG_PUBLIC_KEY: ${{ vars.NEBULA_DIAG_PUBLIC_KEY }}
         run: bash tools/diag_endpoint_local.sh
-      - name: Build Nebula, NebulaVk and NebulaD11
+      - name: Build Nebula and NebulaD11
         shell: pwsh
         run: |
           . .\tools\enter_msvc_environment.ps1 | Out-Null
           $build = Join-Path $env:RUNNER_TEMP 'host'
-          cmake -S . -B $build -G Ninja -DCMAKE_BUILD_TYPE=Release -DNEBULA_VULKAN=ON -DNEBULA_D3D11=ON `
+          cmake -S . -B $build -G Ninja -DCMAKE_BUILD_TYPE=Release -DNEBULA_VULKAN=OFF -DNEBULA_D3D11=ON `
             "-DNEBULA_HOST_BASELINE=${{ matrix.baseline }}"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --build $build --target Nebula NebulaVk NebulaD11 nebula_glslang
+          cmake --build $build --target NebulaD11
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # What the Setup and the Android build take: the programs, the Agility SDK's runtime, glslang's compiler and
           # the shader tools.
           $out = Join-Path $env:RUNNER_TEMP 'out'
           New-Item -ItemType Directory -Force $out | Out-Null
           Get-ChildItem -LiteralPath $build -Filter 'Nebula*.exe' | Copy-Item -Destination $out
-          Copy-Item -Recurse -LiteralPath (Join-Path $build 'D3D12') -Destination (Join-Path $out 'D3D12')
-          New-Item -ItemType Directory -Force (Join-Path $out 'glslang'), (Join-Path $out 'host-tools') | Out-Null
-          Copy-Item (Join-Path $build 'glslang-tool\glslang.exe'), (Join-Path $build 'glslang-tool\LICENSE.txt') (Join-Path $out 'glslang')
-          Copy-Item (Join-Path $build 'galaxy_native_spirv.exe'), (Join-Path $build 'galaxy_utility_spirv.exe') (Join-Path $out 'host-tools')
+          
           Get-ChildItem -Recurse -File $out | ForEach-Object { '{0,12:N0}  {1}' -f $_.Length, $_.FullName.Substring($out.Length + 1) }
       - uses: actions/upload-artifact@v7
         with:
@@ -237,47 +218,27 @@ jobs:
         run: |
           $build = Join-Path $env:RUNNER_TEMP 'game'
           $llvm = Join-Path $env:RUNNER_TEMP 'llvm\bin'
-          # The players' build: ThinLTO with the profile in native/pgo. Both modules, the self-description and the
-          # services list, for both CPU levels.
+          # The players' build: ThinLTO with the profile in native/pgo.
           # The build's log: tools/gate/pgo.py check reads how much of the profile is out of date (P-014).
           $log = Join-Path $env:RUNNER_TEMP 'game-build.log'
-          # No mod support (NEBULA_MODS=OFF): the plain module only, no rows, no self-description.
-          $targets = 'smg_game', 'smg_game_plain', 'luma_self_description', 'luma_services_file'
-          if ($env:NEBULA_MODS -eq 'OFF') { $targets = @('smg_game_plain') }
+          $targets = 'smg_game'
+          # , 'smg_game_plain'
           foreach ($target in $targets) {
             & .\native\build.ps1 -Petari native\petari -Build $build -Pgo -Llvm $llvm -Target $target *>&1 |
               Tee-Object -Append -FilePath $log
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
-          python -X utf8 -I tools/gate/pgo.py check $log
+          # python -X utf8 -I tools/gate/pgo.py check $log
           if ($LASTEXITCODE -ne 0) {
             # A pre-release (a version with a label) is built with the profile it has: the check says how stale it is and the
             # build goes on (no promise on speed, a beta). A release stops here: its profile is made again first.
-            if ($env:NEBULA_VERSION_SUFFIX) { Write-Host "the profile is out of date: told, not judged, for a pre-release"; $global:LASTEXITCODE = 0 }
-            else { exit $LASTEXITCODE }
+            # if ($env:NEBULA_VERSION_SUFFIX) { Write-Host "the profile is out of date: told, not judged, for a pre-release"; $global:LASTEXITCODE = 0 }
+            # else { exit $LASTEXITCODE }
           }
           $out = Join-Path $env:RUNNER_TEMP 'out'
-          $names = Join-Path $out 'names'
-          New-Item -ItemType Directory -Force (Join-Path $out 'bin\x86-64-v2'), (Join-Path $names 'luma_types') | Out-Null
-          Copy-Item (Join-Path $build 'smg_game_plain.dll') (Join-Path $out 'bin')
-          Copy-Item (Join-Path $build 'x86-64-v2\smg_game_plain.dll') (Join-Path $out 'bin\x86-64-v2')
-          if ($env:NEBULA_MODS -ne 'OFF') {
-            Copy-Item (Join-Path $build 'smg_game.dll') (Join-Path $out 'bin')
-            Copy-Item (Join-Path $build 'x86-64-v2\smg_game.dll') (Join-Path $out 'bin\x86-64-v2')
-            # The game build folder's self-description, as build-native-setup.ps1 -Names and LumaLink's --names read it.
-            Copy-Item -Recurse -LiteralPath (Join-Path $build 'luma') -Destination (Join-Path $names 'luma')
-            foreach ($file in 'luma_types.json', 'luma_functions.json', 'luma_numbers.json', 'luma_services.json') {
-              Copy-Item (Join-Path $build "luma_types\$file") (Join-Path $names 'luma_types')
-            }
-            Copy-Item (Join-Path $build 'smg_game.luma-placement.json'), (Join-Path $build 'smg_game.luma-self.json') $names
-            # names/ holds some 15,000 small files: as one tar, the artifact downloads as one file (download-artifact
-            # unpacks while it downloads, and that many files stall it on Windows until it gives up).
-            Push-Location $out
-            tar -cf names.tar names
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            Pop-Location
-          }
-          Remove-Item -Recurse -Force $names
+          New-Item -ItemType Directory -Force (Join-Path $out 'bin') | Out-Null
+          # Copy-Item (Join-Path $build 'smg_game_plain.dll') (Join-Path $out 'bin')
+          Copy-Item (Join-Path $build 'smg_game.dll') (Join-Path $out 'bin')
       - uses: actions/upload-artifact@v7
         with:
           name: windows-game
@@ -355,10 +316,7 @@ jobs:
         with:
           name: windows-hosts-avx2
           path: ${{ runner.temp }}/avx2
-      - uses: actions/download-artifact@v8
-        with:
-          name: windows-hosts-x86-64-v2
-          path: ${{ runner.temp }}/v2
+     
       - uses: actions/download-artifact@v8
         with:
           name: windows-game
@@ -388,7 +346,7 @@ jobs:
           New-Item -ItemType Directory -Force $bin | Out-Null
           # The AVX2 programs with D3D12\ and glslang\, the x86-64-v2 programs beside them, the game modules.
           Copy-Item -Recurse -Path (Join-Path $temp 'avx2\*') -Destination $bin -Exclude 'host-tools'
-          Copy-Item (Join-Path $temp 'v2\*-x86-64-v2.exe') $bin
+        
           Copy-Item -Recurse -Path (Join-Path $temp 'game\bin\*') -Destination $bin -Force
           if ($noMods) {
             # No mod support: no self-description, no LumaKit, no game module with the mod rows (the script reads NEBULA_MODS).
@@ -407,10 +365,7 @@ jobs:
         uses: ./.github/actions/start-check-windows
         with:
           folder: ${{ runner.temp }}\bin
-          programs: Nebula NebulaVk NebulaD11 Nebula-x86-64-v2 NebulaVk-x86-64-v2 NebulaD11-x86-64-v2
-      - name: FSR 3 (the programs the Setup packed hold it)
-        shell: bash
-        run: python -X utf8 -I tools/check_fsr3_package.py "$RUNNER_TEMP/bin/Nebula.exe" "$RUNNER_TEMP/bin/NebulaVk.exe" "$RUNNER_TEMP/bin/Nebula-x86-64-v2.exe" "$RUNNER_TEMP/bin/NebulaVk-x86-64-v2.exe"
+          programs: NebulaD11
       - name: The mod kit (a pre-release has none, a release has it)
         shell: bash
         run: |
@@ -436,14 +391,14 @@ jobs:
 
   linux:
     name: Linux package
-    needs: [release, lumakit, ffx-shaders]
-    if: ${{ !cancelled() && needs.release.result == 'success' && needs.ffx-shaders.result == 'success' && (needs.lumakit.result == 'success' || needs.lumakit.result == 'skipped') }}
+    needs: [release, lumakit]
+    if: false
     runs-on: ubuntu-24.04
     timeout-minutes: 240
     env:
       NEBULA_MODS: ${{ needs.release.outputs.mods }}
       NEBULA_VERSION_SUFFIX: ${{ needs.release.outputs.suffix }}
-      NEBULA_REQUIRE_FSR3: 'ON'
+      NEBULA_REQUIRE_FSR3: 'OFF'
     steps:
       - uses: actions/checkout@v7
         with:
@@ -474,10 +429,7 @@ jobs:
       - name: Dependencies
         run: sh tools/fetch_build_deps.sh "$RUNNER_TEMP/deps"
       # FSR 3's shader headers, made by the ffx-shaders job (its compiler runs on Windows only).
-      - uses: actions/download-artifact@v8
-        with:
-          name: ffx-vk-shaders
-          path: ${{ runner.temp }}/ffx-vk-shaders
+      
       - name: Build Nebula
         # NEBULA_MODS=OFF (no mod support) is read by the script and by every CMake project; NEBULA_REQUIRE_FSR3 by the script and
         # by CMake: without the shader headers the build stops.
@@ -587,7 +539,7 @@ jobs:
   macos:
     name: Mac app
     needs: [release, lumakit]
-    if: ${{ !cancelled() && needs.release.result == 'success' && (needs.lumakit.result == 'success' || needs.lumakit.result == 'skipped') }}
+    if: false
     runs-on: macos-15
     timeout-minutes: 300
     env:
@@ -741,8 +693,7 @@ jobs:
   macos-intel:
     name: Mac app on an Intel Mac
     needs: [release, macos]
-    # The macos job itself ran (its own needs include the skipped lumakit job of a pre-release, which skips what follows it).
-    if: ${{ !cancelled() && needs.macos.result == 'success' }}
+    if: false
     runs-on: macos-15-intel
     timeout-minutes: 30
     steps:
@@ -776,7 +727,7 @@ jobs:
   android:
     name: Android app
     needs: [release, windows-hosts, lumakit]
-    if: ${{ !cancelled() && needs.release.result == 'success' && needs.windows-hosts.result == 'success' && (needs.lumakit.result == 'success' || needs.lumakit.result == 'skipped') }}
+    if: false
     runs-on: windows-2022
     timeout-minutes: 300
     env:

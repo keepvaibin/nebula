@@ -186,7 +186,7 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
                      static_cast<unsigned long long>(desc.pixel), program);
         return nullptr;
     }
-    ID3D11Device1* const device = device_;
+    ID3D11Device* const device = device_;
     const d3d11::ComPtr<ID3D11VertexShader> vertex = shared_object(gShaders.vertex, vs.data, [&](d3d11::ComPtr<ID3D11VertexShader>& out) {
         return device->CreateVertexShader(vs.data, vs.size, nullptr, &out);
     });
@@ -228,12 +228,11 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
 
     const std::uint32_t state = desc.state;
     const bool target = (variant & kSceneVariantTarget) != 0u;
-    D3D11_BLEND_DESC1 blend{};
-    D3D11_RENDER_TARGET_BLEND_DESC1& rt = blend.RenderTarget[0];
+    D3D11_BLEND_DESC blend{};
+    D3D11_RENDER_TARGET_BLEND_DESC& rt = blend.RenderTarget[0];
     rt.SrcBlend = rt.SrcBlendAlpha = D3D11_BLEND_ONE;
     rt.DestBlend = rt.DestBlendAlpha = D3D11_BLEND_ZERO;
     rt.BlendOp = rt.BlendOpAlpha = D3D11_BLEND_OP_ADD;
-    rt.LogicOp = D3D11_LOGIC_OP_NOOP;
     rt.RenderTargetWriteMask = static_cast<UINT8>(
         ((state & NEBULA_STATE_COLOR_WRITE) != 0u
              ? D3D11_COLOR_WRITE_ENABLE_RED | D3D11_COLOR_WRITE_ENABLE_GREEN | D3D11_COLOR_WRITE_ENABLE_BLUE
@@ -263,7 +262,7 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
         rt.BlendOpAlpha = rt.BlendOp;
     }
 
-    D3D11_RASTERIZER_DESC1 raster{};
+    D3D11_RASTERIZER_DESC raster{};
     raster.FillMode = D3D11_FILL_SOLID;
     // Culling all has no state: the walker draws nothing.
     switch ((state >> 15u) & 3u) {
@@ -311,7 +310,7 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
     pipeline->vertex = vertex;
     pipeline->pixel = pixel;
     pipeline->input = input;
-    if (FAILED(device->CreateBlendState1(&blend, &pipeline->blend)) || FAILED(device->CreateRasterizerState1(&raster, &pipeline->rasterizer)) ||
+    if (FAILED(device->CreateBlendState(&blend, &pipeline->blend)) || FAILED(device->CreateRasterizerState(&raster, &pipeline->rasterizer)) ||
         FAILED(device->CreateDepthStencilState(&depth, &pipeline->depth_stencil))) {
         std::fprintf(stderr, "[pipelines] state refused: %llx %llx state %08x variant %u\n", static_cast<unsigned long long>(desc.vertex),
                      static_cast<unsigned long long>(desc.pixel), state, variant);

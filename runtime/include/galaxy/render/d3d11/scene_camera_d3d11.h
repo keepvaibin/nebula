@@ -18,7 +18,7 @@ public:
     SceneCamera& operator=(const SceneCamera&) = delete;
     ~SceneCamera() { shutdown(); }
 
-    bool initialize(ID3D11Device1* device);
+    bool initialize(ID3D11Device* device);
     void shutdown() noexcept;
     [[nodiscard]] bool ready() const noexcept { return ready_; }
 
@@ -32,7 +32,7 @@ public:
         bool resolve = false;  // tone-map MSAA samples directly into a single-sample output
     };
     // The meter and the tone map into `rtv`.
-    bool record(ID3D11DeviceContext1* context, const Inputs& in);
+    bool record(ID3D11DeviceContext* context, const Inputs& in);
 
     struct WidenInputs {
         Texture* picture = nullptr;             // the scene target's single-sample colour
@@ -40,11 +40,11 @@ public:
         unsigned width = 0u, height = 0u, samples = 1u;
     };
     // The scene so far into the wide target.
-    bool widen(ID3D11DeviceContext1* context, const WidenInputs& in);
+    bool widen(ID3D11DeviceContext* context, const WidenInputs& in);
 
 private:
     // `constants` at b0 (none: the widen pass, whose shaders read none).
-    void draw(ID3D11DeviceContext1* context, ID3D11PixelShader* shader, const Context::ConstantPlace& constants,
+    void draw(ID3D11DeviceContext* context, ID3D11PixelShader* shader, const Context::ConstantPlace& constants,
               ID3D11RenderTargetView* rtv, ID3D11ShaderResourceView* picture, unsigned width, unsigned height);
 
     ComPtr<ID3D11ComputeShader> meter_;

@@ -7,7 +7,7 @@
 // a multisampled pair resolved as on Direct3D 12. A frame is recorded on the immediate context, kFramesInFlight ahead of
 // the GPU (Context::signal and wait). A scene pass's draws are recorded as ops (gpu::Encoder) and replayed after the
 // upload memory they read has reached the GPU (flush_draws), when the pass ends or the renderer draws in it itself.
-// The swap chain is a flip-model one (FLIP_DISCARD, kSwapChainBuffers, a waitable object, tearing where offered); the
+// The swap chain is DXGI 1.0's bit-block-transfer one (DISCARD, kSwapChainBuffers; no flip model, waitable object or tearing: WDDM 1.1); the
 // picture is drawn into its buffer by the post chain's last pass or the plain blit, never copied.
 //
 // The renderer's parts (d3d11/fx_d3d11.h): the post chain, the game's bloom, ambient occlusion and the scene camera, each
@@ -262,8 +262,12 @@ public:
     // before a process that ends without the shutdown).
     void finish_pictures();
 
-    [[nodiscard]] gpu::Device* device() const noexcept { return d3d11::Context::get().device(); }
-    [[nodiscard]] const FrameMap& frame_map() const noexcept { return scene_map_; }
+[[nodiscard]] gpu::Device* device() const noexcept {
+    // gpu::Device is ID3D11Device on Direct3D 11 (gpu_types.h): feature level 11_0 is the ceiling, so it is never null.
+    return static_cast<gpu::Device*>(d3d11::Context::get().device());
+}
+
+[[nodiscard]] const FrameMap& frame_map() const noexcept { return scene_map_; }
     // The bound scene target's allocated size: the render size while dynamic resolution draws the scene in a part of it
     // (frame_map, the step's rectangle), else frame_map itself. Pictures for the game and target passes take this size.
     [[nodiscard]] const FrameMap& frame_extent() const noexcept { return frame_extent_; }
@@ -309,8 +313,12 @@ public:
     // For the renderer's parts (post chain, bloom, occlusion, camera): the immediate context with no scene pass open
     // and every recorded draw run (flush_draws, end_scene_pass); a part leaves its own state bound, and the renderer
     // binds its own again (encoder_.reset, bound_).
-    [[nodiscard]] ID3D11DeviceContext1* context() const noexcept { return d3d11::Context::get().immediate(); }
-    using GpuPass = ::galaxy::render::GpuPass;
+[[nodiscard]] ID3D11DeviceContext* context() const noexcept {
+    // The immediate context (Direct3D 11.0's interface: nothing here calls a 11.1 method). Constants are bound through
+    // d3d11::Context::bind_place / bind_buffer_window / bind_compute_place.
+    return d3d11::Context::get().immediate();
+}  
+using GpuPass = ::galaxy::render::GpuPass;
     static constexpr unsigned kGpuPassSlots = 256u;
 
 private:
@@ -466,7 +474,7 @@ private:
     TextureStore* mirrored_store_ = nullptr;
 
     // The swap chain.
-    d3d11::ComPtr<IDXGISwapChain3> swap_chain_;
+    d3d11::ComPtr<IDXGISwapChain> swap_chain_;  // DXGI 1.0's bit-block-transfer chain (WDDM 1.1)
     HANDLE frame_latency_waitable_ = nullptr;
     d3d11::ComPtr<ID3D11RenderTargetView> backbuffer_rtv_;  // buffer 0 (flip model: always the one drawn next)
     std::uint32_t swap_width_ = 0u, swap_height_ = 0u;
@@ -476,7 +484,7 @@ private:
     bool swap_dirty_ = false;
     bool presented_ = false;  // the backbuffer holds this frame's picture (present drew it)
     std::unique_lock<std::timed_mutex> surface_lock_;
-    static constexpr unsigned kSwapChainBuffers = 3u;
+    static constexpr unsigned kSwapChainBuffers = 1u;  // DXGI_SWAP_EFFECT_DISCARD: one back buffer
 
     std::array<Frame, kFramesInFlight> frames_{};
     unsigned frame_slot_ = 0;
@@ -645,9 +653,7 @@ private:
     };
     std::vector<ModPostShaders> mod_post_shaders_;
     std::uint64_t mod_post_epoch_ = 0u;
-    // draw.native's context state: a mod's function binds what it likes there, and the renderer's own state is swapped
-    // back in after it (ID3D11DeviceContext1::SwapDeviceContextState).
-    d3d11::ComPtr<ID3DDeviceContextState> native_state_;
+    // draw.native needs Direct3D 11.1's context state (ID3DDeviceContextState); not called on feature level 11_0.
     bool native_state_failed_ = false;
     [[nodiscard]] const ModPostShaders* mod_post_stages(const ModPostProgram& program);
     void release_mod_post();

@@ -28,7 +28,7 @@ const RendererD3D11::ModPostShaders* RendererD3D11::mod_post_stages(const ModPos
             return &kept;
         }
     }
-    ID3D11Device1* const device = d3d11::Context::get().device();
+    ID3D11Device* const device = d3d11::Context::get().device();
     ModPostShaders made{program.id, nullptr, nullptr};
     const HRESULT vertex = device->CreateVertexShader(program.vertex.data(), program.vertex.size(), nullptr, &made.vertex);
     const HRESULT pixel = FAILED(vertex) ? vertex : device->CreatePixelShader(program.pixel.data(), program.pixel.size(), nullptr, &made.pixel);
@@ -49,7 +49,7 @@ void RendererD3D11::record_mod_post(const ModPostProgram& program, ModPostConsta
     if (!picture || !picture->view || !scene_.color) {
         return;
     }
-    ID3D11DeviceContext1* const ctx = context();
+    ID3D11DeviceContext* const ctx = context();
     const ModPostShaders* const stages = mod_post_stages(program);
     if (stages == nullptr || !stages->vertex || !stages->pixel) {
         return;
@@ -131,61 +131,24 @@ void RendererD3D11::record_mod_post(const ModPostProgram& program, ModPostConsta
     reset_draw_bindings();
 }
 
-// The function draws on a context state of its own, made the first time (the device's interface and feature level):
-// whatever it binds stays out of the renderer's state, which comes back whole after it.
+// A native function (LUMA_DRAW_NATIVE_D3D11) draws on a context state of its own where the device has Direct3D 11.1
+// (ID3DDeviceContextState: whatever it binds stays out of the renderer's state, which comes back whole after it). Feature
+// level 11_0 on WDDM 1.1 has no such state, and the renderer's bindings cannot be told apart from the function's, so the
+// functions are not called there: said once.
 void RendererD3D11::record_native_call(const NebulaCall& call, LumaDrawNativeFrame& frame, bool scene_point) {
-    if (call.fn == nullptr || !scene_.color || native_state_failed_) {
+    (void)frame;
+    (void)scene_point;
+    if (call.fn == nullptr || native_state_failed_) {
         return;
     }
-    ID3D11Device1* const device = d3d11::Context::get().device();
-    if (!native_state_) {
-        const D3D_FEATURE_LEVEL level = device->GetFeatureLevel();
-        if (FAILED(device->CreateDeviceContextState(0u, &level, 1u, D3D11_SDK_VERSION, __uuidof(ID3D11Device1), nullptr,
-                                                    &native_state_))) {
-            std::cerr << "[draw.native] context state failed: native functions are not called\n";
-            native_state_failed_ = true;
-            return;
-        }
-    }
-    const GpuPassScope pass{*this, GpuPass::FramePass};
-    // The draws recorded so far run first, and the scene's targets are let go.
-    end_scene_pass();
-    const bool msaa = scene_.samples > 1u && scene_.ms_color;
-    const d3d11::Texture& target = msaa ? *scene_.ms_color : *scene_.color;
-    const d3d11::Texture* const depth = scene_point ? (msaa ? scene_.ms_depth.get() : scene_.depth.get()) : nullptr;
-    ID3D11DeviceContext1* const ctx = context();
-    frame.backend = LUMA_DRAW_NATIVE_D3D11;
-    frame.width = target.width;
-    frame.height = target.height;
-    frame.samples = std::max(scene_.samples, 1u);
-    frame.d3d11.device = device;
-    frame.d3d11.context = ctx;
-    frame.d3d11.target = target.texture.Get();
-    frame.d3d11.target_rtv = target.target.Get();
-    frame.d3d11.target_format = static_cast<std::uint32_t>(target.format);
-    if (depth != nullptr && depth->depth) {
-        frame.d3d11.depth = depth->texture.Get();
-        frame.d3d11.depth_dsv = depth->depth.Get();
-        frame.d3d11.depth_format = static_cast<std::uint32_t>(depth->format);
-    }
-    d3d11::ComPtr<ID3DDeviceContextState> renderer_state;
-    ctx->SwapDeviceContextState(native_state_.Get(), &renderer_state);
-    call.fn(call.user, &frame);
-    // Nothing the function bound stays referenced by its state until the next call.
-    ctx->ClearState();
-    ctx->SwapDeviceContextState(renderer_state.Get(), nullptr);
-    // What the function drew is in the targets it was given: the multisampled ones' resolves are stale.
-    if (msaa) {
-        scene_.color_dirty = true;
-        scene_.depth_dirty = scene_.depth_dirty || depth != nullptr;
-    }
-    reset_draw_bindings();
+    native_state_failed_ = true;
+    std::cerr << "[draw.native] Direct3D 11.0 has no context state to keep a function's bindings out of the renderer's: "
+                 "native functions are not called\n";
 }
 
 void RendererD3D11::release_mod_post() {
     mod_post_shaders_.clear();
     mod_post_epoch_ = 0u;
-    native_state_.Reset();
     native_state_failed_ = false;
 }
 

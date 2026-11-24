@@ -30,7 +30,6 @@ $src = $PSScriptRoot.Replace("\", "/")
 $Petari = $Petari.Replace("\", "/")
 $Build = $Build.Replace("\", "/")
 $levels = [ordered]@{ "x86-64-v3" = $Build }
-if (-not $NoBaseline) { $levels["x86-64-v2"] = "$Build/x86-64-v2" }
 # vcvars64.bat runs vswhere.exe from PATH.
 $env:PATH = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer;$env:PATH"
 foreach ($level in $levels.Keys) {
