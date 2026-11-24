@@ -406,6 +406,8 @@ private:
         void reset_generated_gpu_ms() override;
         [[nodiscard]] bool benchmark() const override;
         [[nodiscard]] bool tracing() const override;
+        [[nodiscard]] bool display_time(std::int64_t present, std::int64_t& shown) const override;
+        [[nodiscard]] bool last_shown(ShownPicture& picture) override;
 
     private:
         RenderCore& core_;

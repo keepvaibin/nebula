@@ -33,6 +33,7 @@
 #include "galaxy/render/mtl/utility_msl.h"
 #include "galaxy/render/post_process_settings.h"
 #include "galaxy/render/render_config.h"
+#include "galaxy/render/frame_schedule.h"
 #include "galaxy/render/present_slots.h"
 #include "galaxy/render/renderer_common.h"
 #include "galaxy/render/scene_view.h"
@@ -295,6 +296,13 @@ public:
     // the presents pace themselves (PresentPacer, the swap chain's vblanks).
     void set_present_moment(std::int64_t) noexcept {}
     [[nodiscard]] bool take_present_skip() noexcept { return false; }
+    // No display model yet (G2.3.1 gives Direct3D's; this platform's comes in its own landing): the schedule's slots
+    // are the moments the pictures start.
+    [[nodiscard]] bool display_time(std::int64_t, std::int64_t& shown) const noexcept {
+        shown = 0;
+        return false;
+    }
+    [[nodiscard]] bool take_shown(ShownPicture&) noexcept { return false; }
     [[nodiscard]] UploadRing& vertex_ring() noexcept { return vertex_ring_; }
     [[nodiscard]] UploadRing& index_ring() noexcept { return index_ring_; }
     [[nodiscard]] UploadRing& constant_ring() noexcept { return constant_ring_; }

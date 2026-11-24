@@ -44,6 +44,93 @@ std::int64_t slots_per_step(double rate) {
     return std::abs(rate - whole) * static_cast<double>(kStepLockNear) <= whole ? slots : 0;
 }
 
+std::int64_t DisplayModel::first_after(std::int64_t moment) const noexcept {
+    const std::int64_t from = moment - refresh_;
+    const std::int64_t whole = from >= 0 ? from / period_ : -((-from + period_ - 1) / period_);
+    return refresh_ + (whole + 1) * period_;
+}
+
+void DisplayModel::presented(std::uint64_t id, std::int64_t slot, std::int64_t ready, std::int64_t call) noexcept {
+    if (id <= last_id_) {
+        reset();  // a new swap chain counts its presents from the start
+    }
+    last_id_ = id;
+    presents_[next_] = {id, slot, ready, call};
+    next_ = (next_ + 1u) % presents_.size();
+}
+
+void DisplayModel::displayed(std::uint64_t id, std::int64_t shown, std::int64_t period) noexcept {
+    if (period <= 0 || id <= last_displayed_) {
+        return;  // no present shown since the last report
+    }
+    if (period_ != 0 && period != period_) {
+        held_ = -1;  // another display mode: learnt again
+        window_held_ = -1;
+    }
+    last_displayed_ = id;
+    refresh_ = shown;
+    period_ = period;
+    const Present* present = nullptr;
+    for (const Present& p : presents_) {
+        if (p.id == id) {
+            present = &p;
+        }
+    }
+    if (present == nullptr) {
+        return;
+    }
+    // The refreshes it was held past the first after its call: the queue's and the compositor's, and a GPU late for
+    // that refresh. The least over a window is the display's own.
+    const std::int64_t after = shown - present->call;
+    const std::int64_t held = after <= 0 ? 0 : (after + period - 1) / period - 1;
+    window_held_ = window_held_ < 0 ? held : std::min(window_held_, held);
+    if (held_ < 0 || window_start_ == 0) {
+        held_ = held;
+        window_start_ = shown;
+    } else if (frequency_ > 0 && shown - window_start_ >= frequency_) {
+        held_ = window_held_;
+        window_held_ = -1;
+        window_start_ = shown;
+    }
+    if (present->slot == 0) {
+        return;
+    }
+    shown_.slot = present->slot;
+    shown_.earliest = first_after(present->ready) + held_ * period;
+    shown_.shown = shown;
+    // A present reaches the refresh `held` after the first after it: the last that reaches the slot is made before the
+    // refresh `held` before it.
+    shown_.margin = present->slot - held_ * period - present->ready;
+    shown_.period = period;
+    fresh_ = true;
+}
+
+bool DisplayModel::display_time(std::int64_t present, std::int64_t& shown) const noexcept {
+    shown = 0;
+    if (held_ < 0 || period_ <= 0 || (frequency_ > 0 && present - refresh_ > frequency_)) {
+        return false;
+    }
+    shown = first_after(present) + held_ * period_;
+    return true;
+}
+
+std::int64_t DisplayModel::present_from(std::int64_t slot) const noexcept {
+    if (held_ < 0 || period_ <= 0 || slot == 0) {
+        return 0;
+    }
+    const std::int64_t guard = std::min(period_ / 4, frequency_ > 0 ? frequency_ / 2000 : period_ / 4);
+    return slot - (held_ + 1) * period_ + guard;
+}
+
+bool DisplayModel::take_shown(ShownPicture& picture) noexcept {
+    if (!fresh_) {
+        return false;
+    }
+    picture = shown_;
+    fresh_ = false;
+    return true;
+}
+
 FrameSchedule::FrameSchedule(ScheduleDisplay& display, std::int64_t frequency) noexcept
     : display_(display), frequency_(frequency), gpu_cap_(kUnboundedGeneratedFrames), cadence_cap_(kUnboundedGeneratedFrames) {}
 
@@ -112,9 +199,22 @@ void FrameSchedule::start(std::int64_t now, std::int64_t arrived, std::int64_t s
         }
     }
     arrival_ = arrival;
+    // With a display model the slots are the refreshes the pictures show at, a display lead after they start: the
+    // reference holds that lead, so a sequence's first picture starts after its list came. It moves toward the lead by
+    // the delay's bounds (2 % of a step a frame up, 1 % down), at once where none was held.
+    {
+        const std::int64_t period = frequency / kGameStepsPerSecond;
+        if (display_delay_qpc_ == 0 || display_lead_ == 0) {
+            display_delay_qpc_ = display_lead_;
+        } else if (display_delay_qpc_ < display_lead_) {
+            display_delay_qpc_ = std::min(display_lead_, display_delay_qpc_ + period / 50);
+        } else {
+            display_delay_qpc_ = std::max(display_lead_, display_delay_qpc_ - period / 100);
+        }
+    }
     waiting_ = ScheduleSequence{};
     waiting_.active = true;
-    waiting_.frame_qpc = arrival;
+    waiting_.frame_qpc = arrival + display_delay_qpc_;
     waiting_.step_qpc = step_qpc;
     waiting_.stopping = stopping;
     // Nothing plays: the sequence begins at once (a slot at or before its reference waits, next). Else the playing one
@@ -153,6 +253,10 @@ void FrameSchedule::begin_waiting(std::int64_t now) {
     if (on_vblanks) {
         fit_rate_to_vblanks();
     }
+    // The display model's lead, on the vblanks only (a clock of the pacer's own has no refresh to ask for).
+    observe_shown();
+    const bool lead_was = display_lead_ != 0;
+    display_lead_ = on_vblanks ? display_lead_for(now, vblank_period) : 0;
     ++serial_;
     ++counts_.started;
     sequence_ = std::exchange(waiting_, ScheduleSequence{});
@@ -194,8 +298,9 @@ void FrameSchedule::begin_waiting(std::int64_t now) {
     }
     if (on_vblanks) {
         // The next slot moves to the vblank nearest where it was due, so the clock follows the display without adding
-        // or dropping a slot; a clock not running starts at the vblank nearest now.
-        const std::int64_t due = slot_due_ != 0 && std::llabs(slot_due_ - now) <= slot_period_ ? slot_due_ : now;
+        // or dropping a slot; a clock not running starts at the vblank nearest a display lead from now.
+        const std::int64_t due =
+            slot_due_ != 0 && std::llabs(slot_due_ - display_lead_ - now) <= slot_period_ ? slot_due_ : now + display_lead_;
         slot_due_ = vblank + std::llround(static_cast<double>(due - vblank) / static_cast<double>(vblank_period)) *
                                  vblank_period;
     } else if (unbounded_) {
@@ -217,7 +322,37 @@ void FrameSchedule::begin_waiting(std::int64_t now) {
     // With no generated pictures there is no interval to interpolate. A reference slightly in the future must not hold
     // the only picture back while a busy queue replaces it with another sequence.
     if (sequence_.generated == 0u) {
-        slot_due_ = std::min(slot_due_, now);
+        slot_due_ = std::min(slot_due_, now + display_lead_);
+    }
+    // The pictures drawn before the lead came in were not drawn for their refreshes: the lead's rule leaves them out.
+    if (display_lead_ != 0 && !lead_was) {
+        display_from_ = slot_due_;
+    }
+}
+
+std::int64_t FrameSchedule::to_ns(std::int64_t ticks) const noexcept {
+    return ticks / frequency_ * 1'000'000'000 + ticks % frequency_ * 1'000'000'000 / frequency_;
+}
+
+std::int64_t FrameSchedule::display_lead_for(std::int64_t now, std::int64_t vblank_period) {
+    std::int64_t shown = 0;
+    if (vblank_period <= 0 || !display_.display_time(now, shown) || shown <= now) {
+        return 0;
+    }
+    // At the least the time from a present made now to the refresh that shows it, in whole refreshes; a refresh more
+    // at first (the picture's own work); four game steps at most (present_slots.h).
+    const std::int64_t unit = to_ns(vblank_period);
+    const std::int64_t least = to_ns(shown - now);
+    const std::int64_t depth = display_depth_.depth(least + unit, least, 4 * kGameStepNs, unit);
+    return (depth + unit / 2) / unit * vblank_period;
+}
+
+void FrameSchedule::observe_shown() {
+    ShownPicture picture;
+    if (display_.last_shown(picture) && display_lead_ != 0 && picture.period > 0 && picture.slot >= display_from_) {
+        const std::int64_t period = to_ns(picture.period);
+        display_depth_.observe(to_ns(picture.slot), to_ns(picture.earliest), to_ns(picture.shown),
+                               to_ns(picture.margin), period, period / 2);
     }
 }
 
@@ -518,9 +653,10 @@ double FrameSchedule::slot_t() const noexcept {
 
 SchedulePicture FrameSchedule::next(std::int64_t now, bool flush) {
     SchedulePicture picture;
+    observe_shown();
     // Slots run on the clock with VSync too: a present that waits for the display would hold back the frame chunks
-    // behind it.
-    if (!busy() || (!flush && now < slot_due_)) {
+    // behind it. A slot's picture starts the display lead before it.
+    if (!busy() || (!flush && now < slot_due())) {
         return picture;
     }
     // With no slot clock (an unlimited rate) the picture shows the moment it is drawn for.
@@ -563,9 +699,9 @@ SchedulePicture FrameSchedule::next(std::int64_t now, bool flush) {
         slot_due_ = now;
     } else if (!flush) {
         slot_due_ = slot + slot_period_;
-        // A stall skips the slots it missed instead of bunching them.
-        if (now >= slot_due_) {
-            const std::int64_t missed = (now - slot_due_) / slot_period_ + 1;
+        // A stall skips the slots it missed instead of bunching them (with a display model: whose start it missed).
+        if (now >= slot_due()) {
+            const std::int64_t missed = (now - slot_due()) / slot_period_ + 1;
             counts_.late_slots += static_cast<std::uint64_t>(missed);
             slot_due_ += missed * slot_period_;
         }

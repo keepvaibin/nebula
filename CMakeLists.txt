@@ -485,6 +485,7 @@ runtime/src/render/host_window_win32.cpp
     runtime/src/render/os_hdr.cpp
     runtime/src/render/render_core.cpp
     runtime/src/render/frame_schedule.cpp
+    runtime/src/render/present_slots.cpp
     runtime/src/render/gpu_pass_times.cpp
     runtime/src/render/affine.cpp
     runtime/src/render/core/compose.cpp
@@ -868,6 +869,7 @@ if(NEBULA_D3D11)
         runtime/src/render/os_hdr.cpp
         runtime/src/render/render_core.cpp
         runtime/src/render/frame_schedule.cpp
+        runtime/src/render/present_slots.cpp
         runtime/src/render/gpu_pass_times.cpp
         runtime/src/render/affine.cpp
         runtime/src/render/core/compose.cpp

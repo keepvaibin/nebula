@@ -13,10 +13,12 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <limits>
 #include <random>
+#include <utility>
 #include <vector>
 
 using galaxy::kGameStepRate;
@@ -51,8 +53,14 @@ struct SimDisplay final : ScheduleDisplay {
     bool bench = false;
     unsigned suspended = 0;
     unsigned resets = 0;
+    DisplayModel* model = nullptr;  // the display model's answers (G2.3.1); none: the platform gives none
 
     ScheduleSettings settings() const override { return {rate, vsync_on}; }
+    bool display_time(std::int64_t present, std::int64_t& shown) const override {
+        shown = 0;
+        return model != nullptr && model->display_time(present, shown);
+    }
+    bool last_shown(ShownPicture& picture) override { return model != nullptr && model->take_shown(picture); }
     bool vblank_grid(std::int64_t& vblank, std::int64_t& grid) const override {
         if (!timed) return false;
         vblank = vblank0;
@@ -122,12 +130,48 @@ struct Run {
     std::vector<Shown> shown;
     std::vector<std::int64_t> references;  // each sequence's reference as it began
     std::vector<std::int64_t> steps;       // each list's step moment
+    std::vector<std::int64_t> displayed;   // with a swap chain: the refresh that showed each picture of `shown`
     std::uint64_t superseded = 0;
+};
+
+// A flip-model swap chain on a SimDisplay's vblanks, as Direct3D's with frame latency 1 (renderer_d3d12.cpp
+// present_to_swap_chain): a picture ready at `ready` is presented once the compositor took the one before it (the frame
+// latency object's wait) and not before the model's present_from for its slot (the renderer's hold), and shown at the
+// first refresh after its present and `held` refreshes more, never with the one before. Each present's display reaches
+// the model at a later present, as the frame statistics read after a present give the newest present shown by then.
+struct SimSwapChain {
+    const SimDisplay& display;
+    DisplayModel model{kFrequency};
+    std::int64_t held = 0;
+    std::uint64_t id = 0;
+    std::int64_t last_shown = 0;
+    std::vector<std::pair<std::uint64_t, std::int64_t>> pending;  // presents not yet reported: id, shown
+
+    // Presents a picture drawn for `slot` (0: none), ready at `ready`: the moment the present call returns.
+    std::int64_t present(std::int64_t slot, std::int64_t ready) {
+        const std::int64_t period = display.period;
+        const std::int64_t call = std::max({ready, last_shown - held * period, model.present_from(slot)});
+        const std::int64_t first = display.vblank0 + ((call - display.vblank0) / period + 1) * period;
+        const std::int64_t shown = std::max(first + held * period, last_shown + period);
+        std::size_t newest = pending.size();
+        for (std::size_t i = 0; i < pending.size(); ++i) {
+            if (pending[i].second <= call) newest = i;
+        }
+        if (newest != pending.size()) {
+            model.displayed(pending[newest].first, pending[newest].second, period);
+            pending.erase(pending.begin(), pending.begin() + static_cast<std::ptrdiff_t>(newest) + 1);
+        }
+        model.presented(++id, slot, ready, call);
+        pending.emplace_back(id, shown);
+        last_shown = shown;
+        return call;
+    }
 };
 
 Run run(FrameSchedule& schedule, int frames, std::int64_t first_step, const std::vector<std::int64_t>& late,
         std::int64_t cost = kFrequency / 2000, bool with_step = true, std::uint64_t* waited = nullptr,
-        double step_spacing = kStep, SimDisplay* display = nullptr, const std::vector<double>* rates = nullptr) {
+        double step_spacing = kStep, SimDisplay* display = nullptr, const std::vector<double>* rates = nullptr,
+        SimSwapChain* chain = nullptr) {
     Run result;
     std::int64_t now = first_step;
     std::uint64_t waited_total = 0;
@@ -139,6 +183,13 @@ Run run(FrameSchedule& schedule, int frames, std::int64_t first_step, const std:
         if (picture.kind == SchedulePicture::Kind::Generated) {
             schedule.generated_drawn(static_cast<std::uint64_t>(cost), true);
             now += cost;
+        } else if (chain != nullptr) {
+            now += cost;  // the frame's own walk
+        }
+        if (chain != nullptr) {
+            // The present: the render thread waits for the swap chain's queue.
+            now = std::max(now, chain->present(picture.flush ? 0 : picture.slot, now));
+            result.displayed.push_back(chain->last_shown);
         }
     };
     const auto begin = [&] {
@@ -379,12 +430,18 @@ double expected_lead(double refresh, bool timed) {
     return off * (timed ? 5000.0 : 500.0) <= k * kGameStepRate ? 1.0 / k : 0.0;
 }
 
-void test_every_rate() {
+// The head's sample rates: the named ones and 300 random ones between 40 and 500 Hz from a fixed seed.
+std::vector<double> sample_rates() {
     std::vector<double> rates{40.0, 48.0, 50.0, 59.94, 60.0, 72.0, 75.0, 82.37, 90.0, 100.0, 119.88, 120.0,
                               144.0, 165.0, 180.0, 200.0, 240.0, 360.0, 480.0, 500.0};
     std::mt19937 random(20261124u);
     std::uniform_real_distribution<double> any(40.0, 500.0);
     for (int i = 0; i < 300; ++i) rates.push_back(any(random));
+    return rates;
+}
+
+void test_every_rate() {
+    const std::vector<double> rates = sample_rates();
     std::vector<std::int64_t> steady{kFrequency / 500};
     std::vector<std::int64_t> varying;
     for (int i = 0; i < 64; ++i) varying.push_back(kFrequency / 1000 + (i * 29 % 64) * (kFrequency / 12'800));  // 1-6 ms
@@ -578,6 +635,134 @@ void test_variable_refresh() {
     std::snprintf(what, sizeof what, "variable refresh 48-144 Hz: early %zu, rising %d, lag %.0f ticks", e.early,
                   e.rising ? 1 : 0, e.lag_max);
     check(e.early == 0u && e.rising && e.frames_once && e.lag_max < kStep / 2.0, what);
+}
+
+// G2.3.1 proof 1: the display model, Direct3D's (SimSwapChain: frame latency 1, the frame statistics read after each
+// present). At every sample rate of the head that has in-between pictures, with the compositor holding pictures 0 and
+// 1 refreshes, steady lateness: once the lead has settled, each picture is shown at the refresh it was drawn for (its
+// slot, whose t it shows), every slot a vblank, one picture a refresh, none early, no frame twice. The lead comes down
+// to the least the display allows (held + 1 refreshes) where a picture's margin leaves a refresh and 2 ms to spare
+// (refreshes of 3.1 ms and longer, with a walk of 0.5 ms and the hold's guard of 0.5 ms, which the render thread waits
+// out before the next picture), and is never more than a refresh above it. A compositor that
+// starts holding a refresh more raises the lead from what was shown, and the pictures reach their slots again. A
+// variable refresh (the pacer's clock) and a display with no answers keep lead 0: today's slots.
+void test_display_model() {
+    const std::vector<std::int64_t> steady{kFrequency / 500};
+    const std::int64_t walk = kFrequency / 2000;
+    const auto on_slots = [](const Run& r, std::size_t from) {
+        std::size_t off = 0;
+        for (std::size_t i = from; i < r.shown.size(); ++i) {
+            off += !r.shown[i].picture.flush && r.displayed[i] != r.shown[i].picture.slot ? 1u : 0u;
+        }
+        return off;
+    };
+    unsigned bad = 0;
+    std::size_t runs = 0;
+    for (const double refresh : sample_rates()) {
+        const unsigned generated = interpolated_frames_per_game_frame(refresh);
+        if (generated == 0u) continue;  // no slots: each picture a game frame, shown at once
+        for (const std::int64_t held : {std::int64_t{0}, std::int64_t{1}}) {
+            ++runs;
+            SimDisplay display = display_at(refresh, true);
+            SimSwapChain chain{display};
+            chain.held = held;
+            display.model = &chain.model;
+            FrameSchedule schedule(display, kFrequency);
+            schedule.configure(generated, 0);
+            const Run r = run(schedule, 900, kFrequency, steady, walk, true, nullptr, kStep, &display, nullptr, &chain);
+            const std::size_t from = r.shown.size() * 2 / 3;
+            const std::size_t off = on_slots(r, from);
+            const Evenness e = evenness(r, from, display.period, &display);
+            const std::int64_t lead = schedule.display_lead();
+            const std::int64_t least = (held + 1) * display.period;
+            const bool lead_ok = display.period >= kFrequency * 31 / 10'000 ? lead == least
+                                 : display.period <= kFrequency * 29 / 10'000
+                                     ? lead == least + display.period
+                                     : lead == least || lead == least + display.period;
+            const bool ok = off == 0u && e.early == 0u && e.frames_once && e.rising && e.on_grid && lead_ok;
+            if (!ok && bad++ < 10u) {
+                std::printf("  %.2f Hz held %lld: off their slots %zu of %zu, early %zu, frames once %d, rising %d, "
+                            "on grid %d, lead %lld ticks (least %lld)\n",
+                            refresh, static_cast<long long>(held), off, r.shown.size() - from, e.early,
+                            e.frames_once ? 1 : 0, e.rising ? 1 : 0, e.on_grid ? 1 : 0, static_cast<long long>(lead),
+                            static_cast<long long>(least));
+            }
+        }
+    }
+    char what[160];
+    std::snprintf(what, sizeof what, "the display model at every sample rate, held 0 and 1: %u of %zu runs wrong", bad, runs);
+    check(runs > 500u && bad == 0u, what);
+
+    // 240 Hz: the compositor starts holding a refresh more after 15 s.
+    {
+        SimDisplay display = display_at(240.0, true);
+        SimSwapChain chain{display};
+        display.model = &chain.model;
+        FrameSchedule schedule(display, kFrequency);
+        schedule.configure(interpolated_frames_per_game_frame(240.0), 0);
+        (void)run(schedule, 900, kFrequency, steady, walk, true, nullptr, kStep, &display, nullptr, &chain);
+        const std::int64_t before = schedule.display_lead();
+        chain.held = 1;
+        const Run r = run(schedule, 900, kFrequency + static_cast<std::int64_t>(std::llround(900 * kStep)), steady, walk,
+                          true, nullptr, kStep, &display, nullptr, &chain);
+        const std::size_t off = on_slots(r, r.shown.size() * 2 / 3);
+        std::snprintf(what, sizeof what,
+                      "240 Hz, the compositor holding a refresh more: lead %lld then %lld ticks, %zu pictures off their "
+                      "slots",
+                      static_cast<long long>(before), static_cast<long long>(schedule.display_lead()), off);
+        check(before == display.period && schedule.display_lead() == 2 * display.period && off == 0u, what);
+    }
+    // No refresh to ask for under a variable refresh, no answers from a display without a model: lead 0.
+    {
+        SimDisplay display = display_at(144.0, true);
+        display.variable = true;
+        display.cap = 144.0;
+        SimSwapChain chain{display};
+        display.model = &chain.model;
+        FrameSchedule schedule(display, kFrequency);
+        schedule.configure(interpolated_frames_per_game_frame(144.0), 0);
+        (void)run(schedule, 300, kFrequency, steady, walk, true, nullptr, kStep, &display, nullptr, &chain);
+        check(schedule.display_lead() == 0 && schedule.display_delay_qpc() == 0,
+              "a variable refresh: the pacer's clock, no display lead");
+    }
+    {
+        SimDisplay display = display_at(144.0, true);
+        FrameSchedule schedule(display, kFrequency);
+        schedule.configure(interpolated_frames_per_game_frame(144.0), 0);
+        (void)run(schedule, 300, kFrequency, steady);
+        check(schedule.display_lead() == 0 && schedule.display_delay_qpc() == 0,
+              "a display with no answers: no display lead, today's slots");
+    }
+}
+
+// The model alone: a present's held refreshes, the least over a window of a second, the answers' end a second after
+// the last report, a new swap chain starting it again.
+void test_display_model_answers() {
+    const std::int64_t period = kFrequency / 120;
+    const std::int64_t v = 1'000'000;  // a refresh
+    DisplayModel model(kFrequency);
+    std::int64_t shown = 0;
+    check(!model.display_time(v, shown), "the model gives no answer before a report");
+    model.presented(1u, v + period, v + period / 4, v + period / 2);
+    model.displayed(1u, v + 2 * period, period);  // shown a refresh past the first after its call
+    check(model.held() == 1, "a present held a refresh past the first after its call: held 1");
+    check(model.display_time(v + 3 * period + 1, shown) && shown == v + 5 * period,
+          "a present after a refresh: the next refresh and one held");
+    ShownPicture picture;
+    check(model.take_shown(picture) && picture.slot == v + period && picture.shown == v + 2 * period &&
+              picture.earliest == v + 2 * period && picture.margin == period - period / 4 - period,
+          "the picture shown: its slot, the earliest refresh from its ready moment, its margin");
+    check(!model.take_shown(picture), "each picture shown is taken once");
+    // A present held 0 within the window: the least comes in at the window's end.
+    model.presented(2u, 0, v + 2 * period + 10, v + 2 * period + 10);
+    model.displayed(2u, v + 3 * period, period);
+    check(model.held() == 1 && !model.take_shown(picture), "within the window the held stays; no slot, nothing taken");
+    model.presented(3u, 0, v + kFrequency, v + kFrequency);
+    model.displayed(3u, v + kFrequency + 2 * period, period);
+    check(model.held() == 0, "at the window's end the least of its presents");
+    check(!model.display_time(v + 2 * kFrequency + 3 * period, shown), "no answer a second after the last report");
+    model.presented(1u, 0, v, v);
+    check(!model.display_time(v, shown), "a new swap chain (its count from the start): no answer until a report");
 }
 
 // No step moments: the arrival clock smooths the lists' times to the game's period.
@@ -831,6 +1016,8 @@ int main() {
     test_lead_at_multiples();
     test_variable_clock();
     test_variable_refresh();
+    test_display_model();
+    test_display_model_answers();
     test_arrival_clock();
     test_unlimited();
     test_stall();

@@ -53,13 +53,16 @@ enum class Event : std::uint16_t {
     StepWaitEnd = 32,      // game: the wait returned
     ContentTime = 33,      // render: a picture of an interpolation sequence. qpc=the moment it shows, a=its list's game
                            // frame, b=t (0 the frame before, 1 this one) in millionths
-    AcquireBegin = 34,     // render: waiting for a swap image (vkAcquireNextImageKHR, Metal's nextDrawable)
+    AcquireBegin = 34,     // render: waiting for a swap image (vkAcquireNextImageKHR, Metal's nextDrawable, Direct3D's
+                           // frame latency object)
     AcquireEnd = 35,       // render: the wait returned. a=the image's index (Metal: 0), b=1 when it gave none
     GateWaitBegin = 36,    // render, Direct3D 12: a Present waits for pipeline creations in flight (core/present_gate.h).
                            // a=creations in flight
     GateWaitEnd = 37,
     PipelineMissed = 38,   // render: a draw found its pipeline not made yet (core/pipelines.cpp, missing): left out, or
                            // waited for with fixed steps, and made at the workers' queue's front. a=pipeline id, b=its key
+    DisplayModel = 39,     // render, Direct3D: a present of a picture drawn for a refresh (dxgi_pacing.h). qpc=that
+                           // refresh, a=the present's count (DisplayStats' PresentCount), b=when it was ready to present
 };
 
 struct Record {

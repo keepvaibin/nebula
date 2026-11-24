@@ -21,7 +21,7 @@ EVENTS = {
     15: 'PresentEnd', 16: 'DisplayStats', 21: 'DisplayCopy', 22: 'SlotWaitBegin', 23: 'SlotWaitEnd', 24: 'VBlank',
     25: 'DisplayPresented', 26: 'GameFrame', 27: 'ListOpsBegin', 28: 'ListOpsEnd', 29: 'WalkBegin', 30: 'WalkEnd',
     31: 'StepWaitBegin', 32: 'StepWaitEnd', 33: 'ContentTime', 34: 'AcquireBegin', 35: 'AcquireEnd',
-    36: 'GateWaitBegin', 37: 'GateWaitEnd', 38: 'PipelineMissed',
+    36: 'GateWaitBegin', 37: 'GateWaitEnd', 38: 'PipelineMissed', 39: 'DisplayModel',
 }
 
 

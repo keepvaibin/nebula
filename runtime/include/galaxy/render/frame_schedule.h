@@ -15,11 +15,83 @@
 // what later frames read of it. A slot at or before a sequence's reference with none before it to show waits. On a slot
 // clock of k times 60 that the step keeps to (the locked vblanks, or the pacer's own clock) a sequence takes lead 1/k,
 // so its last slot shows the frame itself and none is walked unseen (I-002).
+//
+// The display model (G2.3.1, FM 2.16 target 3). Where the platform says when a picture presented now will be shown and
+// when the last one was (ScheduleDisplay::display_time, last_shown), a slot on the display's vblanks is the refresh the
+// picture is drawn for: its t is that refresh's, and the picture starts a display lead before it (slot_due). The lead
+// follows the pictures shown, as Android's presentation times do (present_slots.h PresentDepth): late ones raise it, a
+// calm stretch takes it down to the least the display allows (the time from a present to the refresh that shows it),
+// so a picture starts as late as it safely can. The sequences' references hold the lead (display_delay_qpc), moved by
+// the step delay's bounds, so the content keeps to the wall clock. A platform with no answers keeps lead 0: its slots
+// are the moments the pictures start, as before.
+
+#include "galaxy/render/present_slots.h"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 
 namespace galaxy::render {
+
+// A picture the display showed, as a display model reports it (ScheduleDisplay::last_shown).
+struct ShownPicture {
+    std::int64_t slot = 0;      // the refresh it was drawn for
+    std::int64_t earliest = 0;  // the first refresh it could have reached, from when it was ready to present
+    std::int64_t shown = 0;     // the refresh that showed it
+    std::int64_t margin = 0;    // how long before the last present that still reaches its slot it was ready
+    std::int64_t period = 0;    // the refresh period
+};
+
+// The display model of a swap chain that tells which refresh showed each present (Direct3D's frame statistics,
+// dxgi_pacing.h). Each present is noted with the refresh the schedule drew it for, when it was ready to present (before
+// any wait for the swap chain's queue) and when the present call was made; each report of a present shown gives the
+// refreshes the swap chain's queue and the compositor held it past the first refresh after its call. Their least over
+// a second of reports is the model's `held`: a picture presented at p is shown at the first refresh after p and held
+// refreshes more. Answers stop a second after the last report (a hidden window, frame generation's swap chain).
+class DisplayModel {
+public:
+    // `frequency`: the clock's ticks a second.
+    explicit DisplayModel(std::int64_t frequency) noexcept : frequency_(frequency) {}
+    // A present of the platform's increasing `id`: drawn for `slot` (0: a picture with no slot, not reported back),
+    // ready at `ready`, its call at `call`. An id not above the last starts the model again (a new swap chain).
+    void presented(std::uint64_t id, std::int64_t slot, std::int64_t ready, std::int64_t call) noexcept;
+    // The display showed present `id` at the refresh `shown`, the refreshes `period` apart.
+    void displayed(std::uint64_t id, std::int64_t shown, std::int64_t period) noexcept;
+    // When a picture presented at `present` will be shown; false with no report in the second before it.
+    [[nodiscard]] bool display_time(std::int64_t present, std::int64_t& shown) const noexcept;
+    // The moment from which a present reaches the refresh `slot` and no refresh before it (the refresh `held` + 1
+    // before the slot, and a guard of a quarter refresh, half a millisecond at most, for a present made just before
+    // it): the swap chain asks no time, so a picture ready before it is held to it. 0 with no answer.
+    [[nodiscard]] std::int64_t present_from(std::int64_t slot) const noexcept;
+    // The newest picture with a slot shown since the last call.
+    [[nodiscard]] bool take_shown(ShownPicture& picture) noexcept;
+    // The refreshes the display holds a picture past the first after its present (the least of the last window).
+    [[nodiscard]] std::int64_t held() const noexcept { return held_; }
+    void reset() noexcept { *this = DisplayModel{frequency_}; }
+
+private:
+    // The first refresh after `moment`.
+    [[nodiscard]] std::int64_t first_after(std::int64_t moment) const noexcept;
+
+    std::int64_t frequency_;
+    struct Present {
+        std::uint64_t id = 0;
+        std::int64_t slot = 0;
+        std::int64_t ready = 0;
+        std::int64_t call = 0;
+    };
+    std::array<Present, 16> presents_{};
+    std::size_t next_ = 0;
+    std::uint64_t last_id_ = 0;
+    std::uint64_t last_displayed_ = 0;
+    std::int64_t refresh_ = 0;  // a refresh moment (the latest shown)
+    std::int64_t period_ = 0;
+    std::int64_t held_ = -1;    // -1: no report yet
+    std::int64_t window_held_ = -1;
+    std::int64_t window_start_ = 0;
+    ShownPicture shown_{};
+    bool fresh_ = false;
+};
 
 // The vblanks per present slot for a rate on a display of `refresh` hertz: a whole number, the rate kept above 60.
 [[nodiscard]] std::int64_t vblanks_per_slot(double refresh, double rate);
@@ -60,6 +132,18 @@ public:
     [[nodiscard]] virtual bool benchmark() const = 0;
     // The governors' decisions are written to the error stream.
     [[nodiscard]] virtual bool tracing() const { return false; }
+    // The display model: when a picture presented at `present` will be shown. false where the platform gives no answer
+    // (the slots are then the moments the pictures start).
+    [[nodiscard]] virtual bool display_time(std::int64_t present, std::int64_t& shown) const {
+        (void)present;
+        shown = 0;
+        return false;
+    }
+    // The display model: the newest picture shown since the last call (DisplayModel::take_shown). false: none.
+    [[nodiscard]] virtual bool last_shown(ShownPicture& picture) {
+        picture = {};
+        return false;
+    }
 };
 
 // The playing game frame's sequence, or the one waiting for its reference.
@@ -153,14 +237,21 @@ public:
     [[nodiscard]] const ScheduleSequence& sequence() const noexcept { return sequence_; }
     // t of the next slot in the playing sequence.
     [[nodiscard]] double slot_t() const noexcept;
-    [[nodiscard]] std::int64_t slot_due() const noexcept { return slot_due_; }
+    // When the next slot's picture starts: the slot less the display lead.
+    [[nodiscard]] std::int64_t slot_due() const noexcept { return slot_due_ - display_lead_; }
+    // The next slot: the moment its picture shows (with a display model, the refresh it is drawn for).
+    [[nodiscard]] std::int64_t slot_shown() const noexcept { return slot_due_; }
     // A slot's length; 0 with no slot clock.
     [[nodiscard]] std::int64_t slot_period() const noexcept { return slot_period_; }
     // An unlimited present rate: no slot clock, each picture drawn as soon as the one before is.
     [[nodiscard]] bool unbounded() const noexcept { return unbounded_; }
     [[nodiscard]] std::int64_t remaining_us(std::int64_t now) const noexcept {
-        return (slot_due_ - now) * 1'000'000 / frequency_;
+        return (slot_due() - now) * 1'000'000 / frequency_;
     }
+    // The display lead: from a picture's start to the refresh it is drawn for (0: no display model answers).
+    [[nodiscard]] std::int64_t display_lead() const noexcept { return display_lead_; }
+    // The part of the references that holds the display lead, moved toward it by the step delay's bounds.
+    [[nodiscard]] std::int64_t display_delay_qpc() const noexcept { return display_delay_qpc_; }
 
     // The present rate with `generated` generated pictures per game frame.
     [[nodiscard]] double rate_with(unsigned generated) const;
@@ -184,6 +275,11 @@ private:
 
     // t at `slot` of a sequence whose reference is `reference`.
     [[nodiscard]] double t_at(std::int64_t slot, std::int64_t reference, double lead) const noexcept;
+    // The display model's answers for a sequence beginning at `now` on vblanks `vblank_period` apart: the display lead.
+    [[nodiscard]] std::int64_t display_lead_for(std::int64_t now, std::int64_t vblank_period);
+    // The pictures shown since the last call, to the display lead's rule.
+    void observe_shown();
+    [[nodiscard]] std::int64_t to_ns(std::int64_t ticks) const noexcept;
 
     ScheduleDisplay& display_;
     std::int64_t frequency_;
@@ -196,6 +292,12 @@ private:
     std::int64_t slot_due_ = 0;
     std::int64_t slot_period_ = 0;
     bool unbounded_ = false;
+
+    // The display model's lead (display_lead), its rule, and the references' part that follows it.
+    std::int64_t display_lead_ = 0;
+    PresentDepth display_depth_{};
+    std::int64_t display_delay_qpc_ = 0;
+    std::int64_t display_from_ = 0;  // the first slot drawn with the lead since it came in (observe_shown)
 
     // The arrival clock and the step clock's delay (start): the delay follows the lists' lateness after their steps'
     // moments, at most one step.

@@ -14,6 +14,7 @@
 #include "galaxy/frame_timeline.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/platform_time.h"
+#include "galaxy/precise_wait.h"
 #include "galaxy/render/host_window_win32.h"
 #include "galaxy/render/program_table.h"
 #include "galaxy/render/texture_store.h"
@@ -638,17 +639,31 @@ std::uint64_t RendererD3D11::end_frame(bool present_swap_chain, SubmissionCallba
         // Interpolation presents on the render core's slot clock; otherwise the pacer holds presents to the cap.
         const float paced_fps = paced_present_rate(presented_max_fps(cfg), cfg.vsync_interval, variable_refresh_, display_refresh_hz_);
         pace_wait_ms = interpolation_mode() ? 0.0 : present_pacer_.pace(variable_refresh_ ? 0u : cfg.vsync_interval, paced_fps);
-        // The display's own signal that a frame may be queued, awaited asleep and bounded (renderer_d3d12.cpp).
+        // The display's own signal that a frame may be queued, awaited asleep and bounded (renderer_d3d12.cpp); it holds a
+        // picture drawn early for its refresh until the one before it is shown.
+        const bool timeline_present = galaxy::timeline::enabled();
+        DxgiPresent model_present{std::exchange(present_moment_, 0), galaxy::qpc_now(), 0};
         if (frame_latency_waitable_ != nullptr && vsync != 0u) {
             const galaxy::bench::RenderSpan span(galaxy::bench::RenderPart::Acquire);
+            if (timeline_present) {
+                galaxy::timeline::record(galaxy::timeline::Event::AcquireBegin);
+            }
             if (WaitForSingleObjectEx(frame_latency_waitable_, 100u, TRUE) == WAIT_TIMEOUT && ++latency_timeouts_ <= 4u) {
                 std::cerr << "[present] the frame latency object did not signal within 100 ms\n";
             }
+            if (timeline_present) {
+                galaxy::timeline::record(galaxy::timeline::Event::AcquireEnd);
+            }
+            // The present asks no time: a picture ready before the refresh it is drawn for could take is held to it.
+            const std::int64_t from = display_model_.present_from(model_present.slot);
+            if (from > galaxy::qpc_now()) {
+                galaxy::PreciseWait::for_this_thread().until(from);
+            }
         }
         const std::int64_t start = galaxy::qpc_now();
+        model_present.call = start;
         // --diagnostics timeline: the present's call, as Direct3D 12 records it (a = the present's ordinal, b = its interval).
         static std::uint64_t timeline_present_ordinal = 0u;
-        const bool timeline_present = galaxy::timeline::enabled();
         if (timeline_present) {
             galaxy::timeline::record(galaxy::timeline::Event::PresentBegin, ++timeline_present_ordinal, vsync);
         }
@@ -674,7 +689,8 @@ std::uint64_t RendererD3D11::end_frame(bool present_swap_chain, SubmissionCallba
         }
         swap_present_qpc_ = end;
         std::int64_t vblank = 0, period = 0;
-        report_dxgi_present(swap_chain_.Get(), hr == S_OK, vblank_grid(vblank, period) ? period : 0);
+        report_dxgi_present(swap_chain_.Get(), hr == S_OK, vblank_grid(vblank, period) ? period : 0, display_model_,
+                            model_present);
     }
     surface_lock_ = {};
     const std::uint64_t fence = d3d11::Context::get().signal();

@@ -775,6 +775,17 @@ bool RenderCore::ScheduleView::tracing() const {
     return ::galaxy::diagnosing(::galaxy::kDiagnosePresentStats);
 }
 
+// The renderer's display model (frame_schedule.h DisplayModel), where its platform answers; only where pictures show
+// whole from a refresh on (a tearing swap chain shows them where they land).
+bool RenderCore::ScheduleView::display_time(std::int64_t present, std::int64_t& shown) const {
+    shown = 0;
+    return pictures_on_refreshes(core_.renderer_.swap_queue()) && core_.renderer_.display_time(present, shown);
+}
+
+bool RenderCore::ScheduleView::last_shown(ShownPicture& picture) {
+    return core_.renderer_.take_shown(picture);
+}
+
 void RenderCore::start_interp_sequence(ListEntry& entry, std::int64_t arrived, std::int64_t step) {
     // A list before the waiting one began: that one begins now, replacing the playing one.
     begin_waiting_interp_sequence();

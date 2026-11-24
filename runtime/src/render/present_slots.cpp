@@ -8,19 +8,26 @@
 
 namespace galaxy::render {
 
+std::int64_t PresentDepth::depth(std::int64_t initial, std::int64_t least, std::int64_t most,
+                                 std::int64_t unit) noexcept {
+    unit = std::max<std::int64_t>(1, unit);
+    if (!depth_set_) {
+        depth_set_ = true;
+        depth_ns_ = initial;
+    }
+    least = (least + unit - 1) / unit * unit;
+    depth_ns_ = std::clamp(depth_ns_, least, std::max(least, most));
+    const std::int64_t depth = (depth_ns_ + unit - 1) / unit * unit;
+    depth_ns_ = depth;
+    least_ns_ = least;
+    return depth;
+}
+
 std::int64_t PresentSlots::place(const PresentClock& clock) noexcept {
     const std::int64_t period = clock.by_moment ? kGameStepNs : clock.period;
     // The depth in whole vsyncs for a picture timed by its moment, in whole present periods for a game frame.
     const std::int64_t unit = std::max<std::int64_t>(1, clock.by_moment ? clock.vsync : clock.step);
-    if (!depth_set_) {
-        depth_set_ = true;
-        depth_ns_ = 2 * period;
-    }
-    const std::int64_t least = (kLeastDepthNs + unit - 1) / unit * unit;
-    depth_ns_ = std::clamp(depth_ns_, least, std::max(least, 4 * period));
-    const std::int64_t depth = (depth_ns_ + unit - 1) / unit * unit;
-    depth_ns_ = depth;
-    least_ns_ = least;
+    const std::int64_t depth = depth_.depth(2 * period, kLeastDepthNs, 4 * period, unit);
     std::int64_t slot = 0;
     skip_ = false;
     if (clock.by_moment) {
@@ -52,7 +59,7 @@ std::int64_t PresentSlots::place(const PresentClock& clock) noexcept {
     return slot;
 }
 
-void PresentSlots::observe(std::int64_t requested, std::int64_t earliest, std::int64_t actual, std::int64_t margin,
+void PresentDepth::observe(std::int64_t requested, std::int64_t earliest, std::int64_t actual, std::int64_t margin,
                            std::int64_t step, std::int64_t half_vsync) noexcept {
     step = std::max<std::int64_t>(step, 1);
     if (actual > requested + half_vsync && earliest > requested + half_vsync) {

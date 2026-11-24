@@ -1667,6 +1667,40 @@ at the picture's moment; every platform does the same or says on screen why not.
    - Variable refresh: told by the system where it says so; otherwise measured on the display clock's own vblank
      waits with no in-between picture in flight, so its pictures cannot hide it. Its own path: presents spaced evenly
      by the precise wait under the cap, each drawn for its own moment; any target rate is then even.
+   Answered at G2.3.1 (11-24, on main's cda9d57c1):
+   - The two questions are `ScheduleDisplay::display_time` (when a picture presented at a moment will be shown) and
+     `ScheduleDisplay::last_shown` (the newest picture shown: the refresh it was drawn for, the first it could have
+     reached, the one that showed it, its margin). A platform without them answers false and keeps lead 0: its slots
+     are the moments its pictures start, as before.
+   - With answers, on the display's vblanks only (a clock of the pacer's own has no refresh to ask for), a slot is the
+     refresh its picture is drawn for: its `t` is that refresh's, and the picture starts the display lead before it
+     (`FrameSchedule::slot_due`). The lead follows the pictures shown by Android's rule, taken out of `PresentSlots` into
+     `PresentDepth` (present_slots.h) so both use the same code: two or more late in a second's window add the
+     refreshes missed, a calm stretch (5 s, doubling to 80 s after a step down that did not hold) whose pictures were
+     ready a refresh and 2 ms before their last moment takes a refresh off. Its least is the time from a present made
+     at once to the refresh that shows it (`display_time`), in whole refreshes; its first value a refresh more.
+   - The references hold the lead (`display_delay_qpc`): it moves toward the lead by the step delay's bounds (2 % of a
+     step a frame up, 1 % down), at once where none was held, so a sequence's first picture starts after its list came
+     and the content keeps to the wall clock when the lead moves.
+   - Windows: `DisplayModel` (frame_schedule.h) is fed by every present (`report_dxgi_present`, dxgi_pacing.h): the
+     present count with the refresh the picture was drawn for, when it was ready (before the frame latency object's
+     wait) and when the Present call was made; and the frame statistics' newest present shown. `held` is the refreshes
+     a present was shown past the first after its call (the flip queue's and the compositor's), its least over each
+     second of reports; a present at p is predicted at the first refresh after p and `held` more. Answers stop a second
+     after the last report (a hidden window, a swap chain of frame generation's). The swap chain asks no time, so a
+     picture ready before the refresh from which it reaches its slot (`DisplayModel::present_from`: `held` + 1
+     refreshes before the slot, and a guard of a quarter refresh, 0.5 ms at most) is held to it by the precise wait
+     before its Present; without that hold a lead above the least would show every picture early.
+   - M2 read from the code (the statistics on a shown window are the planner's owed measure): with frame latency 1 the
+     latency object lets a present go only once the one before is shown. Slots started on a vblank, so after one
+     present missed its refresh every later one waited a whole refresh on the object (P-312's 4 ms a picture) and
+     showed two refreshes after its slot, with no way back: the flip queue held one picture for good. The compositor
+     can add a refresh of its own; the model measures it (`held`) whichever it is. The change: each picture starts its
+     lead before its refresh and is drawn for that refresh, so the object's wait is empty at the least lead and the
+     picture shows on the refresh it was drawn for. The timeline shows each part: the object's wait as `AcquireBegin`
+     and `AcquireEnd` on Direct3D, the refresh asked as `DisplayModel` (event 39) beside `DisplayStats`.
+   - The PC's monitor (read 11-24): 3840x2160, at 240 Hz, lists 29, 30, 59, 60, 119, 120 and 240 Hz; 144 and 165 Hz
+     are not listed there and are proven by the simulated displays of `frame_schedule_tests.cpp`.
 4. The spin. Where a display time is asked (Vulkan present timing, Android display timing, Metal's display link), the
    render thread starts a picture its lead ahead and the display holds it to its time; the closing spin of
    `PreciseWait` stays only where no time can be asked. The render thread's CPU time a second is measured on the tablet

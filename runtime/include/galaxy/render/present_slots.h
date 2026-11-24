@@ -50,6 +50,49 @@ struct PresentClock {
     std::int64_t step = 0;         // one present period (1 s / the present rate)
 };
 
+// The depth from a picture's moment to the refresh asked for it, set by past presentations (observe): PresentSlots' and
+// the frame schedule's display lead (frame_schedule.h, a display model's platforms). Every time in nanoseconds.
+class PresentDepth {
+public:
+    // The depth in whole `unit`s, at least `least` and at most `most` (both rounded up to whole units): `initial` at the
+    // first call, then what observe() left.
+    [[nodiscard]] std::int64_t depth(std::int64_t initial, std::int64_t least, std::int64_t most,
+                                     std::int64_t unit) noexcept;
+    // A past presentation of a timed present: the slot it asked for, the earliest it could have been shown
+    // (earliestPresentTime), when it was (actualPresentTime), how long before the compositor latched it it was ready
+    // (presentMargin), and its present period. Sets the depth by windows of a second of presents (by their shown times,
+    // so the same at every rate): a window with two or more not ready by their slot (shown later than asked, by less
+    // than two frame periods: a longer wait is a stall, not the device's pace) adds the present periods they missed by,
+    // two at most. A calm stretch (5 s, doubling up to 80 s after a step down that did not hold 10 s) whose presents
+    // were all ready a period and 2 ms before the compositor latched them takes a period off, down to the least (in
+    // whole units) at the least.
+    void observe(std::int64_t requested, std::int64_t earliest, std::int64_t actual, std::int64_t margin,
+                 std::int64_t step, std::int64_t half_vsync) noexcept;
+    // The most a late present missed its slot by since the last call.
+    [[nodiscard]] std::int64_t take_late_max() noexcept {
+        const std::int64_t most = late_max_;
+        late_max_ = 0;
+        return most;
+    }
+
+private:
+    bool depth_set_ = false;       // depth_ns_ holds a depth (`initial` at the first call)
+    std::int64_t depth_ns_ = 0;    // the depth wanted, in whole units (vsyncs or present periods)
+    std::int64_t least_ns_ = 0;    // the least, in whole units
+    static constexpr std::int64_t kWindowNs = 1'000'000'000;
+    static constexpr std::int64_t kCalmFirstNs = 5'000'000'000;
+    static constexpr std::int64_t kCalmMostNs = 80'000'000'000;
+    static constexpr std::int64_t kStepDownHeldNs = 10'000'000'000;
+    std::int64_t window_start_ = 0;  // the first shown time of the window (0: none yet)
+    unsigned window_late_ = 0;
+    std::int64_t window_miss_ = 0;  // the most a late present in the window missed its slot by
+    std::int64_t calm_ns_ = 0;
+    std::int64_t calm_needed_ns_ = kCalmFirstNs;
+    std::int64_t since_step_down_ns_ = -1;  // -1: no step down since the last step up
+    std::int64_t calm_margin_ = INT64_MAX;
+    std::int64_t late_max_ = 0;
+};
+
 class PresentSlots {
 public:
     // The pipeline depth's bounds: at least the GPU's work and the compositor's latch, at most four frame periods.
@@ -72,45 +115,22 @@ public:
         return skip;
     }
 
-    // A past presentation of a timed present: the slot it asked for, the earliest it could have been shown
-    // (earliestPresentTime), when it was (actualPresentTime), how long before the compositor latched it it was ready
-    // (presentMargin), and its present period. Sets the depth by windows of a second of presents (by their shown times,
-    // so the same at every rate): a window with two or more not ready by their slot (shown later than asked, by less
-    // than two frame periods: a longer wait is a stall, not the device's pace) adds the present periods they missed by,
-    // two at most. A calm stretch (5 s, doubling up to 80 s after a step down that did not hold 10 s) whose presents
-    // were all ready a period and 2 ms before the compositor latched them takes a period off, down to kLeastDepthNs (in
-    // whole units) at the least.
+    // A past presentation of a timed present (PresentDepth::observe): the depth, down to kLeastDepthNs at the least.
     void observe(std::int64_t requested, std::int64_t earliest, std::int64_t actual, std::int64_t margin,
-                 std::int64_t step, std::int64_t half_vsync) noexcept;
+                 std::int64_t step, std::int64_t half_vsync) noexcept {
+        depth_.observe(requested, earliest, actual, margin, step, half_vsync);
+    }
 
     // The time from the latest picture's moment (or frame start) to its slot.
     [[nodiscard]] std::int64_t depth_used() const noexcept { return depth_used_; }
     // The most a late present missed its slot by since the last call.
-    [[nodiscard]] std::int64_t take_late_max() noexcept {
-        const std::int64_t most = late_max_;
-        late_max_ = 0;
-        return most;
-    }
+    [[nodiscard]] std::int64_t take_late_max() noexcept { return depth_.take_late_max(); }
 
 private:
-    bool depth_set_ = false;       // depth_ns_ holds a depth (two frame periods at the first present)
+    PresentDepth depth_;  // two frame periods at the first present
     bool skip_ = false;
-    std::int64_t depth_ns_ = 0;    // the depth wanted, in whole units (vsyncs or present periods)
-    std::int64_t least_ns_ = kLeastDepthNs;  // kLeastDepthNs in whole units
     std::int64_t depth_used_ = 0;  // see depth_used (0: no slot yet)
     std::int64_t last_slot_ = 0;
-    static constexpr std::int64_t kWindowNs = 1'000'000'000;
-    static constexpr std::int64_t kCalmFirstNs = 5'000'000'000;
-    static constexpr std::int64_t kCalmMostNs = 80'000'000'000;
-    static constexpr std::int64_t kStepDownHeldNs = 10'000'000'000;
-    std::int64_t window_start_ = 0;  // the first shown time of the window (0: none yet)
-    unsigned window_late_ = 0;
-    std::int64_t window_miss_ = 0;  // the most a late present in the window missed its slot by
-    std::int64_t calm_ns_ = 0;
-    std::int64_t calm_needed_ns_ = kCalmFirstNs;
-    std::int64_t since_step_down_ns_ = -1;  // -1: no step down since the last step up
-    std::int64_t calm_margin_ = INT64_MAX;
-    std::int64_t late_max_ = 0;
 };
 
 }  // namespace galaxy::render
