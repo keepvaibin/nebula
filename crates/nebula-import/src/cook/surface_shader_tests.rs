@@ -307,88 +307,33 @@ fn a_check_without_a_compiler_says_the_shader_was_not_compiled() {
     }
 }
 
+/// shader.json `ray` (the shelved ray tracing's rows): a file that gives them is taken whatever they hold, and they are
+/// not read; `ray` says only that the file gave them (the cook's note Cook.RayData).
 #[test]
-fn a_shaders_ray_rows_are_checked() {
+fn a_shaders_ray_rows_are_taken_and_not_read() {
     let with_ray = |ray: Value| {
         let mut j = stripes_json();
         j["ray"] = ray;
         read_json(&j, STRIPES)
     };
-    assert!(with_ray(serde_json::json!({"class": "metal", "base": [0.9, 0.8, 0.2], "roughness": 0.1, "through": 0.0})).unwrap().ray);
     assert!(!read_json(&stripes_json(), STRIPES).unwrap().ray);
-    for (ray, key) in [
-        (serde_json::json!({"class": "water"}), "/ray/class"),
-        (serde_json::json!({"class": "ramp"}), "/ray/class"),
-        (serde_json::json!({"base": [1.0, 0.5]}), "/ray/base"),
-        (serde_json::json!({"base": [1.0, 0.5, 2.0]}), "/ray/base/2"),
-        (serde_json::json!({"emission": [-1.0, 0.0, 0.0]}), "/ray/emission/0"),
-        (serde_json::json!({"roughness": 1.5}), "/ray/roughness"),
-        (serde_json::json!({"sheen": 1.0}), "/ray/sheen"),
-        (serde_json::json!({"colour": "albedo"}), "/ray/colour"),
-        (serde_json::json!(3), "/ray"),
+    let plain = read_json(&stripes_json(), STRIPES).unwrap();
+    for ray in [
+        serde_json::json!({"class": "metal", "base": [0.9, 0.8, 0.2], "roughness": 0.1, "through": 0.0}),
+        serde_json::json!({"class": "water", "sheen": 1.0, "base": [1.0, 0.5]}),
+        serde_json::json!({"traced": "gone", "glow": {"candela": -1.0}}),
+        serde_json::json!(3),
     ] {
-        let (why, args) = refusal(with_ray(ray.clone()));
-        assert_eq!(why, "Cook.Shader.Json", "{ray}");
-        assert!(args.contains(&("key", key.to_string())), "{ray}: {args:?}");
+        let read = with_ray(ray.clone()).unwrap_or_else(|e| panic!("{ray}: {e:#}"));
+        assert!(read.ray, "{ray}");
+        assert_eq!(Source { ray: false, ..read }, plain, "{ray}");
     }
 }
-
-#[test]
-fn a_shaders_ray_placeholders_are_checked() {
-    let with_ray = |ray: Value| {
-        let mut j = stripes_json();
-        j["ray"] = ray;
-        read_json(&j, STRIPES)
-    };
-    let one = |key: &str, v: Value| Value::Object([(key.to_string(), v)].into_iter().collect());
-    // Each key: a good value, one out of range, one of the wrong type.
-    for (key, good, out, wrong) in [
-        ("ior", serde_json::json!(1.33), serde_json::json!(0.9), serde_json::json!("glass")),
-        ("thickness", serde_json::json!(40.0), serde_json::json!(-1.0), serde_json::json!([1.0])),
-        ("body", serde_json::json!(0.5), serde_json::json!(1.1), serde_json::json!(true)),
-        ("shine", serde_json::json!(16.0), serde_json::json!(16.5), serde_json::json!("bright")),
-        ("tint_keep", serde_json::json!(0.0), serde_json::json!(-0.1), serde_json::json!({})),
-        ("traced", serde_json::json!("hidden"), serde_json::json!("gone"), serde_json::json!(1)),
-        ("sun_through", serde_json::json!(0.6), serde_json::json!(2.0), serde_json::json!("half")),
-        ("metal_kind", serde_json::json!("brass"), serde_json::json!("tin"), serde_json::json!(3)),
-        ("glow", serde_json::json!({"color": "own", "candela": 120.0}), serde_json::json!({"candela": -1.0}), serde_json::json!(5)),
-        ("vertex_colour", serde_json::json!("albedo"), serde_json::json!("paint"), serde_json::json!(1)),
-    ] {
-        assert!(with_ray(one(key, good.clone())).is_ok(), "{key} {good}");
-        for bad in [out, wrong] {
-            let (why, args) = refusal(with_ray(one(key, bad.clone())));
-            assert_eq!(why, "Cook.Shader.Json", "{key} {bad}");
-            let at = args.iter().find(|(k, _)| *k == "key").map(|(_, v)| v.clone()).unwrap_or_default();
-            assert!(at.starts_with(&format!("/ray/{key}")), "{key} {bad}: {at}");
-        }
-    }
-    for (glow, at) in [
-        (serde_json::json!({"color": [1.0, 0.5, 2.0], "candela": 1.0}), "/ray/glow/color/2"),
-        (serde_json::json!({"color": "white", "candela": 1.0}), "/ray/glow/color"),
-        (serde_json::json!({"candela": 1.0, "luminance": 1.0}), "/ray/glow"),
-        (serde_json::json!({"color": "own"}), "/ray/glow"),
-        (serde_json::json!({"candela": 1.0, "cone": 30.0}), "/ray/glow/cone"),
-        (serde_json::json!({"luminance": "high"}), "/ray/glow/luminance"),
-    ] {
-        let (_, args) = refusal(with_ray(serde_json::json!({ "glow": glow })));
-        assert!(args.contains(&("key", at.to_string())), "{at}: {args:?}");
-    }
-    for word in ["auto", "albedo", "light"] {
-        assert!(with_ray(serde_json::json!({ "vertex_colour": word })).unwrap().ray, "{word}");
-    }
-    assert!(with_ray(serde_json::json!({"class": "metal", "ior": 1.33, "thickness": 40.0, "body": 0.5, "shine": 2.0,
-        "tint_keep": 0.25, "traced": "hidden", "sun_through": 0.6, "metal_kind": "art",
-        "glow": {"color": [1.0, 0.5, 0.0], "luminance": 300.0}}))
-    .unwrap()
-    .ray);
-}
-
-
 
 #[test]
 fn a_parameter_may_not_take_a_reserved_name() {
     let mut taken = stripes_json();
-    taken["params"][0]["name"] = serde_json::json!("rt_speed");
+    taken["params"][0]["name"] = serde_json::json!("native_speed");
     let (why, _) = refusal(read_json(&taken, STRIPES));
     assert_eq!(why, "Cook.Shader.Json");
 }

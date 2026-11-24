@@ -104,17 +104,18 @@ fn replaced(path: &str) -> String {
     }
 }
 
-/// Ray tracing's tables a layer's `merge/` may hold (lowercase). This game has no ray tracing: the import checks each as
-/// before and writes it nowhere (nebula-import overlay.rs RAY_TABLES, the note Cook.RayData).
-pub const MERGE_TABLES: [&str; 5] =
+/// The shelved ray tracing's tables a layer's `merge/` may hold (lowercase), so that a .luma 1.0 file that carries one
+/// stays valid. The import reads none of them and writes them nowhere (nebula-import overlay.rs run_merges, the note
+/// Cook.RayData).
+pub const IGNORED_TABLES: [&str; 5] =
     ["nebuladata/rtstages.tsv", "nebuladata/rteffects.tsv", "nebuladata/rtmaterials.tsv", "nebuladata/rtglow.tsv", "nebuladata/rtwater.tsv"];
 
 /// A `merge/<game path>` the import's cook reads (nebula-import overlay.rs run_merges and write_overlay, which take
 /// this as their gate): a table or a message file in its JSON form (`.json`: `<Table>.bcsv.json`, `message.bmg.json`,
-/// `MessageData/messages.json`, a particle file's `.jpc.json`), a particle file (`.jpc`), or one of MERGE_TABLES.
+/// `MessageData/messages.json`, a particle file's `.jpc.json`), a particle file (`.jpc`), or one of IGNORED_TABLES.
 pub fn mergeable(path: &str) -> bool {
     let lower = path.trim_start_matches('/').to_ascii_lowercase();
-    lower.ends_with(".json") || lower.ends_with(".jpc") || MERGE_TABLES.contains(&lower.as_str())
+    lower.ends_with(".json") || lower.ends_with(".jpc") || IGNORED_TABLES.contains(&lower.as_str())
 }
 
 pub(crate) fn check(ctx: &mut Ctx) {

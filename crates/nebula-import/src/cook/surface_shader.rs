@@ -16,8 +16,8 @@
 //! - Surface: base (display-encoded colour, 0 to 1), alpha, normal (eye space), roughness, metal, emission
 //!   (display-encoded, added after the light; above 1 feeds bloom).
 //!
-//! - ray (layer 3): shader.json `ray`, each row optional: ray tracing's rows. This game has none: they are checked
-//!   (a .luma 1.0 file valid before stays valid) and used for nothing; the cook notes Cook.RayData once a file.
+//! - ray (layer 3): shader.json `ray`: the shelved ray tracing's rows. A .luma 1.0 file that gives them stays valid;
+//!   they are not read, and the cook notes Cook.RayData once a file.
 //!
 //! Refused, each by name with the file (and the line where there is one), L804 `Cook.Shader.<Kind>`: no source, a
 //! JSON outside the interface, HLSL that binds anything of its own (`register`, a texture, sampler or buffer type,
@@ -68,14 +68,8 @@ const RESERVED: [&str; 42] = [
     "NativeOut", "program_ps", "program_vs", "if", "else", "for", "while", "do", "return", "true", "false", "struct",
     "static", "const", "in", "out", "inout", "void", "bool", "int", "uint", "float", "half", "double", "discard", "switch",
 ];
-const RESERVED_PREFIXES: [&str; 15] =
-    ["g_", "pbr_", "enh_", "traced_", "native_", "program_", "lit", "nm_", "NEBULA_", "NATIVE_", "float", "int", "rt_", "Rt", "RT_"];
-/// The classes a shader's `ray` may name: what its rows alone make (ramp needs a ramp map, water the pack's row).
-/// The metal kinds a `ray` row may name, and `art`.
-pub const RAY_METAL_KINDS: [&str; 8] = ["gold", "silver", "copper", "iron", "chrome", "brass", "platinum", "art"];
-
-pub const RAY_CLASSES: [&str; 8] = ["dielectric", "gloss", "metal", "glass", "cutout", "translucent", "emissive", "painted"];
-
+const RESERVED_PREFIXES: [&str; 11] =
+    ["g_", "pbr_", "enh_", "native_", "program_", "lit", "nm_", "NEBULA_", "NATIVE_", "float", "int"];
 /// A shader as its files say, checked.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Source {
@@ -88,7 +82,7 @@ pub struct Source {
     /// Declared textures: (slot 0 to 7, name).
     pub textures: Vec<(u8, String)>,
     pub reads: u8,
-    /// Whether shader.json gives `ray` rows (materials.md section 3.4, layer 3): checked, used for nothing.
+    /// Whether shader.json gives `ray` rows (materials.md section 3.4, layer 3): the shelved ray tracing's, not read.
     pub ray: bool,
 }
 
@@ -218,7 +212,6 @@ pub fn read(name: &str, file: &str, json: &[u8], hlsl: &[u8]) -> Result<Source> 
     if !root["reads"].is_null() && !root["reads"].is_array() {
         return Err(bad("/reads"));
     }
-    ray_rows(&root["ray"]).map_err(|key| bad(&format!("/ray{key}")))?;
     let ray = !root["ray"].is_null();
     if hlsl.len() > MOST_BYTES {
         return Err(refuse("Cook.Shader.TooLarge", &[("file", file.to_string()), ("value", hlsl.len().to_string()), ("max", MOST_BYTES.to_string())]));
@@ -226,101 +219,6 @@ pub fn read(name: &str, file: &str, json: &[u8], hlsl: &[u8]) -> Result<Source> 
     let code = std::str::from_utf8(hlsl).map_err(|_| refuse("Cook.Shader.Text", &[("file", file.to_string())]))?.replace("\r\n", "\n");
     check_code(file, &code)?;
     Ok(Source { name: name.to_string(), file: file.to_string(), code, params, textures, reads, ray })
-}
-
-/// The keys a shader.json `ray` takes: its material's factors (class to through), then the placeholders.
-pub const RAY_KEYS: [&str; 16] = [
-    "class", "base", "roughness", "metal", "emission", "through", "ior", "thickness", "body", "shine", "tint_keep", "traced",
-    "sun_through", "metal_kind", "glow", "vertex_colour",
-];
-
-/// The keys a glTF material's `extras.nebula.ray` takes: the placeholders alone (its factors are glTF's own).
-pub const MATERIAL_RAY_KEYS: [&str; 10] =
-    ["ior", "thickness", "body", "shine", "tint_keep", "traced", "sun_through", "metal_kind", "glow", "vertex_colour"];
-
-/// A glTF material's `extras.nebula.ray` checked (absent: nothing to check), or the key under it that is not one it
-/// takes or not in its range (as ray_rows).
-pub fn material_ray(v: &Value) -> std::result::Result<(), String> {
-    if let Some(key) = v.as_object().and_then(|o| o.keys().find(|k| !MATERIAL_RAY_KEYS.contains(&k.as_str()))) {
-        return Err(format!("/{key}"));
-    }
-    ray_rows(v)
-}
-
-/// shader.json `ray`, or the key (under `/ray`) that is outside it: a class of RAY_CLASSES; colours of three numbers 0
-/// to 1 (emission 0 or more); roughness, metal, through, body, tint_keep and sun_through 0 to 1; ior 1 to 3; shine 0 to
-/// 16; thickness 0 or more; traced `seen` or `hidden`; metal_kind a name of RAY_METAL_KINDS; glow {color: three
-/// numbers 0 to 1 or `own`, and candela or luminance 0 or more}; vertex_colour `auto`, `albedo` or `light`. The rows
-/// were ray tracing's; this game has none, so they are checked (a .luma 1.0 file valid before stays valid) and used for
-/// nothing (Cook.RayData).
-fn ray_rows(v: &Value) -> std::result::Result<(), String> {
-    if v.is_null() {
-        return Ok(());
-    }
-    let object = v.as_object().ok_or_else(String::new)?;
-    if let Some(key) = object.keys().find(|k| !RAY_KEYS.contains(&k.as_str())) {
-        return Err(format!("/{key}"));
-    }
-    let number_in = |v: &Value, at: &str, low: f64, high: f64| -> std::result::Result<Option<f64>, String> {
-        match v {
-            Value::Null => Ok(None),
-            x => x.as_f64().filter(|x| x.is_finite() && (low..=high).contains(x)).map(Some).ok_or_else(|| at.to_string()),
-        }
-    };
-    let number = |key: &str, low: f64, high: f64| number_in(&v[key], &format!("/{key}"), low, high);
-    let colour_in = |x: &Value, at: &str, top: f64| -> std::result::Result<(), String> {
-        match x {
-            Value::Null => Ok(()),
-            x => {
-                let a = x.as_array().filter(|a| a.len() == 3).ok_or_else(|| at.to_string())?;
-                for (k, c) in a.iter().enumerate() {
-                    c.as_f64().filter(|c| c.is_finite() && *c >= 0.0 && *c <= top).ok_or_else(|| format!("{at}/{k}"))?;
-                }
-                Ok(())
-            }
-        }
-    };
-    let word = |key: &str, words: &[&str]| -> std::result::Result<(), String> {
-        match &v[key] {
-            Value::Null => Ok(()),
-            x => x.as_str().filter(|w| words.contains(w)).map(|_| ()).ok_or_else(|| format!("/{key}")),
-        }
-    };
-    let most = f64::from(f32::MAX);
-    word("class", &RAY_CLASSES)?;
-    colour_in(&v["base"], "/base", 1.0)?;
-    colour_in(&v["emission"], "/emission", most)?;
-    for (key, low, high) in [
-        ("roughness", 0.0, 1.0),
-        ("metal", 0.0, 1.0),
-        ("through", 0.0, 1.0),
-        ("ior", 1.0, 3.0),
-        ("thickness", 0.0, most),
-        ("body", 0.0, 1.0),
-        ("shine", 0.0, 16.0),
-        ("tint_keep", 0.0, 1.0),
-        ("sun_through", 0.0, 1.0),
-    ] {
-        number(key, low, high)?;
-    }
-    word("traced", &["seen", "hidden"])?;
-    word("metal_kind", &RAY_METAL_KINDS)?;
-    word("vertex_colour", &["auto", "albedo", "light"])?;
-    let g = &v["glow"];
-    if !g.is_null() {
-        let o = g.as_object().ok_or_else(|| "/glow".to_string())?;
-        if let Some(key) = o.keys().find(|k| !matches!(k.as_str(), "color" | "candela" | "luminance")) {
-            return Err(format!("/glow/{key}"));
-        }
-        if !matches!(&g["color"], Value::String(s) if s == "own") {
-            colour_in(&g["color"], "/glow/color", 1.0)?;
-        }
-        match (number_in(&g["candela"], "/glow/candela", 0.0, most)?, number_in(&g["luminance"], "/glow/luminance", 0.0, most)?) {
-            (Some(_), None) | (None, Some(_)) => {}
-            _ => return Err("/glow".to_string()),
-        }
-    }
-    Ok(())
 }
 
 /// The HLSL's words outside comments and strings, each with its line: what it may not write, and its `surface`.
