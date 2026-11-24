@@ -360,8 +360,12 @@ session is an order; an answer to such a question is written in your log and the
   the renderer (`d3d12`, `vulkan`, `d3d11`) and the disc (`RMGE01` the US disc, `RMGP01`, `RMGJ01`); `*` stands for any
   of them. Name every renderer, disc and place the picture changes on, for example `tour/010-CannonFleetGalaxy-1 * * * *
   :: the sky is another blue`. The landing plays each stop a line names on the other discs' Direct3D 11 and Vulkan as
-  well and refuses a difference there that no line names; it refuses a line that no differing picture uses. Look at each
-  changed picture yourself first (the run's sheet) and be able to say why it changed. The landing approves declared and
+  well and refuses a difference there that no line names; it refuses a line that no differing picture uses. That refusal
+  has the kind `tool` (`KIND tool pictures/declared - :: N declared change(s) name no differing picture (stale):
+  PICTURES-CHANGE.txt line N: ...`), and so has a line the landing cannot read. Both are your own line, not a fault of
+  a tool: take the line out or correct it, then land again. Do not land the branch once more unchanged and open no
+  mend. When the tablet was away, the same line has the kind `env` and says the tablet's pictures were not taken: that
+  is the usual `env` case (section 9, "When a tool fails"). Look at each changed picture yourself first (the run's sheet) and be able to say why it changed. The landing approves declared and
   new pictures by itself.
 - The old path goes in the step the card names for it. Leave no switch, no fallback and no dead copy behind
   unless the card names one.
@@ -506,7 +510,9 @@ new tip.
   sheet).
 
 Never a tool fault, always the step's: a test you find too strict, a picture that differs, a slower measure (section
-11). A result of the kind `env` (the machine: the tablet away, GitHub unreachable, a full drive, a layer that is not
+11). Nor a line of `PICTURES-CHANGE.txt` that the landing refuses (a stale line, or one it cannot read): the kind says
+`tool`, the line is yours (section 8, the bullet that begins "Declare a picture"), and the row the step tool writes for
+it among the tool faults is about your line, not about a tool. A result of the kind `env` (the machine: the tablet away, GitHub unreachable, a full drive, a layer that is not
 installed) is not mended: record it with `PLAN toolfault --last --could-not "<what it stopped you from doing>"` after
 a landing, or `PLAN tool "<what you ran, what it printed, what you needed>"` outside one, and go on as far as you can.
 
@@ -521,7 +527,8 @@ a landing, or `PLAN tool "<what you ran, what it printed, what you needed>"` out
    hour would send you on to other steps out of order). Record it (`PLAN tool "..."`), write the next step ahead if
    it is not written (4.2), then end the turn with one line, `waiting: <the message's first line>`. At each
    wake-up give `PLAN land <ID>` once more, one try each; your log counts the tries. After six such tries
-   `PLAN blocked <ID> "env: <the message's first line>"` and go on. Of the kind `tool`: a mend. A message that names a rule of the repository (the console census, the cast check, the
+   `PLAN blocked <ID> "env: <the message's first line>"` and go on. Of the kind `tool`: a mend, except a refused line of `PICTURES-CHANGE.txt` (above, "Never a tool fault"):
+   that line is yours. A message that names a rule of the repository (the console census, the cast check, the
    byte-order check, the strictness check, the pre-push hook) is never this case: it is a refusal (code 1, section
    5), and landing it once more gives the same refusal. If a landing of yours ends so with code 4 all the same,
    that is a fault of the tool: a mend.
