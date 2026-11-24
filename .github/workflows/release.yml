@@ -222,7 +222,8 @@ jobs:
           # The players' build: ThinLTO with the profile in native/pgo.
           # The build's log: tools/gate/pgo.py check reads how much of the profile is out of date (P-014).
           $log = Join-Path $env:RUNNER_TEMP 'game-build.log'
-          $targets = 'smg_game', 'smg_game_plain'
+          $targets = 'smg_game_plain'
+          #, 'smg_game'
           foreach ($target in $targets) {
             & .\native\build.ps1 -Petari native\petari -Build $build -Pgo -Llvm $llvm -Target $target *>&1 |
               Tee-Object -Append -FilePath $log
