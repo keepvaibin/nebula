@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-24 14:02. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 14:17. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 24 of 145 (17%).
 
@@ -73,6 +73,7 @@ In work now:
 - R2.2 The sampler tables stop filling: P-048, P-056, P-066, P-061: proof 4, the audit's runs: Direct3D 12 with dynamic resolution and --diagnostics timeline, Good Egg 10 minutes, no [samplers] line and no wait; the tablet, the same 10 minutes; Direct3D 11 with --diagnostics resolution-steps through several galaxies, samplers_.size() under 4096; Metal waits counted on an Apple-silicon Mac (needs a Mac). Metal is compiled by the GitHub Mac job only. (agent 1, 2026-11-24 05:34)
 - G2.1 Landing 1: a sequence starts at its arrival; the step keeps its due times: G2.1 proof 3 (I-004, I-013): on a shown window, the pacing measure before G2.1 and after it: at 240 Hz with in-between pictures on, delay_avg_us of the [pace] line (file F: 42.4 ms, expected about 26) and the timeline's RenderBegin to first present; at 120 Hz with in-between pictures on, the timeline's StepWaitEnd against VBlank (tools/perf/timeline_digest.py); the figures and run folders go into the rows' notes (agent 1, 2026-11-24 11:27)
 - G2.2 Landing 2: the lead at whole multiples of 60 Hz: G2.2 proofs 2 and 3 (I-002): on a shown window at 120 and 240 Hz with in-between pictures on and VSync on, the real pictures shown counted as file F section 1A did (expected near every step, before 5 to 13 of 2,640) and the walks per step (k, before k + 1); the [pace] line's animation_within_1ms before and after, unchanged; the figures and run folders go into I-002's note (agent 1, 2026-11-24 11:51)
+- G2.3.1 Landing 3a: the display model; Windows: M2's trace and P-312's after-measure on a shown window: Direct3D 12 and 11, VSync on, in-between pictures on, at 240 Hz (the monitor's mode on 11-24) with --diagnostics timeline, before (main before G2.3.1) and after: tools/perf/timeline_digest.py's DisplayModel (event 39) against DisplayStats per present count (each picture shown at the refresh it was drawn for), AcquireBegin to AcquireEnd (the latency object's wait, about 4 ms a picture before), and the [pace] line's on_time, missed, doubled and delay_avg_us; with R1.2's PipelineMissed count and R2.2's [samplers] line read in the same run (a stop where either is above 0 is measured again) (agent 1, 2026-11-24 14:17)
 
 ## Waiting for the owner
 
@@ -94,7 +95,7 @@ Nothing is blocked.
 | M-006 | closed | - | the step tier and section check; a passing tool fault played once more; a waiter left not judged runs itself | 0 | 95 | 2911f6429 |
 | M-007 | closed | - | the section-at-a-time roles: a whole section ahead, wait, hand-off sheets, hard reports, the live page | 0 | 80 | 9ed09cfec |
 
-## Decisions (74)
+## Decisions (78)
 
 - 2026-11-23 S0.2.1: LoadSlice: 32 items a frame; an item is a phase of GameScene::initAfterScenarioChosen, the player, one placement made whole, one piece of FileSelector::initStep, or one Star Bit of the reserve (because the card asks for a fixed count of work and names no count; the count is a constant in one place, no player sees which frame of the load an item falls in, and the load worker (G3.7) replaces the slices)
 - 2026-11-23 S0.2.1: Drawing's random stream (MR::getDrawRandom) is seeded with the same seed as the game's stream, in setRandomSeedFromStageName and setFixedRandomSeed (because a fixed seed keeps the cosmetic numbers the same in every run of a replay and needs no new setting; the draw stream runs through the same sequence as the game's but is advanced only by drawing, so neither changes the other)
@@ -170,6 +171,10 @@ Nothing is blocked.
 - 2026-11-24 G2.2: RenderCore's ScheduleDisplay answers variable refresh from the renderer's own finding (g_variable_refresh) with its held refresh as the cap (because the card has ScheduleDisplay say which slot clock is in use; the renderers already hold a variable refresh display under variable_refresh_cap and report it, so that is the answer until G2.3 has the system tell it, which changes only the answer, not the rule)
 - 2026-11-24 G2.2: A sequence with no generated pictures takes no lead (because a lead places pictures between two frames; at 60 (k = 1) and for a stopping or capped-to-none sequence every picture is the frame itself, as the card's limit of 60 says)
 - 2026-11-24 G2.2: On locked vblanks a sequence's reference moves to the first vblank at or after it, not the nearest (because the reference is its step's moment plus the delay, about 1.3 ms before a vblank under the host's frame phase; at 480 Hz that is over half a vblank (at 360 Hz with a slightly longer delay too), so the nearest vblank lies before the list arrives and the sequence's first picture would be late or two in one refresh; the first at or after keeps t = 1 on a refresh at every rate)
+- 2026-11-24 G2.3.1: No switch keeps Direct3D's present with no asked time: the display model replaces it in this step (because the Windows measures that would hold such a switch (proof 2, a shown window at the monitor's rates) are the planner's owed runs, as at G2.1#3 and G2.2#1; AGENT.md 8 leaves no switch or dead copy unless the card names one to keep; the unit tests prove the model at every sample rate, and a platform with no answers keeps today's slots)
+- 2026-11-24 G2.3.1: The display lead follows Android's rule in one shared class: PresentSlots' depth is taken out into PresentDepth (present_slots.h), which FrameSchedule uses with the display model's least (a present's time to the refresh that shows it) in place of Android's 12 ms (because the card asks the lead to adapt as Android's does; one rule in one place, not a copy; Android's 12 ms least would make 240 Hz three refreshes deep, where Direct3D's least is one refresh with no compositor hold; present_slots_tests.cpp proves PresentSlots unchanged)
+- 2026-11-24 G2.3.1: M2's cause is read from the code, not the statistics: the latency object of frame latency 1 holds every present after one that missed its refresh, so slots started on a vblank show two refreshes late for good; the trace on a shown window is owed (because Read first (1) asks the statistics before the change, but they need a shown window at 240 Hz and the pacing measure, which a writer may not run (WRITER.md 2 point 4); the model learns the compositor's hold from the statistics whichever cause it is, and the timeline now records each part (AcquireBegin and AcquireEnd around the object's wait on Direct3D, DisplayModel event 39 beside DisplayStats))
+- 2026-11-24 G2.3.1: The display lead acts on the display's vblanks only: a tearing swap chain and a variable refresh (the pacer's own clock) keep lead 0 (because a refresh to ask for exists only where pictures show whole from a refresh on (present_slots.h pictures_on_refreshes); variable refresh is G2.3.5's piece)
 
 ## Checks changed during the run (72)
 
