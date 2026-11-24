@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-24 06:26. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 06:27. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 17 of 138 (12%).
 
-Now: R2.1-R2.5 written; next: lander for R2
+Now: in work: lander landing R2.1 to R2.5
 
 In work now:
 - R2.1 A target is read through its own slot; the walk-level counting test (agent 1)
