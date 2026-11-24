@@ -349,8 +349,9 @@ std::shared_ptr<Texture> Context::create_texture(std::uint32_t width, std::uint3
     if (device_ == nullptr || width == 0u || height == 0u) {
         return {};
     }
-    const bool depth = format == DXGI_FORMAT_D32_FLOAT_S8X24_UINT || format == DXGI_FORMAT_D24_UNORM_S8_UINT ||
-                       format == DXGI_FORMAT_D32_FLOAT;
+    const bool depth =  DXGI_FORMAT_D24_UNORM_S8_UINT;
+    //format == DXGI_FORMAT_D32_FLOAT_S8X24_UINT || format == DXGI_FORMAT_D24_UNORM_S8_UINT ||
+      //                 format == DXGI_FORMAT_D32_FLOAT;
     D3D11_TEXTURE2D_DESC desc{};
     desc.Width = width;
     desc.Height = height;
