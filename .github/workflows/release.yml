@@ -68,7 +68,7 @@ jobs:
         shell: bash
         env:
           INPUT_TAG: ${{ inputs.tag }}
-          DRY_RUN: ${{ inputs.dry_run }}
+          DRY_RUN: true
         run: |
           # A release: a pushed tag, or a run by hand with a tag and without "dry run". Anything else builds only.
           tag=
