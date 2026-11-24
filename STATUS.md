@@ -54,11 +54,11 @@ In work now: Nothing started.
 
 ## Repairs
 
-1 open of kind fail, 5 in all.
+0 open of kind fail, 5 in all.
 
 | Id | State | Kind | Check | Renderer | Traced to | Seen |
 | --- | --- | --- | --- | --- | --- | --- |
-| R-005 | open | fail | soak | - | not traced | 1 |
+| R-005 | started | fail | soak | - | not traced | 1 |
 | R-001 | confirmed | fail | build/windows-asan | - | not traced | 1 |
 | R-002 | confirmed | fail | coverage | - | not traced | 1 |
 | R-003 | confirmed | fail | soak | - | not traced | 1 |
