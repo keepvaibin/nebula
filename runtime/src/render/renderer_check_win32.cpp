@@ -130,13 +130,11 @@ void check_d3d12(std::vector<Card>& cards) {
     }
 }
 
-// d3d11_context.cpp's device choice: feature levels 11_1 to 10_0 asked, 11_0 needed, the 11.1 interfaces and constant
-// buffer offsets.
+// d3d11_context.cpp's device choice: feature level 11_0 asked for alone (a Windows 7 runtime refuses a list naming 11_1).
 void check_d3d11(std::vector<Card>& cards) {
     const SystemLibrary d3d11(L"d3d11.dll");
     const auto create = d3d11.find<PFN_D3D11_CREATE_DEVICE>("D3D11CreateDevice");
-    static constexpr D3D_FEATURE_LEVEL kLevels[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1,
-                                                    D3D_FEATURE_LEVEL_10_0};
+    static constexpr D3D_FEATURE_LEVEL kLevels[] = {D3D_FEATURE_LEVEL_11_0};
     for (Card& card : cards) {
         if (create == nullptr) {
             card.renderers.set(RendererKind::kD3D11, RendererRefusal::kNoDriver);
@@ -150,13 +148,6 @@ void check_d3d11(std::vector<Card>& cards) {
                                         static_cast<UINT>(std::size(kLevels)), D3D11_SDK_VERSION, &device, &level, &context));
         if (facts.device) {
             facts.feature_level = static_cast<unsigned>(level);
-            ComPtr<ID3D11Device1> device1;
-            ComPtr<ID3D11DeviceContext1> context1;
-            facts.device1 = SUCCEEDED(device.As(&device1)) && SUCCEEDED(context.As(&context1));
-            D3D11_FEATURE_DATA_D3D11_OPTIONS options{};
-            facts.constant_buffer_offsets =
-                facts.device1 && SUCCEEDED(device1->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS, &options, sizeof(options))) &&
-                options.ConstantBufferOffsetting && options.ConstantBufferPartialUpdate;
         }
         card.renderers.set(RendererKind::kD3D11, d3d11_refusal(facts));
     }

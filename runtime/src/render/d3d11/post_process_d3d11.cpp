@@ -62,16 +62,16 @@ constexpr DXGI_FORMAT kEdgesFormat = DXGI_FORMAT_R8G8_UNORM;
 // SMAA's edge marks: its stencil alone is used, never its depth, so the smallest format with a stencil.
 constexpr DXGI_FORMAT kStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 
-bool make(ID3D11Device1* device, ShaderBytes code, ComPtr<ID3D11VertexShader>& out) {
+bool make(ID3D11Device* device, ShaderBytes code, ComPtr<ID3D11VertexShader>& out) {
     return SUCCEEDED(device->CreateVertexShader(code.data, code.size, nullptr, &out));
 }
 
-bool make(ID3D11Device1* device, ShaderBytes code, ComPtr<ID3D11PixelShader>& out) {
+bool make(ID3D11Device* device, ShaderBytes code, ComPtr<ID3D11PixelShader>& out) {
     return SUCCEEDED(device->CreatePixelShader(code.data, code.size, nullptr, &out));
 }
 
 // EASU in its packed 16-bit form where the device runs min16float at 16 bits in the pixel stage, else at 32.
-ShaderBytes easu_shader(ID3D11Device1* device) noexcept {
+ShaderBytes easu_shader(ID3D11Device* device) noexcept {
     D3D11_FEATURE_DATA_SHADER_MIN_PRECISION_SUPPORT precision{};
     const bool half = SUCCEEDED(device->CheckFeatureSupport(D3D11_FEATURE_SHADER_MIN_PRECISION_SUPPORT, &precision,
                                                             sizeof(precision))) &&
@@ -89,7 +89,7 @@ D3D11_VIEWPORT whole_viewport(unsigned width, unsigned height) noexcept {
 }
 
 // Targets and inputs off the pipeline, so the renderer's next use of either binding is not nulled by the runtime.
-void unbind(ID3D11DeviceContext1* context) {
+void unbind(ID3D11DeviceContext* context) {
     ID3D11ShaderResourceView* const none[3] = {};
     context->PSSetShaderResources(0, 3, none);
     context->OMSetRenderTargets(0, nullptr, nullptr);
@@ -135,7 +135,7 @@ void PostProcessor::apply_settings(const PostProcessSettings& settings) {
     status_.live_quality = settings_.smaa_quality;
 }
 
-bool PostProcessor::initialize(ID3D11Device1* device, ID3D11DeviceContext1* context,
+bool PostProcessor::initialize(ID3D11Device* device, ID3D11DeviceContext* context,
                                const PostProcessSettings& settings) {
     shutdown();
     device_ = device;
@@ -309,7 +309,7 @@ void PostProcessor::trim_idle_targets() noexcept {
     }
 }
 
-void PostProcessor::bind_passes(ID3D11DeviceContext1* context) {
+void PostProcessor::bind_passes(ID3D11DeviceContext* context) {
     context->IASetInputLayout(nullptr);
     context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     context->RSSetState(rasterizer_.Get());
@@ -320,7 +320,7 @@ void PostProcessor::bind_passes(ID3D11DeviceContext1* context) {
 }
 
 // The pass's target is bound before it: an input that was the last pass's target is off the output by then.
-void PostProcessor::draw(ID3D11DeviceContext1* context, ID3D11VertexShader* vs, ID3D11PixelShader* ps,
+void PostProcessor::draw(ID3D11DeviceContext* context, ID3D11VertexShader* vs, ID3D11PixelShader* ps,
                          std::initializer_list<ID3D11ShaderResourceView*> inputs, const D3D11_VIEWPORT& viewport,
                          const PostConstants& constants) {
     const Context::ConstantPlace place = Context::get().put_constants(&constants, sizeof(constants));
@@ -337,7 +337,7 @@ void PostProcessor::draw(ID3D11DeviceContext1* context, ID3D11VertexShader* vs, 
     context->Draw(3, 0);
 }
 
-void PostProcessor::run_aa(ID3D11DeviceContext1* context, AaRun pass, ID3D11ShaderResourceView* source,
+void PostProcessor::run_aa(ID3D11DeviceContext* context, AaRun pass, ID3D11ShaderResourceView* source,
                            ID3D11RenderTargetView* target, unsigned width, unsigned height, unsigned part_width,
                            unsigned part_height, bool whole) {
     bind_passes(context);
@@ -392,7 +392,7 @@ void PostProcessor::note_aa_run(const PostProcessPlan& plan, AaRun ran) {
     }
 }
 
-AaRun PostProcessor::record_scene_aa(ID3D11DeviceContext1* context, const Texture& color,
+AaRun PostProcessor::record_scene_aa(ID3D11DeviceContext* context, const Texture& color,
                                      ID3D11RenderTargetView* target, unsigned width, unsigned height,
                                      unsigned picture_width, unsigned picture_height, unsigned display_width,
                                      unsigned display_height, const SceneTrade& trade) {
@@ -431,8 +431,6 @@ AaRun PostProcessor::record_scene_aa(ID3D11DeviceContext1* context, const Textur
         traded_step_ = idle_clock();
         source = traded_->view.Get();
         out = swapped.target;
-        // Every pixel and channel is written next: a tiled GPU neither loads nor keeps the old contents.
-        context->DiscardView(out);
     } else {
         const D3D11_BOX box{0u, 0u, 0u, part_width, part_height, 1u};  // the picture's part (no pass reads further)
         context->CopySubresourceRegion(antialiased_.texture->texture.Get(), 0, 0, 0, 0, color.texture.Get(), 0, &box);
@@ -442,7 +440,7 @@ AaRun PostProcessor::record_scene_aa(ID3D11DeviceContext1* context, const Textur
     return pass;
 }
 
-void PostProcessor::self_test(ID3D11DeviceContext1* context) {
+void PostProcessor::self_test(ID3D11DeviceContext* context) {
     const auto fail = [&](AaRun pass, const char* why) {
         if (pass != AaRun::kFxaa && status_.smaa_ok) {
             status_.smaa_ok = false;
@@ -526,7 +524,7 @@ void PostProcessor::self_test(ID3D11DeviceContext1* context) {
     edges_ = weights_ = stencil_ = {};
 }
 
-void PostProcessor::record(ID3D11DeviceContext1* context, const Texture& source, unsigned source_width,
+void PostProcessor::record(ID3D11DeviceContext* context, const Texture& source, unsigned source_width,
                            unsigned source_height, ID3D11RenderTargetView* target, const D3D11_VIEWPORT& viewport,
                            const PostOutput& output) {
     if (!ready_ || target == nullptr) {
@@ -582,8 +580,6 @@ void PostProcessor::record(ID3D11DeviceContext1* context, const Texture& source,
             set_post_output(constants, output, static_cast<unsigned>(viewport.Width), static_cast<unsigned>(viewport.Height));
         } else {
             ID3D11RenderTargetView* const scaled = scaled_.texture->target.Get();
-            // Written whole next: a tiled GPU neither loads nor keeps the old contents.
-            context->DiscardView(scaled);
             context->OMSetRenderTargets(1, &scaled, nullptr);
             out_viewport = window_sized;
             constants.origin[0] = 0;

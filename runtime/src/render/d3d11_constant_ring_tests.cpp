@@ -43,7 +43,7 @@ constexpr char kRounding[] =
     "    answers[1] = rest;\n"
     "}\n";
 
-ComPtr<ID3D11ComputeShader> compile(ID3D11Device1* device, const char* source, std::size_t size) {
+ComPtr<ID3D11ComputeShader> compile(ID3D11Device* device, const char* source, std::size_t size) {
     ComPtr<ID3DBlob> code;
     ComPtr<ID3DBlob> errors;
     ComPtr<ID3D11ComputeShader> shader;
@@ -63,7 +63,7 @@ struct Answers {
     std::uint32_t count = 0u;
 };
 
-bool make_answers(ID3D11Device1* device, std::uint32_t count, Answers& out) {
+bool make_answers(ID3D11Device* device, std::uint32_t count, Answers& out) {
     D3D11_BUFFER_DESC desc{};
     desc.ByteWidth = count * 4u;
     desc.Usage = D3D11_USAGE_DEFAULT;
@@ -82,7 +82,7 @@ bool make_answers(ID3D11Device1* device, std::uint32_t count, Answers& out) {
 
 // The answers after every queued command has run.
 std::vector<std::uint32_t> read_answers(Context& context, const Answers& answers) {
-    ID3D11DeviceContext1* const immediate = context.immediate();
+    ID3D11DeviceContext* const immediate = context.immediate();
     immediate->CopyResource(answers.readback.Get(), answers.buffer.Get());
     (void)context.wait(context.signal());
     std::vector<std::uint32_t> values;
@@ -103,7 +103,7 @@ bool whole_pieces(Context& context, ID3D11ComputeShader* shader, std::uint32_t f
     if (!make_answers(context.device(), total, answers)) {
         return expect(false, "the answers' buffers");
     }
-    ID3D11DeviceContext1* const immediate = context.immediate();
+    ID3D11DeviceContext* const immediate = context.immediate();
     const UINT ones[4] = {0xEEEEEEEEu, 0xEEEEEEEEu, 0xEEEEEEEEu, 0xEEEEEEEEu};
     immediate->ClearUnorderedAccessViewUint(answers.view.Get(), ones);
     immediate->CSSetShader(shader, nullptr, 0u);
@@ -143,7 +143,7 @@ bool rounding_zeroed(Context& context, ID3D11ComputeShader* shader) {
     if (!make_answers(context.device(), 2u, answers)) {
         return expect(false, "the answers' buffers");
     }
-    ID3D11DeviceContext1* const immediate = context.immediate();
+    ID3D11DeviceContext* const immediate = context.immediate();
     immediate->CSSetShader(shader, nullptr, 0u);
     ID3D11UnorderedAccessView* const view = answers.view.Get();
     immediate->CSSetUnorderedAccessViews(0u, 1u, &view, nullptr);

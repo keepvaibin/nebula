@@ -28,7 +28,7 @@ public:
     ~PostProcessor() { shutdown(); }
 
     // Every pass, the SMAA lookup textures and the AA self-tests (status() final on return); false: the plain blit.
-    bool initialize(ID3D11Device1* device, ID3D11DeviceContext1* context, const PostProcessSettings& settings);
+    bool initialize(ID3D11Device* device, ID3D11DeviceContext* context, const PostProcessSettings& settings);
     void shutdown() noexcept;
     [[nodiscard]] bool ready() const noexcept { return ready_; }
     [[nodiscard]] const PostProcessStatus& status() const noexcept { return status_; }
@@ -36,7 +36,7 @@ public:
     // The scaling chain from `source` (its `source_width` x `source_height` picture from its top left) into the
     // `viewport` rectangle of `target`. `output.hdr`: the target is the HDR10 swap chain buffer. At the picture's own
     // size, or enlarged without sharpening, or enlarged on both axes with sharpening, it is one pass into the target.
-    void record(ID3D11DeviceContext1* context, const Texture& source, unsigned source_width, unsigned source_height,
+    void record(ID3D11DeviceContext* context, const Texture& source, unsigned source_width, unsigned source_height,
                 ID3D11RenderTargetView* target, const D3D11_VIEWPORT& viewport, const PostOutput& output = PostOutput{});
     // True once ready: the last write's passes take an R10G10B10A2 target as they are.
     [[nodiscard]] bool prepare_hdr() const noexcept { return ready_; }
@@ -56,7 +56,7 @@ public:
     // into `target` (the game's alpha stays). With `trade` (a single-sample scene whose image may change hands) the
     // passes read the scene's own image instead, without the copy, and write every pixel and channel of the image that
     // took its place (the alpha the scene's): that image is discarded first, so a tiled GPU never loads it.
-    AaRun record_scene_aa(ID3D11DeviceContext1* context, const Texture& color, ID3D11RenderTargetView* target,
+    AaRun record_scene_aa(ID3D11DeviceContext* context, const Texture& color, ID3D11RenderTargetView* target,
                           unsigned width, unsigned height, unsigned picture_width, unsigned picture_height,
                           unsigned display_width, unsigned display_height, const SceneTrade& trade = {});
     [[nodiscard]] const PostProcessSettings& settings() const noexcept { return settings_; }
@@ -75,21 +75,21 @@ private:
                              Microsoft::WRL::ComPtr<ID3D11VertexShader>& weights_vs,
                              Microsoft::WRL::ComPtr<ID3D11PixelShader>& weights);
     // The state every pass shares: no vertex input, triangles, no culling or scissor, the samplers, the constants.
-    void bind_passes(ID3D11DeviceContext1* context);
-    void draw(ID3D11DeviceContext1* context, ID3D11VertexShader* vs, ID3D11PixelShader* ps,
+    void bind_passes(ID3D11DeviceContext* context);
+    void draw(ID3D11DeviceContext* context, ID3D11VertexShader* vs, ID3D11PixelShader* ps,
               std::initializer_list<ID3D11ShaderResourceView*> inputs, const D3D11_VIEWPORT& viewport,
               const PostConstants& constants);
     // The AA passes from `source` into `target`, the last one with `whole` (every channel, its alpha the source's) or
     // RGB only. SMAA needs edges_, weights_ and stencil_ at `width` x `height`.
     // Over the picture's part (`part_width` x `part_height` from the top left) of a `width` x `height` input: no pass
     // reads past it (post_process.hlsl PicturePart).
-    void run_aa(ID3D11DeviceContext1* context, AaRun pass, ID3D11ShaderResourceView* source,
+    void run_aa(ID3D11DeviceContext* context, AaRun pass, ID3D11ShaderResourceView* source,
                 ID3D11RenderTargetView* target, unsigned width, unsigned height, unsigned part_width, unsigned part_height,
                 bool whole);
     void note_aa_run(const PostProcessPlan& plan, AaRun ran);
-    void self_test(ID3D11DeviceContext1* context);
+    void self_test(ID3D11DeviceContext* context);
 
-    ID3D11Device1* device_ = nullptr;
+    ID3D11Device* device_ = nullptr;
     bool ready_ = false;
     PostProcessStatus status_{};
     PostProcessSettings settings_{};

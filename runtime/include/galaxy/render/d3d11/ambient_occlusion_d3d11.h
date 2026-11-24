@@ -24,7 +24,7 @@ public:
     AmbientOcclusion& operator=(const AmbientOcclusion&) = delete;
     ~AmbientOcclusion() { shutdown(); }
 
-    bool initialize(ID3D11Device1* device);
+    bool initialize(ID3D11Device* device);
     void shutdown() noexcept;
     [[nodiscard]] bool ready() const noexcept { return ready_; }
 

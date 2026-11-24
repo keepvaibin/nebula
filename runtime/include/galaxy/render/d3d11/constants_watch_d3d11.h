@@ -29,20 +29,20 @@ public:
     };
 
     // The shader's bytecode (ConstantsWatchCs). False when the device refuses an object; the watch then does nothing.
-    bool initialize(ID3D11Device1* device, std::span<const unsigned char> shader);
+    bool initialize(ID3D11Device* device, std::span<const unsigned char> shader);
     [[nodiscard]] bool ready() const noexcept { return shader_ != nullptr; }
 
     // One frame's watch (render thread, before the frame's signal): the reads whose frames have passed are compared,
     // then a new piece is written and read. A frame with every read still in flight writes none.
-    void frame(ID3D11DeviceContext1* context);
+    void frame(ID3D11DeviceContext* context);
 
     // The reads whose frames have passed, compared with what was written; returns the differences found, each printed.
-    unsigned check(ID3D11DeviceContext1* context);
+    unsigned check(ID3D11DeviceContext* context);
     // A new piece with the next number, and its place; a place without a buffer when there is no room or no free read.
     [[nodiscard]] Context::ConstantPlace write();
     // The dispatch that reads `place` through ComputeConstants, compared later with the piece write() gave last. The
     // renderer passes that piece's place; a test passes another to plant a wrong binding.
-    bool record(ID3D11DeviceContext1* context, const Context::ConstantPlace& place);
+    bool record(ID3D11DeviceContext* context, const Context::ConstantPlace& place);
 
     [[nodiscard]] unsigned compared() const noexcept { return compared_; }  // reads read back and compared
     [[nodiscard]] unsigned differences() const noexcept { return differences_; }

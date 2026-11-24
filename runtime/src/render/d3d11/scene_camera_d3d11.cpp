@@ -16,7 +16,7 @@
 
 namespace galaxy::render::d3d11 {
 
-bool SceneCamera::initialize(ID3D11Device1* device) {
+bool SceneCamera::initialize(ID3D11Device* device) {
     shutdown();
     if (device == nullptr) {
         return false;
@@ -68,7 +68,7 @@ void SceneCamera::shutdown() noexcept {
 }
 
 // A full-screen triangle into `rtv` reading `picture` (t0) and the exposure (t1); the views let go after.
-void SceneCamera::draw(ID3D11DeviceContext1* context, ID3D11PixelShader* shader, const Context::ConstantPlace& constants,
+void SceneCamera::draw(ID3D11DeviceContext* context, ID3D11PixelShader* shader, const Context::ConstantPlace& constants,
                        ID3D11RenderTargetView* rtv, ID3D11ShaderResourceView* picture, unsigned width, unsigned height) {
     context->OMSetRenderTargets(1u, &rtv, nullptr);
     ID3D11ShaderResourceView* const inputs[2] = {picture, exposure_->view.Get()};
@@ -89,7 +89,7 @@ void SceneCamera::draw(ID3D11DeviceContext1* context, ID3D11PixelShader* shader,
     context->OMSetRenderTargets(0u, nullptr, nullptr);
 }
 
-bool SceneCamera::record(ID3D11DeviceContext1* context, const Inputs& in) {
+bool SceneCamera::record(ID3D11DeviceContext* context, const Inputs& in) {
     if (!ready_ || in.wide == nullptr || in.depth == nullptr || in.rtv == nullptr || in.width == 0u || in.height == 0u ||
         !in.wide->view || !in.depth->view) {
         return false;
@@ -130,7 +130,7 @@ bool SceneCamera::record(ID3D11DeviceContext1* context, const Inputs& in) {
     return true;
 }
 
-bool SceneCamera::widen(ID3D11DeviceContext1* context, const WidenInputs& in) {
+bool SceneCamera::widen(ID3D11DeviceContext* context, const WidenInputs& in) {
     if (!ready_ || in.picture == nullptr || !in.picture->view || in.rtv == nullptr || in.width == 0u ||
         in.height == 0u) {
         return false;

@@ -153,7 +153,7 @@ void RendererD3D11::resolve_scene_depth() {
     }
     end_scene_pass();
     const GpuPassScope scope{*this, GpuPass::Resolve};
-    ID3D11DeviceContext1* const ctx = context();
+    ID3D11DeviceContext* const ctx = context();
     ctx->OMSetRenderTargets(0u, nullptr, set.depth->depth.Get());
     utility_draw(Utility::DepthResolve, set.ms_depth->view.Get(), nullptr, 0u, whole_viewport(set.depth->width, set.depth->height),
                  whole_rect(set.depth->width, set.depth->height), 0u, DepthUse::Resolve);
@@ -231,7 +231,7 @@ void RendererD3D11::apply_window_size() {
 // ---- the scene pass ----
 
 void RendererD3D11::bind_pass_targets() {
-    ID3D11DeviceContext1* const ctx = context();
+    ID3D11DeviceContext* const ctx = context();
     ID3D11RenderTargetView* const rtv = scene_.rtv();
     ID3D11DepthStencilView* dsv = scene_.dsv();
     // The frame's depth sampled by this pass's draws (open_frame_for_pass) stays testable through the read-only view:
@@ -296,7 +296,7 @@ void RendererD3D11::bind_scene() {
 }
 
 // As renderer_d3d12.cpp clear_scene: every channel of the whole target by the clear calls, a rectangle of every channel
-// by ClearView, some channels by the clear's draw with a write mask; the whole depth by ClearDepthStencilView (stencil
+// by the clear's draw with every channel written (ClearView is Direct3D 11.1's), some channels by it with a write mask; the whole depth by ClearDepthStencilView (stencil
 // 0), a rectangle of it by the depth clear's draw (stencil 0 too). Into the multisampled targets with MSAA.
 void RendererD3D11::clear_scene(std::uint32_t clear_rgba, bool color_enable, bool alpha_enable, bool depth_enable,
                                 unsigned rect_x, unsigned rect_y, unsigned rect_w, unsigned rect_h, std::uint8_t pixel_format) {
@@ -323,21 +323,19 @@ void RendererD3D11::clear_scene(std::uint32_t clear_rgba, bool color_enable, boo
     const bool every_channel = color_enable && (alpha_enable || !has_alpha);
     // The draws before the clear run first.
     flush_draws();
-    ID3D11DeviceContext1* const ctx = context();
+    ID3D11DeviceContext* const ctx = context();
     ID3D11RenderTargetView* const rtv = scene_.rtv();
     ID3D11DepthStencilView* const dsv = scene_.dsv();
-    const D3D11_RECT box{rect.left, rect.top, rect.right, rect.bottom};
     bool drew = false;
     if (color_enable || alpha_enable) {
         scene_.color_dirty |= scene_.samples > 1u;
         if (every_channel && whole) {
             ctx->ClearRenderTargetView(rtv, clear.color.data());
-        } else if (every_channel) {
-            ctx->ClearView(rtv, clear.color.data(), &box, 1u);
         } else {
-            const std::uint8_t mask = color_enable ? D3D11_COLOR_WRITE_ENABLE_RED | D3D11_COLOR_WRITE_ENABLE_GREEN |
-                                                         D3D11_COLOR_WRITE_ENABLE_BLUE
-                                                   : D3D11_COLOR_WRITE_ENABLE_ALPHA;
+            const std::uint8_t mask = every_channel ? D3D11_COLOR_WRITE_ENABLE_ALL
+                                      : color_enable ? D3D11_COLOR_WRITE_ENABLE_RED | D3D11_COLOR_WRITE_ENABLE_GREEN |
+                                                           D3D11_COLOR_WRITE_ENABLE_BLUE
+                                                     : D3D11_COLOR_WRITE_ENABLE_ALPHA;
             ctx->OMSetRenderTargets(1u, &rtv, nullptr);
             utility_draw(Utility::Clear, nullptr, clear.color.data(), sizeof(float) * 4u, whole_viewport(scene_w, scene_h), rect, mask);
             drew = true;
@@ -634,7 +632,7 @@ void RendererD3D11::conversion_draw(ID3D11ShaderResourceView* source, d3d11::Tex
     const FrameMap part = scene_part();
     const SceneConversionShaderConstants constants = make_scene_conversion_constants(
         copy_format, src_x, src_y, step_x, step_y, static_cast<float>(part.width), static_cast<float>(part.height));
-    ID3D11DeviceContext1* const ctx = context();
+    ID3D11DeviceContext* const ctx = context();
     ID3D11RenderTargetView* const target = dest.target.Get();
     ctx->OMSetRenderTargets(1u, &target, nullptr);
     utility_draw(display_filter ? Utility::DisplayFilter : Utility::Convert, source, &constants, sizeof(constants),
@@ -736,7 +734,7 @@ bool RendererD3D11::publish_scene_depth_copy(std::uint64_t key, TextureStore& te
     const SceneConversionShaderConstants constants =
         make_scene_conversion_constants(0u, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y,
                                         static_cast<float>(part.width), static_cast<float>(part.height));
-    ID3D11DeviceContext1* const ctx = context();
+    ID3D11DeviceContext* const ctx = context();
     ID3D11RenderTargetView* const target = dest.texture->target.Get();
     ctx->OMSetRenderTargets(1u, &target, nullptr);
     utility_draw(Utility::DepthCopy, scene_.depth->view.Get(), &constants, sizeof(constants),
@@ -960,7 +958,7 @@ void RendererD3D11::game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_
     const GpuPassScope scope{*this, GpuPass::Bloom};
     end_scene_pass();
     resolve_scene_color();
-    ID3D11DeviceContext1* const ctx = context();
+    ID3D11DeviceContext* const ctx = context();
     d3d11::GameBloom::Inputs in{};
     in.scene_target = scene_.color.get();
     in.rtv = scene_.rtv();

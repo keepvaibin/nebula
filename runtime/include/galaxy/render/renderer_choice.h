@@ -61,10 +61,8 @@ struct D3D12Facts {
     unsigned shader_model = 0u;     // D3D12_FEATURE_DATA_SHADER_MODEL::HighestShaderModel (0x60: 6.0)
 };
 struct D3D11Facts {
-    bool device = false;            // D3D11CreateDevice made one at a level of 10_0 to 11_1
+    bool device = false;            // D3D11CreateDevice made one at feature level 11_0
     unsigned feature_level = 0u;    // its D3D_FEATURE_LEVEL (0xb000: 11_0)
-    bool device1 = false;           // ID3D11Device1 and ID3D11DeviceContext1
-    bool constant_buffer_offsets = false;  // ConstantBufferOffsetting and ConstantBufferPartialUpdate
 };
 struct VulkanFacts {
     bool swapchain = false;                 // VK_KHR_swapchain

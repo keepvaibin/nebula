@@ -197,7 +197,7 @@ bool AmbientOcclusion::record(ID3D11DeviceContext* context, const Inputs& in) {
     {
         // The three passes' constants; emptied after the last. On FL 11_0 the Context copies the piece into its own
         // scratch buffer (bind_compute_place falls back to it when scratch is null).
-        const ComputeConstants bound(Context::get(), constants, nullptr);
+        const ComputeConstants bound(nullptr, constants);
 
         ID3D11ShaderResourceView* const fixed[5] = {in.depth->view.Get(), nullptr, nullptr, objects_.view.Get(),
                                                     tiles_.view.Get()};
@@ -219,7 +219,7 @@ bool AmbientOcclusion::record(ID3D11DeviceContext* context, const Inputs& in) {
     context->OMSetRenderTargets(1u, &color, nullptr);
     ID3D11ShaderResourceView* const inputs[2] = {in.depth->view.Get(), denoised_->view.Get()};
     context->PSSetShaderResources(0u, 2u, inputs);
-    Context::get().bind_place(kVertexConstants | kPixelConstants, 0u, constants, nullptr);
+    Context::get().bind_place(kVertexConstants | kPixelConstants, 0u, constants);
     context->IASetInputLayout(nullptr);
     context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     context->VSSetShader(apply_vs_.Get(), nullptr, 0u);

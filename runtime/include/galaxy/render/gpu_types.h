@@ -189,8 +189,8 @@ namespace galaxy::render::gpu {
 // Direct3D 11 (feature level 11_0 and up): for the adapters Direct3D 12 passes over (renderer_d3d12.cpp
 // try_adapter: resource binding tier 1, no shader model 6, or no Direct3D 12 driver). The names the shared code reads
 // are those of the other back ends.
-using Device = ID3D11Device1;
-using DeviceRef = Microsoft::WRL::ComPtr<ID3D11Device1>;
+using Device = ID3D11Device;
+using DeviceRef = Microsoft::WRL::ComPtr<ID3D11Device>;
 using Pipeline = d3d11::Pipeline;
 using PipelineRef = Pipeline*;  // owned by core::Pipelines, deleted in its destroy_all
 using Resource = d3d11::Buffer;

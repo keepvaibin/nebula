@@ -7,7 +7,7 @@
 
 namespace galaxy::render::d3d11 {
 
-bool ConstantsWatch::initialize(ID3D11Device1* device, std::span<const unsigned char> shader) {
+bool ConstantsWatch::initialize(ID3D11Device* device, std::span<const unsigned char> shader) {
     shader_.Reset();
     reads_ = {};
     if (device == nullptr || FAILED(device->CreateComputeShader(shader.data(), shader.size(), nullptr, &shader_))) {
@@ -45,7 +45,7 @@ ConstantsWatch::Read* ConstantsWatch::free_read() noexcept {
     return nullptr;
 }
 
-void ConstantsWatch::frame(ID3D11DeviceContext1* context) {
+void ConstantsWatch::frame(ID3D11DeviceContext* context) {
     if (!ready()) {
         return;
     }
@@ -56,7 +56,7 @@ void ConstantsWatch::frame(ID3D11DeviceContext1* context) {
     }
 }
 
-unsigned ConstantsWatch::check(ID3D11DeviceContext1* context) {
+unsigned ConstantsWatch::check(ID3D11DeviceContext* context) {
     unsigned found = 0u;
     Context& device = Context::get();
     const std::uint64_t completed = device.completed_value();
@@ -113,7 +113,7 @@ Context::ConstantPlace ConstantsWatch::write() {
     return place;
 }
 
-bool ConstantsWatch::record(ID3D11DeviceContext1* context, const Context::ConstantPlace& place) {
+bool ConstantsWatch::record(ID3D11DeviceContext* context, const Context::ConstantPlace& place) {
     Read* const read = free_read();
     if (!ready() || !piece_written_ || place.buffer == nullptr || read == nullptr) {
         return false;

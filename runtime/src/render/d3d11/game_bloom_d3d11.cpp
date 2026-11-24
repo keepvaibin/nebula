@@ -45,7 +45,7 @@ bool fits_scene(const Texture* texture, const GameBloom::Inputs& in) noexcept {
 
 }  // namespace
 
-bool GameBloom::initialize(ID3D11Device1* device) {
+bool GameBloom::initialize(ID3D11Device* device) {
     shutdown();
     if (device == nullptr) {
         return false;
@@ -114,7 +114,7 @@ bool GameBloom::ensure_target(Target& target, DXGI_FORMAT format, unsigned width
 // The frame's pixels of the scene target, in its own format, into `target` (the normal bloom's kept scene, the simple
 // bloom's source), made at the scene target's size (the frame is the part of it drawn in): a kept or source image
 // trades places with the scene target's own.
-bool GameBloom::copy_frame(ID3D11DeviceContext1* context, const Inputs& in, Target& target, const char* name) {
+bool GameBloom::copy_frame(ID3D11DeviceContext* context, const Inputs& in, Target& target, const char* name) {
     if (!ensure_target(target, in.scene_target->format, in.whole_width(), in.whole_height(), kPictureBind, name)) {
         return false;
     }
@@ -133,7 +133,7 @@ std::shared_ptr<Texture> GameBloom::take_image(Target& target, const Inputs& in)
     return image;
 }
 
-std::shared_ptr<Texture> GameBloom::take_kept_image(ID3D11DeviceContext1* context, const Inputs& in) {
+std::shared_ptr<Texture> GameBloom::take_kept_image(ID3D11DeviceContext* context, const Inputs& in) {
     static_cast<void>(context);
     return take_image(keep_, in);
 }
@@ -166,7 +166,7 @@ bool GameBloom::can_take_source(const Inputs& in) {
     return ready_;
 }
 
-std::shared_ptr<Texture> GameBloom::take_source_image(ID3D11DeviceContext1* context, const Inputs& in) {
+std::shared_ptr<Texture> GameBloom::take_source_image(ID3D11DeviceContext* context, const Inputs& in) {
     static_cast<void>(context);
     return take_image(source_, in);
 }
@@ -191,7 +191,7 @@ void GameBloom::trim_idle() {
     for (Target& target : blur2_h_) trim(target);
 }
 
-bool GameBloom::keep(ID3D11DeviceContext1* context, const Inputs& in) {
+bool GameBloom::keep(ID3D11DeviceContext* context, const Inputs& in) {
     kept_ = ready_ && in.scene_target != nullptr && in.frame_width != 0u && in.frame_height != 0u &&
             copy_frame(context, in, keep_, "bloom kept scene");
     return kept_;
@@ -200,7 +200,7 @@ bool GameBloom::keep(ID3D11DeviceContext1* context, const Inputs& in) {
 // One compute pass: t0-t2 read, u0-u2 written, its constants bound for its dispatch alone. The last pass's inputs are let
 // go before its outputs are bound, and its outputs before they are read (Direct3D 11 nulls a view bound for reading and
 // writing at once).
-void GameBloom::dispatch(ID3D11DeviceContext1* context, ID3D11ComputeShader* shader, const Constants& c,
+void GameBloom::dispatch(ID3D11DeviceContext* context, ID3D11ComputeShader* shader, const Constants& c,
                          const std::array<Texture*, 3>& srvs, const std::array<Texture*, 3>& uavs, unsigned width,
                          unsigned height) {
     const ComputeConstants bound(context, Context::get().put_constants(&c, sizeof(c)));
@@ -214,7 +214,7 @@ void GameBloom::dispatch(ID3D11DeviceContext1* context, ID3D11ComputeShader* sha
     context->Dispatch((width + 7u) / 8u, (height + 7u) / 8u, 1u);
 }
 
-bool GameBloom::apply(ID3D11DeviceContext1* context, const Inputs& in, const Params& p) {
+bool GameBloom::apply(ID3D11DeviceContext* context, const Inputs& in, const Params& p) {
     const bool normal = p.kind == Kind::Normal;
     const bool kept = std::exchange(kept_, false);
     const bool given = std::exchange(source_given_, false);
@@ -366,7 +366,7 @@ bool GameBloom::apply(ID3D11DeviceContext1* context, const Inputs& in, const Par
     return true;
 }
 
-bool GameBloom::restore(ID3D11DeviceContext1* context, const Inputs& in) {
+bool GameBloom::restore(ID3D11DeviceContext* context, const Inputs& in) {
     const bool kept = std::exchange(kept_, false);
     if (!ready_ || !kept || !keep_.texture || in.rtv == nullptr || in.frame_width == 0u || in.frame_height == 0u) {
         return false;
@@ -378,7 +378,7 @@ bool GameBloom::restore(ID3D11DeviceContext1* context, const Inputs& in) {
 
 // The scene (t0) plus the bloom from the levels (t1, t2) over the frame, into the scene target's render target; the
 // views let go after.
-void GameBloom::draw_composite(ID3D11DeviceContext1* context, const Inputs& in, const Texture& scene,
+void GameBloom::draw_composite(ID3D11DeviceContext* context, const Inputs& in, const Texture& scene,
                                const Texture& first, const Texture& second, const Constants& c) {
     bind_place(context, kVertexConstants | kPixelConstants, 0u, Context::get().put_constants(&c, sizeof(c)));
     context->OMSetRenderTargets(1u, &in.rtv, nullptr);
