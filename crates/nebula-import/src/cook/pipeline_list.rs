@@ -384,6 +384,19 @@ mod tests {
         assert_eq!(cook.into_records(), vec![header]);
     }
 
+    /// A line of data/site_pipelines.txt that does not read as a record would be left out of the list without a word: each
+    /// one reads, and each names programs the renderer ships.
+    #[test]
+    fn every_site_line_is_a_shipped_record() {
+        let mut records = Vec::new();
+        for (n, line) in include_str!("../../data/site_pipelines.txt").lines().enumerate() {
+            let record = parse_line(line);
+            assert!(record.is_some(), "site_pipelines.txt line {} is not a record", n + 1);
+            records.extend(record);
+        }
+        assert_eq!(unshipped(&records), Vec::new());
+    }
+
     #[test]
     fn an_alpha_test_that_cannot_reject_shades_per_pixel() {
         let mut shape = vec![0u8; 120];
