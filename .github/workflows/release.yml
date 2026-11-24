@@ -176,7 +176,7 @@ jobs:
           cmake -S . -B $build -G Ninja -DCMAKE_BUILD_TYPE=Release -DNEBULA_VULKAN=OFF -DNEBULA_D3D11=ON `
             "-DNEBULA_HOST_BASELINE=${{ matrix.baseline }}"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --build $build --target Nebula NebulaVk NebulaD11 nebula_glslang
+          cmake --build $build --target NebulaD11 nebula_glslang
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # What the Setup and the Android build take: the programs, the Agility SDK's runtime, glslang's compiler and
           # the shader tools.
@@ -391,7 +391,7 @@ jobs:
         uses: ./.github/actions/start-check-windows
         with:
           folder: ${{ runner.temp }}\bin
-          programs: Nebula NebulaVk NebulaD11 Nebula-x86-64-v2 NebulaVk-x86-64-v2 NebulaD11-x86-64-v2
+          programs: NebulaD11 Nebula-x86-64-v2 NebulaVk-x86-64-v2 NebulaD11-x86-64-v2
       - name: The mod kit (a pre-release has none, a release has it)
         shell: bash
         run: |
