@@ -74,7 +74,7 @@ bool RendererD3D11::create_scene_set(SceneSet& set, const FrameMap& map, unsigne
     const auto height = std::max(1u, static_cast<std::uint32_t>(std::lround(static_cast<double>(set_height) * map.sy)));
     const DXGI_FORMAT color_format = target ? draw_layout_.target_color : draw_layout_.scene_color;
     gpu::TextureRef color = context.create_texture(width, height, 1u, color_format, kTargetBinds, "scene target color");
-    gpu::TextureRef depth = context.create_texture(width, height, 1u, draw_layout_.depth, kDepthBinds, "scene target depth");
+    gpu::TextureRef depth = context.create_texture(width, height, 1u, DXGI_FORMAT_D24_UNORM_S8_UINT, kDepthBinds, "scene target depth");
     if (!color || !depth) {
         std::cerr << "[Renderer] scene target " << width << 'x' << height << " allocation failed\n";
         return false;
