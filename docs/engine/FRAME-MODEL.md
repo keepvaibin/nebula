@@ -854,7 +854,9 @@ Read at c8222595e.
   sampler, in a record of its own in place of `ResTIMG` for a model's textures. `tableOf` takes ids and samplers from
   it: no search by address and no decode at a draw.
 - The player's swapped images (`PlayerModel.cpp:136`): its list is registered once per distinct list and kept by the
-  model, not at every draw. How it is kept is decided when the caller is read whole, in the step's code.
+  model, not at every draw. Kept since R2.4 in the material's form state (`SwapTables`, 
+  `native/petari/include/Game/Render/SwapTables.hpp`): the last four distinct swaps of one map, forgotten when the texture
+  stamps move (decision R2.4#1).
 - The render thread writes a table's pairs once, into a table buffer that lives as long as the table, and again only
   when one of its textures' slots or its samplers' slots changes (the texture store's revision, the heap's generation).
   A target, whose picture changes every frame, is read by the program through the target's own slot, which the frame

@@ -51,6 +51,8 @@ elseif(NEBULA_SANITIZE MATCHES "thread")
     # operators are the program's, as in the module (P-012).
     target_link_options(native_arena_tests PRIVATE -fno-sanitize-link-c++-runtime)
 endif()
+# The tables of draws that swap one map's image, registered once per distinct swap (R2.4, header only).
+native_test(native_swap_tables_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/swap_tables_tests.cpp")
 # Work done once by the first thread that asks (P-183: the creator index), header only.
 native_test(native_once_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/once_tests.cpp")
 # The frame-list writer, against the list the renderer reads.
