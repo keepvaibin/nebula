@@ -773,6 +773,16 @@ u32 MaterialDraw::tableOf(s32 formIndex, const NebulaModelFormEntry& rForm) {
         pState->mTableDataStamp == pData->getTextureStamp()) {
         return pState->mTable;
     }
+    // A draw that swaps one map's image (PlayerModel, overrideCoordinate): the form keeps that swap's table, its list
+    // built and registered once.
+    const ImageEdit* pSwap = mImageEdits != nullptr && mImageEdits->mNext == nullptr ? mImageEdits : nullptr;
+    if (pSwap != nullptr) {
+        const u32 kept = pState->mSwaps.find(pSwap->mMap, pSwap->mTexture, mCoordinateTexture, pMaterial->mTextureStamp,
+                                             pData->getTextureStamp());
+        if (kept != SwapTables::cNone) {
+            return kept;
+        }
+    }
 
     NebulaFrameTexture* list = rForm.texture_count != 0 ? Frame::alloc< NebulaFrameTexture >(rForm.texture_count) : nullptr;
     const u8* pNumbers = pData->getFormMaps(rForm.first_texture);
@@ -804,6 +814,9 @@ u32 MaterialDraw::tableOf(s32 formIndex, const NebulaModelFormEntry& rForm) {
         pState->mTable = table;
         pState->mTableStamp = pMaterial->mTextureStamp;
         pState->mTableDataStamp = pData->getTextureStamp();
+    } else if (pSwap != nullptr) {
+        pState->mSwaps.keep(pSwap->mMap, pSwap->mTexture, mCoordinateTexture, pMaterial->mTextureStamp,
+                            pData->getTextureStamp(), table);
     }
     return table;
 }

@@ -226,7 +226,7 @@ This package finishes render data path step 2 (FM 2.10) after the stack of S0.1 
 
 ### R2.4 The player's swapped images
 
-- **What changes.** The player's model swaps an image into a map each draw (`PlayerModel.cpp`, `draw.swapImage(0, RenderTexture::idOf(...))`), and a draw that swaps an image builds and registers its list at every draw (`MaterialDraw::tableOf`, registered by hash through `Registries::texture_table`). New (FM 2.10): the list is registered once per distinct list and kept by the model, not at every draw. How it is kept is decided when the caller is read whole, in the step's code.
+- **What changes.** The player's model swaps an image into a map each draw (`PlayerModel.cpp`, `draw.swapImage(0, RenderTexture::idOf(...))`), and a draw that swaps an image builds and registers its list at every draw (`MaterialDraw::tableOf`, registered by hash through `Registries::texture_table`). New (FM 2.10): the list is registered once per distinct list and kept by the model, not at every draw. How it is kept is decided when the caller is read whole, in the step's code: in the material's form state, the last four distinct swaps of one map (decision R2.4#1).
 - **Where.** `native/petari/src/Game/Player/PlayerModel.cpp` (the swap, around 136), `native/petari/src/Game/Render/Material.cpp` (`MaterialDraw::tableOf` 770, `swapImage` 538, the register call 813), `native/petari/src/Game/Render/RenderTexture.cpp` (`idOf` 175), `runtime/src/render/core/registries.cpp` (`texture_table`, the per-thread memo of 64 lists).
 - **Rows.** none of this package's rows (FM 2.10 only).
 - **Needs first.** S0.1.5

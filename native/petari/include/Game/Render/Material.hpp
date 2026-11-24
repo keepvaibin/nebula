@@ -5,6 +5,7 @@
 #include <nebula_math.h>
 #include <nebula_model.h>
 #include "Game/Render/Clip.hpp"
+#include "Game/Render/SwapTables.hpp"
 
 class Joint;
 class Mesh;
@@ -286,6 +287,7 @@ public:
         u32 mTable;
         u32 mTableStamp;
         u32 mTableDataStamp;
+        SwapTables mSwaps;  // the tables of draws that swap one map's image (MaterialDraw::tableOf)
         u32 mPipeline;
         u32 mPipelineState;
         u64 mPipelineLayout;  // meshLayoutKey
