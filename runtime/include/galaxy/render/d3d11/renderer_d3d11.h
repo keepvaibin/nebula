@@ -265,8 +265,12 @@ public:
     void finish_pictures();
 
 [[nodiscard]] gpu::Device* device() const noexcept {
-    return static_cast<gpu::Device*>(d3d11::Context::get().device());
+    // gpu::Device is ID3D11Device1 on Direct3D 11 (gpu_types.h). Null on feature level 11_0-only devices, where the
+    // renderer's own code uses d3d11::Context::device() (the base interface) instead. Callers that need a gpu::Device*
+    // (create_upload_memory, device_removed) must tolerate null there.
+    return static_cast<gpu::Device*>(d3d11::Context::get().device1());
 }
+
 [[nodiscard]] const FrameMap& frame_map() const noexcept { return scene_map_; }
     // The bound scene target's allocated size: the render size while dynamic resolution draws the scene in a part of it
     // (frame_map, the step's rectangle), else frame_map itself. Pictures for the game and target passes take this size.
@@ -314,8 +318,10 @@ public:
     // and every recorded draw run (flush_draws, end_scene_pass); a part leaves its own state bound, and the renderer
     // binds its own again (encoder_.reset, bound_).
 [[nodiscard]] ID3D11DeviceContext1* context() const noexcept {
-    return static_cast<ID3D11DeviceContext1*>(d3d11::Context::get().immediate());
-}    
+    // Null on feature level 11_0-only devices; the renderer's own draws there go through d3d11::Context::bind_place /
+    // bind_compute_place, which fall back to the plain calls. A part that needs a 11.1 method must test this first.
+    return d3d11::Context::get().immediate1();
+}  
 using GpuPass = ::galaxy::render::GpuPass;
     static constexpr unsigned kGpuPassSlots = 256u;
 
