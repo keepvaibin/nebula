@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-24 10:10. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 11:05. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 22 of 138 (16%).
 
@@ -41,6 +41,7 @@ In work now: Nothing started.
 
 | When | Step | Title | Code commit | Main commit |
 | --- | --- | --- | --- | --- |
+| 2026-11-24 11:05 | R-005 |  | bd769ade9 | e29e1d6bd |
 | 2026-11-24 09:58 | R2.5 | P-216 and P-255's first part | 884be1caa | 788713537 |
 | 2026-11-24 09:14 | R2.4 | The player's swapped images | d034370b1 | aa1e98a03 |
 | 2026-11-24 08:31 | R2.3 | P-059: the cook decides "authored levels" once | 720958ef9 | 31fa52e92 |
@@ -50,7 +51,6 @@ In work now: Nothing started.
 | 2026-11-24 03:28 | R1.3 | N-1067: the present gate waits only on a load screen | 4fcf535b2 | 2d389b3a3 |
 | 2026-11-24 00:04 | R1.2 | P-010: a stage's pipelines made while it loads, a draw never compiles | d0c08ad67 | 61cae33f5 |
 | 2026-11-23 21:08 | R1.1 | P-052: the renderers' own pipelines at start | 6ded5f481 | cd1dc8cae |
-| 2026-11-23 20:08 | S0.3.2 | Remove what is left | c975566fd | ba2b58cf1 |
 
 ## Repairs
 
@@ -58,7 +58,7 @@ In work now: Nothing started.
 
 | Id | State | Kind | Check | Renderer | Traced to | Seen |
 | --- | --- | --- | --- | --- | --- | --- |
-| R-005 | started | fail | soak | - | not traced | 1 |
+| R-005 | landed | fail | soak | - | not traced | 1 |
 | R-001 | confirmed | fail | build/windows-asan | - | not traced | 1 |
 | R-002 | confirmed | fail | coverage | - | not traced | 1 |
 | R-003 | confirmed | fail | soak | - | not traced | 1 |
