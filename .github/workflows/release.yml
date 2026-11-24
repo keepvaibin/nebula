@@ -143,7 +143,6 @@ jobs:
 
   windows-hosts:
     name: Windows programs (${{ matrix.level }})
-    if: false
     needs: release
     runs-on: windows-2022
     timeout-minutes: 300
