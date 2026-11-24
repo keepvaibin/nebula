@@ -123,8 +123,8 @@ void Pipelines::initialize(gpu::Device* device, RootLayout root, void* backend) 
     scene_shown_.store(false, std::memory_order_relaxed);
     // Workers at the lowest priority (worker()): the list is prepared by whatever the game and render threads leave idle,
     // and no frame waits for it. A stage's load waits for its pipelines with the workers raised (set_hurried); a draw whose
-    // pipeline is not made yet is left out and its job moved to the queue's front (missing), never built on the draw's
-    // thread; idle workers cost nothing. How many: pipeline_workers.h, from the cores and the memory free now.
+    // pipeline is not made yet is left out in play (before play it waits) and its job moved to the queue's front (missing),
+    // never built on the draw's thread; idle workers cost nothing. How many: pipeline_workers.h, from the cores and the memory free now.
     memory_failed_.clear();
     memory_wait_until_.store(0, std::memory_order_relaxed);
     memory_failures_.store(0u, std::memory_order_relaxed);
@@ -322,10 +322,11 @@ gpu::Pipeline* Pipelines::missing(std::uint64_t id, const PipelineEntry& entry, 
             note_missed(id, entry, variant, aux, form, *at);
         }
     }
-    if (!wait_for_missing_.load(std::memory_order_relaxed)) {
+    if (!wait_for_missing_.load(std::memory_order_relaxed) && scene_shown_.load(std::memory_order_relaxed)) {
         return at->load(std::memory_order_acquire);
     }
-    // Fixed steps: the draw waits for its urgent job (made by a worker, not here), whatever it ends in.
+    // Fixed steps, and before play (no picture with a scene yet: the start's set is being made and the start waits for it
+    // anyway): the draw waits for its urgent job (made by a worker, not here), whatever it ends in.
     std::unique_lock guard(lock_);
     made_.wait(guard, [&] { return quit_ || at->load(std::memory_order_acquire) != nullptr || urgent_.count(form) == 0u; });
     return at->load(std::memory_order_acquire);
