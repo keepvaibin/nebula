@@ -59,7 +59,7 @@ Take the time from `date "+%m-%d %H:%M"`, never from memory.
 
 ## 4. The loop
 
-    PLAN next -> PLAN start -> read, change, prove, audit, commit -> PLAN land (documents about 7 minutes, a game step about 20, PC and tablet)
+    PLAN next -> PLAN start -> read, change, prove, audit, commit -> PLAN land (documents about 7 minutes, a game step about 30, PC and tablet)
                                                                         |
                               while it plays: PLAN ahead, and write the next step on top of this one
                                                                         |
@@ -118,8 +118,9 @@ Every step is built on the one before it, and nothing reaches main that its land
    text that names a test, a search or a measure; each row the card only advances gets a dated note. Commit
    (section 8). The work folder must hold no uncommitted change.
 8. `PLAN land <ID>`, as a background command with a time limit of 600000 ms. A landing takes what was measured on
-   11-22: a step of documents only, about 7 minutes; a game step, about 20 (its checks 12 to 16 minutes, the PC's
-   speed pair 6 to 8, longer when a figure needs more rounds). A step with an extra check (`PLAN next` lists them) is landed at the main level: every stop of
+   11-22 and 11-23: a step of documents only, about 7 minutes; a game step, about 30 (1651 seconds for a landing that
+   took every picture of the main level; the PC's speed pair 6 to 8 minutes of it, longer when a figure needs more
+   rounds). A step with an extra check (`PLAN next` lists them) is landed at the main level: every stop of
    the tour on every renderer and the other two discs, then each extra check one after another. `soak` adds 30
    minutes, `soak/long` two hours, each other one some minutes; one landing with the single extra check
    `speed/anchor` took 1345 seconds in all. A landing can also wait a few minutes for a piece of the long run.
@@ -331,18 +332,31 @@ session is an order; an answer to such a question is written in your log and the
   less: the step adds one line for each changed file to `docs/plan/strictness-log.tsv` in the same landing (see
   section 9, the top).
 - A step that can move a picture is judged against every picture the main level compares, at its landing: anything
-  compiled into the game or read by it when it runs (`native/`, `runtime/`, the shaders, the SDL host, the importer that
-  cooks the game's data), the recordings, and the tests and tools that play the tours. That is every stop of the tour on
-  the three renderers of the US disc, both other discs on Direct3D 12 and the tablet's 12 stops. No picture may differ
-  from its approved one unless the step declares it in the same landing; a difference nobody declared fails, whichever
-  renderer, disc or place it is on. Before you hand in, play that set: the `tour` command of `PLAN commands` with
-  `--set landing` in place of `--renderer d3d12` (`--tablet`, `--apk` and `--android-bin` of your Android test build add
-  the tablet's pictures; it plays side by side, `--jobs` at a time). `agent_tour.py` compares every picture it played and
-  prints `fail`, with the name of each picture that differs and is not declared and the line to write for it. A step that
-  cannot move a picture (documents, plan data, tools that are not part of the game) is compared against none.
+  compiled into the game or read by it when it runs (`native/`, `runtime/`, the shaders, the SDL host, the importer
+  that cooks the game's data), the recordings, and the tests and tools that play the tours. That is every stop of the
+  tour on the three renderers of the US disc, both other discs on Direct3D 12 and the tablet's 12 stops. No picture
+  may differ from its approved one unless the step declares it in the same landing; a difference nobody declared
+  fails, whichever renderer, disc or place it is on. The landing plays that set and is its judge: you do not play all
+  of it before a hand-in. Before you hand in, play the quick tour (the `tour` command of `PLAN commands`). When your
+  step is meant to change a picture, play it also with `--renderer all`, and with `--stop "<Stage N>"` for each stop
+  you expect to change; keep each run well under ten minutes. `agent_tour.py` compares every picture it played and
+  prints `fail`, with the name of each picture that differs and is not declared and the line to write for it. Never
+  start `--set landing` or `--stops all`: such a run takes about half an hour, a background command is cut after ten
+  minutes, and a cut run leaves no verdict and can leave a `run.lock` that refuses the next start. The tablet's 12
+  stops are played only by the landing. When a landing fails on a picture nobody declared, each one has its own line
+  `KIND fail pictures/... <suite>/<stop>/<renderer>/<picture> :: N of M pixels`; the run's `verdict.json` holds every
+  one, the row in `result.txt` only the first eight. Look at each picture beside its approved one before you write
+  anything (the `review:` path at the end of the check's row in `result.txt` is a sheet with the approved picture, the
+  new one and the difference): a picture your step was not meant to change is a fault in your step, to be found and
+  fixed, never a line to write. For one that is meant to change, write its line from the KIND line: the check's name
+  gives the place and the disc (`pictures/tour/<renderer>` and `pictures/engine/<renderer>`: `pc`, `RMGE01`;
+  `pictures/tour-RMGP01/<renderer>` and `pictures/tour-RMGJ01/<renderer>`: `pc`, that disc, the stop written without
+  the disc's prefix, so `RMGJ01-010-CannonFleetGalaxy-1` is `tour/010-CannonFleetGalaxy-1`; `pictures/tablet`:
+  `tablet`, `RMGE01`), the path gives the stop, the renderer and the picture. A step that cannot move a picture
+  (documents, plan data, tools that are not part of the game) is compared against none.
 - Declare a picture that is meant to change in a file `PICTURES-CHANGE.txt` at the root of the branch, one line each,
   `<suite>/<stop> <picture> <place> <renderer> <disc> :: <reason>`: the suite and stop as `agent_tour.py` prints them
-  (`tour/010-CannonFleetGalaxy-1`, `engine/boot`), the picture (`arrive`, `after`, or `*`), the place (`pc` or `tablet`),
+  (`tour/010-CannonFleetGalaxy-1`, `engine/boot`), the picture (`arrive`, `after`, the name an engine test gives its picture such as `title` in `engine/boot`, or `*`), the place (`pc` or `tablet`),
   the renderer (`d3d12`, `vulkan`, `d3d11`) and the disc (`RMGE01` the US disc, `RMGP01`, `RMGJ01`); `*` stands for any
   of them. Name every renderer, disc and place the picture changes on, for example `tour/010-CannonFleetGalaxy-1 * * * *
   :: the sky is another blue`. The landing plays each stop a line names on the other discs' Direct3D 11 and Vulkan as
@@ -453,9 +467,11 @@ process you did not start, never remove a lock, never stop a landing or the long
 ### What the tools cannot do (do not rely on it)
 
 - Metal is never run on this PC: only compiled and unit-tested by GitHub after the move.
-- A landing plays 12 of the game's 102 stops, on one disc (a landing with an extra check plays every stop on
-  every renderer and the other two discs on Direct3D 12). A fault in another stop is found by the long run,
-  up to a day later, and comes back as a repair.
+- A landing of a step that can move a picture plays every one of the game's 102 stops on the three renderers of
+  the US disc, both other discs on Direct3D 12 and the tablet's 12 stops; a landing of documents, plan data or
+  tools plays no picture. What no landing plays: the other discs on Direct3D 11 and Vulkan, except the stops your
+  `PICTURES-CHANGE.txt` names, and the long run's other parts. A fault there is found by the long run, up to a day
+  later, and comes back as a repair.
 - The speed check does not see a cost smaller than its bands (the bands, and what was planted and refused,
   are in `D:/NebulaWork/plan/TESTING-DONE.md`). "Not slower" in a card still means not slower: do not add a
   cost because it is small.
@@ -632,7 +648,7 @@ landing that passed, after every `PLAN blocked`, and at least once every two hou
      has not read that artifact yet, do `action: "read"` with the address first, then publish.
    - If the file does not exist: publish without `url` and with `icon: "chart"`, and write the address the
      tool returns into that file, alone on one line.
-   - Before your first publish in a session read both copied files whole (the page is 24 KB): you publish
+   - Before your first publish in a session read both copied files whole (the page is 28 KB): you publish
      only what you have seen. Later the data file changes with every landing; `PLAN status` prints the same
      data as short text, read that.
 4. If the Artifact tool is not there or the publish fails twice: write that into your log once, and go on.
