@@ -1175,7 +1175,7 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
             note_program_drawn(entry.desc.vertex, entry.desc.pixel);
         }
         gpu::Pipeline* pipeline = pipelines_.get(item.pipeline, entry, target_variant, aux);
-        if (pipeline == nullptr) {  // the driver refused it: the player misses this draw
+        if (pipeline == nullptr) {  // refused, or not made yet (Pipelines::missing): this picture lacks the draw
             galaxy::loss::note(galaxy::loss::Kind::DrawNoPipeline);
             ++stat_draws_no_pipeline_;
             ++i;

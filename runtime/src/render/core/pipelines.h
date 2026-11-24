@@ -35,7 +35,8 @@ public:
     // 1 the motion, 2 the reactive mask, 3 the reactive mask and the effects layer, 4 the motion target there but not
     // written (a draw sharing the motion draws' pass).
     // A texture target's form is noted the first time a run draws it (note_target_drawn): the forms a target pass has drawn
-    // are the ones prepared ahead (the targets file).
+    // are the ones prepared ahead (the targets file). A pipeline not made yet is never built here (missing): null, and the
+    // draw is left out of this picture.
     gpu::Pipeline* get(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux) {
         const std::uint32_t key = key_of(variant, aux);
         const bool target = target_form(variant, aux);
@@ -49,7 +50,7 @@ public:
                 return found;
             }
         }
-        gpu::Pipeline* made = create_now(id, entry, variant, aux);
+        gpu::Pipeline* made = missing(id, entry, variant, aux);
         if (made != nullptr && target) {
             note_target_drawn(id, entry, variant, aux);
         }
@@ -74,8 +75,16 @@ public:
     // file of its own (Direct3D 11, Metal: the driver's or the system's own cache, which no file here describes).
     [[nodiscard]] bool warm() const noexcept { return warm_.load(std::memory_order_acquire); }
     [[nodiscard]] std::uint64_t created() const noexcept { return created_.load(std::memory_order_relaxed); }
-    // Pipelines a draw wanted before the background had them: the cook's list missed them.
-    [[nodiscard]] std::uint64_t misses() const noexcept { return misses_; }
+    // Pipelines a draw wanted before the workers had made them (missing): each form once, a timeline event each.
+    [[nodiscard]] std::uint64_t misses() const noexcept { return misses_.load(std::memory_order_relaxed); }
+    // While the game's load waits for its pipelines (the host's NEBULA_OPTION_SCENE_PIPELINES): the workers at the normal
+    // priority, not the lowest, and the forms left for after the first scene (left_jobs_) taken too. Any thread.
+    void set_hurried(bool hurried) noexcept;
+    // Runs of fixed steps (NEBULA_EXT_FIXED_STEPS): a draw whose pipeline is missing waits for the worker that makes it, so a
+    // picture holds every draw whatever the workers' pace and two runs draw alike. The render thread, each frame.
+    void set_wait_for_missing(bool wait) noexcept { wait_for_missing_.store(wait, std::memory_order_relaxed); }
+    // Until every queued job counted in pending() is done, or the workers stop (the render thread, drain_pipelines).
+    void wait_drained();
     [[nodiscard]] std::uint64_t failures() const noexcept { return failures_.load(std::memory_order_relaxed); }
     // The texture target forms left to the cache at the start (left_to_cache) are made after the first picture with a scene in
     // it is shown, behind every other job, so the first target pass that draws one finds it made: scene_drawn from the walk
@@ -101,6 +110,8 @@ private:
     struct Page {
         std::array<std::array<std::atomic<gpu::Pipeline*>, kKeys>, 1u << kPageBits> rows{};
         std::array<std::atomic<std::uint8_t>, 1u << kPageBits> drawn{};  // the id's texture target form has been drawn this run
+        // A draw has found the cell empty (missing): one bit for each key, so a form is counted and queued once.
+        std::array<std::array<std::atomic<std::uint32_t>, kKeys / 32u>, 1u << kPageBits> missed{};
     };
     // A texture target's form: the one kind of pipeline prepared ahead only when the targets file says it is used.
     [[nodiscard]] static constexpr bool target_form(unsigned variant, unsigned aux) noexcept {
@@ -123,13 +134,20 @@ private:
         unsigned variant, aux;
         bool optimize = false;  // a draw's quickly linked pipeline, to be replaced by the optimised link
         bool deferred = false;  // a form left out of the start's set, made after the first scene is shown (defer)
+        bool urgent = false;    // a draw's miss: at the queue's front, built at the normal priority (missing)
     };
     // A form the start's set leaves out (a texture target form no run has drawn; any other kind a caller decides the same way):
-    // queued in left_jobs_, made by a worker once jobs_ is empty and a scene has been shown, or by the draw that first needs it if
-    // that comes sooner (the deferred job then finds its cell filled). A deferred job is not deferred again.
+    // queued in left_jobs_, made by a worker once jobs_ is empty and a scene has been shown, or while the load waits (hurried),
+    // or at the queue's front when a draw needs it first (missing; the deferred job then finds its cell filled). A deferred job
+    // is not deferred again.
     void defer(const Job& job) noexcept;
     void release_left() noexcept;
-    gpu::Pipeline* create_now(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux);
+    // A draw's pipeline that is not made: never built on the draw's thread. The first time a form is missed it is counted and
+    // recorded (timeline PipelineMissed), and either linked at once from parts (build_fast: Vulkan with graphics pipeline
+    // libraries, the optimised link queued behind) or queued at the front of the workers' queue as an urgent job. Null then,
+    // and the draw is left out until a later picture finds the cell filled; with wait_for_missing_ the draw waits for the
+    // urgent job instead. Refused forms are null at once.
+    gpu::Pipeline* missing(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux);
     std::atomic<gpu::Pipeline*>* cell(std::uint64_t id, unsigned variant, unsigned aux);
     void refuse(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux);
     // Why a build returned null: the driver refused the pipeline, the device ran out of memory, or the device was lost.
@@ -165,7 +183,7 @@ private:
 
     // The texture targets' forms (target_form). Every one prepared and published is in the driver cache, which a later run
     // loads; a form no target pass has drawn is then left out of the start's set and made after the first scene is shown
-    // (left_jobs_), or by the draw that first needs it if that comes sooner, a load from the cache, not a compile. The file beside the cache keeps both sets and the hash of the cache data they go with: a cache
+    // (left_jobs_), or at the front of the queue when a draw needs it first, a load from the cache, not a compile. The file beside the cache keeps both sets and the hash of the cache data they go with: a cache
     // the driver refused, written by another run, or holding other programs names nothing, and every form is prepared.
     bool targets_open();
     // warm(): the targets file names the cache data the driver took, was written after the start's set of a run drained,
@@ -206,6 +224,10 @@ private:
     // in pending_: the first drain (drained) is the start's set alone.
     std::deque<Job> left_jobs_;
     std::atomic<bool> scene_drawn_{false}, scene_shown_{false};
+    std::atomic<bool> hurried_{false}, wait_for_missing_{false};
+    // The forms (id << 9 | key) of the urgent jobs queued and not finished (under lock_); made_ is told when one finishes.
+    std::unordered_set<std::uint64_t> urgent_;
+    std::condition_variable made_;
     std::unordered_set<std::uint64_t> refused_;  // the driver said no: asked once
     // Program pairs (vertex and pixel ids mixed) the driver refused, and how often: a compiler that cannot take a pair's
     // code refuses it in every state, and each try is a whole compile (hundreds of milliseconds on a phone's draw).
@@ -219,7 +241,7 @@ private:
     std::vector<gpu::PipelineRef> owned_;
     std::atomic<std::uint32_t> pending_{0u};
     std::atomic<std::uint64_t> created_{0u}, failures_{0u};
-    std::atomic<std::uint64_t> misses_{0u};  // the render thread counts, a worker reports
+    std::atomic<std::uint64_t> misses_{0u};  // the draw's thread counts (missing), a worker reports (drained)
     unsigned workers_ = 0u;
     std::atomic<bool> unsaved_{false};  // a pipeline was made since the cache was last written
     std::atomic<bool> reported_{false};

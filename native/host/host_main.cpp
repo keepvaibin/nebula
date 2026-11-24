@@ -3396,6 +3396,48 @@ bool scene_textures_wait() {
     }
     return false;
 }
+
+// NEBULA_OPTION_SCENE_PIPELINES: a loaded scene waits for every pipeline the game has registered so far (its materials'),
+// the workers raised to the normal priority meanwhile, at most kScenePipelinesMostMs (a driver that never returns). The
+// loading screen steps meanwhile. In deterministic mode the frames waited would be the machine's: the game never waits,
+// and the render thread makes the queue's pipelines before its next picture instead (drain_pipelines).
+struct ScenePipelinesWait {
+    bool waiting = false;
+    std::chrono::steady_clock::time_point since{};
+};
+ScenePipelinesWait gScenePipelinesWait;
+constexpr int64_t kScenePipelinesMostMs = 60000;
+
+bool scene_pipelines_wait() {
+    ScenePipelinesWait& wait = gScenePipelinesWait;
+    if (deterministic_mode()) {
+        galaxy::render::drain_pipelines();
+        wait.waiting = false;
+        return false;
+    }
+    const galaxy::render::PipelineProgress progress = galaxy::render::pipeline_progress();
+    const auto now = std::chrono::steady_clock::now();
+    if (!wait.waiting) {
+        wait.waiting = true;
+        wait.since = now;
+    }
+    const int64_t waited = std::chrono::duration_cast<std::chrono::milliseconds>(now - wait.since).count();
+    if (progress.left != 0u && waited < kScenePipelinesMostMs) {
+        galaxy::render::set_pipelines_hurried(true);
+        return true;
+    }
+    galaxy::render::set_pipelines_hurried(false);
+    wait.waiting = false;
+    if (progress.left != 0u) {
+        const std::string text = "the scene starts with " + std::to_string(progress.left) + " pipelines still to make (" +
+                                 std::to_string(waited) + " ms)";
+        log_line("pipelines:", text.c_str());
+    } else if (waited >= 100) {
+        const std::string text = "the scene waited " + std::to_string(waited) + " ms for its pipelines";
+        log_line("pipelines:", text.c_str());
+    }
+    return false;
+}
 #endif
 
 uint32_t svc_option(void*, uint32_t what) {
@@ -3464,9 +3506,9 @@ uint32_t svc_option(void*, uint32_t what) {
 #if defined(NEBULA_HOST_RENDERER)
         // The title waits once for the pipeline list, the first run and after the programs, the driver or the settings
         // changed; what a later settings change adds prepares behind the game. Not when the driver's cache from an earlier
-        // run holds the whole list (warm): each is then a load, made behind the title, or by the draw that first needs it.
-        // Deterministic test mode doesn't: how long the workers take is the machine's, so the frames waited would differ
-        // run to run, and a draw makes its own pipeline when it isn't made yet.
+        // run holds the whole list (warm): each is then a load, made behind the title, and the first scene's load waits for
+        // what is left (NEBULA_OPTION_SCENE_PIPELINES). Deterministic test mode doesn't: how long the workers take is the
+        // machine's, so the frames waited would differ run to run, and a draw waits for its own pipeline's worker instead.
         if (!gPipelinesPrepared) {
             const galaxy::render::PipelineProgress progress = galaxy::render::pipeline_progress();
             gPipelinesPrepared = deterministic_mode() || progress.left == 0u || progress.warm;
@@ -3515,6 +3557,12 @@ uint32_t svc_option(void*, uint32_t what) {
     case NEBULA_OPTION_SCENE_TEXTURES:
 #if defined(NEBULA_HOST_RENDERER)
         return scene_textures_wait() ? 1u : 0u;
+#else
+        return 0u;
+#endif
+    case NEBULA_OPTION_SCENE_PIPELINES:
+#if defined(NEBULA_HOST_RENDERER)
+        return scene_pipelines_wait() ? 1u : 0u;
 #else
         return 0u;
 #endif

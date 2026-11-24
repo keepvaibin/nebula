@@ -3,6 +3,7 @@
 
 #include "galaxy/atomic_file.h"
 #include "galaxy/cpu_count.h"
+#include "galaxy/frame_timeline.h"
 #include "galaxy/windows_power.h"
 
 #include <algorithm>
@@ -84,13 +85,14 @@ void Pipelines::initialize(gpu::Device* device, RootLayout root, void* backend) 
     started_ = std::chrono::steady_clock::now();
     created_.store(0u, std::memory_order_relaxed);  // counts are this device's
     failures_.store(0u, std::memory_order_relaxed);
-    misses_ = 0u;
+    misses_.store(0u, std::memory_order_relaxed);
     reported_.store(false, std::memory_order_relaxed);
     scene_drawn_.store(false, std::memory_order_relaxed);  // a new device's left forms wait for its own first scene
     scene_shown_.store(false, std::memory_order_relaxed);
     // Workers at the lowest priority (worker()): the list is prepared by whatever the game and render threads leave idle,
-    // and no frame waits for it. A draw whose pipeline is not made yet makes that one itself (create_now); idle workers
-    // cost nothing. How many: pipeline_workers.h, from the cores and the memory free now.
+    // and no frame waits for it. A stage's load waits for its pipelines with the workers raised (set_hurried); a draw whose
+    // pipeline is not made yet is left out and its job moved to the queue's front (missing), never built on the draw's
+    // thread; idle workers cost nothing. How many: pipeline_workers.h, from the cores and the memory free now.
     memory_failed_.clear();
     memory_wait_until_.store(0, std::memory_order_relaxed);
     memory_failures_.store(0u, std::memory_order_relaxed);
@@ -111,8 +113,10 @@ void Pipelines::shutdown() noexcept {
         quit_ = true;
         jobs_.clear();
         left_jobs_.clear();
+        urgent_.clear();
     }
     wake_.notify_all();
+    made_.notify_all();
     // A worker in a job finishes it at the normal priority: the caller (a device restore, the end) waits for it (N-1072).
     for (std::thread& thread : threads_) {
         galaxy::host::raise_waited_thread(thread);
@@ -250,55 +254,91 @@ bool Pipelines::pair_refused(const PipelineEntry& entry) {
     return found != refused_pairs_.end() && found->second >= kPairRefusals;
 }
 
-gpu::Pipeline* Pipelines::create_now(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux) {
-    std::atomic<gpu::Pipeline*>* at = cell(id, variant, aux);
-    if (at == nullptr) {
-        return nullptr;
-    }
+gpu::Pipeline* Pipelines::missing(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux) {
+    std::atomic<gpu::Pipeline*>* const at = cell(id, variant, aux);
     if (gpu::Pipeline* existing = at->load(std::memory_order_acquire); existing != nullptr) {
         return existing;
     }
-    {
-        std::lock_guard guard(lock_);
-        if (refused_.count(std::uint64_t{id} << 9u | key_of(variant, aux)) != 0u) {
-            return nullptr;
-        }
-    }
-    if (pair_refused(entry) || waiting_for_memory(std::uint64_t{id} << 9u | key_of(variant, aux))) {
-        return nullptr;
-    }
-    ++misses_;
-    // Where pipelines link from parts, the draw gets a quick link and a worker replaces it with the optimised one.
-    gpu::Pipeline* built = build_fast(entry, variant, aux);
-    const bool linked = built != nullptr;
-    Failure why = Failure::refused;
-    if (built == nullptr) {
-        built = build_noting(entry, variant, aux, why);
-    }
-    if (built == nullptr) {
-        failed(id, entry, variant, aux, why, nullptr);
-        return nullptr;
-    }
-    if (!linked && target_form(variant, aux)) {
-        try {
-            if (targets_open()) {
-                note_target_stored(form_key(entry, variant, aux));
-            }
-        } catch (...) {
-        }
-    }
-    gpu::Pipeline* const published = publish(*at, built);
-    if (linked && published == built) {
+    const std::uint32_t key = key_of(variant, aux);
+    const std::uint64_t form = std::uint64_t{id} << 9u | key;
+    std::atomic<std::uint32_t>& missed = page_of(id)->missed[id & kPageMask][key >> 5u];
+    const std::uint32_t bit = 1u << (key & 31u);
+    if ((missed.load(std::memory_order_relaxed) & bit) == 0u) {
+        bool refused = false;
         {
             std::lock_guard guard(lock_);
-            if (!quit_) {
-                pending_.fetch_add(1u, std::memory_order_relaxed);
-                jobs_.push_back(Job{static_cast<std::uint32_t>(id), std::make_shared<const PipelineEntry>(entry), variant, aux, true});
+            refused = refused_.count(form) != 0u;
+        }
+        refused = refused || pair_refused(entry);
+        if (!refused && waiting_for_memory(form)) {
+            return nullptr;  // asked again once the workers' wait is over (pipeline_workers.h)
+        }
+        if ((missed.fetch_or(bit, std::memory_order_relaxed) & bit) != 0u || refused) {
+            return nullptr;  // a refused form is not asked for again: the bit keeps later draws off the lock
+        }
+        misses_.fetch_add(1u, std::memory_order_relaxed);
+        ::galaxy::timeline::record(::galaxy::timeline::Event::PipelineMissed, id, key);
+        // Where pipelines link from parts, the draw gets a quick link now and a worker replaces it with the optimised one.
+        gpu::Pipeline* const linked = build_fast(entry, variant, aux);
+        if (scene_shown_.load(std::memory_order_relaxed)) {
+            // After a scene's first picture each load has waited for what it registered: a miss here is a form no load named.
+            const char* const then = linked != nullptr                                    ? "linked from parts at once"
+                                     : wait_for_missing_.load(std::memory_order_relaxed) ? "the draw waits for its worker"
+                                                                                         : "left out until it is made";
+            std::fprintf(stderr, "[pipelines] missed by a draw in play: programs %llx %llx variant %u aux %u, %s\n",
+                         static_cast<unsigned long long>(entry.desc.vertex), static_cast<unsigned long long>(entry.desc.pixel),
+                         variant, aux, then);
+        }
+        if (linked != nullptr) {
+            gpu::Pipeline* const published = publish(*at, linked);
+            if (published == linked) {
+                {
+                    std::lock_guard guard(lock_);
+                    if (!quit_) {
+                        pending_.fetch_add(1u, std::memory_order_relaxed);
+                        Job better{static_cast<std::uint32_t>(id), std::make_shared<const PipelineEntry>(entry), variant, aux};
+                        better.optimize = true;
+                        jobs_.push_back(std::move(better));
+                    }
+                }
+                wake_.notify_one();
             }
+            return published;
+        }
+        {
+            std::lock_guard guard(lock_);
+            if (quit_) {
+                return nullptr;
+            }
+            Job now{static_cast<std::uint32_t>(id), std::make_shared<const PipelineEntry>(entry), variant, aux};
+            now.urgent = true;
+            pending_.fetch_add(1u, std::memory_order_relaxed);
+            jobs_.push_front(std::move(now));
+            urgent_.insert(form);
         }
         wake_.notify_one();
     }
-    return published;
+    if (!wait_for_missing_.load(std::memory_order_relaxed)) {
+        return at->load(std::memory_order_acquire);
+    }
+    // Fixed steps: the draw waits for its urgent job (made by a worker, not here), whatever it ends in.
+    std::unique_lock guard(lock_);
+    made_.wait(guard, [&] { return quit_ || at->load(std::memory_order_acquire) != nullptr || urgent_.count(form) == 0u; });
+    return at->load(std::memory_order_acquire);
+}
+
+void Pipelines::set_hurried(bool hurried) noexcept {
+    if (hurried_.exchange(hurried, std::memory_order_relaxed) == hurried) {
+        return;
+    }
+    if (hurried) {
+        try {
+            { std::lock_guard guard(lock_); }  // a worker between its wait's test and its sleep sees the flag
+            wake_.notify_all();
+        } catch (...) {
+            // The lock failed: the workers see the flag at their next job.
+        }
+    }
 }
 
 std::uint8_t scene_aux(std::uint32_t state, bool layer_window) noexcept {
@@ -399,6 +439,7 @@ void Pipelines::worker() {
     // Below the frame's threads on every platform (windows_power.h); on Windows, started on battery, it also asks for
     // efficiency, and on Apple what the compiler does in the system's service for this thread runs at the same class.
     galaxy::host::lower_current_thread_priority();
+    bool raised = false;
     for (;;) {
         Job job;
         {
@@ -409,8 +450,11 @@ void Pipelines::worker() {
                 (void)wake_.wait_until(guard, std::chrono::steady_clock::time_point(std::chrono::steady_clock::duration(until)),
                                        [this] { return quit_; });
             }
-            // The left forms only once the queue is empty and a scene has been shown (release_left).
-            const auto left_ready = [this] { return scene_shown_.load(std::memory_order_relaxed) && !left_jobs_.empty(); };
+            // The left forms only once the queue is empty and a scene has been shown (release_left), or while a load waits.
+            const auto left_ready = [this] {
+                return (scene_shown_.load(std::memory_order_relaxed) || hurried_.load(std::memory_order_relaxed)) &&
+                       !left_jobs_.empty();
+            };
             wake_.wait(guard, [&] { return quit_ || !jobs_.empty() || left_ready(); });
             if (quit_) {
                 return;
@@ -418,6 +462,11 @@ void Pipelines::worker() {
             std::deque<Job>& from = !jobs_.empty() ? jobs_ : left_jobs_;
             job = std::move(from.front());
             from.pop_front();
+        }
+        // A job someone waits for (a draw's, or any while the load waits) at the normal priority; else the lowest again.
+        if (const bool waited = job.urgent || hurried_.load(std::memory_order_relaxed); waited != raised) {
+            galaxy::host::set_current_thread_waited_for(waited);
+            raised = waited;
         }
         if (!warm_decided_.load(std::memory_order_acquire)) {
             decide_warm();
@@ -443,7 +492,7 @@ void Pipelines::worker() {
                     }
                 }
             } else if (at != nullptr && at->load(std::memory_order_acquire) == nullptr && !pair_refused(*job.entry)) {
-                if (!job.deferred && left_to_cache(form)) {
+                if (!job.deferred && !job.urgent && left_to_cache(form)) {
                     left_.fetch_add(1u, std::memory_order_relaxed);
                     defer(job);  // a load from the cache then, at this thread's priority, not the draw's
                 } else {
@@ -473,10 +522,31 @@ void Pipelines::worker() {
             } catch (...) {
             }
         }
+        if (job.urgent) {
+            // Its draw (wait_for_missing_) or the next picture finds the cell filled, or nothing more to wait for.
+            try {
+                {
+                    std::lock_guard guard(lock_);
+                    urgent_.erase(std::uint64_t{job.id} << 9u | key_of(job.variant, job.aux));
+                }
+                made_.notify_all();
+            } catch (...) {
+            }
+        }
         if (!job.deferred && pending_.fetch_sub(1u, std::memory_order_acq_rel) == 1u) {
             drained();
+            try {
+                { std::lock_guard guard(lock_); }  // wait_drained tests pending_ under the lock
+                made_.notify_all();
+            } catch (...) {
+            }
         }
     }
+}
+
+void Pipelines::wait_drained() {
+    std::unique_lock guard(lock_);
+    made_.wait(guard, [this] { return quit_ || pending_.load(std::memory_order_acquire) == 0u; });
 }
 
 void Pipelines::defer(const Job& job) noexcept {
@@ -512,7 +582,7 @@ void Pipelines::release_left() noexcept {
 // render thread and never in the middle of a frame's work: when the first queue drains (warm-up done, here, on the worker that
 // finished it), so the next boot loads it whatever way this one ends, and at exit (destroy_all). Each write is whole or absent:
 // a temporary file renamed over (replace_file), one writer at a time. Pipelines made later in the run, by what a scene change
-// registers or by a draw, join the file at exit.
+// registers or for a draw that missed one, join the file at exit.
 void Pipelines::drained() noexcept {
     if (reported_.exchange(true, std::memory_order_relaxed)) {
         return;
@@ -532,7 +602,7 @@ void Pipelines::drained() noexcept {
     save_targets(stored);
     {
         const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started_).count();
-        std::fprintf(stderr, "[pipelines] %llu prepared by %u workers at %lld ms (%llu made by draws first, %llu refused, %llu texture "
+        std::fprintf(stderr, "[pipelines] %llu prepared by %u workers at %lld ms (%llu missed by draws first, %llu refused, %llu texture "
                      "target forms left to the cache), cache %zu bytes written\n",
                      static_cast<unsigned long long>(created_.load(std::memory_order_relaxed)), workers_, static_cast<long long>(ms),
                      static_cast<unsigned long long>(misses_.load(std::memory_order_relaxed)), static_cast<unsigned long long>(failures_.load(std::memory_order_relaxed)),

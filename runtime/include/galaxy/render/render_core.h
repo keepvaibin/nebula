@@ -97,6 +97,9 @@ public:
         return {static_cast<std::uint32_t>(pipelines_.created()), pipelines_.pending() + (count > queued ? count - queued : 0u),
                 pipelines_.warm()};
     }
+    void set_pipelines_hurried(bool hurried) noexcept { pipelines_.set_hurried(hurried); }
+    // Taken by the render thread's next queueing of the registered pipelines (render_api.h).
+    void drain_pipelines() noexcept { pipelines_drain_.store(true, std::memory_order_release); }
     [[nodiscard]] TextureStore& textures() noexcept { return texture_store_; }
     // The list the next render_frame hands over.
     void attach_frame_list(NebulaFrameList* list) noexcept { producer_list_ = list; }
@@ -335,6 +338,7 @@ private:
     std::vector<std::unique_ptr<ListEntry>> free_lists_;
     std::uint32_t list_serial_ = 0u;
     std::atomic<std::uint32_t> pipelines_queued_{0u};
+    std::atomic<bool> pipelines_drain_{false};  // drain_pipelines: made before the next picture
     std::uint32_t pipelines_settings_ = ~0u;
     bool pixel_lit_ = false;
 

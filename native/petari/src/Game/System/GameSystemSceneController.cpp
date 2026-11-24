@@ -384,8 +384,10 @@ void GameSystemSceneController::exeInitializeScene() {
         initializeScene();
     }
 
-    // Texture packs' replacements of its textures load behind the loading screen, never while the scene plays.
-    if (mSceneInitializeDone && NebulaHost::option(NEBULA_OPTION_SCENE_TEXTURES) == 0) {
+    // Texture packs' replacements of its textures load behind the loading screen, never while the scene plays, and so are the
+    // pipelines its materials registered: a draw in play never waits for one. Both are asked each step, so both go on at once.
+    if (mSceneInitializeDone &&
+        (NebulaHost::option(NEBULA_OPTION_SCENE_TEXTURES) | NebulaHost::option(NEBULA_OPTION_SCENE_PIPELINES)) == 0) {
         mSceneInitializeState = SceneInitializeState_End;
         mIntermissionScene->setCurrentSceneControllerState("[scene ready]");
 

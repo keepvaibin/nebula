@@ -161,11 +161,24 @@ int main() {
         passed &= expect(!ring.resize_textures(24u), "a region that is not larger changes nothing");
     }
     {
+        // A draw's pipeline that is not made is never built on the draw's thread (Pipelines::missing; an empty entry's build
+        // would be refused and counted in failures): null, counted once, and queued for the workers. No worker runs here.
         core::Pipelines pipelines;
         const core::PipelineEntry missing{};
-        (void)pipelines.get(0xFFFF0000u, missing, 0, 0);
-        (void)pipelines.get((std::uint64_t{1} << 32u) | 0xFFFF0000u, missing, 0, 0);
-        passed &= expect(pipelines.failures() == 2, "pipeline IDs past 32 bits reach separate cache cells");
+        const std::uint64_t narrow = 0xFFFF0000u;
+        const std::uint64_t wide = (std::uint64_t{1} << 32u) | 0xFFFF0000u;
+        const bool left_out = pipelines.get(narrow, missing, 0, 0) == nullptr && pipelines.get(wide, missing, 0, 0) == nullptr;
+        passed &= expect(left_out && pipelines.misses() == 2u && pipelines.pending() == 2u && pipelines.failures() == 0u,
+                         "a missing pipeline is left out, counted and queued, never built by the draw");
+        passed &= expect(pipelines.misses() == 2u, "pipeline IDs past 32 bits reach separate cache cells");
+        const bool missed_again = pipelines.get(narrow, missing, 0, 0) == nullptr && pipelines.get(narrow, missing, 8, 0) == nullptr;
+        passed &= expect(missed_again && pipelines.misses() == 3u && pipelines.pending() == 3u && pipelines.failures() == 0u,
+                         "a form missed again is neither counted nor queued again; another target kind of the id is its own form");
+        // With fixed steps a draw waits for its pipeline's worker; when the workers stop it is let go with none.
+        pipelines.set_wait_for_missing(true);
+        pipelines.shutdown();
+        const bool stopped = pipelines.get(narrow, missing, 0, 0) == nullptr && pipelines.get(narrow, missing, 0, 0) == nullptr;
+        passed &= expect(stopped && pipelines.failures() == 0u, "a draw that waits for its pipeline is let go when the workers stop");
         pipelines.shutdown();
     }
     {
