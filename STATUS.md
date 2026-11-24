@@ -1,12 +1,13 @@
 # Nebula native plan: status
 
-Written 2026-11-23 20:08. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-23 20:09. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 13 of 138 (9%).
 
 Now: R1.1 since 20:08 (S0.3.2 landed 20:08); ahead: nothing
 
-In work now: Nothing started.
+In work now:
+- R1.1 P-052: the renderers' own pipelines at start (agent 1)
 
 ## Packages
 
