@@ -127,7 +127,7 @@ game touches goes through the save worker.
 | --- | --- | --- |
 | Window owner (`window_owner.cpp:20`) | the window's size, focus, input | the size reaches the aspect latch (1.5) and the swap chain's resize (1.4, a whole-GPU wait) |
 | Display clock (`vblank_clock_win32.cpp:175`, started once by `vblank_grid`) | the vertical blank's time and period | under `g_mutex`, read by the step wait and the present slots |
-| Pipeline workers (`runtime/src/render/core/pipelines.cpp:104`, lowest priority) | compiling pipeline states | each published to an atomic cell (`cell` :145, `publish` :164); a draw whose pipeline is not there yet is left out of that picture and its job moved to the front of the queue, the worker at the normal priority (`missing`; a quick link where pipelines link from parts; with fixed steps the draw waits for that worker), and a scene's load waits for every pipeline registered so far with the workers raised (`set_hurried`, the host's `NEBULA_OPTION_SCENE_PIPELINES`) |
+| Pipeline workers (`runtime/src/render/core/pipelines.cpp:104`, lowest priority) | compiling pipeline states | each published to an atomic cell (`cell` :145, `publish` :164); a draw whose pipeline is not there yet is left out of that picture and its job moved to the front of the queue, the worker at the normal priority (`missing`; a quick link where pipelines link from parts; with fixed steps the draw waits for that worker), and a scene's load waits for every pipeline registered so far, and for the forms left for a load, which no worker takes at another time, with the workers raised (`set_hurried`, the host's `NEBULA_OPTION_SCENE_PIPELINES`) |
 | Record workers (`runtime/src/render/core/draw_record.h`, `RecordPool`) | encoding a pass's chunks | fork and join inside the walk: the render thread takes a share and returns when all are done |
 | Texture pack workers (`texture_pack.cpp:176`) | reading and decoding replacements | decoded pixels picked up at `pump` once a frame; the upload is the render thread's |
 | Movie (`movie_playback.cpp:85`, :357, :903; :1200 prepares the decoder) | decoding a movie | pictures through the stager to the render thread |
@@ -218,7 +218,7 @@ with no row has a new one.
 | --- | --- | --- |
 | A draw whose pipeline is not ready compiles it on the render thread | `runtime/src/render/core/pipelines.cpp` (`create_now`) | P-010 (fixed at R1.2: `create_now` is gone; the load's gate waits for the pipelines, a miss in play is left out, counted and made at the queue's front) |
 | Utility pipelines compiled on the render thread at first use, outside the cache | `runtime/src/render/core/pipelines.cpp` | P-052 (fixed at R1.1: Direct3D 12's through the driver cache at the start since caa9ca1e7 and e68b6cd6c) |
-| A present waits for every pipeline creation in flight (Direct3D 12) | `runtime/src/render/core/present_gate.h` | N-1067, E3 step 1 |
+| A present waits for every pipeline creation in flight (Direct3D 12) | `runtime/src/render/core/present_gate.h` | N-1067 (fixed at R1.3: no creation is in flight in play unless a draw missed one or a setting changed; such a wait is a log line and a timeline event) |
 | The sampler heap or array, full, waits for the whole GPU | `renderer_d3d12.cpp:1410`; `runtime/src/render/vk/renderer_vk_frame.cpp:2710`, :2729; `runtime/src/render/mtl/renderer_mtl_draw.mm:261` (each `reset_sampler_frame`) | P-048, P-056, P-066, E3 step 2 |
 | Size changes drain the whole GPU inside a frame | `renderer_d3d12.cpp:5019`, :5052, :5214 (the temporal upscaler), :1955; Vulkan's at size changes inside a frame (1.4) | P-028 (written for Direct3D 12 on engine/b; Vulkan's side open) |
 | The game thread waits for the whole render queue at an aspect change | `host_main.cpp:3228` | N-1081 |
@@ -385,7 +385,7 @@ it. Pile A: the foundation does not touch its code; it comes after. Where this d
 | --- | --- | --- | --- | --- |
 | P-022 | B | F3 | The same per-renderer logic is written four times. |  |
 | P-010 | B | F4, E3 step 1 | A draw whose pipeline is not made yet compiles it on the render thread | fixed at R1.2: a scene's load waits for its pipelines; a draw that misses one is left out, counted (timeline `PipelineMissed`) and its job made first |
-| N-1067 | B | F4, E3 step 1 | a Present waits for every pipeline creation in flight (core/present_ga |  |
+| N-1067 | B | F4, E3 step 1 | a Present waits for every pipeline creation in flight (core/present_ga | fixed at R1.3: the forms the start's set leaves out are made only while a load waits, which waits for them; a Present held in play is logged |
 | P-157 | B | F4, E3 step 1 | the imported material format still stores the console's register layou |  |
 | P-052 | B | F4, E3 step 1 | Utility pipelines are compiled on the render thread at first use, outs | fixed at R1.1: Direct3D 12's half was on main (caa9ca1e7, e68b6cd6c); Vulkan's bloom and post-process pipelines are made at the start on workers and the self-test runs before the first frame |
 | P-065 | B | F4, E3 step 1 | performance (hitches; Metal): the renderer's own shaders are compiled  | planner: A; it breaks rule 1, so it ends where every pipeline is made at load |
@@ -765,6 +765,21 @@ three and its speed route thirteen). A form the game registers only at its first
 made before play only when the cook's list names it (`crates/nebula-import/data/site_pipelines.txt`): the line
 "registered after the first picture, not in the cook's list" (`Pipelines::note_registered`) and the line "missed by a draw
 in play" end with the record to add there (P-371).
+
+The present gate (R1.3, N-1067; `runtime/src/render/core/present_gate.h`). It is Direct3D 12's guard alone: a creation
+takes it only in `runtime/src/render/core/pipelines_d3d12.cpp` (`CreationScope`), and Direct3D 12's Present only
+(`PresentScope` in `renderer_d3d12.cpp`); Vulkan, Direct3D 11 and Metal take none, so on them a creation in play costs a
+worker's time and never a picture's (R1.2's proof covers them: no build on a draw's thread, no miss in play). After R1.2
+two kinds of creation were still made in play: the forms the start's set leaves out (`left_jobs_`: the narrow scene's
+motion forms while the wide variant is listed, texture target forms no run has drawn on a warm cache, a build retried
+after the memory ran out), released at the first picture with a scene; and those a draw missed or a setting changed. From
+R1.3 a worker takes a left form only while a load waits for its pipelines (`set_hurried`), and the load waits for them
+too (`PipelineProgress::later`; with fixed steps `Pipelines::drain`): play begins with none in flight. What is left is a
+draw's miss (counted, P-371) and a settings change, whose pipelines the settings view shows as preparing. A Present that
+waits in play (after the first picture with a scene, no load waiting) writes "a Present in play waited N us for M
+pipeline creations in flight" (the first 100) beside its timeline events `GateWaitBegin` and `GateWaitEnd`. In a test run
+the title does not wait for the start's set, so its first pictures can wait on the gate: those are before play and are
+not counted.
 
 **Readers.** `ModelData` resolves the sections once at load (2.8's lookup) and keeps the arrays. `Material` keeps its
 `MATL` and `GXMT` entries in place of 12's record; every form reader takes the form's ranges in place of `*_at`;

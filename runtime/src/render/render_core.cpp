@@ -2037,12 +2037,11 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
             pipelines_queued_.store(count, std::memory_order_relaxed);
             pipelines_noted_ = std::max(pipelines_noted_, count);
         }
-        // Fixed steps: a missing pipeline is waited for, not left out, and a scene's load gate drains the queue here.
+        // Fixed steps: a missing pipeline is waited for, not left out, and a scene's load gate drains the queue and the left
+        // forms here.
         pipelines_.set_wait_for_missing((galaxy::extensions::flags() & NEBULA_EXT_FIXED_STEPS) != 0u);
         if (pipelines_drain_.exchange(false, std::memory_order_acq_rel)) {
-            pipelines_.set_hurried(true);
-            pipelines_.wait_drained();
-            pipelines_.set_hurried(false);
+            pipelines_.drain();
         }
     }
     renderer_.bind_scene();

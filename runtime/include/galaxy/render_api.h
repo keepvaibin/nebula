@@ -89,13 +89,16 @@ bool finish_pictures(std::uint32_t limit_ms);
 // from an earlier run (a load, not a compile), so nothing need wait for them.
 struct PipelineProgress {
     std::uint32_t done = 0u, left = 0u;
+    // Forms the start's set left for a load's wait (the narrow scene's motion forms, texture target forms no run has drawn):
+    // made only while a scene's load waits for its pipelines, which then waits for these too.
+    std::uint32_t later = 0u;
     bool warm = false;
 };
 [[nodiscard]] PipelineProgress pipeline_progress() noexcept;
 // While a scene's load waits for its pipelines: the pipeline workers at the normal priority, not the lowest. Any thread.
 void set_pipelines_hurried(bool hurried) noexcept;
-// Deterministic runs, at a scene's load gate: the render thread makes every pipeline registered so far before its next
-// picture (the workers hurried, the render thread waiting), so the scene's pictures find them made. Any thread.
+// Deterministic runs, at a scene's load gate: the render thread makes every pipeline registered so far and every form left
+// for a load before its next picture (the workers hurried, the render thread waiting), so the scene's pictures find them made. Any thread.
 void drain_pipelines() noexcept;
 [[nodiscard]] TextureStore& textures() noexcept;
 // The list the next render_frame hands over.
