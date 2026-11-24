@@ -2025,6 +2025,9 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
             entries.reserve(count - pipelines_queued_.load(std::memory_order_relaxed));
             for (std::uint32_t id = pipelines_queued_.load(std::memory_order_relaxed); id < count; ++id) {
                 const core::PipelineEntry& pipeline = registries_.pipeline(id);
+                if (id >= pipelines_noted_) {
+                    pipelines_.note_registered(pipeline);  // after the first picture: not in the cook's list
+                }
                 if (pipeline.lit_form && !pixel_lit_) {
                     continue;
                 }
@@ -2032,6 +2035,7 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
             }
             pipelines_.prepare(entries, variants, motion, layer, one_pass);
             pipelines_queued_.store(count, std::memory_order_relaxed);
+            pipelines_noted_ = std::max(pipelines_noted_, count);
         }
         // Fixed steps: a missing pipeline is waited for, not left out, and a scene's load gate drains the queue here.
         pipelines_.set_wait_for_missing((galaxy::extensions::flags() & NEBULA_EXT_FIXED_STEPS) != 0u);

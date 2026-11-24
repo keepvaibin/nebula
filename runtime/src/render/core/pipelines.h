@@ -85,6 +85,10 @@ public:
     void set_wait_for_missing(bool wait) noexcept { wait_for_missing_.store(wait, std::memory_order_relaxed); }
     // Until every queued job counted in pending() is done, or the workers stop (the render thread, drain_pipelines).
     void wait_drained();
+    // A pipeline the game registered, handed over once when the render thread first queues it. The cook's list
+    // (NebulaData/Pipelines.bin) is registered at boot: one registered after the first picture with a scene is not in it, and
+    // its record is logged for crates/nebula-import/data/site_pipelines.txt.
+    void note_registered(const PipelineEntry& entry);
     [[nodiscard]] std::uint64_t failures() const noexcept { return failures_.load(std::memory_order_relaxed); }
     // The texture target forms left to the cache at the start (left_to_cache) are made after the first picture with a scene in
     // it is shown, behind every other job, so the first target pass that draws one finds it made: scene_drawn from the walk

@@ -340,6 +340,7 @@ private:
     std::atomic<std::uint32_t> pipelines_queued_{0u};
     std::atomic<bool> pipelines_drain_{false};  // drain_pipelines: made before the next picture
     std::uint32_t pipelines_settings_ = ~0u;
+    std::uint32_t pipelines_noted_ = 0u;  // the registered pipelines handed to note_registered once (render thread)
     bool pixel_lit_ = false;
 
     WalkState walk_{};
