@@ -42,6 +42,8 @@ struct SimDisplay final : ScheduleDisplay {
     double rate = 120.0;
     bool vsync_on = true;
     bool timed = true;             // the vblanks are timed, pictures show whole from a refresh on
+    bool variable = false;         // the refreshes follow the presents: the pacer's clock, at most `cap` hertz
+    double cap = 0.0;
     std::int64_t vblank0 = 12'345;
     std::int64_t period = kFrequency / 120;
     double gpu_ms = 0.0;
@@ -56,6 +58,10 @@ struct SimDisplay final : ScheduleDisplay {
         vblank = vblank0;
         grid = period;
         return true;
+    }
+    bool variable_refresh(double& held) const override {
+        held = variable ? cap : 0.0;
+        return variable;
     }
     double generated_gpu_ms() const override { return gpu_ms; }
     bool temporal_upscaling() const override { return temporal; }
@@ -313,11 +319,12 @@ void test_free_running() {
 
 // I-004: a sequence starts at its list's arrival, its reference its own step's moment plus the delay, so a picture
 // shows the game the delay after the moment it shows (today's 2 ms lateness: about 2.2 ms), where the present the
-// next step asks for put it a whole step and more later.
+// next step asks for put it a whole step and more later. At 144 Hz: on vblanks the step locks to (120 Hz) the reference
+// moves on to the next vblank (G2.2, test_lead_at_multiples).
 void test_starts_at_arrival() {
-    SimDisplay display = display_at(120.0, true);
+    SimDisplay display = display_at(144.0, true);
     FrameSchedule schedule(display, kFrequency);
-    schedule.configure(1u, 0);
+    schedule.configure(interpolated_frames_per_game_frame(144.0), 0);
     const Run r = run(schedule, 600, kFrequency, {kFrequency / 500});
     double worst = 0.0;
     for (std::size_t i = r.references.size() / 2; i < r.references.size() && i < r.steps.size(); ++i) {
@@ -362,7 +369,16 @@ void test_varying_lateness() {
 // ones between 40 and 500 Hz from a fixed seed (most not whole numbers), each on timed vblanks and on a swap chain that
 // tears, under steady, varying and spiking load. No picture is early, none is two in a vblank, each slot of a timed
 // display is a vblank, no list's frame is shown twice; under steady and varying load each picture shows the game at
-// most the delay (under half a step) before its slot.
+// most the delay (under half a step) before its slot. G2.2 proof 1: a sequence has a lead only at a whole multiple of
+// 60 (1/k): on timed vblanks where the step locks to them (exact, as galaxy/step_lock.h with in-between pictures on),
+// on a swap chain that tears within 0.2 %; at every other rate the lead is 0.
+double expected_lead(double refresh, bool timed) {
+    const double k = std::round(refresh / kGameStepRate);
+    const double off = std::abs(refresh - k * kGameStepRate);
+    if (k < 2.0) return 0.0;
+    return off * (timed ? 5000.0 : 500.0) <= k * kGameStepRate ? 1.0 / k : 0.0;
+}
+
 void test_every_rate() {
     std::vector<double> rates{40.0, 48.0, 50.0, 59.94, 60.0, 72.0, 75.0, 82.37, 90.0, 100.0, 119.88, 120.0,
                               144.0, 165.0, 180.0, 200.0, 240.0, 360.0, 480.0, 500.0};
@@ -387,12 +403,16 @@ void test_every_rate() {
                 const Run r = run(schedule, 240, kFrequency, *loads[l]);
                 const Evenness e = evenness(r, r.shown.size() / 4, timed ? display.period : 1, timed ? &display : nullptr);
                 const bool interpolated = generated != 0u;
+                const double lead = interpolated ? expected_lead(refresh, timed) : 0.0;
+                bool leads = true;
+                for (const Shown& s : r.shown) leads &= std::abs(s.lead - lead) < 1e-9;
                 const bool ok = e.early == 0u && e.frames_once && (!interpolated || (e.rising && e.on_grid)) &&
-                                (!interpolated || l == 2 || e.lag_max < kStep / 2.0);
+                                (!interpolated || l == 2 || e.lag_max < kStep / 2.0) && leads;
                 if (!ok && bad++ < 10u) {
-                    std::printf("  %.2f Hz %s %s: early %zu, frames once %d, rising %d, on grid %d, lag %.0f ticks\n",
+                    std::printf("  %.2f Hz %s %s: early %zu, frames once %d, rising %d, on grid %d, lag %.0f ticks, "
+                                "lead %s\n",
                                 refresh, timed ? "timed" : "tearing", load_names[l], e.early, e.frames_once ? 1 : 0,
-                                e.rising ? 1 : 0, e.on_grid ? 1 : 0, e.lag_max);
+                                e.rising ? 1 : 0, e.on_grid ? 1 : 0, e.lag_max, leads ? "right" : "WRONG");
                 }
             }
         }
@@ -401,6 +421,143 @@ void test_every_rate() {
     std::snprintf(what, sizeof what, "every rate, timed and tearing, three loads: %u of %zu runs wrong", bad,
                   rates.size() * 6u);
     check(bad == 0u, what);
+}
+
+// What each list of a run's settled part showed (G2.2): its frame shown on a slot at t = 1 (the real picture), how many
+// pictures it took (walks), and its sequence's lead.
+struct ListShows {
+    std::size_t lists = 0;
+    std::size_t real = 0;         // lists whose frame was shown at t = 1 on a slot
+    std::size_t walks_wrong = 0;  // lists that took other than `walks` pictures
+    std::size_t lead_wrong = 0;   // pictures whose sequence's lead is not `lead`
+    std::size_t off_spacing = 0;  // a list's slots not `spacing` apart (0: not checked)
+    bool on_grid = true;          // every slot a vblank of `grid`
+};
+
+ListShows list_shows(const Run& r, std::size_t from, std::size_t to, std::size_t walks, double lead,
+                     std::int64_t spacing, const SimDisplay* grid) {
+    ListShows l;
+    for (std::size_t list = from; list < to; ++list) {
+        ++l.lists;
+        std::size_t pictures = 0;
+        bool real = false;
+        std::int64_t last_slot = 0;
+        for (const Shown& s : r.shown) {
+            if (s.frame != static_cast<int>(list)) continue;
+            ++pictures;
+            if (std::abs(s.lead - lead) > 1e-9) ++l.lead_wrong;
+            if (grid != nullptr && (s.picture.slot - grid->vblank0) % grid->period != 0) l.on_grid = false;
+            if (spacing != 0 && last_slot != 0 && s.picture.slot - last_slot != spacing) ++l.off_spacing;
+            last_slot = s.picture.slot;
+            real |= s.picture.kind == SchedulePicture::Kind::Frame && !s.picture.flush &&
+                    std::abs(s.picture.t - 1.0) < 1e-3;
+        }
+        l.real += real ? 1u : 0u;
+        l.walks_wrong += pictures != walks ? 1u : 0u;
+    }
+    return l;
+}
+
+// G2.2 proofs 1 and 2 (I-002): at 120, 180, 240, 360 and 480 Hz on timed vblanks, the step locked to them and started
+// its work's budget (its longest work and 1.5 ms) before a vblank, as the host's frame phase does: each sequence has
+// lead 1/k, its last slot is a vblank that shows its frame at t = 1, and each step takes k walks, none unseen (before:
+// lead 0, 5 to 13 real pictures in 2,640 steps, k + 1 walks a step). Steady and varying lateness.
+void test_lead_at_multiples() {
+    std::vector<std::int64_t> steady{kFrequency / 500};
+    std::vector<std::int64_t> varying;
+    for (int i = 0; i < 64; ++i) varying.push_back(kFrequency / 1000 + (i * 29 % 64) * (kFrequency / 12'800));  // 1-6 ms
+    for (const double refresh : {120.0, 180.0, 240.0, 360.0, 480.0}) {
+        for (const std::vector<std::int64_t>* late : {&steady, &varying}) {
+            SimDisplay display = display_at(refresh, true);
+            FrameSchedule schedule(display, kFrequency);
+            const unsigned generated = interpolated_frames_per_game_frame(refresh);
+            schedule.configure(generated, 0);
+            const std::size_t k = generated + 1u;
+            const std::int64_t budget = *std::max_element(late->begin(), late->end()) + kFrequency * 15 / 10'000;
+            const std::int64_t first = display.vblank0 + 600 * display.period - budget;
+            const Run r = run(schedule, 600, first, *late, kFrequency / 2000, true, nullptr,
+                              static_cast<double>(static_cast<std::int64_t>(k) * display.period));
+            const ListShows l = list_shows(r, 300, 590, k, 1.0 / static_cast<double>(k), 0, &display);
+            char what[200];
+            std::snprintf(what, sizeof what,
+                          "%.0f Hz locked, %s lateness: real pictures %zu of %zu lists, walks other than %zu: %zu, "
+                          "lead not 1/%zu: %zu, on vblanks %d",
+                          refresh, late == &steady ? "steady" : "1-6 ms", l.real, l.lists, k, l.walks_wrong, k,
+                          l.lead_wrong, l.on_grid ? 1 : 0);
+            check(l.real == l.lists && l.walks_wrong == 0u && l.lead_wrong == 0u && l.on_grid, what);
+            // Each reference moved to the first vblank at or after its step's moment plus the delay (within the delay
+            // estimate's 0.1 ms step).
+            const std::int64_t delay = schedule.delay_qpc();
+            std::size_t moved_wrong = 0;
+            for (std::size_t i = 300; i < 590 && i < r.references.size(); ++i) {
+                const std::int64_t after = r.references[i] - (r.steps[i] + delay);
+                moved_wrong += (r.references[i] - display.vblank0) % display.period != 0 ||
+                                       after < -kFrequency / 10'000 || after >= display.period + kFrequency / 10'000
+                                   ? 1u
+                                   : 0u;
+            }
+            std::snprintf(what, sizeof what, "%.0f Hz locked, %s lateness: references not on the next vblank: %zu",
+                          refresh, late == &steady ? "steady" : "1-6 ms", moved_wrong);
+            check(moved_wrong == 0u, what);
+        }
+    }
+    // The step not locked (59.94 Hz's multiple, 119.88 Hz, is 0.1 % off: in-between pictures keep the step at exactly
+    // 60): lead 0.
+    SimDisplay display = display_at(119.88, true);
+    FrameSchedule schedule(display, kFrequency);
+    schedule.configure(interpolated_frames_per_game_frame(119.88), 0);
+    const Run r = run(schedule, 300, kFrequency, steady);
+    bool none = true;
+    for (const Shown& s : r.shown) none &= s.lead == 0.0;
+    check(none, "119.88 Hz timed: the step is not locked, no lead");
+}
+
+// G2.2 proof 5: a variable refresh display, whose slot clock is the pacer's own (its vblanks, here timed at 144 Hz, are
+// never the clock). At a limit of 60, 120 or 180 under a cap of 224, and 240 under a cap of 240, each sequence has
+// lead 1/k and its last slot shows its frame at t = 1, the slots 1/limit apart from the reference; at 60 every picture
+// is a real one. At 90, 100, 144 and 82.37, and at 240 above a cap of 224 (the cap's 224 then), the lead is 0.
+void test_variable_clock() {
+    const std::vector<std::int64_t> steady{kFrequency / 500};
+    struct Case {
+        double limit;
+        double cap;
+        std::size_t k;  // 0: no lead
+    };
+    const Case cases[] = {{60.0, 224.0, 1}, {120.0, 224.0, 2}, {180.0, 224.0, 3}, {240.0, 240.0, 4},
+                          {90.0, 224.0, 0}, {100.0, 224.0, 0}, {144.0, 224.0, 0}, {82.37, 224.0, 0},
+                          {240.0, 224.0, 0}};
+    for (const Case& c : cases) {
+        SimDisplay display = display_at(144.0, true);
+        display.variable = true;
+        display.cap = c.cap;
+        display.rate = c.limit;
+        FrameSchedule schedule(display, kFrequency);
+        const double rate = std::min(c.limit, c.cap);
+        schedule.configure(interpolated_frames_per_game_frame(rate), 0);
+        const Run r = run(schedule, 300, kFrequency, steady);
+        char what[200];
+        if (c.k == 1u) {
+            bool real = !r.shown.empty();
+            for (const Shown& s : r.shown) real &= s.picture.kind == SchedulePicture::Kind::Frame;
+            std::snprintf(what, sizeof what, "variable refresh, limit 60: every picture a real one");
+            check(real, what);
+            continue;
+        }
+        if (c.k == 0u) {
+            bool none = true;
+            for (const Shown& s : r.shown) none &= s.lead == 0.0;
+            std::snprintf(what, sizeof what, "variable refresh, limit %.2f under a cap of %.0f: no lead", c.limit, c.cap);
+            check(none, what);
+            continue;
+        }
+        const auto spacing = static_cast<std::int64_t>(static_cast<double>(kFrequency) / c.limit);
+        const ListShows l = list_shows(r, 150, 290, c.k, 1.0 / static_cast<double>(c.k), spacing, nullptr);
+        std::snprintf(what, sizeof what,
+                      "variable refresh, limit %.0f under a cap of %.0f: real pictures %zu of %zu lists, walks other "
+                      "than %zu: %zu, lead wrong %zu, slots not 1/limit apart %zu",
+                      c.limit, c.cap, l.real, l.lists, c.k, l.walks_wrong, l.lead_wrong, l.off_spacing);
+        check(l.real == l.lists && l.walks_wrong == 0u && l.lead_wrong == 0u && l.off_spacing == 0u, what);
+    }
 }
 
 // A variable refresh: no timed vblanks, the rate each list sees moving through the display's range (48 to 144 Hz and
@@ -671,6 +828,8 @@ int main() {
     test_starts_at_arrival();
     test_varying_lateness();
     test_every_rate();
+    test_lead_at_multiples();
+    test_variable_clock();
     test_variable_refresh();
     test_arrival_clock();
     test_unlimited();
