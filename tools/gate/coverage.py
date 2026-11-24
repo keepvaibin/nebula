@@ -147,6 +147,32 @@ def append_history(path, row):
         f.write("\t".join(str(row.get(c, "pass") if c == "verdict" else row[c]) for c in HISTORY_COLUMNS) + "\n")
 
 
+NOT_PLAYED_KINDS = ("tool", "env")     # a test that ended as the tool's or the machine's fault played no game: it counted nothing
+
+
+def missing_runs(runs):
+    """What is missing from the counting runs, as sentences ([] when every run played): `runs` is [(name, result)], result what the
+    harness check of that run returned, (passed, detail, cases) with cases.results {test: (kind, message)}. A run with no test, or with a
+    test that did not play (kind tool or env: a game that could not open its data, a runner that did not start), counted less than the
+    run that was asked for, and a share made from it is not the share of the tests: the check says so and writes no history line
+    (R-004: on 11-23 all 120 tests ended "game.pak did not open", and the 0.15 % that 345 bare starts made was called a fall from 16.23 %).
+    A run whose result carries no cases (the mod suites) is not judged here."""
+    said = []
+    for name, result in runs:
+        cases = result[2] if len(result) > 2 else None
+        if cases is None:
+            continue
+        results = getattr(cases, "results", cases)
+        if not results:
+            said.append("%s: no test ran" % name)
+            continue
+        lost = sorted(t for t, (kind, _) in results.items() if kind in NOT_PLAYED_KINDS)
+        if lost:
+            why = " ".join(str(results[lost[0]][1]).split())[:110]
+            said.append("%s: %d of %d tests did not play (first: %s: %s)" % (name, len(lost), len(results), lost[0], why))
+    return said
+
+
 def report(a, run=subprocess.run, now=None):
     r = run([str(pathlib.Path(a.llvm) / "llvm-cov"), "export", "-format=lcov", "-instr-profile=" + str(a.profile),
              str(a.binary[0])] + [x for b in a.binary[1:] for x in ("-object", str(b))], capture_output=True, text=True)

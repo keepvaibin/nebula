@@ -94,11 +94,20 @@ function Drop-Shared-Objects([string]$Folder) {
     Set-Content -Path "$Folder/sccache-own-paths" -Value "objects compiled with this folder's own paths (N-1049)" -Encoding ascii
 }
 
+# An object whose compile read another work tree's files (a folder another tree built into) is never made again when this tree's files change:
+# ninja looks at the other tree's. Those objects, and only those, go (tools/gate/foreign_objects.py, R-004); a sound folder is untouched.
+function Drop-Foreign-Objects([string]$Folder) {
+    if (-not (Test-Path "$Folder/.ninja_deps")) { return }
+    $py = Get-Command python -ErrorAction SilentlyContinue
+    if ($py) { & $py.Source -X utf8 -I (Join-Path $PSScriptRoot "foreign_objects.py") drop $Folder --tree $Tree }
+}
+
 . "$PSScriptRoot/build_steps.ps1"   # Start-Step, Finish-Step, Step: a step that failed in the compiler cache alone is run again
 
 # The game modules (both), the headless host, the self-description and the services list.
 $game = "$Root/game"
 Drop-Shared-Objects $game
+Drop-Foreign-Objects $game
 if (-not (Test-Path "$game/build.ninja") -or (Launcher-Differs $game) -or (Game-Config-Differs $game $Sanitize ([bool]$Coverage))) {
     Step "game configure" ("`"$cmake`" -S `"$Tree/native`" -B `"$game`" -G Ninja -DCMAKE_MAKE_PROGRAM=`"$ninja`" $launch" +
         "-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=`"$Llvm/clang.exe`" -DCMAKE_CXX_COMPILER=`"$Llvm/clang++.exe`" " +
@@ -118,6 +127,7 @@ $gameRun = Start-Step "`"$cmake`" --build `"$game`" --target all -j $half -- -k 
 $msvc = "$Root/msvc"
 New-Item -ItemType Directory -Force $msvc | Out-Null
 Drop-Shared-Objects $msvc
+Drop-Foreign-Objects $msvc
 # The SDK's libraries are built already; building them again would rewrite the folder other trees link from.
 foreach ($stamp in "fidelityfx-fg.built", "fidelityfx-fg-vk.built") {
     if (-not (Test-Path "$msvc/$stamp")) { Set-Content -Path "$msvc/$stamp" -Value "$Ffx/sdk" -Encoding ascii }

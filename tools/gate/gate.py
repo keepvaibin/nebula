@@ -124,6 +124,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 TREE = HERE.parent.parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(TREE / "tools" / "verify"))
+import coverage as coverage_tool  # noqa: E402
 import gate_tour  # noqa: E402
 import gamedata  # noqa: E402
 import github_rule  # noqa: E402
@@ -3755,14 +3756,23 @@ def coverage_check(g, bin_dir, tour, parts=None):
             runs = [(n, parts[n]) for n, _ in runs]
         if mods_on(g):
             runs.append(("mods", mod_tests(g, "d3d12", bin_dir=bin_dir, label="mods-coverage", more_env=env)))
-        said = []
+        said, played = [], []
         for name, part in runs:
-            said.append("%s %s" % (name, part(out / ("%s.log" % name))[1]))
+            result = part(out / ("%s.log" % name))
+            said.append("%s %s" % (name, result[1]))
+            played.append((name, result))
         with open(log, "a", encoding="utf-8") as f:
             f.write("runs: %s\n" % "; ".join(said))
+        # A run that did not play (no test, or a test that ended as the tool's or the machine's fault) counted nothing of its own:
+        # the share it leaves is not the share of the tests, so none is made, no history line is written, and the check is owed.
+        missing = coverage_tool.missing_runs(played)
         raws = sorted(counts.glob("*.profraw"))
-        if not raws:
-            return False, "no process wrote counts; runs: " + "; ".join(said)
+        if missing or not raws:
+            reason = "; ".join(missing) if missing else "no process wrote counts"
+            with open(log, "a", encoding="utf-8") as f:
+                f.write("coverage: could not measure: %s\n" % reason)
+            shutil.rmtree(counts, ignore_errors=True)
+            return False, "could not measure, no share and no history line: %s" % reason, None, "owed"
         llvm = LLVM_BIN
         merged = out / "counts.profdata"
         # Hundreds of files: their names in a list, past the command line's length.
