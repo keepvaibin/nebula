@@ -18,6 +18,9 @@ way luma_test.py writes them. Each case below plants one situation and reads the
   declared_difference_approved     a differing picture the change declares is new; it is approved and its old row replaced
   unused_declaration_is_caught     a declaration that names no differing picture is tool (env when the tablet was owed),
                                    and so is a line that is not a declaration
+  carried                          a step's landing (12 stops) passes a line no picture of its stops used, keeps the file on main
+                                   with the used line marked; the section's check takes the marked line as used, removes the
+                                   file at its approval, and still calls an unmarked line nothing used stale
   one_list_for_every_suite_name    a row approved from one run is found from a run that gave its suite another name, and
                                    for a test kept under tests/ by its own folder; rows written as "tour-tablet" still count
   places_do_not_collide            the PC's and the tablet's "vulkan" rows are two sets: each run is checked against its own
@@ -321,6 +324,59 @@ def main():
         row = w.check(g)
         check(row["state"] == "tool" and "line 1" in row["detail"] + str(row["records"]), "a line that is not one is tool",
               str(row))
+    finally:
+        w.close()
+
+    # --- a step's landing carries the declarations to the section's full check (mend M-006) -------------------------------
+    w = case("carried")
+    try:
+        g = w.gate()
+        w.run(g, "001-AAA-1", A)
+        w.run(g, "050-ZZZ-1", A)
+        w.approve(g)
+        w.declare("tour/001-AAA-1 * pc d3d12 RMGE01 :: the sky is another blue",
+                  "tour/050-ZZZ-1 * pc d3d12 RMGE01 :: a stop the 12 quick stops do not play")
+        g = w.gate()
+        g.level = gate.LAND_LEVEL
+        w.run(g, "001-AAA-1", B)
+        w.check(g)
+        with contextlib.redirect_stdout(io.StringIO()):
+            ok = g.check("pictures/declared", gate.declared_check(g))
+        row = g.results[-1]
+        check(ok is not False and row["state"] == "pass" and "the section's full check judges it" in row["detail"],
+              "at a step's landing a line no picture of the 12 stops used waits for the section's check", str(row))
+        w.finish(g)
+        tested = w.head()
+        landed, fault = gate.approve_pictures(g, tested, say=lambda text: None)
+        files = sorted(w.sh("diff", "--name-only", tested, landed).stdout.split())
+        kept = (w.tree / CHANGES).read_text(encoding="utf-8").splitlines() if (w.tree / CHANGES).exists() else []
+        check(fault is None and files == sorted([CHANGES, MANIFEST]), "the step's approval touches the list and the declarations",
+              "%s %s" % (fault, files))
+        check(kept == ["tour/001-AAA-1 * pc d3d12 RMGE01 :: the sky is another blue " + pictures.STEP_MARK,
+                       "tour/050-ZZZ-1 * pc d3d12 RMGE01 :: a stop the 12 quick stops do not play"],
+              "the file stays: the used line is marked, the other as it was", "\n".join(kept))
+        # The section's check: the marked line is not stale; the other is used by the stop it names; the approval removes the file.
+        g = w.gate()
+        w.run(g, "001-AAA-1", B)
+        w.run(g, "050-ZZZ-1", B)
+        w.check(g)
+        with contextlib.redirect_stdout(io.StringIO()):
+            ok = g.check("pictures/declared", gate.declared_check(g))
+        check(ok is not False and g.results[-1]["state"] == "pass", "the section's check takes both lines", str(g.results[-1]))
+        w.finish(g)
+        section_tested = w.head()
+        landed, fault = gate.approve_pictures(g, section_tested, say=lambda text: None)
+        check(fault is None and not (w.tree / CHANGES).exists(), "the section's approval removes the file", str(fault))
+        # A line still unused at the section's check, never used by a step's landing, is stale there as before.
+        w.sh("reset", "-q", "--hard", section_tested)
+        g = w.gate()
+        w.run(g, "001-AAA-1", B)
+        w.check(g)
+        with contextlib.redirect_stdout(io.StringIO()):
+            ok = g.check("pictures/declared", gate.declared_check(g))
+        row = g.results[-1]
+        check(ok is False and row["state"] == "tool" and "line 2" in row["detail"] and "line 1" not in row["detail"],
+              "at the section's check an unmarked line nothing used is stale", str(row))
     finally:
         w.close()
 

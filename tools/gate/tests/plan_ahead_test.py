@@ -24,7 +24,9 @@ from plan_fixture import Tree, git_run, ledger_row, ready_a1, run, setup_module,
 from plan_rerun_test import failed_verdict, passed_verdict  # noqa: E402
 
 REFUSAL = "ahead is for the time a landing plays: nothing of yours is being landed"
-FIRST_PLAN = (("A.1", "A", "", "open"), ("C.1", "C", "", "open"))     # C.1 does not need A.1
+# C.1 does not need A.1; A.2 keeps A.1 from being its package's last step, whose landing is the section's full check, during
+# which `ahead` writes no step of another package (mend M-006, plan_section_test)
+FIRST_PLAN = (("A.1", "A", "", "open"), ("C.1", "C", "", "open"), ("A.2", "A", "", "open"))
 BLOCKED_AFTER = (("A.1", "A", "", "open"), ("B.1", "B", "Z", "open"), ("Z.1", "Z", "", "blocked"))
 
 

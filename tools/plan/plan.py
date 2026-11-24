@@ -1930,6 +1930,13 @@ def cmd_ahead(a):
             say("nothing can be prepared ahead: step %s is kept on its branch and comes first after the repair" % kept["step"])
             return 1
     nxt = following(a, steps, done)
+    if nxt is not None and done is not None and nxt["package"] != done["package"] and is_section_check(a, steps, done):
+        # The section's barrier (mend M-006): the next package is not written before its section's full check has passed.
+        say("nothing can be prepared ahead: the landing of %s is the full check of package %s, and the next step, %s, is of "
+            "package %s: it is written when the check has passed" % (done["step"], done["package"], nxt["step"], nxt["package"]))
+        if entry:
+            say("native/%s, written ahead, is kept as it is." % entry["step"])
+        return 1
     if nxt is None:
         say("nothing can be prepared ahead: " + ahead_why_none(steps, done))
         if entry:
@@ -2929,9 +2936,42 @@ def join_landing(a, s, folder, branch, rec):
 
 
 def also_options(a, step_id):
-    """`--also` for the extra checks the step's proof asks for (docs/plan/native/step-checks.tsv): none, or two words."""
+    """`--also` for the extra checks the step's proof asks for (docs/plan/native/step-checks.tsv): none, or two words; and `--section`
+    when the landing is its section's full check (is_section_check)."""
     names = also_names(a.tree, step_id)
-    return ["--also", ",".join(names)] if names else []
+    steps = read_steps(a.tree, a.live)
+    s = find(steps, step_id)
+    section = ["--section"] if s is not None and is_section_check(a, steps, s) else []
+    return (["--also", ",".join(names)] if names else []) + section
+
+
+# The two tiers of a landing (mend M-006, docs/plan/04-GATE-AND-MAIN.md "Two tiers"): a step's landing plays the 12 quick stops on
+# the three renderers and the tablet; the section's full check (gate.py land --section: every picture the main level compares, the
+# debug layers, both speed measures) is the landing of a package's last step, or of the SECTION_EVERY-th step landed since the last
+# one. The count is kept in the live folder (SECTION_SINCE), written at each pass of a step.
+SECTION_EVERY = 4
+SECTION_SINCE = "section-since.txt"
+
+
+def section_since(a):
+    """The steps landed since the last section's full check (0 when nothing is written)."""
+    try:
+        return max(0, int((live_dir(a.live) / SECTION_SINCE).read_text(encoding="utf-8").split()[0]))
+    except (OSError, ValueError, IndexError):
+        return 0
+
+
+def is_section_check(a, steps, s):
+    """Whether the landing of step `s` is its section's full check: every other step of its package is landed, or SECTION_EVERY - 1
+    steps have landed since the last check."""
+    if all(x["state"] == "landed" for x in steps if x["package"] == s["package"] and x["step"] != s["step"]):
+        return True
+    return section_since(a) + 1 >= SECTION_EVERY
+
+
+def section_after_pass(a, section):
+    """The count after a step's pass: 0 after a section's full check, one more after a step's landing."""
+    lv.atomic_write(live_dir(a.live) / SECTION_SINCE, "%d\n" % (0 if section else section_since(a) + 1))
 
 
 SPEED_CHECKS = ("measure/", "speed/")
@@ -2968,11 +3008,13 @@ def finish_landing(a, s, code_commit, verdict, seconds, summary):
     """What follows a pass: the step is landed in the plan tree's file and in what the tool reads, the landings list, the claim and
     the page. The landings list takes a step id once, so whoever does this second adds nothing."""
     agent = agent_of(a)
+    section = is_section_check(a, read_steps(a.tree, a.live), s)       # before the step is written landed
     MAIN_LANDED[a.id] = code_commit
     # A landing that ends while the work folder is on a step written ahead writes no file of the working tree (steps.tsv there is
     # that step's own); what is landed is read from origin/main, and the live folder has the rest.
     set_state(a.tree, a.id, "landed", code_commit, live=a.live, write_file=ahead_here(a) is None)
     lv.add_landing(live_dir(a.live), a.id, code_commit, seconds, agent, main=verdict.commit or "-", figures=figures_line(verdict))
+    section_after_pass(a, section)
     settle_claim(a, read_steps(a.tree, a.live), s, agent, renew=True)
     refresh_page(a)
     say("LANDED %s as %s%s in %d s. Verdict by kind: %s." % (

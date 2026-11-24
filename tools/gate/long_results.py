@@ -671,7 +671,9 @@ def land_pictures_for(gate, args, ctx):
             done = sh(*a)
             if done.returncode != 0:
                 return "not landed: git %s: %s" % (a[0], (done.stderr or done.stdout).strip()[-200:])
-        sha, why = picture_tool.approve_landing(tree, run.folder, picture_tool.STORE, picture_rechecker(run, tree), gate.GIT)
+        # carry: PICTURES-CHANGE.txt on main holds the lines of steps landed since the last section's check (mend M-006); the
+        # nightly approval marks the lines its pictures used and leaves the file to that check.
+        sha, why = picture_tool.approve_landing(tree, run.folder, picture_tool.STORE, picture_rechecker(run, tree), gate.GIT, carry=True)
         if why:
             return "not landed: " + why
         if sha is None:

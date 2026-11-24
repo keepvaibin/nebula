@@ -132,7 +132,8 @@ class HarnessError(Exception):
 #         tools/gate/kinds.py Settler; alone it is a flake if it passes, a fail if it is too slow again).
 # No verdict depends on how long something took (docs/plan/04-GATE-AND-MAIN.md, "Time limits in the test runner").
 # result.json carries it as "kind"; the gate reads it from there (tools/gate/kinds.py). The gate may change a fail to
-# flake or main afterwards; it never changes pass, tool or env.
+# flake or main afterwards, and a pass whose result names a first play with a fault of the tool's ("retried", RETRIED below) to
+# flake; it never changes another pass, tool or env.
 KINDS = {"pass": "pass", "fail": "fail", "crashed": "fail", "timeout": "fail", "hung": "fail", "not-reached": "fail",
          "harness-error": "tool",
          "setup-failed": "tool", "output-missing": "tool", "no-exit-record": "tool", "not-run": "env", "device-lost": "env",
@@ -3084,33 +3085,16 @@ def run_tests(args):
                     report(run_folder, test["name"], test["proves"], renderer, "device-lost",
                            "not run: the device left before it (%s)" % lost, [], args, {})
                     continue
-                try:
-                    if test["continue_from"] is not None:
-                        prev = passed.get((test["continue_from"], renderer))
-                        if prev is None:
-                            raise SetupFailed("continue_from %s: that test did not pass earlier in this suite" % test["continue_from"])
-                        previous = prev
-                    ran = run_one(test, renderer, args, run_folder, previous)
-                    ran["missing_outputs"] = settle_outputs(test, run_folder, ran)
-                    pictures = finish_pictures(run_folder)
-                    verdict, reason, checks, facts = evaluate(test, renderer, run_folder, ran)
-                except HarnessError as error:
-                    verdict, reason, checks, facts, pictures, ran = "harness-error", str(error), [], [], [], {}
-                except SetupFailed as error:
-                    verdict, reason, checks, facts, pictures, ran = "setup-failed", str(error), [], [], [], {}
-                except NotRun as error:
-                    verdict, reason, checks, facts, pictures, ran = "not-run", str(error), [], [], [], {}
-                except DeviceLost as error:
-                    verdict, reason, checks, facts, pictures, ran = "device-lost", str(error), [], [], [], {}
-                    lost = str(error)
-                except Exception as error:  # noqa: BLE001 - the runner's own fault for this test, said in its result
-                    if drive_full(error):
-                        verdict, reason = "not-run", "the drive is full: %s" % error
-                    else:
-                        verdict, reason = "harness-error", "the runner raised %s: %s" % (type(error).__name__, error)
-                        run_folder.mkdir(parents=True, exist_ok=True)
-                        (run_folder / "runner-error.txt").write_text(traceback.format_exc(), encoding="utf-8")
-                    checks, facts, pictures, ran = [], [], [], {}
+                if test["continue_from"] is not None:
+                    previous = passed.get((test["continue_from"], renderer))
+                verdict, reason, checks, facts, pictures, ran, again, lost = play_once(test, renderer, args, run_folder, previous)
+                retried = None
+                if again and lost is None:
+                    # A fault of the tool's that one more play can clear (RETRIED): the test is played once more at once, its first
+                    # folder kept beside it as <renderer>-first, and the result is the second play's, naming the first.
+                    retried = {"verdict": verdict, "reason": reason, "folder": keep_first(run_folder)}
+                    print("%-28s %-7s %-14s %s: played once more" % (test["name"], renderer, verdict, reason), flush=True)
+                    verdict, reason, checks, facts, pictures, ran, _, lost = play_once(test, renderer, args, run_folder, previous)
                 if verdict == "pass":
                     passed[(test["name"], renderer)] = run_folder
                 else:
@@ -3128,13 +3112,76 @@ def run_tests(args):
                         "seconds": round(ran.get("seconds", 0.0), 2), "pictures": pictures,
                         "binaries": ran.get("frozen", {}), "exit": ran.get("code"), "starts": ran.get("starts"),
                         "test_path": test_path_of(folder), "not_on_this_system": test["not_here"], "limit_seconds": test["limit"],
-                        "limit_scale": args.limit_scale, "test_json": test["raw"]})
+                        "limit_scale": args.limit_scale, "test_json": test["raw"], **({"retried": retried} if retried else {})})
         print(summary_line(SUMMARY), flush=True)
     finally:
         lock.unlink()
         if device is not None:
             android.release_lock(args.device_lock)
     return 0 if all_pass else 1
+
+
+# The verdicts of a fault of the tool's that one more play can clear: a picture or report the game wrote at its exit that did not come
+# back (output-missing), the tablet's exit record that never came (no-exit-record), and a run the runner could not set up or that
+# it raised on while playing it (setup-failed, and harness-error from an exception of its own: an adb command that answered nothing,
+# a read-back of the device's folder that came back empty). A malformed test, a game that cannot start, a test whose continue_from
+# did not pass and a full drive are the same on every play and are not played again (HarnessError, NotRun, drive_full).
+RETRIED = ("output-missing", "no-exit-record")
+
+
+def play_once(test, renderer, args, run_folder, previous):
+    """One play of a test: (verdict, reason, checks, facts, pictures, ran, again, lost). `again`: its verdict is a fault of the
+    tool's that one more play can clear; `lost`: why the device went, when it did."""
+    again, lost = False, None
+    if test["continue_from"] is not None and previous is None:
+        return ("setup-failed", "continue_from %s: that test did not pass earlier in this suite" % test["continue_from"], [], [], [], {},
+                False, None)
+    try:
+        ran = run_one(test, renderer, args, run_folder, previous)
+        ran["missing_outputs"] = settle_outputs(test, run_folder, ran)
+        pictures = finish_pictures(run_folder)
+        verdict, reason, checks, facts = evaluate(test, renderer, run_folder, ran)
+        again = verdict in RETRIED
+    except HarnessError as error:
+        verdict, reason, checks, facts, pictures, ran = "harness-error", str(error), [], [], [], {}
+    except SetupFailed as error:
+        verdict, reason, checks, facts, pictures, ran = "setup-failed", str(error), [], [], [], {}
+        again = True
+    except NotRun as error:
+        verdict, reason, checks, facts, pictures, ran = "not-run", str(error), [], [], [], {}
+    except DeviceLost as error:
+        verdict, reason, checks, facts, pictures, ran = "device-lost", str(error), [], [], [], {}
+        lost = str(error)
+    except Exception as error:  # noqa: BLE001 - the runner's own fault for this test, said in its result
+        if drive_full(error):
+            verdict, reason = "not-run", "the drive is full: %s" % error
+        else:
+            verdict, reason = "harness-error", "the runner raised %s: %s" % (type(error).__name__, error)
+            run_folder.mkdir(parents=True, exist_ok=True)
+            (run_folder / "runner-error.txt").write_text(traceback.format_exc(), encoding="utf-8")
+            again = True
+        checks, facts, pictures, ran = [], [], [], {}
+    return verdict, reason, checks, facts, pictures, ran, again, lost
+
+
+def first_folder(run_folder):
+    """Where the first play of a test played again is kept: beside its folder, as <renderer>-first (the gate reads only <renderer>)."""
+    return run_folder.with_name(run_folder.name + "-first")
+
+
+def keep_first(run_folder):
+    """Moves the first play's folder aside (an older one there goes), so the second play starts in an empty folder. Returns the
+    kept folder's name, or why it was not kept: a file still held there (Windows) leaves it in place, and the second play's own
+    setup then says what holds it."""
+    first = first_folder(run_folder)
+    try:
+        if first.exists():
+            shutil.rmtree(first)
+        if run_folder.exists():
+            run_folder.rename(first)
+        return first.name
+    except OSError as error:
+        return "not kept: %s" % error
 
 
 def run_stalls(run_folder):

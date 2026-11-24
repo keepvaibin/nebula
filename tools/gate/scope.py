@@ -78,13 +78,23 @@ GROUPS = {
     "measure_tablet": ("the speed measure of the play route on the tablet, in the Android lane after its build (owed when the "
                        "tablet does not answer)",
                        ["measure/step/tablet"]),
+    # Not a row of the table either: the step tool asks for it (`gate.py land --section`) at the last step of a package of the
+    # native plan, or at the fourth step landed since the last one. No check of its own: it brings the main level's whole set.
+    "section": ("the section's full check: every picture the main level compares, the debug layers, the Android build and both "
+                "speed measures, whatever the changed files are",
+                []),
 }
 GROUP_NAMES = tuple(GROUPS)
 # The speed measure's groups (package B8, tools/gate/gate.py measure/step/pc and measure/step/tablet): a plan that holds an engine or a
 # tour group gets measure_pc; one that holds the Android build besides gets measure_tablet. No row of the table names them.
 GAME_GROUPS = ("engine1", "engine3", "tour1", "tour3")
 # A group that brings others with it: `pictures` is the main level's picture checks, whose tablet part is the group tablet12.
-BRINGS = {"pictures": ("engine3", "tour3", "tablet12")}
+BRINGS = {"pictures": ("engine3", "tour3", "tablet12"),
+          "section": ("pictures", "engine3", "tour3", "tablet12", "validate", "android", "measure_pc", "measure_tablet")}
+# The section's full check (mend M-006, docs/plan/04-GATE-AND-MAIN.md "Two tiers"): a landing without it is a step's, which plays
+# the 12 quick stops on the three renderers and on the tablet and leaves these groups to the section's check.
+SECTION = "section"
+STEP_LEAVES = ("validate", "measure_pc", "measure_tablet")
 # The group of a change that can move a picture of the game: the landing takes every picture the main level compares.
 PICTURES = "pictures"
 # A pseudo-group a row may name: it makes the run full, as a file no row names does.
@@ -124,8 +134,14 @@ class Plan:
 
     @property
     def takes_pictures(self):
-        """Whether the landing of this plan compares every picture the main level does (the group `pictures`, or a full run)."""
+        """Whether the landing of this plan compares pictures of the game (the group `pictures`, or a full run): every picture the
+        main level compares when it is also the section's check (`is_section`), else the 12 quick stops on each place."""
         return self.full or PICTURES in self.groups
+
+    @property
+    def is_section(self):
+        """Whether the landing of this plan is a section's full check (the group `section`, or a full run)."""
+        return self.full or SECTION in self.groups
 
     def text(self):
         if self.full:
@@ -261,6 +277,19 @@ def with_group(plan, name):
     if plan.full or name in plan.groups:
         return plan
     return Plan([g for g in GROUP_NAMES if g in expand(set(plan.groups) | {name})], False, plan.unmatched, plan.why)
+
+
+def step_plan(plan):
+    """The plan of a step's landing (not a section's check): the plan without the debug layers and the speed measures (STEP_LEAVES),
+    which the section's check runs. A full plan stays full; a section's plan stays as it is."""
+    if plan.is_section:
+        return plan
+    return Plan([g for g in plan.groups if g not in STEP_LEAVES], False, plan.unmatched, plan.why)
+
+
+def section_plan(plan):
+    """The plan of a section's full check: the plan with the group `section` and all it brings."""
+    return with_group(plan, SECTION)
 
 
 def github_form(plan):

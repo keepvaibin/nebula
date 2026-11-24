@@ -78,7 +78,8 @@ Every check and every test ends as one kind (tools/gate/kinds.py; docs/plan/04-G
          another number of cases than it declares, or none;
   env    the machine was not fit: the tablet away, the drive full, another graphics card than the approved pictures
          name, a lock not had in time;
-  flake  it failed, then passed when run again alone (a line in <plan>/native/flakes.tsv); the third flake of one test
+  flake  it failed, then passed when run again alone, or the runner played it once more at once after a fault of the tool's
+         that one more play can clear (luma_test.py RETRIED) and it passed (a line in <plan>/native/flakes.tsv); the third flake of one test
          and renderer in seven days sets the test aside (<plan>/native/set-aside.tsv): it still runs and is reported,
          its fail does not count;
   main   it failed again alone and fails the same way on main's kept build (<build>/base-bins/<commit>): main is at
@@ -367,6 +368,7 @@ class Gate:
         self.main_ref = MAIN_REF
         self.open_rows = []
         self.flake_results = []       # the tests the run set aside: one repair is opened for each (stress.open_flake_repairs)
+        self.played_again = []        # (check, Cases, records) with a test the runner played once more and that passed (kinds.PLAYED_AGAIN)
         self.aside = kinds.read_aside(SET_ASIDE)
         self.verdict = None
         self.github = getattr(args, "github_form", None)   # how a landing meets GitHub: "first" (waited), "after" (read after the move)
@@ -542,6 +544,8 @@ class Gate:
             if cases is not None:
                 records, state = kinds.judge_cases(cases, self.known.get(name, {}), self.aside, bool(passed))
                 detail = with_notes(detail, records) if detail else kinds.describe(cases, records)
+                if any(r["note"] == kinds.PLAYED_AGAIN for r in records):
+                    self.played_again.append((name, cases, records))  # its flake lines are written in settle, once every lane has ended
             elif fail_kind == "owed" and not passed:
                 state, records = "owed", default_records("owed", detail)
             else:
@@ -583,11 +587,17 @@ class Gate:
 
     def settle(self):
         """After every lane has ended: each test that is fail is run once more alone, a pass is flake; one that fails
-        again is run alone on main's build. The rows' states are settled and printed again."""
+        again is run alone on main's build. The rows' states are settled and printed again. A test the runner played once
+        more after a fault of the tool's and that then passed (kinds.PLAYED_AGAIN) gets its line in the flakes file here, as
+        a flake of a second run does."""
         pending = [r for r in self.results if r.get("pending")]
-        if self.dry or not pending:
+        if self.dry or not (pending or self.played_again):
             return
         settler = kinds.Settler(FLAKES, SET_ASIDE, self.commit, say=lambda text: print("gate.py: " + text, flush=True))
+        for name, cases, records in self.played_again:
+            for r in records:
+                if r["note"] == kinds.PLAYED_AGAIN:
+                    settler.flake(name, cases, r["test"], r["message"])
         for row in pending:
             cases = self.cases[row["check"]]
             if STOPPED.is_set():
@@ -1443,7 +1453,8 @@ def harness(g, suite, renderer, label, device=None, bin_dir=None, env=None, judg
         elif problem is None and not passes and code == 0 and not judged_only(source, work, renderer):
             problem = "the runner exited 0 though a test did not pass"
         cases = kinds.Cases(results, declared, problem, renderer, None if device else source, final=source.final,
-                            extra=source.counted, stress=stress_lane, stress_fails=stress_fails)
+                            extra=source.counted, stress=stress_lane, stress_fails=stress_fails,
+                            again=kinds.played_again(work, source.suite_dir, renderer))
         return passes and problem is None, "", cases
     return fn
 
@@ -2295,7 +2306,8 @@ def picture_recheck(g):
 def declared_check(g):
     """Every line of PICTURES-CHANGE.txt names a differing picture some picture check took (a line that names none is stale:
     tool). When the tablet's part was owed, its pictures were not taken, so a stale line cannot be told from one for them:
-    env."""
+    env. A step's landing (LAND_LEVEL, mend M-006) plays the 12 quick stops only: a line no picture of theirs used waits for the
+    section's full check, which judges it (a line a step's landing used is marked, pictures.STEP_MARK, and is not stale there)."""
     def fn(log):
         entries = picture_tool.gather(g.work, PICTURE_STORE)
         path = pathlib.Path(g.tree) / picture_tool.CHANGES_NAME
@@ -2305,6 +2317,9 @@ def declared_check(g):
             return False, str(error), None, "tool"
         if not unused:
             return True, "every declared change names a differing picture" if path.is_file() else "no declared change"
+        if g.level == LAND_LEVEL:
+            return True, "%d declared change%s name no picture of the 12 quick stops: the section's full check judges %s" % (
+                len(unused), "" if len(unused) == 1 else "s", "it" if len(unused) == 1 else "them")
         owed = any(r["state"] == "owed" for r in g.results)
         text = "; ".join("%s line %d: %s" % (picture_tool.CHANGES_NAME, n, t) for n, t in unused[:4])
         if owed:
@@ -2320,7 +2335,8 @@ def approve_pictures(g, commit, say=print):
     not) when it could not be done. Nothing to approve: the tested commit."""
     if not g.new_pictures:
         return commit, None
-    sha, why = picture_tool.approve_landing(g.tree, g.work, PICTURE_STORE, lambda: picture_recheck(g), GIT, say=say)
+    sha, why = picture_tool.approve_landing(g.tree, g.work, PICTURE_STORE, lambda: picture_recheck(g), GIT, say=say,
+                                            carry=g.level == LAND_LEVEL)
     if why is not None:
         return commit, why
     return sha or commit, None
@@ -4455,9 +4471,10 @@ def also_problem(args, also, known, planned):
 
 
 def landing_level(plan, also):
-    """The level a landing of a plan that is not full has: its own (LAND_LEVEL: the 12 quick stops) unless the plan can move a picture (the
-    group `pictures`: every picture the main level compares) or asks for checks by name (the nightly's depth), which are of the main level."""
-    return "main" if also or plan.takes_pictures else LAND_LEVEL
+    """The level a landing of a plan that is not full has: its own (LAND_LEVEL: the 12 quick stops, on the three renderers and the tablet
+    when the plan can move a picture) unless it is a section's full check that can move a picture (the groups `section` and `pictures`:
+    every picture the main level compares) or asks for checks by name (the nightly's depth), which are of the main level."""
+    return "main" if also or (plan.takes_pictures and plan.is_section) else LAND_LEVEL
 
 
 def landing_selection(args, plan, also, known, planned):
@@ -4500,6 +4517,9 @@ def parser(land=False):
                         "GitHub (each written to the tool-fault record as ENV with the first line of its log), and the run "
                         "judges by the new result. For a red whose log shows a download or an install failing, not the game")
     if land:
+        p.add_argument("--section", action="store_true",
+                       help="the section's full check (the step tool gives it at the last step of a package, or the fourth step since "
+                            "the last check): the main level's whole set, whatever the changed files are")
         p.add_argument("--github", choices=("first",), default=None,
                        help="`first`: this landing waits for GitHub's `must` jobs before main moves (the step tool uses it for a "
                             "repair of a red job of GitHub, so the fix is proven there first)")
@@ -4663,8 +4683,12 @@ def run_main(argv, left):
         except scope.ScopeError as error:
             return refuse("tools/gate/scope.tsv or --scope is wrong:\n  " + "\n  ".join(error.problems))
         print("gate.py: scope: " + "; ".join(scope.describe(plan)), flush=True)
-        if not plan.full and plan.takes_pictures:
-            print("gate.py: the change can move a picture: the landing is of the main level and takes every picture that level compares "
+        if not plan.full and plan.takes_pictures and not plan.is_section:
+            print("gate.py: the change can move a picture: a step's landing plays the 12 quick stops on the three renderers and the "
+                  "tablet's 12 stops, with their pictures and replays; the rest of the main level's pictures, the debug layers and the "
+                  "speed measures are the section's full check (gate.py land --section)", flush=True)
+        if not plan.full and plan.takes_pictures and plan.is_section:
+            print("gate.py: the section's full check: the landing is of the main level and takes every picture that level compares "
                   "(the engine tests and every stop of the tour on the three renderers, the two other discs on Direct3D 12, the tablet's "
                   "12 stops%s)" % (", and every stop a PICTURES-CHANGE.txt line names on the other discs' Direct3D 11 and Vulkan"
                                    if (pathlib.Path(TREE) / picture_tool.CHANGES_NAME).is_file() else ""), flush=True)
@@ -5098,6 +5122,8 @@ def land_main(argv):
             print("gate.py: " + why, file=sys.stderr)
             print(kinds.verdict_line("not-judged"), flush=True)
             return landing.EXIT_NOT_JUDGED
+    if args.section:
+        also.append(landing.SECTION_CHECK)     # the queue keeps it with the branch: the batch is run as the section's full check
     if args.github == "first":
         also.append(landing.GITHUB_FIRST)      # the queue keeps it with the branch: the batch is run with `github-first`
     sys.path.insert(0, str(TREE / "tools" / "plan"))

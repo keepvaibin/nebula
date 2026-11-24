@@ -11,6 +11,8 @@ run of that test leaves, by the phase it is in: the first run (any other work fo
   "fail:MESSAGE"    a fail with that reason (verdict fail)
   "tool"            verdict harness-error (kind tool); "env": verdict not-run (kind env)
   "slow:PCT"        verdict too-slow (kind env): the time limit passed with the game at PCT% of full speed
+  "retried:VERDICT" a pass whose result names a first play that ended VERDICT (the real runner's "retried": it played the test
+                    once more at once after a fault of the tool's)
   "none"            no result at all, as if the runner had raised before it
   "garbage"         a result.json that is not JSON;  "no-verdict": one that names no verdict
 A test the scenario does not name passes. "exit" overrides the exit code (the real one: 0 when all passed, else 1);
@@ -74,6 +76,10 @@ def main():
             verdict, kind = "too-slow", "env"
             reason = ("too slow on this machine now: still moving when its time limit of 240 s passed "
                       "(the game ran at %s%% of full speed)" % outcome.partition(":")[2])
+        retried = None
+        if outcome.startswith("retried:"):
+            retried = {"verdict": outcome.partition(":")[2], "reason": "the game ended, and 60 s later this was still not there: after",
+                       "folder": renderer + "-first"}
         if outcome == "none":
             bad += 1
             continue
@@ -84,6 +90,8 @@ def main():
         result = {"harness": 1, "test": name, "renderer": renderer, "verdict": verdict, "kind": kind, "reason": reason}
         if outcome == "no-verdict":
             result.pop("verdict")
+        if retried:
+            result["retried"] = retried
         (run / "result.json").write_text(json.dumps(result), encoding="utf-8")
         bad += kind != "pass"
         print("%-28s %-7s %-14s %s" % (name, renderer, verdict, reason))

@@ -22,6 +22,10 @@ waits until its branches reach an end state. The runner:
      landed. VERDICT not-judged (a tool or the machine, not the change): nothing lands, every branch goes back to `waiting`,
      the run ends and the tool or machine lines are printed.
 
+A caller whose branches another caller's runner took into its run and left not judged (that run judged nothing, or the runner
+broke) has not had a run of its own: it runs them once itself, as the runner, before it ends (mend M-006). Not judged by its
+own run, it ends not judged, as before.
+
 Halving. The failing set S is known to hold a fault; U is what has not been told apart from it. Half of S is run alone (the
 first half, rounded down). Passing, it lands at once and the other half is the failing set (when that is one branch, it is
 named without a run: the others passed and landed, and the run that held it failed). Failing, that half is the failing set
@@ -125,6 +129,10 @@ def also_text(*texts):
 # `gate.py land --github first` travels in the queue's `also` cell as this word (the queue file keeps its columns): the batch it
 # is in is run with the group `github-first`, so the move waits for GitHub's `must` jobs. It names no check.
 GITHUB_FIRST = "@github-first"
+# `gate.py land --section` travels the same way: the batch it is in is the section's full check (scope.section_plan: the main level's
+# whole set); a batch without it is a step's landing (scope.step_plan). It names no check.
+SECTION_CHECK = "@section"
+WORDS = (GITHUB_FIRST, SECTION_CHECK)
 
 
 def called_by_runner(pid, lock_path=RUNNER_LOCK, alive=process_alive):
@@ -276,11 +284,14 @@ class Queue:
 
     def claim(self, skip=(), retry=False):
         """Every waiting branch not in `skip`, in queue order, now `running`: the rows as they were. A branch that went back to
-        waiting after a run that judged nothing is taken only when `retry` (gate.py land --queue, or its own caller again): a
-        tool fault of one branch does not hold up the landing of another's."""
+        waiting after a run that judged nothing is taken only when `retry` is True (gate.py land --queue) or names it (its own
+        caller again): a tool fault of one branch does not hold up the landing of another's."""
+        def again(branch):
+            return retry is True or (not isinstance(retry, bool) and branch in retry)
+
         def fn(rows):
             taken = [dict(r) for r in rows if r["state"] == WAITING and r["branch"] not in skip
-                     and (retry or not r["note"].startswith(NOT_JUDGED))]
+                     and (again(r["branch"]) or not r["note"].startswith(NOT_JUDGED))]
             names = {r["branch"] for r in taken}
             for r in rows:
                 if r["branch"] in names:
@@ -499,20 +510,30 @@ class Landing:
             return EXIT_NOT_JUDGED
         self.queue.add(branches, agent, self.commit_of, also)
         deadline = self.clock() + 60.0 * wait_minutes
+        ran_here, again = False, set()
         while True:
             rows = {b: self.queue.row(b) for b in branches}
-            if all(ended(r) for r in rows.values()):
-                break
+            if all(ended(r) for r in rows.values()) and not again:
+                left = sorted(b for b, r in rows.items() if r is not None and r["state"] == WAITING and r["note"].startswith(NOT_JUDGED))
+                if not left or ran_here:
+                    break
+                # Another caller's runner took them into its run and judged nothing: this caller has had no run of its own. It runs
+                # them once itself (claim's `retry` names them), and ends with what that run says.
+                again = set(left)
+                self.say("gate.py: another caller's runner left %s not judged (%s): this caller runs %s once itself" % (
+                    ", ".join(left), rows[left[0]]["note"], "it" if len(left) == 1 else "them"))
             if self.runner.try_take("landing runner"):
                 try:
                     self.queue.recover()
-                    self.run_queue()
+                    ran_here = True
+                    self.run_queue(retry=again or False)
+                    again = set()
                 finally:
                     self.runner.free()
                 continue
             if self.clock() >= deadline:
                 self.say("gate.py: the queue's runner (%s) has not reached %s in %g minutes" % (
-                    self.runner.holder()[0], ", ".join(b for b, r in rows.items() if not ended(r)), wait_minutes))
+                    self.runner.holder()[0], ", ".join(sorted(again) or [b for b, r in rows.items() if not ended(r)]), wait_minutes))
                 return self.report(branches, give_up=True)
             if not getattr(self, "_said", False):
                 self.say("gate.py: a queue runner is alive (%s); waiting for %s" % (self.runner.holder()[0], ", ".join(branches)))
@@ -644,7 +665,7 @@ class Landing:
         for b in prep.empty:
             self.queue.finish(b, LANDED, note="no commit of its own: main holds it already")
             self.store.clear(b)
-            asked = [n for n in also_names(getattr(self, "alsos", {}).get(b, "")) if n != GITHUB_FIRST]
+            asked = [n for n in also_names(getattr(self, "alsos", {}).get(b, "")) if n not in WORDS]
             if asked:
                 # Nothing was run for this branch (main holds it already), so what it asked for by --also was not run either.
                 self.say("gate.py: %s: main holds it already, so no check ran: the checks asked for with --also were NOT run: %s. Put a "
@@ -659,7 +680,9 @@ class Landing:
         self.runs += 1
         also_all = also_names(*[getattr(self, "alsos", {}).get(b, "") for b in prep.order])
         first = GITHUB_FIRST in also_all
-        also = ",".join(n for n in also_all if n != GITHUB_FIRST)
+        section = SECTION_CHECK in also_all
+        also = ",".join(n for n in also_all if n not in WORDS)
+        plan = scope.section_plan(plan) if section else scope.step_plan(plan)
         if first:
             plan = scope.with_group(plan, scope.GITHUB_FIRST)
         self.say("gate.py: run %d on %s: %s%s (%s)" % (self.runs, ", ".join(prep.order), plan.text(),

@@ -22,6 +22,9 @@ Each case below plants one situation and reads the kind back:
   unreadable_result         a result.json that is not JSON, or names no verdict, is tool
   count_differs / zero_cases  a check that ran another number of cases than it declares, or none, is tool
   tablet_away, runner_refused, lock_not_had, other_graphics_card   env, which does not fail a run
+  played_again_by_the_runner a test the runner played once more after a fault of the tool's and that then passed is flake, with
+                            its line in flakes.tsv, on the tablet too (whose tests the gate never runs again); the third sets it
+                            aside; a fault of the tool's on both plays stays tool
   lines_and_verdict_json    the KIND lines and verdict.json say the same
 and the rest of the rules: known failures and planned checks keep working, a tablet check is not run again, a check that
 raised is tool, no test in ctest is tool, the kinds' order, the exit codes, the two newest builds of main are kept.
@@ -497,6 +500,48 @@ def device_is_not_run_again(s, check):
           "a tablet check is not run again (its test app is removed when its part ends): %s" % record_of(g, "a"))
 
 
+def played_again_by_the_runner(s, check):
+    """The runner played a test once more at once after a fault of the tool's (luma_test.py RETRIED) and it passed: flake."""
+    for device in (None, "T"):
+        s.plan({"a": {"first": "retried:output-missing"}})
+        g = s.run(g=s.gate(), device=device)
+        r = record_of(g, "a")
+        check(r["kind"] == "flake" and not r["counts"] and r["note"] == kinds.PLAYED_AGAIN
+              and r["message"].startswith("output-missing: the game ended"),
+              "a pass after a first play with a fault of the tool's is flake, its first fault said (device %s): %s" % (device, r))
+        check(row(g)["state"] == "flake" and g.verdict == "pass" and g.code == 0,
+              "the run passes (device %s): %s %s %s" % (device, row(g)["state"], g.verdict, g.code))
+        check(not any((g.work / d).exists() for d in ("rerun", "main")), "the gate runs it no more (device %s)" % device)
+    lines = s.flake_lines()
+    check(len(lines) == 2 and all(l[1] == "a" and l[4].startswith("output-missing") for l in lines),
+          "a line in flakes.tsv for each, the tablet's too: %s" % lines)
+    # The third in seven days sets the test aside and opens a repair, as for a flake the gate's second run found.
+    g = s.run(g=s.gate(), device="T")
+    check(("a", RENDERER) in kinds.read_aside(s.aside) and g.flake_results and g.flake_results[0]["test"] == "a",
+          "the third sets it aside: %s %s" % (kinds.read_aside(s.aside), g.flake_results))
+    # A planted fault: the tool's fault on both plays is tool (not judged), never a pass or a flake.
+    s.plan({"b": {"first": "tool"}})
+    g = s.run(g=s.gate(), device="T")
+    check(record_of(g, "b")["kind"] == "tool" and g.verdict == "not-judged", "a fault on both plays stays tool: %s" % record_of(g, "b"))
+    # The reader: such a result is a pass for every reader and judge (read_result); played_again names it beside the results, and a
+    # retried result that is not a pass is not named.
+    for name, result in (("p", {"verdict": "pass", "kind": "pass", "reason": ""}),
+                         ("t", {"verdict": "output-missing", "kind": "tool", "reason": "x",
+                                "retried": {"verdict": "output-missing", "reason": "y"}}),
+                         ("f", {"verdict": "pass", "kind": "pass", "reason": "", "retried": {"verdict": "no-exit-record", "reason": ""}})):
+        folder = s.t / "read" / "runs" / "x" / name / RENDERER
+        folder.mkdir(parents=True)
+        (folder / "result.json").write_text(json.dumps(dict(result, test=name)), encoding="utf-8")
+    got = {n: kinds.read_result(s.t / "read" / "runs" / "x" / n / RENDERER / "result.json", lambda v: "fail") for n in ("p", "t", "f")}
+    check(got == {"p": ("pass", ""), "t": ("tool", "output-missing: x"), "f": ("pass", "")}, "read_result: %s" % got)
+    check(kinds.played_again(s.t / "read", "x", RENDERER) == {"f": "no-exit-record"},
+          "played_again names the retried pass only: %s" % kinds.played_again(s.t / "read", "x", RENDERER))
+    # A lane's judge that fails such a test (a picture or a step hash that differs) makes it fail, never flake: it is judged as any pass.
+    cases = kinds.Cases({"f": ("fail", "the picture after differs from its approved copy")}, 1, None, RENDERER, again={"f": "no-exit-record"})
+    records, state = kinds.judge_cases(cases)
+    check(state == "fail" and records[0]["kind"] == "fail" and records[0]["counts"], "a judge's fail stays fail: %s" % records)
+
+
 def settle_rules(s, check):
     """The Settler with a fake source: what it does with a second run that is not a pass, one that breaks, a source that
     cannot run on main."""
@@ -632,6 +677,7 @@ CASES = [always_fails, fails_once, third_flake_sets_aside, fails_on_main_too, ma
          runner_exception, unreadable_result, count_differs, zero_cases, tablet_away, runner_refused, lock_not_had,
          other_graphics_card, lines_and_verdict_json, known_and_planned_still_work, device_is_not_run_again, settle_rules,
          slow_passes_alone, slow_again_alone, kinds_order_and_exit_codes, base_builds_kept, pictures_and_replays_read_the_settled_runs]
+CASES += [played_again_by_the_runner]
 
 
 def main():
