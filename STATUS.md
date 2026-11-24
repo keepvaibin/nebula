@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-24 03:28. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 03:29. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 16 of 138 (12%).
 
-Now: in work: lander landing R1.3 (written ahead)
+Now: R1.3 landed; next: writer for R1.4
 
 In work now: Nothing started.
 
