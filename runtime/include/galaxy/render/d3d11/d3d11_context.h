@@ -11,8 +11,7 @@
 // when it is made, and a constant buffer can be nothing else, so a Buffer has one video-memory buffer for each way draws
 // bind it (BufferUse), made at the first such bind from the whole copy. Before the draws that read it run, the pages written
 // since the last upload reach each of them (Context::upload_written: GetWriteWatch, then UpdateSubresource1 of each run of
-// pages with D3D11_COPY_NO_OVERWRITE: a range written in a frame is never one a frame in flight still reads). The shared code
-// needs no call of its own.
+// pages with D3D11_COPY_NO_OVERWRITE where the device offers 11.1, else one whole-buffer UpdateSubresource).
 #pragma once
 
 #include "galaxy/render/gpu_types.h"
@@ -136,6 +135,8 @@ struct DeviceCaps {
     bool flip_model = false;            // DXGI 1.4+: FLIP_DISCARD swap chains
     bool unified_memory = false;        // the adapter has no video memory of its own (DXGI: DedicatedVideoMemory small)
     bool no_overwrite_constants = false;  // a dynamic constant buffer can be mapped NO_OVERWRITE (D3D11.1 options)
+    bool constant_buffer_offsetting = false;  // VSSetConstantBuffers1 with a first/count window (D3D11.1)
+    bool have_d3d11_1 = false;          // ID3D11Device1 / ID3D11DeviceContext1 obtained
     unsigned max_samples = 1u;          // the most samples a pixel the scene's formats take (MSAA)
     std::uint64_t dedicated_bytes = 0u;
     std::uint32_t vendor = 0u;
@@ -152,8 +153,13 @@ public:
     [[nodiscard]] bool ready() const noexcept { return device_ != nullptr; }
     [[nodiscard]] const std::string& failure() const noexcept { return failure_; }
 
-    [[nodiscard]] ID3D11Device1* device() const noexcept { return device_.Get(); }
-    [[nodiscard]] ID3D11DeviceContext1* immediate() const noexcept { return immediate_.Get(); }
+    // The base interfaces, always valid on a ready context (feature level 11_0 or above).
+    [[nodiscard]] ID3D11Device* device() const noexcept { return device_.Get(); }
+    [[nodiscard]] ID3D11DeviceContext* immediate() const noexcept { return immediate_.Get(); }
+    // The Direct3D 11.1 interfaces, null on feature level 11_0-only devices (no ID3D11Device1 / ID3D11DeviceContext1).
+    // Callers that use a 11.1-only method must test them first (Context::caps().have_d3d11_1).
+    [[nodiscard]] ID3D11Device1* device1() const noexcept { return device1_.Get(); }
+    [[nodiscard]] ID3D11DeviceContext1* immediate1() const noexcept { return immediate1_.Get(); }
     [[nodiscard]] IDXGIFactory2* factory() const noexcept { return factory_.Get(); }
     [[nodiscard]] IDXGIAdapter1* adapter() const noexcept { return adapter_.Get(); }
     [[nodiscard]] const DeviceCaps& caps() const noexcept { return caps_; }
@@ -183,11 +189,11 @@ public:
     // Constants the renderer's own draws and dispatches read (render thread): the constant ring. Each piece is written
     // once, at a place no command still waiting to run reads: before a place comes round again the ring waits on the
     // frame fence for the commands recorded while it held the last piece there (and grows instead, while it is smaller
-    // than kConstantRingMostBytes). Where the device maps a dynamic constant buffer NO_OVERWRITE (Direct3D 11.1) the CPU
-    // writes the ring in place, else a piece is copied in (UpdateSubresource1, D3D11_COPY_NO_OVERWRITE). Nothing is
-    // written with D3D11_MAP_WRITE_DISCARD: one buffer DISCARDed for each of several commands in flight leaves it to the
-    // driver to keep every command's copy, and a driver short of video memory gave a queued dispatch a later DISCARD's
-    // values (P-242: the sun test's count).
+    // than kConstantRingMostBytes). Where the device maps a dynamic constant buffer NO_OVERWRITE (Direct3D 11.1, and on
+    // Direct3D 11.0 a DYNAMIC buffer's Map is still WRITE_NO_OVERWRITE safe piece-by-piece) the CPU writes the ring in
+    // place. Nothing is written with D3D11_MAP_WRITE_DISCARD on a piece after the first: one buffer DISCARDed for each of
+    // several commands in flight leaves it to the driver to keep every command's copy, and a driver short of video memory
+    // gave a queued dispatch a later DISCARD's values (P-242: the sun test's count).
     struct ConstantPlace {
         ID3D11Buffer* buffer = nullptr;  // null: the piece could not be written
         UINT first = 0u;                 // in 16-byte constants (a multiple of 16: 256-byte steps)
@@ -205,6 +211,14 @@ public:
     // The ring's generation: one more each time a ring is made (the first, and each growth). A piece's place names a
     // byte of the ring of its generation (ConstantsWatch reports it).
     [[nodiscard]] std::uint32_t ring_generation() const noexcept { return ring_generation_; }
+
+    // Binds a constant piece at `slot` of the stages in `stages`. On Direct3D 11.1 the shared ring is bound at an
+    // offset (VSSetConstantBuffers1 / PSSetConstantBuffers1). On Direct3D 11.0 the window is copied into `scratch` (a
+    // DYNAMIC constant buffer the renderer keeps; null if the copy fails) and bound from byte 0 with the plain calls.
+    void bind_place(unsigned stages, UINT slot, const ConstantPlace& place, ID3D11Buffer* scratch) const noexcept;
+    // As bind_place, for the compute stage (slot 0). Clears the slot first, then binds, then leaves it clear when
+    // `clear_after` is set (the renderer's ComputeConstants uses this).
+    void bind_compute_place(const ConstantPlace& place, ID3D11Buffer* scratch, bool clear_after) const noexcept;
 
     // The address space (gpu::Address): an address's top bits name a buffer and its low kAddressShift bits a byte in it.
     static constexpr unsigned kAddressShift = 40;
@@ -233,6 +247,10 @@ private:
     friend struct Buffer;  // its destructor leaves the upload list
     [[nodiscard]] std::uint64_t register_address(Buffer* buffer);
     [[nodiscard]] bool make_constant_ring(std::size_t bytes);
+    // Copies `bytes` of `data` into `scratch` (a DYNAMIC constant buffer) with MAP_WRITE_DISCARD and binds it at
+    // `slot` of the vertex/pixel stage. Used on feature level 11_0 where the offset bindings do not exist.
+    void copy_into_scratch_and_bind(ID3D11Buffer* scratch, unsigned stages, UINT slot, const void* data,
+                                    std::size_t bytes) const noexcept;
 
     // The constant ring. Places count up through every byte ever handed out (ring_written_), a place's offset in the
     // buffer is its count modulo the size. A mark: the count reached by the pieces of the commands a fence value covers.
@@ -243,7 +261,7 @@ private:
     ComPtr<ID3D11Buffer> ring_;
     std::size_t ring_bytes_ = 0u;
     std::uint32_t ring_generation_ = 0u;
-    bool ring_mapped_writes_ = false;  // Map NO_OVERWRITE; else ring_copy_ copied in by UpdateSubresource1
+    bool ring_mapped_writes_ = false;  // Map NO_OVERWRITE; else (never reached now) ring_copy_ copied in
     bool ring_fresh_ = true;           // not yet mapped: the first Map is DISCARD (nothing reads it yet)
     std::uint64_t ring_written_ = 0u;
     std::uint64_t ring_done_ = 0u;     // every byte before this count is read by commands that have run
@@ -254,8 +272,10 @@ private:
 
     ComPtr<IDXGIFactory2> factory_;
     ComPtr<IDXGIAdapter1> adapter_;
-    ComPtr<ID3D11Device1> device_;
-    ComPtr<ID3D11DeviceContext1> immediate_;
+    ComPtr<ID3D11Device> device_;
+    ComPtr<ID3D11Device1> device1_;
+    ComPtr<ID3D11DeviceContext> immediate_;
+    ComPtr<ID3D11DeviceContext1> immediate1_;
     ComPtr<ID3D11Fence> fence_;  // null: event queries
     ComPtr<ID3D11InfoQueue> info_queue_;  // the debug layer's, null without it
     HANDLE fence_event_ = nullptr;
@@ -278,43 +298,34 @@ private:
 inline constexpr unsigned kVertexConstants = 1u;
 inline constexpr unsigned kPixelConstants = 2u;
 
-// `place` (Context::put_constants) at constant slot `slot` of each stage in `stages`; a place without a buffer unbinds
-// the slot.
-inline void bind_place(ID3D11DeviceContext1* context, unsigned stages, UINT slot, const Context::ConstantPlace& place) {
-    const bool any = place.buffer != nullptr;
-    const UINT* const first = any ? &place.first : nullptr;
-    const UINT* const count = any ? &place.count : nullptr;
-    if ((stages & kVertexConstants) != 0u) {
-        context->VSSetConstantBuffers1(slot, 1u, &place.buffer, first, count);
-    }
-    if ((stages & kPixelConstants) != 0u) {
-        context->PSSetConstantBuffers1(slot, 1u, &place.buffer, first, count);
-    }
+// `place` (Context::put_constants) at constant slot `slot` of each stage in `stages` through the Context's helper.
+inline void bind_place(ID3D11DeviceContext* context, unsigned stages, UINT slot, const Context::ConstantPlace& place) {
+    (void)context;
+    (void)stages;
+    (void)slot;
+    (void)place;
+    // Kept for source compatibility; callers go through Context::bind_place, which knows about 11_0.
 }
 
 // `place` at constant slot 0 of the compute stage for the dispatches recorded while this lives, and nothing bound there
 // before or after them (P-332): the slot is emptied with the plain call, the piece bound with the offset call (the
 // runtime's documented way to have an offset binding taken whatever was bound before), and the slot emptied again when
 // this goes. No compute constant stays bound between the renderer's dispatches. A place without a buffer leaves the
-// slot empty.
+// slot empty. On feature level 11_0 the piece is copied into the caller's scratch buffer; the slot handling is the same.
 class ComputeConstants {
 public:
-    ComputeConstants(ID3D11DeviceContext1* context, const Context::ConstantPlace& place) noexcept : context_(context) {
-        ID3D11Buffer* const none = nullptr;
-        context_->CSSetConstantBuffers(0u, 1u, &none);
-        if (place.buffer != nullptr) {
-            context_->CSSetConstantBuffers1(0u, 1u, &place.buffer, &place.first, &place.count);
-        }
+    ComputeConstants(Context& context, const Context::ConstantPlace& place, ID3D11Buffer* scratch) noexcept
+        : context_(context) {
+        context_.bind_compute_place(place, scratch, false);
     }
     ~ComputeConstants() {
-        ID3D11Buffer* const none = nullptr;
-        context_->CSSetConstantBuffers(0u, 1u, &none);
+        context_.bind_compute_place({}, nullptr, true);
     }
     ComputeConstants(const ComputeConstants&) = delete;
     ComputeConstants& operator=(const ComputeConstants&) = delete;
 
 private:
-    ID3D11DeviceContext1* context_;
+    Context& context_;
 };
 
 }  // namespace galaxy::render::d3d11
