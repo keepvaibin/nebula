@@ -176,7 +176,7 @@ jobs:
           cmake -S . -B $build -G Ninja -DCMAKE_BUILD_TYPE=Release -DNEBULA_VULKAN=OFF -DNEBULA_D3D11=ON `
             "-DNEBULA_HOST_BASELINE=${{ matrix.baseline }}"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --build $build --target NebulaD11 nebula_glslang
+          cmake --build $build --target NebulaD11
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # What the Setup and the Android build take: the programs, the Agility SDK's runtime, glslang's compiler and
           # the shader tools.
