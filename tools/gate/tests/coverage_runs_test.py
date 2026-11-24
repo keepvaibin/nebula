@@ -13,7 +13,9 @@ What each part plants (and what it was seen to catch):
   foreign_objects   a folder whose objects read Nebula-A1h's files while its tree is Nebula-long: listed (exit 1) and dropped, and only
                     those object files; a sound folder (own tree, the SDK, the folder's own generated files): nothing listed, nothing
                     dropped. Seen failing with the tree compared to nothing (every object foreign) and with the other tree ignored.
-  build_windows.ps1 calls the detector for the game folder and for the MSVC folder (a text check).
+  build_windows.ps1 calls the detector for the MSVC folder (a text check); not for the game folder, whose deps take 16 s to read.
+  fail-safe          a ninja that fails, no ninja, a ninja that cannot be started, an answer that cannot be read: one line, exit 0 for `drop`
+                    (2 for `list`), every object file still there; the planted foreign folder is the only one that loses a file.
 """
 import argparse
 import pathlib
@@ -164,6 +166,40 @@ def main(argv=None):
         check(not (folder / "CMakeFiles/c.dir/runtime/src/asset_store.cpp.obj").exists()
               and (folder / "CMakeFiles/a.dir/runtime/src/a.cpp.obj").exists() and (folder / "CMakeFiles/b.dir/b.cpp.obj").exists(),
               "only that object's file went; the others stay")
+        # The fail-safe: a detector that cannot answer says one line, deletes nothing and lets the build go on (exit 0 for `drop`).
+        import contextlib
+        import io
+
+        def run_main(*argv):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = foreign_objects.main(list(argv))
+            return code, out.getvalue()
+        before = sorted(str(f) for f in folder.rglob("*.obj"))
+        code, said = run_main("drop", str(folder), "--tree", tree, "--ninja", sys.executable)
+        check(code == 0 and said.count("\n") == 1 and "not checked (Doubt: ninja -t deps ended with" in said and "nothing deleted, the build goes on" in said,
+              "a ninja that fails: one line, exit 0, nothing deleted: %r" % said)
+        real_find = foreign_objects.find_ninja
+        foreign_objects.find_ninja = lambda given=None: None
+        try:
+            code, said = run_main("drop", str(folder), "--tree", tree)
+        finally:
+            foreign_objects.find_ninja = real_find
+        check(code == 0 and said.count("\n") == 1 and "not checked (Doubt: no ninja program found)" in said,
+              "no ninja: one line, exit 0, nothing deleted: %r" % said)
+        code, said = run_main("list", str(folder), "--tree", tree, "--ninja", sys.executable)
+        check(code == 2, "`list` says exit 2 when it cannot answer: %s" % code)
+
+        def raising(cmd, **kw):
+            raise OSError("the program is gone")
+        try:
+            foreign_objects.deps_text(folder, shutil_ninja, raising)
+            check(False, "a ninja that cannot be started raises Doubt")
+        except foreign_objects.Doubt as error:
+            check("could not be run" in str(error), "a ninja that cannot be started raises Doubt: %s" % error)
+        check(foreign_objects.parse_deps("garbage\nlines only") == {} and foreign_objects.foreign({}, folder, "x") == {},
+              "an answer that cannot be read lists no object")
+        check(sorted(str(f) for f in folder.rglob("*.obj")) == before, "after every case of doubt every object file is still there")
         none = t / "empty"
         none.mkdir()
         check(foreign_objects.check(none, tree, shutil_ninja, fake_ninja(DEPS_FOREIGN))[2] == {}, "a folder with no .ninja_deps: nothing found")
@@ -174,8 +210,8 @@ def main(argv=None):
 
     # --- build_windows.ps1 -------------------------------------------------------------------------------------------------
     ps1 = (GATE / "build_windows.ps1").read_text(encoding="utf-8")
-    check("Drop-Foreign-Objects $game" in ps1 and "Drop-Foreign-Objects $msvc" in ps1 and "foreign_objects.py" in ps1,
-          "build_windows.ps1 drops foreign objects of the game folder and of the MSVC folder before it builds")
+    check("Drop-Foreign-Objects $msvc" in ps1 and "foreign_objects.py" in ps1 and "Drop-Foreign-Objects $game" not in ps1,
+          "build_windows.ps1 drops foreign objects of the MSVC folder before it builds (the game folder: `ninja -t deps` takes 16 s there)")
 
     for what in failures:
         print("FAILED:", what)

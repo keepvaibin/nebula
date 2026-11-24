@@ -99,7 +99,9 @@ function Drop-Shared-Objects([string]$Folder) {
 function Drop-Foreign-Objects([string]$Folder) {
     if (-not (Test-Path "$Folder/.ninja_deps")) { return }
     $py = Get-Command python -ErrorAction SilentlyContinue
-    if ($py) { & $py.Source -X utf8 -I (Join-Path $PSScriptRoot "foreign_objects.py") drop $Folder --tree $Tree }
+    if (-not $py) { return }
+    # It answers in one line and deletes nothing when it cannot tell; whatever it does, the build goes on as it would have.
+    try { & $py.Source -X utf8 -I (Join-Path $PSScriptRoot "foreign_objects.py") drop $Folder --tree $Tree } catch { "foreign_objects: not run ($_); the build goes on" }
 }
 
 . "$PSScriptRoot/build_steps.ps1"   # Start-Step, Finish-Step, Step: a step that failed in the compiler cache alone is run again
@@ -107,7 +109,6 @@ function Drop-Foreign-Objects([string]$Folder) {
 # The game modules (both), the headless host, the self-description and the services list.
 $game = "$Root/game"
 Drop-Shared-Objects $game
-Drop-Foreign-Objects $game
 if (-not (Test-Path "$game/build.ninja") -or (Launcher-Differs $game) -or (Game-Config-Differs $game $Sanitize ([bool]$Coverage))) {
     Step "game configure" ("`"$cmake`" -S `"$Tree/native`" -B `"$game`" -G Ninja -DCMAKE_MAKE_PROGRAM=`"$ninja`" $launch" +
         "-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=`"$Llvm/clang.exe`" -DCMAKE_CXX_COMPILER=`"$Llvm/clang++.exe`" " +

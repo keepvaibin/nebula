@@ -89,16 +89,26 @@ def find_ninja(given=None):
     return None
 
 
+class Doubt(Exception):
+    """The detector cannot answer (no ninja, ninja failed, the answer cannot be read): nothing is judged and nothing is deleted."""
+
+
 def deps_text(folder, ninja=None, run=subprocess.run):
-    """`ninja -C FOLDER -t deps` (it reads the folder's logs and changes nothing); "" when there is no .ninja_deps or no ninja."""
+    """`ninja -C FOLDER -t deps` (it reads the folder's logs and changes nothing); "" when the folder has no .ninja_deps (nothing built
+    there yet: nothing to ask). Raises Doubt when it has one and the answer cannot be had."""
     folder = pathlib.Path(folder)
     if not (folder / ".ninja_deps").is_file():
         return ""
     program = find_ninja(ninja)
     if program is None:
-        return ""
-    done = run([program, "-C", str(folder), "-t", "deps"], capture_output=True, text=True, encoding="utf-8", errors="replace")
-    return done.stdout if done.returncode == 0 else ""
+        raise Doubt("no ninja program found")
+    try:
+        done = run([program, "-C", str(folder), "-t", "deps"], capture_output=True, text=True, encoding="utf-8", errors="replace")
+    except (OSError, subprocess.SubprocessError) as error:
+        raise Doubt("ninja could not be run: %s" % " ".join(str(error).split())[:100])
+    if done.returncode != 0:
+        raise Doubt("ninja -t deps ended with %s" % done.returncode)
+    return done.stdout
 
 
 def check(folder, tree=None, ninja=None, run=subprocess.run):
@@ -121,9 +131,12 @@ def drop(folder, bad):
     gone = 0
     for obj in bad:
         path = pathlib.Path(folder) / obj
-        if path.is_file():
-            path.unlink()
-            gone += 1
+        try:
+            if path.is_file():
+                path.unlink()
+                gone += 1
+        except OSError:
+            pass            # a file that cannot be deleted stays; the build then finds it as it found it before
     return gone
 
 
@@ -134,7 +147,12 @@ def main(argv=None):
     p.add_argument("--tree", default="")
     p.add_argument("--ninja", default="")
     a = p.parse_args(argv)
-    owner, total, bad = check(a.folder, a.tree or None, a.ninja or None)
+    try:
+        owner, total, bad = check(a.folder, a.tree or None, a.ninja or None)
+    except Exception as error:  # noqa: BLE001 - a detector that cannot answer leaves the build as it is: one line, nothing deleted
+        print("foreign_objects: %s: not checked (%s: %s); nothing deleted, the build goes on" % (
+            a.folder, type(error).__name__, " ".join(str(error).split())[:120]))
+        return 0 if a.command == "drop" else 2
     print(describe(a.folder, owner, total, bad))
     if a.command == "drop" and bad:
         print("foreign_objects: %d object file(s) deleted; the next build makes them again from this tree" % drop(a.folder, bad))

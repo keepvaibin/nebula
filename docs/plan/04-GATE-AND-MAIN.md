@@ -550,8 +550,8 @@ lower the bar. The lines up to 11-21 were re-keyed once (engine,mods,tour) and t
 a pass. The share is made only from counting runs that played (R-004, 11-23): when a run has no test, or a test that ended `tool` or `env`
 (on 11-23 all 120 tests ended "game.pak did not open" and 345 bare starts made 0.15 %, written as `fell`), the check ends `owed`
 with the line "could not measure" naming what is missing, merges nothing and writes no history line (`coverage.missing_runs`). The
-build script deletes, before it builds, the objects of its game and MSVC folders whose compile read another work tree's files
-(`tools/gate/foreign_objects.py`; the coverage folder held 338 of them, made while another tree built into it, and they were never made
+build script deletes, before it builds, the objects of its MSVC folder whose compile read another work tree's files
+(`tools/gate/foreign_objects.py`; 0.2 s on a folder of 1100 objects; the game folder is not asked, its answer takes 16 s; the coverage folder held 338 of them, made while another tree built into it, and they were never made
 again): a folder of its own tree loses nothing.
 
 **Game data by key.** `D:/NebulaWork/build/game-data/` holds one folder per disc, store version and importer
