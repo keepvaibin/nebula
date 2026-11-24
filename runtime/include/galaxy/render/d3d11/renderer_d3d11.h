@@ -39,6 +39,7 @@
 #include "galaxy/render_api.h"
 #include "galaxy/render/idle_clock.h"
 #include "render/core/draw_record.h"
+#include "render/core/retire_ring.h"
 #include "render/core/gpu_encoder.h"
 
 #include <nebula_frame_list.h>
@@ -438,6 +439,7 @@ private:
     void write_table(d3d11::BoundTable& table, const TextureHandle* handles, unsigned count, const TextureStore& cache);
     [[nodiscard]] ID3D11SamplerState* sampler_for(const SamplerKey& key, const RenderConfig& cfg);
     void reset_sampler_frame();
+    void replace_samplers(core::RetireRing& ring, unsigned slot, std::uint32_t config, bool all);
     // One of the renderer's own full-screen triangles into the bound targets: `rect` cuts it, `write_mask` the channels it
     // writes (D3D11_COLOR_WRITE_ENABLE_*), `source` its t0.
     void utility_draw(Utility shader, ID3D11ShaderResourceView* source, const void* constants, std::size_t constant_bytes,
@@ -569,6 +571,7 @@ private:
     std::unordered_map<SamplerTableKey, std::unique_ptr<d3d11::BoundTable>, SamplerTableKeyHasher> sampler_tables_;
     std::uint32_t sampler_config_ = 0;
     std::uint32_t sampler_generation_ = 1u;
+    bool sampler_ready_ = false;
     gpu::Table default_sampler_table_{};
     std::uint32_t zero_stream_bytes_ = 0u;
     gpu::Address zero_stream_address_ = 0u;
@@ -648,6 +651,9 @@ private:
     bool native_state_failed_ = false;
     [[nodiscard]] const ModPostShaders* mod_post_stages(const ModPostProgram& program);
     void release_mod_post();
+    // What frames in flight may still read when it is given up, per frame slot (core::RetireRing; its first users are the
+    // samplers and sampler tables a start again leaves behind). Last, so it is emptied before the rest goes.
+    core::RetireRing retire_ring_{kFramesInFlight};
 };
 
 using Renderer = RendererD3D11;

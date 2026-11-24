@@ -225,11 +225,7 @@ bool RendererMtl::create_layouts() {
     }
     if (bindless_) {
         sampler_array_slots_ = std::min<std::uint32_t>(kSamplerHeapSlots, caps.sampler_array_max);
-        sampler_array_ = mtl::Context::get().create_buffer(std::uint64_t{sampler_array_slots_} * 8u, mtl::Storage::Shared,
-                                                          "sampler array");
-        if (!sampler_array_) {
-            throw std::runtime_error("the sampler array could not be made");
-        }
+        sampler_array_ = make_sampler_array();
     }
     return true;
 }
@@ -451,6 +447,7 @@ void RendererMtl::shutdown() {
             drop(state);
         }
         drop(linear_clamp_);
+        retire_ring_.release_all();
         for (auto& [key, sampler] : samplers_) {
             mtl::release(sampler);
         }
@@ -661,6 +658,8 @@ void RendererMtl::begin_frame() {
         target_swept_step_ = idle_clock();
         sweep_target_slots();
     }
+    // What this slot gave up goes first: its fence has passed, and the reset may retire the sampler array to it.
+    retire_ring_.release(frame_slot_);
     reset_sampler_frame();
     // Passes are timed only when asked for; with neither asked nothing is split or read.
     const bool timed = pass_times_.begin_frame(::galaxy::diagnosing(::galaxy::kDiagnoseGpuPasses) ||

@@ -42,6 +42,7 @@
 #include "galaxy/render/renderer_common.h"
 #include "render/core/gpu_encoder.h"
 #include "render/core/draw_record.h"
+#include "render/core/retire_ring.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/present_slots.h"
 #include "galaxy/render/window_owner.h"
@@ -741,6 +742,9 @@ private:
     bool create_root_signature();
     bool create_sampler_heap();
     void reset_sampler_frame(); // only after this slot's fence completes
+    // A new sampler heap beside the one frames in flight read; the old one goes to the retire ring at `slot`.
+    void replace_sampler_heap(core::RetireRing& ring, unsigned slot, const RenderConfig& cfg);
+    [[nodiscard]] Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> make_sampler_heap(const RenderConfig& cfg);
     bool create_conversion_pipeline();  // the capture pipelines
     bool create_clear_pipeline();
     // Every variant of the renderer's own passes' pipelines the device can draw (the clear's per scene variant, the 2D
@@ -1182,7 +1186,11 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> sampler_heap_;
     std::uint32_t sampler_config_ = ~0u;
     std::uint32_t sampler_generation_ = 1u;
+    bool sampler_ready_ = false;
     SamplerSlotCache sampler_slots_;
+    // What frames in flight may still read when it is given up, per frame slot (core::RetireRing; its first user is the
+    // sampler heap a full or a changed one leaves behind).
+    core::RetireRing retire_ring_{kFramesInFlight};
     // The texture region is the first part of srv_ring_'s heap: a view's slot is its TextureStore index and the last slot
     // (null_texture_slot_) holds the null view (an empty map). When the region grows (install_texture_heap,
     // grow_texture_heap) the ring builds a larger heap; the replaced heap is kept until the GPU is past the frames that
@@ -1195,7 +1203,7 @@ private:
     std::vector<RetiredHeap> retired_heaps_;
     void install_texture_heap(TextureStore& cache, std::uint32_t slots);
     [[nodiscard]] DescriptorRing::Persistent allocate_persistent_descriptors(unsigned count);
-    void fill_sampler_heap(const RenderConfig& cfg);
+    void fill_sampler_heap(ID3D12DescriptorHeap* heap, const RenderConfig& cfg);
     void grow_texture_heap(std::uint32_t index);
     // The descriptor ring grew a frame's segment into a new heap: the texture views go into it again.
     void texture_heap_replaced();

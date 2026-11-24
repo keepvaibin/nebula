@@ -33,6 +33,7 @@
 #include "galaxy/windows_power.h"
 #include "galaxy/render/idle_clock.h"
 #include "render/core/present_gate.h"
+#include "render/core/sampler_renewal.h"
 
 #pragma warning(push, 0)
 #include <d3d12sdklayers.h>
@@ -1365,18 +1366,27 @@ D3D12_SAMPLER_DESC build_sampler_desc_from_key(
 }
 
 bool RendererD3D12::create_sampler_heap() {
+    const RenderConfig cfg = get_render_config();
+    sampler_heap_ = make_sampler_heap(cfg);
+    sampler_config_ = sampler_config_key(cfg);
+    sampler_slots_.reset();
+    sampler_ready_ = true;
+    return true;
+}
+
+Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> RendererD3D12::make_sampler_heap(const RenderConfig& cfg) {
     D3D12_DESCRIPTOR_HEAP_DESC dhd{};
     dhd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
     dhd.NumDescriptors = kSamplerHeapSlots;
     dhd.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-    d3d_check(device_->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&sampler_heap_)), "CreateDescriptorHeap Sampler");
-    sampler_config_ = ~0u;
-    fill_sampler_heap(get_render_config());
-    return true;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> heap;
+    d3d_check(device_->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&heap)), "CreateDescriptorHeap Sampler");
+    fill_sampler_heap(heap.Get(), cfg);
+    return heap;
 }
 
 // Every slot holds the default sampler, so a slot no draw named reads it and the heap is defined from its creation.
-void RendererD3D12::fill_sampler_heap(const RenderConfig& cfg) {
+void RendererD3D12::fill_sampler_heap(ID3D12DescriptorHeap* heap, const RenderConfig& cfg) {
     const unsigned anisotropy = std::clamp(cfg.anisotropic_filtering, 1u, 16u);
     D3D12_SAMPLER_DESC sd{};
     sd.Filter = anisotropy > 1u ? D3D12_FILTER_ANISOTROPIC : D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
@@ -1387,32 +1397,45 @@ void RendererD3D12::fill_sampler_heap(const RenderConfig& cfg) {
     sd.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
     sd.MaxLOD = D3D12_FLOAT32_MAX;
     const UINT stride = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
-    D3D12_CPU_DESCRIPTOR_HANDLE h = sampler_heap_->GetCPUDescriptorHandleForHeapStart();
+    D3D12_CPU_DESCRIPTOR_HANDLE h = heap->GetCPUDescriptorHandleForHeapStart();
     for (unsigned i = 0; i < kSamplerHeapSlots; ++i, h.ptr += stride) {
         device_->CreateSampler(&sd, h);
     }
 }
 
-// Between frames, with nothing recorded: the sampler heap starts again when the settings change or fewer than
-// kSamplerFrameRoom slots are free, every slot holding the default sampler, after the GPU is past the frames that read it.
+// Between frames, with nothing recorded (core::renew_samplers): when the settings change or fewer than
+// kSamplerFrameRoom slots are free, a new heap beside the old one, which the frames in flight still read.
 void RendererD3D12::reset_sampler_frame() {
     const RenderConfig cfg = get_render_config();
-    const std::uint32_t config_key = sampler_config_key(cfg);
-    const bool full = sampler_slots_.used() + kSamplerFrameRoom > kSamplerHeapSlots;
-    if (config_key == sampler_config_ && !full) {
-        return;
+    const unsigned used = sampler_slots_.used();
+    struct Samplers {
+        RendererD3D12& renderer;
+        const RenderConfig& cfg;
+        // Descriptors only: no sampler objects of their own to count.
+        [[nodiscard]] static std::size_t samplers_made() noexcept { return 0u; }
+        void make_samplers(core::RetireRing& ring, unsigned slot, std::uint32_t, bool) {
+            renderer.replace_sampler_heap(ring, slot, cfg);
+        }
+    } samplers{*this, cfg};
+    bool restarted = false;
+    if (core::renew_samplers(samplers, retire_ring_, frame_slot_,
+                             {&sampler_slots_, sampler_config_, sampler_ready_, sampler_generation_}, sampler_config_key(cfg),
+                             kSamplerHeapSlots, kSamplerFrameRoom, SIZE_MAX, &restarted) &&
+        restarted && used + kSamplerFrameRoom > kSamplerHeapSlots) {
+        std::fprintf(stderr, "[samplers] %u of %u slots made: a new heap beside the old one\n", used, kSamplerHeapSlots);
     }
-    if (full) {
-        std::fprintf(stderr, "[samplers] %u of %u slots made: the heap starts again once the GPU is past them\n",
-                     sampler_slots_.used(), kSamplerHeapSlots);
+}
+
+// The old heap is destroyed once this slot's fence has passed: the frames in flight read it until then.
+void RendererD3D12::replace_sampler_heap(core::RetireRing& ring, unsigned slot, const RenderConfig& cfg) {
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> old = std::move(sampler_heap_);
+    sampler_heap_ = make_sampler_heap(cfg);
+    if (old) {
+        ring.retire(slot, std::move(old));
     }
-    if (sampler_config_ != ~0u) {
-        wait_for_gpu();
-    }
-    sampler_config_ = config_key;
-    sampler_slots_.reset();
-    ++sampler_generation_;
-    fill_sampler_heap(cfg);
+    srv_ring_.set_sampler_heap(sampler_heap_.Get());
+    srv_ring_.forget_bound();
+    invalidate_draw_bindings();
 }
 
 void RendererD3D12::bind_draw_textures(gpu::Address lists) {
@@ -3203,8 +3226,10 @@ void RendererD3D12::shutdown() {
     scene_color_.Reset();
     scene_depth_.Reset();
     for (auto& b : backbuffers_) b.Reset();
+    retire_ring_.release_all();
     rtv_heap_.Reset(); dsv_heap_.Reset(); sampler_heap_.Reset(); root_signature_.Reset();
     sampler_slots_.reset();
+    sampler_ready_ = false;
     texture_list_chunks_.clear();
     retired_heaps_.clear();
     mirrored_backend_ = nullptr;
@@ -3921,6 +3946,8 @@ void RendererD3D12::begin_frame() {
         const std::uint64_t completed = completed_fence_value();
         std::erase_if(retired_heaps_, [&](const RetiredHeap& retired) { return retired.fence <= completed; });
     }
+    // What this slot gave up goes first: its fence has passed, and the reset may retire the sampler heap to it.
+    retire_ring_.release(frame_slot_);
     reset_sampler_frame();
     bound_rt_aux_ = 0u;
     retired_targets_[frame_slot_].clear();

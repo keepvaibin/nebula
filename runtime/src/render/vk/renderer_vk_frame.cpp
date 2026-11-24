@@ -6,6 +6,7 @@
 #include "galaxy/render/vk/renderer_vk.h"
 
 #include "render/core/frame_core.h"
+#include "render/core/sampler_renewal.h"
 #include <nebula_frame_list.h>
 
 #include "galaxy/content_viewport.h"
@@ -2563,72 +2564,97 @@ gpu::Table RendererVk::sampler_table_for(const SamplerKey* keys, unsigned count)
     return gpu::Table{reinterpret_cast<std::uint64_t>(set)};
 }
 
-// Between frames: the samplers made again when the settings change or too many have been made, which also makes the walker
-// ask for its lists or tables again. With descriptor indexing the sampler array starts again when it is nearly full too, slot 0 the default sampler
-// (wrap, linear, mip point, every level) and the slots written once the GPU is past the frames that read them; else the
-// default table of draws without samplers of their own is made again.
+// Between frames, with nothing recorded (core::renew_samplers): the samplers start again beside the old ones when the
+// settings change, the array is nearly full (descriptor indexing) or half the device's maxSamplerAllocationCount is made
+// (4000 on the Android baselines and on some desktop drivers): a new sampler array, or a new default table, every slot the
+// default sampler (wrap, linear, mip point, every level), and the walker writes its lists and tables again
+// (sampler_generation). What the frames in flight read goes to the retire ring. Samplers are made per key the game uses
+// (the texture's own state: the frame's part of the bias is the programs', SamplerFrameBias) and per settings.
 void RendererVk::reset_sampler_frame() {
     const RenderConfig cfg = get_render_config();
-    const std::uint32_t config = sampler_config_key(cfg);
-    // Samplers are made per key the game uses (the texture's own state: the frame's part of the bias is the programs',
-    // SamplerFrameBias) and per settings configuration, against the device's maxSamplerAllocationCount (4000 on the
-    // Android baselines and on some desktop drivers). After a settings change, or with half of that limit made, once
-    // the GPU is past every frame that read them: the old configuration's samplers (all of them when crowded) are
-    // destroyed, and the tables and slots are written again as the walker asks for them (sampler_generation). The same
-    // samplers come back.
-    const bool crowded = samplers_.size() >= vk::Context::get().properties().limits.maxSamplerAllocationCount / 2u;
-    const auto drop_other_configs = [this, config, crowded] {
-        const VkDevice device = vk::Context::get().device();
-        std::erase_if(samplers_, [&](const auto& entry) {
-            if (entry.first.config == config && !crowded) {
-                return false;
+    const unsigned used = sampler_slots_.used();
+    struct Samplers {
+        RendererVk& renderer;
+        const RenderConfig& cfg;
+        [[nodiscard]] std::size_t samplers_made() const noexcept { return renderer.samplers_.size(); }
+        void make_samplers(core::RetireRing& ring, unsigned slot, std::uint32_t config, bool all) {
+            renderer.replace_samplers(ring, slot, cfg, config, all);
+        }
+    } samplers{*this, cfg};
+    const std::size_t crowd = vk::Context::get().properties().limits.maxSamplerAllocationCount / 2u;
+    bool restarted = false;
+    if (core::renew_samplers(samplers, retire_ring_, frame_slot_,
+                             {bindless_ ? &sampler_slots_ : nullptr, sampler_config_, sampler_slots_ready_, sampler_generation_},
+                             sampler_config_key(cfg), bindless_ ? kSamplerHeapSlots : 0u,
+                             bindless_ ? vk_detail::kSamplerFrameRoom : 0u, crowd, &restarted) &&
+        restarted) {
+        std::fprintf(stderr, "[samplers] %u of %u slots, %zu samplers made: new ones beside the old\n", used,
+                     kSamplerHeapSlots, samplers_.size());
+    }
+}
+
+// The old array's pool (or the old tables' sets) and the samplers of other settings (every one when `all`) go to the
+// retire ring: destroyed, or free again, once this slot's fence has passed.
+void RendererVk::replace_samplers(core::RetireRing& ring, unsigned slot, const RenderConfig& cfg, std::uint32_t config,
+                                  bool all) {
+    const VkDevice device = vk::Context::get().device();
+    std::vector<VkSampler> gone;
+    std::erase_if(samplers_, [&](const auto& entry) {
+        if (!all && entry.first.config == config) {
+            return false;
+        }
+        gone.push_back(entry.second);
+        return true;
+    });
+    if (!gone.empty()) {
+        ring.retire(slot, [device, gone = std::move(gone)] {
+            for (const VkSampler sampler : gone) {
+                vkDestroySampler(device, sampler, nullptr);
             }
-            vkDestroySampler(device, entry.second, nullptr);
-            return true;
         });
-    };
+    }
     if (bindless_) {
-        const bool full = sampler_slots_.used() + vk_detail::kSamplerFrameRoom > kSamplerHeapSlots;
-        if (sampler_slots_ready_ && config == sampler_config_ && !full && !crowded) {
-            return;
+        // The first array is the one made at the start; a start again makes its own.
+        if (sampler_slots_ready_ && bindless_pool_ != VK_NULL_HANDLE) {
+            ring.retire(slot, [device, pool = bindless_pool_] { vkDestroyDescriptorPool(device, pool, nullptr); });
+            bindless_pool_ = VK_NULL_HANDLE;
+            bindless_samplers_ = VK_NULL_HANDLE;
+            make_sampler_array();
         }
-        if (sampler_slots_ready_ && (full || crowded)) {
-            std::fprintf(stderr, "[samplers] %u of %u slots, %zu samplers made: the array starts again once the GPU is "
-                                 "past them\n", sampler_slots_.used(), kSamplerHeapSlots, samplers_.size());
-        }
-        if (sampler_slots_ready_ && last_submitted_ != 0u) {
-            wait_for_fence_value(last_submitted_);
-        }
-        if (sampler_slots_ready_ && (config != sampler_config_ || crowded)) {
-            drop_other_configs();  // the array is filled again below: no slot keeps an old sampler
-        }
-        sampler_slots_.reset();
-        sampler_slots_ready_ = true;
-        sampler_config_ = config;
-        ++sampler_generation_;
         fill_sampler_array(sampler_for(kDefaultSamplerKey, cfg));
         return;
     }
-    if (default_sampler_table_.ptr != 0u && config == sampler_config_ && !crowded) {
-        return;
+    // Bound tables: their sets are written again as the walker asks for them, once the frames in flight are past them.
+    std::vector<VkDescriptorSet> sets;
+    sets.reserve(sampler_tables_.size());
+    for (const auto& [key, set] : sampler_tables_) {
+        sets.push_back(set);
     }
-    if (default_sampler_table_.ptr != 0u) {
-        // Every table made so far is written again as it is asked for (sampler_generation makes the walker ask), in the
-        // same sets.
-        if (last_submitted_ != 0u) {
-            wait_for_fence_value(last_submitted_);
-        }
-        for (const auto& [key, set] : sampler_tables_) {
-            free_sampler_tables_.push_back(set);
-        }
-        sampler_tables_.clear();
-        drop_other_configs();
+    sampler_tables_.clear();
+    if (!sets.empty()) {
+        ring.retire(slot, [this, sets = std::move(sets)] {
+            free_sampler_tables_.insert(free_sampler_tables_.end(), sets.begin(), sets.end());
+        });
     }
     std::array<SamplerKey, vk::kBoundTableSlots> keys{};
     keys.fill(kDefaultSamplerKey);
     default_sampler_table_ = sampler_table_for(keys.data(), vk::kBoundTableSlots);
-    sampler_config_ = config;
-    ++sampler_generation_;
+}
+
+void RendererVk::make_sampler_array() {
+    const VkDevice device = vk::Context::get().device();
+    const VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_SAMPLER, vk::kBindlessSamplerSlots};
+    VkDescriptorPoolCreateInfo pool{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+    pool.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+    pool.maxSets = 1;
+    pool.poolSizeCount = 1;
+    pool.pPoolSizes = &size;
+    vk::check(vkCreateDescriptorPool(device, &pool, nullptr, &bindless_pool_), "sampler array descriptor pool");
+    VkDescriptorSetAllocateInfo allocate{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+    allocate.descriptorPool = bindless_pool_;
+    allocate.descriptorSetCount = 1;
+    allocate.pSetLayouts = &draw_layout_.sets[2];
+    vk::check(vkAllocateDescriptorSets(device, &allocate, &bindless_samplers_), "sampler array descriptor set");
 }
 
 namespace {

@@ -37,6 +37,7 @@
 #include "galaxy/render/vk/vk_context.h"
 #include "render/core/gpu_encoder.h"
 #include "render/core/draw_record.h"
+#include "render/core/retire_ring.h"
 #include "galaxy/render/host_window.h"
 #include "galaxy/render/unseen_window.h"
 #include "galaxy/render/window_owner.h"
@@ -621,9 +622,12 @@ private:
 #endif
     void retire(gpu::TextureRef texture);
     [[nodiscard]] VkDescriptorSet allocate_persistent_set(VkDescriptorSetLayout layout);
-    // At each frame's start: the sampler array (or the default table) starts again when the settings changed or the array
-    // is nearly full.
+    // At each frame's start: the sampler array (or the default table) starts again beside the old one when the settings
+    // changed, the array is nearly full or half the device's samplers are made (core::renew_samplers).
     void reset_sampler_frame();
+    void replace_samplers(core::RetireRing& ring, unsigned slot, const RenderConfig& cfg, std::uint32_t config, bool all);
+    // The sampler array's pool and set (descriptor indexing), made at the start and again beside a full one.
+    void make_sampler_array();
     void write_sampler(unsigned slot, VkSampler sampler);
     void fill_sampler_array(VkSampler sampler);
     // Slots [first, first + count) of binding 0 of `set` take `info`: one write per chunk of kFillChunk infos, taken from
@@ -1173,6 +1177,9 @@ private:
     // averages and the logs' window (window_frames: the frames read, which gpu-stats is divided by too).
     std::atomic<bool> gpu_timing_wanted_{false};
     GpuPassTimes pass_times_;
+    // What frames in flight may still read when it is given up, per frame slot (core::RetireRing; its first users are the
+    // sampler arrays, sets and samplers a start again leaves behind). Last, so it is emptied before the rest goes.
+    core::RetireRing retire_ring_{kFramesInFlight};
 };
 
 using Renderer = RendererVk;

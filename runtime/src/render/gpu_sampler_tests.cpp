@@ -4,6 +4,7 @@
 #include <cmath>
 #include "render/core/pipelines.h"
 #include "render/core/present_gate.h"
+#include "render/core/sampler_renewal.h"
 #include <atomic>
 #include <chrono>
 #include <iostream>
@@ -115,6 +116,70 @@ int main() {
                      "the cache counts past the array: the renderer starts again before it is full");
     cache.reset();
     passed &= expect(cache.get_or_allocate(a).index == kSamplerReservedSlots, "reset reclaims slot space");
+    {
+        // P-056, P-066, P-061: the samplers start again between frames beside the ones in flight, and nothing waits. A
+        // fake renderer records frame n in slot n % 2 and releases the slot first, as begin_frame does after its fence;
+        // its arrays and samplers are owners that count their destruction, and a GPU wait would count in `waits`.
+        struct Fake {
+            int waits = 0;
+            int arrays_made = 0;
+            int arrays_destroyed = 0;
+            int in_use = -1;
+            std::size_t samplers = 0u;
+            std::size_t samplers_destroyed = 0u;
+            [[nodiscard]] std::size_t samplers_made() const noexcept { return samplers; }
+            void make_samplers(core::RetireRing& ring, unsigned slot, std::uint32_t, bool all) {
+                if (in_use >= 0) {
+                    ring.retire(slot, [this] { ++arrays_destroyed; });
+                }
+                if (all) {
+                    ring.retire(slot, [this, n = samplers] { samplers_destroyed += n; });
+                    samplers = 0u;
+                }
+                in_use = arrays_made++;
+            }
+        } fake;
+        core::RetireRing ring(2u);
+        SamplerSlotCache slots;
+        std::uint32_t config = 0u;
+        bool ready = false;
+        std::uint32_t generation = 0u;
+        constexpr unsigned room = 512u;
+        constexpr std::size_t crowd = 64u;
+        unsigned frame = 0u;
+        bool restarted = false;
+        const auto next_frame = [&](std::uint32_t settings) {
+            const unsigned slot = frame++ % 2u;
+            ring.release(slot);
+            restarted = false;
+            return core::renew_samplers(fake, ring, slot, {&slots, config, ready, generation}, settings, kSamplerHeapSlots,
+                                        room, crowd, &restarted);
+        };
+        passed &= expect(next_frame(5u) && !restarted && fake.in_use == 0 && generation == 1u && config == 5u,
+                         "the first frame makes the first array");
+        passed &= expect(!next_frame(5u) && fake.arrays_made == 1, "the same settings with room keep the array");
+        auto filled = a;
+        for (unsigned i = 0; slots.used() + room <= kSamplerHeapSlots; ++i) {
+            filled.sampler.lod_bias = 1000.0f + static_cast<float>(i);
+            (void)slots.get_or_allocate(filled);
+        }
+        passed &= expect(next_frame(5u) && restarted && fake.in_use == 1 && slots.used() == kSamplerReservedSlots &&
+                             generation == 2u,
+                         "a nearly full array is replaced by a new one, and the slots start again");
+        passed &= expect(fake.arrays_destroyed == 0, "the old array lives on in the frame that replaced it");
+        passed &= expect(!next_frame(5u) && fake.arrays_destroyed == 0, "the other slot's release keeps it");
+        passed &= expect(!next_frame(5u) && fake.arrays_destroyed == 1, "its own slot's next release destroys it, once");
+        passed &= expect(next_frame(9u) && config == 9u && fake.in_use == 2 && fake.arrays_destroyed == 1,
+                         "new settings make a new array beside the old one");
+        fake.samplers = crowd;
+        passed &= expect(next_frame(9u) && fake.samplers == 0u && fake.samplers_destroyed == 0u && fake.arrays_made == 4,
+                         "as many samplers as the device should keep start again beside the old ones");
+        (void)next_frame(9u);
+        (void)next_frame(9u);
+        passed &= expect(fake.samplers_destroyed == crowd && fake.arrays_destroyed == 3 && ring.count() == 0u,
+                         "the samplers given up are destroyed after their slot's fence");
+        passed &= expect(fake.waits == 0, "nothing waits for the GPU");
+    }
     {
         // A bound table's key: its length and settings count.
         const SamplerKey two[2] = {key, biased_key};
