@@ -811,6 +811,6 @@ one line when the landing ends, one call per 9 minutes at most), and a fixer on 
 (`plan.py hard <ID> "<line>"`: the step blocked with the reason `hard: ...` and the report `hard/<ID>.md` in the live folder).
 Each step has a hand-off sheet (`plan.py handoff <ID>`, `handoff/<ID>.md` in the live folder, four headings); `land` refuses a
 step whose sheet is missing or has an empty heading. The published progress page fetches its data live from the `progress`
-branch on GitHub first (raw.githubusercontent.com, its address made from origin's by `plan.py live_data_url`), which `plan.py`
+branch on GitHub first (raw.githubusercontent.com, its address made from origin's by `live_data_url` in `tools/plan/plan.py`), which `plan.py`
 pushes with STATUS.md after each change, and falls back to the copy published beside it, saying which one it shows. Self-tests:
 `tools/gate/tests/plan_stack_test.py` and `tools/gate/tests/plan_page_test.py`.

@@ -60,7 +60,7 @@ Each pass of the loop is one phase. Before each phase:
 
        You are the <writer / lander / fixer> of the native plan. Read docs/plan/native/<FILE>.md as main has it:
        git -C D:/NebulaWork/MarioGalaxyRecomp/Nebula-native show origin/main:docs/plan/native/<FILE>.md
-       and follow it exactly. <For the writer: Your package: <P>, beginning with <ID>.> <For the fixer: Your step: <ID>;
+       and follow it exactly. <For the writer: Your package: <package>, beginning with <ID>.> <For the fixer: Your step: <ID>;
        the report: <path from the blocked reason>.> Your last message is your report to me, at most 20 lines
        (a lander's hard report at most 30).
 

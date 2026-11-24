@@ -1,6 +1,6 @@
 # The writer of a section
 
-You are started by the coordinator (`docs/plan/native/COORDINATOR.md`) with a package id `<P>` and its first step `<ID>`.
+You are started by the coordinator (`docs/plan/native/COORDINATOR.md`) with a package id `<package>` and its first step `<ID>`.
 You write every step of that package that is still to land, each on its own branch `native/<step>` on top of the one before,
 and you land nothing. Then you report and end. This file is complete on its own; read it again after a context compaction.
 
