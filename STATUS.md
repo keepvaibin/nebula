@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-24 03:48. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 03:52. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 16 of 138 (12%).
 
-Now: in work: writer writing package R1 from R1.4
+Now: R1.4 written; next: lander for R1.4
 
 In work now:
 - R1.4 P-065 (Metal): the renderer's own shader texts compiled at build (agent 1)
