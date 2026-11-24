@@ -1,12 +1,13 @@
 # Nebula native plan: status
 
-Written 2026-11-23 17:33. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-23 18:35. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 11 of 138 (8%).
 
 Now: S0.2.6 landed at 10:25; the trial of S0.2.1 to S0.2.6 ends here: nothing in work, nothing ahead, G6.2 not started
 
-In work now: Nothing started.
+In work now:
+- S0.3.1 Search main for what the rows name (agent 1)
 
 ## Packages
 
