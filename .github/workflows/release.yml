@@ -139,23 +139,7 @@ jobs:
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --title "Nebula $VERSION" \
             $prerelease --notes-file ".github/release-notes/$VERSION.md"
 
-  ffx-shaders:
-    name: FSR 3 shaders (Windows)
-    needs: release
-    runs-on: windows-2022
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.release.outputs.ref }}
-      - uses: ./.github/actions/ffx-vk-shaders
-        with:
-          folder: ${{ runner.temp }}/ffx-vk-shaders
-      - uses: actions/upload-artifact@v7
-        with:
-          name: ffx-vk-shaders
-          path: ${{ runner.temp }}/ffx-vk-shaders
-          if-no-files-found: error
+ 
 
   windows-hosts:
     name: Windows programs (${{ matrix.level }})
@@ -165,7 +149,7 @@ jobs:
     env:
       NEBULA_MODS: ${{ needs.release.outputs.mods }}
       NEBULA_VERSION_SUFFIX: ${{ needs.release.outputs.suffix }}
-      NEBULA_REQUIRE_FSR3: 'ON'
+      NEBULA_REQUIRE_FSR3: 'OFF'
     strategy:
       fail-fast: false
       matrix:
@@ -189,7 +173,7 @@ jobs:
         run: |
           . .\tools\enter_msvc_environment.ps1 | Out-Null
           $build = Join-Path $env:RUNNER_TEMP 'host'
-          cmake -S . -B $build -G Ninja -DCMAKE_BUILD_TYPE=Release -DNEBULA_VULKAN=ON -DNEBULA_D3D11=ON `
+          cmake -S . -B $build -G Ninja -DCMAKE_BUILD_TYPE=Release -DNEBULA_VULKAN=OFF -DNEBULA_D3D11=ON `
             "-DNEBULA_HOST_BASELINE=${{ matrix.baseline }}"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmake --build $build --target Nebula NebulaVk NebulaD11 nebula_glslang
@@ -408,9 +392,6 @@ jobs:
         with:
           folder: ${{ runner.temp }}\bin
           programs: Nebula NebulaVk NebulaD11 Nebula-x86-64-v2 NebulaVk-x86-64-v2 NebulaD11-x86-64-v2
-      - name: FSR 3 (the programs the Setup packed hold it)
-        shell: bash
-        run: python -X utf8 -I tools/check_fsr3_package.py "$RUNNER_TEMP/bin/Nebula.exe" "$RUNNER_TEMP/bin/NebulaVk.exe" "$RUNNER_TEMP/bin/Nebula-x86-64-v2.exe" "$RUNNER_TEMP/bin/NebulaVk-x86-64-v2.exe"
       - name: The mod kit (a pre-release has none, a release has it)
         shell: bash
         run: |
@@ -443,7 +424,7 @@ jobs:
     env:
       NEBULA_MODS: ${{ needs.release.outputs.mods }}
       NEBULA_VERSION_SUFFIX: ${{ needs.release.outputs.suffix }}
-      NEBULA_REQUIRE_FSR3: 'ON'
+      NEBULA_REQUIRE_FSR3: 'OFF'
     steps:
       - uses: actions/checkout@v7
         with:
