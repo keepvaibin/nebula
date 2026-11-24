@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-23 21:08. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-23 21:16. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 14 of 138 (10%).
 
@@ -67,6 +67,7 @@ In work now:
 ## For the owner to check by hand
 
 - S0.1.2 Documents: P-096: on the tablet, set up the game once more over an installed one, and once with the setup cut off (close the app mid-copy); then start the launcher: the old game stays playable until the new one is whole, and nothing is left behind (no game.pak.new, no half copy). (agent 1, 2026-11-22 14:18)
+- R1.2 P-010: a stage's pipelines made while it loads, a draw never compiles: Real-time play on a cold cache (delete nothing yours; a new install folder): enter three galaxies for the first time and compare the frame times with R1.1's build under --diagnostics timeline; no PipelineMissed event and no frame longer than its neighbours after each stage's first picture (agent 1, 2026-11-23 21:16)
 
 ## Waiting for the owner
 
@@ -86,7 +87,7 @@ Nothing is blocked.
 | M-004 | closed | S0.2.1 | the replay check cannot play a run at a time rate of 2 and compare its step hashes with a rate-1 run (S0.2.1 proof 2) | 0 | 94 | fb2b39bc6 |
 | M-005 | closed | R-004 | Coverage measured a program that could not open the game data: its build folder held objects of another tree | 0 | 0 | f9b350784185c77e18d4822f7b13cd8b1381a33e |
 
-## Decisions (36)
+## Decisions (40)
 
 - 2026-11-23 S0.2.1: LoadSlice: 32 items a frame; an item is a phase of GameScene::initAfterScenarioChosen, the player, one placement made whole, one piece of FileSelector::initStep, or one Star Bit of the reserve (because the card asks for a fixed count of work and names no count; the count is a constant in one place, no player sees which frame of the load an item falls in, and the load worker (G3.7) replaces the slices)
 - 2026-11-23 S0.2.1: Drawing's random stream (MR::getDrawRandom) is seeded with the same seed as the game's stream, in setRandomSeedFromStageName and setFixedRandomSeed (because a fixed seed keeps the cosmetic numbers the same in every run of a replay and needs no new setting; the draw stream runs through the same sequence as the game's but is advanced only by drawing, so neither changes the other)
@@ -124,6 +125,10 @@ Nothing is blocked.
 - 2026-11-23 R1.2: With fixed steps (NEBULA_EXT_FIXED_STEPS) the game never waits at the gate: the render thread makes the queue before its next picture (drain_pipelines), and a draw that still misses waits for its urgent job's worker instead of being left out (because frames waited at a load screen would be the machine's pace and change the step hashes, and a left-out draw would change a picture; this keeps replays and pictures the same while no draw builds)
 - 2026-11-23 R1.2: The gate waits for the queue (pending) and the registered pipelines not yet queued, at most 60 s with a log line; the forms left for after the first scene (left_jobs_) are taken by the hurried workers but not waited for (because the left forms are the ones the start's set already leaves out (a texture target form no run has drawn, the narrow scene's motion forms while the wide one draws); a draw that needs one goes to the queue's front; the cap keeps a driver that never returns from holding the load)
 - 2026-11-23 R1.2: The count the card calls 'made by draws first' is logged as 'missed by draws first' at the first drain and as one line 'missed by a draw in play' for each miss after the first scene's picture; the cards of R1.2 and G2 are corrected (because no draw makes a pipeline after R1.2, so the old words would be false)
+- 2026-11-23 R1.2: The forms the tours' draws missed in play (registered by the game only at their first draw) are added to crates/nebula-import/data/site_pipelines.txt, so the cook's list registers them at boot; a miss in play prints its record for the list; stops no tour played are ledger row P-371 (because the card's proof 1 asks for no miss after a stage's first picture, and the list is the place the cook already keeps the sites and per-object states no model file names (pipeline_list.rs); registering at first draw cannot be moved into a load without knowing the form)
+- 2026-11-23 R1.2: Proof 1 is the tour command itself: every run starts with a new driver cache (its log: the driver's cache is new or was refused), so no cache file is removed by hand; Direct3D 12 and Vulkan by agent_tour, the tablet by the landing's tablet tour; the count is the lines 'missed by a draw in play' (because the tours' own logs show each run starts cold, and the owner's cache files must not be deleted)
+- 2026-11-23 R1.2: Proof 2 (frame times at first entry to three galaxies against today's) is met by the landing's speed checks (measure/step/pc, the tablet's measure) and by proof 1's count of 0 misses after a stage's first picture; the real-time first entry is owed to the owner (because my tours run fixed steps, where frame times are the machine's and the frame-time measure is the landing's check; a real-time start is not one of my commands)
+- 2026-11-23 R1.2: Proof 4 is galaxy_gpu_sampler_tests' case of Pipelines (a miss is null, counted once, queued, never built by the draw; a waiting draw is let go when the workers stop) and the timeline event PipelineMissed recorded at each first miss; the draw returning is the same table read every draw makes once the worker publishes the cell (because a unit test cannot run a worker without a device (decide_warm opens the device's driver cache), and in fixed steps a missing draw waits instead of being left out)
 
 ## Checks changed during the run (57)
 
