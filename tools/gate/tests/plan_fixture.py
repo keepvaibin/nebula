@@ -166,10 +166,13 @@ class Tree:
         # plan.py pushes the progress branch after a change of state: the tests push nothing unless a test turns it on.
         self.env = mock.patch.dict(os.environ, dict(git_env(TEMPLATE["config"]), **{plan.PUSH_OFF: "1"}))
         self.live_patch = mock.patch.object(plan, "LIVE", str(self.live))
+        # A step's landing needs its hand-off sheet (mend M-007): plan_stack_test proves that rule; the other tests land without one.
+        self.handoff_patch = mock.patch.object(plan, "HANDOFF_REQUIRED", False)
 
     def __enter__(self):
         self.env.start()
         self.live_patch.start()
+        self.handoff_patch.start()
         shutil.copytree(TEMPLATE["root"] / "origin.git", self.origin)
         shutil.copytree(TEMPLATE["root"] / "tree", self.tree)
         self.work.mkdir()
@@ -178,6 +181,7 @@ class Tree:
         return self
 
     def __exit__(self, *exc):
+        self.handoff_patch.stop()
         self.live_patch.stop()
         self.env.stop()
         rmtree_force(self.dir)

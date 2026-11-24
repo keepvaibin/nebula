@@ -1,7 +1,7 @@
 """plan.py: the step tool of the native plan (package T13). The coding agent reads, codes and proves; this says what is next.
 
     python -X utf8 -I tools/plan/plan.py next | status | page | card ID | rows [ID] | start ID | land ID [--github-again] | blocked ID "WHY"
-                                         | ahead
+                                         | ahead | stack [--list] | wait ID [--minutes N] [--log FILE] | handoff ID | hard ID "LINE"
                                          | owed ID "TEXT" | commands | note "TEXT" | note --clear
                                          | claim PACKAGE [--take-stale] | tool "TEXT" | toolfault --last --could-not "TEXT"
                                          | mend open|land|close|failed|drop|list ... | decide ID "WHAT" --because "WHY" [--replaces N] | decide ID --list
@@ -1193,6 +1193,11 @@ def status_text(tree, work_root=WORK_ROOT, at=None, live=None, agent="1", queue_
                 "- %s %s: branch native/%s, %s, on top of %s (base %s); plan.py start %s takes it up once %s has landed" % (
                     held["step"], held["title"], held["step"], commits_word(count), written["after"], written["base"][:9],
                     held["step"], written["after"])]
+    stacked = lv.read_stack(live_dir(live), agent)
+    if stacked:
+        out += ["", "## Stack (%d)" % len(stacked), ""]
+        out += ["- %s: branch native/%s on native/%s (base %s); plan.py start %s takes it up once %s has landed" % (
+            r["step"], r["step"], r["after"], r["base"][:9], r["step"], r["after"]) for r in stacked]
     out += ["", "## Blocked (%d)" % len(by["blocked"]), ""]
     out += ["- %s %s: %s" % (s["step"], s["title"], s["reason"] or reasons.get(s["step"], "(no reason written)"))
             for s in by["blocked"]] or ["- none"]
@@ -1364,7 +1369,7 @@ def write_page(tree, live=None, at=None):
     status, landed, total = page.make_status(static, data, landings, events, data["generated"])
     with lv.locked(live_dir(live)):
         paths.publish.mkdir(parents=True, exist_ok=True)
-        write_if_changed(paths.index, page.render(static))
+        write_if_changed(paths.index, page.render(static, live_url=live_data_url(tree)))
         write_if_changed(paths.data, page.data_json(data))
         write_if_changed(paths.html, page.render(static, data))
         write_if_changed(paths.status, status)
@@ -1376,6 +1381,10 @@ def write_page(tree, live=None, at=None):
 # ---- the progress branch ---------------------------------------------------------------------------------------
 
 PROGRESS_BRANCH = "refs/heads/progress"
+# The live data the published page fetches first (mend M-007): progress-data.json on the progress branch, read through GitHub's raw
+# file host, which a claude.ai page may fetch (tried by the owner on 11-23). Its answers may be up to five minutes old (its cache).
+LIVE_DATA = "https://raw.githubusercontent.com/%s/%s/progress/progress-data.json"
+GITHUB_ORIGIN = re.compile(r"^(?:https://github\.com/|git@github\.com:|ssh://git@github\.com/)([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?$")
 PUSH_OFF = "NEBULA_PLAN_NO_PUSH"
 GIT_WAIT = 60
 
@@ -1412,29 +1421,47 @@ def progress_git(repo, *args, stdin=None):
     return out
 
 
-def publish_progress(repo, text, landed, total, remote="origin"):
-    """Puts STATUS.md's `text` on the branch `progress` of `remote`, as one commit holding that one file, made with git's
-    plumbing commands in `repo` (no work tree, no index, no checkout is touched). The branch shares no history with main:
-    its first commit has no parent, a later one has the branch's previous tip. Text the tip already has: nothing is made
-    or pushed. Returns what was done, in words; raises RuntimeError when git fails (a push that is refused too)."""
+def live_data_url(tree):
+    """The address of the live progress data (LIVE_DATA) for the plan tree's origin when that is on GitHub; "" when it is not."""
+    r = git(tree, "remote", "get-url", "origin")
+    m = GITHUB_ORIGIN.match(r.stdout.strip()) if r.returncode == 0 else None
+    return LIVE_DATA % (m.group(1), m.group(2)) if m else ""
+
+
+def publish_progress(repo, text, landed, total, remote="origin", data=None):
+    """Puts STATUS.md's `text` (and `data`, progress-data.json's text, when given) on the branch `progress` of `remote`, as one
+    commit holding those files, made with git's plumbing commands in `repo` (no work tree, no index, no checkout is touched). The
+    branch shares no history with main: its first commit has no parent, a later one has the branch's previous tip. Files the tip
+    already has as they are: nothing is made or pushed. Returns what was done, in words; raises RuntimeError when git fails (a
+    push that is refused too)."""
     listed = progress_git(repo, "ls-remote", "--heads", remote, PROGRESS_BRANCH)
     tip = listed.split()[0] if listed else ""
     blob = progress_git(repo, "hash-object", "-w", "--no-filters", "--stdin", stdin=text)
+    data_blob = progress_git(repo, "hash-object", "-w", "--no-filters", "--stdin", stdin=data) if data is not None else ""
     if tip:
         have = subprocess.run([GIT if pathlib.Path(GIT).exists() else "git", "-C", str(repo), "cat-file", "-e", tip + "^{commit}"],
                               capture_output=True, text=True, timeout=GIT_WAIT).returncode == 0
         if not have:
             progress_git(repo, "fetch", "--quiet", remote, PROGRESS_BRANCH)       # FETCH_HEAD only: no ref, no work tree
         try:
-            if progress_git(repo, "rev-parse", "%s:STATUS.md" % tip) == blob:
-                return "STATUS.md is what %s has: nothing pushed" % PROGRESS_BRANCH
+            if progress_git(repo, "rev-parse", "%s:STATUS.md" % tip) == blob and (
+                    not data_blob or progress_git(repo, "rev-parse", "%s:progress-data.json" % tip) == data_blob):
+                return "%s is what %s has: nothing pushed" % ("STATUS.md and progress-data.json" if data_blob else "STATUS.md",
+                                                             PROGRESS_BRANCH)
         except RuntimeError:
-            pass                                                                # the tip has no STATUS.md: it is new
-    tree = progress_git(repo, "mktree", stdin="100644 blob %s\tSTATUS.md\n" % blob)
+            pass                                                                # the tip lacks a file: it is new
+    tree = progress_git(repo, "mktree", stdin="100644 blob %s\tSTATUS.md\n" % blob + (
+        "100644 blob %s\tprogress-data.json\n" % data_blob if data_blob else ""))
     commit = progress_git(repo, "commit-tree", tree, *(["-p", tip] if tip else []), "-m",
                           "Progress: %d of %d steps landed" % (landed, total))
     progress_git(repo, "push", "--quiet", remote, "%s:%s" % (commit, PROGRESS_BRANCH))
     return "%s %s on %s (%s)" % ("pushed" if tip else "pushed the first commit", commit[:9], PROGRESS_BRANCH, "after " + tip[:9] if tip else "no parent")
+
+
+def push_progress(repo, written):
+    """publish_progress with what write_page made: STATUS.md and the live data, the page's data with a person's home folder
+    written ~/ as in STATUS.md (the branch is public)."""
+    return publish_progress(repo, written.text, written.landed, written.total, data=page.home_short(page.data_json(written.data)))
 
 
 def regenerate(a, say_result=False):
@@ -1451,7 +1478,7 @@ def regenerate(a, say_result=False):
             repo = main_repo(a.tree)
             if repo is None:
                 raise RuntimeError("%s is no git tree" % a.tree)
-            result = publish_progress(repo, written.text, written.landed, written.total)
+            result = push_progress(repo, written)
             if say_result:
                 say("progress branch: " + result)
         except Exception as e:  # noqa: BLE001
@@ -2023,6 +2050,300 @@ def cmd_ahead(a):
     return 0
 
 
+# ---- a section written ahead, the hand-off sheet, a hard failure, waiting for a landing (mend M-007) -----------------------
+# The usage design (docs/plan/native/AGENT.md): a writer writes every step of a section before any lands, each on the one before;
+# a lander lands them in order and waits with one call per landing; a failure it may not fix goes to a fixer with a report. `stack`
+# makes the branch of the step after the last one written on that one's tip; the live folder keeps a row for it (live.py
+# stack-<agent>.tsv: the step, the one before it, the commit its own commits stand on). `start <ID>` takes a stacked step up once
+# the one it stands on has landed: its own commits are moved onto origin/main (take_up_prepared). Nothing here deletes a branch,
+# a commit or a file.
+
+HANDOFF_HEADINGS = ("Changes", "Pictures declared", "Expected test effects", "Hard if")
+HANDOFF_REQUIRED = True       # `land` refuses a step without a complete sheet; plan_fixture turns it off for the other rules' tests
+HARD_PREFIX = "hard: "
+HARD_HEADINGS = ("Check", "Test", "First error line", "Run folder", "What was tried")
+WAIT_POLL = 20.0              # seconds between two looks of `wait`
+WAIT_APPEAR = 120.0           # seconds a landing begun in the background has to reach the gate (its pre-checks run first)
+WAIT_MAX = 9                  # minutes of one `wait` call at most
+
+
+def stack_rows(a, steps=None):
+    """The agent's stack rows in the order written; the rows of steps that are landed or not in the plan are dropped (their
+    branches are left as they are)."""
+    live = live_dir(a.live)
+    agent = agent_of(a)
+    steps = steps if steps is not None else read_steps(a.tree, a.live)
+    rows = []
+    for r in lv.read_stack(live, agent):
+        s = find(steps, r["step"])
+        if s is None or s["state"] == "landed":
+            lv.drop_stack(live, agent, r["step"])
+        else:
+            rows.append(r)
+    return rows
+
+
+def stack_row(a, step_id, steps=None):
+    return next((r for r in stack_rows(a, steps) if r["step"] == step_id), None)
+
+
+def say_stack(a, steps, rows):
+    work = [r["step"] for k, r in in_work(a, steps) if k == "step"]
+    if not rows:
+        say("the stack is empty%s" % ("; in work: " + ", ".join(work) if work else ""))
+        return
+    folder = work_folder(a.work_root, agent_of(a))
+    say("the stack (start takes each up in this order once the one it stands on has landed):")
+    for r in rows:
+        n = git(folder, "rev-list", "--count", "%s..refs/heads/native/%s" % (r["base"], r["step"]))
+        count = int(n.stdout.strip()) if n.returncode == 0 and n.stdout.strip().isdigit() else None
+        say("  %s on native/%s (%s), %s of its own" % (r["step"], r["after"], r["base"][:9], commits_word(count)))
+
+
+def cmd_stack(a):
+    """`stack`: the writer of a section writes every step of it before any lands. The step that follows the last one written (the
+    step in work, then each stacked one) gets its branch native/<ID> on the tip of that one, in the agent's work folder, and a row in
+    the live folder. Refused while a landing of the agent plays, while a step written ahead waits, when nothing is in work, when the
+    folder is not on the last step's branch or has uncommitted changes, and for a step of another package (the section's barrier:
+    the next package is written after this one's landings, the last of them its full check). `stack --list` changes nothing."""
+    if mend_blocks(a):
+        return 1
+    fetch_main_landed(a)
+    agent = agent_of(a)
+    live = live_dir(a.live)
+    steps = read_steps(a.tree, a.live)
+    rows = stack_rows(a, steps)
+    if getattr(a, "list", False):
+        say_stack(a, steps, rows)
+        return 0
+    rec = landing_of(a)
+    if rec:
+        say("plan.py: %s is in the gate's hands. stack writes a section before its landings; while a landing plays, `plan.py ahead` "
+            "writes the step after it." % rec["step"])
+        return 1
+    entry = ahead_entry(a)
+    if entry:
+        say("plan.py: native/%s was written ahead of the landing of %s and waits for `plan.py start %s%s`: stack begins after it." % (
+            entry["step"], entry["after"], entry["step"], agent_flag(agent)))
+        return 1
+    work = in_work(a, steps)
+    if len(work) != 1 or work[0][0] != "step":
+        say("plan.py: stack writes the steps after the one in work, and %s. Start the section's first step (plan.py start <ID>%s), "
+            "commit its work, then run stack." % ("nothing is in work" if not work else "a repair is in work", agent_flag(agent)))
+        return 1
+    first = work[0][1]
+    chain = [first["step"]] + [r["step"] for r in rows]
+    last = chain[-1]
+    folder = work_folder(a.work_root, agent)
+    if not (folder / ".git").exists():
+        say("plan.py: the work folder %s is missing" % folder.as_posix())
+        return 1
+    last_branch = "native/" + last
+    tip = commit_of(folder, "refs/heads/" + last_branch)
+    if not tip:
+        say("plan.py: the branch %s of the last step written is missing; nothing is changed." % last_branch)
+        return 1
+    on = head_branch(folder)
+    if on != last_branch:
+        say("plan.py: the work folder %s is on %s, not %s: stack makes the next step on top of the last one written. git checkout "
+            "%s first." % (folder.as_posix(), on or "no branch", last_branch, last_branch))
+        return 1
+    if folder_changes(folder):
+        say("plan.py: " + dirty_line(folder, "stack"))
+        return 1
+    marked = [dict(x, state="landed") if x["step"] in chain else dict(x) for x in steps]
+    nxt = following(a, marked, None)
+    if nxt is None:
+        say("STACK END: %s is the last step written: %s." % (last, ahead_why_none(marked, None)))
+        return 1
+    if nxt["package"] != first["package"]:
+        say("STACK END: package %s is written up to %s. The next step, %s, is of package %s: it is written after the landings of "
+            "package %s, the last of them its full check, have passed." % (first["package"], last, nxt["step"], nxt["package"],
+                                                                           first["package"]))
+        return 1
+    branch = "native/" + nxt["step"]
+    if branch_exists(folder, "refs/heads/" + branch):
+        say("plan.py: the branch %s exists already and the stack has no row for it. Nothing is changed and nothing is deleted." % branch)
+        return 1
+    made = git(folder, "checkout", "--no-track", "-b", branch, tip)
+    if made.returncode != 0:
+        say("plan.py: git checkout failed: %s" % (made.stderr or made.stdout).strip())
+        return 1
+    lv.push_stack(live, agent, nxt["step"], last, tip)
+    say("STACKED: %s  %s" % (nxt["step"], nxt["title"]))
+    say("on %s, the tip of native/%s. Written after %s (in work): %s" % (tip[:9], last, first["step"],
+                                                                         ", ".join(chain[1:] + [nxt["step"]])))
+    print_step_body(a, nxt)
+    say()
+    say(commands_text(a, agent))
+    say("Write it and commit it on %s, fill its hand-off sheet (plan.py handoff %s), then run stack again. Land none of them: the "
+        "lander lands %s, then takes each stacked step up in order with plan.py start <ID>." % (branch, nxt["step"], first["step"]))
+    return 0
+
+
+def handoff_path(live, step_id):
+    return live_dir(live) / "handoff" / ("%s.md" % step_id)
+
+
+def handoff_template(step_id):
+    lines = ["# Hand-off sheet of %s" % step_id, "",
+             "Written by the step's writer for its lander and its fixer (docs/plan/native/WRITER.md). Each heading needs at least one line.", ""]
+    for h in HANDOFF_HEADINGS:
+        lines += ["## " + h, "", ""]
+    return "\n".join(lines)
+
+
+def sheet_parts(text):
+    """{heading: [its non-empty lines]} of the `## ` headings of a sheet (a `### ` line is text under the heading before it)."""
+    parts, current = {}, None
+    for line in text.splitlines():
+        m = re.match(r"## +(\S.*?)\s*$", line)
+        if m:
+            current = m.group(1)
+            parts.setdefault(current, [])
+        elif current is not None and line.strip():
+            parts[current].append(line)
+    return parts
+
+
+def handoff_problems(live, step_id):
+    """[] when the step's hand-off sheet is there with text under each of its headings; else one line for each thing missing."""
+    path = handoff_path(live, step_id)
+    if not path.exists():
+        return ["the sheet %s is missing (plan.py handoff %s makes it with its headings)" % (path.as_posix(), step_id)]
+    parts = sheet_parts(path.read_text(encoding="utf-8", errors="replace"))
+    out = []
+    for h in HANDOFF_HEADINGS:
+        if h not in parts:
+            out.append("the heading '## %s' is missing in %s" % (h, path.as_posix()))
+        elif not parts[h]:
+            out.append("nothing is written under '## %s' in %s" % (h, path.as_posix()))
+    return out
+
+
+def cmd_handoff(a):
+    """`handoff <ID>`: the path of the step's hand-off sheet (made with its headings when it is not there) and what it still lacks.
+    0 when it is complete."""
+    if find(read_steps(a.tree, a.live), a.id) is None:
+        say("plan.py: no step %s" % a.id)
+        return 1
+    path = handoff_path(a.live, a.id)
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(handoff_template(a.id), encoding="utf-8")
+    say(path.as_posix())
+    bad = handoff_problems(a.live, a.id)
+    for b in bad:
+        say("to fill: " + b)
+    if not bad:
+        say("the sheet is complete")
+    return 1 if bad else 0
+
+
+def hard_path(live, step_id):
+    return live_dir(live) / "hard" / ("%s.md" % step_id)
+
+
+def is_hard(s):
+    return s["state"] == "blocked" and (s["reason"] or "").startswith(HARD_PREFIX)
+
+
+def cmd_hard(a):
+    """`hard <ID> "<line>"`: the lander met a failure it may not fix (docs/plan/native/LANDER.md). The step in work, or a stacked
+    step whose commits do not apply on main, is blocked with the reason `hard: <line>` (as `blocked` does: a branch in work kept and
+    pushed, the page lists it), and the report file for the fixer is made with its headings when it is not there (one that is
+    there is never written over); its path is printed. `start <ID>` takes the step up again after the fixer, on top of main (a
+    stacked one from its stack row)."""
+    steps = read_steps(a.tree, a.live)
+    s = find(steps, a.id)
+    if s is None:
+        say("plan.py: no step %s" % a.id)
+        return 1
+    if s["state"] != "started" and not (s["state"] == "open" and stack_row(a, a.id, steps)):
+        say("plan.py: step %s is %s; hard is for the step in work whose landing failed, or a stacked step that `start` could not "
+            "move onto main" % (a.id, s["state"]))
+        return 1
+    line = " ".join((a.line or "").split())
+    if not line:
+        say("plan.py: hard needs one line: what failed")
+        return 1
+    path = hard_path(a.live, a.id)
+    a.why = "%s%s (report: %s)" % (HARD_PREFIX, line, path.as_posix())
+    code = cmd_blocked(a)
+    if code != 0:
+        return code
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        body = ["# Hard failure of %s" % a.id, "", "The lander's line: %s" % line, "",
+                "Written by the lander for the fixer (docs/plan/native/LANDER.md): at most 30 lines in all.", ""]
+        for h in HARD_HEADINGS:
+            body += ["## " + h, "", ""]
+        path.write_text("\n".join(body), encoding="utf-8")
+    say("HARD: %s is blocked for the fixer. Fill the report: %s" % (a.id, path.as_posix()))
+    return 0
+
+
+def last_text_line(path):
+    try:
+        lines = [l for l in pathlib.Path(path).read_text(encoding="utf-8", errors="replace").splitlines() if l.strip()]
+    except OSError:
+        return ""
+    return lines[-1].strip()[:300] if lines else ""
+
+
+def item_state(a, item_id):
+    """The state of a step or a repair, or None when there is no such item."""
+    if is_repair(item_id):
+        rep = next((r for r in lv.read_repairs(live_dir(a.live)) if r["id"] == item_id), None)
+        return rep["state"] if rep else None
+    s = find(read_steps(a.tree, a.live), item_id)
+    return s["state"] if s else None
+
+
+def cmd_wait(a):
+    """`wait <ID> [--minutes N] [--log FILE]`: for the lander, which runs `plan.py land <ID>` in the background: blocks until the
+    landing of ID is out of the gate's hands or N minutes (at most 9) pass, then prints one line. Exit 0 LANDED; 1 ENDED (not
+    landed: read the land command's output); 3 STILL PLAYING (call wait again). FILE is the land command's output: its last line is
+    shown. A landing begun a moment ago has WAIT_APPEAR seconds to reach the gate."""
+    minutes = a.minutes
+    if not 0 <= minutes <= WAIT_MAX:
+        say("plan.py: --minutes is 0 to %d: one wait call for %d minutes at most" % (WAIT_MAX, WAIT_MAX))
+        return 2
+    if item_state(a, a.id) is None:
+        say("plan.py: no step or repair %s" % a.id)
+        return 1
+    log = getattr(a, "log", None)
+
+    def tail():
+        last = last_text_line(log) if log else ""
+        return "; the last line of %s: %s" % (pathlib.Path(log).name, last) if last else ""
+
+    began = time.monotonic()
+    deadline, appear_by = began + minutes * 60, began + WAIT_APPEAR
+    seen = False
+    while True:
+        rec = landing_of(a)
+        now = time.monotonic()
+        if rec is not None and rec["step"] != a.id:
+            say("ENDED: %s is not in the gate's hands; %s is%s" % (a.id, rec["step"], tail()))
+            return 1
+        if rec is not None:
+            seen = True
+            if now >= deadline:
+                say("STILL PLAYING: %s, in the gate's hands since %s%s" % (a.id, hhmm(rec.get("queue_time") or rec["time"]), tail()))
+                return 3
+        else:
+            fetch_main_landed(a, say_failure=False)
+            state = item_state(a, a.id)
+            if state == "landed":
+                say("LANDED: %s%s" % (a.id, tail()))
+                return 0
+            if seen or now >= appear_by or now >= deadline:
+                say("ENDED: %s is not landed (it is %s)%s" % (a.id, state, tail()))
+                return 1
+        time.sleep(WAIT_POLL)
+
+
 def print_step_body(a, s):
     """A step's card and what goes with it: the package's rows, what the landing needs in the ledger, the checks its changed
     paths run and the extra checks its proof asks for. Changes nothing."""
@@ -2084,6 +2405,10 @@ def print_step(a, steps, s, notes=(), blocked_before=(), working=False):
     if entry and entry["step"] == s["step"]:
         say("PREPARED AHEAD: branch native/%s, %s; plan.py start %s%s takes it up" % (
             s["step"], commits_word(ahead_count(a, entry)), s["step"], agent_flag(agent)))
+    row = None if working else stack_row(a, s["step"], steps)
+    if row:
+        say("STACKED: branch native/%s, written on native/%s; plan.py start %s%s takes it up" % (
+            s["step"], row["after"], s["step"], agent_flag(agent)))
     say("Package %s; step %s of %d; %d landed so far." % (s["package"], s["order"], len(steps), landed))
     if working:
         say("This is in work: go on with it, then land it or block it. Nothing new is given while it is.")
@@ -2435,7 +2760,12 @@ def cmd_start(a):
     branch = "native/" + a.id
     entry = ahead_entry(a)
     prepared = entry if entry and entry["step"] == a.id and folder.is_dir() and branch_exists(folder, "refs/heads/" + branch) else None
-    why = take_up_prepared(a, prepared) if prepared else begin_work(a, branch, on_main=is_kept(s))
+    stacked = None
+    if prepared is None:
+        row = stack_row(a, a.id, steps)
+        if row and folder.is_dir() and branch_exists(folder, "refs/heads/" + branch):
+            prepared = stacked = row          # the step it stands on is of its package, so `unmet` above held it until that landed
+    why = take_up_prepared(a, prepared) if prepared else begin_work(a, branch, on_main=is_kept(s) or is_hard(s))
     if why:
         say("plan.py: " + why)
         return 1
@@ -2445,8 +2775,11 @@ def cmd_start(a):
     say("started %s: branch %s in %s (package %s is claimed by agent %s)" % (a.id, branch, folder.as_posix(), s["package"], agent))
     if prepared:
         count = git(folder, "rev-list", "--count", "origin/main..refs/heads/" + branch).stdout.strip()
-        say("prepared ahead: %s commits of %s are on top of main" % (count, a.id))
-        lv.drop_ahead(live_dir(a.live), agent, a.id)
+        say("%s: %s commits of %s are on top of main" % ("from the stack" if stacked else "prepared ahead", count, a.id))
+        if stacked:
+            lv.drop_stack(live_dir(a.live), agent, a.id)
+        else:
+            lv.drop_ahead(live_dir(a.live), agent, a.id)
     if replay_allowed(card_text(a.tree, s)):
         say("This step's card says its replay reference may change. Once the change is made and the tour has played every recorded "
             "stop, record the reference with: %s" % REPLAY_RECORD)
@@ -2827,6 +3160,9 @@ def land_item(a):
         if held and held["step"] == a.id:
             say("step %s is prepared ahead, not started: plan.py start %s%s" % (a.id, a.id, agent_flag(agent)))
             return 1
+        if stack_row(a, a.id, steps):
+            say("step %s is written in the stack, not started: plan.py start %s%s" % (a.id, a.id, agent_flag(agent)))
+            return 1
         say("plan.py: step %s is %s; only a started step lands (plan.py start %s)" % (a.id, s["state"], a.id))
         return 1
     claims = lv.read_claims(live_dir(a.live))
@@ -2845,6 +3181,13 @@ def land_item(a):
         return 1
     if rec:
         return join_landing(a, s, folder, branch, rec)
+    if HANDOFF_REQUIRED:
+        bad = handoff_problems(a.live, a.id)
+        if bad:
+            say("plan.py: step %s has no complete hand-off sheet, which its lander and its fixer read (docs/plan/native/WRITER.md):" % a.id)
+            for b in bad:
+                say("  " + b)
+            return 1
     here = ahead_here(a)
     if here and here["after"] == a.id and head_branch(folder) != branch:
         return land_from_ahead(a, s, folder, branch, here)
@@ -4058,7 +4401,7 @@ def cmd_page(a):
             repo = main_repo(a.tree)
             if repo is None:
                 raise RuntimeError("%s is no git tree" % a.tree)
-            say("progress branch: " + publish_progress(repo, written.text, written.landed, written.total))
+            say("progress branch: " + push_progress(repo, written))
         except Exception as e:  # noqa: BLE001 - a failed push is a warning, never the command's result
             say("plan.py: warning: the progress branch was not pushed: %s: %s" % (type(e).__name__, " ".join(str(e).split())[:200]))
     else:
@@ -4085,6 +4428,22 @@ def parser():
     sub.add_parser("ahead", parents=[who], help="while a landing plays: the branch and the card of the step that follows it, on top of "
                    "the commit being tested").set_defaults(fn=cmd_ahead)
     sub.add_parser("page").set_defaults(fn=cmd_page)
+    sk = sub.add_parser("stack", parents=[who], help="the writer of a section: the branch and the card of the step after the last one "
+                        "written, on its tip; nothing lands (mend M-007)")
+    sk.add_argument("--list", action="store_true", help="the stack's rows; changes nothing")
+    sk.set_defaults(fn=cmd_stack)
+    wt = sub.add_parser("wait", parents=[who], help="the lander: one line when the landing of ID ends, or after N minutes")
+    wt.add_argument("id")
+    wt.add_argument("--minutes", type=float, default=WAIT_MAX, help="0 to %d (default %d)" % (WAIT_MAX, WAIT_MAX))
+    wt.add_argument("--log", help="the land command's output file: its last line is shown")
+    wt.set_defaults(fn=cmd_wait)
+    ho = sub.add_parser("handoff", help="the path of a step's hand-off sheet (made with its headings) and what it lacks")
+    ho.add_argument("id")
+    ho.set_defaults(fn=cmd_handoff)
+    hd = sub.add_parser("hard", parents=[who], help="the lander: a failure it may not fix; the step is blocked for the fixer")
+    hd.add_argument("id")
+    hd.add_argument("line")
+    hd.set_defaults(fn=cmd_hard)
     cd = sub.add_parser("card", help="any step's card, its package's rows and the checks it needs; changes nothing")
     cd.add_argument("id")
     cd.set_defaults(fn=cmd_card)

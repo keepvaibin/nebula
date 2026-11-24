@@ -10,15 +10,18 @@ What is published on the web (the `publish` folder beside them):
 
   publish/index.html           the page with no data in it: layout, script and what never changes with progress (the
                                step ids, titles, packages and their order, from steps.tsv). Rewritten only when this tool
-                               or the plan's step list changes, never because progress changed. It fetches
-                               `progress-data.json` from beside it; when that cannot be loaded, within three seconds it
-                               says so in place of "Loading...".
+                               or the plan's step list changes, never because progress changed. It fetches the live data
+                               first: progress-data.json on the `progress` branch of origin, when origin is on GitHub
+                               (raw.githubusercontent.com; plan.py live_data_url, mend M-007), so the published page shows
+                               each change without being published again; when that cannot be loaded, the copy of
+                               `progress-data.json` beside it. It says which one it shows ("Live data." or "Copy published
+                               HH:MM."). When neither can be loaded, within three seconds it says so in place of "Loading...".
   publish/progress-data.json   only what changes: per step its state, agent, code commit, main's commit and landing time (keyed by
                                step id; a step still open is not in it), the blocked list with reasons, the claims, the
                                tool-fault table, what is owed to a person's check, the flake count, a generated-at time.
                                Compact JSON.
 
-One self-contained file each: no outside script, font or style, no address of any kind. Light and dark by
+One self-contained file each: no outside script, font or style, and no address but the one of the live data. Light and dark by
 prefers-color-scheme, colours as tokens on :root, system fonts, readable at phone width with no sideways scroll.
 """
 import json
@@ -211,6 +214,7 @@ h2 { font-size: 1.05rem; margin: 28px 0 10px; }
 <main>
 <h1>Nebula Native Progress</h1>
 <div class="muted" id="when">Loading...</div>
+<div class="muted" id="source"></div>
 <div id="app"></div>
 </main>
 <script type="application/json" id="plan-static">__STATIC__</script>__LOCAL__
@@ -472,11 +476,17 @@ h2 { font-size: 1.05rem; margin: 28px 0 10px; }
     });
   }
 
-  /* The complete page (progress.html) has its data inside and draws it at once. The published page (index.html) fetches
-     progress-data.json from beside it; when that fails, or has not answered in __WAIT__ seconds, it says so in place of
-     "Loading...". Data that comes late is still drawn. */
+  /* The complete page (progress.html) has its data inside and draws it at once. The published page (index.html) fetches the
+     live data (LIVE, on GitHub's progress branch) first and the copy of progress-data.json beside it when that fails; when
+     neither has answered in __WAIT__ seconds, it says so in place of "Loading...". Data that comes late is still drawn. */
+  var LIVE = __LIVE__;
   var drawn = false;
-  function show(d) { drawn = true; draw(d); }
+  function show(d, how) {
+    drawn = true;
+    draw(d);
+    var at = String(d.generated || "").slice(11, 16), source = document.getElementById("source");
+    if (source) source.textContent = how === "live" ? "Live data." : how === "copy" ? "Copy published " + at + "." : "";
+  }
   function failed() {
     if (!drawn) document.getElementById("when").textContent = "__NODATA__";
   }
@@ -490,11 +500,13 @@ h2 { font-size: 1.05rem; margin: 28px 0 10px; }
     show(inside);
   } else {
     setTimeout(failed, __WAIT__ * 1000);
+    var load = function (url) {
+      return fetch(url, { cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error("status " + r.status); return r.json(); });
+    };
+    var copy = function () { load("progress-data.json").then(function (d) { show(d, "copy"); }).catch(failed); };
     try {
-      fetch("progress-data.json", { cache: "no-store" })
-        .then(function (r) { if (!r.ok) throw new Error("status " + r.status); return r.json(); })
-        .then(show)
-        .catch(failed);
+      if (LIVE) load(LIVE).then(function (d) { show(d, "live"); }).catch(copy);
+      else copy();
     } catch (e) {
       failed();
     }
@@ -506,22 +518,24 @@ h2 { font-size: 1.05rem; margin: 28px 0 10px; }
 """
 
 
-def render(static, data=None):
+def render(static, data=None, live_url=""):
     """The page. With `data` the complete page (progress.html: the data inside, so it works from disk); without, the one
-    for publishing (index.html: it fetches progress-data.json from beside it)."""
+    for publishing (index.html: it fetches `live_url`, the live data, when one is given, else or when that fails the copy of
+    progress-data.json beside it)."""
     local = ""
     if data is not None:
         local = '\n<script type="application/json" id="embedded-data">%s</script>' % embed(data)
     head, _, rest = PAGE.partition("__STATIC__")      # one pass: no title or reason can be taken for a marker
     mid, _, tail = rest.partition("__LOCAL__")
     tail = tail.replace("__WAIT__", str(WAIT_SECONDS)).replace("__NODATA__", NO_DATA).replace("__OLDPAGE__", OLD_PAGE)
+    tail = tail.replace("__LIVE__", json.dumps(live_url or "").replace("<", "\\u003c"))
     return head + embed(static) + mid + local + tail
 
 
 # STATUS.md ----------------------------------------------------------------------------------------------------------
 
 # A path that starts with the home folder of a person on this PC: C:/Users/<name>/ (either slash direction, any case).
-HOME = re.compile(r"C:[\\/]+Users[\\/]+[^\\/\s|]+[\\/]", re.I)
+HOME = re.compile(r"C:[\\/]+Users[\\/]+[^\\/\s|]+[\\/]+", re.I)
 
 
 def home_short(text):
