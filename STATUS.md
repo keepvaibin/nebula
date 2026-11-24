@@ -4,7 +4,7 @@ Written 2026-11-23 21:08. If this time is more than three hours old, the work ha
 
 Steps landed: 14 of 138 (10%).
 
-Now: R1.1 since 20:08 (S0.3.2 landed 20:08); ahead: nothing
+Now: R1.2 since 21:09 (written ahead, its tours play); ahead: nothing
 
 In work now:
 - R1.2 P-010: a stage's pipelines made while it loads, a draw never compiles (agent 1)
