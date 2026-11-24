@@ -1,10 +1,13 @@
 # Nebula native plan: status
 
-Written 2026-11-23 22:10. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-23 22:20. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 14 of 138 (10%).
 
-In work now: Nothing started.
+Now: R1.2 since 21:09 (written ahead, its tours play); ahead: nothing
+
+In work now:
+- R1.2 P-010: a stage's pipelines made while it loads, a draw never compiles (agent 1)
 
 ## Packages
 
@@ -37,19 +40,34 @@ In work now: Nothing started.
 
 ## Last 10 landings
 
-None yet.
+| When | Step | Title | Code commit | Main commit |
+| --- | --- | --- | --- | --- |
+| 2026-11-23 21:08 | R1.1 | P-052: the renderers' own pipelines at start | 6ded5f481 | cd1dc8cae |
+| 2026-11-23 20:08 | S0.3.2 | Remove what is left | c975566fd | ba2b58cf1 |
+| 2026-11-23 18:49 | S0.3.1 | Search main for what the rows name | d0c611857 | 053bc9c98 |
+| 2026-11-23 10:25 | S0.2.6 | Landing B, part 4: the question-and-answer path is deleted | 3eaa95375 | d324dc52e |
+| 2026-11-23 08:09 | S0.2.5 | Landing B, part 3: the lens flare | 21ccecf7b | 424c3e541 |
+| 2026-11-23 06:19 | S0.2.4 | Landing B, part 2: the talk balloon | 2423dde4f | 27172e772 |
+| 2026-11-23 06:02 | S0.2.3 | Landing B, part 1: the pointer | 8861980d7 | 6544d38df |
+| 2026-11-23 05:08 | S0.2.2 | The scene query's form, written into the inventory before code | e54a921e5 | 37db1ddaa |
+| 2026-11-23 04:53 | S0.2.1 | Landing A: drawing stops changing the game | 84a2f5a72 | 5695013af |
+| 2026-11-22 18:13 | S0.1.5 | Render data path step 2, second landing: `f4/e3-2b` and `f4/e3-2c` | 02d236b5c | fb2dfa855 |
 
 ## Repairs
 
-1 open of kind fail, 1 in all.
+0 open of kind fail, 4 in all.
 
 | Id | State | Kind | Check | Renderer | Traced to | Seen |
 | --- | --- | --- | --- | --- | --- | --- |
-| R-001 | open | fail | tour/d3d12 | d3d12 | step S1.1 commit abc | 2 |
+| R-002 | landed | fail | coverage | - | not traced | 1 |
+| R-004 | landed | fail | coverage | - | not traced | 1 |
+| R-001 | confirmed | fail | build/windows-asan | - | not traced | 1 |
+| R-003 | confirmed | fail | soak | - | not traced | 1 |
 
 ## For the owner to check by hand
 
-Nothing is owed.
+- S0.1.2 Documents: P-096: on the tablet, set up the game once more over an installed one, and once with the setup cut off (close the app mid-copy); then start the launcher: the old game stays playable until the new one is whole, and nothing is left behind (no game.pak.new, no half copy). (agent 1, 2026-11-22 14:18)
+- R1.2 P-010: a stage's pipelines made while it loads, a draw never compiles: Real-time play on a cold cache (delete nothing yours; a new install folder): enter three galaxies for the first time and compare the frame times with R1.1's build under --diagnostics timeline; no PipelineMissed event and no frame longer than its neighbours after each stage's first picture (agent 1, 2026-11-23 21:16)
 
 ## Waiting for the owner
 
@@ -61,9 +79,15 @@ Nothing is blocked.
 
 ## Tool mends
 
-No tool was mended.
+| Id | State | Step | Title | Attempts | Minutes | Commit |
+| --- | --- | --- | --- | --- | --- | --- |
+| M-001 | closed | R-002 | coverage: the history's key holds the suites that ran, a run that fell is not the next bar | 0 | 0 | 2d7287334 |
+| M-002 | closed | R-003 | soak: a run of eight laps or more is judged from lap 6 (slope and lowest of the last laps), a spike is not growth | 0 | 0 | 2d7287334 |
+| M-003 | closed | R-001 | build_windows.ps1 refuses a build folder configured with another NEBULA_SANITIZE instead of configuring it again | 0 | 117 | c60999ee1 |
+| M-004 | closed | S0.2.1 | the replay check cannot play a run at a time rate of 2 and compare its step hashes with a rate-1 run (S0.2.1 proof 2) | 0 | 94 | fb2b39bc6 |
+| M-005 | closed | R-004 | Coverage measured a program that could not open the game data: its build folder held objects of another tree | 0 | 0 | f9b350784185c77e18d4822f7b13cd8b1381a33e |
 
-## Decisions (32)
+## Decisions (44)
 
 - 2026-11-23 S0.2.1: LoadSlice: 32 items a frame; an item is a phase of GameScene::initAfterScenarioChosen, the player, one placement made whole, one piece of FileSelector::initStep, or one Star Bit of the reserve (because the card asks for a fixed count of work and names no count; the count is a constant in one place, no player sees which frame of the load an item falls in, and the load worker (G3.7) replaces the slices)
 - 2026-11-23 S0.2.1: Drawing's random stream (MR::getDrawRandom) is seeded with the same seed as the game's stream, in setRandomSeedFromStageName and setFixedRandomSeed (because a fixed seed keeps the cosmetic numbers the same in every run of a replay and needs no new setting; the draw stream runs through the same sequence as the game's but is advanced only by drawing, so neither changes the other)
@@ -97,6 +121,18 @@ No tool was mended.
 - 2026-11-23 R1.1: The Vulkan bloom and post-process pipelines are made at the start each on a std::async worker, joined in RendererVk::initialize before the first frame, as Direct3D 12's passes are (renderer_d3d12.cpp, prepare on std::async, joined before the start ends); the post-process self-test runs after the join on the render thread, before any frame, as Direct3D 12's does in PostProcessor::initialize (because FM 1.9's rule is that the render thread never compiles and never waits for the whole GPU inside a frame; a wait at the start is allowed (FM 1.8, Direct3D 12's self-test); the self-test needs Context's buffers, textures and a submission, which the render thread owns)
 - 2026-11-23 R1.1: Left as they are: a change of the scene's format for HDR output (set_wide, then prepare_pipelines, between frames after a GPU wait) and a change of the SMAA quality (apply_settings) still make their pipelines when they happen (because both are settings changes, not a first use in play, and Direct3D 12's same two paths (PostProcessor::set_wide, apply_settings) do the same; the card names only the first-frame builds)
 - 2026-11-23 R1.1: Proof 2 (a cold and a warm start on Vulkan) is shown by two Vulkan tour runs of one stop (command 4 with --renderer vulkan), each logging '[pipelines] Vulkan's passes made at the start in N ms' and the self-test line before the first frame; the Direct3D 12 figures of proof 1 (the MSAA 4x stage run, 408 pictures) belong to the landed commits caa9ca1e7 and e68b6cd6c, and today's are the two tests and the landing's pictures (because Vulkan's pipeline cache (shared_pipeline_cache) does not tell a pipeline loaded from one made, so the start's time is the figure the log can give; no engine test command runs on Vulkan)
+- 2026-11-23 R1.2: The load's gate is asked in GameSystemSceneController::exeInitializeScene beside NEBULA_OPTION_SCENE_TEXTURES, through a new option NEBULA_OPTION_SCENE_PIPELINES (game API 164); both options are asked each step so both waits run at once (because isReadyToStartScene (the card's line 222) only reads the nerve ReadyToStartScene, which the game reaches after exeInitializeScene's condition holds; the textures' wait already holds the load there, and the card leaves the host service open)
+- 2026-11-23 R1.2: With fixed steps (NEBULA_EXT_FIXED_STEPS) the game never waits at the gate: the render thread makes the queue before its next picture (drain_pipelines), and a draw that still misses waits for its urgent job's worker instead of being left out (because frames waited at a load screen would be the machine's pace and change the step hashes, and a left-out draw would change a picture; this keeps replays and pictures the same while no draw builds)
+- 2026-11-23 R1.2: The gate waits for the queue (pending) and the registered pipelines not yet queued, at most 60 s with a log line; the forms left for after the first scene (left_jobs_) are taken by the hurried workers but not waited for (because the left forms are the ones the start's set already leaves out (a texture target form no run has drawn, the narrow scene's motion forms while the wide one draws); a draw that needs one goes to the queue's front; the cap keeps a driver that never returns from holding the load)
+- 2026-11-23 R1.2: The count the card calls 'made by draws first' is logged as 'missed by draws first' at the first drain and as one line 'missed by a draw in play' for each miss after the first scene's picture; the cards of R1.2 and G2 are corrected (because no draw makes a pipeline after R1.2, so the old words would be false)
+- 2026-11-23 R1.2: Proof 1 is the tour command itself: every run starts with a new driver cache (its log: the driver's cache is new or was refused), so no cache file is removed by hand; Direct3D 12 and Vulkan by agent_tour, the tablet by the landing's tablet tour; the count is the lines 'missed by a draw in play' (because the tours' own logs show each run starts cold, and the owner's cache files must not be deleted)
+- 2026-11-23 R1.2: Proof 2 (frame times at first entry to three galaxies against today's) is met by the landing's speed checks (measure/step/pc, the tablet's measure) and by proof 1's count of 0 misses after a stage's first picture; the real-time first entry is owed to the owner (because my tours run fixed steps, where frame times are the machine's and the frame-time measure is the landing's check; a real-time start is not one of my commands)
+- 2026-11-23 R1.2: Proof 4 is galaxy_gpu_sampler_tests' case of Pipelines (a miss is null, counted once, queued, never built by the draw; a waiting draw is let go when the workers stop) and the timeline event PipelineMissed recorded at each first miss; the draw returning is the same table read every draw makes once the worker publishes the cell (because a unit test cannot run a worker without a device (decide_warm opens the device's driver cache), and in fixed steps a missing draw waits instead of being left out)
+- 2026-11-23 R1.2: The forms the game registers after the first picture (at their first draw: sites, per-object states, forms of materials) are added to crates/nebula-import/data/site_pipelines.txt from the log line 'registered after the first picture, not in the cook's list' (Pipelines::note_registered), which names each one whether or not its draw missed; a miss in play also prints its record; stops no tour played are ledger row P-371 (because a form registered at its first draw misses only when no worker made it before the walk reached it, so the misses of one run are a varying subset; the registrations are the same every run)
+- 2026-11-23 R1.3: The forms the start's set leaves out (left_jobs_: narrow motion forms while the wide variant is listed, texture target forms left to the cache, memory retries) are taken by a worker only while a load waits for its pipelines (set_hurried), and the load's gate waits for them too (PipelineProgress::later; Pipelines::drain with fixed steps); their release at the first picture with a scene (release_left) is removed (because the card says that after R1.2 no creation is in flight in play, but R1.2 still released those forms at the first picture with a scene, so a Direct3D 12 Present in play could wait for them; the card is for the gate waiting only on a load screen, so the code follows that; for the left forms this replaces R1.2's decision 3 (the gate did not wait for them))
+- 2026-11-23 R1.3: A Present that waits for a creation in play (from the first picture with a scene, no load waiting) writes one log line with its wait and the creations in flight (the first 100 of a run), beside the timeline events GateWaitBegin and GateWaitEnd; galaxy_gpu_sampler_tests proves a held Present is counted in play and not during a load (because the tours record no timeline (agent_tour.py has no diagnostics option), so proof 1 counts these lines in the tours' logs, as R1.2 counted its miss line; proof 2's naming in the timeline is kept as it was)
+- 2026-11-23 R1.3: Proof 1 on Vulkan and the tablet is R1.2's count (no line 'missed by a draw in play', no line 'registered after the first picture'); the gate's count is Direct3D 12's (because the read-first question answered from the code: only pipelines_d3d12.cpp takes CreationScope and only renderer_d3d12.cpp takes PresentScope, so Vulkan, Direct3D 11 and Metal have no gate and a creation there never holds a picture)
+- 2026-11-23 R1.3: A settings change in play still queues its new forms at once (prepare), made by the workers at the lowest priority while the settings view shows them as preparing; a Direct3D 12 Present can wait for them, and such a wait is logged (because the row names a later settings change as one of the two creations left in play; holding the new forms until the next load would leave the changed setting's draws out until then, which a player sees)
 
 ## Checks changed during the run (57)
 
@@ -160,4 +196,12 @@ No tool was mended.
 
 ## Tool faults
 
-0 tool faults recorded.
+3 tool faults recorded.
+
+The last 20:
+
+| When | Step | Test | What happened | What the agent could not do |
+| --- | --- | --- | --- | --- |
+| 2026-11-23 20:39 | R1.1 | vulkan | approved on Adreno (TM) 740 driver 512.676.1; these runs: Adreno (TM) 740 driver 512.676.1, unknown driver | R1.1 was not judged: the tablet's tour could not start (run-as gave no folder), so R1.1 waited a second landing |
+| 2026-11-23 20:39 | R1.1 | 010-CannonFleetGalaxy-1 | harness-error: the runner raised RuntimeError: run-as dev.nebula.galaxy.test gave no folder (is the test app installed, and debuggable?): | - |
+| 2026-11-22 14:33 | - | (by hand) | plan.py land S0.1.3 ended code 4 (not judged): gate.py's push check refused main's move because tools/verify/console_census.py's closed group fifo counts 31 (the card's section names GXMT, GXTG, GXTM, GXWP in native/include/nebula_model.h, runtime/src/render/core/model_sections_tests.cpp, crates/nebula-import/src/cook/model_write.rs); it is a certain refusal of the change, reported as not judged; plan.py toolfault --last then said: agent 1 has no tool fault recorded | - |
