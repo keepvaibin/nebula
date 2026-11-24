@@ -1,13 +1,12 @@
 # Nebula native plan: status
 
-Written 2026-11-24 03:11. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 03:28. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
-Steps landed: 15 of 138 (11%).
+Steps landed: 16 of 138 (12%).
 
 Now: in work: lander landing R1.3 (written ahead)
 
-In work now:
-- R1.3 N-1067: the present gate waits only on a load screen (agent 1)
+In work now: Nothing started.
 
 ## Packages
 
@@ -16,7 +15,7 @@ In work now:
 | S0.1 | 5 | 5 |
 | S0.2 | 6 | 6 |
 | S0.3 | 2 | 2 |
-| R1 | 2 | 4 |
+| R1 | 3 | 4 |
 | R2 | 0 | 5 |
 | G2 | 0 | 9 |
 | G6 | 0 | 8 |
@@ -42,6 +41,7 @@ In work now:
 
 | When | Step | Title | Code commit | Main commit |
 | --- | --- | --- | --- | --- |
+| 2026-11-24 03:28 | R1.3 | N-1067: the present gate waits only on a load screen | 4fcf535b2 | 2d389b3a3 |
 | 2026-11-24 00:04 | R1.2 | P-010: a stage's pipelines made while it loads, a draw never compiles | d0c08ad67 | 61cae33f5 |
 | 2026-11-23 21:08 | R1.1 | P-052: the renderers' own pipelines at start | 6ded5f481 | cd1dc8cae |
 | 2026-11-23 20:08 | S0.3.2 | Remove what is left | c975566fd | ba2b58cf1 |
@@ -51,7 +51,6 @@ In work now:
 | 2026-11-23 06:19 | S0.2.4 | Landing B, part 2: the talk balloon | 2423dde4f | 27172e772 |
 | 2026-11-23 06:02 | S0.2.3 | Landing B, part 1: the pointer | 8861980d7 | 6544d38df |
 | 2026-11-23 05:08 | S0.2.2 | The scene query's form, written into the inventory before code | e54a921e5 | 37db1ddaa |
-| 2026-11-23 04:53 | S0.2.1 | Landing A: drawing stops changing the game | 84a2f5a72 | 5695013af |
 
 ## Repairs
 
