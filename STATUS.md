@@ -6,7 +6,8 @@ Steps landed: 22 of 138 (16%).
 
 Now: R-005 landed (22 of 138); in work: writer writing package G2 from G2.1
 
-In work now: Nothing started.
+In work now:
+- G2.1 Landing 1: a sequence starts at its arrival; the step keeps its due times (agent 1)
 
 ## Packages
 
