@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-23 21:54. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-23 22:09. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 14 of 138 (10%).
 
@@ -45,7 +45,7 @@ None yet.
 
 | Id | State | Kind | Check | Renderer | Traced to | Seen |
 | --- | --- | --- | --- | --- | --- | --- |
-| R-001 | open | fail | tour/d3d12 | d3d12 | step S1.1 commit abc | 2 |
+| R-001 | open | fail | tour/d3d12 | d3d12 | step S1.1 commit abc | 1 |
 
 ## For the owner to check by hand
 
@@ -98,7 +98,7 @@ No tool was mended.
 - 2026-11-23 R1.1: Left as they are: a change of the scene's format for HDR output (set_wide, then prepare_pipelines, between frames after a GPU wait) and a change of the SMAA quality (apply_settings) still make their pipelines when they happen (because both are settings changes, not a first use in play, and Direct3D 12's same two paths (PostProcessor::set_wide, apply_settings) do the same; the card names only the first-frame builds)
 - 2026-11-23 R1.1: Proof 2 (a cold and a warm start on Vulkan) is shown by two Vulkan tour runs of one stop (command 4 with --renderer vulkan), each logging '[pipelines] Vulkan's passes made at the start in N ms' and the self-test line before the first frame; the Direct3D 12 figures of proof 1 (the MSAA 4x stage run, 408 pictures) belong to the landed commits caa9ca1e7 and e68b6cd6c, and today's are the two tests and the landing's pictures (because Vulkan's pipeline cache (shared_pipeline_cache) does not tell a pipeline loaded from one made, so the start's time is the figure the log can give; no engine test command runs on Vulkan)
 
-## Checks changed during the run (60)
+## Checks changed during the run (57)
 
 - 2026-11-22 S0.1.3 tools/verify/console_census.py: the open group gx_sections counts the four section names GXMT, GXTG, GXTM and GXWP with a ceiling of 31, and the closed group fifo excludes only those four whole words (allowed by docs/engine/FRAME-MODEL.md section 2.9)
 - 2026-11-22 U-unattended tools/gate/main_push_guard.py: the guard also refuses a push of a branch named plant/... (allowed by docs/plan/native/TOOL-MEND-PLANTS.md, how a plant is kept from ever landing)
@@ -157,9 +157,6 @@ No tool was mended.
 - 2026-11-23 AF tools/gate/tests/plan_commands_test.py: the tour command's test gives agent_tour.py the pictures of its runs (one picture the same) in place of runs that took none (allowed by docs/plan/04-GATE-AND-MAIN.md section 9 (Pictures), the planner's brief AF)
 - 2026-11-23 AF tools/gate/tests/pictures_new_test.py: the declaration lines of the cases have the five words (place, renderer and disc named) (allowed by docs/plan/04-GATE-AND-MAIN.md section 9 (Pictures), the planner's brief AF)
 - 2026-11-23 AF tests/pictures/approved.tsv: 626 rows of the other two discs on Direct3D 11 (314) and Vulkan (312) take the picture the tour of main 53eb71017 draws: each lies from the approved Direct3D 12 picture of the same disc, stop and picture within the gap that renderer had before the trial (Direct3D 11: 19 pixels at most, 1 level, none over 15; Vulkan: 32993 pixels, 230 levels, 13 over 15) (allowed by docs/plan/04-GATE-AND-MAIN.md section 9 (Pictures), the planner's brief AF part 2)
-- 2026-11-23 AK tools/gate/kinds.py: a named test whose run ended with the runner's own error (harness-error, kind tool) is played once more alone in the same landing (the tablet's: in the tablet's lane, while the test app is installed); a pass counts as passed (flake, one line in tool-hiccups.tsv, never in flakes.tsv, never toward setting a test aside), the error again stays tool, a fail stays a fail (allowed by docs/plan/04-GATE-AND-MAIN.md section 9 (Run again alone after the tool's own error), the planner's brief AK, the owner's order of 2026-11-23 (a balance of speed and accuracy))
-- 2026-11-23 AK tools/gate/scope.tsv: the row `crates/luma-validate/**` names repo, build, start, import, pictures, android and github (what `crates/nebula-import/**` names, with the build and the starts) (allowed by tools/gate/scope.tsv header (a row names the groups of the checks that can see a wrong file there), the planner's brief AK part 2, the owner's order of 2026-11-23 (a balance of speed and accuracy))
-- 2026-11-23 AK tools/gate/scope.tsv: the rows `localization/NebulaText.tsv` (repo, build, import, android, github) and `localization/PackageText.tsv` (repo, github-first); a new file in localization/ still has no row and plans full (allowed by tools/gate/scope.tsv header (a row names the groups of the checks that can see a wrong file there), the planner's brief AK part 2, the owner's order of 2026-11-23 (a balance of speed and accuracy))
 
 ## Tool faults
 
