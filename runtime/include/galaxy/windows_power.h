@@ -49,9 +49,6 @@ inline void lower_current_thread_priority() noexcept {
     }
 }
 
-// A lowered background thread another thread now waits for (a stop's join): the normal priority again and no efficiency
-// request, so the job it is in finishes at a frame thread's pace. Windows' priorities are strict: beside busy threads of
-// the normal priority, one at the lowest runs only when the scheduler lifts it against starvation, seconds apart, and a
 // A lowered background thread whose work a frame thread or a load now waits for (a pipeline a draw missed, a scene's load
 // gate), from itself: the normal priority and no efficiency request while `waited`; lower_current_thread_priority's again
 // after.

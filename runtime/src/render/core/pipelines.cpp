@@ -305,52 +305,22 @@ gpu::Pipeline* Pipelines::missing(std::uint64_t id, const PipelineEntry& entry, 
         if (!refused && waiting_for_memory(form)) {
             return nullptr;  // asked again once the workers' wait is over (pipeline_workers.h)
         }
-        if ((missed.fetch_or(bit, std::memory_order_relaxed) & bit) != 0u || refused) {
+        bool first = false;
+        {
+            // The bit and the urgent entry under one lock: a draw on another record worker that finds the bit set and waits
+            // (wait_for_missing_) finds the form in urgent_ until its pipeline is published or its job has ended.
+            std::lock_guard guard(lock_);
+            first = (missed.fetch_or(bit, std::memory_order_relaxed) & bit) == 0u;
+            if (first && !refused && !quit_) {
+                urgent_.insert(form);
+            }
+        }
+        if (refused) {
             return nullptr;  // a refused form is not asked for again: the bit keeps later draws off the lock
         }
-        misses_.fetch_add(1u, std::memory_order_relaxed);
-        ::galaxy::timeline::record(::galaxy::timeline::Event::PipelineMissed, id, key);
-        // Where pipelines link from parts, the draw gets a quick link now and a worker replaces it with the optimised one.
-        gpu::Pipeline* const linked = build_fast(entry, variant, aux);
-        if (scene_shown_.load(std::memory_order_relaxed)) {
-            // After a scene's first picture each load has waited for what it registered: a miss here is a form no load named.
-            const char* const then = linked != nullptr                                    ? "linked from parts at once"
-                                     : wait_for_missing_.load(std::memory_order_relaxed) ? "the draw waits for its worker"
-                                                                                         : "left out until it is made";
-            // The record as a line of crates/nebula-import/data/site_pipelines.txt: the cook's list then names it, and every
-            // load registers it before its first picture.
-            std::fprintf(stderr, "[pipelines] missed by a draw in play: programs %llx %llx variant %u aux %u, %s; record %s\n",
-                         static_cast<unsigned long long>(entry.desc.vertex), static_cast<unsigned long long>(entry.desc.pixel),
-                         variant, aux, then, record_hex(entry).c_str());
+        if (first) {
+            note_missed(id, entry, variant, aux, form, *at);
         }
-        if (linked != nullptr) {
-            gpu::Pipeline* const published = publish(*at, linked);
-            if (published == linked) {
-                {
-                    std::lock_guard guard(lock_);
-                    if (!quit_) {
-                        pending_.fetch_add(1u, std::memory_order_relaxed);
-                        Job better{static_cast<std::uint32_t>(id), std::make_shared<const PipelineEntry>(entry), variant, aux};
-                        better.optimize = true;
-                        jobs_.push_back(std::move(better));
-                    }
-                }
-                wake_.notify_one();
-            }
-            return published;
-        }
-        {
-            std::lock_guard guard(lock_);
-            if (quit_) {
-                return nullptr;
-            }
-            Job now{static_cast<std::uint32_t>(id), std::make_shared<const PipelineEntry>(entry), variant, aux};
-            now.urgent = true;
-            pending_.fetch_add(1u, std::memory_order_relaxed);
-            jobs_.push_front(std::move(now));
-            urgent_.insert(form);
-        }
-        wake_.notify_one();
     }
     if (!wait_for_missing_.load(std::memory_order_relaxed)) {
         return at->load(std::memory_order_acquire);
@@ -359,6 +329,58 @@ gpu::Pipeline* Pipelines::missing(std::uint64_t id, const PipelineEntry& entry, 
     std::unique_lock guard(lock_);
     made_.wait(guard, [&] { return quit_ || at->load(std::memory_order_acquire) != nullptr || urgent_.count(form) == 0u; });
     return at->load(std::memory_order_acquire);
+}
+
+void Pipelines::note_missed(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux, std::uint64_t form,
+                            std::atomic<gpu::Pipeline*>& at) {
+    const std::uint32_t key = key_of(variant, aux);
+    misses_.fetch_add(1u, std::memory_order_relaxed);
+    ::galaxy::timeline::record(::galaxy::timeline::Event::PipelineMissed, id, key);
+    // Where pipelines link from parts, the draw gets a quick link now and a worker replaces it with the optimised one.
+    gpu::Pipeline* const linked = build_fast(entry, variant, aux);
+    if (scene_shown_.load(std::memory_order_relaxed)) {
+        // After a scene's first picture each load has waited for what it registered: a miss here is a form no load named.
+        const char* const then = linked != nullptr                                    ? "linked from parts at once"
+                                 : wait_for_missing_.load(std::memory_order_relaxed) ? "the draw waits for its worker"
+                                                                                     : "left out until it is made";
+        // The record as a line of crates/nebula-import/data/site_pipelines.txt: the cook's list then names it, and every
+        // load registers it before its first picture.
+        std::fprintf(stderr, "[pipelines] missed by a draw in play: programs %llx %llx variant %u aux %u, %s; record %s\n",
+                     static_cast<unsigned long long>(entry.desc.vertex), static_cast<unsigned long long>(entry.desc.pixel), variant,
+                     aux, then, record_hex(entry).c_str());
+    }
+    if (linked != nullptr) {
+        gpu::Pipeline* const published = publish(at, linked);
+        bool queued = false;
+        {
+            std::lock_guard guard(lock_);
+            urgent_.erase(form);  // the cell is filled: nothing is left to wait for
+            if (published == linked && !quit_) {
+                pending_.fetch_add(1u, std::memory_order_relaxed);
+                Job better{static_cast<std::uint32_t>(id), std::make_shared<const PipelineEntry>(entry), variant, aux};
+                better.optimize = true;
+                jobs_.push_back(std::move(better));
+                queued = true;
+            }
+        }
+        made_.notify_all();
+        if (queued) {
+            wake_.notify_one();
+        }
+        return;
+    }
+    {
+        std::lock_guard guard(lock_);
+        if (quit_) {
+            urgent_.erase(form);
+            return;
+        }
+        Job now{static_cast<std::uint32_t>(id), std::make_shared<const PipelineEntry>(entry), variant, aux};
+        now.urgent = true;
+        pending_.fetch_add(1u, std::memory_order_relaxed);
+        jobs_.push_front(std::move(now));
+    }
+    wake_.notify_one();
 }
 
 void Pipelines::set_hurried(bool hurried) noexcept {
