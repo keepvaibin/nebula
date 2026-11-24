@@ -2,7 +2,7 @@
 
     python -X utf8 -I tools/gate/tests/plan_cards_test.py
 
-  The cards of steps 12 to 138 (the plan's own files, as they are):
+  The cards of steps 12 to 145 (the plan's own files, as they are):
     proofs_name_only_what_the_agent_can_use   every program, script and test a proof names is a file or a name on main, is not on AGENT.md's list
                                               `Programs you never run`, and every option written beside it is one it takes (where the source says);
                                               the findings that stand are listed in KNOWN_FINDINGS by step: a new one fails, and so does a listed one
@@ -25,7 +25,7 @@ sys.path.insert(0, str(TREE / "tools" / "verify"))
 import plan  # noqa: E402
 import proofs  # noqa: E402
 
-FIRST_STEP, LAST_STEP = 12, 138
+FIRST_STEP, LAST_STEP = 12, 145  # 138 until 11-24, when G2.3 became eight steps
 
 # What the test found in the cards when it was written (11-23), each a card that is to be mended; the cards are another helper's and the
 # planner's to change. A finding is the step and the text `proofs.problems` gives.
@@ -36,7 +36,7 @@ def agent_md():
     return (TREE / "docs" / "plan" / "native" / "AGENT.md").read_text(encoding="utf-8")
 
 
-def cards_12_to_138():
+def cards_12_to_145():
     steps = [s for s in plan.read_base(TREE) if FIRST_STEP <= int(s["order"]) <= LAST_STEP]
     return [(s, proofs.proof_of(plan.card_text(TREE, s))) for s in steps]
 
@@ -46,9 +46,9 @@ class RealCards(unittest.TestCase):
     def setUpClass(cls):
         cls.repo = proofs.Repo(TREE)
         cls.forbidden = proofs.forbidden_programs(agent_md())
-        cls.cards = cards_12_to_138()
+        cls.cards = cards_12_to_145()
 
-    def test_there_are_127_cards_and_each_has_a_proof(self):
+    def test_there_are_134_cards_and_each_has_a_proof(self):
         self.assertEqual(len(self.cards), LAST_STEP - FIRST_STEP + 1)
         self.assertEqual([s["step"] for s, proof in self.cards if not proof.strip()], [], "a card with no Proof item")
 
