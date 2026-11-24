@@ -68,8 +68,10 @@ std::string startup_failure();
 void set_frame_end_presents(bool enabled) noexcept;
 
 // Walks the frame list attached (attach_frame_list) and optionally presents: the newest picture, or black when
-// `black`. Nothing attached: at most a present.
-void render_frame(bool present_swap_chain = true, bool black = false);
+// `black`. Nothing attached: at most a present. `list_shows`: the game shows the attached list's picture (the frame
+// clock shows a picture and the start does not skip frames), so with in-between pictures its sequence starts as it
+// arrives (I-004); otherwise it is shown by the present the next step asks for.
+void render_frame(bool present_swap_chain = true, bool black = false, bool list_shows = false);
 // Simulation thread, as each step starts: the moment its step clock set for it (qpc_now() ticks). The frame the next
 // render_frame hands over arrives at that moment for the interpolation's clock, not when the thread got to run: a late
 // wake would otherwise move the frame's place in time. Used once; 0 or none: render_frame's own time.

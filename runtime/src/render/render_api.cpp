@@ -23,8 +23,8 @@ std::string startup_failure() {
     return backend().startup_failure();
 }
 
-void render_frame(bool present_swap_chain, bool black) {
-    backend().render_frame(present_swap_chain, black);
+void render_frame(bool present_swap_chain, bool black, bool list_shows) {
+    backend().render_frame(present_swap_chain, black, list_shows);
 }
 
 void set_step_moment(std::int64_t qpc) noexcept {

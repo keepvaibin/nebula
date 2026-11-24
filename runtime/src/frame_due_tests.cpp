@@ -28,18 +28,45 @@ int main() {
         auto due = clock.due(now, kPeriod);
         expect(!due.cut && due.ns == now + kPeriod, "the first frame is due one period after the first reading");
         now = due.ns + 200'000;  // woke 0.2 ms late
-        clock.waited(now, kPeriod);
+        (void)clock.waited(now, kPeriod);
         due = clock.due(now, kPeriod);
         expect(!due.cut && due.ns == (1'000 * kHour / 3600) + 2 * kPeriod, "the next frame is one period after the one just due");
     }
-    // A late wake-up skips the frames it missed: one period from now, not a run of frames to catch up.
+    // P-274: a late wake-up keeps the due moments; the steps it missed run back to back, the game's time on the wall clock's.
+    {
+        galaxy::FrameDue clock;
+        const std::int64_t start = 5'000'000'000;
+        std::int64_t now = start;
+        (void)clock.due(now, kPeriod);
+        now = start + kPeriod + 3'000'000;  // the first wait returned 3 ms late
+        expect(clock.waited(now, kPeriod) == 0, "a wake 3 ms late drops nothing");
+        expect(clock.next() == start + 2 * kPeriod, "the next step keeps its due moment, not one period from the late wake");
+        // A stall of 100 ms: the six steps it missed are due at once, one after another, each at its own moment.
+        now = start + 2 * kPeriod + 100'000'000;
+        expect(clock.waited(now, kPeriod) == 0, "a 100 ms stall is within the bound");
+        int back_to_back = 0;
+        while (clock.due(now, kPeriod).ns <= now) {
+            ++back_to_back;
+            now += 200'000;  // each step's work, 0.2 ms
+            expect(clock.waited(now, kPeriod) == 0, "steps run back to back drop nothing");
+        }
+        expect(back_to_back == 6, "the six steps a 100 ms stall missed run back to back");
+        expect(clock.next() == start + 9 * kPeriod, "then the clock is on its due moments again");
+    }
+    // Further behind than the bound (a load): those steps are dropped, said by the time returned; one period from now.
     {
         galaxy::FrameDue clock;
         std::int64_t now = 5'000'000'000;
         (void)clock.due(now, kPeriod);
-        now += 100 * kPeriod;  // a stop of 100 frames
-        clock.waited(now, kPeriod);
-        expect(clock.next() == now + kPeriod, "a late wake-up starts again one period from now");
+        now += 100 * kPeriod;  // a stop of 100 frames: the wait for the step due one period in ended 99 periods late
+        const std::int64_t dropped = clock.waited(now, kPeriod);
+        expect(dropped == 98 * kPeriod, "a stop of 100 frames runs the step waited for and drops the 98 after it");
+        expect(clock.next() == now + kPeriod, "and starts again one period from now");
+        galaxy::FrameDue edge;
+        (void)edge.due(0, kPeriod);
+        expect(edge.waited(kPeriod + galaxy::FrameDue::kCatchUpNs + kPeriod, kPeriod) == 0 &&
+                   edge.next() == 2 * kPeriod,
+               "exactly the bound behind still runs its steps");
     }
     // The beta's fault: the moment kept was a steady_clock reading, hours ahead of the runtime's clock on a Mac that had slept.
     // A moment so far ahead is cut to one period, said by `cut` and `ahead_ns`; the wait is then one period, not 5 hours.

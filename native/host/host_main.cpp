@@ -516,6 +516,9 @@ std::atomic<uint32_t> gSoundSubframes{0};
 std::atomic<uint32_t> gSceneBegins{0};
 // The game frame running (frame_begun): it numbers the frame lists the game submits.
 std::atomic<uint32_t> gGameFrames{0};
+// The frame running shows the game's picture, not black (frame_begun; NebulaFrameClock::show, committed at a frame's
+// start): its list is shown as it arrives (svc_submit_frame).
+std::atomic<bool> gFrameShowsPicture{false};
 
 void* find_optional_symbol(void* module, const char* name) {
 #if defined(_WIN32)
@@ -1169,12 +1172,14 @@ std::optional<galaxy::host::DisplayRefresh> display_refresh() {
     return known;
 }
 
-// The next frame's start after the one due at `start_ns` (the runtime's clock, nanoseconds; frame_phase.h).
+// The next frame's start after the one due at `start_ns` (the runtime's clock, nanoseconds; frame_phase.h). The work is
+// the step before's own (I-013): from its moment to when the render thread had its list done (present_clock.h
+// StepWork, keyed by the moment set_step_moment gave it), with in-between pictures on or off; 0 while not done yet.
 int64_t next_frame_start(int64_t start_ns, std::chrono::nanoseconds period) {
     static galaxy::host::FramePhase phase;
     static int64_t previous_ns = 0;
-    const int64_t present_ns = galaxy::render::g_last_present_ns.load(std::memory_order_relaxed);
-    const int64_t work_ns = previous_ns != 0 && present_ns > previous_ns ? present_ns - previous_ns : 0;
+    const int64_t work_qpc = previous_ns != 0 ? galaxy::render::g_step_work.work(galaxy::qpc_from_ns(previous_ns)) : 0;
+    const int64_t work_ns = work_qpc > 0 ? galaxy::qpc_to_ns(work_qpc) : 0;
     previous_ns = start_ns;
     const int64_t next_ns = phase.next_start(start_ns, work_ns, period.count(), display_refresh(),
                                              galaxy::render::g_in_between_on.load(std::memory_order_relaxed));
@@ -1209,8 +1214,9 @@ void apply_power_wish(bool background, bool minimised) {
 // The game's step: 60 a second (game_step.h), or, on a display within 0.2 % of a whole number of steps' refreshes
 // (galaxy/step_lock.h; exact with in-between pictures on), that many of the display's refreshes, so no picture repeats
 // against it. On Android and Apple the step waits for the display's own vsync by the same rule (every second one at
-// 120 Hz); the host's clock takes over where the display gives none. A late wake-up skips the steps it missed, as a
-// display does, rather than running them back to back.
+// 120 Hz); the host's clock takes over where the display gives none. A late wake-up keeps the steps' due moments: the
+// steps it missed run back to back, so the game's time keeps to the wall clock's (P-274); a clock further behind than
+// FrameDue::kCatchUpNs (a load, a stall) drops those steps with one log line and starts again from now.
 void svc_frame_wait(void*) {
 #if defined(NEBULA_HOST_RENDERER)
     galaxy::pacing::step_done();  // the game thread is back: the step's own work ends here
@@ -1286,14 +1292,15 @@ void svc_frame_wait(void*) {
         const std::int64_t now_ns = clock_ns();
 #if defined(_WIN32) && defined(NEBULA_HOST_RENDERER) && !defined(NEBULA_HOST_SDL)
         frame_due.set_next(next_frame_start(frame_due.next(), period));
-        if (now_ns >= frame_due.next()) frame_due.set_next(now_ns + period.count());
+        std::int64_t dropped_ns = frame_due.catch_up(now_ns, period.count());
 #else
-        frame_due.waited(now_ns, period.count());
+        std::int64_t dropped_ns = frame_due.waited(now_ns, period.count());
 #endif
         [[maybe_unused]] const auto now = Clock::now();  // a length of time only (the pacing line's window)
 #if defined(NEBULA_HOST_SDL)
         if (vsync) {
             frame_due.set_next(now_ns + period.count());  // the host's clock continues from the display's
+            dropped_ns = 0;  // the vsync grid keeps its own slots and says what it drops (wait_display_frame)
             ++on_vsync;
         }
         // Every 10 s: how the frames were paced (the window's wall time, how many began on the display's vsync) and
@@ -1330,6 +1337,15 @@ void svc_frame_wait(void*) {
             window_began = now;
         }
 #endif
+        if (dropped_ns > 0) {
+            char text[160];
+            std::snprintf(text, sizeof(text),
+                          "the steps were %lld ms behind their due moments (at most %lld ms are run back to back): they "
+                          "are dropped",
+                          static_cast<long long>(dropped_ns / 1000000),
+                          static_cast<long long>(galaxy::FrameDue::kCatchUpNs / 1000000));
+            log_line("host:", text);
+        }
 #if defined(NEBULA_HOST_RENDERER)
         galaxy::render::set_step_moment(due_qpc);
         galaxy::pacing::step(due_qpc);
@@ -2135,8 +2151,8 @@ std::atomic<uint64_t> gSubmissions{0};  // render_frame calls with commands: the
 
 galaxy::host::NativeGameAudio* gAudio = nullptr;
 
-void submit_frame_unchecked(bool present, bool black) {
-    galaxy::render::render_frame(present, black);
+void submit_frame_unchecked(bool present, bool black, bool list_shows = false) {
+    galaxy::render::render_frame(present, black, list_shows);
     gSubmissions.fetch_add(1, std::memory_order_relaxed);
 }
 
@@ -2237,9 +2253,9 @@ bool retry_start_for_gpu_memory(const std::string& reason) {
 
 // The renderer's hard failures end the game with their line and a dump. Caught here: thrown on the game's stacks they
 // could not unwind through its frames.
-void submit_frame(bool present, bool black) {
+void submit_frame(bool present, bool black, bool list_shows = false) {
     try {
-        submit_frame_unchecked(present, black);
+        submit_frame_unchecked(present, black, list_shows);
     } catch (const std::exception& error) {
         const std::string text = std::string("the renderer stopped: ") + error.what();
         svc_fatal(nullptr, text.c_str());
@@ -2883,7 +2899,11 @@ void svc_submit_frame(void*, NebulaFrameList* list) {
     }
     list->game_frame = gGameFrames.load(std::memory_order_relaxed);
     galaxy::render::attach_frame_list(list);
-    submit_frame(false, false);
+    // Its picture is shown when the frame clock shows the game's picture and the start does not skip frames: with
+    // in-between pictures its sequence then starts as it arrives (I-004), not at the present the next frame asks for,
+    // which then only supersedes it when it is black (a restart: the last list before black can show for a step).
+    const bool shows = gFrameShowsPicture.load(std::memory_order_relaxed) && !gBootFast.load(std::memory_order_relaxed);
+    submit_frame(false, false, shows);
 }
 // draw.post (docs/modding/reference/services/draw.md): the program compiled for the running renderer (mod_post.cpp).
 static_assert(int{galaxy::render::kModPostOk} == NEBULA_POST_OK && int{galaxy::render::kModPostCompile} == NEBULA_POST_COMPILE &&
@@ -3268,6 +3288,7 @@ const char* svc_game_id(void*) {
 
 void svc_frame_begun(void*, int black, uint32_t frame) {
     gGameFrames.store(frame, std::memory_order_relaxed);
+    gFrameShowsPicture.store(black == 0, std::memory_order_relaxed);
 #if defined(NEBULA_HOST_RENDERER)
     if (const uint32_t at = gResultsFrame.load(std::memory_order_acquire); at != 0u && frame >= at) {
         gResultsFrame.store(0u, std::memory_order_relaxed);

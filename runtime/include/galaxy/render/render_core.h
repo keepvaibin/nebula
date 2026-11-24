@@ -72,7 +72,7 @@ public:
 
     bool initialize(int width, int height);
     [[nodiscard]] std::string startup_failure() const { return renderer_.startup_failure(); }
-    void render_frame(bool present_swap_chain = true, bool black = false);
+    void render_frame(bool present_swap_chain = true, bool black = false, bool list_shows = false);
     void present_cached_display(
         bool black,
         bool present_swap_chain = true);
@@ -167,6 +167,12 @@ private:
         // The moment of the step that made it on the step clock (set_step_moment); 0 none.
         std::int64_t step_moment_qpc = 0;
         NebulaFrameList* list = nullptr;
+        // The list's own arrival: when the game handed it over (QPC, its thread) and the moment of the step that made
+        // it; with in-between pictures its sequence starts from these (I-004), not from the present asked later.
+        std::int64_t list_asked_qpc = 0;
+        std::int64_t list_step_qpc = 0;
+        // The game shows the list's picture (render_frame `list_shows`): its sequence starts as it arrives.
+        bool shows = false;
     };
 
     void reset_session_state();
@@ -246,7 +252,6 @@ private:
     std::vector<core::TextureLists::Place> released_lists_;
     void give_up_released_lists();
     void walk_frame(ListEntry& entry, const core::WalkTime& time, bool present);
-    void flush_waiting_list();
     void scan_list(core::ListData& now);
     void prepare_walk(core::ListData& now, core::ListData* before, const core::WalkTime& time);
     void walk_list(core::ListData& now, core::ListData* before, const core::WalkTime& time);
@@ -407,16 +412,13 @@ private:
     ScheduleView schedule_view_{*this};
     // When each picture between two game frames is shown (frame_schedule.h).
     FrameSchedule schedule_{schedule_view_, galaxy::qpc_frequency()};
-    // The game frame the playing sequence ends on.
+    // The game frame the playing sequence ends on, and the one whose sequence waits for its reference
+    // (FrameSchedule::waiting).
     ListEntry* interp_entry_ = nullptr;
-
-    // A ready frame's present arrived inside a render chunk: the render loop
-    // finishes the playing sequence, then starts this one.
-    bool interp_start_pending_ = false;
-    void run_pending_interp_start();
-    // A recorded frame whose present arrives as a separate present.
-    bool interp_list_waiting_ = false;
-    ListEntry* interp_waiting_entry_ = nullptr;
+    ListEntry* interp_next_entry_ = nullptr;
+    // The newest list's sequence shows it (a list the game marked shown, FrameChunk::shows): the present the next step
+    // asks for only feeds the cadence count.
+    bool interp_list_shown_ = false;
     bool interp_stopping_ = false;        // render thread draining for a stop
     // A native overlay (the HOME Menu, the settings) up while no interpolated frames run, at a present rate above
     // 60 Hz (the interpolation's slots, or none at an unlimited rate): the latest frame presents again at each slot
@@ -432,11 +434,14 @@ private:
     std::uint64_t interp_slot_to_vblank_samples_ = 0;
     void note_present_vblank(std::int64_t slot);
     void skip_slot_for_depth();
-    // The starting frame's present_asked_qpc and step moment (FrameChunk::step_moment_qpc), for start_interp_sequence.
-    std::int64_t interp_present_asked_qpc_ = 0;
-    std::int64_t interp_step_moment_qpc_ = 0;
     void supersede_interp_sequence();
-    void start_interp_sequence();
+    // `entry`'s sequence starts at its arrival (FrameChunk::list_asked_qpc, list_step_qpc): at once, or waiting for its
+    // reference while the playing one goes on.
+    void start_interp_sequence(ListEntry& entry, std::int64_t arrived, std::int64_t step);
+    // The waiting sequence begins, replacing the playing one (its frame walked unseen).
+    void begin_waiting_interp_sequence();
+    // The playing and the waiting sequences end, their frames walked unseen.
+    void end_interp_sequences();
     // The game thread's time blocked on the render thread (queue space, drains, completions, scene target peeks), in QPC
     // ticks: the generated frames' share of it tells their misses from the game's own.
     std::atomic<std::uint64_t> game_wait_qpc_{0};
