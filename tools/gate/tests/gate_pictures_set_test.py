@@ -4,7 +4,11 @@ PICTURES-CHANGE.txt names on the other discs' Direct3D 11 and Vulkan too (brief 
     python -X utf8 -I tools/gate/tests/gate_pictures_set_test.py
 
 Each test was seen to fail with the thing it guards broken (named in a phrase after the test).
-  the_level_of_a_landing          a game-code plan landed at the 12-stop level; a documents plan at the main level
+  the_level_of_a_landing          a step's game-code plan landed at the main level, or its section's check at the 12-stop level; a
+                                  documents plan at the main level
+  a_steps_landing_plays_the_quick_stops_everywhere_and_leaves_the_rest_to_the_section   a step's landing took the debug layers, a
+                                  speed measure or another disc; or left out a renderer or the tablet; a section's check of documents
+                                  ran less than the whole set
   stops_a_declaration_names       the stops of the tree's PICTURES-CHANGE.txt for the sibling plays: a line `tour/010-*` named one stop, an
                                   engine line none, a file that is not a declaration none
   no_sibling_without_a_line       the sibling checks registered with no declaration
@@ -64,8 +68,32 @@ class Level(Case):
         self.assertEqual(gate.landing_level(plan("tools/gate/gate.py", "tools/plan/plan.py"), []), gate.LAND_LEVEL)
         for paths in (("native/petari/src/Game/Foo.cpp",), ("runtime/src/render/a.cpp",), ("platform/sdl/a.cpp",),
                       ("crates/nebula-import/src/a.rs",), ("PICTURES-CHANGE.txt",), ("tests/replays/a.tsv",)):
-            self.assertEqual(gate.landing_level(plan(*paths), []), "main", paths)
+            # A step's landing of a change that can move a picture plays the 12 quick stops (mend M-006); its section's check the main level.
+            self.assertEqual(gate.landing_level(scope.step_plan(plan(*paths)), []), gate.LAND_LEVEL, paths)
+            self.assertEqual(gate.landing_level(scope.section_plan(plan(*paths)), []), "main", paths)
+        self.assertEqual(gate.landing_level(scope.section_plan(plan("docs/a.md")), []), "main", "a section's check of documents too")
         self.assertEqual(gate.landing_level(plan("docs/a.md"), ["stress"]), "main", "a check asked for by name keeps the main level")
+
+    def test_a_steps_landing_plays_the_quick_stops_everywhere_and_leaves_the_rest_to_the_section(self):
+        known, planned, _ = gate.read_lists()
+        args = gate.parser().parse_args(["--main", "--tablet", "T"])
+
+        def chosen(p):
+            args.mode = gate.landing_level(p, [])
+            return gate.landing_selection(args, p, [], known, planned)
+        step = scope.step_plan(scope.plan_for(["runtime/src/render/a.cpp"], TABLE))
+        got = chosen(step)
+        must = {"engine/d3d12", "engine/vulkan", "engine/d3d11", "tour/d3d12", "tour/vulkan", "tour/d3d11", "replays/vulkan",
+                "pictures/tour/d3d11", "tour/tablet", "pictures/tablet", "build/android", "pictures/declared", "unit/windows"}
+        self.assertTrue(must <= got, sorted(must - got))
+        section_only = {"validate/d3d12", "validate/vulkan", "measure/step/pc", "measure/step/tablet", "tour-RMGP01/d3d12",
+                        "tour-RMGJ01/d3d12"}
+        self.assertFalse(section_only & got, sorted(section_only & got))
+        got = chosen(scope.section_plan(step))
+        self.assertTrue((must | section_only) <= got, sorted((must | section_only) - got))
+        got = chosen(scope.section_plan(scope.plan_for(["docs/a.md"], TABLE)))
+        self.assertTrue((must | section_only) - {"unit/windows"} <= got,
+                        "a section's check runs the whole set whatever its files: %s" % sorted((must | section_only) - got))
 
 
 class Siblings(Case):

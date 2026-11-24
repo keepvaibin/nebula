@@ -216,10 +216,12 @@ declares it. A picture with no approved copy is `new`: it never fails a run.
   so. A differing picture a line names is `new`; one no line names is `fail`. A line that names no differing picture is stale:
   the check `pictures/declared` of a main gate is `tool` (`env` when the tablet's pictures were not taken, since they cannot be
   told from it).
-- *Every picture a landing can move is compared, and a declared stop is played everywhere.* A landing whose changed paths can
-  move a picture (the group `pictures` of `tools/gate/scope.tsv`: what is compiled into the game or read by it when it runs, the
-  shaders, the cooked data's makers, the recordings and the tests and tools that play the tours; a path no row names) is of the
-  main level and takes every picture that level compares: the engine tests and every stop of the tour on the three renderers of the
+- *Every picture a landing can move is compared, and a declared stop is played everywhere.* A step's landing whose changed paths
+  can move a picture plays the 12 quick stops on the three renderers and on the tablet (section 15, "Two tiers"); the section's
+  full check, and a landing whose changed paths can move a picture outside the native plan's steps (the group `pictures` of
+  `tools/gate/scope.tsv`: what is compiled into the game or read by it when it runs, the shaders, the cooked data's makers, the
+  recordings and the tests and tools that play the tours; a path no row names), is of the main level and takes every picture that
+  level compares: the engine tests and every stop of the tour on the three renderers of the
   US disc, both other discs on Direct3D 12, the tablet's 12 stops, and `pictures/declared`. A landing that cannot (documents,
   plan data, tools that are not part of the game) takes none. For every stop `PICTURES-CHANGE.txt` names, the landing also plays
   that stop on the other discs' Direct3D 11 and Vulkan, whose rows only the long run compares otherwise, so that each sibling
@@ -252,7 +254,7 @@ test's `result.json`):
 | `fail` | The game or the change is wrong: once the game has started, a crash dump, frames that stopped, an exit code other than 0, a loss report that is not all 0, a wrong step hash, a picture that differs from its approved copy. | yes |
 | `tool` | The test tool broke: the runner or a script raised, a file the runner must provide is missing, the game could not be started at all, a result file is missing or cannot be read, a check ran another number of cases than its suite lists, or none. | no: the run is not judged; the tool is fixed and the check run again |
 | `env` | The machine was not fit: the tablet does not answer, the drive is full, another graphics card or driver than the approved pictures name, a lock not had in time. The tablet's `owed` state is `env`. | no: not judged (an owed tablet part does not change the verdict) |
-| `flake` | It failed, then passed when run again alone. | no |
+| `flake` | It failed, then passed when run again alone; or the runner played it once more after a fault of the tool's and it passed then. | no |
 | `main` | It failed again alone and fails the same way on main's build: main is at fault. | no |
 | `new` | A picture with no approved copy, or one the change declares in `PICTURES-CHANGE.txt`. | no: approved at the landing |
 
@@ -270,6 +272,19 @@ renderer within seven days, the test goes to `D:/NebulaWork/plan/native/set-asid
 A test listed there still runs and is reported (`set aside` on its line), and its `fail` does not fail a run; the gate
 prints the set-aside tests at the top of every summary, and a line leaves the file, with the test's lines of flakes.tsv, when its repair has landed (`plan.py land R-00N` does it): until then the test stays set aside, which is for ever if nobody lands the repair. The tablet's tests
 are not run again (the test app is removed when the tablet's part ends).
+
+**Played once more by the runner (mend M-006).** A fault of the tool's that one more play can clear is played once more by the
+runner itself, at once, on the PC and on the tablet alike (`luma_test.py`, `RETRIED` and `play_once`): a picture or report the
+game wrote at its exit that did not come back (`output-missing`), the tablet's exit record that never came (`no-exit-record`), a
+run it could not set up (`setup-failed`) and an exception of the runner's own while it played (`harness-error` from an adb
+command that answered nothing, such as "run-as gave no folder"). The first play's folder is kept beside the test's as
+`<renderer>-first`; the result is the second play's and names the first in `"retried"`. A pass then is a pass for every reader
+and every lane's judge (its pictures, step hashes and logs are judged as any pass's); when it is still a pass after them the gate
+makes it `flake` (`kinds.py played_again`, `judge_cases`), with its line in flakes.tsv like any flake, so three in seven days set
+the test aside and open a repair:
+a fault that keeps coming back is found, not hidden. The same fault twice stays `tool`. A malformed test, a game that cannot be
+started, a `continue_from` that did not pass, a disc not given, a full drive and a device that left are the same on every play
+and are played once. Before this, one such fault on the tablet left a landing not judged and the whole landing was played again.
 
 **Check against main.** A test that is still `fail` after its second run is run alone on main's build, but only when its
 own definition (its test folder, or for a generated tour the files that write it) is the same on `origin/main` and in the tree
@@ -448,12 +463,34 @@ groups once: `repo`, `tools`, `build`, `unit`, `start`, `engine1`, `engine3`, `t
 The group `repo` (the cheap repository checks) is in every run, whatever the rows say. Every row a changed file matches adds its groups; a landing runs the union over all changed files (`git diff --name-only` from the
 merge base with `origin/main`). A change of documents only runs `repo`, with no build, so it lands in minutes. A change to the
 game, the engine, the SDL host, the importer, the test driver or the recordings (anything that can move a picture, the group `pictures`) runs the build,
-the unit tests, a start on each renderer and, as a landing of the main level, every picture check of that level (section 9, "Pictures"): every
-stop of the tour on the three renderers, the other discs on Direct3D 12 and the tablet's 12 stops, with their replays.
+the unit tests, a start on each renderer and the engine tests and 12 quick stops on the three renderers and the tablet (a step's
+landing, below "Two tiers"), or, as a landing of the main level (the section's full check), every picture check of that level
+(section 9, "Pictures"): every stop of the tour on the three renderers, the other discs on Direct3D 12 and the tablet's 12 stops,
+with their replays.
 A change to the renderers also runs `validate` (below). A file that no row names makes the run `full`:
 everything the main gate runs on the native game (every renderer's engine tests and 102-stop tour, the other discs, the Android
 build and the tablet's short part). The full set on three renderers, three discs and the tablet is also the nightly run's first
 part. `python -X utf8 -I tools/gate/scope.py --base origin/main` prints the groups and the checks of the branch you are in.
+
+**Two tiers: a step's landing and the section's full check (mend M-006, the owner's order of 11-23).** A landing through `gate.py
+land` is a step's unless the caller gives `--section`. A step's landing runs its groups without `validate`, `measure_pc` and
+`measure_tablet` (`scope.step_plan`), and a change that can move a picture is of the landing's own level (`LAND_LEVEL`): the build,
+the unit tests, a start on each renderer, the engine tests on the three renderers, the 12 quick stops on the three renderers with
+their pictures and replays, the Android build, the tablet's 12 stops beside them, and `pictures/declared`. `--section` (the step
+tool gives it at the last step of a package of the native plan, or at the fourth step landed since the last check:
+`tools/plan/plan.py`, `is_section_check`, the count in the live folder's `section-since.txt`) adds the group `section`, which
+brings every picture group, `validate`, `android` and both speed measures whatever the changed files are (`scope.section_plan`), and
+the landing is of the main level: every stop of the tour on the three renderers, the other discs, the debug layers, the tablet and
+both measures, judged against the last section's check. While a section's check is the step in work, `plan.py ahead` writes no step
+of the next package. A fault the 12 stops did not reach lands with the step and is found by the section's check, which then fails
+on the last step's landing: the cause may be in any step since the last check, and it is mended on that step's branch.
+`PICTURES-CHANGE.txt` is carried between the two: at a step's landing a line no picture of the 12 stops used is not stale (the
+check says the section's check judges it), and the approval keeps the file on main, each line a picture used ending with
+`[approved at a step's landing]`; the next step adds its lines to the same file. At the section's check a marked line that names no
+differing picture is not stale (its pictures are approved already), an unmarked one is stale as before, and the approval removes
+the file. The long run's approval of new pictures keeps the file in the same way. What this trades: a line a step declared stays
+in force until the section's check, so a later step's difference on a picture that line names is approved under it; and the other
+stops, the debug layers and the speed measures see a step up to three landings later (`docs/plan/strictness-log.tsv`, M-006).
 
 **Faults under heavy load, and faults in how the card is driven (package T12).** Two lanes, both on the machine alone for their tests'
 time, neither read by a person until it fails.

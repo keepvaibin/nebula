@@ -10,7 +10,11 @@ Every check and every test ends as one kind:
          name, a lock not had in time, a test that reached its time limit with the game stepping at under 80% of full speed
          ("too-slow"; the gate runs it again alone, like a fail: alone it passes (flake), or it is a fail; a game that
          completed no step for 120 s is fail, "hung"; at 80% or more it is fail, "not-reached");
-  flake  failed, then passed when run again alone (tests/flakes: <plan>/native/flakes.tsv);
+  flake  failed, then passed when run again alone (tests/flakes: <plan>/native/flakes.tsv); or a fault of the tool's that one more
+         play can clear (luma_test.py RETRIED: a picture that did not come back, the tablet's exit record, a run it could not set up
+         or raised on), after which the runner played the test once more at once and it passed, and every judge of its lane left
+         it a pass (its result.json "retried", played_again: the tablet's tests cannot be run again after its part, its test app
+         removed); a line in the same file;
   main   failed again alone, and fails on main's build in the same way: main is at fault, not the change;
   new    a picture with no approved copy, or one that the change declares (PICTURES-CHANGE.txt): it never fails a run, the
          gate approves it when the change lands (tools/gate/pictures.py);
@@ -136,6 +140,24 @@ def read_result(path, kind_of_verdict):
     return kind, reason if verdict == "fail" and reason else ("%s: %s" % (verdict, reason) if reason else verdict)
 
 
+def played_again(work, suite_dir, renderer):
+    """{test: its first play's fault} of the tests whose result is a pass after the runner played them once more after a fault of the
+    tool's (luma_test.py RETRIED: result.json "retried"). Read beside the results, never in place of them: such a test is a pass for
+    every reader and every lane's judge, and judge_cases makes it flake only when it is still a pass after them."""
+    out = {}
+    for name, path in result_files(work, suite_dir, renderer).items():
+        try:
+            result = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        retried = result.get("retried") if isinstance(result, dict) else None
+        if result.get("kind") == "pass" and isinstance(retried, dict):
+            first = first_line(retried.get("reason") or "")
+            verdict = retried.get("verdict") or "tool"
+            out[result.get("test") or name] = "%s: %s" % (verdict, first) if first else verdict
+    return out
+
+
 def result_path(work, suite_dir, test, renderer):
     """Where the runner writes a test's result (luma_test.py run_tests): runs/<suite>/<test>/<renderer>/result.json, or
     runs/<suite>/<test>/-/result.json for a test it could not read."""
@@ -197,8 +219,9 @@ class Cases:
     flake, and `stress_fails` (asked for by --also) makes it a fail."""
 
     def __init__(self, results, declared=None, problem=None, renderer="", source=None, final=(), extra="", stress=False,
-                 stress_fails=False):
+                 stress_fails=False, again=None):
         self.results = dict(results)
+        self.again = dict(again or {})      # played_again: {test: its first play's fault}
         self.declared = declared
         self.problem = problem
         self.renderer = renderer
@@ -217,6 +240,10 @@ def cases_of_verdicts(verdicts, kind_of_verdict, renderer=""):
 # --- A check's kind -----------------------------------------------------------------------------------------------------
 
 
+# The note of a test the runner played once more after a fault of the tool's and that then passed (read_result's flake).
+PLAYED_AGAIN = "a fault of the tool's, then passed when played once more"
+
+
 def judge_cases(cases, known=None, aside=(), passed=True):
     """The records of a check's tests and its state: (records, state). A test in `known` {test: row} that is not a pass
     does not count (state known); one that passes fails the check (its line must go). A test whose (test, renderer) is in
@@ -227,6 +254,9 @@ def judge_cases(cases, known=None, aside=(), passed=True):
         if kind == "pass":
             if test in known:
                 records.append(record(test, "fail", "passes but is listed in known-failures.tsv, remove the line", final=True))
+            elif test in cases.again:
+                # The runner played it once more after a fault of the tool's, and every judge left that play a pass: flake.
+                records.append(record(test, "flake", cases.again[test], counts=False, note=PLAYED_AGAIN))
             continue
         if test in known:
             records.append(record(test, kind, message, counts=False, note="known (%s)" % known[test]["ledger row"]))

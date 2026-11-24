@@ -21,6 +21,8 @@ machine fault) and on a pass moves origin's main to the tip, as the gate's move 
   tool_fault_between_is_not_counted a tool fault between two failures does not count and does not reset them
   a_different_failure_starts_again  another first failing check or error line resets the count
   two_callers_at_once               one caller becomes the runner, the other waits, gets its own verdict, and runs nothing
+  a_waiter_left_not_judged          a waiting caller whose branch another caller's runner left not judged runs it once itself;
+                                    not judged by its own run too, it ends not judged after that one run (mend M-006)
   documents_only_run                a branch of documents only runs the group `repo` and prints its lines (the case prints them)
   groups_of_the_union               the groups a batch runs are those of the union of its changed files
   queue_file                        rows, states, the lock folder, a branch in the queue twice, a stale runner lock
@@ -464,10 +466,20 @@ class Cases(unittest.TestCase):
         w.branch("feat/game", {"native/g2.cpp": "g"})
         w.branch("feat/render", {"runtime/src/render/r.cpp": "r"})
         land(w, ["feat/doc", "feat/game", "feat/render"])
-        self.assertEqual(w.checker.calls[0]["groups"], "repo,build,unit,start,engine3,tour3,pictures,validate,android,tablet12,github,measure_pc,measure_tablet")
+        # A step's landing (mend M-006): the debug layers and the speed measures are the section's check.
+        self.assertEqual(w.checker.calls[0]["groups"], "repo,build,unit,start,engine3,tour3,pictures,android,tablet12,github")
         w.branch("feat/odd", {"installer/x.ps1": "x"})
         land(w, ["feat/odd"])
         self.assertTrue(w.checker.calls[-1]["groups"].startswith("full"), "a file no row names")
+
+    def test_a_section_check_runs_the_whole_set_whatever_its_files_and_names_no_check(self):
+        w = self.w
+        w.branch("feat/last", {"docs/last.md": "l"})
+        L = w.landing()
+        self.assertEqual(L.land(["feat/last"], also=landing.SECTION_CHECK), 0)
+        call = w.checker.calls[-1]
+        self.assertEqual(call["groups"], "repo,engine3,tour3,pictures,validate,android,tablet12,measure_pc,measure_tablet,section")
+        self.assertEqual(call["also"], "", "the word names no check")
 
     # --- the queue file ---------------------------------------------------------------------------------------------
 
@@ -554,6 +566,57 @@ class Cases(unittest.TestCase):
         self.assertEqual(results, {"a": 0, "b": 0})
         self.assertEqual(set(w.checker.threads), {"caller-a"}, "the second caller only waited")
         self.assertEqual([(c["names"], c["also"]) for c in w.checker.calls], [(["feat/a"], ""), (["feat/b"], "tour/vulkan")])
+
+    def waiter_left_not_judged(self, tool_file):
+        """Caller a is the runner (its run of feat/a held); caller b queues feat/b and waits; a's runner then runs feat/b, and that
+        run judges nothing (planted: a tool line). Returns ({caller: exit code}, b's lines)."""
+        w = self.w
+        w.branch("feat/a", {"docs/a.md": "a"})
+        w.branch("feat/b", dict({"docs/b.md": "b"}, **({"tool/x": "the runner raised: OSError\n"} if tool_file else {})))
+
+        class OnceNotJudged(FakeChecker):
+            def run(self, tree, tip, names, groups_text, also=""):
+                if names == ["feat/b"] and threading.current_thread().name == "caller-a":
+                    self.calls.append({"names": list(names), "groups": groups_text, "tip": tip, "tree": str(tree), "also": also})
+                    self.threads.append(threading.current_thread().name)
+                    lines = ["KIND tool tour/d3d12 - :: run-as dev.nebula.galaxy.test gave no folder"]
+                    return landing.Result("not-judged", lines, landing.failures_of_lines(lines), "", "", "", "")
+                return FakeChecker.run(self, tree, tip, names, groups_text, also)
+
+        w.checker = OnceNotJudged(w)
+        w.checker.hold = threading.Event()
+        first, second = w.landing(pid=1001), w.landing(pid=1002)
+        results = {}
+        t1 = threading.Thread(target=lambda: results.update(a=first.land(["feat/a"])), name="caller-a")
+        t1.start()
+        self.assertTrue(w.checker.entered.wait(30))
+        t2 = threading.Thread(target=lambda: results.update(b=second.land(["feat/b"])), name="caller-b")
+        t2.start()
+        deadline = time.time() + 30
+        while w.rows().get("feat/b") is None and time.time() < deadline:
+            time.sleep(0.01)
+        w.checker.hold.set()
+        t1.join(60)
+        t2.join(60)
+        return results, second.out
+
+    def test_a_waiter_left_not_judged_by_another_callers_runner_runs_its_branch_once_itself(self):
+        results, out = self.waiter_left_not_judged(tool_file=False)
+        w = self.w
+        self.assertEqual(results, {"a": 0, "b": 0}, out)
+        self.assertEqual([(c["names"], t) for c, t in zip(w.checker.calls, w.checker.threads)],
+                         [(["feat/a"], "caller-a"), (["feat/b"], "caller-a"), (["feat/b"], "caller-b")])
+        self.assertEqual(w.rows()["feat/b"]["state"], "landed")
+        self.assertTrue(any("another caller's runner left feat/b not judged" in l and "runs it once itself" in l for l in out), out)
+
+    def test_a_waiter_not_judged_by_its_own_run_too_ends_not_judged_after_that_one_run(self):
+        results, out = self.waiter_left_not_judged(tool_file=True)
+        w = self.w
+        self.assertEqual(results, {"a": 0, "b": 2}, out)
+        self.assertEqual([t for c, t in zip(w.checker.calls, w.checker.threads) if c["names"] == ["feat/b"]], ["caller-a", "caller-b"],
+                         "one run by the other caller's runner, then exactly one of its own")
+        self.assertEqual(w.rows()["feat/b"]["state"], "waiting")
+        self.assertEqual(out[-1], "VERDICT not-judged")
 
     def test_one_batch_runs_the_union_of_its_branches_also(self):
         w = self.w

@@ -297,10 +297,32 @@ def declared_stops(declarations, tour_tests):
     return [t for t in tour_tests if any(fnmatch.fnmatchcase("tour/" + t, d[1]) for d in declarations)]
 
 
+# A line that a step's landing used (mend M-006: a step plays the 12 quick stops) ends with this mark on main until the section's full
+# check, whose approval removes the file: the pictures it named there are approved already, so that check does not call it stale.
+STEP_MARK = "[approved at a step's landing]"
+
+
+def used_lines(entries):
+    """The line numbers of PICTURES-CHANGE.txt that a differing picture of `entries` (a landing's new-pictures lines) uses."""
+    return {int(n) for e in entries if e["kind"] == "declared" for n in str(e["declaration"]).split(",") if n}
+
+
 def unused_declarations(changes_path, entries):
-    """The declarations (line, text) that no differing picture of `entries` (a landing's new-pictures lines) uses."""
-    used = {int(n) for e in entries if e["kind"] == "declared" for n in str(e["declaration"]).split(",") if n}
-    return [(d[0], "%s %s %s %s %s :: %s" % (d[1:5] + (d[5], d[6]))) for d in read_declarations(changes_path) if d[0] not in used]
+    """The declarations (line, text) that no differing picture of `entries` uses and that no step's landing used before (STEP_MARK)."""
+    used = used_lines(entries)
+    return [(d[0], "%s %s %s %s %s :: %s" % (d[1:5] + (d[5], d[6]))) for d in read_declarations(changes_path)
+            if d[0] not in used and not d[6].endswith(STEP_MARK)]
+
+
+def mark_used(changes_path, used):
+    """Ends each line of PICTURES-CHANGE.txt numbered in `used` with STEP_MARK (once), the file's other lines as they are."""
+    path = pathlib.Path(changes_path)
+    lines = path.read_bytes().decode("utf-8").splitlines(True)     # the file's own line ends kept
+    for i, line in enumerate(lines):
+        body = line.rstrip("\r\n")
+        if i + 1 in used and not body.endswith(STEP_MARK):
+            lines[i] = body + " " + STEP_MARK + line[len(body):]
+    path.write_text("".join(lines), encoding="utf-8", newline="")
 
 
 # --- Judging -------------------------------------------------------------------------------------------------------------
@@ -560,13 +582,14 @@ def tests_line(entries, limit=5):
     return shown + (" and %d more" % (len(names) - limit) if len(names) > limit else "")
 
 
-def approve_landing(tree, work, store, recheck, git, say=print, message_file=None):
+def approve_landing(tree, work, store, recheck, git, say=print, message_file=None, carry=False):
     """The approval of a landing: the new and declared pictures a run left (<work>/new-pictures.tsv) become approved. One
     commit on top of the tested commit that touches only tests/pictures/approved.tsv and PICTURES-CHANGE.txt (removed), plain,
     with the repository's own identity: "pictures: N approved for <the tests>"; then `recheck()` runs the picture checks again
     on the same run folders and returns [(check, state)]; every state must be pass. Returns (sha, None) of the new commit,
     (None, None) when the run left nothing to approve, or (None, why) with the tree back at the tested commit (the pictures
-    are in the store: files under their hash do no harm)."""
+    are in the store: files under their hash do no harm). `carry` (a step's landing, mend M-006): PICTURES-CHANGE.txt is not removed;
+    each line a picture used is marked (STEP_MARK) and the file stays on main for the section's full check, whose approval removes it."""
     tree, work = pathlib.Path(tree), pathlib.Path(work)
     entries = read_entries(work / "new-pictures.tsv")
     if not entries:
@@ -594,7 +617,14 @@ def approve_landing(tree, work, store, recheck, git, say=print, message_file=Non
     except (ValueError, OSError, SystemExit) as error:
         return undo("the pictures could not be approved: %s" % error)
     paths = [MANIFEST_NAME]
-    if changes.exists():
+    if changes.exists() and carry:
+        try:
+            mark_used(changes, used_lines(entries))
+        except (OSError, UnicodeError) as error:
+            return undo("%s could not be marked: %s" % (CHANGES_NAME, error))
+        sh("add", "--", CHANGES_NAME)
+        paths.append(CHANGES_NAME)
+    elif changes.exists():
         if sh("ls-files", "--error-unmatch", CHANGES_NAME).returncode == 0:
             sh("rm", "-q", "-f", CHANGES_NAME)
         else:

@@ -15,6 +15,10 @@ machine was not fit). luma_test.py kind_of is the one place it is decided. Here:
   5. the runner that cannot start because the machine is not fit (the run lock held, the device not answering) ends with
      exit code ENV_EXIT and writes no result, and the gate expects that same number;
   6. a game that cannot be started at all is tool ("the game could not be started").
+  7. a fault of the tool's that one more play can clear (RETRIED: output-missing, no-exit-record; a setup that failed; an
+     exception of the runner's own) is played once more at once: the result is the second play's and names the first in
+     "retried", whose folder is kept as <renderer>-first; a pass then is a pass the gate names in played_again; a malformed test, a
+     continue_from that did not pass, a disc not given, a full drive and a device that left are played once.
 Exit 0 when every case holds.
 """
 import argparse
@@ -178,6 +182,76 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             check(False, "run_one raised %s: %s (not a HarnessError) %s" % (type(error).__name__, error, traceback.format_exc()))
     finally:
         subprocess.Popen = real_popen
+
+    # 7. Played once more after a fault of the tool's.
+    suite7 = tmp / "suite7"
+    names7 = ["once", "always", "setup-once", "raises-once", "malformed", "refused", "full", "follows", "lost"]  # lost last: none plays after it
+    for n in names7:
+        (suite7 / n).mkdir(parents=True)
+        (suite7 / n / "test.json").write_text(json.dumps(dict(body, name=n)), encoding="utf-8")
+    (suite7 / "follows" / "test.json").write_text(json.dumps(dict(body, name="follows", continue_from="malformed")), encoding="utf-8")
+    (suite7 / "suite.json").write_text(json.dumps({"harness": 1, "tests": names7}), encoding="utf-8")
+    plays = {}
+
+    def fake_run_one7(test, renderer, a, run_folder, previous):
+        n = test["name"]
+        plays[n] = plays.get(n, 0) + 1
+        run_folder.mkdir(parents=True, exist_ok=True)
+        (run_folder / "play.txt").write_text(str(plays[n]), encoding="utf-8")
+        if n == "setup-once" and plays[n] == 1:
+            raise luma_test.SetupFailed("adb push: no answer")
+        if n == "raises-once" and plays[n] == 1:
+            raise RuntimeError("run-as dev.nebula.galaxy.test gave no folder")
+        if n == "malformed":
+            raise luma_test.HarnessError("the test names an object the types file lacks")
+        if n == "refused":
+            raise luma_test.NotRun("needs disc RMGP01: this run's game is RMGE01")
+        if n == "lost":
+            raise luma_test.DeviceLost("T left adb during the test")
+        if n == "full":
+            raise OSError(errno.ENOSPC, "No space left on device")
+        return {"code": 0, "seconds": 1.0, "frozen": {}, "mods": [], "exe": "x", "starts": 1, "unwatched": None}
+
+    def fake_evaluate7(test, renderer, run_folder, ran):
+        n = test["name"]
+        if n == "always" or (n == "once" and plays[n] == 1):
+            return "output-missing", "the game ended, and 60 s later this was still not there: after", [], []
+        return "pass", "", [], []
+
+    luma_test.run_one, luma_test.evaluate = fake_run_one7, fake_evaluate7
+    try:
+        with redirect_stdout(io.StringIO()):
+            luma_test.run_tests(argparse.Namespace(**dict(vars(run_args(tmp / "run7.lock", tmp / "work7")), target=str(suite7 / "suite.json"))))
+    finally:
+        luma_test.run_one, luma_test.evaluate = real["run_one"], real["evaluate"]
+    got7 = {}
+    for n in names7:
+        f = tmp / "work7" / "runs" / "suite7" / n / "d3d12" / "result.json"
+        got7[n] = json.loads(f.read_text(encoding="utf-8")) if f.is_file() else {}
+    first = tmp / "work7" / "runs" / "suite7" / "once" / "d3d12-first"
+    check(got7["once"].get("kind") == "pass" and got7["once"].get("retried", {}).get("verdict") == "output-missing"
+          and got7["once"]["retried"].get("folder") == "d3d12-first" and plays["once"] == 2,
+          "a picture that did not come back, then a pass: the pass, naming the first play: %s" % got7["once"])
+    check((first / "play.txt").read_text(encoding="utf-8") == "1" if (first / "play.txt").is_file() else False,
+          "the first play's folder is kept beside it as d3d12-first")
+    check((tmp / "work7" / "runs" / "suite7" / "once" / "d3d12" / "play.txt").read_text(encoding="utf-8") == "2",
+          "the result's folder holds the second play")
+    check(kinds.read_result(tmp / "work7" / "runs" / "suite7" / "once" / "d3d12" / "result.json", lambda v: "fail")[0] == "pass"
+          and "once" in kinds.played_again(tmp / "work7", "suite7", "d3d12"),
+          "the gate reads it as a pass that was played again (its judges look at it, then it is flake)")
+    check(got7["always"].get("kind") == "tool" and got7["always"].get("verdict") == "output-missing" and plays["always"] == 2
+          and got7["always"].get("retried", {}).get("verdict") == "output-missing",
+          "the same fault twice: tool, played twice, naming the first: %s" % got7["always"])
+    check(got7["setup-once"].get("kind") == "pass" and got7["setup-once"].get("retried", {}).get("verdict") == "setup-failed",
+          "a setup that failed once: played once more: %s" % got7["setup-once"])
+    check(got7["raises-once"].get("kind") == "pass" and got7["raises-once"].get("retried", {}).get("verdict") == "harness-error"
+          and "gave no folder" in got7["raises-once"]["retried"].get("reason", ""),
+          "the runner's own exception once (run-as gave no folder): played once more: %s" % got7["raises-once"])
+    for n, verdict in (("malformed", "harness-error"), ("refused", "not-run"), ("lost", "device-lost"), ("full", "not-run")):
+        check(plays.get(n) == 1 and got7[n].get("verdict") == verdict and "retried" not in got7[n],
+              "%s is played once (%s plays): %s" % (n, plays.get(n), got7[n]))
+    check("follows" not in plays and got7["follows"].get("verdict") == "setup-failed" and "retried" not in got7["follows"],
+          "a continue_from that did not pass is not played: %s" % got7["follows"])
 
 if failures:
     print("harness_kind_test.py: FAILED:\n  " + "\n  ".join(failures))

@@ -59,7 +59,7 @@ Take the time from `date "+%m-%d %H:%M"`, never from memory.
 
 ## 4. The loop
 
-    PLAN next -> PLAN start -> read, change, prove, audit, commit -> PLAN land (documents about 7 minutes, a game step about 30, PC and tablet)
+    PLAN next -> PLAN start -> read, change, prove, audit, commit -> PLAN land (documents about 7 minutes, a game step about 15, a section's full check about 30)
                                                                         |
                               while it plays: PLAN ahead, and write the next step on top of this one
                                                                         |
@@ -97,7 +97,10 @@ Every step is built on the one before it, and nothing reaches main that its land
 4. Make the change the card describes: all of it, and nothing the card does not ask for. Something else you
    notice that is wrong gets a ledger row (section 10), not a fix in this step.
 5. Prove it. Write the tests the card's "Proof" asks for, and run only the tests you wrote or changed, plus
-   the build. Do not run the full test set yourself: the landing runs exactly what is needed, once. `PLAN check`
+   the build. Do not run the full test set yourself: the landing runs exactly what is needed, once. Before a hand-in
+   you run the build, the step's own unit tests, the quick tour (12 stops) on each renderer your change touches (on all
+   three when it can move a picture) and `PLAN check` whole: no other stop set, renderer or disc unless the card's
+   proof names it (the owner's order of 11-23). `PLAN check`
    runs what `land` checks before it queues anything (the ledger, the file references, the replay rule, the
    console census and the other code checks, the strictness check, the rule on test tools and GitHub's jobs) on
    the work folder as it stands, prints every thing that would refuse the step at once, and queues nothing.
@@ -118,9 +121,15 @@ Every step is built on the one before it, and nothing reaches main that its land
    text that names a test, a search or a measure; each row the card only advances gets a dated note. Commit
    (section 8). The work folder must hold no uncommitted change.
 8. `PLAN land <ID>`, as a background command with a time limit of 600000 ms. A landing takes what was measured on
-   11-22 and 11-23: a step of documents only, about 7 minutes; a game step, about 30 (1651 seconds for a landing that
-   took every picture of the main level; the PC's speed pair 6 to 8 minutes of it, longer when a figure needs more
-   rounds). A step with an extra check (`PLAN next` lists them) is landed at the main level: every stop of
+   11-22 and 11-23: a step of documents only, about 7 minutes; a section's full check, about 30 (1651 seconds for a
+   landing that took every picture of the main level; the PC's speed pair 6 to 8 minutes of it, longer when a figure needs
+   more rounds). A game step that is not a section's check is a step's landing (mend M-006): the engine tests and the 12
+   quick stops on the three renderers and on the tablet, with pictures and replays, the Android build, no debug layers and
+   no speed measure; the tool estimates it at about 15 minutes until one is measured. The section's full check is the
+   landing of a package's last step, or of the fourth step landed since the last check: `PLAN land` gives it by itself
+   (`--section`) and says so; it plays every picture of the main level, the debug layers and both speed measures, whatever
+   the step's own files are. When it fails on something the 12 stops could not reach, the cause can be in any step landed
+   since the last check (`git log` names them): find it, and mend it on this step's branch. A step with an extra check (`PLAN next` lists them) is landed at the main level: every stop of
    the tour on every renderer and the other two discs, then each extra check one after another. `soak` adds 30
    minutes, `soak/long` two hours, each other one some minutes; one landing with the single extra check
    `speed/anchor` took 1345 seconds in all. A landing can also wait a few minutes for a piece of the long run.
@@ -161,6 +170,9 @@ Do not wait for a landing with empty hands.
 6. If `<M>` is whole and committed and the landing still plays (a long extra check): read the card and the
    sources of the step that follows `<M>` in `docs/plan/native/steps.tsv` (`PLAN card <ID>`). Write nothing
    for it. One step ahead is the limit.
+7. The section's barrier: while the step being landed is its package's full check (`PLAN land` said `--section`), `PLAN
+   ahead` writes no step of the next package (`nothing can be prepared ahead: the landing of <N> is the full check of
+   package <P> ...`): join the landing and wait for it, as for any `nothing can be prepared ahead`.
 
 ### 4.3 When the landing has ended
 
@@ -331,11 +343,12 @@ session is an order; an answer to such a question is written in your log and the
   differs means your change altered the game: find why. A recorded replay is a place that can make a check see
   less: the step adds one line for each changed file to `docs/plan/strictness-log.tsv` in the same landing (see
   section 9, the top).
-- A step that can move a picture is judged against every picture the main level compares, at its landing: anything
-  compiled into the game or read by it when it runs (`native/`, `runtime/`, the shaders, the SDL host, the importer
-  that cooks the game's data), the recordings, and the tests and tools that play the tours. That is every stop of the
-  tour on the three renderers of the US disc, both other discs on Direct3D 12 and the tablet's 12 stops. No picture
-  may differ from its approved one unless the step declares it in the same landing; a difference nobody declared
+- A step that can move a picture (anything compiled into the game or read by it when it runs: `native/`, `runtime/`,
+  the shaders, the SDL host, the importer that cooks the game's data; the recordings; the tests and tools that play the
+  tours) is judged at its own landing on the engine tests and the 12 quick stops of the three renderers and the tablet,
+  and at its section's full check against every picture the main level compares: every stop of the tour on the three
+  renderers of the US disc, both other discs on Direct3D 12 and the tablet's 12 stops (section 4.1 point 8). No picture
+  may differ from its approved one unless a line of `PICTURES-CHANGE.txt` declares it; a difference nobody declared
   fails, whichever renderer, disc or place it is on. The landing plays that set and is its judge: you do not play all
   of it before a hand-in. Before you hand in, play the quick tour (the `tour` command of `PLAN commands`). When your
   step is meant to change a picture, play it also with `--renderer all`, and with `--stop "<Stage N>"` for each stop
@@ -359,8 +372,13 @@ session is an order; an answer to such a question is written in your log and the
   (`tour/010-CannonFleetGalaxy-1`, `engine/boot`), the picture (`arrive`, `after`, the name an engine test gives its picture such as `title` in `engine/boot`, or `*`), the place (`pc` or `tablet`),
   the renderer (`d3d12`, `vulkan`, `d3d11`) and the disc (`RMGE01` the US disc, `RMGP01`, `RMGJ01`); `*` stands for any
   of them. Name every renderer, disc and place the picture changes on, for example `tour/010-CannonFleetGalaxy-1 * * * *
-  :: the sky is another blue`. The landing plays each stop a line names on the other discs' Direct3D 11 and Vulkan as
-  well and refuses a difference there that no line names; it refuses a line that no differing picture uses. That refusal
+  :: the sky is another blue`. Name the stops beyond the 12 quick ones too: a step's landing plays only those 12, and the
+  file stays on main until the section's full check, which plays the rest and removes it. So the file on main may hold
+  the lines of the steps landed since the last check: add yours below them, and never change or take out a line that is
+  there (a line a step's landing used ends with `[approved at a step's landing]`). The section's check plays each stop a
+  line names on the other discs' Direct3D 11 and Vulkan as well and refuses a difference there that no line names; it
+  refuses a line that no differing picture uses and that no step's landing marked (a step's landing refuses none: a line
+  its 12 stops did not use waits for the section's check). That refusal
   has the kind `tool` (`KIND tool pictures/declared - :: N declared change(s) name no differing picture (stale):
   PICTURES-CHANGE.txt line N: ...`), and so has a line the landing cannot read. Both are your own line, not a fault of
   a tool: take the line out or correct it, then land again. Do not land the branch once more unchanged and open no
@@ -450,10 +468,10 @@ work at the same time.
 | repository checks | no forbidden content, every script parses, the code rules, the settings table matches the code, no check was made to see less without its line in the strictness log (the file and line references of your documents and commit messages are read by `PLAN land` before the gate, not here) |
 | Windows build, unit tests, a start on each renderer | it builds and starts |
 | engine tests with their pictures (one renderer, or three) | each part of the engine draws and behaves as approved |
-| the tour: 12 stops of the game (every stop when the step has an extra check; every stop on every renderer, the other discs and the tablet's 12 stops when the step can move a picture), pictures and replays | the game plays exactly as recorded, on each renderer, and no picture differs that the step did not declare |
-| the debug layers (renderer changes) | no misuse of the graphics API |
-| Android build; on the tablet a start, a speed measure, and for Vulkan and Android changes the 12 stops | it runs on a real device as it does on the PC |
-| the speed check on the PC | the game's and the renderer's work for one step is not slower than the last judged build's (both builds run side by side) |
+| the tour: 12 stops of the game (on the three renderers and the tablet when the step can move a picture; every stop when the step has an extra check; at the section's full check every stop on every renderer, the other discs and the tablet's 12 stops), pictures and replays | the game plays exactly as recorded, on each renderer, and no picture differs that the step did not declare |
+| the debug layers (renderer changes; at the section's full check) | no misuse of the graphics API |
+| Android build; on the tablet a start and the 12 stops (a change that can move a picture, Vulkan and Android changes), and at the section's full check the tablet's speed measure | it runs on a real device as it does on the PC |
+| the speed check on the PC (at the section's full check) | the game's and the renderer's work for one step is not slower than the last judged build's (both builds run side by side) |
 | extra checks, only where the card's proof needs them: under load (`stress`), the memory-fault build (`sanitizer/tour`), the endurance run (`soak`, `soak/long`), the software graphics device (`replays/software`), a time rate of 2 against a rate of 1 (`replays/rates`), the comparison with the build of the plan's start (`speed/anchor`) | listed by `PLAN next` when your step has one |
 
 A failed test is run again alone, and on main's build, before the landing judges: that is where the kinds
@@ -471,9 +489,11 @@ process you did not start, never remove a lock, never stop a landing or the long
 ### What the tools cannot do (do not rely on it)
 
 - Metal is never run on this PC: only compiled and unit-tested by GitHub after the move.
-- A landing of a step that can move a picture plays every one of the game's 102 stops on the three renderers of
-  the US disc, both other discs on Direct3D 12 and the tablet's 12 stops; a landing of documents, plan data or
-  tools plays no picture. What no landing plays: the other discs on Direct3D 11 and Vulkan, except the stops your
+- A step's landing of a change that can move a picture plays the 12 quick stops on the three renderers and the tablet;
+  the section's full check plays every one of the game's 102 stops on the three renderers of the US disc, both other
+  discs on Direct3D 12 and the tablet's 12 stops, the debug layers and both speed measures; a step's landing of
+  documents, plan data or tools plays no picture. A fault only the full check can see lands with a step and is found up
+  to three landings later, at the section's check. What no landing plays: the other discs on Direct3D 11 and Vulkan, except the stops your
   `PICTURES-CHANGE.txt` names, and the long run's other parts. A fault there is found by the long run, up to a day
   later, and comes back as a repair.
 - The speed check does not see a cost smaller than its bands (the bands, and what was planted and refused,
@@ -610,8 +630,8 @@ impossible to pass, that is a reason to block the step, with the row's id in the
 
 - A proof item asks for something to be shown. Show it with a test that the landing will run from now on,
   wherever that is possible, so it stays proven.
-- "Before and after: never slower": the landing's own speed check is this proof (on the PC the check
-  `measure/step/pc`, and the tablet's measure). Do not build a measurement of your own for it. The figures exist
+- "Before and after: never slower": the speed check of the section's full check that follows the step is this proof
+  (on the PC the check `measure/step/pc`, and the tablet's measure; a step's own landing takes no measure, mend M-006). Do not build a measurement of your own for it. The figures exist
   only after the landing: when it has passed, `PLAN land` prints the speed checks' lines and keeps them with the
   step in the landings list and on the page. The row's proof text names the landing's check
   (`measure/step/pc`, the run folder it prints); no figure is copied by hand.
