@@ -1,13 +1,12 @@
 # Nebula native plan: status
 
-Written 2026-11-24 06:56. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 07:34. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
-Steps landed: 18 of 138 (13%).
+Steps landed: 19 of 138 (14%).
 
 Now: in work: lander landing R2.1 to R2.5
 
-In work now:
-- R2.2 The sampler tables stop filling: P-048, P-056, P-066, P-061 (agent 1)
+In work now: Nothing started.
 
 ## Packages
 
@@ -17,7 +16,7 @@ In work now:
 | S0.2 | 6 | 6 |
 | S0.3 | 2 | 2 |
 | R1 | 4 | 4 |
-| R2 | 1 | 5 |
+| R2 | 2 | 5 |
 | G2 | 0 | 9 |
 | G6 | 0 | 8 |
 | G1 | 0 | 5 |
@@ -42,6 +41,7 @@ In work now:
 
 | When | Step | Title | Code commit | Main commit |
 | --- | --- | --- | --- | --- |
+| 2026-11-24 07:34 | R2.2 | The sampler tables stop filling: P-048, P-056, P-066, P-061 | 63c679c5f | 4f085e54d |
 | 2026-11-24 06:56 | R2.1 | A target is read through its own slot; the walk-level counting test | 9519e05d7 | 8c7031e10 |
 | 2026-11-24 04:51 | R1.4 | P-065 (Metal): the renderer's own shader texts compiled at build | 292b3cc4d | 599592a98 |
 | 2026-11-24 03:28 | R1.3 | N-1067: the present gate waits only on a load screen | 4fcf535b2 | 2d389b3a3 |
@@ -51,7 +51,6 @@ In work now:
 | 2026-11-23 18:49 | S0.3.1 | Search main for what the rows name | d0c611857 | 053bc9c98 |
 | 2026-11-23 10:25 | S0.2.6 | Landing B, part 4: the question-and-answer path is deleted | 3eaa95375 | d324dc52e |
 | 2026-11-23 08:09 | S0.2.5 | Landing B, part 3: the lens flare | 21ccecf7b | 424c3e541 |
-| 2026-11-23 06:19 | S0.2.4 | Landing B, part 2: the talk balloon | 2423dde4f | 27172e772 |
 
 ## Repairs
 
