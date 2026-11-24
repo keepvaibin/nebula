@@ -30,7 +30,7 @@ constexpr DXGI_FORMAT kDistanceFormat = DXGI_FORMAT_R32_FLOAT;
 
 }  // namespace
 
-bool AmbientOcclusion::initialize(ID3D11Device1* device) {
+bool AmbientOcclusion::initialize(ID3D11Device* device) {
     shutdown();
     device_ = device;
     if (device_ == nullptr) {
@@ -196,6 +196,7 @@ bool AmbientOcclusion::record(ID3D11DeviceContext1* context, const Inputs& in) {
     ID3D11UnorderedAccessView* const no_storage = nullptr;
     {
         const ComputeConstants bound(context, constants);  // the three passes', emptied after the last
+        
         ID3D11ShaderResourceView* const fixed[5] = {in.depth->view.Get(), nullptr, nullptr, objects_.view.Get(),
                                                     tiles_.view.Get()};
         context->CSSetShaderResources(0u, 5u, fixed);
