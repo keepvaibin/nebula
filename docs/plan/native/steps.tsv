@@ -17,7 +17,7 @@ order	step	package	title	package_needs	card_file	state	commit
 16	R1.3	R1	N-1067: the present gate waits only on a load screen	S0.2	04-NATIVE-LANE-R.md	landed	4fcf535b2
 17	R1.4	R1	P-065 (Metal): the renderer's own shader texts compiled at build	S0.2	04-NATIVE-LANE-R.md	landed	292b3cc4d
 18	R2.1	R2	A target is read through its own slot; the walk-level counting test	S0.1	04-NATIVE-LANE-R.md	landed	9519e05d7
-19	R2.2	R2	The sampler tables stop filling: P-048, P-056, P-066, P-061	S0.1	04-NATIVE-LANE-R.md	open	
+19	R2.2	R2	The sampler tables stop filling: P-048, P-056, P-066, P-061	S0.1	04-NATIVE-LANE-R.md	landed	63c679c5f
 20	R2.3	R2	P-059: the cook decides "authored levels" once	S0.1	04-NATIVE-LANE-R.md	open	
 21	R2.4	R2	The player's swapped images	S0.1	04-NATIVE-LANE-R.md	open	
 22	R2.5	R2	P-216 and P-255's first part	S0.1	04-NATIVE-LANE-R.md	open	
