@@ -24,7 +24,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 163u
+#define NEBULA_GAME_API_VERSION 164u
 
 /* The game's fixed step: nebula_game_run's loop runs this many steps a second (frame_wait paces them), whatever the
    display's rate; the host presents each or interpolates between them. */
@@ -411,6 +411,8 @@ enum {
     NEBULA_OPTION_GRAPHICS_BACKEND,    /* the renderer's backend, the same all session: 1 D3D12, 2 Vulkan, 3 D3D11 (draw.native) */
     NEBULA_OPTION_SCENE_TEXTURES,      /* 1 while texture packs' replacements of the textures a loaded scene made are still
                                           loading: the scene starts once this is 0 */
+    NEBULA_OPTION_SCENE_PIPELINES,     /* 1 while pipelines the game has registered are still to make (the workers raised
+                                          meanwhile): the scene starts once this is 0 */
 };
 
 /* post_register's result (draw.post, docs/modding/reference/services/draw.md). */

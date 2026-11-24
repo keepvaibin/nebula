@@ -56,6 +56,14 @@ PipelineProgress pipeline_progress() noexcept {
     return backend().pipeline_progress();
 }
 
+void set_pipelines_hurried(bool hurried) noexcept {
+    backend().set_pipelines_hurried(hurried);
+}
+
+void drain_pipelines() noexcept {
+    backend().drain_pipelines();
+}
+
 TextureStore& textures() noexcept {
     return backend().textures();
 }

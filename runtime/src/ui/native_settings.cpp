@@ -6336,7 +6336,7 @@ NativeSettingsView build_native_settings_view() {
     } else if (const PipelineProgress pipelines = pipeline_progress();
                pipelines.left != 0u && (galaxy::extensions::flags() & NEBULA_EXT_FIXED_STEPS) == 0u) {
         // Not in fixed steps (deterministic test mode): the workers' pace is the machine's, so the line would differ run
-        // to run; the title does not wait for them there either, and a draw makes its own pipeline when it needs one.
+        // to run; the title does not wait for them there either, and a draw waits for its own pipeline's worker.
         view.status = NativeSettingsStatus::Preparing;
         view.status_number = static_cast<int>(std::uint64_t{pipelines.done} * 100u / (std::uint64_t{pipelines.done} + pipelines.left));
     } else if (GameLanguage running{}; tab == 4u && running_game_language(running) &&

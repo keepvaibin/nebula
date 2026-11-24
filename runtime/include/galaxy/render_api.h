@@ -92,6 +92,11 @@ struct PipelineProgress {
     bool warm = false;
 };
 [[nodiscard]] PipelineProgress pipeline_progress() noexcept;
+// While a scene's load waits for its pipelines: the pipeline workers at the normal priority, not the lowest. Any thread.
+void set_pipelines_hurried(bool hurried) noexcept;
+// Deterministic runs, at a scene's load gate: the render thread makes every pipeline registered so far before its next
+// picture (the workers hurried, the render thread waiting), so the scene's pictures find them made. Any thread.
+void drain_pipelines() noexcept;
 [[nodiscard]] TextureStore& textures() noexcept;
 // The list the next render_frame hands over.
 void attach_frame_list(NebulaFrameList* list) noexcept;

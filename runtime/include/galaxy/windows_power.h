@@ -52,6 +52,21 @@ inline void lower_current_thread_priority() noexcept {
 // A lowered background thread another thread now waits for (a stop's join): the normal priority again and no efficiency
 // request, so the job it is in finishes at a frame thread's pace. Windows' priorities are strict: beside busy threads of
 // the normal priority, one at the lowest runs only when the scheduler lifts it against starvation, seconds apart, and a
+// A lowered background thread whose work a frame thread or a load now waits for (a pipeline a draw missed, a scene's load
+// gate), from itself: the normal priority and no efficiency request while `waited`; lower_current_thread_priority's again
+// after.
+inline void set_current_thread_waited_for(bool waited) noexcept {
+    if (!waited) {
+        lower_current_thread_priority();
+        return;
+    }
+    (void)SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_NORMAL);
+    set_current_thread_efficiency(false);
+}
+
+// A lowered background thread another thread now waits for (a stop's join): the normal priority again and no efficiency
+// request, so the job it is in finishes at a frame thread's pace. Windows' priorities are strict: beside busy threads of
+// the normal priority, one at the lowest runs only when the scheduler lifts it against starvation, seconds apart, and a
 // device restore that joined such threads took 16 s on a loaded PC (N-1072).
 inline void raise_waited_thread(std::thread& thread) noexcept {
     const HANDLE handle = static_cast<HANDLE>(thread.native_handle());
@@ -156,6 +171,16 @@ inline void lower_current_thread_priority() noexcept {
     (void)pthread_set_qos_class_self_np(QOS_CLASS_UTILITY, 0);
 #else
     (void)setpriority(PRIO_PROCESS, static_cast<id_t>(syscall(SYS_gettid)), 10);
+#endif
+}
+// A lowered background thread whose work a frame thread or a load now waits for, from itself: Apple's user-initiated class,
+// nice 0 on Linux and Android where the system allows it (RLIMIT_NICE; refused, the thread keeps nice 10) while `waited`;
+// lower_current_thread_priority's again after.
+inline void set_current_thread_waited_for(bool waited) noexcept {
+#if defined(__APPLE__)
+    (void)pthread_set_qos_class_self_np(waited ? QOS_CLASS_USER_INITIATED : QOS_CLASS_UTILITY, 0);
+#else
+    (void)setpriority(PRIO_PROCESS, static_cast<id_t>(syscall(SYS_gettid)), waited ? 0 : 10);
 #endif
 }
 // A waited-for lowered thread keeps its class here: Linux's fair scheduler gives nice 10 its share of a contended core and

@@ -127,7 +127,7 @@ game touches goes through the save worker.
 | --- | --- | --- |
 | Window owner (`window_owner.cpp:20`) | the window's size, focus, input | the size reaches the aspect latch (1.5) and the swap chain's resize (1.4, a whole-GPU wait) |
 | Display clock (`vblank_clock_win32.cpp:175`, started once by `vblank_grid`) | the vertical blank's time and period | under `g_mutex`, read by the step wait and the present slots |
-| Pipeline workers (`runtime/src/render/core/pipelines.cpp:104`, lowest priority) | compiling pipeline states | each published to an atomic cell (`cell` :145, `publish` :164); a draw whose pipeline is not there yet compiles it on the render thread (`create_now` :253; a quick link where pipelines link from parts, :271) |
+| Pipeline workers (`runtime/src/render/core/pipelines.cpp:104`, lowest priority) | compiling pipeline states | each published to an atomic cell (`cell` :145, `publish` :164); a draw whose pipeline is not there yet is left out of that picture and its job moved to the front of the queue, the worker at the normal priority (`missing`; a quick link where pipelines link from parts; with fixed steps the draw waits for that worker), and a scene's load waits for every pipeline registered so far with the workers raised (`set_hurried`, the host's `NEBULA_OPTION_SCENE_PIPELINES`) |
 | Record workers (`runtime/src/render/core/draw_record.h`, `RecordPool`) | encoding a pass's chunks | fork and join inside the walk: the render thread takes a share and returns when all are done |
 | Texture pack workers (`texture_pack.cpp:176`) | reading and decoding replacements | decoded pixels picked up at `pump` once a frame; the upload is the render thread's |
 | Movie (`movie_playback.cpp:85`, :357, :903; :1200 prepares the decoder) | decoding a movie | pictures through the stager to the render thread |
@@ -216,7 +216,7 @@ with no row has a new one.
 
 | Part | Where | Row |
 | --- | --- | --- |
-| A draw whose pipeline is not ready compiles it on the render thread | `runtime/src/render/core/pipelines.cpp:253` (`create_now`) | P-010, E3 step 1 (a form known at load) |
+| A draw whose pipeline is not ready compiles it on the render thread | `runtime/src/render/core/pipelines.cpp` (`create_now`) | P-010 (fixed at R1.2: `create_now` is gone; the load's gate waits for the pipelines, a miss in play is left out, counted and made at the queue's front) |
 | Utility pipelines compiled on the render thread at first use, outside the cache | `runtime/src/render/core/pipelines.cpp` | P-052 (fixed at R1.1: Direct3D 12's through the driver cache at the start since caa9ca1e7 and e68b6cd6c) |
 | A present waits for every pipeline creation in flight (Direct3D 12) | `runtime/src/render/core/present_gate.h` | N-1067, E3 step 1 |
 | The sampler heap or array, full, waits for the whole GPU | `renderer_d3d12.cpp:1410`; `runtime/src/render/vk/renderer_vk_frame.cpp:2710`, :2729; `runtime/src/render/mtl/renderer_mtl_draw.mm:261` (each `reset_sampler_frame`) | P-048, P-056, P-066, E3 step 2 |
@@ -384,7 +384,7 @@ it. Pile A: the foundation does not touch its code; it comes after. Where this d
 | Row | Pile | Step | What | Note |
 | --- | --- | --- | --- | --- |
 | P-022 | B | F3 | The same per-renderer logic is written four times. |  |
-| P-010 | B | F4, E3 step 1 | A draw whose pipeline is not made yet compiles it on the render thread |  |
+| P-010 | B | F4, E3 step 1 | A draw whose pipeline is not made yet compiles it on the render thread | fixed at R1.2: a scene's load waits for its pipelines; a draw that misses one is left out, counted (timeline `PipelineMissed`) and its job made first |
 | N-1067 | B | F4, E3 step 1 | a Present waits for every pipeline creation in flight (core/present_ga |  |
 | P-157 | B | F4, E3 step 1 | the imported material format still stores the console's register layou |  |
 | P-052 | B | F4, E3 step 1 | Utility pipelines are compiled on the render thread at first use, outs | fixed at R1.1: Direct3D 12's half was on main (caa9ca1e7, e68b6cd6c); Vulkan's bloom and post-process pipelines are made at the start on workers and the self-test runs before the first frame |
@@ -747,9 +747,17 @@ alpha cutoff, the glow row, the base map, the baked light, the coordinate source
 are not written in step 1: nothing on main reads them, and a field written with no reader cannot be proved. Each is
 added at `FORM`'s end by the landing that brings its first reader; `stride` makes that an added field, not a format.
 2.4's row 1 lists them as step 1's: they are not. The pipelines a model needs are already written at the cook
-(NebulaData/Pipelines.bin, `pipeline_list.rs:1-5`, `:102-114`) and registered at boot; what is left of P-010 is that a
-draw whose pipeline is not made yet builds it on the render thread, which is E5's code and needs nothing more from the
-file.
+(NebulaData/Pipelines.bin, `pipeline_list.rs:1-5`, `:102-114`) and registered at boot; what was left of P-010 was that a
+draw whose pipeline is not made yet built it on the render thread, which is E5's code and needed nothing more from the
+file. Fixed at R1.2 (`runtime/src/render/core/pipelines.cpp`, `missing`): no draw builds. A form left out of the start's set
+(`defer`: a texture target form no run has drawn, the narrow scene's motion forms while the wide one is drawn) waits in
+`left_jobs_` behind the queue, taken once a scene has been shown or while a load waits (`set_hurried`); a draw that needs
+one first finds its cell empty, is left out of that picture, and its form goes to the front of the queue as an urgent job
+at the normal priority; the deferred job later finds the cell filled. A scene's load (`GameSystemSceneController::exeInitializeScene`)
+asks the host `NEBULA_OPTION_SCENE_PIPELINES` each step: 1 while the queue and the registered-but-not-queued pipelines
+are not empty (`pipeline_progress`), at most 60 s. With fixed steps the game never waits (the frames waited would be the
+machine's): the render thread makes the queue before its next picture (`drain_pipelines`), and a draw that still misses
+waits for its worker, so two runs draw alike.
 
 **Readers.** `ModelData` resolves the sections once at load (2.8's lookup) and keeps the arrays. `Material` keeps its
 `MATL` and `GXMT` entries in place of 12's record; every form reader takes the form's ranges in place of `*_at`;

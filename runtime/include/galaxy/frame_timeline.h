@@ -58,6 +58,8 @@ enum class Event : std::uint16_t {
     GateWaitBegin = 36,    // render, Direct3D 12: a Present waits for pipeline creations in flight (core/present_gate.h).
                            // a=creations in flight
     GateWaitEnd = 37,
+    PipelineMissed = 38,   // render: a draw found its pipeline not made yet (core/pipelines.cpp, missing): left out, or
+                           // waited for with fixed steps, and made at the workers' queue's front. a=pipeline id, b=its key
 };
 
 struct Record {
