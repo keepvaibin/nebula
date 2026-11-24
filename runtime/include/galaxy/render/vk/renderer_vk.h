@@ -20,6 +20,7 @@
 #include "galaxy/render/gpu_pass_times.h"
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/display_modes.h"
+#include "galaxy/render/frame_schedule.h"
 #include "galaxy/render/present_slots.h"
 #include "galaxy/render/renderer_common.h"
 #include "galaxy/render/scene_view.h"
@@ -408,6 +409,13 @@ public:
     // True once when the presentation times lower the depth by one picture fewer: the next slot is skipped
     // (PresentSlots::take_skip).
     [[nodiscard]] bool take_present_skip() noexcept { return present_timing_.slots.take_skip(); }
+    // No display model yet (G2.3.1 gives Direct3D's; this platform's comes in its own landing): the schedule's slots
+    // are the moments the pictures start.
+    [[nodiscard]] bool display_time(std::int64_t, std::int64_t& shown) const noexcept {
+        shown = 0;
+        return false;
+    }
+    [[nodiscard]] bool take_shown(ShownPicture&) noexcept { return false; }
     [[nodiscard]] UploadRing& vertex_ring() noexcept { return vertex_ring_; }
     [[nodiscard]] UploadRing& index_ring() noexcept { return index_ring_; }
     [[nodiscard]] UploadRing& constant_ring() noexcept { return constant_ring_; }

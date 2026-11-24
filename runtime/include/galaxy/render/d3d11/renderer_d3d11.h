@@ -32,6 +32,7 @@
 #include "galaxy/render/mod_post.h"
 #include "galaxy/render/post_process_settings.h"
 #include "galaxy/render/render_config.h"
+#include "galaxy/render/frame_schedule.h"
 #include "galaxy/render/present_slots.h"
 #include "galaxy/render/renderer_common.h"
 #include "galaxy/render/scene_view.h"
@@ -287,10 +288,16 @@ public:
     [[nodiscard]] SwapQueue swap_queue() const noexcept {
         return get_render_config().vsync_interval != 0u ? SwapQueue::EveryPicture : SwapQueue::Tearing;
     }
-    // The moment the next present shows (RenderCore's interpolation slots): this API has no presentation times, so
-    // the presents pace themselves (PresentPacer, the swap chain's vblanks).
-    void set_present_moment(std::int64_t) noexcept {}
+    // The refresh the next present is drawn for (RenderCore's interpolation slot); 0 when it has none. This API asks no
+    // time: the display model (display_time) tells when a present shows, and the frame latency object holds a present
+    // that is early until the one before it is shown.
+    void set_present_moment(std::int64_t qpc) noexcept { present_moment_ = qpc; }
     [[nodiscard]] bool take_present_skip() noexcept { return false; }
+    // The display model (frame_schedule.h DisplayModel), fed by every present's frame statistics (dxgi_pacing.h).
+    [[nodiscard]] bool display_time(std::int64_t present, std::int64_t& shown) const noexcept {
+        return display_model_.display_time(present, shown);
+    }
+    [[nodiscard]] bool take_shown(ShownPicture& picture) noexcept { return display_model_.take_shown(picture); }
     [[nodiscard]] UploadRing& vertex_ring() noexcept { return vertex_ring_; }
     [[nodiscard]] UploadRing& index_ring() noexcept { return index_ring_; }
     [[nodiscard]] UploadRing& constant_ring() noexcept { return constant_ring_; }
@@ -468,6 +475,9 @@ private:
     // The swap chain.
     d3d11::ComPtr<IDXGISwapChain3> swap_chain_;
     HANDLE frame_latency_waitable_ = nullptr;
+    // The refresh the next present is drawn for (set_present_moment), and the display model its statistics feed.
+    std::int64_t present_moment_ = 0;
+    DisplayModel display_model_{galaxy::qpc_frequency()};
     d3d11::ComPtr<ID3D11RenderTargetView> backbuffer_rtv_;  // buffer 0 (flip model: always the one drawn next)
     std::uint32_t swap_width_ = 0u, swap_height_ = 0u;
     DXGI_FORMAT swap_format_ = DXGI_FORMAT_R8G8B8A8_UNORM;

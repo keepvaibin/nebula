@@ -42,6 +42,8 @@ int main() {
         tl::record(tl::Event::SlotWaitBegin, 7u);
         tl::record(tl::Event::SlotWaitEnd, 7u);
         tl::record(tl::Event::ContentTime, 2u, 1u);
+        // A Direct3D present drawn for a refresh (dxgi_pacing.h): the refresh's moment, the present's count, when it was ready.
+        tl::record_at(tl::Event::DisplayModel, tl::now(), 5u, 9u);
         const std::uint64_t after = tl::now();
         check(before != 0u && after >= before, "the clock reads the platform's");
         tl::dump();
@@ -50,31 +52,34 @@ int main() {
         std::FILE* in = galaxy::open_path(file, "rb");
         check(in != nullptr, "the dump writes the file --timeline names");
         std::uint64_t header[8]{};
-        std::vector<tl::Record> records(4u);
+        std::vector<tl::Record> records(5u);
         const bool header_read = std::fread(header, sizeof(header), 1u, in) == 1u;
         const std::size_t read = std::fread(records.data(), sizeof(tl::Record), records.size(), in);
         std::fclose(in);
         std::error_code ignored;
         std::filesystem::remove(file, ignored);
-        check(header_read && read == 3u, "a header and the three records, nothing more");
+        check(header_read && read == 4u, "a header and the four records, nothing more");
         check(std::memcmp(&header[0], "NBTL0001", 8u) == 0 && header[1] == 1u, "format NBTL0001, version 1");
         check(header[2] == static_cast<std::uint64_t>(galaxy::qpc_frequency()) && header[2] != 0u,
               "the header gives the clock's ticks a second");
-        check(header[3] == 3u && header[4] == 3u, "three records kept of three written");
+        check(header[3] == 4u && header[4] == 4u, "four records kept of four written");
         check(header[5] == galaxy::current_process_id(), "the header names the process");
         check(records[0].event == static_cast<std::uint16_t>(tl::Event::SlotWaitBegin) &&
                   records[1].event == static_cast<std::uint16_t>(tl::Event::SlotWaitEnd) &&
-                  records[2].event == static_cast<std::uint16_t>(tl::Event::ContentTime),
+                  records[2].event == static_cast<std::uint16_t>(tl::Event::ContentTime) &&
+                  records[3].event == static_cast<std::uint16_t>(tl::Event::DisplayModel) && records[3].event == 39u,
               "the events in their order");
-        check(records[0].a == 7u && records[1].a == 7u && records[2].a == 2u && records[2].b == 1u,
+        check(records[0].a == 7u && records[1].a == 7u && records[2].a == 2u && records[2].b == 1u && records[3].a == 5u &&
+                  records[3].b == 9u,
               "each event's values");
-        for (std::size_t i = 0u; i < 3u; ++i) {
+        for (std::size_t i = 0u; i < 4u; ++i) {
             check(records[i].valid == 1u, "every record is marked written");
             check(records[i].qpc >= before && records[i].qpc <= after, "every record's moment is on the clock");
             check(records[i].thread != 0u && records[i].thread == records[0].thread,
                   "every record names this thread");
         }
-        check(records[0].qpc <= records[1].qpc && records[1].qpc <= records[2].qpc, "moments in order");
+        check(records[0].qpc <= records[1].qpc && records[1].qpc <= records[2].qpc && records[2].qpc <= records[3].qpc,
+              "moments in order");
     } catch (const std::exception& error) {
         std::cerr << "frame_timeline_tests: FAILED: " << error.what() << "\n";
         return 1;

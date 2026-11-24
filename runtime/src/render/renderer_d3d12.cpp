@@ -15,6 +15,7 @@
 
 #include "galaxy/content_viewport.h"
 #include "galaxy/platform_time.h"
+#include "galaxy/precise_wait.h"
 #include "galaxy/display_aspect.h"
 #include "galaxy/render_api.h"
 #include "galaxy/render/galaxy_select.h"
@@ -4316,13 +4317,27 @@ void RendererD3D12::present_to_swap_chain() {
     streamline::marker(streamline::Marker::kPresentStart);
     // The display's own signal that a frame may be queued, awaited asleep (never a poll) and bounded, so a display that stopped
     // never holds the render thread. Not when presenting at once with no wait for the display (vsync off), and not on a chain
-    // that frame generation replaced.
+    // that frame generation replaced. With one present in flight it holds a picture drawn early for its refresh
+    // (RenderCore's display lead) until the one before it is shown.
+    DxgiPresent model_present{std::exchange(present_moment_, 0), galaxy::qpc_now(), 0};
     if (latency_wait_ != nullptr && vsync != 0u && !generating && !fsr_swap_chain_) {
         const galaxy::bench::RenderSpan span(galaxy::bench::RenderPart::Acquire);
+        if (timeline_present) {
+            galaxy::timeline::record(galaxy::timeline::Event::AcquireBegin);
+        }
         if (WaitForSingleObjectEx(latency_wait_, 100u, TRUE) == WAIT_TIMEOUT && ++latency_timeouts_ <= 4u) {
             std::cerr << "[present] the frame latency object did not signal within 100 ms\n";
         }
+        if (timeline_present) {
+            galaxy::timeline::record(galaxy::timeline::Event::AcquireEnd);
+        }
+        // The present asks no time: a picture ready before the refresh it is drawn for could take is held to it.
+        const std::int64_t from = display_model_.present_from(model_present.slot);
+        if (from > galaxy::qpc_now()) {
+            galaxy::PreciseWait::for_this_thread().until(from);
+        }
     }
+    model_present.call = galaxy::qpc_now();
     // No pipeline creation spans the Present (core/present_gate.h).
     HRESULT present_hr = S_OK;
     {
@@ -4391,7 +4406,7 @@ void RendererD3D12::present_to_swap_chain() {
     {
         std::int64_t vblank = 0, period = 0;
         report_dxgi_present(swap_chain_.Get(), !generating && !fsr_swap_chain_ && present_hr == S_OK,
-                            vblank_grid(vblank, period) ? period : 0);
+                            vblank_grid(vblank, period) ? period : 0, display_model_, model_present);
     }
     {
         LARGE_INTEGER now{};
