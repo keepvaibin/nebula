@@ -1,13 +1,12 @@
 # Nebula native plan: status
 
-Written 2026-11-24 13:12. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 13:28. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
-Steps landed: 23 of 138 (17%).
+Steps landed: 24 of 138 (17%).
 
 Now: in work: lander landing G2.1 and G2.2
 
-In work now:
-- G2.2 Landing 2: the lead at whole multiples of 60 Hz (agent 1)
+In work now: Nothing started.
 
 ## Packages
 
@@ -18,7 +17,7 @@ In work now:
 | S0.3 | 2 | 2 |
 | R1 | 4 | 4 |
 | R2 | 5 | 5 |
-| G2 | 1 | 9 |
+| G2 | 2 | 9 |
 | G6 | 0 | 8 |
 | G1 | 0 | 5 |
 | R3 | 0 | 13 |
@@ -42,6 +41,7 @@ In work now:
 
 | When | Step | Title | Code commit | Main commit |
 | --- | --- | --- | --- | --- |
+| 2026-11-24 13:28 | G2.2 | Landing 2: the lead at whole multiples of 60 Hz | 71aa23551 | 502e0e4bf |
 | 2026-11-24 13:12 | G2.1 | Landing 1: a sequence starts at its arrival; the step keeps its due times | 428c84f7d | 4614f2a97 |
 | 2026-11-24 11:05 | R-005 |  | bd769ade9 | e29e1d6bd |
 | 2026-11-24 09:58 | R2.5 | P-216 and P-255's first part | 884be1caa | 788713537 |
@@ -51,7 +51,6 @@ In work now:
 | 2026-11-24 06:56 | R2.1 | A target is read through its own slot; the walk-level counting test | 9519e05d7 | 8c7031e10 |
 | 2026-11-24 04:51 | R1.4 | P-065 (Metal): the renderer's own shader texts compiled at build | 292b3cc4d | 599592a98 |
 | 2026-11-24 03:28 | R1.3 | N-1067: the present gate waits only on a load screen | 4fcf535b2 | 2d389b3a3 |
-| 2026-11-24 00:04 | R1.2 | P-010: a stage's pipelines made while it loads, a draw never compiles | d0c08ad67 | 61cae33f5 |
 
 ## Repairs
 
