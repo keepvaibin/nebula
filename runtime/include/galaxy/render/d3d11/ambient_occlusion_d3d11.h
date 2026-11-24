@@ -44,7 +44,7 @@ public:
         SceneView view{};                          // the scene's projection, depth range and viewport (scene target pixels)
     };
     // The occlusion, multiplied into `color`'s RGB. False when nothing was drawn.
-    bool record(ID3D11DeviceContext1* context, const Inputs& in);
+    bool record(ID3D11DeviceContext* context, const Inputs& in);
     // Once a frame: the targets no record() asked for in kIdleSteps game steps are handed back.
     void trim_idle();
 
@@ -55,8 +55,8 @@ private:
         std::uint32_t capacity = 0;  // elements
     };
     bool ensure(std::shared_ptr<Texture>& target, DXGI_FORMAT format, unsigned width, unsigned height, const char* name);
-    bool upload(ID3D11DeviceContext1* context, Rows& rows, const void* data, std::uint32_t count, std::uint32_t stride);
-    void dispatch(ID3D11DeviceContext1* context, ID3D11ComputeShader* shader, ID3D11ShaderResourceView* occlusion,
+    bool upload(ID3D11DeviceContext* context, Rows& rows, const void* data, std::uint32_t count, std::uint32_t stride);
+    void dispatch(ID3D11DeviceContext* context, ID3D11ComputeShader* shader, ID3D11ShaderResourceView* occlusion,
                   Texture& output, unsigned width, unsigned height);
 
     ID3D11Device* device_ = nullptr;
