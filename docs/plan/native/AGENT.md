@@ -172,7 +172,7 @@ Do not wait for a landing with empty hands.
    for it. One step ahead is the limit.
 7. The section's barrier: while the step being landed is its package's full check (`PLAN land` said `--section`), `PLAN
    ahead` writes no step of the next package (`nothing can be prepared ahead: the landing of <N> is the full check of
-   package <P> ...`): join the landing and wait for it, as for any `nothing can be prepared ahead`.
+   package <package> ...`): join the landing and wait for it, as for any `nothing can be prepared ahead`.
 
 ### 4.3 When the landing has ended
 
