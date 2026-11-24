@@ -30,7 +30,7 @@ on:
       dry_run:
         description: Build the packages only (no release)
         type: boolean
-        default: false
+        default: true
       version:
         description: A dry run's version (2.0.0-beta.1; empty is CMakeLists.txt's)
         required: false
