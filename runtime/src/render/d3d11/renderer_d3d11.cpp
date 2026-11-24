@@ -88,8 +88,8 @@ bool RendererD3D11::initialize(int window_width, int window_height, const FrameM
         // The scene in a part of its targets, every pass reading that part (dynamic_resolution.h).
         set_dynamic_resolution_offered(true);
         // The scene's depth as a picture (publish_scene_depth_copy): a format the device draws into and filters.
-        UINT r32 = 0u;
-        constexpr UINT kDepthCopyNeeds = D3D11_FORMAT_SUPPORT_RENDER_TARGET | D3D11_FORMAT_SUPPORT_SHADER_SAMPLE;
+       // UINT r32 = 0u;
+       // constexpr UINT kDepthCopyNeeds = D3D11_FORMAT_SUPPORT_RENDER_TARGET | D3D11_FORMAT_SUPPORT_SHADER_SAMPLE;
         depth_copy_format_ = DXGI_FORMAT_R16_FLOAT;
         // The rings are upload memory with addresses in the renderer's own space; their sizes follow the other renderers'.
         // No ring keeps a frame before the last one readable: nothing on Direct3D 11 reads last frame's vertices (motion).
