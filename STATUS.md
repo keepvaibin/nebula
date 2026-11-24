@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-24 11:54. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 11:55. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 22 of 138 (16%).
 
-Now: R-005 landed (22 of 138); in work: writer writing package G2 from G2.1
+Now: G2.1, G2.2 written, G2.3 blocked; next: lander for G2
 
 In work now:
 - G2.1 Landing 1: a sequence starts at its arrival; the step keeps its due times (agent 1)
