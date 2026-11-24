@@ -212,4 +212,7 @@ class WaitTest(StackBase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    # the gate runs each self-test through guarded.py with options of its own (--work): they are not unittest's
+    result = unittest.main(argv=[sys.argv[0]], exit=False, verbosity=1).result
+    print("plan_stack_test: %s (%d tests)" % ("pass" if result.wasSuccessful() else "FAIL", result.testsRun))
+    sys.exit(0 if result.wasSuccessful() else 1)
