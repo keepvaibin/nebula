@@ -51,6 +51,9 @@ CMakeFiles/a.dir/runtime/src/a.cpp.obj: #deps 3, deps mtime 1 (VALID)
 
 CMakeFiles/b.dir/b.cpp.obj: #deps 1, deps mtime 1 (VALID)
     generated/programs_dxil.rc
+
+libx.so: #deps 1, deps mtime 1 (VALID)
+    CMakeFiles/x.dir/D_/NebulaWork/MarioGalaxyRecomp/Nebula-A1h/runtime/src/x.cpp.o
 """
 DEPS_FOREIGN = DEPS_SOUND + """
 CMakeFiles/c.dir/runtime/src/asset_store.cpp.obj: #deps 2, deps mtime 1 (VALID)
@@ -147,12 +150,12 @@ def main(argv=None):
 
         # The folder as the build left it: relative paths, as `ninja -t deps` prints them, from build/x/msvc up to NebulaWork.
         sound = foreign_objects.check(folder, tree, shutil_ninja, fake_ninja(DEPS_SOUND))
-        check(sound[1] == 2 and sound[2] == {}, "a sound folder: 2 objects, none foreign: %s" % (sound,))
+        check(sound[1] == 3 and sound[2] == {}, "a sound folder: 3 objects, none foreign (a link step names objects of the folder itself after the sources' paths): %s" % (sound,))
         planted = foreign_objects.check(folder, tree, shutil_ninja, fake_ninja(DEPS_FOREIGN))
         check(list(planted[2]) == ["CMakeFiles/c.dir/runtime/src/asset_store.cpp.obj"] and planted[2][list(planted[2])[0]] == {"nebula-a1h"},
               "the planted folder: the one object that read Nebula-A1h is found, and the tree it read: %s" % (planted,))
         line = foreign_objects.describe("F", planted[0], planted[1], planted[2])
-        check("1 of 3 objects read another tree's files (nebula-a1h)" in line and "tree nebula-long" in line, "the line says it: %s" % line)
+        check("1 of 4 objects read another tree's files (nebula-a1h)" in line and "tree nebula-long" in line, "the line says it: %s" % line)
         # The folder's own tree from its CMakeCache when none is given.
         from_cache = foreign_objects.check(folder, None, shutil_ninja, fake_ninja(DEPS_FOREIGN))
         check(from_cache[0] == foreign_objects.tree_of(tree) and list(from_cache[2]) == list(planted[2]),

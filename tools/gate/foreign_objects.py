@@ -67,10 +67,13 @@ def foreign(deps, folder, tree):
     """{object: {other tree, ...}} of the objects one of whose deps is in a work tree other than `tree` (dep paths are as ninja prints
     them: relative to the folder, or absolute)."""
     found = {}
+    inside = os.path.normcase(os.path.abspath(str(folder))) + os.sep
     for obj, files in deps.items():
         others = set()
         for dep in files:
-            absolute = dep if os.path.isabs(dep) else os.path.join(str(folder), dep)
+            absolute = os.path.normpath(dep if os.path.isabs(dep) else os.path.join(os.path.abspath(str(folder)), dep))
+            if os.path.normcase(absolute).startswith(inside):
+                continue            # the folder's own files (a link step's objects are named after the sources' paths: D_/NebulaWork/...)
             owner = tree_of(absolute)
             if owner is not None and owner != tree:
                 others.add(owner.rsplit("/", 1)[-1])

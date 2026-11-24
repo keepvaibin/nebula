@@ -547,7 +547,12 @@ share of lines run, the key and the verdict. The key is the binaries' names and 
 (16.23 % on 11-22) is not that of a run with 548 mod tests too (22.07 %): each key has its own line. A run whose share is lower than the last
 line of its key that passed fails and is written with the verdict `fell`; the next run is compared with the last pass, so a fall does not
 lower the bar. The lines up to 11-21 were re-keyed once (engine,mods,tour) and the 11-22 line (engine,tour); a line with no verdict counts as
-a pass.
+a pass. The share is made only from counting runs that played (R-004, 11-23): when a run has no test, or a test that ended `tool` or `env`
+(on 11-23 all 120 tests ended "game.pak did not open" and 345 bare starts made 0.15 %, written as `fell`), the check ends `owed`
+with the line "could not measure" naming what is missing, merges nothing and writes no history line (`coverage.missing_runs`). The
+build script deletes, before it builds, the objects of its game and MSVC folders whose compile read another work tree's files
+(`tools/gate/foreign_objects.py`; the coverage folder held 338 of them, made while another tree built into it, and they were never made
+again): a folder of its own tree loses nothing.
 
 **Game data by key.** `D:/NebulaWork/build/game-data/` holds one folder per disc, store version and importer
 (`<disc>-<store>-<first 12 characters of the git tree hash of crates/nebula-import>`). The gate asks for a disc's data by that
