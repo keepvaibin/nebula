@@ -9,6 +9,7 @@
 
 #include <array>
 #include <memory>
+#include <span>
 
 namespace galaxy::render::mtl {
 
@@ -22,6 +23,9 @@ public:
     // False (the device cannot read and write one texture in a pass, or a program fails) leaves the camera off.
     // `depth_format`: the scene pass's depth and stencil target.
     bool initialize(Format depth_format);
+    // The passes' pipelines, made at the renderer's start: the widen for each wide scene pass, the camera's three forms for
+    // each scene pass.
+    void prepare_pipelines(std::span<const ScenePassFormat> scene_passes, std::span<const ScenePassFormat> wide_passes);
     void shutdown() noexcept;
     [[nodiscard]] bool ready() const noexcept { return ready_; }
     // Each works in the top-left `width` x `height` of its targets (the scene's drawn part: dynamic resolution's
@@ -53,7 +57,7 @@ private:
         unsigned samples = 0;
         Object pipeline = nullptr;  // id<MTLRenderPipelineState>
     };
-    std::array<Made, 16> pipelines_{};
+    std::array<Made, 24> pipelines_{};
     bool exposure_ready_ = false;
     bool ready_ = false;
 };

@@ -2,8 +2,8 @@
 // Presentation post-processing on Metal, the other renderers' chain (post_process.h, vk/post_process_vk.h) with the
 // same shaders: SMAA 1x or FXAA of the 3D scene before the 2D layer draws, so menus and text stay sharp, and the
 // scaling chain to the window (FSR 1 EASU when enlarging, else the footprint box filter, then RCAS). The programs are
-// post_process.hlsl's, turned to MSL at build (mtl/utility_msl.h post_msl) and compiled on a worker thread: until
-// they are ready the renderer presents with its plain blit.
+// post_process.hlsl's, turned to MSL and compiled into the app's utility.metallib at build (mtl/utility_msl.h post_msl);
+// the passes are made at the renderer's start. Without them the renderer presents with its plain blit.
 //
 // Plain C++ (mtl_context.h): Metal's objects are mtl::Object.
 #pragma once
@@ -16,8 +16,8 @@
 #include <array>
 #include <cstdint>
 #include <functional>
-#include <future>
 #include <memory>
+#include <span>
 #include <unordered_map>
 #include <vector>
 
@@ -30,13 +30,17 @@ public:
     PostProcessor& operator=(const PostProcessor&) = delete;
     ~PostProcessor() { shutdown(); }
 
-    // Starts compiling every pass. `scene_format`: the scene target's colour (pictures between passes have it too);
+    // The settings and formats. `scene_format`: the scene target's colour (pictures between passes have it too);
     // `depth_format`: the scene pass's depth and stencil target.
     void initialize(const PostProcessSettings& settings, Format scene_format, Format depth_format);
     void shutdown() noexcept;
-    // Once the worker has finished: builds the pipelines and runs the SMAA and FXAA self-tests (a submission the
-    // render thread waits for), so status() is final. True when the chain is ready.
-    bool poll_ready();
+    // Makes every pass, at the renderer's start on a worker of its own: the functions, the pipelines between passes, the
+    // scene's anti-aliasing at each of `sample_counts`, and the passes into a `present_format` picture. False: the chain
+    // is off.
+    bool build(std::span<const unsigned> sample_counts, Format present_format);
+    // After build, on the render thread before the first frame: the SMAA and FXAA self-tests (a submission it waits
+    // for), so status() is final. True when the chain is ready.
+    bool finish_build();
     [[nodiscard]] bool ready() const noexcept { return ready_; }
     [[nodiscard]] const PostProcessStatus& status() const noexcept { return status_; }
     [[nodiscard]] const PostProcessSettings& settings() const noexcept { return settings_; }
@@ -104,11 +108,6 @@ private:
     struct PipelineKeyHasher {
         std::size_t operator()(const PipelineKey& key) const noexcept;
     };
-    // The compiled functions of every program (those that follow the SMAA quality: one per quality).
-    struct Functions {
-        std::array<std::array<Object, 4>, kProgramCount> at{};  // id<MTLFunction> by program and quality
-        bool ok = false;
-    };
     [[nodiscard]] Object pipeline(Program vertex, Program fragment, Format color, Format depth, std::uint8_t write_mask,
                                   unsigned samples = 1u);
     [[nodiscard]] Object function(Program program) const;
@@ -133,11 +132,11 @@ private:
     PostProcessSettings settings_{};
     PostProcessStatus status_{};
     bool ready_ = false;
-    bool to_build_ = false;  // initialized: poll_ready makes the pipelines once the functions are compiled
+    bool built_ = false;  // build made every pass: finish_build tests them
     Format scene_format_ = Format::Rgb10a2;
     Format depth_format_ = Format::Depth32fStencil8;
-    std::future<Functions> compiling_;
-    Functions functions_{};
+    // The functions of every program (those that follow the SMAA quality: one per quality).
+    std::array<std::array<Object, 4>, kProgramCount> functions_{};  // id<MTLFunction> by program and quality
     std::unordered_map<PipelineKey, Object, PipelineKeyHasher> pipelines_;
     std::array<Object, static_cast<std::size_t>(Stencil::Count)> stencil_states_{};  // id<MTLDepthStencilState>
     Object samplers_[2]{};  // id<MTLSamplerState>: linear, point

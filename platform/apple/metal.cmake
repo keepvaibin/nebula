@@ -22,9 +22,46 @@ else()
     set(nebula_apple_utility_msl_tool "${NEBULA_HOST_TOOLS}/utility_msl")
     set(nebula_apple_utility_msl_dependency "${NEBULA_HOST_TOOLS}/utility_msl")
 endif()
-add_custom_command(OUTPUT "${nebula_apple_utility_msl_dir}/utility_msl_data.h"
-    COMMAND "${nebula_apple_utility_msl_tool}" "${nebula_apple_utility_msl_dir}/utility_msl_data.h" ${nebula_apple_msl_platform}
+set(nebula_apple_utility_texts "${nebula_apple_utility_msl_dir}/utility_msl.bin")
+add_custom_command(OUTPUT "${nebula_apple_utility_msl_dir}/utility_msl_data.h" "${nebula_apple_utility_texts}"
+    COMMAND "${nebula_apple_utility_msl_tool}" "${nebula_apple_utility_msl_dir}/utility_msl_data.h"
+            "${nebula_apple_utility_texts}" ${nebula_apple_msl_platform}
     DEPENDS ${nebula_apple_utility_msl_dependency} VERBATIM)
+# The texts the tool filed are the texts the runtime makes, each under the name it asks utility.metallib for
+# (tools/utility_msl_check.cpp, over runtime/src/render/mtl/utility_msl.cpp): run at every build that makes the tools.
+set(nebula_apple_utility_check_stamp)
+if(nebula_apple_builds_tools)
+    add_executable(nebula_apple_utility_msl_check
+        "${CMAKE_CURRENT_SOURCE_DIR}/tools/utility_msl_check.cpp"
+        "${nebula_root}/runtime/src/render/mtl/utility_msl.cpp"
+        "${nebula_apple_utility_msl_dir}/utility_msl_data.h")
+    target_compile_features(nebula_apple_utility_msl_check PRIVATE cxx_std_20)
+    target_include_directories(nebula_apple_utility_msl_check PRIVATE "${nebula_root}/runtime/include" "${nebula_apple_utility_msl_dir}")
+    set_target_properties(nebula_apple_utility_msl_check PROPERTIES
+        OUTPUT_NAME utility_msl_check RUNTIME_OUTPUT_DIRECTORY "${NEBULA_HOST_TOOLS}")
+    set(nebula_apple_utility_check_stamp "${nebula_apple_utility_msl_dir}/utility_msl_check.stamp")
+    add_custom_command(OUTPUT "${nebula_apple_utility_check_stamp}"
+        COMMAND "$<TARGET_FILE:nebula_apple_utility_msl_check>" "${nebula_apple_utility_texts}" "${nebula_apple_utility_check_stamp}"
+        DEPENDS nebula_apple_utility_msl_check "${nebula_apple_utility_texts}" VERBATIM)
+endif()
+# With Apple's Metal compiler (CMakeLists.txt) the texts are compiled here into the app's utility.metallib
+# (tools/compile_metallib.py --utility): the renderer takes each function from it, and compiles a text only in a build
+# without the compiler.
+set(nebula_apple_utility_library)
+if(NOT nebula_apple_no_metal_compiler)
+    set(nebula_apple_utility_library "${CMAKE_BINARY_DIR}/generated/utility.metallib")
+    add_custom_command(OUTPUT "${nebula_apple_utility_library}"
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compile_metallib.py"
+                --utility "${nebula_apple_utility_texts}"
+                --out-dir "${CMAKE_BINARY_DIR}/generated" --work "${CMAKE_BINARY_DIR}/generated/metallib-utility"
+                --sdk ${nebula_apple_metal_sdk} --min-os ${nebula_apple_metal_min_os}
+                ${nebula_apple_metal_developer_argument}
+        DEPENDS "${nebula_apple_utility_texts}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compile_metallib.py"
+        USES_TERMINAL VERBATIM)
+    list(APPEND nebula_apple_program_libraries "${nebula_apple_utility_library}")
+endif()
+add_custom_target(nebula_apple_utility_files DEPENDS "${nebula_apple_utility_msl_dir}/utility_msl_data.h"
+    ${nebula_apple_utility_check_stamp} ${nebula_apple_utility_library})
 
 # Every source of the Vulkan library that is not Vulkan's: what other lanes add to the renderer comes along.
 get_target_property(nebula_apple_vk_sources galaxy_render_vk SOURCES)
@@ -78,7 +115,7 @@ set_source_files_properties(${nebula_apple_mtl_backend} PROPERTIES COMPILE_OPTIO
 # compiler on the build machine the names of the functions in the app's Metal libraries (CMakeLists.txt).
 set_source_files_properties("${nebula_root}/runtime/src/render/core/program_table.cpp" PROPERTIES
     COMPILE_DEFINITIONS "GALAXY_PROGRAM_BLOB=\"${nebula_apple_programs_blob}\"" OBJECT_DEPENDS "${nebula_apple_programs_blob}")
-add_dependencies(galaxy_render_mtl nebula_apple_programs_msl_file)
+add_dependencies(galaxy_render_mtl nebula_apple_programs_msl_file nebula_apple_utility_files)
 
 # The game on the Metal renderer with the SDL host: a development build until Apple's own host (host/) carries it.
 get_target_property(nebula_apple_main_sources main SOURCES)

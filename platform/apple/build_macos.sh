@@ -139,9 +139,9 @@ else
     cp "$work/macos-$1/game/libsmg_game_plain.dylib" "$app/Contents/Frameworks/libsmg_game_plain.dylib"
 fi
 
-# The programs' Metal libraries, when the build machine had Apple's compiler to make them (the same for every
-# processor: the first build's).
-for library in programs_2_4.metallib programs_3_0.metallib; do
+# The programs' and the renderer's own Metal libraries, when the build machine had Apple's compiler to make them (the
+# same for every processor: the first build's).
+for library in programs_2_4.metallib programs_3_0.metallib utility.metallib; do
     if [ -f "$host_tree/generated/$library" ]; then
         cp "$host_tree/generated/$library" "$app/Contents/Resources/$library"
     fi

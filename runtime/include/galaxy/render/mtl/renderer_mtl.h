@@ -409,6 +409,11 @@ private:
                           unsigned height = kFrameUnits, bool target = false);
     void destroy_scene_set(SceneSet& set);
     [[nodiscard]] unsigned wanted_msaa_samples() const;
+    // Every sample count a scene target can have on this device (1 and each it supports up to draw_layout_.max_samples):
+    // the passes' pipelines are made for each at the start.
+    [[nodiscard]] std::vector<unsigned> scene_sample_counts() const;
+    // The renderer's own pipelines every frame can ask for, made at the start on a worker (initialize).
+    void prepare_utility_pipelines();
     void resolve_scene_depth();
     [[nodiscard]] bool scene_fits_memory(const FrameMap& map) const;
     void apply_window_size();

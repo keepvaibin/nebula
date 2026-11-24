@@ -38,34 +38,28 @@ constexpr UtilityShader kShaders[] = {UtilityShader::BloomDownCs, UtilityShader:
 
 }  // namespace
 
-void GameBloom::initialize(Format depth_format) {
+bool GameBloom::initialize(Format depth_format, std::span<const ScenePassFormat> passes) {
     shutdown();
     depth_format_ = depth_format;
-    to_build_ = true;
-    const Object metal_device = Context::get().device();
-    compiling_ = std::async(std::launch::async, [metal_device] {
-        Functions made;
-        made.ok = true;
-        @autoreleasepool {
-            id<MTLDevice> const from = (__bridge id<MTLDevice>)metal_device;
-            MTLCompileOptions* const options = [MTLCompileOptions new];
-            options.fastMathEnabled = NO;
-            options.languageVersion = MTLLanguageVersion2_4;
-            for (unsigned program = 0; program < kProgramCount; ++program) {
-                NSError* error = nil;
-                id<MTLLibrary> const library = [from newLibraryWithSource:@(utility_msl(kShaders[program])) options:options error:&error];
-                id<MTLFunction> const function = library != nil ? [library newFunctionWithName:@"main0"] : nil;
-                if (function == nil) {
-                    std::fprintf(stderr, "[bloom] program %u did not compile: %s\n", program,
-                                 error != nil ? error.localizedDescription.UTF8String : "no main0");
-                    made.ok = false;
-                    continue;
-                }
-                made.at[program] = own(function);
-            }
+    // From utility.metallib (utility_msl.h renderer_function).
+    bool made = true;
+    for (unsigned program = 0; program < kProgramCount; ++program) {
+        functions_[program] = renderer_function(utility_msl(kShaders[program]));
+        if (functions_[program] == nullptr) {
+            std::fprintf(stderr, "[bloom] program %u could not be made\n", program);
+            made = false;
         }
-        return made;
-    });
+    }
+    ready_ = made && build();
+    if (!ready_) {
+        destroy();
+        std::cerr << "[bloom] Metal passes unavailable: the game draws its own bloom\n";
+        return false;
+    }
+    for (const ScenePassFormat& pass : passes) {
+        static_cast<void>(composite_pipeline(pass.color, pass.samples));
+    }
+    return true;
 }
 
 void GameBloom::destroy() noexcept {
@@ -84,16 +78,11 @@ void GameBloom::destroy() noexcept {
 }
 
 void GameBloom::shutdown() noexcept {
-    if (compiling_.valid()) {
-        functions_ = compiling_.get();
-    }
-    to_build_ = false;
     destroy();
-    for (Object& function : functions_.at) {
+    for (Object& function : functions_) {
         release(function);
         function = nullptr;
     }
-    functions_.ok = false;
     ready_ = false;
     kept_ = false;
     pending_ = false;
@@ -102,23 +91,6 @@ void GameBloom::shutdown() noexcept {
     }
     for (auto& t : blur_h_) t.reset();
     for (auto& t : blur2_h_) t.reset();
-}
-
-bool GameBloom::poll_ready() {
-    if (ready_) {
-        return true;
-    }
-    if (!to_build_ || !compiling_.valid() || compiling_.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
-        return false;
-    }
-    to_build_ = false;
-    functions_ = compiling_.get();
-    ready_ = functions_.ok && build();
-    if (!ready_) {
-        destroy();
-        std::cerr << "[bloom] Metal passes unavailable: the game draws its own bloom\n";
-    }
-    return ready_;
 }
 
 bool GameBloom::build() {
@@ -135,7 +107,7 @@ bool GameBloom::build() {
         for (unsigned program = 0; program < 3u; ++program) {
             NSError* error = nil;
             id<MTLComputePipelineState> const state =
-                [device() newComputePipelineStateWithFunction:(__bridge id<MTLFunction>)functions_.at[program] error:&error];
+                [device() newComputePipelineStateWithFunction:(__bridge id<MTLFunction>)functions_[program] error:&error];
             if (state == nil) {
                 std::fprintf(stderr, "[bloom] compute pipeline %u: %s\n", program,
                              error != nil ? error.localizedDescription.UTF8String : "");
@@ -162,8 +134,8 @@ Object GameBloom::composite_pipeline(Format color_format, unsigned samples) {
     }
     @autoreleasepool {
         MTLRenderPipelineDescriptor* const descriptor = [MTLRenderPipelineDescriptor new];
-        descriptor.vertexFunction = (__bridge id<MTLFunction>)functions_.at[kCompositeVs];
-        descriptor.fragmentFunction = (__bridge id<MTLFunction>)functions_.at[kCompositePs];
+        descriptor.vertexFunction = (__bridge id<MTLFunction>)functions_[kCompositeVs];
+        descriptor.fragmentFunction = (__bridge id<MTLFunction>)functions_[kCompositePs];
         descriptor.colorAttachments[0].pixelFormat = static_cast<MTLPixelFormat>(color_format);
         descriptor.colorAttachments[0].writeMask = MTLColorWriteMaskAll;
         descriptor.depthAttachmentPixelFormat = static_cast<MTLPixelFormat>(depth_format_);

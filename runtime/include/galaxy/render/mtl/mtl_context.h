@@ -48,6 +48,13 @@ enum class Format : std::uint32_t {
     Stencil8 = 253u,
 };
 
+// A scene pass the renderer can open: its colour's format and its samples a pixel. The passes that draw inside one make
+// their pipelines for each at the renderer's start.
+struct ScenePassFormat {
+    Format color = Format::None;
+    unsigned samples = 1u;
+};
+
 // What a texture is made for (MTLTextureUsage's bits).
 enum TextureUse : std::uint32_t {
     kUseSample = 1u,

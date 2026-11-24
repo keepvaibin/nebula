@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The game's bloom on Metal: the operator of game_bloom.h (game_bloom.hlsl, turned to MSL at build and compiled on
-// the device) over the scene target. Until it is ready the game draws its own chains (NEBULA_OPTION_BLOOM 0). As
-// vk/game_bloom_vk.h for Vulkan.
+// The game's bloom on Metal: the operator of game_bloom.h (game_bloom.hlsl, turned to MSL and compiled into the app's
+// utility.metallib at build) over the scene target. When it is not ready the game draws its own chains
+// (NEBULA_OPTION_BLOOM 0). As vk/game_bloom_vk.h for Vulkan.
 //
 // Plain C++ (mtl_context.h): Metal's objects are mtl::Object.
 #pragma once
@@ -10,8 +10,8 @@
 
 #include <array>
 #include <cstdint>
-#include <future>
 #include <memory>
+#include <span>
 
 namespace galaxy::render::mtl {
 
@@ -22,12 +22,11 @@ public:
     GameBloom& operator=(const GameBloom&) = delete;
     ~GameBloom() { shutdown(); }
 
-    // Starts compiling the passes. `depth_format`: the scene pass's depth and stencil target.
-    void initialize(Format depth_format);
+    // Makes the passes: the compute pipelines and the composite for each scene pass in `passes` (another pass's at its
+    // first use). Run at the renderer's start on a worker of its own, joined before the first frame. True when ready.
+    // `depth_format`: the scene pass's depth and stencil target.
+    bool initialize(Format depth_format, std::span<const ScenePassFormat> passes);
     void shutdown() noexcept;
-    // Once the worker has finished: builds the compute pipelines (the composite's are made per scene pass at first
-    // use). True when ready.
-    bool poll_ready();
     [[nodiscard]] bool ready() const noexcept { return ready_; }
 
     // As game_bloom.h's: Restore draws the kept scene alone (the game's own chain, the NATIVE setting).
@@ -91,10 +90,6 @@ private:
         float uv[4];
     };
     enum Program : unsigned { kDown, kBox, kBlur, kCompositeVs, kCompositePs, kProgramCount };
-    struct Functions {
-        std::array<Object, kProgramCount> at{};  // id<MTLFunction>
-        bool ok = false;
-    };
     bool build();
     void destroy() noexcept;
     [[nodiscard]] Object composite_pipeline(Format color_format, unsigned samples);
@@ -108,10 +103,8 @@ private:
     bool ready_ = false;
     bool kept_ = false;
     bool source_given_ = false;  // give_source ran since the last prepare
-    bool to_build_ = false;  // initialized: poll_ready makes the passes
     Format depth_format_ = Format::Depth32fStencil8;
-    std::future<Functions> compiling_;
-    Functions functions_{};
+    std::array<Object, kProgramCount> functions_{};  // id<MTLFunction>, by kShaders' order
     Object sampler_ = nullptr;             // id<MTLSamplerState>: linear clamp
     Object no_depth_ = nullptr;            // id<MTLDepthStencilState>: the composite's
     std::array<Object, 3> compute_{};      // id<MTLComputePipelineState>: down, box, blur
@@ -121,7 +114,7 @@ private:
         unsigned samples = 0;
         Object pipeline = nullptr;  // id<MTLRenderPipelineState>
     };
-    std::array<Composite, 8> composites_{};
+    std::array<Composite, 12> composites_{};
     // The pending composite (prepare to finish).
     bool pending_ = false;
     Constants composite_constants_{};

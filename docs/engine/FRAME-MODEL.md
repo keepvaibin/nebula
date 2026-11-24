@@ -82,7 +82,7 @@ Two frames are in flight (`kFramesInFlight`, `runtime/include/galaxy/render/rend
 | Direct3D 12 | the slot about to be used again (`renderer_d3d12.cpp:3809-3817`); the oldest history ring segment when it is reused (:3966-3970); the frame latency waitable, 100 ms bound (:4356); the copy queue's slot before its staging is written again (`gpu_texture_backend_d3d12.cpp:513`, from `texture_store.cpp:666`) | `wait_for_gpu` (:916) in `reset_sampler_frame` (:1410), `prepare_temporal_upscaler` (:5019, :5052), `record_temporal_upscale` (:5214), and a capture's readback (:6889, :6892) |
 | Vulkan | the slot (`runtime/src/render/vk/renderer_vk.cpp:2012`); the history ring segment (:2110) | `vkDeviceWaitIdle` when a size no longer matches: the temporal upscaler's preparation and record (`runtime/src/render/vk/renderer_vk_frame.cpp:922`, :953, :1428) and frame generation's HUD-less targets (:1455, :1495, :1548); the sampler array's restart waits for the last submitted frame (:2710, :2729); the post-process's self-test, in the first frame it is built (`runtime/src/render/vk/post_process_vk.cpp:947`, 1.8) |
 | Direct3D 11 | the slot (`runtime/src/render/d3d11/renderer_d3d11.cpp:530`); the frame latency waitable, 100 ms bound (:653) | none; a window size change waits for the GPU idle (`runtime/src/render/d3d11/renderer_d3d11_scene.cpp:246`) |
-| Metal | the slot (`runtime/src/render/mtl/renderer_mtl.mm:592`, `wait_for_fence_value`); the history ring segment (:679); a drawable (`nextDrawable`, :1183, in `present`) | `wait_for_gpu_idle` (:499) when the temporal upscaler's size no longer matches (`runtime/src/render/mtl/renderer_mtl_draw.mm:736`, :757); the sampler array restarts when nearly full and waits for the last submitted frame (:244-247, the wait :261; P-066); the post-process's self-test, in the first frame it is built (`runtime/src/render/mtl/post_process_mtl.mm:792`, 1.8) |
+| Metal | the slot (`runtime/src/render/mtl/renderer_mtl.mm:592`, `wait_for_fence_value`); the history ring segment (:679); a drawable (`nextDrawable`, :1183, in `present`) | `wait_for_gpu_idle` (:499) when the temporal upscaler's size no longer matches (`runtime/src/render/mtl/renderer_mtl_draw.mm:736`, :757); the sampler array restarts when nearly full and waits for the last submitted frame (:244-247, the wait :261; P-066); the post-process's self-test waits once at the renderer's start, before any frame (`PostProcessor::finish_build` in `runtime/src/render/mtl/post_process_mtl.mm`, 1.8; P-065, R1.4) |
 
 Outside a frame, `wait_for_gpu` drains the GPU at a window size change (:1955), a swap chain's re-creation or resize
 (:3371, :3419), an HDR switch (:4164), shutdown (:3114, :3141) and the pictures at exit (:6754). Those are allowed by the
@@ -196,15 +196,24 @@ Read for the rules (whole-GPU waits, compiles, file reads on the render thread):
   any frame, as Direct3D 12's does (P-052, R1.1). A swap chain made again builds the present pipelines again
   (`PostProcessorVk::set_present_pass` in `runtime/src/render/vk/post_process_vk.cpp`, from `create_swapchain`), outside a
   frame's walk.
-- Metal: the post-process and bloom compile their MSL on a worker from the renderer's start
-  (`runtime/src/render/mtl/post_process_mtl.mm:112-130`, `runtime/src/render/mtl/game_bloom_mtl.mm:46-56`); the render thread makes their pipeline states
-  from it the first frame it is ready (`poll_ready`, `post_process_mtl.mm:272`, `game_bloom_mtl.mm:107`), and the
-  post-process's self-test waits for the GPU there (`post_process_mtl.mm:792`). Ambient occlusion compiles at the
-  renderer's start (`runtime/src/render/mtl/ambient_occlusion_mtl.mm:59`, from `runtime/src/render/mtl/renderer_mtl.mm:118`). The utility pipelines
-  (`runtime/src/render/mtl/renderer_mtl_scene.mm:56`, from `utility_pipeline` :67) and the scene camera's (`runtime/src/render/mtl/scene_camera_mtl.mm:45`,
-  from `pipeline` :108) compile from source on the render thread when a key is first asked for; SGSR 2
-  (`runtime/src/render/mtl/sgsr2_mtl.mm:58`) and the MetalFX depth copy (`runtime/src/render/mtl/metalfx_mtl.mm:244`) when their upscaler is made; the game's
-  programs from their text when their pipeline is made (`runtime/src/render/mtl/pipelines_mtl.mm:283`).
+- Metal (P-065, R1.4): no shader text is compiled in a build made with Apple's Metal compiler. The renderer's own texts
+  (`runtime/include/galaxy/render/mtl/utility_msl.h` `renderer_msl_texts`: the utility shaders Metal uses, the
+  presentation programs at each SMAA quality, MetalFX's depth copy) are compiled at build into the app's `utility.metallib`
+  (`platform/apple/tools/utility_msl.cpp` files them, `platform/apple/tools/compile_metallib.py --utility` compiles them,
+  `platform/apple/tools/utility_msl_check.cpp` holds them to the runtime's list), each under the name of its text's hash;
+  `renderer_function` (`runtime/src/render/mtl/utility_library_mtl.mm`) takes a function from there, and compiles a text
+  only when the library lacks it, which it logs. At the renderer's start (`RendererMtl::initialize` in
+  `runtime/src/render/mtl/renderer_mtl.mm`) one worker takes every function and makes the renderer's own pipelines
+  (`RendererMtl::prepare_utility_pipelines`: the present's blit, the depth copy and resolve, the scene pass's clears and
+  copies for each scene pass), a second makes the bloom's passes (`GameBloom::initialize`, its composite for each scene
+  pass), a third the post-process's (`PostProcessor::build`, with the scene's anti-aliasing at each sample count and the
+  passes into the window's picture), while ambient occlusion's and the scene camera's are made on the render thread
+  (`prepare_pipelines` of each); all are joined before the first frame, and the post-process's self-test then waits for
+  the GPU there (`PostProcessor::finish_build`), before any frame, as Vulkan's does. A key beyond these (a picture's own
+  format, a texture target's pass, a pass with extra targets) and SGSR 2's and the MetalFX depth copy's pipelines (when
+  their upscaler is made) are made at first use from functions already taken: a pipeline state, no compile of a text.
+  The game's programs come from `programs_2_4.metallib` and `programs_3_0.metallib`; a build without the compiler
+  compiles their texts on the pipeline workers (`function_of` in `runtime/src/render/mtl/pipelines_mtl.mm`, logged once).
 - The upscalers' and frame generation's bodies (XeSS, FSR, the Vulkan temporal upscaler, SGSR 2) wait for no fence and
   read no file in a frame.
 
@@ -233,7 +242,7 @@ with no row has a new one.
 | The scene's camera found at its opaque end, as the game loads its projection after the scene begins | `draw_walker.cpp:1356` | E4 (`GameScene::draw3D` states its passes) |
 | A target's texture table rebuilt each frame; each draw names its textures again | `draw_walker.cpp:878`, :920 | E3 step 2 (each form's texture list) |
 | Vulkan's bloom and post-process pipelines built on the render thread in the first frame that needs them, and the post-process's self-test waiting for the GPU there | `runtime/src/render/vk/renderer_vk.cpp:1997`, :2821; `runtime/src/render/vk/post_process_vk.cpp:947` | P-052 (fixed at R1.1: made at the start on workers, the self-test run before the first frame, `RendererVk::initialize`) |
-| Metal's own pipelines made on the render thread in a frame: the utility and scene camera pipelines compiled from source there, the post-process's and bloom's states made from a worker's compile, and the post-process's self-test waiting for the GPU | `mtl/*_mtl.mm` (1.8) | P-065 (its text says every compile is on the render thread: the post-process's and bloom's are on a worker, ambient occlusion's at the start) |
+| Metal's own pipelines made on the render thread in a frame: the utility and scene camera pipelines compiled from source there, the post-process's and bloom's states made from a worker's compile, and the post-process's self-test waiting for the GPU | `mtl/*_mtl.mm` (1.8) | P-065 (fixed at R1.4: every text compiled at build into `utility.metallib` and taken from it at the start; the passes' pipelines made at the start on workers and joined before the first frame, the self-test run there) |
 
 This list covers the render path as read for this file: every file of 1.1 to 1.8, with the files stage 2 item 1
 names (draw_walker.cpp whole; the post-process, upscaler and frame-generation files for waits, compiles and file
