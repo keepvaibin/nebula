@@ -189,8 +189,6 @@ AREAS = [
     (r"^runtime/(?:src|include/galaxy)/render/(?:renderer_d3d12|renderer_common|pipeline_cache|render_config|"
      r"display_modes|window_owner|vblank_clock)", "renderer-d3d12", "CONVERT",
      "D3D12 backend and infrastructure: bindless, root constants, one frame graph, native targets."),
-    (r"^runtime/(?:src|include/galaxy)/render/(?:ray_tracing|rt_)", "feature-rt", "CONVERT",
-     "Ray tracing: rebuild on native shapes/materials/lights/instances."),
     (r"^runtime/(?:src|include/galaxy)/render/(?:frame_interpolation|interp_gpu|transform_history|temporal_upscaler|"
      r"streamline_bridge)", "feature-temporal", "CONVERT",
      "Interpolation, upscalers, frame generation: exact per-object motion from native data."),
@@ -231,7 +229,7 @@ REQUIREMENTS = {
     "host-module-bridge": "C-06", "native-build": "C-09", "tools": "N-03", "dev-tools": "N-03",
     "renderer-translation": "E-02", "renderer-core": "E-01, E-03", "renderer-d3d12": "E-04..E-17",
     "renderer-vulkan": "E-04..E-17", "renderer-other": "E-04..E-17", "feature-graphics": "F",
-    "feature-temporal": "F", "feature-rt": "G", "feature-packs": "D-05, D-06, M-04", "host-ui-win32": "L-01",
+    "feature-temporal": "F", "feature-packs": "D-05, D-06, M-04", "host-ui-win32": "L-01",
     "host-dsp": "H-01", "host-console-model": "M-02, I-01, I-07", "host-input-devices": "I-02..I-06",
     "host-mods": "D-04, M-03", "host-mii": "B-55, M-03", "host-runtime": "M-01, K", "platform-hosts": "S, L-01",
     "importer": "N-01, D-01..D-07", "installer": "N-02, D-07", "docs": "R", "localization": "L-02",

@@ -172,10 +172,6 @@ public:
     void suspend_temporal_interpolation(double ms_per_frame);
     [[nodiscard]] bool temporal_interpolation() const noexcept { return temporal_interp_; }
     [[nodiscard]] unsigned temporal_output_width() const noexcept { return temporal_output_w_; }
-    // Milliseconds a GPU timestamp tick (0: the device has no compute timestamps).
-    [[nodiscard]] double gpu_ms_per_tick() const noexcept { return timestamp_period_ns_ / 1'000'000.0; }
-    // Smoothed GPU time of a frame that drew the scene (0 until measured).
-    [[nodiscard]] double scene_gpu_ema_ms() const noexcept { return frame_gpu_.scene_ema_ms(); }
     void set_scene_view(const std::array<float, 12>* view) noexcept {
         scene_view_known_ = view != nullptr;
         if (view != nullptr) {

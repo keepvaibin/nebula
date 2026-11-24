@@ -9,8 +9,7 @@
 // varyings carry. Any number: the device's own interpolator count is the limit.
 //
 // The coordinates come first (TEXCOORD0 up), the motion varyings after them (TEXCOORD NATIVE_COORDS and the next), as a
-// generated program's: the prepass's pixel stage (no motion varyings) reads the motion form's first outputs, so a motion
-// draw's prepass (its vertex stage's motion form) links.
+// generated program's.
 
 #include "program.hlsli"
 // NATIVE_LIT: set by a written material that sums the game's lights in its vertex stage (fur, the Mii face, the

@@ -465,12 +465,6 @@ public:
     // perspective projections).
     [[nodiscard]] bool scene_temporal_begin(float& jitter_x, float& jitter_y);
     [[nodiscard]] unsigned temporal_output_width() const noexcept { return temporal_output_w_; }
-    // Milliseconds a GPU timestamp tick of the frame's queue (0: none).
-    [[nodiscard]] double gpu_ms_per_tick() const noexcept {
-        return timestamp_frequency_ != 0u ? 1000.0 / static_cast<double>(timestamp_frequency_) : 0.0;
-    }
-    // Smoothed GPU time of a frame that drew the scene (0 until measured).
-    [[nodiscard]] double scene_gpu_ema_ms() const noexcept { return frame_gpu_.scene_ema_ms(); }
     // After scene_temporal_begin, in a temporal scene: clears the motion target for the scene. False
     // otherwise or when it could not be created (no motion writers).
     [[nodiscard]] bool begin_motion_scene();
