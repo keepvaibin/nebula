@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-24 11:27. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 11:51. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 22 of 138 (16%).
 
@@ -72,6 +72,7 @@ In work now:
 - R1.4 P-065 (Metal): the renderer's own shader texts compiled at build: On a Mac (and an iPhone when its app exists): start the game and turn on bloom, the post-process (SMAA and FXAA) and ambient occlusion, then MetalFX and SGSR 2: the log shows '[metal] renderer shaders: N from utility.metallib, 0 compiled from their text' and no hitch the first time each is used (agent 1, 2026-11-24 03:48)
 - R2.2 The sampler tables stop filling: P-048, P-056, P-066, P-061: proof 4, the audit's runs: Direct3D 12 with dynamic resolution and --diagnostics timeline, Good Egg 10 minutes, no [samplers] line and no wait; the tablet, the same 10 minutes; Direct3D 11 with --diagnostics resolution-steps through several galaxies, samplers_.size() under 4096; Metal waits counted on an Apple-silicon Mac (needs a Mac). Metal is compiled by the GitHub Mac job only. (agent 1, 2026-11-24 05:34)
 - G2.1 Landing 1: a sequence starts at its arrival; the step keeps its due times: G2.1 proof 3 (I-004, I-013): on a shown window, the pacing measure before G2.1 and after it: at 240 Hz with in-between pictures on, delay_avg_us of the [pace] line (file F: 42.4 ms, expected about 26) and the timeline's RenderBegin to first present; at 120 Hz with in-between pictures on, the timeline's StepWaitEnd against VBlank (tools/perf/timeline_digest.py); the figures and run folders go into the rows' notes (agent 1, 2026-11-24 11:27)
+- G2.2 Landing 2: the lead at whole multiples of 60 Hz: G2.2 proofs 2 and 3 (I-002): on a shown window at 120 and 240 Hz with in-between pictures on and VSync on, the real pictures shown counted as file F section 1A did (expected near every step, before 5 to 13 of 2,640) and the walks per step (k, before k + 1); the [pace] line's animation_within_1ms before and after, unchanged; the figures and run folders go into I-002's note (agent 1, 2026-11-24 11:51)
 
 ## Waiting for the owner
 
@@ -93,7 +94,7 @@ Nothing is blocked.
 | M-006 | closed | - | the step tier and section check; a passing tool fault played once more; a waiter left not judged runs itself | 0 | 95 | 2911f6429 |
 | M-007 | closed | - | the section-at-a-time roles: a whole section ahead, wait, hand-off sheets, hard reports, the live page | 0 | 80 | 9ed09cfec |
 
-## Decisions (68)
+## Decisions (74)
 
 - 2026-11-23 S0.2.1: LoadSlice: 32 items a frame; an item is a phase of GameScene::initAfterScenarioChosen, the player, one placement made whole, one piece of FileSelector::initStep, or one Star Bit of the reserve (because the card asks for a fixed count of work and names no count; the count is a constant in one place, no player sees which frame of the load an item falls in, and the load worker (G3.7) replaces the slices)
 - 2026-11-23 S0.2.1: Drawing's random stream (MR::getDrawRandom) is seeded with the same seed as the game's stream, in setRandomSeedFromStageName and setFixedRandomSeed (because a fixed seed keeps the cosmetic numbers the same in every run of a replay and needs no new setting; the draw stream runs through the same sequence as the game's but is advanced only by drawing, so neither changes the other)
@@ -163,6 +164,12 @@ Nothing is blocked.
 - 2026-11-24 G2.1: The step clock's delay is bounded by one step, not half (because the delay now covers a list's whole lateness after its own step's moment (the step's work), which on a slow device passes half a step; at one step the reference is where the next step's present request put it before, so no device starts later than today)
 - 2026-11-24 G2.1: P-274's due moments are kept on every host: Windows (next_frame_start's caller), the other hosts' own clock (FrameDue::waited) and the vsync grid of Android and Apple (VsyncGrid::next_slot, its two callers in platform/ log what they drop) (because AGENT.md 8: every platform moves together; the card names the Windows path, the row the step clock as a whole)
 - 2026-11-24 G2.1: Locked rates (a tearing swap chain at a multiple of 60) start a sequence's slots at its reference, moved on by whole slots past the slot last shown when the clock runs (because a sequence now begins at a slot (the waiting sequence's turn) where the reference can lie before the slot last shown; the old rule (the reference itself) could then show a slot twice)
+- 2026-11-24 G2.1: The [pace] line's delay of a sequence's frame starts at its list's own step's moment, where before G2.1 it started one step later, at the next step's moment, whose present request began the sequence (because pacing.h defines the delay's start as the moment the step it shows began, and tools/gate/pace.py's bound for in-between pictures on (one step + one refresh + the step's work) reads it so; proof 3's before figure (42.4 ms at 240 Hz) was counted from one step later, so from the list's own step it was about 59 ms, and the after figure (about 26) is counted from the list's own step)
+- 2026-11-24 G2.2: No switch keeps lead 0 on vblanks: the old rule is replaced in this step (because the measures that would hold such a switch (proofs 2 and 3, a shown window at 120 and 240 Hz, and the pacing measure) are the planner's owed runs, as at G2.1#3, and AGENT.md 8 leaves no switch or dead copy unless the card names one to keep; the unit tests prove the rule at every rate)
+- 2026-11-24 G2.2: A whole multiple of 60 is one within 0.2 % on every slot clock (slots_per_step, step_lock.h kStepLockNear), replacing the tearing clock's 2 % of 60 (because the card's rule is k times 60 within 0.2 %; 2 % of 60 took 121 Hz for 120; on vblanks the step lock's 0.02 % (in-between pictures on) also holds, so 119.88 Hz takes no lead)
+- 2026-11-24 G2.2: RenderCore's ScheduleDisplay answers variable refresh from the renderer's own finding (g_variable_refresh) with its held refresh as the cap (because the card has ScheduleDisplay say which slot clock is in use; the renderers already hold a variable refresh display under variable_refresh_cap and report it, so that is the answer until G2.3 has the system tell it, which changes only the answer, not the rule)
+- 2026-11-24 G2.2: A sequence with no generated pictures takes no lead (because a lead places pictures between two frames; at 60 (k = 1) and for a stopping or capped-to-none sequence every picture is the frame itself, as the card's limit of 60 says)
+- 2026-11-24 G2.2: On locked vblanks a sequence's reference moves to the first vblank at or after it, not the nearest (because the reference is its step's moment plus the delay, about 1.3 ms before a vblank under the host's frame phase; at 480 Hz that is over half a vblank (at 360 Hz with a slightly longer delay too), so the nearest vblank lies before the list arrives and the sequence's first picture would be late or two in one refresh; the first at or after keeps t = 1 on a refresh at every rate)
 
 ## Checks changed during the run (70)
 
