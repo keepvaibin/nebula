@@ -200,7 +200,7 @@ P-196, P-239, P-248, P-262, P-263, P-310, P-188.
 
 **R7 The frame planned from what each pass reads and writes.** Rows: P-006, P-007, P-021, P-025, P-027, P-031,
 P-053, P-055, P-063, P-290, P-296, P-319, P-026, P-028, P-030, P-049, P-050, P-054, P-057, P-058, N-1081,
-N-1082, P-293, P-295, P-298, P-305.
+N-1082, P-293, P-295, P-298, P-305, P-367.
 - A planner orders the passes, chooses what each keeps and throws away, and pools the targets. Size changes and
   upscaler changes stop waiting for the whole graphics card.
 - For a player: fewer graphics-card waits, less memory traffic on phones, no long frame at a resolution or
