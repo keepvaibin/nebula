@@ -79,18 +79,21 @@ bool RendererD3D11::initialize(int window_width, int window_height, const FrameM
             shutdown();
             return false;
         }
-               report_adapter();
+        report_adapter();
         memory_.attach(d3d11::Context::get().adapter());
-        // The scene's depth as a picture (publish_scene_depth_copy): 16-bit float, which every feature level 11_0
-        // driver renders and filters. R32_FLOAT was probed for before; the Intel Skylake driver reports it as supported
-        // but fails at draw time, so it is not used.
-        depth_copy_format_ = DXGI_FORMAT_R16_FLOAT;
         if (!create_scene_targets(scene_map_, wanted_msaa_samples())) {
             shutdown();
             return false;
         }
         // The scene in a part of its targets, every pass reading that part (dynamic_resolution.h).
         set_dynamic_resolution_offered(true);
+        // The scene's depth as a picture (publish_scene_depth_copy): a format the device draws into and filters.
+        UINT r32 = 0u;
+        constexpr UINT kDepthCopyNeeds = D3D11_FORMAT_SUPPORT_RENDER_TARGET | D3D11_FORMAT_SUPPORT_SHADER_SAMPLE;
+        depth_copy_format_ = SUCCEEDED(d3d11::Context::get().device()->CheckFormatSupport(DXGI_FORMAT_R32_FLOAT, &r32)) &&
+                                     (r32 & kDepthCopyNeeds) == kDepthCopyNeeds
+                                 ? DXGI_FORMAT_R32_FLOAT
+                                 : DXGI_FORMAT_R16_FLOAT;
         // The rings are upload memory with addresses in the renderer's own space; their sizes follow the other renderers'.
         // No ring keeps a frame before the last one readable: nothing on Direct3D 11 reads last frame's vertices (motion).
         gpu::Device* const device = this->device();
@@ -137,10 +140,7 @@ bool RendererD3D11::initialize(int window_width, int window_height, const FrameM
         shutdown();
         return false;
     }
-       std::cout << "[Renderer] Direct3D 11 scene target=" << scene_map_.width << 'x' << scene_map_.height
-              << " depth=" << (draw_layout_.depth == DXGI_FORMAT_D24_UNORM_S8_UINT ? "D24S8"
-                             : draw_layout_.depth == DXGI_FORMAT_D32_FLOAT_S8X24_UINT ? "D32FS8"
-                             : "other") << '\n';
+    std::cout << "[Renderer] Direct3D 11 scene target=" << scene_map_.width << 'x' << scene_map_.height << " depth=D32FS8\n";
     return true;
 }
 
@@ -1017,31 +1017,21 @@ void RendererD3D11::flush_draws() {
             ctx->RSSetViewports(1u, &viewport);
             break;
         }
-                case gpu::DrawOp::Kind::Stream: {
+        case gpu::DrawOp::Kind::Stream: {
             const d3d11::Context::BufferOffset at = device.resolve(op.a[0]);
             ID3D11Buffer* buffer = at.buffer != nullptr ? at.buffer->bound(d3d11::BufferUse::Geometry) : nullptr;
             const UINT stride = op.w[1];
             const UINT offset = static_cast<UINT>(at.offset);
-            if (buffer == nullptr) {
-                std::cerr << "[stream] null buffer slot=" << op.slot << " stride=" << stride
-                          << " offset=" << offset << " addr=" << op.a[0] << '\n';
-            }
             ctx->IASetVertexBuffers(op.slot, 1u, &buffer, &stride, &offset);
             break;
         }
-           case gpu::DrawOp::Kind::Indices: {
+        case gpu::DrawOp::Kind::Indices: {
             const d3d11::Context::BufferOffset at = device.resolve(op.a[0]);
             ID3D11Buffer* buffer = at.buffer != nullptr ? at.buffer->bound(d3d11::BufferUse::Geometry) : nullptr;
-            if (buffer == nullptr) {
-                std::cerr << "[indices] null buffer offset=" << at.offset << " addr=" << op.a[0] << '\n';
-            }
             ctx->IASetIndexBuffer(buffer, op.w[1] == 4u ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT, static_cast<UINT>(at.offset));
             break;
         }
-              case gpu::DrawOp::Kind::DrawIndexed:
-            if (op.w[0] == 0u) {
-                std::cerr << "[draw] zero indices\n";
-            }
+        case gpu::DrawOp::Kind::DrawIndexed:
             ctx->DrawIndexedInstanced(op.w[0], op.w[1], op.w[2], static_cast<INT>(op.w[3]), 0u);
             break;
         case gpu::DrawOp::Kind::Draw:

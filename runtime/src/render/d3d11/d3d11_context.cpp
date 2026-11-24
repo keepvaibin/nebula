@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <new>
 #include <iostream>
@@ -86,7 +87,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool debug_layer) {
         for (const ComPtr<IDXGIAdapter1>& adapter : adapters) {
             DXGI_ADAPTER_DESC1 d{};
             if (SUCCEEDED(adapter->GetDesc1(&d)) && (d.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) == 0u) {
-                choices.push_back(GpuChoice{gpu_identity(d.VendorId, d.DeviceId, d.SubSysId), narrow(d.Description)});
+                choices.push_back(GpuChoice{gpu_identity(d.VendorId, d.DeviceId, d.SubsysId), narrow(d.Description)});
             }
         }
         record_gpu_choices(std::move(choices));
@@ -96,7 +97,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool debug_layer) {
     if (!chosen_gpu.empty()) {
         const auto chosen = [&](const ComPtr<IDXGIAdapter1>& a) {
             DXGI_ADAPTER_DESC1 d{};
-            return SUCCEEDED(a->GetDesc1(&d)) && gpu_identity(d.VendorId, d.DeviceId, d.SubSysId) == chosen_gpu;
+            return SUCCEEDED(a->GetDesc1(&d)) && gpu_identity(d.VendorId, d.DeviceId, d.SubsysId) == chosen_gpu;
         };
         const bool present = std::any_of(adapters.begin(), adapters.end(), chosen);
         std::stable_partition(adapters.begin(), adapters.end(), chosen);
@@ -349,9 +350,8 @@ std::shared_ptr<Texture> Context::create_texture(std::uint32_t width, std::uint3
     if (device_ == nullptr || width == 0u || height == 0u) {
         return {};
     }
-    const bool depth =  DXGI_FORMAT_D24_UNORM_S8_UINT;
-    //format == DXGI_FORMAT_D32_FLOAT_S8X24_UINT || format == DXGI_FORMAT_D24_UNORM_S8_UINT ||
-      //                 format == DXGI_FORMAT_D32_FLOAT;
+    const bool depth = format == DXGI_FORMAT_D32_FLOAT_S8X24_UINT || format == DXGI_FORMAT_D24_UNORM_S8_UINT ||
+                       format == DXGI_FORMAT_D32_FLOAT;
     D3D11_TEXTURE2D_DESC desc{};
     desc.Width = width;
     desc.Height = height;
@@ -522,6 +522,7 @@ Buffer::~Buffer() {
 void Context::upload_written() {
     std::lock_guard guard(buffers_mutex_);
     std::vector<void*>& pages = written_pages_;
+    static const bool full_upload = std::getenv("NEBULA_D3D11_FULL_UPLOAD") != nullptr;
     if (pages.size() < 4096u) {
         pages.resize(4096u);
     }
@@ -540,6 +541,25 @@ void Context::upload_written() {
         // Every written page since the last call; read and reset in one call, so a write after it is seen next time.
         // Each run of consecutive pages is one boxed UpdateSubresource per video-memory buffer (Direct3D 11.0: no buffer
         // here is a constant buffer, whose box 11.0 refuses).
+        if (full_upload) {
+            // Diagnostic (NEBULA_D3D11_FULL_UPLOAD=1): drain the written pages, then push the whole buffer if any was written.
+            bool dirty = false;
+            while (GetWriteWatch(WRITE_WATCH_FLAG_RESET, buffer->shadow, buffer->size, pages.data(), &count, &page_bytes) == 0u) {
+                dirty = dirty || count != 0u;
+                if (count < pages.size()) {
+                    break;
+                }
+                count = pages.size();
+            }
+            if (dirty) {
+                for (const ComPtr<ID3D11Buffer>& made : buffer->gpu) {
+                    if (made != nullptr) {
+                        immediate_->UpdateSubresource(made.Get(), 0u, nullptr, buffer->shadow, 0u, 0u);
+                    }
+                }
+            }
+            continue;
+        }
         while (GetWriteWatch(WRITE_WATCH_FLAG_RESET, buffer->shadow, buffer->size, pages.data(), &count, &page_bytes) == 0u) {
             std::size_t i = 0;
             while (i < count) {
