@@ -1,8 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-24 04:12. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 04:51. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
-Steps landed: 16 of 138 (12%).
+Steps landed: 17 of 138 (12%).
+
+Now: in work: lander landing R1.4
 
 In work now: Nothing started.
 
@@ -13,7 +15,7 @@ In work now: Nothing started.
 | S0.1 | 5 | 5 |
 | S0.2 | 6 | 6 |
 | S0.3 | 2 | 2 |
-| R1 | 3 | 4 |
+| R1 | 4 | 4 |
 | R2 | 0 | 5 |
 | G2 | 0 | 9 |
 | G6 | 0 | 8 |
@@ -37,19 +39,35 @@ In work now: Nothing started.
 
 ## Last 10 landings
 
-None yet.
+| When | Step | Title | Code commit | Main commit |
+| --- | --- | --- | --- | --- |
+| 2026-11-24 04:51 | R1.4 | P-065 (Metal): the renderer's own shader texts compiled at build | 292b3cc4d | 599592a98 |
+| 2026-11-24 03:28 | R1.3 | N-1067: the present gate waits only on a load screen | 4fcf535b2 | 2d389b3a3 |
+| 2026-11-24 00:04 | R1.2 | P-010: a stage's pipelines made while it loads, a draw never compiles | d0c08ad67 | 61cae33f5 |
+| 2026-11-23 21:08 | R1.1 | P-052: the renderers' own pipelines at start | 6ded5f481 | cd1dc8cae |
+| 2026-11-23 20:08 | S0.3.2 | Remove what is left | c975566fd | ba2b58cf1 |
+| 2026-11-23 18:49 | S0.3.1 | Search main for what the rows name | d0c611857 | 053bc9c98 |
+| 2026-11-23 10:25 | S0.2.6 | Landing B, part 4: the question-and-answer path is deleted | 3eaa95375 | d324dc52e |
+| 2026-11-23 08:09 | S0.2.5 | Landing B, part 3: the lens flare | 21ccecf7b | 424c3e541 |
+| 2026-11-23 06:19 | S0.2.4 | Landing B, part 2: the talk balloon | 2423dde4f | 27172e772 |
+| 2026-11-23 06:02 | S0.2.3 | Landing B, part 1: the pointer | 8861980d7 | 6544d38df |
 
 ## Repairs
 
-1 open of kind fail, 1 in all.
+0 open of kind fail, 4 in all.
 
 | Id | State | Kind | Check | Renderer | Traced to | Seen |
 | --- | --- | --- | --- | --- | --- | --- |
-| R-001 | open | fail | tour/d3d12 | d3d12 | step S1.1 commit abc | 2 |
+| R-002 | landed | fail | coverage | - | not traced | 1 |
+| R-004 | landed | fail | coverage | - | not traced | 1 |
+| R-001 | confirmed | fail | build/windows-asan | - | not traced | 1 |
+| R-003 | confirmed | fail | soak | - | not traced | 1 |
 
 ## For the owner to check by hand
 
-Nothing is owed.
+- S0.1.2 Documents: P-096: on the tablet, set up the game once more over an installed one, and once with the setup cut off (close the app mid-copy); then start the launcher: the old game stays playable until the new one is whole, and nothing is left behind (no game.pak.new, no half copy). (agent 1, 2026-11-22 14:18)
+- R1.2 P-010: a stage's pipelines made while it loads, a draw never compiles: Real-time play on a cold cache (delete nothing yours; a new install folder): enter three galaxies for the first time and compare the frame times with R1.1's build under --diagnostics timeline; no PipelineMissed event and no frame longer than its neighbours after each stage's first picture (agent 1, 2026-11-23 21:16)
+- R1.4 P-065 (Metal): the renderer's own shader texts compiled at build: On a Mac (and an iPhone when its app exists): start the game and turn on bloom, the post-process (SMAA and FXAA) and ambient occlusion, then MetalFX and SGSR 2: the log shows '[metal] renderer shaders: N from utility.metallib, 0 compiled from their text' and no hitch the first time each is used (agent 1, 2026-11-24 03:48)
 
 ## Waiting for the owner
 
@@ -61,7 +79,15 @@ Nothing is blocked.
 
 ## Tool mends
 
-No tool was mended.
+| Id | State | Step | Title | Attempts | Minutes | Commit |
+| --- | --- | --- | --- | --- | --- | --- |
+| M-001 | closed | R-002 | coverage: the history's key holds the suites that ran, a run that fell is not the next bar | 0 | 0 | 2d7287334 |
+| M-002 | closed | R-003 | soak: a run of eight laps or more is judged from lap 6 (slope and lowest of the last laps), a spike is not growth | 0 | 0 | 2d7287334 |
+| M-003 | closed | R-001 | build_windows.ps1 refuses a build folder configured with another NEBULA_SANITIZE instead of configuring it again | 0 | 117 | c60999ee1 |
+| M-004 | closed | S0.2.1 | the replay check cannot play a run at a time rate of 2 and compare its step hashes with a rate-1 run (S0.2.1 proof 2) | 0 | 94 | fb2b39bc6 |
+| M-005 | closed | R-004 | Coverage measured a program that could not open the game data: its build folder held objects of another tree | 0 | 0 | f9b350784185c77e18d4822f7b13cd8b1381a33e |
+| M-006 | closed | - | the step tier and section check; a passing tool fault played once more; a waiter left not judged runs itself | 0 | 95 | 2911f6429 |
+| M-007 | closed | - | the section-at-a-time roles: a whole section ahead, wait, hand-off sheets, hard reports, the live page | 0 | 80 | 9ed09cfec |
 
 ## Decisions (49)
 
@@ -190,4 +216,13 @@ No tool was mended.
 
 ## Tool faults
 
-0 tool faults recorded.
+4 tool faults recorded.
+
+The last 20:
+
+| When | Step | Test | What happened | What the agent could not do |
+| --- | --- | --- | --- | --- |
+| 2026-11-23 22:44 | - | measure/step/tablet | the measure could not run: the run failed, harness exit 1 | - |
+| 2026-11-23 20:39 | R1.1 | vulkan | approved on Adreno (TM) 740 driver 512.676.1; these runs: Adreno (TM) 740 driver 512.676.1, unknown driver | R1.2's landing waited 38 min behind test/ak-second-run and ended not judged; nothing tested |
+| 2026-11-23 20:39 | R1.1 | 010-CannonFleetGalaxy-1 | harness-error: the runner raised RuntimeError: run-as dev.nebula.galaxy.test gave no folder (is the test app installed, and debuggable?): | - |
+| 2026-11-22 14:33 | - | (by hand) | plan.py land S0.1.3 ended code 4 (not judged): gate.py's push check refused main's move because tools/verify/console_census.py's closed group fifo counts 31 (the card's section names GXMT, GXTG, GXTM, GXWP in native/include/nebula_model.h, runtime/src/render/core/model_sections_tests.cpp, crates/nebula-import/src/cook/model_write.rs); it is a certain refusal of the change, reported as not judged; plan.py toolfault --last then said: agent 1 has no tool fault recorded | - |
