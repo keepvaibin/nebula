@@ -11,6 +11,7 @@
 #include <cstring>
 #include <fstream>
 #include <stdexcept>
+#include <string>
 
 #include "galaxy/render/program_table.h"
 #include "render/core/pipeline_cache_file.h"
@@ -65,6 +66,37 @@ thread_local bool tl_device_lost = false;
 
 std::int64_t steady_ticks() noexcept {
     return std::chrono::steady_clock::now().time_since_epoch().count();
+}
+
+// An entry as Pipelines.bin's record (nebula_frame_list.h NEBULA_PIPELINE_RECORD_BYTES, then its inputs), in hexadecimal.
+std::string record_hex(const PipelineEntry& entry) {
+    unsigned char header[NEBULA_PIPELINE_RECORD_BYTES];
+    std::memcpy(header, &entry.desc.vertex, 8u);
+    std::memcpy(header + 8, &entry.desc.pixel, 8u);
+    std::memcpy(header + 16, &entry.desc.state, 4u);
+    const auto count = static_cast<std::uint32_t>(entry.inputs.size());
+    std::memcpy(header + 20, &count, 4u);
+    std::memcpy(header + 24, &entry.desc.position_stride, 4u);
+    static constexpr char kDigits[] = "0123456789abcdef";
+    std::string text;
+    text.reserve((sizeof(header) + entry.inputs.size() * NEBULA_LAYOUT_INPUT_BYTES) * 2u);
+    const auto add = [&text](const unsigned char* bytes, std::size_t size) {
+        for (std::size_t i = 0; i < size; ++i) {
+            text += kDigits[bytes[i] >> 4u];
+            text += kDigits[bytes[i] & 15u];
+        }
+    };
+    add(header, sizeof(header));
+    for (const NebulaLayoutInput& input : entry.inputs) {
+        unsigned char bytes[NEBULA_LAYOUT_INPUT_BYTES];
+        std::memcpy(bytes, &input.semantic, 2u);
+        bytes[2] = input.stream;
+        bytes[3] = input.format;
+        std::memcpy(bytes + 4, &input.offset, 4u);
+        std::memcpy(bytes + 8, &input.stride, 4u);
+        add(bytes, sizeof(bytes));
+    }
+    return text;
 }
 
 }  // namespace
@@ -285,9 +317,11 @@ gpu::Pipeline* Pipelines::missing(std::uint64_t id, const PipelineEntry& entry, 
             const char* const then = linked != nullptr                                    ? "linked from parts at once"
                                      : wait_for_missing_.load(std::memory_order_relaxed) ? "the draw waits for its worker"
                                                                                          : "left out until it is made";
-            std::fprintf(stderr, "[pipelines] missed by a draw in play: programs %llx %llx variant %u aux %u, %s\n",
+            // The record as a line of crates/nebula-import/data/site_pipelines.txt: the cook's list then names it, and every
+            // load registers it before its first picture.
+            std::fprintf(stderr, "[pipelines] missed by a draw in play: programs %llx %llx variant %u aux %u, %s; record %s\n",
                          static_cast<unsigned long long>(entry.desc.vertex), static_cast<unsigned long long>(entry.desc.pixel),
-                         variant, aux, then);
+                         variant, aux, then, record_hex(entry).c_str());
         }
         if (linked != nullptr) {
             gpu::Pipeline* const published = publish(*at, linked);
