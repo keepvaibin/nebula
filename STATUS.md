@@ -4,7 +4,7 @@ Written 2026-11-24 11:05. If this time is more than three hours old, the work ha
 
 Steps landed: 22 of 138 (16%).
 
-Now: in work: lander landing repair R-005 (soak pipelines)
+Now: R-005 landed (22 of 138); in work: writer writing package G2 from G2.1
 
 In work now: Nothing started.
 
