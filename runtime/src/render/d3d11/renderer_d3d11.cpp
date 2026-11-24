@@ -1017,21 +1017,31 @@ void RendererD3D11::flush_draws() {
             ctx->RSSetViewports(1u, &viewport);
             break;
         }
-        case gpu::DrawOp::Kind::Stream: {
+                case gpu::DrawOp::Kind::Stream: {
             const d3d11::Context::BufferOffset at = device.resolve(op.a[0]);
             ID3D11Buffer* buffer = at.buffer != nullptr ? at.buffer->bound(d3d11::BufferUse::Geometry) : nullptr;
             const UINT stride = op.w[1];
             const UINT offset = static_cast<UINT>(at.offset);
+            if (buffer == nullptr) {
+                std::cerr << "[stream] null buffer slot=" << op.slot << " stride=" << stride
+                          << " offset=" << offset << " addr=" << op.a[0] << '\n';
+            }
             ctx->IASetVertexBuffers(op.slot, 1u, &buffer, &stride, &offset);
             break;
         }
-        case gpu::DrawOp::Kind::Indices: {
+           case gpu::DrawOp::Kind::Indices: {
             const d3d11::Context::BufferOffset at = device.resolve(op.a[0]);
             ID3D11Buffer* buffer = at.buffer != nullptr ? at.buffer->bound(d3d11::BufferUse::Geometry) : nullptr;
+            if (buffer == nullptr) {
+                std::cerr << "[indices] null buffer offset=" << at.offset << " addr=" << op.a[0] << '\n';
+            }
             ctx->IASetIndexBuffer(buffer, op.w[1] == 4u ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT, static_cast<UINT>(at.offset));
             break;
         }
-        case gpu::DrawOp::Kind::DrawIndexed:
+              case gpu::DrawOp::Kind::DrawIndexed:
+            if (op.w[0] == 0u) {
+                std::cerr << "[draw] zero indices\n";
+            }
             ctx->DrawIndexedInstanced(op.w[0], op.w[1], op.w[2], static_cast<INT>(op.w[3]), 0u);
             break;
         case gpu::DrawOp::Kind::Draw:
