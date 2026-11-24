@@ -222,7 +222,9 @@ bool GameBloom::apply(ID3D11DeviceContext* context, const Inputs& in, const Para
         (normal && (!kept || !keep_.texture)) || (given && !source_.texture)) {
         return false;
     }
-    if (bloom::adds_nothing(p.threshold, normal ? 0u : p.channel, p.tap1, p.intensity, p.strength)) {
+    // Diagnostic (NEBULA_D3D11_NO_GAME_BLOOM=1): the game's glow adds nothing, so the scene is composed as it is.
+    static const bool no_glow = GetEnvironmentVariableA("NEBULA_D3D11_NO_GAME_BLOOM", nullptr, 0u) != 0u;
+    if (no_glow || bloom::adds_nothing(p.threshold, normal ? 0u : p.channel, p.tap1, p.intensity, p.strength)) {
         // The scene alone (kind 0), no level made: the kept scene, the given source, or (multisampled, where the
         // composite writes every sample from the resolved frame) a copy of the frame. A single-sample simple bloom
         // leaves the frame as it is.
