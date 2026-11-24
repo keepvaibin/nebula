@@ -6,7 +6,8 @@ Steps landed: 14 of 138 (10%).
 
 Now: R1.1 since 20:08 (S0.3.2 landed 20:08); ahead: nothing
 
-In work now: Nothing started.
+In work now:
+- R1.2 P-010: a stage's pipelines made while it loads, a draw never compiles (agent 1)
 
 ## Packages
 
