@@ -802,3 +802,15 @@ been held for more than 30 minutes by a line that names no process, or by a proc
 
 **A queue runner that dies** during a landing leaves its row `running`; the next `land` takes the dead runner's lock over, puts
 the row back to waiting and runs the whole batch again (the children ended with the runner's job object).
+
+**The four roles** (mend M-007, `docs/plan/native/AGENT.md` section 15): a coordinator on Sonnet starts one worker at a time:
+a writer on Opus that writes every step of a package before any lands (`plan.py stack`: each branch on the one before, a row in
+`stack-<agent>.tsv` of the live folder; `start` moves a stacked step's own commits onto main's tip once the one it stands on has
+landed; no step of the next package is written), a lander on Sonnet (`plan.py land` in the background and `plan.py wait <ID>`:
+one line when the landing ends, one call per 9 minutes at most), and a fixer on Opus for each failure the lander may not fix
+(`plan.py hard <ID> "<line>"`: the step blocked with the reason `hard: ...` and the report `hard/<ID>.md` in the live folder).
+Each step has a hand-off sheet (`plan.py handoff <ID>`, `handoff/<ID>.md` in the live folder, four headings); `land` refuses a
+step whose sheet is missing or has an empty heading. The published progress page fetches its data live from the `progress`
+branch on GitHub first (raw.githubusercontent.com, its address made from origin's by `plan.py live_data_url`), which `plan.py`
+pushes with STATUS.md after each change, and falls back to the copy published beside it, saying which one it shows. Self-tests:
+`tools/gate/tests/plan_stack_test.py` and `tools/gate/tests/plan_page_test.py`.

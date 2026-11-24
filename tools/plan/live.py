@@ -12,6 +12,11 @@ it a temporary folder), never in an untracked file inside one work folder:
     ahead-<agent>.tsv step, after, base, handed, time    the step written ahead while a landing plays (plan.py ahead): its branch is
                       native/<step>, `after` is the item being landed, `base` the commit the step's own commits stand on, `handed`
                       the tip of that item the last landing was given
+    stack-<agent>.tsv step, after, base, time            the steps of a section written before any of them lands (plan.py stack, mend
+                      M-007), in the order written: the branch is native/<step>, `after` the step written before it, `base` the
+                      commit its own commits stand on (the tip of native/<after> when it was made)
+    handoff/<ID>.md   a step's hand-off sheet, written by its writer for its lander and fixer (plan.py handoff)
+    hard/<ID>.md      the report of a failure the lander may not fix, for the fixer (plan.py hard)
     owed.tsv          time, agent, step, text            what only a person or other hardware can check
     repairs.tsv       id, opened, source, kind, check, renderer, step, commit, evidence, row, state, closed, seen, note
     github-pending.tsv  time, commit, branches, candidate, run_folder, rerun   (a landing that moved main before GitHub's jobs
@@ -41,6 +46,7 @@ FAULT_COLUMNS = ["time", "agent", "step", "kind", "check", "test", "first_error"
 LANDING_COLUMNS = ["step", "commit", "finished", "seconds", "agent", "main", "figures"]
 RECORD_COLUMNS = ["step", "branch", "tip", "time", "pid"]
 AHEAD_COLUMNS = ["step", "after", "base", "handed", "time"]
+STACK_COLUMNS = ["step", "after", "base", "time"]
 OWED_COLUMNS = ["time", "agent", "step", "text"]
 REPAIR_COLUMNS = ["id", "opened", "source", "kind", "check", "renderer", "step", "commit", "evidence", "row", "state", "closed",
                   "seen", "note"]
@@ -357,6 +363,35 @@ def drop_ahead(live, agent, step=None):
         old = read_ahead(live, agent)
         if old is not None and (step is None or old["step"] == step):
             ahead_path(live, agent).unlink(missing_ok=True)
+
+
+def stack_path(live, agent):
+    return pathlib.Path(live) / ("stack-%s.tsv" % agent)
+
+
+def read_stack(live, agent):
+    """The agent's stack rows, in the order they were written."""
+    return read_rows(stack_path(live, agent), STACK_COLUMNS)
+
+
+def push_stack(live, agent, step, after, base, now=None):
+    with locked(live):
+        rows = [r for r in read_stack(live, agent) if r["step"] != step]
+        rows.append({"step": step, "after": after, "base": base, "time": stamp(now)})
+        write_rows(stack_path(live, agent), STACK_COLUMNS, rows)
+
+
+def drop_stack(live, agent, step):
+    """Removes the stack row of `step`; the file goes when it has none left. The branch is never touched."""
+    with locked(live):
+        rows = read_stack(live, agent)
+        left = [r for r in rows if r["step"] != step]
+        if len(left) == len(rows):
+            return
+        if left:
+            write_rows(stack_path(live, agent), STACK_COLUMNS, left)
+        else:
+            stack_path(live, agent).unlink(missing_ok=True)
 
 
 # ---- what only a person can check ---------------------------------------------------------------------------------------

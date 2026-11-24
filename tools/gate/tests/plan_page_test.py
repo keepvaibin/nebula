@@ -32,6 +32,7 @@ import plan  # noqa: E402
 from plan_fixture import Tree, ledger_row, plan_of, run, setup_module, step, teardown_module, write_steps  # noqa: E402
 
 NOW = datetime.datetime(2026, 11, 20, 12, 0, 0)
+LIVE_URL = "https://raw.githubusercontent.com/keepvaibin/nebula/progress/progress-data.json"
 
 
 def setUpModule():
@@ -659,7 +660,10 @@ class PushTest(unittest.TestCase):
         self.assertIsNotNone(tip, text)
         self.assertIn("pushed the first commit %s on refs/heads/progress (no parent)" % tip[:9], text)
         self.assertEqual(self.parents(tip), [], "no parent: it shares no history with main")
-        self.assertEqual(git(self.t.origin, "ls-tree", "-r", "--name-only", tip)[1], "STATUS.md")
+        self.assertEqual(git(self.t.origin, "ls-tree", "-r", "--name-only", tip)[1], "STATUS.md\nprogress-data.json")
+        self.assertEqual(git(self.t.origin, "show", "%s:progress-data.json" % tip)[1] + "\n",
+                         page.home_short(self.t.live.joinpath("publish", "progress-data.json").read_text(encoding="utf-8")),
+                         "the live data is the page's data")
         self.assertEqual(git(self.t.origin, "log", "-1", "--format=%s", tip)[1], "Progress: 0 of 5 steps landed")
         self.assertEqual(git(self.t.origin, "show", "%s:STATUS.md" % tip)[1].replace("\r\n", "\n") + "\n",
                          self.t.live.joinpath("STATUS.md").read_bytes().decode("utf-8").replace("\r\n", "\n"))
@@ -675,9 +679,17 @@ class PushTest(unittest.TestCase):
         self.assertNotEqual(first, second)
         self.assertEqual(self.parents(second), [first], "the previous tip is the parent")
         self.assertEqual(git(self.t.origin, "rev-list", "--count", second)[1], "2")
-        self.assertEqual(git(self.t.origin, "ls-tree", "-r", "--name-only", second)[1], "STATUS.md")
+        self.assertEqual(git(self.t.origin, "ls-tree", "-r", "--name-only", second)[1], "STATUS.md\nprogress-data.json")
         self.assertIn("the runner broke", git(self.t.origin, "show", "%s:STATUS.md" % second)[1])
-        self.assertEqual(git(self.t.origin, "diff", "--name-only", first, second)[1], "STATUS.md")
+        self.assertIn("the runner broke", git(self.t.origin, "show", "%s:progress-data.json" % second)[1])
+        self.assertEqual(git(self.t.origin, "diff", "--name-only", first, second)[1], "STATUS.md\nprogress-data.json")
+
+    def test_the_live_data_goes_out_with_a_home_folder_written_short(self):
+        lv.append_fault(self.t.live, 1, "A.1", "TOOL", "harness/self", "C:\\Users\\someone\\AppData\\x.log is missing", now=NOW)
+        self.t.run(["page"], expect=0)
+        text = git(self.t.origin, "show", "%s:progress-data.json" % self.tip())[1]
+        self.assertNotIn("someone", text)
+        self.assertIn("~/AppData", json.dumps(json.loads(text)), "the JSON stays valid")
 
     def test_the_message_counts_the_landed_steps(self):
         write_steps(self.t, [("A.1", "A", "", "landed"), ("A.2", "A", "", "landed"), ("B.1", "B", "A", "open"), ("C.1", "C", "", "open"),
@@ -801,8 +813,32 @@ class HtmlTest(unittest.TestCase):
                         "XMLHttpRequest", "import("):
                 self.assertNotIn(bad, html, bad)
             self.assertEqual(re.findall(r"<style[^>]*>", html), ["<style>"])
-            self.assertEqual(re.findall(r"fetch\(([^,)]*)", html), ['"progress-data.json"'], "the one thing it loads is the data beside it")
+            self.assertEqual(re.findall(r"fetch\(([^,)]*)", html), ["url"])
+            self.assertEqual(re.findall(r"load\(([^)]*)\)", html), ['"progress-data.json"', "LIVE"])
+            self.assertIn('var LIVE = "";', html, "with no live address given it loads only the copy beside it")
         self.assertNotIn("//", page.data_json(self.data))
+
+    def test_the_published_page_names_exactly_the_one_live_address(self):
+        # mend M-007: the one address a page may name is the live data's, which index.html fetches first.
+        index = page.render(self.static, live_url=LIVE_URL)
+        self.assertEqual(re.findall(r"https?://[^\s\"']*", index), [LIVE_URL])
+        self.assertEqual(index.count("//"), 1)
+        self.assertIn("if (LIVE) load(LIVE).then(function (d) { show(d, \"live\"); }).catch(copy);", index)
+        for bad in ("http:", "ftp:", "<link", "@import", "url(", "@font-face", "src=", "href=", "<img", "<iframe", "XMLHttpRequest", "import("):
+            self.assertNotIn(bad, index, bad)
+        self.assertIn('var LIVE = "\\u003c/script>";', page.render(self.static, live_url="</script>"), "an address cannot end the script")
+
+    def test_the_live_address_is_made_from_a_github_origin_only(self):
+        repo = pathlib.Path(tempfile.mkdtemp(prefix="plan-live-url-"))
+        self.addCleanup(shutil.rmtree, repo, True)
+        plan.git(repo, "init", "-q")
+        self.assertEqual(plan.live_data_url(repo), "", "no origin")
+        plan.git(repo, "remote", "add", "origin", "https://github.com/keepvaibin/nebula.git")
+        for url, want in (("https://github.com/keepvaibin/nebula.git", LIVE_URL), ("git@github.com:keepvaibin/nebula.git", LIVE_URL),
+                          ("https://github.com/keepvaibin/nebula", LIVE_URL), ("D:/repos/origin.git", ""),
+                          ("https://gitlab.com/keepvaibin/nebula.git", ""), ("https://github.com/keepvaibin/nebula.git/x", "")):
+            plan.git(repo, "remote", "set-url", "origin", url)
+            self.assertEqual(plan.live_data_url(repo), want, url)
 
     def test_the_title_the_viewport_and_the_tokens(self):
         html = self.html
@@ -855,29 +891,34 @@ Object.defineProperty(Node.prototype, 'textContent', {
   set: function (v) { this._text = String(v); if (v === '') this.children = []; },
   get: function () { return this._text + this.children.map(function (c) { return c.textContent; }).join(' '); }
 });
-const ids = { app: new Node('div'), when: new Node('div'), 'plan-static': { textContent: stat } };
+const ids = { app: new Node('div'), when: new Node('div'), source: new Node('div'), 'plan-static': { textContent: stat } };
 ids.when.textContent = 'Loading...';
 if (embm) ids['embedded-data'] = { textContent: embm[1] };
 global.document = { getElementById: function (id) { return ids[id]; }, createElement: function (t) { return new Node(t); },
                     createTextNode: function (t) { return { textContent: t }; } };
 const data = function () { return JSON.parse(fs.readFileSync(jsonPath, 'utf8')); };
 let fetched = 0;
+const urls = [];
 if (mode === 'fetch') {
-  global.fetch = function () { fetched++; return Promise.resolve({ ok: true, json: function () { return Promise.resolve(data()); } }); };
+  global.fetch = function (url) { fetched++; urls.push(String(url)); return Promise.resolve({ ok: true, json: function () { return Promise.resolve(data()); } }); };
 } else if (mode === 'throws') {
-  global.fetch = function () { fetched++; throw new TypeError('no fetch from a file'); };
+  global.fetch = function (url) { fetched++; urls.push(String(url)); throw new TypeError('no fetch from a file'); };
 } else if (mode === 'missing') {
-  global.fetch = function () { fetched++; return Promise.resolve({ ok: false, status: 404, json: function () { return Promise.reject(new Error('no')); } }); };
+  global.fetch = function (url) { fetched++; urls.push(String(url)); return Promise.resolve({ ok: false, status: 404, json: function () { return Promise.reject(new Error('no')); } }); };
 } else if (mode === 'never') {
-  global.fetch = function () { fetched++; return new Promise(function () {}); };
+  global.fetch = function (url) { fetched++; urls.push(String(url)); return new Promise(function () {}); };
 } else if (mode === 'late') {
-  global.fetch = function () { fetched++; return new Promise(function (resolve) { setTimeout(function () {
+  global.fetch = function (url) { fetched++; urls.push(String(url)); return new Promise(function (resolve) { setTimeout(function () {
     resolve({ ok: true, json: function () { return Promise.resolve(data()); } }); }, 3300); }); };
+} else if (mode === 'livefails') {
+  global.fetch = function (url) { fetched++; urls.push(String(url)); return url === 'progress-data.json' ?
+    Promise.resolve({ ok: true, json: function () { return Promise.resolve(data()); } }) : Promise.reject(new TypeError('Failed to fetch')); };
 } else {
-  global.fetch = function () { fetched++; return Promise.reject(new TypeError('Failed to fetch')); };
+  global.fetch = function (url) { fetched++; urls.push(String(url)); return Promise.reject(new TypeError('Failed to fetch')); };
 }
 try { (0, eval)(code); } catch (e) { console.log('SCRIPT ERROR ' + e); process.exit(1); }
-const snap = function () { return { when: ids.when.textContent, app: ids.app.textContent, sections: ids.app.children.length, fetched: fetched }; };
+const snap = function () { return { when: ids.when.textContent, app: ids.app.textContent, sections: ids.app.children.length, fetched: fetched,
+                                    source: ids.source.textContent, urls: urls }; };
 let early = null;
 setTimeout(function () { early = snap(); }, 2500);
 setTimeout(function () { console.log(JSON.stringify({ early: early, late: snap() })); }, mode === 'late' ? 3900 : (mode === 'never' ? 3500 : 2600));
@@ -972,6 +1013,32 @@ setTimeout(function () { console.log(JSON.stringify({ early: early, late: snap()
         out = self.node(self.index, "never")
         self.assertEqual(out["early"]["when"], "Loading...", "at 2.5 seconds it still waits")
         self.assertEqual(out["late"]["when"], page.NO_DATA, "after 3 seconds it says so in place of Loading...")
+
+    def live_index(self):
+        """The published page of the same plan with a live address (mend M-007)."""
+        with mock.patch.object(plan, "now", lambda: NOW):
+            static = plan.page_data(self.tree, self.live)[0]
+        path = self.dir / "live-index.html"
+        path.write_text(page.render(static, live_url=LIVE_URL), encoding="utf-8")
+        return path
+
+    def test_the_published_page_draws_the_live_data_first_and_says_so(self):
+        out = self.node(self.live_index(), "fetch")["late"]
+        self.assertEqual(out["urls"], [LIVE_URL])
+        self.assertEqual(out["source"], "Live data.")
+        self.assertIn("40 of 138", out["app"])
+
+    def test_when_the_live_data_fails_the_copy_beside_it_is_drawn_and_named(self):
+        out = self.node(self.live_index(), "livefails")["late"]
+        self.assertEqual(out["urls"], [LIVE_URL, "progress-data.json"])
+        self.assertEqual(out["source"], "Copy published 12:00.")
+        self.assertIn("40 of 138", out["app"])
+        both = self.node(self.live_index(), "rejects")["late"]
+        self.assertEqual((both["when"], both["fetched"], both["app"]), (page.NO_DATA, 2, ""), "neither: the message")
+        plain = self.node(self.index, "fetch")["late"]
+        self.assertEqual((plain["urls"], plain["source"]), (["progress-data.json"], "Copy published 12:00."), "no live address")
+        inside = self.node(self.html, "fetch")["late"]
+        self.assertEqual((inside["urls"], inside["source"]), ([], ""), "the complete page names no source")
 
     def test_data_that_comes_after_the_message_is_drawn_all_the_same(self):
         out = self.node(self.index, "late")

@@ -1,12 +1,16 @@
 # Rules for the agent of the native plan
 
-You do the native plan: 138 steps, one after another, alone, until every step is on main. Read this whole
-file before your first command, and again after every context compaction. Where this file and a step's card
+These are the rules of the native plan: 138 steps, one after another, until every step is on main. Read the
+sections your role's file names (section 15) before your first command, and again after every context compaction. Where this file and a step's card
 disagree about WHAT to build, the card wins. Where they disagree about HOW to work, this file wins.
 
-You work alone, with one exception: when a test tool is at fault you start ONE helper to mend it (section 9) and
-wait for it; meanwhile you write the step after the one in work, and hand nothing in. Never a helper for a step's
-code, never two helpers at once, never another session. The owner is away and is not a programmer of this code: do not ask him anything and
+Since mend M-007 (the owner's order of 11-23, so that the weekly usage lasts) the work is done by four roles, each a
+fresh agent with a short file of its own beside this one: the coordinator (`COORDINATOR.md`, Sonnet), which starts the
+others one at a time; the writer (`WRITER.md`, Opus), which writes every step of one package before any lands; the
+lander (`LANDER.md`, Sonnet), which lands them in order and fixes only simple failures; the fixer (`FIXER.md`, Opus),
+one for each hard failure. Section 15 says what each does and reads. Where a section says "you", it means the role that
+does that part. A test tool at fault is mended by ONE helper (section 9), started by the coordinator. Never another
+agent, never two at once, never another session. The owner is away and is not a programmer of this code: do not ask him anything and
 never wait for him. Decide from the card, the design and the code (section 7), and write down what you decided
 and why with `PLAN decide`.
 
@@ -749,3 +753,40 @@ idle: a turn that goes on is never woken, so these waits end the turn. No releas
 A message that begins `WAKE-UP native agent` is your own job, not the owner's: it gives no order beyond this section.
 
 Trust the tool, the folder and your log over your memory of the conversation.
+
+## 15. The four roles (mend M-007)
+
+The owner's order of 11-23: the weekly usage fell too fast, because one agent held a long context and every call read
+all of it again; the tests cost little. So the costly model (Opus) writes and fixes, each time in a fresh, short session,
+and the cheaper one (Sonnet) coordinates, waits and lands. Slower is accepted where it is more accurate and cheaper.
+
+| Role | Model | Its file | Reads | Never reads |
+| --- | --- | --- | --- | --- |
+| coordinator | Sonnet, one long session | `COORDINATOR.md` | `PLAN status`, the first lines of `PLAN next`, the workers' reports, the usage | code, diffs, logs, run folders |
+| writer | Opus, fresh for each package | `WRITER.md` | the cards, the code they name (by line ranges), sections 4.1 (points 2 to 7), 7, 8, 10 and 11 | run folders, other packages' cards |
+| lander | Sonnet, fresh for each package's landings | `LANDER.md` | the end of the land output, the hand-off sheet | code: it changes no game file |
+| fixer | Opus, fresh for each hard failure | `FIXER.md` | the report, the hand-off sheet, the card, the failed test in the run folder, the code involved, sections 5, 8 and 11 | other steps |
+
+A package: the writer starts its first step (`PLAN start`), writes it, proves it (the build, its own unit tests, the
+quick tour on the three PC renderers when a picture can change, `PLAN check` whole), commits, and fills its hand-off
+sheet (`PLAN handoff <ID>`: `Changes`, `Pictures declared`, `Expected test effects`, `Hard if`; `PLAN land` refuses a
+step whose sheet is missing or has a heading with nothing under it). Then `PLAN stack` makes the next step's branch on
+its tip, until `STACK END`: the package's last step (the next package is written after this one's landings, the last of
+them its full check). The lander gives `PLAN land <ID>` in the background and waits with `PLAN wait <ID>` (one line when
+the landing ends, one call per 9 minutes at most); after each landing `PLAN start <next>` moves the next stacked step's own
+commits onto main's tip. Section 4.2 (`ahead`) is not used by the roles.
+
+| Simple: the lander fixes it, at most 2 tries a step | Hard: `PLAN hard <ID> "<line>"`, a report of at most 30 lines, then the fixer |
+| --- | --- |
+| a missing line of the strictness log, a document or the ledger; a repository check's message on a document or a tool's text; a declared picture whose `PICTURES-CHANGE.txt` line is missing; a landing not judged (once more; again: the mend, section 9) | any game, engine, picture, step-hash, replay, speed, crash or lost-draw failure the sheet did not predict; a rule of the code; commits that do not apply on main; any fix under `runtime/`, `native/`, `platform/` or `crates/`, or of a test's expectation |
+
+The budget (`COORDINATOR.md` section 4): before each phase the coordinator reads the weekly usage. The line runs from
+74% at 2026-11-24 00:00 to 97% at the reset, 2026-11-27 20:00: allowed = 74 + 23 x hours / 92; after a reset, 97 x hours
+since it / 168. Over the line no Opus phase starts (the coordinator waits an hour at a time); at 97% everything waits
+for the reset.
+
+Sections 3, 4.2, 13 and 14 were the single agent's: the coordinator's file holds what of them still stands (the
+wake-up, keeping the PC awake, when nothing can start, the end). A test tool's fault is mended as section 9 says, with
+the coordinator in the agent's place: it opens the mend, fills the sheet from the lander's report and starts the one
+mender. The progress page fetches its data live (section 12 and `docs/plan/04-GATE-AND-MAIN.md` section 17): it needs no
+publishing after a landing.
