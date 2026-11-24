@@ -37,10 +37,10 @@
     },
     "current": {
       "div_1": "LATEST RELEASE",
-      "heading_1": "Nebula v1.0.2",
-      "paragraph_1": "Nebula v1.0.2 for Windows, released 27 October 2026.",
-      "paragraph_2": "Download Nebula-Setup.exe under Assets on the release page.",
-      "link_1": "Download v1.0.2 ↗",
+      "heading_1": "Nebula v2.0.0-beta.1",
+      "paragraph_1": "The first beta of Nebula v2, for Windows, Linux, macOS and Android, released 23 November 2026. Expect faults, and keep a copy of your saves.",
+      "paragraph_2": "Download the file for your system under Assets on the release page.",
+      "link_1": "Download v2.0.0-beta.1 ↗",
       "link_2": "All releases ↗"
     },
     "platforms": {
@@ -65,7 +65,7 @@
     "before": {
       "div_1": "YOUR GAME",
       "heading_1": "Game files",
-      "paragraph_1": "Nebula includes no game files. You need Super Mario Galaxy for Wii, North America (RMGE01), as an ISO, RVZ or extracted folder.",
+      "paragraph_1": "Nebula includes no game files. You need Super Mario Galaxy for Wii from North America (RMGE01), Europe (RMGP01) or Japan (RMGJ01), as an ISO, RVZ or extracted folder.",
       "link_1": "System requirements"
     },
     "footer": {
