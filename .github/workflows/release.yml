@@ -157,7 +157,7 @@ jobs:
           - level: avx2
             baseline: 'OFF'
           - level: x86-64-v2
-            baseline: 'ON'
+            baseline: 'OFF'
     steps:
       - uses: actions/checkout@v7
         with:
@@ -239,12 +239,10 @@ jobs:
           }
           $out = Join-Path $env:RUNNER_TEMP 'out'
           $names = Join-Path $out 'names'
-          New-Item -ItemType Directory -Force (Join-Path $out 'bin\x86-64-v2'), (Join-Path $names 'luma_types') | Out-Null
           Copy-Item (Join-Path $build 'smg_game_plain.dll') (Join-Path $out 'bin')
-          Copy-Item (Join-Path $build 'x86-64-v2\smg_game_plain.dll') (Join-Path $out 'bin\x86-64-v2')
-          if ($env:NEBULA_MODS -ne 'OFF') {
+           if ($env:NEBULA_MODS -ne 'OFF') {
             Copy-Item (Join-Path $build 'smg_game.dll') (Join-Path $out 'bin')
-            Copy-Item (Join-Path $build 'x86-64-v2\smg_game.dll') (Join-Path $out 'bin\x86-64-v2')
+            
             # The game build folder's self-description, as build-native-setup.ps1 -Names and LumaLink's --names read it.
             Copy-Item -Recurse -LiteralPath (Join-Path $build 'luma') -Destination (Join-Path $names 'luma')
             foreach ($file in 'luma_types.json', 'luma_functions.json', 'luma_numbers.json', 'luma_services.json') {
@@ -336,10 +334,7 @@ jobs:
         with:
           name: windows-hosts-avx2
           path: ${{ runner.temp }}/avx2
-      - uses: actions/download-artifact@v8
-        with:
-          name: windows-hosts-x86-64-v2
-          path: ${{ runner.temp }}/v2
+     
       - uses: actions/download-artifact@v8
         with:
           name: windows-game
@@ -369,7 +364,7 @@ jobs:
           New-Item -ItemType Directory -Force $bin | Out-Null
           # The AVX2 programs with D3D12\ and glslang\, the x86-64-v2 programs beside them, the game modules.
           Copy-Item -Recurse -Path (Join-Path $temp 'avx2\*') -Destination $bin -Exclude 'host-tools'
-          Copy-Item (Join-Path $temp 'v2\*-x86-64-v2.exe') $bin
+        
           Copy-Item -Recurse -Path (Join-Path $temp 'game\bin\*') -Destination $bin -Force
           if ($noMods) {
             # No mod support: no self-description, no LumaKit, no game module with the mod rows (the script reads NEBULA_MODS).
@@ -388,7 +383,7 @@ jobs:
         uses: ./.github/actions/start-check-windows
         with:
           folder: ${{ runner.temp }}\bin
-          programs: NebulaD11 Nebula-x86-64-v2 NebulaD11-x86-64-v2
+          programs: NebulaD11
       - name: The mod kit (a pre-release has none, a release has it)
         shell: bash
         run: |
