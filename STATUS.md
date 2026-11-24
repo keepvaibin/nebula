@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-24 11:51. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 11:54. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 22 of 138 (16%).
 
@@ -80,7 +80,7 @@ Nothing waits for the owner.
 
 ## Blocked
 
-Nothing is blocked.
+- G2.3 Landing 3: a display model, one platform at a time: Nothing written yet (native/G2.3 is at G2.2's d18a663e9, no change). In the way: the card asks the step itself to run the tablet (proof 9: config.ini removed through adb with the tablet lock; proofs 2 and 5b: the tablet's measures and its panel's hasArrSupport), which WRITER.md forbids a writer, and its other proofs need a Mac run (4), a Linux run (3) and the owner's monitor setting (5a). Its code is nine pieces that share little (Windows frame statistics and lead, Vulkan and Android present timing, the Linux present-wait clock, the Metal display link and drawable count, the variable-refresh decision with display_recheck on four hosts, P-281's four faults, P-042's Android vote and fall-back with a new JNI call, the settings texts in 14 languages, the published picture interval, P-313's trace), and its Old path already lands them platform by platform. Asked: split G2.3 into one step per piece, each with the proofs a writer can make here and the tablet, Mac, Linux and real-display proofs as PLAN owed.
 
 ## Tool mends
 
