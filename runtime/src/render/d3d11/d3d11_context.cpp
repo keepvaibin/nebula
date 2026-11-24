@@ -524,11 +524,7 @@ Buffer::~Buffer() {
 void Context::upload_written() {
     std::lock_guard guard(buffers_mutex_);
     std::vector<void*>& pages = written_pages_;
-<<<<<<< HEAD
     static const bool full_upload = GetEnvironmentVariableA("NEBULA_D3D11_FULL_UPLOAD", nullptr, 0u) != 0u;
-=======
-     static const bool full_upload = GetEnvironmentVariableA("NEBULA_D3D11_FULL_UPLOAD", nullptr, 0u) != 0u;
->>>>>>> 3c58e3dfb482939f6b1ed123fb1f69e164d7c657
     if (pages.size() < 4096u) {
         pages.resize(4096u);
     }
