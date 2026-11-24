@@ -2,8 +2,9 @@
 // Presentation post-processing on Vulkan, the D3D12 chain's (post_process.h) with the same shaders: SMAA 1x or FXAA
 // of the 3D scene before the 2D layer draws, so menus and text stay sharp, and the scaling chain to the window (FSR 1
 // EASU when enlarging, else the footprint box filter, then RCAS). post_process.hlsl is composed with the vendored SMAA
-// and FidelityFX FSR 1 sources as the D3D12 build composes its fxc inputs, and compiled on the device, on a worker
-// thread: until it is ready the renderer presents with its plain blit.
+// and FidelityFX FSR 1 sources as the D3D12 build composes its fxc inputs. Its pipelines are made at the start on a
+// worker (build) and its self-test runs before the first frame (finish_build); a chain that could not be made leaves
+// the renderer presenting with its plain blit.
 #pragma once
 
 #include "galaxy/render/post_process_settings.h"
@@ -29,8 +30,9 @@ public:
     PostProcessorVk& operator=(const PostProcessorVk&) = delete;
     ~PostProcessorVk() { shutdown(); }
 
-    // Starts compiling every pass, for the renderer's scene target pass (RGBA8 and depth) and its RGBA8 colour pass (one
-    // attachment, ending shader-readable). The present pass comes with set_present_pass.
+    // The settings and the passes the chain draws in: the renderer's scene target pass (RGBA8 and depth) and its RGBA8
+    // colour pass (one attachment, ending shader-readable). The present pass comes with set_present_pass. Nothing is made
+    // until build.
     void initialize(const PostProcessSettings& settings, VkRenderPass scene_pass, VkRenderPass color_pass,
                     VkRenderPass window_pass);
     // The swap chain's render pass (made again when its format changes): the chain's last pass draws in it.
@@ -41,13 +43,17 @@ public:
     // deferred), the chain ready.
     void set_wide(bool wide, VkRenderPass scene_pass, VkRenderPass color_pass);
     // The scene passes' multisampled pipelines (FXAA's, SMAA's) in the renderer's scene target passes of the current
-    // format, by samples (log2; null where none) (P-052): when the chain is ready and after each set_wide.
+    // format, by samples (log2; null where none) (P-052): by build, and after each set_wide.
     void prepare_pipelines(const std::array<VkRenderPass, 4>& scene_passes);
     [[nodiscard]] bool wide() const noexcept { return color_format_ == VK_FORMAT_R16G16B16A16_SFLOAT; }
     void shutdown() noexcept;
-    // Once the worker has finished: builds the pipelines and runs the SMAA and FXAA self-tests (a submission the
-    // render thread waits for), so status() is final. True when the chain is ready.
-    bool poll_ready();
+    // Makes every pass's pipelines, and the scene passes' multisampled ones for `scene_passes` (P-052): at the start, on
+    // a worker, after initialize and set_present_pass. Device objects only, no submission. False when the scaling
+    // pipelines cannot be made: the renderer presents with its plain blit.
+    bool build(const std::array<VkRenderPass, 4>& scene_passes);
+    // After a build that succeeded, at the start and outside any frame: runs the SMAA and FXAA self-tests (a submission
+    // it waits for), so status() is final, and the chain is ready.
+    void finish_build();
     [[nodiscard]] bool ready() const noexcept { return ready_; }
     [[nodiscard]] const PostProcessStatus& status() const noexcept { return status_; }
     [[nodiscard]] const PostProcessSettings& settings() const noexcept { return settings_; }
@@ -156,7 +162,6 @@ private:
     PostProcessStatus status_{};
     bool ready_ = false;
     bool built_ = false;
-    bool to_build_ = false;  // initialized: poll_ready makes the pipelines
     unsigned spirv_quality_ = 0;  // the SMAA quality module() takes the quality-dependent programs at
     VkRenderPass scene_pass_ = VK_NULL_HANDLE;
     VkRenderPass color_pass_ = VK_NULL_HANDLE;
