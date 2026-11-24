@@ -1,13 +1,12 @@
 # Nebula native plan: status
 
-Written 2026-11-24 00:01. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 00:04. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
-Steps landed: 14 of 138 (10%).
+Steps landed: 15 of 138 (11%).
 
 Now: R1.2's third landing plays since 23:12; tool change M-005 (quick tier per step, full check per section) in self-tests; R1.3 written; owner asked before R1.4
 
-In work now:
-- R1.2 P-010: a stage's pipelines made while it loads, a draw never compiles (agent 1)
+In work now: Nothing started.
 
 ## Packages
 
@@ -16,7 +15,7 @@ In work now:
 | S0.1 | 5 | 5 |
 | S0.2 | 6 | 6 |
 | S0.3 | 2 | 2 |
-| R1 | 1 | 4 |
+| R1 | 2 | 4 |
 | R2 | 0 | 5 |
 | G2 | 0 | 9 |
 | G6 | 0 | 8 |
@@ -42,6 +41,7 @@ In work now:
 
 | When | Step | Title | Code commit | Main commit |
 | --- | --- | --- | --- | --- |
+| 2026-11-24 00:04 | R1.2 | P-010: a stage's pipelines made while it loads, a draw never compiles | d0c08ad67 | 61cae33f5 |
 | 2026-11-23 21:08 | R1.1 | P-052: the renderers' own pipelines at start | 6ded5f481 | cd1dc8cae |
 | 2026-11-23 20:08 | S0.3.2 | Remove what is left | c975566fd | ba2b58cf1 |
 | 2026-11-23 18:49 | S0.3.1 | Search main for what the rows name | d0c611857 | 053bc9c98 |
@@ -51,7 +51,6 @@ In work now:
 | 2026-11-23 06:02 | S0.2.3 | Landing B, part 1: the pointer | 8861980d7 | 6544d38df |
 | 2026-11-23 05:08 | S0.2.2 | The scene query's form, written into the inventory before code | e54a921e5 | 37db1ddaa |
 | 2026-11-23 04:53 | S0.2.1 | Landing A: drawing stops changing the game | 84a2f5a72 | 5695013af |
-| 2026-11-22 18:13 | S0.1.5 | Render data path step 2, second landing: `f4/e3-2b` and `f4/e3-2c` | 02d236b5c | fb2dfa855 |
 
 ## Repairs
 
@@ -86,7 +85,7 @@ Nothing is blocked.
 | M-003 | closed | R-001 | build_windows.ps1 refuses a build folder configured with another NEBULA_SANITIZE instead of configuring it again | 0 | 117 | c60999ee1 |
 | M-004 | closed | S0.2.1 | the replay check cannot play a run at a time rate of 2 and compare its step hashes with a rate-1 run (S0.2.1 proof 2) | 0 | 94 | fb2b39bc6 |
 | M-005 | closed | R-004 | Coverage measured a program that could not open the game data: its build folder held objects of another tree | 0 | 0 | f9b350784185c77e18d4822f7b13cd8b1381a33e |
-| M-006 | open | - | the step tier and section check; a passing tool fault played once more; a waiter left not judged runs itself | 0 | 0 | - |
+| M-006 | open | - | the step tier and section check; a passing tool fault played once more; a waiter left not judged runs itself | 0 | 2 | - |
 
 ## Decisions (45)
 
