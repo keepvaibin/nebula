@@ -1265,6 +1265,7 @@ bool RenderCore::restart_device() {
         lap(steps.textures);
         registries_.lose_device();
         texture_lists_.clear();
+        target_slots_.clear_places();
         display_pictures_.shutdown();
         drop_device_state();
         lap(steps.rest);
@@ -1906,6 +1907,7 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
         for (const std::uint32_t id : freed_textures_) {
             if (TextureStore::is_target(id)) {
                 renderer_.free_target(id, texture_store_);
+                target_slots_.forget(id);  // forget_textures dropped the tables naming it
             }
         }
         // Tables no walk has named for a long while give up what was built for them (core::Registries::retire_idle_tables).

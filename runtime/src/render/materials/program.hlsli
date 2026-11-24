@@ -36,7 +36,9 @@ cbuffer Draw : register(b3) {
     float draw_half_line;   // a widened line's half width in pixels
     float draw_half_point;  // a widened point's half size in pixels
     uint draw_table;        // the draw's first entry in draw_tables
-    uint draw_map_bias;     // NEBULA_BOUND_TABLES: each map's frame bias kind, two bits a map from map 0
+    // NEBULA_BOUND_TABLES: each map's frame bias kind, two bits a map from map 0; else the first entry of the target
+    // slots in draw_tables (MAP_AT).
+    uint draw_maps;
 };
 
 StructuredBuffer<float4> rows : register(t16);
@@ -54,7 +56,7 @@ Texture2D tex[NEBULA_TABLE_SLOTS] : register(t0);
 SamplerState samp[NEBULA_TABLE_SLOTS] : register(s0);
 #define MAP_AT(n) tex[n]
 #define SAMP(n) samp[n]
-#define BIAS_KIND(n) ((draw_map_bias >> (2u * (n))) & 3u)
+#define BIAS_KIND(n) ((draw_maps >> (2u * (n))) & 3u)
 #else
 // Every texture and sampler in one array each, bound once; the draw's list holds each map's places in them (x the
 // texture, y the sampler), the same for every pixel of the draw.
@@ -64,7 +66,10 @@ Texture2D gTextures[] : register(t0, space1);
 SamplerState gSamplers[] : register(s0, space1);
 // The sampler's place is y's low 30 bits, the map's frame bias kind its top two (gpu::kTableBiasShift).
 StructuredBuffer<uint2> draw_tables : register(t18);
-#define MAP_AT(n) gTextures[draw_tables[draw_table + (n)].x]
+// A map that names a target (x's top bit, core::kTargetMap) reads its picture's place in the frame's target slots, at
+// draw_maps plus the target's number: the list stands while the target's pictures move (core::TargetSlots).
+uint map_slot(uint x) { return x >= 0x80000000u ? draw_tables[draw_maps + (x & 0x7FFFFFFFu)].x : x; }
+#define MAP_AT(n) gTextures[map_slot(draw_tables[draw_table + (n)].x)]
 #define SAMP(n) gSamplers[draw_tables[draw_table + (n)].y & 0x3FFFFFFFu]
 #define BIAS_KIND(n) (draw_tables[draw_table + (n)].y >> 30u)
 #endif

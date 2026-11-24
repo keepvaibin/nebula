@@ -118,7 +118,7 @@ struct TextureTable {
     gpu::Table samplers{};
     std::uint64_t textures_revision = ~0ull;
     std::uint32_t samplers_generation = 0u;
-    std::uint32_t map_bias = 0u;  // a bound table's maps' SamplerFrameBias (gpu::DrawRoot::map_bias)
+    std::uint32_t map_bias = 0u;  // a bound table's maps' SamplerFrameBias (gpu::DrawRoot::maps)
     bool has_target = false;
     std::uint64_t walk_stamp = 0u;
     std::uint64_t pictures_moved = 0u;  // RenderCore::pictures_moved_ when its target's pictures were named

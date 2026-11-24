@@ -769,47 +769,42 @@ std::uint32_t RenderCore::merge_ring_run(std::uint32_t first, std::uint32_t end,
     return count;
 }
 
-void RenderCore::walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_t& first) {
+void RenderCore::walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_t& first, std::uint32_t& targets) {
     core::TextureTable& table = registries_.table(id);
     table.last_frame = walk_.now->serial;
     table.retired = false;
-    // A list written earlier in this walk stands unless the generation moved since (the sampler array started again, or
-    // the Vulkan image array grew and its null slot moved): then it is written again.
     const auto generation = renderer_.sampler_generation();
-    if (table.walk_stamp == walk_.serial && table.samplers_generation == generation &&
-        (!table.has_target || table.pictures_moved == pictures_moved_)) {
-        lists = table.lists;
-        first = table.list_first;
-        return;
+    // The targets' pictures stand until the next walk, a picture's view changed (a copy, a take, a target pass or the
+    // scene published it in another image), a generated frame's copy was written or the generation moved (the null
+    // slot): then the target slots are written again (core::TargetSlots).
+    const TargetState state{walk_.serial, texture_store_.views_changed(), generated_notes_, generation};
+    if (!(state == target_state_seen_)) {
+        target_state_seen_ = state;
+        ++target_state_;
     }
-    // The run is as long as the list: no count caps it.
-    const std::uint32_t count = table.count;
-    const NebulaFrameTexture none{};
-    const auto entry_of = [&](std::uint32_t i) -> const NebulaFrameTexture& {
-        return table.count == 0u ? none : table.list[std::min(i, table.count - 1u)];
-    };
-    walk_handles_.assign(count, TextureHandle{});
-    bool has_target = false;
-    for (std::uint32_t i = 0; i < count; ++i) {
-        const std::uint32_t texture = entry_of(i).texture;
-        if (texture == 0u) {
-            continue;
+    // core::walk_list's host: the store, the renderer and this walk.
+    struct Host {
+        using Handle = TextureHandle;
+        RenderCore& core;
+        [[nodiscard]] std::uint64_t walk() const noexcept { return core.walk_.serial; }
+        [[nodiscard]] std::uint64_t state() const noexcept { return core.target_state_; }
+        [[nodiscard]] auto generation() const noexcept { return core.renderer_.sampler_generation(); }
+        [[nodiscard]] std::uint64_t revision() const noexcept { return core.texture_store_.revision(); }
+        [[nodiscard]] static bool is_target(std::uint32_t texture) noexcept { return TextureStore::is_target(texture); }
+        [[nodiscard]] TextureHandle handle(std::uint32_t texture) { return core.texture_store_.handle(texture); }
+        [[nodiscard]] std::uint32_t texture_slot(const TextureHandle& handle) const noexcept {
+            return core.renderer_.texture_slot(handle);
         }
-        if (TextureStore::is_target(texture)) {
-            has_target = true;
-            const std::uint64_t key = walk_.between && generated_written(texture) ? (kGeneratedPicture | texture) : texture;
-            (void)renderer_.target_picture(key, walk_handles_[i]);
-        } else {
-            walk_handles_[i] = texture_store_.handle(texture);
+        [[nodiscard]] std::uint32_t target_slot(std::uint32_t target) const {
+            const std::uint64_t key =
+                core.walk_.between && core.generated_written(target) ? (kGeneratedPicture | target) : target;
+            TextureHandle picture;
+            (void)core.renderer_.target_picture(key, picture);
+            return core.renderer_.texture_slot(picture);
         }
-    }
-    // A sampler depends on its texture (levels, generated levels, a replacement's shift): made again when the textures
-    // or the heap changed, and each walk for a table holding a target. The frame's part of its bias is the programs'.
-    if (has_target || table.sampler_slots.size() != count || table.textures_revision != texture_store_.revision() ||
-        table.samplers_generation != generation) {
-        table.sampler_slots.resize(count);
-        for (std::uint32_t i = 0; i < count; ++i) {
-            const NebulaFrameTexture& t = entry_of(i);
+        // A sampler depends on its texture (levels, generated levels, a replacement's shift). The frame's part of its
+        // bias is the programs'.
+        [[nodiscard]] std::uint32_t sampler_slot(const NebulaFrameTexture& t, const TextureHandle& handle) {
             TextureSampler mode;
             mode.wrap_s = static_cast<TexWrap>(t.wrap_s);
             mode.wrap_t = static_cast<TexWrap>(t.wrap_t);
@@ -820,54 +815,33 @@ void RenderCore::walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_
             mode.lod_bias = t.lod_bias;
             mode.min_lod = t.min_lod;
             mode.max_lod = t.max_lod;
-            const TextureHandle& handle = walk_handles_[i];
             // A draw keeps to the game's first level: the cook's generated levels are not the game's.
             if (handle.generated_mips) {
                 mode.min_lod = 0.0f;
                 mode.max_lod = 0.0f;
             }
-            const std::uint32_t slot = renderer_.sampler_slot(make_sampler_key(mode, handle.mip_levels, handle.lod_shift,
-                                                                               handle.lod_arbitrary, handle.authored_levels));
+            const std::uint32_t slot = core.renderer_.sampler_slot(
+                make_sampler_key(mode, handle.mip_levels, handle.lod_shift, handle.lod_arbitrary, handle.authored_levels));
             const auto bias = sampler_frame_bias(mode, handle.lod_arbitrary, handle.authored_levels);
-            table.sampler_slots[i] = slot | static_cast<std::uint32_t>(bias) << gpu::kTableBiasShift;
+            return slot | static_cast<std::uint32_t>(bias) << gpu::kTableBiasShift;
         }
-        table.textures_revision = texture_store_.revision();
-        table.samplers_generation = generation;
-    }
-    walk_pairs_.resize(std::size_t{count} * 2u);
-    for (std::uint32_t i = 0; i < count; ++i) {
-        walk_pairs_[2u * i] = renderer_.texture_slot(walk_handles_[i]);
-        walk_pairs_[2u * i + 1u] = table.sampler_slots[i];
-    }
-    // The list lives as long as the table (core::TextureLists): written again only when a pair changed. A table holding
-    // a target is written each walk, its picture's slot moving with the frame, until a target is read through its own
-    // slot (FRAME-MODEL 2.10, E3 step 2's last landing).
-    if (has_target || !table.list_place.valid() || table.list_pairs != walk_pairs_) {
-        texture_lists_.release(table.list_place, renderer_.submitted_fence_value() + 1u);
-        table.list_place = texture_lists_.write(walk_pairs_.data(), count, renderer_.completed_fence_value(),
-                                                [&](std::uint32_t pairs) {
-                                                    core::TextureLists::Chunk chunk;
-                                                    chunk.pairs = pairs;
-                                                    if (!renderer_.make_texture_list_chunk(pairs, chunk.mapped, chunk.address)) {
-                                                        chunk.mapped = nullptr;
-                                                    }
-                                                    return chunk;
-                                                });
-        if (!table.list_place.valid()) {
-            throw std::runtime_error("[textures] the texture lists could not be made");
+        [[nodiscard]] std::uint64_t completed() const noexcept { return core.renderer_.completed_fence_value(); }
+        [[nodiscard]] std::uint64_t submitted() const noexcept { return core.renderer_.submitted_fence_value(); }
+        core::TextureLists::Chunk make(std::uint32_t pairs) {
+            core::TextureLists::Chunk chunk;
+            chunk.pairs = pairs;
+            if (!core.renderer_.make_texture_list_chunk(pairs, chunk.mapped, chunk.address)) {
+                chunk.mapped = nullptr;
+            }
+            return chunk;
         }
-        table.list_pairs = walk_pairs_;
+    };
+    Host host{*this};
+    // The list lives as long as the table (core::TextureLists), written again only when a pair changed; a target is read
+    // through the target slots of this state (FRAME-MODEL 2.10).
+    if (!core::walk_list(table, host, texture_lists_, target_slots_, walk_handles_, walk_pairs_, targets)) {
+        throw std::runtime_error("[textures] the texture lists could not be made");
     }
-    table.lists = texture_lists_.address(table.list_place);
-    table.list_first = table.list_place.first;
-    table.has_target = has_target;
-    table.pictures_moved = pictures_moved_;
-    if (count > table.count && !table.clamp_logged) {
-        table.clamp_logged = true;
-        std::fprintf(stderr, "[textures] test: a list of %u maps walked as a run of %u (first entry %u)\n", table.count, count,
-                     table.list_first);
-    }
-    table.walk_stamp = walk_.serial;
     lists = table.lists;
     first = table.list_first;
 }
@@ -1220,13 +1194,13 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
 #if defined(NEBULA_GPU_VULKAN) || defined(NEBULA_GPU_METAL) || defined(NEBULA_GPU_D3D11)
         if (!renderer_.bindless()) {
             gpu::Table textures{}, samplers{};
-            walk_bound_tables(item.textures, textures, samplers, root.map_bias);
+            walk_bound_tables(item.textures, textures, samplers, root.maps);
             encoder.set_tables(textures, samplers);
         } else
 #endif
         {
             gpu::Address lists = 0u;
-            walk_tables(item.textures, lists, root.table);
+            walk_tables(item.textures, lists, root.table, root.maps);
             encoder.bind_textures(lists);
         }
         root.first_instance = i;
@@ -1825,6 +1799,7 @@ bool RenderCore::generated_written(std::uint32_t texture) const noexcept {
 
 void RenderCore::note_generated_written(std::uint32_t texture) {
     generated_written_[texture] = walk_.serial;
+    ++generated_notes_;
 }
 
 }  // namespace galaxy::render

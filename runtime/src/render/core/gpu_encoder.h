@@ -34,9 +34,10 @@ struct DrawRoot {
     float half_line = 0.0f;
     float half_point = 0.0f;
     std::uint32_t table = 0u;  // the draw's first entry in the frame's texture lists (draw_tables)
-    // A bound table's maps' SamplerFrameBias, two bits a map from map 0 (program.hlsli NEBULA_BOUND_TABLES); with the
-    // arrays, each list entry's sampler slot holds its own at kTableBiasShift.
-    std::uint32_t map_bias = 0u;
+    // A bound table's maps' SamplerFrameBias, two bits a map from map 0 (program.hlsli NEBULA_BOUND_TABLES). With the
+    // arrays (each list entry's sampler slot holds its own bias at kTableBiasShift): the first entry of the target slots
+    // in draw_tables, through which a list entry naming a target reads its picture (core::TargetSlots, kTargetMap).
+    std::uint32_t maps = 0u;
     [[nodiscard]] bool operator==(const DrawRoot&) const noexcept = default;
 };
 

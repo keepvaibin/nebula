@@ -272,11 +272,21 @@ private:
     // The ring draws from `first` that are one draw with it; their indices in `index_count`.
     [[nodiscard]] std::uint32_t merge_ring_run(std::uint32_t first, std::uint32_t end, std::uint32_t matrix_at,
                                                std::uint32_t& index_count);
-    // The table's texture list for this walk: the buffer and its first pair (DrawRoot::table). Direct3D 12, and Vulkan with
-    // descriptor indexing (renderer_.bindless()).
-    void walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_t& first);
+    // The table's texture list for this walk: the buffer, its first pair (DrawRoot::table) and the first pair of the target
+    // slots beside it (DrawRoot::maps). Direct3D 12, Vulkan with descriptor indexing and Metal with arrays
+    // (renderer_.bindless()).
+    void walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_t& first, std::uint32_t& targets);
     std::vector<TextureHandle> walk_handles_;
     std::vector<std::uint32_t> walk_pairs_;
+    // Each target's number and the slots of its pictures as they stand (core::TargetSlots), written once a state.
+    core::TargetSlots target_slots_;
+    struct TargetState {
+        std::uint64_t walk = ~0ull, views = 0u, notes = 0u;
+        std::uint32_t generation = 0u;
+        [[nodiscard]] bool operator==(const TargetState&) const noexcept = default;
+    };
+    TargetState target_state_seen_{};
+    std::uint64_t target_state_ = 0u;
 #if defined(NEBULA_GPU_VULKAN) || defined(NEBULA_GPU_METAL) || defined(NEBULA_GPU_D3D11)
     // Vulkan without descriptor indexing: the table's descriptor sets, as many maps as a bound table holds.
     void walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::Table& samplers, std::uint32_t& map_bias);
@@ -346,7 +356,7 @@ private:
     WalkState walk_{};
     std::uint64_t walk_serial_ = 0u;
     // Counts the frame captures and takes that published a target's picture in another image (a new view): a table naming
-    // a target, written earlier in the walk, names it again after one.
+    // a target, written earlier in the walk, names it again after one (a bound table).
     std::uint64_t pictures_moved_ = 0u;
     std::vector<Affine34> walk_cameras_;
     std::vector<std::uint32_t> walk_block_rows_, walk_block_world_, walk_previous_;
@@ -368,6 +378,7 @@ private:
     const float (*walk_rows_cpu_)[4] = nullptr;
     std::byte* walk_rows_upload_ = nullptr;  // the same rows in the frame's upload memory
     std::unordered_map<std::uint32_t, std::uint64_t> generated_written_;
+    std::uint64_t generated_notes_ = 0u;  // note_generated_written's calls: a target read after one reads the copy
     float sky_up_[3]{0.0f, 1.0f, 0.0f};
     std::uint32_t view_flags_ = 0u;  // ViewRows::view_flags
     bool target_open_ = false;
