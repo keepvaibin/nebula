@@ -87,7 +87,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool debug_layer) {
         for (const ComPtr<IDXGIAdapter1>& adapter : adapters) {
             DXGI_ADAPTER_DESC1 d{};
             if (SUCCEEDED(adapter->GetDesc1(&d)) && (d.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) == 0u) {
-                choices.push_back(GpuChoice{gpu_identity(d.VendorId, d.DeviceId, d.SubsysId), narrow(d.Description)});
+                choices.push_back(GpuChoice{gpu_identity(d.VendorId, d.DeviceId, d.SubSysId), narrow(d.Description)});
             }
         }
         record_gpu_choices(std::move(choices));
@@ -97,7 +97,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool debug_layer) {
     if (!chosen_gpu.empty()) {
         const auto chosen = [&](const ComPtr<IDXGIAdapter1>& a) {
             DXGI_ADAPTER_DESC1 d{};
-            return SUCCEEDED(a->GetDesc1(&d)) && gpu_identity(d.VendorId, d.DeviceId, d.SubsysId) == chosen_gpu;
+            return SUCCEEDED(a->GetDesc1(&d)) && gpu_identity(d.VendorId, d.DeviceId, d.SubSysId) == chosen_gpu;
         };
         const bool present = std::any_of(adapters.begin(), adapters.end(), chosen);
         std::stable_partition(adapters.begin(), adapters.end(), chosen);
