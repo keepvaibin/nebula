@@ -863,8 +863,23 @@ Read at c8222595e.
   texture in use for the video-memory budget and what gives a movie's texture its current frame; skipped when the
   store's revision stands, the budget would shrink textures on screen and a movie would stop. Only the copy of the pairs
   is skipped (`core::TextureLists`, `texture_lists.h`).
-- In between until the step's last landing: a table holding a target is still written each walk, until the program
-  reads a target through its own slot (a program change).
+- A target through its own slot (R2.1; read at 599592a98). Every program reads a map through `program.hlsli`'s `MAP_AT`
+  (the generated programs' `TEX(n)` and the written ones' alike; no program reads `draw_tables` or `gTextures` by
+  itself): with the arrays, `gTextures[draw_tables[draw_table + n].x]`, the list in a chunk of `core::TextureLists`
+  bound at t18. A target's picture moves from image to image (a frame copy or a take publishes it in a new view,
+  `publish_picture`), and it can move inside one walk (`NEBULA_PASS_COPY_FRAME` and `NEBULA_PASS_TAKE_FRAME` in
+  `walk_pass`), with draws on both sides reading it: so its slot is set once for each state of the pictures, not once a
+  frame. A list names a target by a number that stands while the target lives (`core::TargetSlots`, freed with the
+  target, after the tables naming it were dropped), as `kTargetMap | number`; `MAP_AT` reads such an entry's place
+  from the target slots, at `draw_maps + number` of the same buffer (`gpu::DrawRoot::maps`, which a bound table uses
+  for its maps' bias kinds), where the walk writes each target's current slot once per state (a walk, a picture view
+  made or given up (`TextureStore::views_changed`: a copy, a take, a target pass or the scene publishing a picture in
+  another image), a generated frame's copy written, the renderers' sampler generation), in the chunk of the lists that read them. A
+  table holding a target is written once; its samplers are those of a one-level picture, made with the table. The
+  walk's part is `core::walk_list` (`texture_lists.h`), which the counting test drives (`galaxy_texture_lists_tests`).
+- A bound table (Direct3D 11; Vulkan and Metal without descriptor indexing, `walk_bound_tables`) holds the views
+  themselves, which shader model 5.0 and those devices index only by constants: a bound table holding a target is
+  still made again once per state of the pictures.
 - The game's own uses of a model's texture take the `ModelTexture` too (`f4/e3-2a`): Mario's eyelid pictures, the
   normal-map objects and fur (`MR::getModelTexture`, a `GameTexture` made from a `ModelTexture`). A draw site keeps the
   filter numbers (`SiteTexture`, `NEBULA_FILTER_*`) until step 4, so `SiteTextures::setSampler` writes a cooked sampler

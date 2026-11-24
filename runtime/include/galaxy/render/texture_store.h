@@ -130,8 +130,17 @@ public:
     [[nodiscard]] static std::uint64_t staging_bytes() noexcept;
 
     // A view slot for a picture the renderer owns; retire_view returns both after the frame's fence.
-    [[nodiscard]] std::uint32_t allocate_view() { return allocate_srv_index(); }
-    void retire_view(std::uint32_t index, gpu::TextureRef picture) { retire(std::move(picture), index); }
+    [[nodiscard]] std::uint32_t allocate_view() {
+        ++views_changed_;
+        return allocate_srv_index();
+    }
+    void retire_view(std::uint32_t index, gpu::TextureRef picture) {
+        ++views_changed_;
+        retire(std::move(picture), index);
+    }
+    // Counts the renderer's own views made and given up: a target's picture moved to another view, came or went
+    // (core::TargetSlots are written again after one).
+    [[nodiscard]] std::uint64_t views_changed() const noexcept { return views_changed_; }
 
     [[nodiscard]] const TextureBackend& backend() const noexcept { return backend_; }
     [[nodiscard]] TextureBackend& backend() noexcept { return backend_; }
@@ -278,6 +287,7 @@ private:
     // Render thread. Ids are never used again, so a table naming a freed image reads nothing, not another image.
     std::vector<std::unique_ptr<Entry>> entries_;
     std::uint64_t revision_ = 1u;
+    std::uint64_t views_changed_ = 0u;
     // Budget: frames begun, bytes of replaced textures still held by frames in flight, the bytes a walk may still ask to have
     // back this frame, the frame the next batch of reductions may start, and the counts since the start. (Render thread.)
     std::uint64_t frame_ = 0u;
