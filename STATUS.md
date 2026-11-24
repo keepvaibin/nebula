@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-24 12:49. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 12:50. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 23 of 145 (16%).
 
@@ -45,7 +45,7 @@ None yet.
 
 | Id | State | Kind | Check | Renderer | Traced to | Seen |
 | --- | --- | --- | --- | --- | --- | --- |
-| R-001 | open | fail | tour/d3d12 | d3d12 | step S1.1 commit abc | 1 |
+| R-001 | open | fail | tour/d3d12 | d3d12 | step S1.1 commit abc | 2 |
 
 ## For the owner to check by hand
 
