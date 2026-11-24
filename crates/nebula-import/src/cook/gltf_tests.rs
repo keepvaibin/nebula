@@ -672,10 +672,10 @@ fn the_metal_smooth_sphere_is_lit_as_metal() {
     assert_eq!((lit.metal, lit.roughness), (1.0, 0.05));
 }
 
-/// A glTF material's `extras.nebula.ray` (ray tracing's rows; this game has none): checked as before, so a valid file
-/// stays valid, then used for nothing: the model is the same byte for byte, and the cook notes Cook.RayData once.
+/// A glTF material's `extras.nebula.ray` (the shelved ray tracing's rows): taken whatever it holds and not read, so the
+/// model is the same byte for byte, and the cook notes Cook.RayData once.
 #[test]
-fn a_materials_ray_values_are_checked_and_change_nothing() {
+fn a_materials_ray_values_are_not_read() {
     // The test takes what the cook notes (refuse::reading).
     let _reading = crate::cook::refuse::reading();
     let mut document = document_of(&triangle(1));
@@ -693,30 +693,20 @@ fn a_materials_ray_values_are_checked_and_change_nothing() {
     assert_eq!(notes(), 0);
     for given in [
         serde_json::json!({}),
-        serde_json::json!({"vertex_colour": "auto"}),
-        serde_json::json!({"vertex_colour": "albedo"}),
         serde_json::json!({"vertex_colour": "light"}),
         serde_json::json!({"ior": 1.33, "thickness": 40.0, "body": 0.5, "shine": 2.0, "tint_keep": 0.25, "traced": "hidden",
             "sun_through": 0.5, "metal_kind": "gold", "glow": {"color": [1.0, 0.5, 0.0], "candela": 100.0}}),
-        serde_json::json!({"glow": {"color": "own", "luminance": 30.0}}),
+        // Values the checks of the shelved rows refused: a key a material did not take, out of range, no object.
+        serde_json::json!({"class": "metal"}),
+        serde_json::json!({"ior": 0.5, "vertex_colour": "paint"}),
+        serde_json::json!({"glow": {"color": "own"}}),
+        serde_json::json!(3),
     ] {
         assert!(model_of(&with(given.clone())) == plain, "{given}");
         assert_eq!(notes(), 1, "{given}");
     }
     assert!(model_of(&with(Value::Null)) == plain);
     assert_eq!(notes(), 0);
-    // A key the material does not take (its factors are glTF's own), one out of range, or no object: refused.
-    for (ray, key) in [
-        (serde_json::json!({"class": "metal"}), "/materials/0/extras/nebula/ray/class"),
-        (serde_json::json!({"through": 0.5}), "/materials/0/extras/nebula/ray/through"),
-        (serde_json::json!({"ior": 0.5}), "/materials/0/extras/nebula/ray/ior"),
-        (serde_json::json!({"vertex_colour": "paint"}), "/materials/0/extras/nebula/ray/vertex_colour"),
-        (serde_json::json!({"glow": {"color": "own"}}), "/materials/0/extras/nebula/ray/glow"),
-        (serde_json::json!(3), "/materials/0/extras/nebula/ray"),
-    ] {
-        let error = cook(&with(ray.clone()), None).err().unwrap();
-        assert_eq!(refused(&error), ("Cook.Material.Ray", vec![own(("material", "material")), own(("key", key))]), "{ray}");
-    }
 }
 
 #[test]

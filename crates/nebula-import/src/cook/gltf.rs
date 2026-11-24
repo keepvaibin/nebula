@@ -1466,9 +1466,7 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
             }
             other => return Err(refuse("Cook.Shader.Name", &[("material", material_name.clone()), ("name", other.to_string())])),
         };
-        super::surface_shader::material_ray(&nebula["ray"])
-            .map_err(|key| refuse("Cook.Material.Ray", &[("material", material_name.clone()), ("key", format!("/materials/{i}/extras/nebula/ray{key}"))]))?;
-        // Ray tracing's rows, here or in its shader.json: checked, used for nothing, said once for the file.
+        // The shelved ray tracing's rows, here or in its shader.json: not read, said once for the file.
         if !ray_data && (!nebula["ray"].is_null() || shader.as_ref().is_some_and(|(source, _, _)| source.ray)) {
             ray_data = true;
             super::refuse::note("Cook.RayData", &[]);
