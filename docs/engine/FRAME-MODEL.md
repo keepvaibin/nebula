@@ -1632,6 +1632,21 @@ at the picture's moment; every platform does the same or says on screen why not.
    display (`step_lock.h`, exact multiples only with in-between pictures on), the sequence takes the lead that puts
    `t = 1` on a refresh: the real frame is shown and no walk is thrown away at 120, 240 and 360 Hz. At other rates the
    unseen walk goes with E4's named last real frame (2.15, the engine's item 5).
+   Answered at G2.2 (11-24, on G2.1's 428c84f7d):
+   - The rule reads the slot clock (`FrameSchedule::begin_waiting`). A slot clock of k times 60 within 0.2 %
+     (`slots_per_step`) gives lead 1/k: on the display's vblanks when every vblank is a slot and the step locks to
+     them (`step_lock_refreshes` with in-between pictures on, 0.02 %), the reference then moved to the first vblank at
+     or after it; on the pacer's own clock (a swap chain that tears, a variable refresh) with the slots spaced from the
+     reference itself. A sequence with no generated pictures takes none. Other rates keep lead 0.
+   - The first vblank at or after the reference, not the nearest: the reference lies about 1.3 ms before a vblank
+     under the frame phase, over half a vblank at 480 Hz (and at 360 Hz with a slightly longer delay), where the
+     nearest would lie before the list came.
+   - A waiting sequence on a locked clock begins at the first slot at or after its reference (`next`), so the slot
+     before shows the playing sequence's own frame at `t` = 1 and none is walked unseen.
+   - `ScheduleDisplay::variable_refresh` says the pacer's clock is in use, with the cap the display is held under;
+     the vblanks are then never the clock, and the rate is the player's limit at or under the cap, else the cap.
+     RenderCore answers it from the renderer's own finding (`g_variable_refresh`, `variable_refresh_cap`); G2.3
+     changes the answer, not the rule.
 3. A display model. `ScheduleDisplay` answers two more questions, through each platform: when will a picture presented
    now be shown, and when was the last one shown. The schedule then picks each picture's `t` from its predicted
    display time and corrects the lead from the actual one.

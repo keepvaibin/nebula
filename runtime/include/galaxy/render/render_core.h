@@ -399,6 +399,7 @@ private:
         explicit ScheduleView(RenderCore& core) noexcept : core_(core) {}
         [[nodiscard]] ScheduleSettings settings() const override;
         [[nodiscard]] bool vblank_grid(std::int64_t& vblank, std::int64_t& period) const override;
+        [[nodiscard]] bool variable_refresh(double& cap) const override;
         [[nodiscard]] double generated_gpu_ms() const override;
         [[nodiscard]] bool temporal_upscaling() const override;
         void suspend_temporal_upscaling(double generated_ms) override;

@@ -3,6 +3,7 @@
 
 #include "galaxy/game_step.h"
 #include "galaxy/render/render_config.h"
+#include "galaxy/step_lock.h"
 
 #include <algorithm>
 #include <cmath>
@@ -18,6 +19,29 @@ std::int64_t vblanks_per_slot(double refresh, double rate) {
         slot = std::max<std::int64_t>(1, static_cast<std::int64_t>(refresh / (kGameStepRate + 1.0)));
     }
     return slot;
+}
+
+namespace {
+
+// The first tick of a clock (`origin`, every `period`) at or after `moment`.
+std::int64_t first_tick_from(std::int64_t origin, std::int64_t period, std::int64_t moment) {
+    const std::int64_t from = moment - origin;
+    const std::int64_t ticks = from >= 0 ? (from + period - 1) / period : -(-from / period);
+    return origin + ticks * period;
+}
+
+}  // namespace
+
+std::int64_t slots_per_step(double rate) {
+    if (!std::isfinite(rate)) {
+        return 0;
+    }
+    const std::int64_t slots = std::llround(rate / kGameStepRate);
+    if (slots < 1) {
+        return 0;
+    }
+    const double whole = static_cast<double>(slots) * kGameStepRate;
+    return std::abs(rate - whole) * static_cast<double>(kStepLockNear) <= whole ? slots : 0;
 }
 
 FrameSchedule::FrameSchedule(ScheduleDisplay& display, std::int64_t frequency) noexcept
@@ -106,15 +130,20 @@ void FrameSchedule::begin_waiting(std::int64_t now) {
     }
     const std::int64_t frequency = frequency_;
     const ScheduleSettings settings = display_.settings();
-    double rate = std::max(kGameStepRate + 1.0, settings.present_rate);
+    // A display whose refreshes follow the presents: the slot clock is the pacer's own, at the player's limit when that
+    // is at or under the display's cap, else at the cap; its vblanks are never the clock.
+    double cap = 0.0;
+    const bool variable = display_.variable_refresh(cap);
+    double rate = std::max(kGameStepRate + 1.0,
+                           variable && cap > 1.0 ? std::min(settings.present_rate, cap) : settings.present_rate);
     // Pictures shown whole from a refresh on (VSync, or a swap chain that cannot tear) with the display's vblanks timed:
     // every slot is a vblank (every n-th for a rate below the refresh, kept above 60), so each picture's moment is the
     // one its vblank shows. A slot clock of its own would beat against the refreshes there: two pictures in one refresh
-    // (one never seen) and a refresh shown twice, over and over. The game's 60 Hz is not locked to the display, so
-    // content time follows the slots (no lead). An unlimited rate with VSync off keeps no slots.
+    // (one never seen) and a refresh shown twice, over and over. An unlimited rate with VSync off keeps no slots.
     std::int64_t vblank = 0;
     std::int64_t vblank_period = 0;
-    const bool on_vblanks = (settings.vsync || std::isfinite(rate)) && display_.vblank_grid(vblank, vblank_period);
+    const bool on_vblanks =
+        !variable && (settings.vsync || std::isfinite(rate)) && display_.vblank_grid(vblank, vblank_period);
     std::int64_t slot_vblanks = 1;
     const auto fit_rate_to_vblanks = [&] {
         const double refresh = static_cast<double>(frequency) / static_cast<double>(vblank_period);
@@ -134,20 +163,35 @@ void FrameSchedule::begin_waiting(std::int64_t now) {
     }
     sequence_.next = 0u;
     // Present slots run on one clock at the present rate. A slot shows the game at t = (slot - reference) * 60 + lead
-    // between the previous frame (0) and this one (1); the first slot with t >= 1 presents this frame itself. Integer
-    // multiples of 60 lock the clock to each reference with lead 60 / rate: k generated frames at i / (k + 1), then the
-    // frame, on time. Other rates keep a free-running clock with lead 0: content time is then linear in present time
-    // (the next reference ends the sequence at t -> 1), where a lead would show the frame up to one slot early and step
-    // the content unevenly around it. A clock left behind by a pause restarts.
+    // between the previous frame (0) and this one (1); the first slot with t >= 1 presents this frame itself. A slot
+    // clock of k times 60 whose ticks the step's start keeps to locks to each reference with lead 1/k: k - 1 generated
+    // pictures at i / k, then the frame itself on a slot, so no walk of it is thrown away (I-002). That clock is the
+    // display's vblanks when every vblank is a slot and the step is locked to them (galaxy/step_lock.h, exact with
+    // in-between pictures on: the host's frame phase and display clocks start each step on the display's cadence), the
+    // reference then moved to the first vblank at or after it (the nearest one can lie before the list came, where the
+    // delay is over half a vblank: at 480 Hz); or the pacer's own clock (a swap chain that tears, a variable
+    // refresh), the step on the host's clock at exactly 60 and the slots spaced from the reference itself. Other rates
+    // keep lead 0 and a free-running clock (on vblanks, the vblanks): content time is then linear in present time (the
+    // next reference ends the sequence at t -> 1), where a lead would show the frame up to one slot early and step the
+    // content unevenly around it. A clock left behind by a pause restarts.
     // An unlimited rate (render_config.h kUnlimitedFrameRate) has no slot clock: each picture is drawn as soon as the
     // one before is and shows the moment it is drawn for (next).
     unbounded_ = !on_vblanks && !std::isfinite(rate);
     slot_period_ = on_vblanks ? slot_vblanks * vblank_period
         : unbounded_          ? 0
                               : std::max<std::int64_t>(1, static_cast<std::int64_t>(static_cast<double>(frequency) / rate));
-    const bool locked = !on_vblanks && !unbounded_ &&
-                        std::abs(rate / kGameStepRate - std::round(rate / kGameStepRate)) < 0.02;
-    sequence_.lead = locked ? kGameStepRate / rate : 0.0;
+    // A lead needs pictures between the frames: none at 60 (every picture a real one) or with none generated.
+    const std::int64_t slots = unbounded_ || sequence_.generated == 0u ? 0 : slots_per_step(rate);
+    const bool locked_to_vblanks =
+        on_vblanks && slots != 0 && slot_vblanks == 1 &&
+        step_lock_refreshes(kGameStepNs,
+                            std::llround(static_cast<double>(vblank_period) * 1e9 / static_cast<double>(frequency)),
+                            true) == slots;
+    const bool locked = locked_to_vblanks || (!on_vblanks && slots != 0);
+    sequence_.lead = locked ? 1.0 / static_cast<double>(slots) : 0.0;
+    if (locked_to_vblanks) {
+        sequence_.frame_qpc = first_tick_from(vblank, vblank_period, arrival);
+    }
     if (on_vblanks) {
         // The next slot moves to the vblank nearest where it was due, so the clock follows the display without adding
         // or dropping a slot; a clock not running starts at the vblank nearest now.
@@ -484,8 +528,14 @@ SchedulePicture FrameSchedule::next(std::int64_t now, bool flush) {
     if (waiting_.active) {
         // The waiting sequence begins at the first slot past its reference, or at once when nothing plays; until then
         // the playing sequence shows the slots at its own t (N-1084). Its t is read with the playing one's lead, which
-        // it takes as it begins unless the rate changed. A slot where it is at 0 shows the playing one's frame.
-        if (flush || !sequence_.active || t_at(slot, waiting_.frame_qpc, sequence_.lead) > 1e-3) {
+        // it takes as it begins unless the rate changed. A slot where it is at 0 shows the playing one's frame. On a
+        // locked clock (a lead) its first slot is the first at or after its reference (begin_waiting), so the slot
+        // before, where the playing one shows its own frame, never begins it.
+        std::int64_t reference = waiting_.frame_qpc;
+        if (sequence_.lead > 0.0 && slot_period_ > 0) {
+            reference = first_tick_from(slot, slot_period_, reference);
+        }
+        if (flush || !sequence_.active || t_at(slot, reference, sequence_.lead) > 1e-3) {
             picture.kind = SchedulePicture::Kind::Begin;
             picture.slot = slot;
             picture.flush = flush;

@@ -12,7 +12,9 @@
 // clock's delay. A list that arrives while a sequence plays waits for its reference: the slots before it show the
 // sequence before at their own t (N-1084), never the frame before early. At its reference it replaces the sequence
 // before (at rates that are not multiples of 60 that is the normal end): that one's frame is then walked unseen, for
-// what later frames read of it. A slot at or before a sequence's reference with none before it to show waits.
+// what later frames read of it. A slot at or before a sequence's reference with none before it to show waits. On a slot
+// clock of k times 60 that the step keeps to (the locked vblanks, or the pacer's own clock) a sequence takes lead 1/k,
+// so its last slot shows the frame itself and none is walked unseen (I-002).
 
 #include <array>
 #include <cstdint>
@@ -21,6 +23,10 @@ namespace galaxy::render {
 
 // The vblanks per present slot for a rate on a display of `refresh` hertz: a whole number, the rate kept above 60.
 [[nodiscard]] std::int64_t vblanks_per_slot(double refresh, double rate);
+
+// k when a slot clock of `rate` hertz is k times the game's 60 steps a second within 0.2 % (galaxy/step_lock.h
+// kStepLockNear), else 0.
+[[nodiscard]] std::int64_t slots_per_step(double rate);
 
 struct ScheduleSettings {
     double present_rate = 0.0;
@@ -36,6 +42,13 @@ public:
     [[nodiscard]] virtual ScheduleSettings settings() const = 0;
     // The display's vblanks: true where pictures show whole from a refresh on and the vblanks are timed.
     [[nodiscard]] virtual bool vblank_grid(std::int64_t& vblank, std::int64_t& period) const = 0;
+    // The slot clock in use is the present pacer's own, at the pictures' rate, not the display's vblanks: the display's
+    // refreshes follow the presents (variable refresh). `cap`: the rate the display is held under, in hertz (0: none);
+    // the pictures' rate is the player's limit at or under it, else the cap.
+    [[nodiscard]] virtual bool variable_refresh(double& cap) const {
+        cap = 0.0;
+        return false;
+    }
     // A generated picture's GPU time in milliseconds as the renderer estimates it (a scene's walk); 0 when unknown.
     [[nodiscard]] virtual double generated_gpu_ms() const = 0;
     // The temporal upscaler runs on generated pictures.
@@ -54,8 +67,8 @@ struct ScheduleSequence {
     bool active = false;
     unsigned generated = 0;      // generated pictures it may show
     unsigned next = 0;           // generated pictures shown
-    std::int64_t frame_qpc = 0;  // its reference: t = lead there (FrameSchedule::start)
-    double lead = 0.0;           // t of a slot at the reference (FrameSchedule::begin_waiting)
+    std::int64_t frame_qpc = 0;  // its reference: t = lead there (start; on locked vblanks the next vblank)
+    double lead = 0.0;           // t of a slot at the reference: 1/k on a locked clock, else 0 (begin_waiting)
     std::int64_t step_qpc = 0;   // the moment its frame's step began (the step clock), 0 unknown
     bool stopping = false;       // no generated pictures (FrameSchedule::start)
 };

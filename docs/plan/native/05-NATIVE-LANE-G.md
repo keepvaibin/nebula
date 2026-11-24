@@ -246,7 +246,7 @@ Today the in-between pictures (frame interpolation) start a step late, the real 
 - **Where.** `runtime/src/render/frame_schedule.cpp` (`locked`, the lead and slot clock in `next`); `runtime/src/render/render_core.cpp` (the next sequence's start); `runtime/include/galaxy/step_lock.h`; `native/host/host_main.cpp` (`svc_frame_wait`); `platform/sdl/display_clock.cpp` (`wait_display_frame`); `runtime/src/render/frame_schedule_tests.cpp`.
 - **Rows.** I-002 whole.
 - **Needs first.** G2.1 (the row: I-013 first, so the phase holds under in-between pictures).
-- **Old path.** The landing's own switch keeps lead 0 on vblanks; this step deletes it once its measures hold.
+- **Old path.** Lead 0 on vblanks is replaced in this step, with no switch beside the new rule (decision G2.2#1: the measures of proofs 2 and 3 are the planner's owed runs, as at G2.1#3).
 - **Proof.**
   1. `frame_schedule_tests.cpp` at 120, 180, 240, 360 and 480 Hz with the step locked: a refresh lands on `t = 1`; at the head's other sample rates, whole or not, no slot is placed to land on `t = 1` and the lead stays 0 (the test fails if a lead is given at a rate that is not a whole multiple of 60).
   2. Real pictures shown, counted as file F section 1A did, at 120 and 240 Hz near every step (today 5 to 13 of 2,640); walks per step k (today k + 1).
