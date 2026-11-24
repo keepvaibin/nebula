@@ -437,7 +437,7 @@ jobs:
   linux:
     name: Linux package
     needs: [release, lumakit, ffx-shaders]
-    if: ${{ !cancelled() && needs.release.result == 'success' && needs.ffx-shaders.result == 'success' && (needs.lumakit.result == 'success' || needs.lumakit.result == 'skipped') }}
+    if: false
     runs-on: ubuntu-24.04
     timeout-minutes: 240
     env:
@@ -587,7 +587,7 @@ jobs:
   macos:
     name: Mac app
     needs: [release, lumakit]
-    if: ${{ !cancelled() && needs.release.result == 'success' && (needs.lumakit.result == 'success' || needs.lumakit.result == 'skipped') }}
+    if: false
     runs-on: macos-15
     timeout-minutes: 300
     env:
@@ -741,8 +741,7 @@ jobs:
   macos-intel:
     name: Mac app on an Intel Mac
     needs: [release, macos]
-    # The macos job itself ran (its own needs include the skipped lumakit job of a pre-release, which skips what follows it).
-    if: ${{ !cancelled() && needs.macos.result == 'success' }}
+    if: false
     runs-on: macos-15-intel
     timeout-minutes: 30
     steps:
@@ -776,7 +775,7 @@ jobs:
   android:
     name: Android app
     needs: [release, windows-hosts, lumakit]
-    if: ${{ !cancelled() && needs.release.result == 'success' && needs.windows-hosts.result == 'success' && (needs.lumakit.result == 'success' || needs.lumakit.result == 'skipped') }}
+    if: false
     runs-on: windows-2022
     timeout-minutes: 300
     env:
