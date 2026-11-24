@@ -59,7 +59,7 @@ private:
     void dispatch(ID3D11DeviceContext1* context, ID3D11ComputeShader* shader, ID3D11ShaderResourceView* occlusion,
                   Texture& output, unsigned width, unsigned height);
 
-    ID3D11Device1* device_ = nullptr;
+    ID3D11Device* device_ = nullptr;
     bool ready_ = false;
     ComPtr<ID3D11ComputeShader> distance_pass_;
     ComPtr<ID3D11ComputeShader> occlusion_;
