@@ -551,8 +551,8 @@ fn fog_lines(fog_type: u8, rows: &mut Rows) -> Vec<String> {
         7 => format!("fog_rev_exp2({amount})"),
         _ => amount,
     };
-    // program.hlsli program_fog_curve: fogs at once, or in a traced form after the traced light, the fog lit by the
-    // traced share along its curve: start, end, the pixel's depth, the type.
+    // program.hlsli program_fog_curve: the colour fogged by its amount; the curve (start, end, the pixel's depth, the
+    // type) is given and not read.
     vec![format!("    prev.rgb = program_fog_curve(prev.rgb, {color}.rgb, {curved}, float4({fog}.x, {fog}.y, {ze}, {fog_type}.0));")]
 }
 
@@ -741,7 +741,7 @@ fn stage_lines(p: &mut Pixel, registers: &Registers) -> Result<bool> {
             let sampled = p.sample(map, &coord);
             let sampled = format!("{sampled}.{}", swizzle(&p.m.swaps[s.texture_swap as usize & 3]));
             let wrapped = if p.form.lit && p.env_coords.contains(&c) { format!("enh_env({sampled})") } else { sampled };
-            // A painted environment: the traced form's reflection takes its place (program.hlsli ENV_FETCH).
+            // A painted environment, through program.hlsli ENV_FETCH, which gives it back as it is.
             let wrapped = if p.env_coords.contains(&c) { format!("ENV_FETCH({wrapped})") } else { wrapped };
             // A painted highlight sprite: not drawn under the relight in a lit form; the sun's highlight stands for it.
             let wrapped = if p.form.lit && p.sprite_coords.contains(&c) { format!("HIGHLIGHT_FETCH({wrapped})") } else { wrapped };
@@ -1161,8 +1161,7 @@ fn pbr_channel_lines(m: &MaterialIr, eye: &str, base: &str, rows: &mut Rows, out
 }
 
 /// A glTF material's light after its base colour (program_pbr.hlsli): metal and roughness by their factors and map,
-/// the occlusion, the stage's reflection through ENV_FETCH (the traced mirror where the tracer owns the pixel), then
-/// pbr_finish on prev.
+/// the occlusion, the stage's reflection through ENV_FETCH, then pbr_finish on prev.
 fn pbr_lines(p: &mut Pixel, shade: &PbrShading) -> Vec<String> {
     let mut out = vec!["    {".to_string()];
     out.extend(pbr_factor_lines(p, shade, "        "));
@@ -1531,8 +1530,7 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
     }
     vertex_in.push_str("};\n");
 
-    // A vertex stage that sums lights takes the game's ambient: the traced light reaches only a pixel stage
-    // (program_lit.hlsli's AMBIENT_TERM).
+    // A vertex stage that sums lights takes the game's ambient as it is (program_lit.hlsli's AMBIENT_TERM).
     let mut vertex = String::from("#include \"program.hlsli\"\n#define AMBIENT_TERM(x) (x)\n");
     vertex.push_str(&v_rows.declare(1, "MaterialVertex"));
     vertex.push_str(&vertex_in);

@@ -301,7 +301,7 @@ public:
     FormState* formState(s32 index);
 
     FormState* mForms;
-    u32 mSourceHash;  // the model's name and its own, from frame to frame and for ray tracing
+    u32 mSourceHash;  // the model's name and its own, from frame to frame
     bool mFollowsView;
 };
 

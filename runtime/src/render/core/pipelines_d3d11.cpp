@@ -171,7 +171,7 @@ std::string layout_key(const void* vertex, const InputList& inputs) {
 }  // namespace
 
 gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, unsigned aux) {
-    // Direct3D 11 draws no aux targets (no temporal upscaler, frame generation or tracer): the programs' file holds the
+    // Direct3D 11 draws no aux targets (no temporal upscaler or frame generation): the programs' file holds the
     // base and per-sample forms only (compile_programs.py DXBC_FORMS).
     if (aux != 0u) {
         return nullptr;

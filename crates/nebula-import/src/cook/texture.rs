@@ -242,7 +242,7 @@ fn cmpr_block(block: &[u8], ox: usize, oy: usize, w: usize, h: usize, out: &mut 
     }
 }
 
-/// xxh64 with seed 0 (texture packs' hash of a texture's level 0; rt_materials.cpp).
+/// xxh64 with seed 0 (texture packs' hash of a texture's level 0).
 pub fn xxh64(data: &[u8]) -> u64 {
     const K1: u64 = 0x9E37_79B1_85EB_CA87;
     const K2: u64 = 0xC2B2_AE3D_27D4_EB4F;

@@ -5557,10 +5557,6 @@ bool RendererD3D12::publish_picture(std::uint64_t key, std::uint32_t width, std:
         swizzle[0] == 4u ? 5u : swizzle[0], swizzle[1] == 4u ? 5u : swizzle[1], swizzle[2] == 4u ? 5u : swizzle[2],
         swizzle[3] == 4u ? 5u : swizzle[3]);
     desc.Texture2D.MipLevels = 1u;
-    if (picture.viewed->GetDesc().Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D) {
-        desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;  // the light volume (rt_publish_light)
-        desc.Texture3D = D3D12_TEX3D_SRV{0u, 1u, 0.0f};
-    }
     const auto cpu = textures.backend().srv_cpu(picture.view);
     device_->CreateShaderResourceView(picture.viewed.Get(), &desc, cpu);
     textures.backend().publish_view(picture.view);

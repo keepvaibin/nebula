@@ -27,7 +27,7 @@
 //    its place, times the override's colour. MaterialEntry::draw reads the copies when it draws.
 //  - Parts: MeshEntry::Flag_ModHidden on the meshes of a joint and its children (the draw passes them over); the
 //    override keeps which it hid, a bit a mesh, and clears those at its end.
-//  - Scale: the model's draw pose (Model::viewCalc's capture of its joints, which the draw, the shadows and the tracer
+//  - Scale: the model's draw pose (Model::viewCalc's capture of its joints, which the draw and the shadows
 //    read) scaled about the actor's base in the base's own axes; the joints themselves (the game's logic, its hit
 //    sensors) stay the game's. A frame's pose is captured again from the joints next frame, so nothing compounds.
 // The end (release, the mod's end, the actor's death) puts back what the game wrote where the copy still holds this

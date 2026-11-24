@@ -17,7 +17,7 @@ namespace {
     PlainMtxCalc< Skeleton::calcSoftimage, Skeleton::initSoftimage > sSoftimageCalc;
     PlainMtxCalc< Skeleton::calcMaya, Skeleton::initMaya > sMayaCalc;
 
-    // FNV-1a over lower-case ASCII: the material table of ray tracing names materials the same way.
+    // FNV-1a over lower-case ASCII.
     u32 hashName(u32 hash, const char* pName, bool stopAtDot) {
         for (const char* c = pName; c != nullptr && *c != '\0' && !(stopAtDot && *c == '.'); ++c) {
             const u8 v = static_cast< u8 >(*c >= 'A' && *c <= 'Z' ? *c + ('a' - 'A') : *c);

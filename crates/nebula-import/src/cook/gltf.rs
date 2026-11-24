@@ -1919,7 +1919,7 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
             }
             // Its glow (glTF: + emissive factor x emissive texture), last and in no light: a stage adds constant 1 x the
             // emissive map, or constant 1 alone, to what the stages before made; alpha stays theirs. The sum is taken
-            // on sRGB values as the game's stages take theirs; the hit record holds the glow unclamped and linear.
+            // on sRGB values as the game's stages take theirs.
             if let Some(Glow { constant, map }) = source.glow {
                 made.constants[1] = constant;
                 let mut glow = made.stages[0];

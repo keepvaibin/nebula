@@ -32,7 +32,7 @@ namespace luma {
             namespace {
                 const u32 kMost = LUMA_DRAW_LIGHTS_ALL_MOST;
                 const f32 cReference = 15.0f;    // LightPointCtrl's reference distance
-                const f32 cCandelaAtMetre = 37.5f; // a lamp halving at 1 m (rt_walk.cpp)
+                const f32 cCandelaAtMetre = 37.5f; // a lamp halving at 1 m
                 const f32 cFar = 3.0e38f;        // no player: as far as any
 
                 struct Light {
