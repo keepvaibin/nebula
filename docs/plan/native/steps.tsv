@@ -10,7 +10,7 @@ order	step	package	title	package_needs	card_file	state	commit
 9	S0.2.4	S0.2	Landing B, part 2: the talk balloon	S0.1	03-NATIVE-STAGE-0.md	landed	2423dde4f
 10	S0.2.5	S0.2	Landing B, part 3: the lens flare	S0.1	03-NATIVE-STAGE-0.md	landed	21ccecf7b
 11	S0.2.6	S0.2	Landing B, part 4: the question-and-answer path is deleted	S0.1	03-NATIVE-STAGE-0.md	landed	3eaa95375
-12	S0.3.1	S0.3	Search main for what the rows name	S0.1	03-NATIVE-STAGE-0.md	open	
+12	S0.3.1	S0.3	Search main for what the rows name	S0.1	03-NATIVE-STAGE-0.md	landed	d0c611857
 13	S0.3.2	S0.3	Remove what is left	S0.1	03-NATIVE-STAGE-0.md	open	
 14	R1.1	R1	P-052: the renderers' own pipelines at start	S0.2	04-NATIVE-LANE-R.md	open	
 15	R1.2	R1	P-010: a stage's pipelines made while it loads, a draw never compiles	S0.2	04-NATIVE-LANE-R.md	open	
