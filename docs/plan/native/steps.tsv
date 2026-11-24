@@ -22,7 +22,7 @@ order	step	package	title	package_needs	card_file	state	commit
 21	R2.4	R2	The player's swapped images	S0.1	04-NATIVE-LANE-R.md	landed	d034370b1
 22	R2.5	R2	P-216 and P-255's first part	S0.1	04-NATIVE-LANE-R.md	landed	884be1caa
 23	G2.1	G2	Landing 1: a sequence starts at its arrival; the step keeps its due times	S0.2	05-NATIVE-LANE-G.md	landed	428c84f7d
-24	G2.2	G2	Landing 2: the lead at whole multiples of 60 Hz	S0.2	05-NATIVE-LANE-G.md	open	
+24	G2.2	G2	Landing 2: the lead at whole multiples of 60 Hz	S0.2	05-NATIVE-LANE-G.md	landed	71aa23551
 25	G2.3	G2	Landing 3: a display model, one platform at a time	S0.2	05-NATIVE-LANE-G.md	open	
 26	G2.4	G2	Landing 4: no closing spin where a display time is asked	S0.2	05-NATIVE-LANE-G.md	open	
 27	G2.5	G2	Landing 5: one arbiter, the clock held, the heat input	S0.2	05-NATIVE-LANE-G.md	open	
