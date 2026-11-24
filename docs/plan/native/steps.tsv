@@ -23,7 +23,7 @@ order	step	package	title	package_needs	card_file	state	commit
 22	R2.5	R2	P-216 and P-255's first part	S0.1	04-NATIVE-LANE-R.md	landed	884be1caa
 23	G2.1	G2	Landing 1: a sequence starts at its arrival; the step keeps its due times	S0.2	05-NATIVE-LANE-G.md	landed	428c84f7d
 24	G2.2	G2	Landing 2: the lead at whole multiples of 60 Hz	S0.2	05-NATIVE-LANE-G.md	landed	71aa23551
-25	G2.3.1	G2	Landing 3a: the display model; Windows	S0.2	05-NATIVE-LANE-G.md	open	
+25	G2.3.1	G2	Landing 3a: the display model; Windows	S0.2	05-NATIVE-LANE-G.md	landed	bc751e350
 26	G2.3.2	G2	Landing 3b: Vulkan and Android present at the asked time	S0.2	05-NATIVE-LANE-G.md	open	
 27	G2.3.3	G2	Landing 3c: Linux's display clock	S0.2	05-NATIVE-LANE-G.md	open	
 28	G2.3.4	G2	Landing 3d: Apple's display link	S0.2	05-NATIVE-LANE-G.md	open	
