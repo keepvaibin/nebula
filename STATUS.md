@@ -4,7 +4,7 @@ Written 2026-11-24 15:18. If this time is more than three hours old, the work ha
 
 Steps landed: 25 of 145 (17%).
 
-Now: in work: lander landing G2.3.1
+Now: G2.3.1 landed (25 of 145); next writer G2.3.2 waits for the usage line
 
 In work now: Nothing started.
 
