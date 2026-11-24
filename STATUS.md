@@ -1,8 +1,8 @@
 # Nebula native plan: status
 
-Written 2026-11-24 12:15. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 12:49. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
-Steps landed: 22 of 138 (16%).
+Steps landed: 23 of 145 (16%).
 
 In work now: Nothing started.
 
@@ -15,7 +15,7 @@ In work now: Nothing started.
 | S0.3 | 2 | 2 |
 | R1 | 4 | 4 |
 | R2 | 5 | 5 |
-| G2 | 0 | 9 |
+| G2 | 1 | 16 |
 | G6 | 0 | 8 |
 | G1 | 0 | 5 |
 | R3 | 0 | 13 |
@@ -45,7 +45,7 @@ None yet.
 
 | Id | State | Kind | Check | Renderer | Traced to | Seen |
 | --- | --- | --- | --- | --- | --- | --- |
-| R-001 | open | fail | tour/d3d12 | d3d12 | step S1.1 commit abc | 2 |
+| R-001 | open | fail | tour/d3d12 | d3d12 | step S1.1 commit abc | 1 |
 
 ## For the owner to check by hand
 
@@ -135,7 +135,7 @@ No tool was mended.
 - 2026-11-24 G2.1: Locked rates (a tearing swap chain at a multiple of 60) start a sequence's slots at its reference, moved on by whole slots past the slot last shown when the clock runs (because a sequence now begins at a slot (the waiting sequence's turn) where the reference can lie before the slot last shown; the old rule (the reference itself) could then show a slot twice)
 - 2026-11-24 G2.1: The [pace] line's delay of a sequence's frame starts at its list's own step's moment, where before G2.1 it started one step later, at the next step's moment, whose present request began the sequence (because pacing.h defines the delay's start as the moment the step it shows began, and tools/gate/pace.py's bound for in-between pictures on (one step + one refresh + the step's work) reads it so; proof 3's before figure (42.4 ms at 240 Hz) was counted from one step later, so from the list's own step it was about 59 ms, and the after figure (about 26) is counted from the list's own step)
 
-## Checks changed during the run (70)
+## Checks changed during the run (71)
 
 - 2026-11-22 S0.1.3 tools/verify/console_census.py: the open group gx_sections counts the four section names GXMT, GXTG, GXTM and GXWP with a ceiling of 31, and the closed group fifo excludes only those four whole words (allowed by docs/engine/FRAME-MODEL.md section 2.9)
 - 2026-11-22 U-unattended tools/gate/main_push_guard.py: the guard also refuses a push of a branch named plant/... (allowed by docs/plan/native/TOOL-MEND-PLANTS.md, how a plant is kept from ever landing)
@@ -207,6 +207,7 @@ No tool was mended.
 - 2026-11-24 M-007 tools/gate/tests/plan_page_test.py: the node driver's document has the element source, and its fetch stand-ins keep the addresses they were given (allowed by the owner's order in the session of 11-23 (one section at a time on Opus, a Sonnet agent lands and makes the simple fixes, the hard ones go back to Opus; the page live; approved 'Yes, build it'); docs/plan/native/AGENT.md section 15)
 - 2026-11-24 M-007 tools/gate/tests/plan_fixture.py: Tree turns plan.HANDOFF_REQUIRED off for every test that uses it (allowed by the owner's order in the session of 11-23 (one section at a time on Opus, a Sonnet agent lands and makes the simple fixes, the hard ones go back to Opus; the page live; approved 'Yes, build it'); docs/plan/native/AGENT.md section 15)
 - 2026-11-24 R1.4 .github/workflows/check.yml: the Mac start check keeps its command on one line with the output piped to start.log (set -o pipefail), and fails unless the log has the line "[metal] renderer shaders: N from utility.metallib, 0 compiled from their text, 0 failed" and no "renderer shader compiled from its text" line (allowed by docs/plan/native/04-NATIVE-LANE-R.md section R1.4 (P-065))
+- 2026-11-24 G2.3 split tools/gate/tests/plan_cards_test.py: the real cards read are those of places 12 to 145, not 12 to 138 (LAST_STEP, the function cards_12_to_145, the count test now 134 cards) (allowed by the planner's split of G2.3 on 11-24, after its writer blocked it (PLAN blocked G2.3: nine pieces and proofs a writer may not run); docs/plan/native/02-NATIVE-OVERVIEW.md, the order checked against steps.tsv)
 
 ## Tool faults
 
