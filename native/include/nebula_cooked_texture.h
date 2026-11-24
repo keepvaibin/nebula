@@ -43,6 +43,11 @@ enum {
 enum {
     /* Levels below the first were made by the cook from the first: only the enhanced-mipmaps option samples them. */
     NEBULA_TEXTURE_GENERATED_LEVELS = 1u << 0,
+    /* The record's own levels were drawn by hand, not made smaller from the first (the cook's judge, cook/texture.rs
+       authored_levels, the same as the runtime's detail::authored_levels): a draw shows the level the game showed. Never
+       with NEBULA_TEXTURE_GENERATED_LEVELS. A record the game makes (NEBULA_TEXTURE_MADE) has no cook behind it: the
+       runtime judges it once when it is registered. */
+    NEBULA_TEXTURE_AUTHORED_LEVELS = 1u << 1,
 };
 
 /* The layout of texels handed over as NEBULA_TEXTURE_LINEAR_L8 / _LA8 / _RGBA8. */
@@ -82,7 +87,7 @@ typedef struct NebulaTexture {
     uint8_t layout;         /* NEBULA_TEXTURE_RGBA8, _L8 or _LA8 */
     uint8_t source_format;  /* the pixel format the image was authored in (texture-pack names), NEBULA_TEXTURE_MADE (the host
                                names one by nebula_texture_linear_code and its level-0 texels) */
-    uint8_t flags;          /* NEBULA_TEXTURE_GENERATED_LEVELS */
+    uint8_t flags;          /* NEBULA_TEXTURE_GENERATED_LEVELS, NEBULA_TEXTURE_AUTHORED_LEVELS */
     uint8_t reserved_byte;
     /* image_id: the same for every record of one source image (a model groups its draws by it). name_hash: FNV-1a 64 of
        the texture's name in lower case, "<model stem>/<texture>" or "<file stem>" (NebulaData/TextureNames.tsv), which

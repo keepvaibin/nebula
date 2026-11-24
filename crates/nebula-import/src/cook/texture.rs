@@ -617,7 +617,231 @@ fn record_of(width: u32, height: u32, format: u8, flags: u8, layout: u8, hashes:
     }
     let size = u32::try_from(record.len()).map_err(|_| anyhow::anyhow!("native texture block exceeds u32 byte offsets"))?;
     record[12..16].copy_from_slice(&size.to_le_bytes());
+    // Decided once here: the run time reads the bit and judges no cooked record (P-059).
+    if flags & GENERATED_LEVELS == 0 && authored_levels(&record) {
+        record[30] |= AUTHORED_LEVELS;
+    }
     Ok(record)
+}
+
+/// A record's own levels were drawn by hand (nebula_cooked_texture.h NEBULA_TEXTURE_AUTHORED_LEVELS).
+const AUTHORED_LEVELS: u8 = 2;
+/// 255ths between a level and every box-filtered copy of the first that mark it drawn by hand (texture_store.h
+/// kAuthoredLevelsChange).
+const AUTHORED_LEVELS_CHANGE: f64 = 8.0;
+
+/// sRGB both ways as the runtime reads it (texture_store.cpp SrgbCurve): an 8-bit value to linear light, and linear light
+/// to an sRGB value in 255ths from 4096 steps.
+struct SrgbCurve {
+    to_linear: [f32; 256],
+    to_srgb: [f32; 4097],
+}
+
+fn srgb_curve() -> &'static SrgbCurve {
+    static CURVE: std::sync::OnceLock<SrgbCurve> = std::sync::OnceLock::new();
+    CURVE.get_or_init(|| {
+        let mut curve = SrgbCurve { to_linear: [0.0; 256], to_srgb: [0.0; 4097] };
+        for (c, out) in curve.to_linear.iter_mut().enumerate() {
+            let v = c as f64 / 255.0;
+            *out = (if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }) as f32;
+        }
+        for (i, out) in curve.to_srgb.iter_mut().enumerate() {
+            let v = i as f64 / 4096.0;
+            *out = (255.0 * (if v <= 0.0031308 { v * 12.92 } else { 1.055 * v.powf(1.0 / 2.4) - 0.055 })) as f32;
+        }
+        curve
+    })
+}
+
+impl SrgbCurve {
+    fn srgb(&self, linear: f32) -> f32 {
+        let at = linear.clamp(0.0, 1.0) * 4096.0;
+        let i = (at as i32).min(4095) as usize;
+        self.to_srgb[i] + (self.to_srgb[i + 1] - self.to_srgb[i]) * (at - i as f32)
+    }
+}
+
+/// The bytes of one level of a record (nebula_cooked_texture.h nebula_texture_level_bytes).
+fn record_level_bytes(width: u32, height: u32, layout: u8) -> usize {
+    let (w, h) = (width as usize, height as usize);
+    match layout {
+        LAYOUT_BLOCK4 => w.div_ceil(4) * h.div_ceil(4) * 8,
+        LAYOUT_L8 => w * h,
+        LAYOUT_LA8 => w * h * 2,
+        _ => w * h * 4,
+    }
+}
+
+/// One level of a record as RGBA8, as the runtime reads it (texture_store.cpp detail::expand_record_level).
+fn expand_record_level(layout: u8, src: &[u8], width: u32, height: u32) -> Vec<[u8; 4]> {
+    let count = width as usize * height as usize;
+    match layout {
+        LAYOUT_L8 => src[..count].iter().map(|&l| [l, l, l, l]).collect(),
+        LAYOUT_LA8 => src[..count * 2].chunks_exact(2).map(|p| [p[0], p[0], p[0], p[1]]).collect(),
+        LAYOUT_BLOCK4 => {
+            let widen = |v: u16| [expand5(v >> 11), expand6(v >> 5), expand5(v), 0xFF];
+            let interpolated = |p: u8, s: u8| ((5 * p as u32 + 3 * s as u32) >> 3) as u8;
+            let mut out = vec![[0u8; 4]; count];
+            let blocks_x = width.div_ceil(4);
+            for by in 0..height.div_ceil(4) {
+                for bx in 0..blocks_x {
+                    let block = &src[(by * blocks_x + bx) as usize * 8..][..8];
+                    let c0 = u16::from_le_bytes([block[0], block[1]]);
+                    let c1 = u16::from_le_bytes([block[2], block[3]]);
+                    let (a, b) = (widen(c0), widen(c1));
+                    let mut entries = [a, b, [0; 4], [0; 4]];
+                    if c0 > c1 {
+                        entries[2] = [interpolated(a[0], b[0]), interpolated(a[1], b[1]), interpolated(a[2], b[2]), 0xFF];
+                        entries[3] = [interpolated(b[0], a[0]), interpolated(b[1], a[1]), interpolated(b[2], a[2]), 0xFF];
+                    } else {
+                        let half = |p: u8, s: u8| ((p as u32 + s as u32) / 2) as u8;
+                        entries[2] = [half(a[0], b[0]), half(a[1], b[1]), half(a[2], b[2]), 0xFF];
+                        entries[3] = [entries[2][0], entries[2][1], entries[2][2], 0];
+                    }
+                    let indices = u32::from_le_bytes([block[4], block[5], block[6], block[7]]);
+                    for y in 0..4 {
+                        for x in 0..4 {
+                            if by * 4 + y < height && bx * 4 + x < width {
+                                out[((by * 4 + y) * width + bx * 4 + x) as usize] = entries[((indices >> (2 * (y * 4 + x))) & 3) as usize];
+                            }
+                        }
+                    }
+                }
+            }
+            out
+        }
+        _ => src[..count * 4].chunks_exact(4).map(|p| [p[0], p[1], p[2], p[3]]).collect(),
+    }
+}
+
+/// Whether a record's levels were drawn by hand rather than made smaller from the first: the runtime's
+/// detail::authored_levels (texture_store.cpp, where the reasons are written), step for step in the same float and double
+/// arithmetic, so the two give the same answer for every record (galaxy_authored_levels_check runs both over a store).
+/// Each level (while it holds 4 texels or more a side) is compared with the first made smaller by a box filter in sRGB
+/// values or in linear light, straight or premultiplied, one-bit alpha kept or cut at half again; a level more than
+/// AUTHORED_LEVELS_CHANGE 255ths from every copy in its mean colour (weighted by alpha) or mean alpha marks the record.
+pub fn authored_levels(record: &[u8]) -> bool {
+    let u32_at = |at: usize| u32::from_le_bytes([record[at], record[at + 1], record[at + 2], record[at + 3]]);
+    let (width, height, levels, layout) = (u32_at(16), u32_at(20), u32_at(24), record[28]);
+    if levels < 2 || width == 0 || height == 0 {
+        return false;
+    }
+    let (mut w, mut h) = ((width >> 1).max(1), (height >> 1).max(1));
+    if w.min(h) < 4 || width != w * 2 || height != h * 2 {
+        return false;
+    }
+    let texels = &record[HEADER..];
+    let first = expand_record_level(layout, texels, width, height);
+    let one_bit = first.iter().all(|t| t[3] == 0 || t[3] == 255);
+    let curve = srgb_curve();
+    // The ways: sRGB values, sRGB premultiplied, linear light, linear premultiplied.
+    let mut count = (w * h) as usize;
+    let mut colour: [Vec<f32>; 4] = std::array::from_fn(|_| vec![0f32; count * 3]);
+    let mut alpha = vec![0f32; count];
+    for y in 0..h {
+        for x in 0..w {
+            let i = (y * w + x) as usize;
+            let mut a_sum = 0f32;
+            let mut sums = [[0f32; 3]; 4];
+            for q in 0..4u32 {
+                let t = first[((y * 2 + q / 2) * width + x * 2 + q % 2) as usize];
+                let a = t[3] as f32 / 255.0;
+                a_sum += a;
+                for k in 0..3 {
+                    let value = t[k] as f32;
+                    let linear = curve.to_linear[t[k] as usize];
+                    sums[0][k] += value;
+                    sums[1][k] += value * a;
+                    sums[2][k] += linear;
+                    sums[3][k] += linear * a;
+                }
+            }
+            alpha[i] = a_sum * 0.25;
+            for way in 0..4 {
+                for k in 0..3 {
+                    colour[way][i * 3 + k] = sums[way][k] * 0.25;
+                }
+            }
+        }
+    }
+
+    let mut level_at = record_level_bytes(width, height, layout);
+    for l in 1..levels {
+        if l > 1 {
+            let (lw, lh) = ((width >> l).max(1), (height >> l).max(1));
+            if lw.min(lh) < 4 || w != lw * 2 || h != lh * 2 {
+                break;
+            }
+            // Halve in place: texel i is written after every texel it reads, and every later read is past it.
+            let wu = w as usize;
+            for y in 0..lh {
+                for x in 0..lw {
+                    let i = (y * lw + x) as usize;
+                    let s = (y * 2 * w + x * 2) as usize;
+                    alpha[i] = (alpha[s] + alpha[s + 1] + alpha[s + wu] + alpha[s + wu + 1]) * 0.25;
+                    for c in colour.iter_mut() {
+                        for k in 0..3 {
+                            c[i * 3 + k] = (c[s * 3 + k] + c[(s + 1) * 3 + k] + c[(s + wu) * 3 + k] + c[(s + wu + 1) * 3 + k]) * 0.25;
+                        }
+                    }
+                }
+            }
+            w = lw;
+            h = lh;
+            count = (w * h) as usize;
+        }
+
+        let level = expand_record_level(layout, &texels[level_at..], w, h);
+        let mut drawn = [0f64; 4];
+        for t in &level[..count] {
+            drawn[0] += t[0] as f64 * t[3] as f64;
+            drawn[1] += t[1] as f64 * t[3] as f64;
+            drawn[2] += t[2] as f64 * t[3] as f64;
+            drawn[3] += t[3] as f64;
+        }
+        for c in 0..3 {
+            drawn[c] = if drawn[3] > 0.0 { drawn[c] / drawn[3] } else { 0.0 };
+        }
+        drawn[3] /= count as f64;
+
+        let mut closest = f64::INFINITY;
+        for (way, values) in colour.iter().enumerate() {
+            let premultiplied = way == 1 || way == 3;
+            let linear = way >= 2;
+            for cut in 0..(if one_bit { 2 } else { 1 }) {
+                let mut copy = [0f64; 4];
+                for i in 0..count {
+                    let a = alpha[i];
+                    let weight = if cut != 0 { if a >= 0.5 { 255.0 } else { 0.0 } } else { a as f64 * 255.0 };
+                    if weight == 0.0 {
+                        continue;
+                    }
+                    for k in 0..3 {
+                        let mut value = values[i * 3 + k];
+                        if premultiplied {
+                            value /= a;
+                        }
+                        copy[k] += weight * (if linear { curve.srgb(value) } else { value }) as f64;
+                    }
+                    copy[3] += weight;
+                }
+                for k in 0..3 {
+                    copy[k] = if copy[3] > 0.0 { copy[k] / copy[3] } else { 0.0 };
+                }
+                copy[3] /= count as f64;
+                let mut apart = 0f64;
+                for k in 0..4 {
+                    apart = apart.max((drawn[k] - copy[k]).abs());
+                }
+                closest = closest.min(apart);
+            }
+        }
+        if closest > AUTHORED_LEVELS_CHANGE {
+            return true;
+        }
+        level_at += record_level_bytes(w, h, layout);
+    }
+    false
 }
 
 /// One level below `source`: a premultiplied-alpha 2x2 box filter with fixed rounding.
@@ -964,6 +1188,45 @@ mod tests {
             format!("name\timage\tpalette\twidth\theight\tformat\tfile\nNameTest/Body\t{image_id:016x}\t0000000000000000\t8\t4\t{}\tObjectData/NameTest.arc\n", Format::I8 as u8),
             "one row (duplicates go), tab separated, the header first"
         );
+    }
+
+    /// A 16x16 RGBA8 record of three levels (16, 8, 4): a checker first level whose smaller copies are its mean, then the
+    /// given fill per level (texture_pack_tests.cpp test_authored_levels, the runtime's judge on the same chains).
+    fn checker_chain(fills: [[u8; 4]; 3]) -> Vec<u8> {
+        let mut texels = vec![Vec::new(), Vec::new(), Vec::new()];
+        for (l, level) in texels.iter_mut().enumerate() {
+            let side = 16usize >> l;
+            for i in 0..side * side {
+                let c = fills[l];
+                level.push(if l != 0 {
+                    c
+                } else if ((i % side) + i / side) % 2 == 1 {
+                    [c[0] + 20, c[1] + 20, c[2] + 20, c[3]]
+                } else {
+                    [c[0] - 20, c[1] - 20, c[2] - 20, c[3]]
+                });
+            }
+        }
+        record_of(16, 16, Format::Rgba8 as u8, 0, LAYOUT_RGBA8, [0, 0], &[], &texels).unwrap()
+    }
+
+    #[test]
+    fn the_cook_marks_levels_drawn_by_hand() {
+        let sand = [200, 180, 120, 255];
+        let copies = checker_chain([sand, sand, sand]);
+        assert!(!authored_levels(&copies) && copies[30] & AUTHORED_LEVELS == 0, "smaller copies of the first level are not drawn by hand");
+        let tinted = checker_chain([sand, sand, [60, 140, 200, 255]]);
+        assert!(authored_levels(&tinted) && tinted[30] & AUTHORED_LEVELS != 0, "a level tinted for the distance is drawn by hand");
+        let faded = checker_chain([sand, [200, 180, 120, 120], [200, 180, 120, 40]]);
+        assert!(authored_levels(&faded) && faded[30] & AUTHORED_LEVELS != 0, "levels fading out for the distance are drawn by hand");
+        // Levels the cook made are never marked.
+        let mut generated = Vec::new();
+        for l in 0..3 {
+            generated.push(vec![[60u8, 140, 200, 255]; (16usize >> l) * (16usize >> l)]);
+        }
+        generated[2] = vec![[200, 20, 20, 255]; 16];
+        let record = record_of(16, 16, Format::Rgba8 as u8, GENERATED_LEVELS, LAYOUT_RGBA8, [0, 0], &[], &generated).unwrap();
+        assert_eq!(record[30], GENERATED_LEVELS, "generated levels are not judged");
     }
 
     #[test]

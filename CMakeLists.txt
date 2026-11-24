@@ -642,6 +642,15 @@ endforeach()
 # The pictures the mod check reads with the same answers (crates/nebula-import cook/pack_texture.rs).
 target_compile_definitions(galaxy_texture_pack_tests PRIVATE
     NEBULA_PACK_PICTURES="${CMAKE_CURRENT_SOURCE_DIR}/crates/nebula-import/data/pack-pictures")
+# The import check of P-059 (R2.3): every texture record of a store judged by the runtime against the cook's bit. It
+# needs a disc's game.pak, so it is built with the tests and run by hand, not by ctest.
+add_executable(galaxy_authored_levels_check ${render_src}/authored_levels_check.cpp)
+target_include_directories(galaxy_authored_levels_check PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/runtime/include")
+target_compile_features(galaxy_authored_levels_check PRIVATE cxx_std_20)
+target_link_libraries(galaxy_authored_levels_check PRIVATE galaxy_runtime_abi galaxy_render)
+if(MSVC)
+    target_compile_options(galaxy_authored_levels_check PRIVATE /W4 ${NEBULA_WARNINGS_AS_ERRORS} /permissive- /EHsc)
+endif()
 # The tests compile their own small shaders; the program itself never compiles any.
 target_link_libraries(galaxy_frame_pass_tests PRIVATE d3dcompiler)
 
