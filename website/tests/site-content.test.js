@@ -76,7 +76,7 @@ test('all twenty-one error codes and current download links remain present', () 
   assert.equal((errors.match(/class="error-entry"/g) || []).length, 21);
   assert.match(
     documents.get(resolve(root, 'download/index.html')),
-    /Nebula v1\.0\.2 for Windows, released 27 October 2026\./,
+    /releases\/tag\/v2\.0\.0-beta\.1"/,
   );
   assert.match(documents.get(resolve(root, 'index.html')), /https:\/\/discord.gg\/2fJEdhAw2f/);
 });
