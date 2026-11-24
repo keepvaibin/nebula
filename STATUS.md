@@ -4,7 +4,7 @@ Written 2026-11-23 23:22. If this time is more than three hours old, the work ha
 
 Steps landed: 14 of 138 (10%).
 
-Now: R1.2 since 21:09: its second landing found a cold-start draw left out; fix written; tool change M-005 (step tier, section check) prepared; ahead: R1.3 written
+Now: R1.2's third landing plays since 23:12; tool change M-005 (quick tier per step, full check per section) in self-tests; R1.3 written; owner asked before R1.4
 
 In work now:
 - R1.2 P-010: a stage's pipelines made while it loads, a draw never compiles (agent 1)
