@@ -49,9 +49,13 @@ void expand_record_level(std::uint8_t layout, const std::uint8_t* texels, std::u
 // kAuthoredLevelsChange 255ths from every such copy's marks the record: Beach Bowl's sea bed (its far levels the water's
 // blue) measures 105, a fade into the distance its alpha's change. Of the game's 197 textures with levels, 72 are
 // marked; copies made in linear light or premultiplied (smoke, cloud maps) no longer read as drawn by hand.
+// The cook makes the same judgement once (cook/texture.rs authored_levels, NEBULA_TEXTURE_AUTHORED_LEVELS); the store
+// runs this one only for a record the game made (NEBULA_TEXTURE_MADE), once when it is registered or its bytes change.
 inline constexpr double kAuthoredLevelsChange = 8.0;
 [[nodiscard]] bool authored_levels(std::uint8_t layout, const std::uint8_t* texels, std::uint32_t width,
                                    std::uint32_t height, std::uint32_t levels);
+// How many times authored_levels has run in this process (texture_pack_tests: a restage runs it no more).
+[[nodiscard]] std::uint64_t authored_judgements() noexcept;
 }  // namespace detail
 
 // What a draw needs to bind one texture map.
@@ -191,7 +195,7 @@ private:
         Staged staged;
         PackName name;
         bool generated = false;
-        bool authored = false;  // detail::authored_levels
+        bool authored = false;  // the record's levels drawn by hand: its cook's bit, or detail::authored_levels
         // `trimmed`: a record's first level alone, its generated levels left out (a draw reads the first level only).
         // `full_levels`: the levels the image has.
         bool trimmed = false;
@@ -241,14 +245,16 @@ private:
         std::uint32_t size = 0u;
         std::uint32_t width = 0u, height = 0u;
         std::uint8_t format = 0u;
+        bool authored = false;  // decided when it was registered or its bytes changed (Op::authored)
     };
 
     [[nodiscard]] Staged stage(const std::uint8_t* texels, std::uint32_t width, std::uint32_t height,
                                std::uint32_t levels, std::uint8_t layout);
     [[nodiscard]] ChunkRef allocate_staging(std::uint64_t bytes, std::uint64_t& offset);
     // `drop` leaves that many top levels out of a record (false when it has no more levels than that, or is a single image).
+    // `registered`: the image's source as registered, whose answer on levels drawn by hand stands (a restage judges nothing).
     bool stage_image(Op& op, const void* bytes, std::uint32_t size, std::uint32_t width, std::uint32_t height,
-                     std::uint8_t format, std::uint32_t drop = 0u);
+                     std::uint8_t format, std::uint32_t drop = 0u, const Source* registered = nullptr);
     void queue_built_in(std::uint32_t id, const void* record);
     void create_entry(Op& op);
     // `once`: the texture's levels are written once (a new id), so it may be a direct-write texture; an id that is updated

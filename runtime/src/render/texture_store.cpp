@@ -36,6 +36,8 @@ constexpr std::uint64_t kStagingTrimSteps = 120u;
 
 // The bytes of the store's staging chunks that exist now (allocate_staging's), for the video memory breakdown.
 std::atomic<std::uint64_t> g_staging_bytes{0u};
+// detail::authored_levels's runs (detail::authored_judgements).
+std::atomic<std::uint64_t> g_authored_judgements{0u};
 
 std::uint64_t align_up(std::uint64_t value, std::uint64_t alignment) {
     return (value + alignment - 1u) & ~(alignment - 1u);
@@ -130,8 +132,13 @@ void detail::expand_record_level(std::uint8_t layout, const std::uint8_t* src, s
     }
 }
 
+std::uint64_t detail::authored_judgements() noexcept {
+    return g_authored_judgements.load(std::memory_order_relaxed);
+}
+
 bool detail::authored_levels(std::uint8_t layout, const std::uint8_t* texels, std::uint32_t width, std::uint32_t height,
                              std::uint32_t levels) {
+    g_authored_judgements.fetch_add(1u, std::memory_order_relaxed);
     if (texels == nullptr || levels < 2u || width == 0u || height == 0u) {
         return false;
     }
@@ -327,7 +334,7 @@ void TextureStore::restart(gpu::Device* device) {
         Op op;
         op.kind = Op::Kind::Create;
         op.id = id;
-        if (stage_image(op, source.bytes, source.size, source.width, source.height, source.format)) {
+        if (stage_image(op, source.bytes, source.size, source.width, source.height, source.format, 0u, &source)) {
             const std::lock_guard guard(lock_);
             queued_->list.push_back(std::move(op));
         }
@@ -453,7 +460,7 @@ TextureStore::Staged TextureStore::stage(const std::uint8_t* texels, std::uint32
 
 // An image as the game hands it over, staged and named.
 bool TextureStore::stage_image(Op& op, const void* bytes, std::uint32_t size, std::uint32_t width, std::uint32_t height,
-                               std::uint8_t format, std::uint32_t drop) {
+                               std::uint8_t format, std::uint32_t drop, const Source* registered) {
     const auto* first = static_cast<const std::uint8_t*>(bytes);
     if (format >= NEBULA_TEXTURE_LINEAR_L8 && format <= NEBULA_TEXTURE_LINEAR_RGBA8) {
         const std::uint8_t layout = nebula_texture_linear_layout(format);
@@ -472,8 +479,17 @@ bool TextureStore::stage_image(Op& op, const void* bytes, std::uint32_t size, st
     }
     const std::uint8_t* const texels = first + NEBULA_TEXTURE_HEADER;
     op.generated = (record->flags & NEBULA_TEXTURE_GENERATED_LEVELS) != 0u;
-    op.authored = !op.generated &&
-                  detail::authored_levels(record->layout, texels, record->width, record->height, record->levels);
+    // Whether its levels were drawn by hand: the cook decided it once (NEBULA_TEXTURE_AUTHORED_LEVELS); a record the game
+    // made has no cook behind it and is judged here once, the answer kept with its source for every restage.
+    if (registered != nullptr) {
+        op.authored = registered->authored;
+    } else if (op.generated) {
+        op.authored = false;
+    } else if (record->source_format != NEBULA_TEXTURE_MADE) {
+        op.authored = (record->flags & NEBULA_TEXTURE_AUTHORED_LEVELS) != 0u;
+    } else {
+        op.authored = detail::authored_levels(record->layout, texels, record->width, record->height, record->levels);
+    }
     if (drop != 0u) {
         // The levels after the dropped ones, in the record's own order; the name stays with the whole texture.
         const std::uint8_t* kept = texels;
@@ -510,8 +526,8 @@ std::uint32_t TextureStore::register_image(const NebulaTextureImage& image) {
         const std::uint32_t id = next_image_++;
         if (staged) {
             op.id = id;
+            sources_[id] = Source{image.bytes, image.size, image.width, image.height, image.format, op.authored};
             queued_->list.push_back(std::move(op));
-            sources_[id] = Source{image.bytes, image.size, image.width, image.height, image.format};
             if (image.format != NEBULA_TEXTURE_IMAGE) {
                 linear_images_[id] = LinearImage{image.width, image.height, image.format};
             }
@@ -541,11 +557,12 @@ void TextureStore::update_image(std::uint32_t id, const void* bytes, std::uint32
             return;
         }
         const std::lock_guard guard(lock_);
-        queued_->list.push_back(std::move(op));
         if (const auto source = sources_.find(id); source != sources_.end()) {
             source->second.bytes = bytes;
             source->second.size = size;
+            source->second.authored = op.authored;
         }
+        queued_->list.push_back(std::move(op));
     });
 }
 
@@ -620,7 +637,7 @@ std::shared_ptr<TextureStore::Ops> TextureStore::take_ops() {
         op.id = request.id;
         op.resize = true;
         op.drop = request.drop;
-        if (!stage_image(op, source.bytes, source.size, source.width, source.height, source.format, request.drop)) {
+        if (!stage_image(op, source.bytes, source.size, source.width, source.height, source.format, request.drop, &source)) {
             continue;
         }
         const std::lock_guard guard(lock_);

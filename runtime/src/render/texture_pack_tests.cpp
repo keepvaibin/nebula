@@ -621,6 +621,76 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
     cache.shutdown();
 }
 
+// P-059: a cooked record's levels drawn by hand are its cook's bit, read; a record the game made is judged once when it is
+// registered; a restage for the video-memory budget judges nothing and keeps the answer.
+void test_judged_once(Gpu& gpu) {
+    // 64x64 RGBA8 records of three levels whose levels are no smaller copies of the first.
+    const auto record = [](std::uint8_t source_format, std::uint8_t flags) {
+        std::vector<std::byte> bytes(NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(64u, 64u, 3u, NEBULA_TEXTURE_RGBA8));
+        nebula_texture_init(bytes.data(), 64u, 64u, 3u, NEBULA_TEXTURE_RGBA8, flags);
+        reinterpret_cast<NebulaTexture*>(bytes.data())->source_format = source_format;
+        for (std::size_t i = NEBULA_TEXTURE_HEADER; i < bytes.size(); ++i) {
+            bytes[i] = static_cast<std::byte>(i * 13u + 5u);
+        }
+        return bytes;
+    };
+    std::vector<std::byte> cooked = record(6u, NEBULA_TEXTURE_AUTHORED_LEVELS);  // RGBA8 on the disc
+    std::vector<std::byte> made = record(NEBULA_TEXTURE_MADE, 0u);
+    const auto image_of = [](std::vector<std::byte>& bytes) {
+        NebulaTextureImage image{};
+        image.bytes = bytes.data();
+        image.size = static_cast<std::uint32_t>(bytes.size());
+        image.width = 64u;
+        image.height = 64u;
+        image.format = NEBULA_TEXTURE_IMAGE;
+        image.levels = 3u;
+        return image;
+    };
+    const auto owner = std::make_unique<TextureStore>();
+    TextureStore& store = *owner;
+    DeviceGate gate;
+    gate.set_device(gpu.device.Get());
+    expect(store.initialize(gpu.device.Get(), gate), "store initializes");
+    unsigned frame = 0;
+    std::vector<std::uint32_t> freed;
+    const auto next_frame = [&] {
+        if (frame != 0u) {
+            gpu.run();
+        }
+        store.begin_frame(frame++ % 2u, 2u);
+        store.backend().set_upload_list(gpu.list.Get());
+        if (const auto ops = store.take_ops()) {
+            store.apply_ops(*ops, freed);
+        }
+    };
+    const std::uint64_t before = detail::authored_judgements();
+    const std::uint32_t cooked_id = store.register_image(image_of(cooked));
+    expect(detail::authored_judgements() == before, "a cooked record is not judged: its cook's bit is read");
+    const std::uint32_t made_id = store.register_image(image_of(made));
+    expect(detail::authored_judgements() == before + 1u, "a record the game made is judged once when it is registered");
+    next_frame();
+    const TextureHandle cooked_whole = store.handle(cooked_id);
+    const TextureHandle made_whole = store.handle(made_id);
+    expect(cooked_whole.authored_levels && cooked_whole.mip_levels == 3u, "the cook's bit reaches the handle");
+    // Named by no walk for a few frames, then far over the budget: both are staged again with top levels left out.
+    for (unsigned i = 0; i < 8u; ++i) {
+        next_frame();
+    }
+    store.enforce_budget(std::uint64_t{1} << 30u, std::uint64_t{1} << 20u);
+    next_frame();
+    next_frame();
+    expect(store.budget_stats().reductions >= 2u, "the budget staged both again, smaller");
+    expect(detail::authored_judgements() == before + 1u, "a restage judges nothing");
+    const TextureHandle cooked_reduced = store.handle(cooked_id);
+    const TextureHandle made_reduced = store.handle(made_id);
+    expect(cooked_reduced.mip_levels < 3u && cooked_reduced.authored_levels &&
+               made_reduced.mip_levels < 3u && made_reduced.authored_levels == made_whole.authored_levels,
+           "a reduced texture keeps the answer it was registered with");
+    gpu.run();
+    store.backend().set_upload_list(nullptr);
+    store.shutdown();
+}
+
 }  // namespace
 
 // BLOCK4 blocks as ASTC 4x4: two blocks against bytes an independent decoder of the ASTC specification decodes to the
@@ -719,6 +789,7 @@ int main() {
         try {
             test_packs(gpu, root);
             test_cache(gpu, root);
+            test_judged_once(gpu);
         } catch (const std::exception& error) {
             std::cerr << "FAILED: threw: " << error.what() << std::endl;
             ++failures;
