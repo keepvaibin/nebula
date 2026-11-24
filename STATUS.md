@@ -4,7 +4,7 @@ Written 2026-11-23 20:08. If this time is more than three hours old, the work ha
 
 Steps landed: 13 of 138 (9%).
 
-Now: S0.3.2 since 18:50 (S0.3.1 landed 18:49); ahead: nothing
+Now: R1.1 since 20:08 (S0.3.2 landed 20:08); ahead: nothing
 
 In work now: Nothing started.
 
