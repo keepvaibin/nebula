@@ -757,7 +757,10 @@ at the normal priority; the deferred job later finds the cell filled. A scene's 
 asks the host `NEBULA_OPTION_SCENE_PIPELINES` each step: 1 while the queue and the registered-but-not-queued pipelines
 are not empty (`pipeline_progress`), at most 60 s. With fixed steps the game never waits (the frames waited would be the
 machine's): the render thread makes the queue before its next picture (`drain_pipelines`), and a draw that still misses
-waits for its worker, so two runs draw alike.
+waits for its worker, so two runs draw alike. A form the game registers only at its first draw (a site, a per-object state) is
+made before play only when the cook's list names it (`crates/nebula-import/data/site_pipelines.txt`): the line
+"registered after the first picture, not in the cook's list" (`Pipelines::note_registered`) and the line "missed by a draw
+in play" end with the record to add there (P-371).
 
 **Readers.** `ModelData` resolves the sections once at load (2.8's lookup) and keeps the arrays. `Material` keeps its
 `MATL` and `GXMT` entries in place of 12's record; every form reader takes the form's ranges in place of `*_at`;

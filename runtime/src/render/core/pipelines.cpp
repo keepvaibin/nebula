@@ -583,6 +583,15 @@ void Pipelines::wait_drained() {
     made_.wait(guard, [this] { return quit_ || pending_.load(std::memory_order_acquire) == 0u; });
 }
 
+void Pipelines::note_registered(const PipelineEntry& entry) {
+    if (!scene_shown_.load(std::memory_order_relaxed)) {
+        return;
+    }
+    std::fprintf(stderr, "[pipelines] registered after the first picture, not in the cook's list: programs %llx %llx; record %s\n",
+                 static_cast<unsigned long long>(entry.desc.vertex), static_cast<unsigned long long>(entry.desc.pixel),
+                 record_hex(entry).c_str());
+}
+
 void Pipelines::defer(const Job& job) noexcept {
     try {
         std::lock_guard guard(lock_);
