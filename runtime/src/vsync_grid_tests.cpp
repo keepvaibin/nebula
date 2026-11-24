@@ -5,9 +5,12 @@
 // whose vsyncs do not divide the frame period.
 #include "galaxy/vsync_grid.h"
 
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <random>
+#include <vector>
 
 namespace {
 
@@ -136,10 +139,46 @@ void test_slots() {
     check(on_grid, "slots lie on the vsync grid");
     check(spaced, "60 Hz frames on 120 Hz are two vsyncs apart");
     check(frame_period == 2 * grid.interval_ns, "the frame period is two vsyncs");
-    // After a stall, from now: the slot is the first vsync from now, not a run of missed slots.
-    check(grid.next_slot(kGamePeriod, last, last + 100000000, false, slot, frame_period) && slot >= last + 100000000 &&
-              slot - (last + 100000000) < grid.interval_ns,
-          "after a stall the next slot is the first vsync from now");
+    // P-274: after a stall of 90 ms the slots are kept: the next is the one after the last, though past, and the frames
+    // it missed run back to back, each on its own slot of the grid, until they are on time again.
+    {
+        galaxy::VsyncGrid stalled = grid;
+        std::int64_t at = last;
+        std::int64_t later = last + 90000000;
+        while (stalled.vsync_ns + kHz120 <= later) {
+            stalled.note(stalled.vsync_ns + kHz120, 0);
+        }
+        std::int64_t dropped = 0;
+        int behind = 0;
+        bool kept = true;
+        for (;;) {
+            if (!stalled.next_slot(kGamePeriod, at, later, false, slot, frame_period, &dropped)) {
+                kept = false;
+                break;
+            }
+            kept = kept && slot == at + 2 * kHz120 && (slot - 1000000000) % kHz120 == 0;
+            if (slot >= later) {
+                break;
+            }
+            ++behind;
+            at = slot;
+            later += 200000;  // each frame's work, 0.2 ms
+        }
+        check(kept && dropped == 0, "after a 90 ms stall every slot is kept, two vsyncs after the one before");
+        check(behind == 5, "the five frames a 90 ms stall missed run back to back");
+    }
+    // Further behind than the bound (FrameDue::kCatchUpNs): from now, the first vsync from now, and the time dropped said.
+    {
+        galaxy::VsyncGrid stalled = grid;
+        const std::int64_t later = last + 300000000;
+        while (stalled.vsync_ns + kHz120 <= later) {
+            stalled.note(stalled.vsync_ns + kHz120, 0);
+        }
+        std::int64_t dropped = 0;
+        check(stalled.next_slot(kGamePeriod, last, later, false, slot, frame_period, &dropped) && slot >= later &&
+                  slot - later < stalled.interval_ns && dropped > galaxy::FrameDue::kCatchUpNs,
+              "after a 300 ms stall the next slot is the first vsync from now, the time dropped said");
+    }
     // The first slot, with no last: the first vsync from now.
     check(grid.next_slot(kGamePeriod, 0, grid.vsync_ns + 5000000, false, slot, frame_period) && slot == grid.vsync_ns + kHz120,
           "the first slot is the next vsync");
@@ -163,6 +202,62 @@ void test_slots() {
     check(!none.next_slot(kGamePeriod, 0, 1000000000, false, slot, frame_period), "one vsync is no grid");
 }
 
+// G2.1 proof 7: the Android and Apple step-wait decision (wait_display_frame's next_slot) at every sample rate of the
+// native plan's "Any refresh rate" paragraph, with in-between pictures on and off. At 60, 120, 180, 240, 360 and 480 Hz
+// (59.94 and 119.88 Hz with them off) the step follows the grid at 1, 2, 3, 4, 6 and 8 vsyncs and each slot is a
+// vsync; at every other rate, whole or not, there is no slot and the host's own clock runs the game at exactly 60. A
+// random rate within 0.5 % of a multiple of 60 is left out (the lock rule's own tolerance decides it).
+void test_every_rate() {
+    std::vector<double> rates{40.0, 48.0, 50.0, 59.94, 60.0, 72.0, 75.0, 82.37, 90.0, 100.0, 119.88, 120.0,
+                              144.0, 165.0, 180.0, 200.0, 240.0, 360.0, 480.0, 500.0};
+    std::mt19937 random(20261124u);
+    std::uniform_real_distribution<double> any(40.0, 500.0);
+    for (int i = 0; i < 300; ++i) rates.push_back(any(random));
+    unsigned wrong = 0;
+    for (const bool in_between : {false, true}) {
+        for (const double rate : rates) {
+            int expected = 0;
+            for (const int n : {1, 2, 3, 4, 6, 8}) {
+                if (rate == 60.0 * n) expected = n;
+            }
+            if (rate == 59.94) expected = in_between ? 0 : 1;
+            if (rate == 119.88) expected = in_between ? 0 : 2;
+            const double multiple = std::round(rate / 60.0);
+            if (expected == 0 && rate != 59.94 && rate != 119.88 && multiple >= 1.0 &&
+                std::abs(rate / 60.0 - multiple) / multiple < 0.005) {
+                continue;
+            }
+            const std::int64_t interval = std::llround(1e9 / rate);
+            galaxy::VsyncGrid grid;
+            const std::int64_t last_vsync = feed(grid, 1000000000, interval, 120, 0, 0);
+            std::int64_t slot = 0, frame_period = 0;
+            std::int64_t last = 0;
+            bool ok = true;
+            std::int64_t now = last_vsync + 1000;
+            for (int i = 0; i < 20; ++i) {
+                while (grid.vsync_ns + interval <= now) {
+                    grid.note(grid.vsync_ns + interval, 0);
+                }
+                const bool locked = grid.next_slot(kGamePeriod, last, now, in_between, slot, frame_period);
+                if (locked != (expected != 0)) {
+                    ok = false;
+                    break;
+                }
+                if (!locked) break;
+                ok = ok && (slot - 1000000000) % interval == 0 && frame_period == expected * interval &&
+                     (last == 0 || slot - last == expected * interval);
+                last = slot;
+                now = slot + 1000;
+            }
+            if (!ok && wrong++ < 10u) {
+                std::printf("  %.3f Hz, in-between pictures %s: expected %d vsyncs a step\n", rate,
+                            in_between ? "on" : "off", expected);
+            }
+        }
+    }
+    check(wrong == 0u, "every sample rate: the step follows the grid at the multiples only, each slot a vsync");
+}
+
 }  // namespace
 
 int main() {
@@ -171,6 +266,7 @@ int main() {
     test_rate_changes();
     test_stated_and_gaps();
     test_slots();
+    test_every_rate();
     if (failures == 0) {
         std::printf("vsync grid tests: all pass\n");
     }

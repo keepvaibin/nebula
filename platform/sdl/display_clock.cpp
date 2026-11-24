@@ -148,10 +148,17 @@ bool wait_display_frame(std::int64_t period_ns, std::int64_t& last_ns, bool in_b
     // keeps the game at its speed.
     std::int64_t target = 0;
     std::int64_t frame_period = 0;
-    if (!grid.next_slot(period_ns, last_ns, monotonic_ns(), in_between, target, frame_period)) {
+    std::int64_t dropped = 0;
+    if (!grid.next_slot(period_ns, last_ns, monotonic_ns(), in_between, target, frame_period, &dropped)) {
         g_frame_slot_ns.store(0, std::memory_order_relaxed);
         return false;
     }
+    if (dropped > 0) {
+        std::fprintf(stderr,
+                     "[pacing] the game's steps were %.0f ms behind the display's vsync: those steps are dropped\n",
+                     static_cast<double>(dropped) / 1e6);
+    }
+    // A slot already past (the clock catching up, P-274) returns at once.
     const timespec wake{static_cast<time_t>(target / 1000000000), static_cast<long>(target % 1000000000)};
     while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &wake, nullptr) != 0) {
     }

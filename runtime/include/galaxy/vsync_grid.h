@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
+#include "galaxy/frame_due.h"
 #include "galaxy/step_lock.h"
 
 // The display's vsync grid as the game's frame clock, from the vsync callbacks a platform delivers (Android's
@@ -71,13 +72,16 @@ struct VsyncGrid {
     }
 
     // The frame slot after `last` (0: none yet) for frames `period` apart, at `now`: the first vsync at least one frame
-    // period (less half a vsync) after the last slot, or from now when the clock fell behind (a suspended app, a stalled
-    // thread), as a display skips the fields it missed. `frame_period`: the period in whole vsyncs. False, and the host's
+    // period (less half a vsync) after the last slot. A clock that fell behind keeps its slots, as the host's clock keeps
+    // its due moments (FrameDue::catch_up, P-274): a slot already past is returned, so the frames it missed run back to
+    // back; further behind than FrameDue::kCatchUpNs (a suspended app, a load) the slots start again from now, and
+    // `dropped`, when given, is set to the time dropped. `frame_period`: the period in whole vsyncs. False, and the host's
     // own clock runs the frames, when there is no grid (no vsync yet, or none for a quarter second: out of sight, the
     // display asleep) or the step does not lock to it (galaxy/step_lock.h: `in_between`, in-between pictures on;
     // 59.94, 60, 120 or 240 Hz keep the game on the grid with them off; at 50, 61, 75 or 90 Hz the host's clock runs it).
     [[nodiscard]] bool next_slot(std::int64_t period, std::int64_t last, std::int64_t now, bool in_between,
-                                 std::int64_t& slot, std::int64_t& frame_period) const noexcept {
+                                 std::int64_t& slot, std::int64_t& frame_period,
+                                 std::int64_t* dropped = nullptr) const noexcept {
         if (vsync_ns == 0 || interval_ns == 0 || now - vsync_ns > 250000000) {
             return false;
         }
@@ -86,11 +90,15 @@ struct VsyncGrid {
             return false;
         }
         std::int64_t earliest = last + period - interval_ns / 2;
-        if (last == 0 || earliest < now - period) {
+        if (last == 0 || earliest < now - FrameDue::kCatchUpNs) {
+            if (last != 0 && dropped != nullptr) {
+                *dropped = now - earliest;
+            }
             earliest = now;
         }
-        const std::int64_t ahead = earliest - vsync_ns + interval_ns - 1;
-        const std::int64_t steps = ahead > 0 ? ahead / interval_ns : 0;
+        // The first vsync at or after `earliest`, before the latest one while the clock catches up.
+        const std::int64_t from = earliest - vsync_ns;
+        const std::int64_t steps = from >= 0 ? (from + interval_ns - 1) / interval_ns : -(-from / interval_ns);
         slot = vsync_ns + steps * interval_ns;
         frame_period = vsyncs * interval_ns;
         return true;

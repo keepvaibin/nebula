@@ -8,8 +8,11 @@
 // display and the GPU are asked through ScheduleDisplay, so frame_schedule_tests.cpp drives it with simulated displays.
 //
 // A game frame's sequence: its generated pictures at t in (0, 1) on the present slots, then the frame itself (t = 1).
-// The next game frame's sequence can replace it before its frame (at rates that are not multiples of 60 that is the
-// normal end): its frame is then walked unseen, for what later frames read of it.
+// It starts when its list arrives (I-004): its reference, the moment of t = 0, is its step's moment plus the step
+// clock's delay. A list that arrives while a sequence plays waits for its reference: the slots before it show the
+// sequence before at their own t (N-1084), never the frame before early. At its reference it replaces the sequence
+// before (at rates that are not multiples of 60 that is the normal end): that one's frame is then walked unseen, for
+// what later frames read of it. A slot at or before a sequence's reference with none before it to show waits.
 
 #include <array>
 #include <cstdint>
@@ -46,22 +49,25 @@ public:
     [[nodiscard]] virtual bool tracing() const { return false; }
 };
 
-// The playing game frame's sequence.
+// The playing game frame's sequence, or the one waiting for its reference.
 struct ScheduleSequence {
     bool active = false;
     unsigned generated = 0;      // generated pictures it may show
     unsigned next = 0;           // generated pictures shown
-    std::int64_t frame_qpc = 0;  // the frame's arrival
-    double lead = 0.0;           // t of a slot at the arrival (FrameSchedule::start)
+    std::int64_t frame_qpc = 0;  // its reference: t = lead there (FrameSchedule::start)
+    double lead = 0.0;           // t of a slot at the reference (FrameSchedule::begin_waiting)
     std::int64_t step_qpc = 0;   // the moment its frame's step began (the step clock), 0 unknown
+    bool stopping = false;       // no generated pictures (FrameSchedule::start)
 };
 
 // The next picture of the playing sequence.
 struct SchedulePicture {
     enum class Kind : std::uint8_t {
-        None,       // nothing due yet, or no sequence
+        None,       // nothing due yet, no sequence, or a slot at or before the sequence's reference that waits
         Generated,  // a generated picture at t
         Frame,      // the frame itself; the sequence has ended
+        Begin,      // the waiting sequence's turn at this slot: the playing one is replaced (supersede) and the
+                    // waiting one begins (begin_waiting); then next is asked again
     };
     Kind kind = Kind::None;
     std::int64_t slot = 0;  // the moment it shows
@@ -81,7 +87,8 @@ struct ScheduleWalk {
 struct ScheduleCounts {
     std::uint64_t started = 0;
     std::uint64_t superseded = 0;
-    std::uint64_t late_slots = 0;  // slots a stall skipped
+    std::uint64_t late_slots = 0;    // slots a stall skipped
+    std::uint64_t waited_slots = 0;  // slots up to a sequence's reference with no sequence before it to show
     std::uint64_t gpu_capped = 0;  // sequences with fewer generated pictures
     std::uint64_t cadence_drops = 0;
     std::uint64_t history_resets = 0;
@@ -98,18 +105,26 @@ public:
     void configure(unsigned generated, std::int64_t now);
     [[nodiscard]] unsigned configured() const noexcept { return frames_; }
 
-    // A game frame's sequence starts. `asked`: when the game asked for its present, 0 unknown; `step`: its step's
-    // moment, 0 unknown; `waited_total`: the game thread's time blocked on the render thread so far; `stopping`: the
-    // render thread drains for a stop (no generated pictures).
-    void start(std::int64_t now, std::int64_t asked, std::int64_t step, std::uint64_t waited_total, bool stopping);
-    // A game frame presented while interpolating, with no sequence of its own.
-    void frame_alone(std::int64_t now, std::uint64_t waited_total) { note_cadence(now, waited_total); }
+    // A game frame's list arrived: its sequence starts. `arrived`: when the game handed the list over (its thread), 0
+    // unknown; `step`: its step's moment, 0 unknown; `stopping`: the render thread drains for a stop (no generated
+    // pictures). With no sequence playing it begins at once; else it waits for its reference (waiting()). A sequence
+    // still waiting is begun first by the caller (supersede, begin_waiting).
+    void start(std::int64_t now, std::int64_t arrived, std::int64_t step, bool stopping);
+    // The waiting sequence begins: the playing one has ended or was replaced (supersede).
+    void begin_waiting(std::int64_t now);
+    [[nodiscard]] bool waiting() const noexcept { return waiting_.active; }
+    // A sequence plays or waits.
+    [[nodiscard]] bool busy() const noexcept { return sequence_.active || waiting_.active; }
+    // A game step's present request while interpolating, its frame shown by its sequence or alone: the cadence
+    // governor's count (`asked`: when the game asked).
+    void note_step(std::int64_t asked, std::uint64_t waited_total) { note_cadence(asked, waited_total); }
     // The playing sequence is replaced before its frame: true when one was playing.
     bool supersede() noexcept;
     // Every sequence and pairing forgotten (a lost device).
     void forget() noexcept;
 
-    // The picture due at `now` (all of what is left at once with `flush`); the slot clock moves past it.
+    // The picture due at `now` (all of what is left at once with `flush`); the slot clock moves past it. Begin: the
+    // waiting sequence's turn (SchedulePicture::Kind).
     [[nodiscard]] SchedulePicture next(std::int64_t now, bool flush);
     // A generated picture was drawn in `spent` ticks; `presented`: it reached the swap chain.
     void generated_drawn(std::uint64_t spent, bool presented) noexcept;
@@ -154,10 +169,14 @@ private:
     void restart_governors(std::int64_t now);
     void note_cadence(std::int64_t now, std::uint64_t waited_total);
 
+    // t at `slot` of a sequence whose reference is `reference`.
+    [[nodiscard]] double t_at(std::int64_t slot, std::int64_t reference, double lead) const noexcept;
+
     ScheduleDisplay& display_;
     std::int64_t frequency_;
     unsigned frames_ = 0;
     ScheduleSequence sequence_{};
+    ScheduleSequence waiting_{};
     std::uint64_t serial_ = 0;
 
     // The present slot clock: the next slot and a slot's length (on the display's vblanks when they are timed).
@@ -165,7 +184,8 @@ private:
     std::int64_t slot_period_ = 0;
     bool unbounded_ = false;
 
-    // The arrival clock and the step clock's delay (start).
+    // The arrival clock and the step clock's delay (start): the delay follows the lists' lateness after their steps'
+    // moments, at most one step.
     std::int64_t arrival_ = 0;
     std::int64_t frame_period_ = 0;
     std::int64_t delay_qpc_ = 0;

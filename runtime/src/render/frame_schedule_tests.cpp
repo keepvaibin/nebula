@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Tests of the frame schedule (frame_schedule.h, I-016) on simulated displays: the game's 60 steps a second shown at
-// present rates that are and are not multiples of 60, with the display's vblanks timed and not, and an unlimited rate.
-// The motion is even when every picture shows the game's time a constant delay before its slot (content time linear
-// in present time); the slots of a timed display are its vblanks. The governors, a stall and the walk's history
-// pairing are tested on their own. These are the rules the schedule follows today; E6b changes some of them and these
-// tests with them.
+// present rates that are and are not multiples of 60, with the display's vblanks timed and not, an unlimited rate and a
+// variable refresh. The motion is even when every picture shows the game's time a constant delay before its slot
+// (content time linear in present time); the slots of a timed display are its vblanks. A sequence starts when its list
+// arrives, its reference its own step's moment plus the step clock's delay (I-004), and a slot before that reference
+// shows the sequence before at its own t, never the frame before early (N-1084). The governors, a stall and the walk's
+// history pairing are tested on their own.
 #include "galaxy/render/frame_schedule.h"
 
 #include "galaxy/game_step.h"
@@ -15,6 +16,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <limits>
+#include <random>
 #include <vector>
 
 using galaxy::kGameStepRate;
@@ -62,95 +64,177 @@ struct SimDisplay final : ScheduleDisplay {
     bool benchmark() const override { return bench; }
 };
 
+// A display at `refresh` hertz, its present rate the same (VSync on, the frame rate at the refresh or above), its vblanks
+// timed or a swap chain that tears.
+SimDisplay display_at(double refresh, bool timed) {
+    SimDisplay display;
+    display.rate = refresh;
+    display.timed = timed;
+    display.vsync_on = timed;
+    display.period = static_cast<std::int64_t>(std::llround(static_cast<double>(kFrequency) / refresh));
+    return display;
+}
+
 struct Shown {
     SchedulePicture picture;
-    std::int64_t step = 0;  // its frame's step moment
-    std::int64_t frame = 0; // its sequence's index
+    std::int64_t step = 0;       // its frame's step moment
+    std::int64_t reference = 0;  // its sequence's reference
+    double lead = 0.0;
+    unsigned generated = 0;      // its sequence's generated pictures
+    int frame = 0;               // its list's index
     // The game time it shows: the frame's own at t = 1, else t steps on from the step before.
     [[nodiscard]] double content() const {
         const double t = picture.kind == SchedulePicture::Kind::Frame ? 1.0 : picture.t;
         return static_cast<double>(step) + t * kStep;
     }
+    // t of its slot on its own sequence's clock.
+    [[nodiscard]] double slot_t() const {
+        return static_cast<double>(picture.slot - reference) * kGameStepRate / static_cast<double>(kFrequency) + lead;
+    }
 };
 
-// The render loop of RenderCore, on a simulated clock: each game frame's present arrives `late` after its step's
-// moment; the playing sequence's slots are served up to it; it replaces the sequence and starts its own, and the loop
-// asks for a picture at once. A generated picture costs `cost` of the render thread's time.
+// What RenderCore does as a list arrives: a sequence still waiting begins first (the playing one replaced), then the new
+// one starts. With `alone` the playing one is replaced too, so the new one begins at once.
+void arrive(FrameSchedule& schedule, std::int64_t now, std::int64_t arrived, std::int64_t step, bool alone,
+            bool stopping = false) {
+    if (schedule.waiting()) {
+        (void)schedule.supersede();
+        schedule.begin_waiting(now);
+    }
+    if (alone) {
+        (void)schedule.supersede();
+    }
+    schedule.start(now, arrived, step, stopping);
+}
+
+// The render loop of RenderCore, on a simulated clock: each step asks for its present `present_late` after its moment
+// (the cadence count) and hands its list over `late` after it; the playing sequence's slots are served up to each, the
+// list's sequence starts (at once, or waiting for its reference), and the loop asks for a picture at once. A generated
+// picture costs `cost` of the render thread's time. `rates`: the display's rate for each list in turn (a variable
+// refresh), else the display's own.
 struct Run {
     std::vector<Shown> shown;
-    std::vector<std::int64_t> arrivals;  // each sequence's arrival (frame_qpc)
+    std::vector<std::int64_t> references;  // each sequence's reference as it began
+    std::vector<std::int64_t> steps;       // each list's step moment
     std::uint64_t superseded = 0;
 };
 
 Run run(FrameSchedule& schedule, int frames, std::int64_t first_step, const std::vector<std::int64_t>& late,
         std::int64_t cost = kFrequency / 2000, bool with_step = true, std::uint64_t* waited = nullptr,
-        double step_spacing = kStep) {
+        double step_spacing = kStep, SimDisplay* display = nullptr, const std::vector<double>* rates = nullptr) {
     Run result;
     std::int64_t now = first_step;
     std::uint64_t waited_total = 0;
-    const auto serve = [&](std::int64_t until, std::int64_t index) {
-        while (schedule.sequence().active && schedule.slot_due() <= until) {
+    int playing = -1;
+    int waiting = -1;
+    const auto record = [&](const SchedulePicture& picture) {
+        const ScheduleSequence& s = schedule.sequence();
+        result.shown.push_back({picture, s.step_qpc, s.frame_qpc, s.lead, s.generated, playing});
+        if (picture.kind == SchedulePicture::Kind::Generated) {
+            schedule.generated_drawn(static_cast<std::uint64_t>(cost), true);
+            now += cost;
+        }
+    };
+    const auto begin = [&] {
+        if (schedule.supersede()) ++result.superseded;
+        schedule.begin_waiting(now);
+        playing = waiting;
+        waiting = -1;
+        result.references.push_back(schedule.sequence().frame_qpc);
+    };
+    const auto draw = [&] {
+        SchedulePicture picture = schedule.next(now, false);
+        if (picture.kind == SchedulePicture::Kind::Begin) {
+            begin();
+            picture = schedule.next(now, false);
+        }
+        if (picture.kind == SchedulePicture::Kind::Generated || picture.kind == SchedulePicture::Kind::Frame) {
+            record(picture);
+        }
+    };
+    const auto serve = [&](std::int64_t until) {
+        while (schedule.busy() && schedule.slot_due() <= until) {
             now = std::max(now, schedule.slot_due());
-            const SchedulePicture picture = schedule.next(now, false);
-            if (picture.kind == SchedulePicture::Kind::None) break;
-            result.shown.push_back({picture, schedule.sequence().step_qpc, index});
-            if (picture.kind == SchedulePicture::Kind::Generated) {
-                schedule.generated_drawn(static_cast<std::uint64_t>(cost), true);
-                now += cost;
-            }
+            const std::int64_t due = schedule.slot_due();
+            const std::size_t count = result.shown.size();
+            draw();
+            if (result.shown.size() == count && schedule.slot_due() == due && !schedule.waiting()) break;
         }
     };
     for (int k = 0; k < frames; ++k) {
+        if (display != nullptr && rates != nullptr) {
+            display->rate = (*rates)[static_cast<std::size_t>(k) % rates->size()];
+        }
         const auto step = first_step + static_cast<std::int64_t>(std::llround(k * step_spacing));
-        const std::int64_t asked = step + late[static_cast<std::size_t>(k) % late.size()];
-        serve(asked, k - 1);
+        result.steps.push_back(step);
+        // The step's present request, just after its moment: the cadence count only.
+        const std::int64_t asked = step + kFrequency / 5000;
+        serve(asked);
         now = std::max(now, asked);
         if (waited != nullptr) waited_total += *waited;
-        if (schedule.supersede()) ++result.superseded;
-        schedule.start(now, asked, with_step ? step : 0, waited_total, false);
-        result.arrivals.push_back(schedule.sequence().frame_qpc);
-        const SchedulePicture picture = schedule.next(now, false);
-        if (picture.kind != SchedulePicture::Kind::None) {
-            result.shown.push_back({picture, schedule.sequence().step_qpc, k});
-            if (picture.kind == SchedulePicture::Kind::Generated) {
-                schedule.generated_drawn(static_cast<std::uint64_t>(cost), true);
-                now += cost;
-            }
+        schedule.note_step(asked, waited_total);
+        // Its list, at the end of its work.
+        const std::int64_t arrived = step + late[static_cast<std::size_t>(k) % late.size()];
+        serve(arrived);
+        now = std::max(now, arrived);
+        if (schedule.waiting()) begin();
+        schedule.start(now, arrived, with_step ? step : 0, false);
+        if (schedule.waiting()) {
+            waiting = k;
+        } else {
+            playing = k;
+            result.references.push_back(schedule.sequence().frame_qpc);
         }
+        draw();
     }
     return result;
 }
 
-// After the first `skip` pictures: the spread of (content - slot), in ticks, and whether the slots rise by at least
-// `least` each. Counted apart: a frame later than the delay is held at t = 1 until it comes (FrameSchedule::start),
-// and a slot between a frame's present and its arrival shows t = 0, the frame before, early (N-1084, E6b's to fix).
+// After the first `skip` pictures: the spread of (content - slot), in ticks; whether the slots rise by at least `least`
+// each; the largest time from a picture's content to its slot. Counted apart: a frame later than the delay, held at
+// t = 1 until its list came; and a picture early, showing a moment after its slot's (N-1084: a slot between a frame's
+// present and its arrival showed t = 0, the frame before), or a frame shown before its moment.
 struct Evenness {
     double spread = 0.0;
+    double lag_max = 0.0;
     bool rising = true;
     bool on_grid = true;
     std::size_t held = 0;
     std::size_t early = 0;
+    bool frames_once = true;  // no list's frame shown twice
 };
 
 Evenness evenness(const Run& r, std::size_t skip, std::int64_t least, const SimDisplay* grid) {
     Evenness e;
     double low = std::numeric_limits<double>::max();
     double high = std::numeric_limits<double>::lowest();
-    for (std::size_t i = skip; i < r.shown.size(); ++i) {
+    std::vector<int> frames_shown(r.steps.size() + 1u, 0);
+    for (std::size_t i = 0; i < r.shown.size(); ++i) {
         const Shown& s = r.shown[i];
+        if (s.picture.kind == SchedulePicture::Kind::Frame && s.frame >= 0 &&
+            ++frames_shown[static_cast<std::size_t>(s.frame)] > 1) {
+            e.frames_once = false;
+        }
+        if (i < skip) continue;
         if (i > skip && s.picture.slot - r.shown[i - 1].picture.slot < least) e.rising = false;
         if (grid != nullptr && (s.picture.slot - grid->vblank0) % grid->period != 0) e.on_grid = false;
+        if (s.generated != 0u && !s.picture.flush) {
+            const bool early_generated = s.picture.kind == SchedulePicture::Kind::Generated &&
+                                         (s.picture.t > s.slot_t() + 1e-9 || s.picture.t == 0.0);
+            const bool early_frame = s.picture.kind == SchedulePicture::Kind::Frame && s.slot_t() < 1.0 - 1e-3;
+            if (early_generated || early_frame) {
+                ++e.early;
+                continue;
+            }
+        }
         if (s.picture.kind == SchedulePicture::Kind::Frame && s.picture.t > 1.0 + 1e-3) {
             ++e.held;
-            continue;
-        }
-        if (s.picture.kind == SchedulePicture::Kind::Generated && s.picture.t == 0.0) {
-            ++e.early;
             continue;
         }
         const double offset = s.content() - static_cast<double>(s.picture.slot);
         low = std::min(low, offset);
         high = std::max(high, offset);
+        e.lag_max = std::max(e.lag_max, -offset);
     }
     e.spread = high - low;
     return e;
@@ -169,9 +253,7 @@ void test_vblanks_per_slot() {
 // slot (within the step delay's 0.1 ms steps), at every refresh rate above 60.
 void test_timed_vblanks() {
     for (const double refresh : {120.0, 144.0, 165.0, 240.0}) {
-        SimDisplay display;
-        display.rate = refresh;
-        display.period = static_cast<std::int64_t>(std::llround(static_cast<double>(kFrequency) / refresh));
+        SimDisplay display = display_at(refresh, true);
         FrameSchedule schedule(display, kFrequency);
         schedule.configure(interpolated_frames_per_game_frame(refresh), 0);
         const Run r = run(schedule, 600, kFrequency, {kFrequency / 500});  // 2 ms late, steady
@@ -191,12 +273,10 @@ void test_timed_vblanks() {
     }
 }
 
-// A tearing swap chain at 120 Hz, a multiple of 60: the slot clock locks to each arrival with lead 1/2, so each game
+// A tearing swap chain at 120 Hz, a multiple of 60: the slot clock locks to each reference with lead 1/2, so each game
 // frame shows one picture at t = 1/2 and then itself at t = 1, on its own slot, and no sequence is replaced.
 void test_locked_rate() {
-    SimDisplay display;
-    display.timed = false;
-    display.vsync_on = false;
+    SimDisplay display = display_at(120.0, false);
     FrameSchedule schedule(display, kFrequency);
     schedule.configure(interpolated_frames_per_game_frame(120.0), 0);
     const Run r = run(schedule, 300, kFrequency, {kFrequency / 500});
@@ -219,10 +299,7 @@ void test_locked_rate() {
 // A tearing swap chain at 144 Hz: a free-running clock (no lead), the content's time linear in present time across
 // frames, each sequence replaced by the next as its normal end.
 void test_free_running() {
-    SimDisplay display;
-    display.timed = false;
-    display.vsync_on = false;
-    display.rate = 144.0;
+    SimDisplay display = display_at(144.0, false);
     FrameSchedule schedule(display, kFrequency);
     schedule.configure(interpolated_frames_per_game_frame(144.0), 0);
     const Run r = run(schedule, 600, kFrequency, {kFrequency / 500});
@@ -234,7 +311,32 @@ void test_free_running() {
     check(r.superseded > 500u, "free-running 144 Hz: sequences end replaced");
 }
 
-// The game's lateness varies: the step clock's delay follows its 97th percentile, so the content keeps its speed.
+// I-004: a sequence starts at its list's arrival, its reference its own step's moment plus the delay, so a picture
+// shows the game the delay after the moment it shows (today's 2 ms lateness: about 2.2 ms), where the present the
+// next step asks for put it a whole step and more later.
+void test_starts_at_arrival() {
+    SimDisplay display = display_at(120.0, true);
+    FrameSchedule schedule(display, kFrequency);
+    schedule.configure(1u, 0);
+    const Run r = run(schedule, 600, kFrequency, {kFrequency / 500});
+    double worst = 0.0;
+    for (std::size_t i = r.references.size() / 2; i < r.references.size() && i < r.steps.size(); ++i) {
+        worst = std::max(worst, static_cast<double>(r.references[i] - r.steps[i]));
+    }
+    // The delay's estimate moves up and down by its 0.1 ms step around the lateness's top, so a reference is within one
+    // step of the delay last set.
+    const double delay = static_cast<double>(schedule.delay_qpc()) + kFrequency / 10000.0;
+    char what[160];
+    std::snprintf(what, sizeof what, "each reference its own step's moment plus the delay (worst %.0f ticks, delay %.0f)",
+                  worst, delay);
+    check(worst <= delay && delay < kStep / 4.0, what);
+    const Evenness e = evenness(r, r.shown.size() / 2, display.period, &display);
+    std::snprintf(what, sizeof what, "a picture shows the game at most the delay before its slot (%.0f ticks)", e.lag_max);
+    check(e.lag_max <= delay, what);
+}
+
+// The game's lateness varies: the step clock's delay follows its 97th percentile, so the content keeps its speed; a slot
+// between a list's arrival and its reference shows the sequence before at its own t (N-1084: none early).
 void test_varying_lateness() {
     SimDisplay display;
     FrameSchedule schedule(display, kFrequency);
@@ -249,16 +351,79 @@ void test_varying_lateness() {
     std::snprintf(what, sizeof what, "1-2 ms lateness at 120 Hz: few frames held (%zu of %zu pictures)", e.held,
                   r.shown.size() / 2);
     check(e.held * 20u <= r.shown.size() / 2, what);
-    // Today a slot between a frame's present and its arrival shows the frame before, up to the lateness's spread early
-    // (N-1084). E6b makes it none and this count zero.
-    std::snprintf(what, sizeof what, "1-2 ms lateness at 120 Hz: pictures shown early at t = 0 (%zu)", e.early);
-    check(e.early > 0u && e.early * 4u <= r.shown.size() / 2, what);
+    std::snprintf(what, sizeof what, "1-2 ms lateness at 120 Hz: no picture shown early (%zu)", e.early);
+    check(e.early == 0u, what);
     const double delay_ms = static_cast<double>(schedule.delay_qpc()) * 1000.0 / kFrequency;
     std::snprintf(what, sizeof what, "the delay covers the lateness's top, plus its guard (%.2f ms)", delay_ms);
     check(delay_ms > 1.8 && delay_ms < 2.4, what);
 }
 
-// No step moments: the arrival clock smooths the presents' times to the game's period.
+// Every rate of file E A.5 and the head's "Any refresh rate" sample points (G2.1 proof 1): the named rates, 300 random
+// ones between 40 and 500 Hz from a fixed seed (most not whole numbers), each on timed vblanks and on a swap chain that
+// tears, under steady, varying and spiking load. No picture is early, none is two in a vblank, each slot of a timed
+// display is a vblank, no list's frame is shown twice; under steady and varying load each picture shows the game at
+// most the delay (under half a step) before its slot.
+void test_every_rate() {
+    std::vector<double> rates{40.0, 48.0, 50.0, 59.94, 60.0, 72.0, 75.0, 82.37, 90.0, 100.0, 119.88, 120.0,
+                              144.0, 165.0, 180.0, 200.0, 240.0, 360.0, 480.0, 500.0};
+    std::mt19937 random(20261124u);
+    std::uniform_real_distribution<double> any(40.0, 500.0);
+    for (int i = 0; i < 300; ++i) rates.push_back(any(random));
+    std::vector<std::int64_t> steady{kFrequency / 500};
+    std::vector<std::int64_t> varying;
+    for (int i = 0; i < 64; ++i) varying.push_back(kFrequency / 1000 + (i * 29 % 64) * (kFrequency / 12'800));  // 1-6 ms
+    std::vector<std::int64_t> spiking(60, kFrequency / 500);
+    spiking[30] = kFrequency / 40;  // 25 ms: a list later than its step
+    const std::vector<std::int64_t>* loads[] = {&steady, &varying, &spiking};
+    const char* load_names[] = {"steady", "varying", "spiking"};
+    unsigned bad = 0;
+    for (const double refresh : rates) {
+        for (const bool timed : {true, false}) {
+            for (int l = 0; l < 3; ++l) {
+                SimDisplay display = display_at(refresh, timed);
+                FrameSchedule schedule(display, kFrequency);
+                const unsigned generated = interpolated_frames_per_game_frame(refresh);
+                schedule.configure(generated, 0);
+                const Run r = run(schedule, 240, kFrequency, *loads[l]);
+                const Evenness e = evenness(r, r.shown.size() / 4, timed ? display.period : 1, timed ? &display : nullptr);
+                const bool interpolated = generated != 0u;
+                const bool ok = e.early == 0u && e.frames_once && (!interpolated || (e.rising && e.on_grid)) &&
+                                (!interpolated || l == 2 || e.lag_max < kStep / 2.0);
+                if (!ok && bad++ < 10u) {
+                    std::printf("  %.2f Hz %s %s: early %zu, frames once %d, rising %d, on grid %d, lag %.0f ticks\n",
+                                refresh, timed ? "timed" : "tearing", load_names[l], e.early, e.frames_once ? 1 : 0,
+                                e.rising ? 1 : 0, e.on_grid ? 1 : 0, e.lag_max);
+                }
+            }
+        }
+    }
+    char what[120];
+    std::snprintf(what, sizeof what, "every rate, timed and tearing, three loads: %u of %zu runs wrong", bad,
+                  rates.size() * 6u);
+    check(bad == 0u, what);
+}
+
+// A variable refresh: no timed vblanks, the rate each list sees moving through the display's range (48 to 144 Hz and
+// back). No picture is early, the slots rise, each picture shows the game at most the delay before its slot.
+void test_variable_refresh() {
+    std::vector<double> range;
+    for (int i = 0; i < 64; ++i) {
+        range.push_back(96.0 + 48.0 * std::sin(static_cast<double>(i) * 0.098));  // 48 to 144 Hz
+    }
+    SimDisplay display = display_at(144.0, false);
+    display.vsync_on = true;
+    FrameSchedule schedule(display, kFrequency);
+    schedule.configure(interpolated_frames_per_game_frame(144.0), 0);
+    const Run r = run(schedule, 600, kFrequency, {kFrequency / 500}, kFrequency / 2000, true, nullptr, kStep, &display,
+                      &range);
+    const Evenness e = evenness(r, r.shown.size() / 4, 1, nullptr);
+    char what[160];
+    std::snprintf(what, sizeof what, "variable refresh 48-144 Hz: early %zu, rising %d, lag %.0f ticks", e.early,
+                  e.rising ? 1 : 0, e.lag_max);
+    check(e.early == 0u && e.rising && e.frames_once && e.lag_max < kStep / 2.0, what);
+}
+
+// No step moments: the arrival clock smooths the lists' times to the game's period.
 void test_arrival_clock() {
     SimDisplay display;
     FrameSchedule schedule(display, kFrequency);
@@ -267,8 +432,8 @@ void test_arrival_clock() {
     for (int i = 0; i < 64; ++i) late.push_back(kFrequency / 1000 + (i * 29 % 64) * (kFrequency / 64'000));  // 1-2 ms
     const Run r = run(schedule, 600, kFrequency, late, kFrequency / 2000, false);
     double worst = 0.0;
-    for (std::size_t i = r.arrivals.size() / 2; i + 1 < r.arrivals.size(); ++i) {
-        worst = std::max(worst, std::abs(static_cast<double>(r.arrivals[i + 1] - r.arrivals[i]) - kStep));
+    for (std::size_t i = r.references.size() / 2; i + 1 < r.references.size(); ++i) {
+        worst = std::max(worst, std::abs(static_cast<double>(r.references[i + 1] - r.references[i]) - kStep));
     }
     char what[120];
     std::snprintf(what, sizeof what, "arrivals a game step apart within 1/8 of the jitter (worst %.0f ticks)", worst);
@@ -284,7 +449,7 @@ void test_unlimited() {
     FrameSchedule schedule(display, kFrequency);
     schedule.configure(kUnboundedGeneratedFrames, 0);
     std::int64_t now = kFrequency;
-    schedule.start(now, now, now - kFrequency / 500, 0, false);
+    arrive(schedule, now, now, now - kFrequency / 500, true);
     check(schedule.unbounded() && schedule.slot_period() == 0, "unlimited: no slot clock");
     double t_before = -1.0;
     bool linear = true;
@@ -300,6 +465,12 @@ void test_unlimited() {
     check(linear, "unlimited: each picture at its own moment, t rising");
     check(pictures >= 15u && pictures <= 18u, "unlimited: a picture a millisecond until the frame's moment");
     check(schedule.next(now, false).kind == SchedulePicture::Kind::None, "unlimited: the frame shown once");
+    // A list in before its reference with nothing playing: the next picture waits for the reference, not drawn early.
+    arrive(schedule, now, now, now, true);
+    const SchedulePicture early = schedule.next(now, false);
+    check(early.kind == SchedulePicture::Kind::None && schedule.slot_due() > now && schedule.busy(),
+          "unlimited: a slot before the reference waits for it");
+    check(schedule.take_counts().waited_slots == 1u, "the wait counted");
 }
 
 // A stall skips the slots it missed instead of bunching them.
@@ -310,13 +481,43 @@ void test_stall() {
     display.rate = 240.0;
     display.period = kFrequency / 240;
     const std::int64_t now = kFrequency;
-    schedule.start(now, now, 0, 0, false);
+    arrive(schedule, now, now, 0, true);
     const std::int64_t due = schedule.slot_due();
     (void)schedule.take_counts();
     const SchedulePicture p = schedule.next(due + 5 * display.period, false);
     check(p.kind != SchedulePicture::Kind::None, "a stalled slot is served");
     check(schedule.slot_due() == due + 6 * display.period, "the next slot after the stall, on the grid");
     check(schedule.take_counts().late_slots == 5u, "five slots counted late");
+}
+
+// A list in before its reference while a sequence plays waits (N-1084); a second list before it began makes it begin;
+// a slot past the reference begins it.
+void test_waiting() {
+    SimDisplay display;
+    FrameSchedule schedule(display, kFrequency);
+    schedule.configure(1u, 0);
+    std::int64_t now = kFrequency;
+    arrive(schedule, now, now, now - kFrequency / 500, false);
+    check(schedule.sequence().active && !schedule.waiting(), "nothing playing: the first sequence begins at once");
+    const std::int64_t first = schedule.sequence().frame_qpc;
+    const std::int64_t next_step = now - kFrequency / 500 + static_cast<std::int64_t>(kStep);
+    now = next_step + kFrequency / 10'000;  // in 0.1 ms after its step, before its reference
+    arrive(schedule, now, now, next_step, false);
+    check(schedule.waiting() && schedule.sequence().frame_qpc == first, "a list in early waits; the one before plays on");
+    // A slot due before the waiting reference is the playing sequence's.
+    SchedulePicture p = schedule.next(schedule.slot_due(), false);
+    check(p.kind != SchedulePicture::Kind::Begin, "a slot before the reference: the playing sequence's picture");
+    // Past the reference: Begin.
+    for (int i = 0; i < 8 && p.kind != SchedulePicture::Kind::Begin; ++i) {
+        p = schedule.next(std::max(schedule.slot_due(), now), false);
+        if (p.kind == SchedulePicture::Kind::Generated) schedule.generated_drawn(0u, true);
+    }
+    check(p.kind == SchedulePicture::Kind::Begin, "a slot past the reference begins the waiting sequence");
+    (void)schedule.supersede();
+    schedule.begin_waiting(p.slot);
+    check(!schedule.waiting() && schedule.sequence().frame_qpc != first, "the waiting sequence plays");
+    const ScheduleCounts counts = schedule.take_counts();
+    check(counts.started == 2u, "two sequences started");
 }
 
 // The GPU governor: generated pictures that do not fit in nine tenths of a step are dropped once its warm second and
@@ -331,7 +532,7 @@ void test_gpu_governor() {
     int sequences = 0;
     for (; sequences < 200 && generated != 0u; ++sequences) {
         now += static_cast<std::int64_t>(kStep);
-        schedule.start(now, now, 0, 0, false);
+        arrive(schedule, now, now, 0, true);
         generated = schedule.sequence().generated;
     }
     check(generated == 0u, "over budget: no generated pictures");
@@ -340,7 +541,7 @@ void test_gpu_governor() {
     int back = 0;
     for (; back < 400 && generated == 0u; ++back) {
         now += static_cast<std::int64_t>(kStep);
-        schedule.start(now, now, 0, 0, false);
+        arrive(schedule, now, now, 0, true);
         generated = schedule.sequence().generated;
     }
     check(generated == 1u, "under budget again: the generated picture back");
@@ -355,13 +556,14 @@ void test_gpu_governor() {
     now = kFrequency;
     for (int i = 0; i < 100; ++i) {
         now += static_cast<std::int64_t>(kStep);
-        with_upscaler.start(now, now, 0, 0, false);
+        arrive(with_upscaler, now, now, 0, true);
     }
     check(upscaled.suspended > 0u, "temporal upscaling on generated pictures suspended when none fits");
 }
 
-// The cadence governor: game frames late by the render thread's generated pictures take them away; late by the game's
-// own work (no waits on the render thread), a probe takes them away for a second and gives them back.
+// The cadence governor (fed by each step's present request): game frames late by the render thread's generated
+// pictures take them away; late by the game's own work (no waits on the render thread), a probe takes them away for a
+// second and gives them back.
 void test_cadence_governor() {
     {
         SimDisplay display;
@@ -394,20 +596,20 @@ void test_walk_pairing() {
     FrameSchedule schedule(display, kFrequency);
     schedule.configure(1u, 0);
     int a = 0, b = 0, c = 0, d = 0;
-    schedule.start(kFrequency, kFrequency, 0, 0, false);
+    arrive(schedule, kFrequency, kFrequency, 0, true);
     ScheduleWalk w = schedule.walk_time(&a, nullptr, false, 0.5f, true);
     check(w.reset, "nothing walked before: a new history");
     schedule.walked(&a, 0.5f);
     w = schedule.walk_time(&a, nullptr, false, 1.0f, true);
     check(!w.reset && w.t_prev == 0.5f, "the same pair: motion from t = 1/2");
     schedule.walked(&a, 1.0f);
-    schedule.start(kFrequency * 2, kFrequency * 2, 0, 0, false);
+    arrive(schedule, kFrequency * 2, kFrequency * 2, 0, true);
     w = schedule.walk_time(&b, &a, false, 0.5f, true);
     check(!w.reset && w.t_prev == 0.0f, "the next pair from its frame before's end: t = 0");
     w = schedule.walk_time(&b, &a, true, 0.5f, true);
     check(w.reset, "a camera cut: a new history");
     schedule.walked(&b, 0.75f);
-    schedule.start(kFrequency * 3, kFrequency * 3, 0, 0, false);
+    arrive(schedule, kFrequency * 3, kFrequency * 3, 0, true);
     w = schedule.walk_time(&c, &b, false, 0.25f, true);
     check(!w.reset && w.t_prev == -0.25f, "a pair replaced at t = 3/4: motion from t - 1 on the next");
     w = schedule.walk_time(&d, &a, false, 0.25f, true);
@@ -416,6 +618,7 @@ void test_walk_pairing() {
     check(counts.history_carried == 1u && counts.history_resets == 3u, "history carried and reset counted");
     schedule.forget();
     check(schedule.walk_time(&c, &b, false, 0.5f, false).reset, "a lost device forgets the pairing");
+    check(!schedule.busy(), "a lost device forgets the sequences");
 }
 
 // A new present rate starts both governors over; a rate with no generated pictures leaves no slot clock.
@@ -428,7 +631,7 @@ void test_configure() {
     std::int64_t now = 2 * kFrequency;
     for (int i = 0; i < 100; ++i) {
         now += static_cast<std::int64_t>(kStep);
-        schedule.start(now, now, 0, 0, false);
+        arrive(schedule, now, now, 0, true);
     }
     check(schedule.gpu_cap() == 0u, "capped");
     schedule.configure(1u, now);
@@ -437,7 +640,7 @@ void test_configure() {
     check(schedule.gpu_cap() == kUnboundedGeneratedFrames && display.resets == 2u, "a new one starts over");
     schedule.configure(0u, now);
     check(schedule.slot_period() == 0 && !schedule.unbounded(), "none: no slot clock");
-    schedule.start(now, now, 0, 0, true);
+    arrive(schedule, now, now, 0, true, true);
     check(schedule.sequence().generated == 0u, "stopping: no generated pictures");
 }
 
@@ -465,10 +668,14 @@ int main() {
     test_timed_vblanks();
     test_locked_rate();
     test_free_running();
+    test_starts_at_arrival();
     test_varying_lateness();
+    test_every_rate();
+    test_variable_refresh();
     test_arrival_clock();
     test_unlimited();
     test_stall();
+    test_waiting();
     test_gpu_governor();
     test_cadence_governor();
     test_walk_pairing();

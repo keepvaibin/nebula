@@ -1599,6 +1599,35 @@ at the picture's moment; every platform does the same or says on screen why not.
    the sequence before at its own `t`, as N-1084's row says, never the frame before early. The step clock keeps its due
    times (P-274's form: missed steps run back to back up to a bound, the rest dropped with a log line), so the
    reference never slips against the wall clock.
+   Answered at G2.1 (11-24, from the code at 4b1f6ec2a):
+   - The list's mark. The host marks a list shown in `svc_submit_frame` when the frame running shows the game's
+     picture (`svc_frame_begun`'s `black` is 0: `NebulaFrameClock::show`, committed at a frame's start) and the start
+     does not skip frames (`gBootFast` off). A marked list's sequence starts as the render thread takes it
+     (`RenderCore::start_interp_sequence`), from the time the game handed it over and its own step's moment
+     (`FrameChunk::list_asked_qpc`, `list_step_qpc`). A list not marked is not held: it is walked as it comes, as
+     with in-between pictures off, after the sequences end, and the present the next step asks for shows it (or black).
+     The held list (`interp_list_waiting_`) and the present-only gate (`interp_start_pending_`) are gone; a present
+     request while a marked list's sequence plays only feeds the cadence count (`FrameSchedule::note_step`).
+   - The waiting sequence. A list that arrives while a sequence plays waits (`FrameSchedule::waiting`) until a slot
+     passes its reference; the slots before it show the playing sequence at their own `t`. A slot at or before a
+     sequence's reference with no sequence before it to show waits (`waited_slots`) for the first slot past it: the
+     display shows the picture before at its own moment (a picture at `t` = 0 would only show it again).
+   - The delay's bound. The step clock's delay now covers a list's whole lateness after its step's moment (the game's
+     update and the list's making), so its bound is one step, where it was half a step when it covered only the time
+     from the next step's moment to its present request: at one step the reference is where the present request put
+     it before.
+   - The bound for missed steps (P-274): 250 ms, 15 steps (`FrameDue::kCatchUpNs`). A step clock up to that far
+     behind keeps its due moments and runs the missed steps back to back; further behind (a load, a stall) it drops
+     them all, says so in one line, and starts again from now. The same holds for the host's clock on Windows
+     (`next_frame_start`'s caller), elsewhere (`FrameDue::waited`) and on the vsync grid of Android and Apple
+     (`VsyncGrid::next_slot`, which returns a slot already past while it catches up).
+   - The step's work (I-013). The render thread records, keyed by a step's moment, when that step's list was done
+     (its sequence started, or its picture walked and handed to the display: `present_clock.h` `StepWork`, written
+     beside the timeline's `RenderSubmitted`); `next_frame_start` reads the entry of the step that started at
+     `previous_ns`. `g_last_present_ns` is gone.
+   - The `[pace]` line's delay. A sequence's frame counts its delay from its list's own step's moment (`pacing.h`:
+     the step it shows); before G2.1 it counted from the next step's moment, one step later, whose present request
+     began the sequence. A before figure taken then is one step short of the same measure now.
 2. The phase at whole multiples. On vblanks at a rate that is a whole multiple of 60 with the step locked to the
    display (`step_lock.h`, exact multiples only with in-between pictures on), the sequence takes the lead that puts
    `t = 1` on a refresh: the real frame is shown and no walk is thrown away at 120, 240 and 360 Hz. At other rates the

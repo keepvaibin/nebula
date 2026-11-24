@@ -42,11 +42,25 @@ public:
         return {next_ns_, false, ahead};
     }
 
-    // The wait ended at `now_ns`: the next frame is one period after the one just due, or one period from now when the
-    // wake-up came late (the steps it missed are skipped, not run to catch up).
-    void waited(std::int64_t now_ns, std::int64_t period_ns) noexcept {
+    // How far behind its due moments the step clock may fall and still run the steps it missed, back to back: a quarter
+    // second, 15 steps. A late wake-up within it keeps the due moments, so the game's time keeps to the wall clock's
+    // (P-274). Further behind is a load or a stall: those steps are dropped and the clock starts again from now.
+    static constexpr std::int64_t kCatchUpNs = 250'000'000;
+
+    // The wait ended at `now_ns`: the next frame is one period after the one just due (catch_up). Returns the time
+    // dropped, 0 when none.
+    [[nodiscard]] std::int64_t waited(std::int64_t now_ns, std::int64_t period_ns) noexcept {
         next_ns_ += period_ns;
-        if (now_ns >= next_ns_) next_ns_ = now_ns + period_ns;
+        return catch_up(now_ns, period_ns);
+    }
+
+    // The next frame kept due at its moment, even past (the steps missed then run back to back), unless the clock is
+    // more than kCatchUpNs behind `now_ns`: it is then one period from now. Returns the time dropped, 0 when none.
+    [[nodiscard]] std::int64_t catch_up(std::int64_t now_ns, std::int64_t period_ns) noexcept {
+        const std::int64_t behind = now_ns - next_ns_;
+        if (behind <= kCatchUpNs) return 0;
+        next_ns_ = now_ns + period_ns;
+        return behind;
     }
 
     // The next frame at a moment chosen by the caller (a display's own vsync, a phase correction): in the runtime's clock.

@@ -1,10 +1,15 @@
 #include "galaxy/frame_phase.h"
+#include "galaxy/render/present_clock.h"
 #include "galaxy/step_lock.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <iostream>
+#include <random>
+#include <vector>
 
 namespace {
 
@@ -164,6 +169,108 @@ void test_lock_rule() {
     expect(own, "in-between pictures on at 59.94 Hz: every step exactly 60 Hz");
 }
 
+// I-013: a step's work is its own, from its moment to when the render thread had its list done (present_clock.h
+// StepWork), not the time of the last real picture, which with in-between pictures is the arrival delay or nothing.
+void test_step_work() {
+    constexpr std::int64_t kMs = 1'000'000;
+    galaxy::render::StepWork log;
+    const std::int64_t step = 1'000'000'000;
+    log.record(step, step + 5 * kMs);
+    // Its real picture is shown at +30 ms, two steps on: the measure before (that picture's time less the step's
+    // moment) gave 30 ms, or 0 when the real picture was never shown.
+    const std::int64_t own_work = log.work(step);
+    expect(own_work == 5 * kMs, "a step done at +5 ms whose real picture shows at +30 ms: work 5 ms");
+    expect(log.work(step + kFrame) == 0, "a step not done yet: no work known");
+    expect(log.work(0) == 0, "no step moment: no work");
+    log.record(0, step);
+    expect(log.work(0) == 0, "a list with no step moment is not kept");
+    // The last eight steps are kept, each read by its own moment.
+    for (int i = 0; i < 20; ++i) {
+        const std::int64_t at = step + i * kFrame;
+        log.record(at, at + (i + 1) * 100'000);
+    }
+    expect(log.work(step + 19 * kFrame) == 20 * 100'000, "the newest step's own work");
+    expect(log.work(step + 12 * kFrame) == 13 * 100'000, "the eighth newest still kept");
+    expect(log.work(step + 11 * kFrame) == 0, "older ones written over");
+    // The phase from it: 5 ms of work lowers the budget to the work and the margin, where 30 ms (past the step) said
+    // nothing and left it as it was.
+    FramePhase own;
+    FramePhase before;
+    const DisplayRefresh display{0, 1'000'000'000 / 120};
+    std::int64_t start_own = 0;
+    std::int64_t start_before = 0;
+    for (int i = 0; i < 4000; ++i) {
+        start_own = own.next_start(start_own, own_work, kFrame, display, true);
+        start_before = before.next_start(start_before, 30 * kMs, kFrame, display, true);
+    }
+    expect(std::llabs(own.budget_ns() - (5 * kMs + FramePhase::kMarginNs)) < 50'000,
+           "the step's own 5 ms: the budget is the work and the margin");
+    expect(before.budget_ns() != own.budget_ns(), "the real picture's 30 ms gave another budget");
+}
+
+// The sample rates of the native plan's "Any refresh rate" paragraph (05-NATIVE-LANE-G.md): the named ones and 300
+// random ones between 40 and 500 Hz from a fixed seed.
+std::vector<double> sample_rates() {
+    std::vector<double> rates{40.0, 48.0, 50.0, 59.94, 60.0, 72.0, 75.0, 82.37, 90.0, 100.0, 119.88, 120.0,
+                              144.0, 165.0, 180.0, 200.0, 240.0, 360.0, 480.0, 500.0};
+    std::mt19937 random(20261124u);
+    std::uniform_real_distribution<double> any(40.0, 500.0);
+    for (int i = 0; i < 300; ++i) rates.push_back(any(random));
+    return rates;
+}
+
+// The refreshes a step must follow at `rate`, from the rate alone: 60, 120, 180, 240, 360 and 480 Hz take 1, 2, 3, 4, 6
+// and 8; 59.94 and 119.88 Hz 1 and 2 with in-between pictures off. -1: a rate near a multiple of 60 that is not one of
+// these (a random one within 0.5 % of it), which the test leaves out; 0: the host's own clock at exactly 60.
+int expected_refreshes(double rate, bool in_between) {
+    for (const int n : {1, 2, 3, 4, 6, 8}) {
+        if (rate == 60.0 * n) return n;
+    }
+    if (rate == 59.94) return in_between ? 0 : 1;
+    if (rate == 119.88) return in_between ? 0 : 2;
+    const double multiple = std::round(rate / 60.0);
+    if (multiple >= 1.0 && std::abs(rate / 60.0 - multiple) / multiple < 0.005) return -1;
+    return 0;
+}
+
+// G2.1 proof 7: the step's decision at every sample rate, with in-between pictures on and off: the lock rule
+// (step_lock_refreshes) and the frame phase (FramePhase::next_start). At a whole multiple the steps follow the grid at its
+// refreshes and a settled present lands just before a refresh; at every other rate every step is exactly 60 Hz.
+void test_every_rate() {
+    unsigned wrong = 0;
+    unsigned checked = 0;
+    for (const bool in_between : {false, true}) {
+        for (const double rate : sample_rates()) {
+            const int expected = expected_refreshes(rate, in_between);
+            if (expected < 0) continue;
+            ++checked;
+            const std::int64_t refresh = std::llround(1e9 / rate);
+            bool ok = galaxy::step_lock_refreshes(kFrame, refresh, in_between) == expected;
+            FramePhase phase;
+            const DisplayRefresh display{987'654, refresh};
+            std::int64_t start = 12'345'678;
+            for (int i = 0; i < 1200; ++i) {
+                const std::int64_t next = phase.next_start(start, 3'000'000, kFrame, display, in_between);
+                if (i > 600) {
+                    ok = ok && (expected == 0 ? next - start == kFrame
+                                              : std::llabs(next - start - expected * refresh) <= 1'000);
+                }
+                start = next;
+            }
+            if (expected != 0) {
+                const std::int64_t gap = to_refresh(start + 3'000'000, display);
+                ok = ok && gap >= FramePhase::kMarginNs - 100'000 && gap <= FramePhase::kMarginNs + 2'000'000;
+            }
+            if (!ok && wrong++ < 10u) {
+                std::printf("  %.3f Hz, in-between pictures %s: expected %d refreshes a step\n", rate,
+                            in_between ? "on" : "off", expected);
+            }
+        }
+    }
+    expect(checked > 600u, "most sample rates checked");
+    expect(wrong == 0u, "every sample rate: the step locks at the multiples only, else exactly 60 Hz");
+}
+
 }  // namespace
 
 int main() {
@@ -174,6 +281,8 @@ int main() {
     test_budget();
     test_falls_back();
     test_in_step();
+    test_step_work();
+    test_every_rate();
     if (g_failures != 0) {
         std::cerr << g_failures << " check(s) failed\n";
         return 1;

@@ -36,8 +36,74 @@ void FrameSchedule::configure(unsigned generated, std::int64_t now) {
     }
 }
 
-void FrameSchedule::start(std::int64_t now, std::int64_t asked, std::int64_t step, std::uint64_t waited_total,
-                          bool stopping) {
+void FrameSchedule::start(std::int64_t now, std::int64_t arrived, std::int64_t step, bool stopping) {
+    const std::int64_t frequency = frequency_;
+    // The list's arrival: when the game handed it over (stamped on the game's thread as it queues it), never when the
+    // render thread takes it: a take waits for the picture in progress, and at Unlimited for the sequence before to
+    // reach t = 1, so take times would only ever look late.
+    const std::int64_t seen = arrived != 0 && arrived <= now ? arrived : now;
+    // The reference. With no step moment, the arrival clock: the game's frame cadence, smoothed: the prediction one or
+    // more frame periods on, pulled 1/8 toward the measured arrival, with the period tracking the game's rate (the
+    // smoothed period would otherwise climb to its clamp and the takes hold the game back). A miss by a third of a
+    // period or more (pause, hitch) restarts it at the measured time.
+    if (frame_period_ == 0) {
+        frame_period_ = frequency / kGameStepsPerSecond;
+    }
+    std::int64_t arrival = seen;
+    const std::int64_t moment = step;
+    const std::int64_t step_qpc = moment > 0 && moment <= seen ? moment : 0;
+    if (moment > 0 && moment <= seen && seen - moment < frame_period_) {
+        // A step clock's moment: the frame's own time, exact. Its pictures are shown a delay after it, the same for
+        // every frame, so the content's time runs on the wall clock's (t linear in the present's moment across frames,
+        // as the steps are). The delay covers the lists' usual lateness to the render thread (the game's update and
+        // the list's making after the moment): the lateness's 97th percentile, tracked by a streaming estimate (up 0.97
+        // of 0.1 ms after a later list, down 0.03 of it after an earlier one), with a 0.2 ms guard, at most one step
+        // (where the next step's present request started a sequence before I-004). It moves by at most 2 % of a period a
+        // frame up and 1 % down, so the content's speed changes by that and no more. A rarer late list replaces the
+        // sequence before at its first slot and shows its own moment: the content keeps to the wall clock across it,
+        // as a display holds a late frame and goes on, and adds no lasting delay.
+        const std::int64_t late = seen - moment;
+        const std::int64_t period = frequency / kGameStepsPerSecond;
+        const std::int64_t quantile_step = frequency / 10000;
+        late_quantile_ = std::clamp<std::int64_t>(
+            late_quantile_ + (late > late_quantile_ ? quantile_step * 97 / 100 : -(quantile_step * 3 / 100)), 0, period);
+        const std::int64_t wanted = std::min(late_quantile_ + frequency / 5000, period);
+        if (delay_qpc_ < wanted) {
+            delay_qpc_ = std::min(wanted, delay_qpc_ + period / 50);
+        } else if (delay_qpc_ > wanted) {
+            delay_qpc_ = std::max(wanted, delay_qpc_ - period / 100);
+        }
+        counts_.delay_ms_max = std::max(counts_.delay_ms_max,
+                                        static_cast<double>(delay_qpc_) * 1000.0 / static_cast<double>(frequency));
+        arrival = moment + delay_qpc_;
+    } else if (arrival_ != 0 && seen > arrival_) {
+        const std::int64_t periods = std::max<std::int64_t>(1, (seen - arrival_ + frame_period_ / 2) / frame_period_);
+        const std::int64_t predicted = arrival_ + periods * frame_period_;
+        const std::int64_t error = seen - predicted;
+        if (periods <= 4 && std::abs(error) < frame_period_ / 3) {
+            arrival = predicted + error / 8;
+            frame_period_ = std::clamp<std::int64_t>(frame_period_ + error / (64 * periods),
+                                                     frequency / (kGameStepsPerSecond + 2),
+                                                     frequency / (kGameStepsPerSecond - 2));
+        }
+    }
+    arrival_ = arrival;
+    waiting_ = ScheduleSequence{};
+    waiting_.active = true;
+    waiting_.frame_qpc = arrival;
+    waiting_.step_qpc = step_qpc;
+    waiting_.stopping = stopping;
+    // Nothing plays: the sequence begins at once (a slot at or before its reference waits, next). Else the playing one
+    // shows the slots before the reference at their own t.
+    if (!sequence_.active) {
+        begin_waiting(now);
+    }
+}
+
+void FrameSchedule::begin_waiting(std::int64_t now) {
+    if (!waiting_.active) {
+        return;
+    }
     const std::int64_t frequency = frequency_;
     const ScheduleSettings settings = display_.settings();
     double rate = std::max(kGameStepRate + 1.0, settings.present_rate);
@@ -60,20 +126,18 @@ void FrameSchedule::start(std::int64_t now, std::int64_t asked, std::int64_t ste
     }
     ++serial_;
     ++counts_.started;
-    // The frame's arrival: when the game asked for its present (the arrival clock below says why).
-    const std::int64_t seen = asked != 0 && asked <= now ? asked : now;
-    note_cadence(seen, waited_total);
-    sequence_.active = true;
-    sequence_.generated = gpu_governor(rate, stopping, now);
+    sequence_ = std::exchange(waiting_, ScheduleSequence{});
+    const std::int64_t arrival = sequence_.frame_qpc;
+    sequence_.generated = gpu_governor(rate, sequence_.stopping, now);
     if (on_vblanks) {
         fit_rate_to_vblanks();  // a rate the governors lowered
     }
     sequence_.next = 0u;
-    // Present slots run on one clock at the present rate. A slot shows the game at t = (slot - arrival) * 60 + lead
+    // Present slots run on one clock at the present rate. A slot shows the game at t = (slot - reference) * 60 + lead
     // between the previous frame (0) and this one (1); the first slot with t >= 1 presents this frame itself. Integer
-    // multiples of 60 lock the clock to each arrival with lead 60 / rate: k generated frames at i / (k + 1), then the
+    // multiples of 60 lock the clock to each reference with lead 60 / rate: k generated frames at i / (k + 1), then the
     // frame, on time. Other rates keep a free-running clock with lead 0: content time is then linear in present time
-    // (the next arrival ends the sequence at t -> 1), where a lead would show the frame up to one slot early and step
+    // (the next reference ends the sequence at t -> 1), where a lead would show the frame up to one slot early and step
     // the content unevenly around it. A clock left behind by a pause restarts.
     // An unlimited rate (render_config.h kUnlimitedFrameRate) has no slot clock: each picture is drawn as soon as the
     // one before is and shows the moment it is drawn for (next).
@@ -83,55 +147,6 @@ void FrameSchedule::start(std::int64_t now, std::int64_t asked, std::int64_t ste
                               : std::max<std::int64_t>(1, static_cast<std::int64_t>(static_cast<double>(frequency) / rate));
     const bool locked = !on_vblanks && !unbounded_ &&
                         std::abs(rate / kGameStepRate - std::round(rate / kGameStepRate)) < 0.02;
-    // The arrival clock: a frame arrives when the game asks for its present (stamped on the game's thread as it queues
-    // it), never when the render thread takes it: a take waits for the picture in progress, and at Unlimited for the
-    // sequence before to reach t = 1, so take times would only ever look late and the smoothed period would climb to
-    // its clamp, the takes then holding the game back. Arrivals are the game's frame cadence, smoothed: the prediction
-    // one or more frame periods on, pulled 1/8 toward the measured arrival, with the period tracking the game's rate. A
-    // miss by a third of a period or more (pause, hitch) restarts it at the measured time.
-    if (frame_period_ == 0) {
-        frame_period_ = frequency / kGameStepsPerSecond;
-    }
-    std::int64_t arrival = seen;
-    const std::int64_t moment = step;
-    sequence_.step_qpc = moment > 0 && moment <= seen ? moment : 0;
-    if (moment > 0 && moment <= seen && seen - moment < frame_period_) {
-        // A step clock's moment: the frame's own time, exact. Its pictures are shown a delay after it, the same for
-        // every frame, so the content's time runs on the wall clock's (t linear in the present's moment across frames,
-        // as the steps are). The delay covers the frames' usual lateness to the render thread (the game's update and
-        // the list's making after the moment): the lateness's 97th percentile, tracked by a streaming estimate (up 0.97
-        // of 0.1 ms after a later frame, down 0.03 of it after an earlier one), with a 0.2 ms guard. It moves by at most
-        // 2 % of a period a frame up and 1 % down, so the content's speed changes by that and no more. A rarer late
-        // frame holds its sequence at t = 1 until it comes and then shows its own moment: the content keeps to the wall
-        // clock across it, as a display holds a late frame and goes on, and adds no lasting delay.
-        const std::int64_t late = seen - moment;
-        const std::int64_t period = frequency / kGameStepsPerSecond;
-        const std::int64_t quantile_step = frequency / 10000;
-        late_quantile_ = std::clamp<std::int64_t>(
-            late_quantile_ + (late > late_quantile_ ? quantile_step * 97 / 100 : -(quantile_step * 3 / 100)), 0,
-            period / 2);
-        const std::int64_t wanted = std::min(late_quantile_ + frequency / 5000, period / 2);
-        if (delay_qpc_ < wanted) {
-            delay_qpc_ = std::min(wanted, delay_qpc_ + period / 50);
-        } else if (delay_qpc_ > wanted) {
-            delay_qpc_ = std::max(wanted, delay_qpc_ - period / 100);
-        }
-        counts_.delay_ms_max = std::max(counts_.delay_ms_max,
-                                        static_cast<double>(delay_qpc_) * 1000.0 / static_cast<double>(frequency));
-        arrival = moment + delay_qpc_;
-    } else if (arrival_ != 0 && seen > arrival_) {
-        const std::int64_t periods = std::max<std::int64_t>(1, (seen - arrival_ + frame_period_ / 2) / frame_period_);
-        const std::int64_t predicted = arrival_ + periods * frame_period_;
-        const std::int64_t error = seen - predicted;
-        if (periods <= 4 && std::abs(error) < frame_period_ / 3) {
-            arrival = predicted + error / 8;
-            frame_period_ = std::clamp<std::int64_t>(frame_period_ + error / (64 * periods),
-                                                     frequency / (kGameStepsPerSecond + 2),
-                                                     frequency / (kGameStepsPerSecond - 2));
-        }
-    }
-    arrival_ = arrival;
-    sequence_.frame_qpc = arrival;
     sequence_.lead = locked ? kGameStepRate / rate : 0.0;
     if (on_vblanks) {
         // The next slot moves to the vblank nearest where it was due, so the clock follows the display without adding
@@ -141,12 +156,22 @@ void FrameSchedule::start(std::int64_t now, std::int64_t asked, std::int64_t ste
                                  vblank_period;
     } else if (unbounded_) {
         slot_due_ = now;
-    } else if (locked || slot_due_ == 0 || now - slot_due_ > slot_period_ || slot_due_ - now > slot_period_) {
-        // Locked rates start the slots at the (smoothed) arrival.
-        slot_due_ = locked && arrival <= now + slot_period_ ? arrival : now;
+    } else if (!locked) {
+        if (slot_due_ == 0 || now - slot_due_ > slot_period_ || slot_due_ - now > slot_period_) {
+            slot_due_ = now;
+        }
+    } else {
+        // Locked rates put the slots on the reference's clock: from the reference, or the first of its slots from now
+        // when it is further ahead, never at or before the slot last shown while the clock runs.
+        std::int64_t due =
+            arrival > now + slot_period_ ? arrival - (arrival - now) / slot_period_ * slot_period_ : arrival;
+        if (slot_due_ != 0 && std::llabs(slot_due_ - now) <= slot_period_ && due <= slot_due_ - slot_period_) {
+            due += ((slot_due_ - slot_period_ - due) / slot_period_ + 1) * slot_period_;
+        }
+        slot_due_ = due;
     }
-    // With no generated pictures there is no interval to interpolate. A smoothed arrival slightly in the future must
-    // not hold the only picture back while a busy queue replaces it with another sequence.
+    // With no generated pictures there is no interval to interpolate. A reference slightly in the future must not hold
+    // the only picture back while a busy queue replaces it with another sequence.
     if (sequence_.generated == 0u) {
         slot_due_ = std::min(slot_due_, now);
     }
@@ -435,26 +460,55 @@ bool FrameSchedule::supersede() noexcept {
 
 void FrameSchedule::forget() noexcept {
     sequence_ = {};
+    waiting_ = {};
     shown_list_ = nullptr;
 }
 
+double FrameSchedule::t_at(std::int64_t slot, std::int64_t reference, double lead) const noexcept {
+    return static_cast<double>(slot - reference) * kGameStepRate / static_cast<double>(frequency_) + lead;
+}
+
 double FrameSchedule::slot_t() const noexcept {
-    return static_cast<double>(slot_due_ - sequence_.frame_qpc) * kGameStepRate / static_cast<double>(frequency_) +
-           sequence_.lead;
+    return t_at(slot_due_, sequence_.frame_qpc, sequence_.lead);
 }
 
 SchedulePicture FrameSchedule::next(std::int64_t now, bool flush) {
     SchedulePicture picture;
     // Slots run on the clock with VSync too: a present that waits for the display would hold back the frame chunks
     // behind it.
-    if (!sequence_.active || (!flush && now < slot_due_)) {
+    if (!busy() || (!flush && now < slot_due_)) {
         return picture;
     }
     // With no slot clock (an unlimited rate) the picture shows the moment it is drawn for.
     const std::int64_t slot = unbounded_ ? now : slot_due_;
-    // A free-running slot due just before the arrival shows t = 0.
-    const double t = std::max(0.0, static_cast<double>(slot - sequence_.frame_qpc) * kGameStepRate /
-                                           static_cast<double>(frequency_) + sequence_.lead);
+    if (waiting_.active) {
+        // The waiting sequence begins at the first slot past its reference, or at once when nothing plays; until then
+        // the playing sequence shows the slots at its own t (N-1084). Its t is read with the playing one's lead, which
+        // it takes as it begins unless the rate changed. A slot where it is at 0 shows the playing one's frame.
+        if (flush || !sequence_.active || t_at(slot, waiting_.frame_qpc, sequence_.lead) > 1e-3) {
+            picture.kind = SchedulePicture::Kind::Begin;
+            picture.slot = slot;
+            picture.flush = flush;
+            return picture;
+        }
+    }
+    const double t = t_at(slot, sequence_.frame_qpc, sequence_.lead);
+    if (!flush && t <= 0.0 && sequence_.generated != 0u) {
+        // A slot at or before the reference with no sequence before it to show: it waits, the display showing the
+        // picture before (t = 0 is that picture again). The slot clock moves to the first slot past the reference.
+        const std::int64_t zero =
+            sequence_.frame_qpc -
+            static_cast<std::int64_t>(std::llround(sequence_.lead * static_cast<double>(frequency_) / kGameStepRate));
+        if (unbounded_) {
+            slot_due_ = zero + 1;
+            ++counts_.waited_slots;
+        } else {
+            const std::int64_t waited = std::max<std::int64_t>(1, (zero - slot) / slot_period_ + 1);
+            slot_due_ = slot + waited * slot_period_;
+            counts_.waited_slots += static_cast<std::uint64_t>(waited);
+        }
+        return picture;
+    }
     if (!flush && unbounded_) {
         slot_due_ = now;
     } else if (!flush) {
@@ -467,7 +521,7 @@ SchedulePicture FrameSchedule::next(std::int64_t now, bool flush) {
         }
     }
     picture.slot = slot;
-    picture.t = t;
+    picture.t = std::max(0.0, t);  // 0 or below only for a frame shown at once (flush, no generated pictures)
     picture.flush = flush;
     // Generated pictures until t reaches 1 (the frame itself) or the next game frame replaces the sequence: no count
     // bounds them.
@@ -488,7 +542,7 @@ void FrameSchedule::generated_drawn(std::uint64_t spent, bool presented) noexcep
     ++sequence_.next;
 }
 
-// Only within a sequence: the next sequence starts its slots at the vblank nearest its frame (start).
+// Only within a sequence: the next sequence starts its slots at the vblank nearest its frame (begin_waiting).
 void FrameSchedule::skip_slot() noexcept {
     if (slot_period_ > 0) {
         slot_due_ += slot_period_;
