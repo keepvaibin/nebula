@@ -3397,10 +3397,12 @@ bool scene_textures_wait() {
     return false;
 }
 
-// NEBULA_OPTION_SCENE_PIPELINES: a loaded scene waits for every pipeline the game has registered so far (its materials'),
-// the workers raised to the normal priority meanwhile, at most kScenePipelinesMostMs (a driver that never returns). The
-// loading screen steps meanwhile. In deterministic mode the frames waited would be the machine's: the game never waits,
-// and the render thread makes the queue's pipelines before its next picture instead (drain_pipelines).
+// NEBULA_OPTION_SCENE_PIPELINES: a loaded scene waits for every pipeline the game has registered so far (its materials')
+// and for the forms the start's set left for a load (PipelineProgress::later, made at no other time), the workers raised
+// to the normal priority meanwhile, at most kScenePipelinesMostMs (a driver that never returns). The loading screen steps
+// meanwhile; play then starts with no creation in flight, so no Present waits for one (present_gate.h). In deterministic
+// mode the frames waited would be the machine's: the game never waits, and the render thread makes them before its next
+// picture instead (drain_pipelines).
 struct ScenePipelinesWait {
     bool waiting = false;
     std::chrono::steady_clock::time_point since{};
@@ -3422,14 +3424,15 @@ bool scene_pipelines_wait() {
         wait.since = now;
     }
     const int64_t waited = std::chrono::duration_cast<std::chrono::milliseconds>(now - wait.since).count();
-    if (progress.left != 0u && waited < kScenePipelinesMostMs) {
+    const uint32_t left = progress.left + progress.later;
+    if (left != 0u && waited < kScenePipelinesMostMs) {
         galaxy::render::set_pipelines_hurried(true);
         return true;
     }
     galaxy::render::set_pipelines_hurried(false);
     wait.waiting = false;
-    if (progress.left != 0u) {
-        const std::string text = "the scene starts with " + std::to_string(progress.left) + " pipelines still to make (" +
+    if (left != 0u) {
+        const std::string text = "the scene starts with " + std::to_string(left) + " pipelines still to make (" +
                                  std::to_string(waited) + " ms)";
         log_line("pipelines:", text.c_str());
     } else if (waited >= 100) {

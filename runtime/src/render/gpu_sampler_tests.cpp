@@ -3,8 +3,12 @@
 #include <nebula_clip.h>
 #include <cmath>
 #include "render/core/pipelines.h"
+#include "render/core/present_gate.h"
+#include <atomic>
+#include <chrono>
 #include <iostream>
 #include <stdexcept>
+#include <thread>
 #include <unordered_map>
 
 namespace {
@@ -199,7 +203,37 @@ int main() {
         pipelines.shutdown();
         const bool stopped = pipelines.get(narrow, missing, 0, 0) == nullptr && pipelines.get(narrow, missing, 0, 0) == nullptr;
         passed &= expect(stopped && pipelines.failures() == 0u, "a draw that waits for its pipeline is let go when the workers stop");
+        passed &= expect(pipelines.later() == 0u, "no form is left for a load where none was prepared");
         pipelines.shutdown();
+    }
+    {
+        // The present gate (Direct3D 12): a Present waits for a creation in flight and runs alone; in play (no load waiting
+        // for its pipelines) each such wait is counted and logged, during a load it is not.
+        core::PresentGate gate;
+        const auto held_present = [&gate](bool in_play) {
+            gate.set_in_play(in_play);
+            gate.begin_creation();
+            std::atomic<bool> presented{false};
+            std::thread present([&] {
+                gate.begin_present();
+                presented.store(true);
+                gate.end_present();
+            });
+            bool held = false;
+            for (int i = 0; i < 2000 && !held; ++i) {
+                held = gate.present_held();
+                if (!held) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            const bool waited = held && !presented.load();
+            gate.end_creation();
+            present.join();
+            return waited && presented.load();
+        };
+        passed &= expect(held_present(false) && gate.play_waits() == 0u, "a Present held during a load is not play's");
+        passed &= expect(held_present(true) && gate.play_waits() == 1u, "a Present held in play is counted");
+        gate.begin_present();
+        gate.end_present();
+        passed &= expect(gate.play_waits() == 1u, "a Present with no creation in flight does not wait");
     }
     {
         // texture_table: one id per list content, from the lookup or this thread's remembered answer alike.

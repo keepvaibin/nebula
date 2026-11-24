@@ -16,6 +16,7 @@
 #include "galaxy/render/program_table.h"
 #include "render/core/pipeline_cache_file.h"
 #include "render/core/pipeline_workers.h"
+#include "render/core/present_gate.h"
 
 #if defined(__APPLE__)
 #include <TargetConditionals.h>
@@ -119,8 +120,10 @@ void Pipelines::initialize(gpu::Device* device, RootLayout root, void* backend) 
     failures_.store(0u, std::memory_order_relaxed);
     misses_.store(0u, std::memory_order_relaxed);
     reported_.store(false, std::memory_order_relaxed);
-    scene_drawn_.store(false, std::memory_order_relaxed);  // a new device's left forms wait for its own first scene
+    scene_drawn_.store(false, std::memory_order_relaxed);  // a new device's play begins at its own first scene
     scene_shown_.store(false, std::memory_order_relaxed);
+    gPresentGate.set_in_play(false);
+    later_.store(0u, std::memory_order_relaxed);
     // Workers at the lowest priority (worker()): the list is prepared by whatever the game and render threads leave idle,
     // and no frame waits for it. A stage's load waits for its pipelines with the workers raised (set_hurried); a draw whose
     // pipeline is not made yet is left out in play (before play it waits) and its job moved to the queue's front (missing),
@@ -144,6 +147,7 @@ void Pipelines::shutdown() noexcept {
         std::lock_guard guard(lock_);
         quit_ = true;
         jobs_.clear();
+        later_.fetch_sub(static_cast<std::uint32_t>(left_jobs_.size()), std::memory_order_relaxed);  // a running one counts down
         left_jobs_.clear();
         urgent_.clear();
     }
@@ -245,6 +249,7 @@ void Pipelines::failed(std::uint64_t id, const PipelineEntry& entry, unsigned va
                 Job later = *job;
                 later.deferred = true;  // not counted in pending_ again: the start's drain does not wait for it
                 left_jobs_.push_back(std::move(later));
+                later_.fetch_add(1u, std::memory_order_relaxed);
             }
         }
         std::fprintf(stderr, "[pipelines] out of memory building %llx %llx variant %u aux %u: %s\n",
@@ -388,6 +393,8 @@ void Pipelines::set_hurried(bool hurried) noexcept {
     if (hurried_.exchange(hurried, std::memory_order_relaxed) == hurried) {
         return;
     }
+    // A Present that waits for a creation while a load waits for its pipelines is the load's, not play's.
+    gPresentGate.set_in_play(!hurried && scene_shown_.load(std::memory_order_relaxed));
     if (hurried) {
         try {
             { std::lock_guard guard(lock_); }  // a worker between its wait's test and its sleep sees the flag
@@ -452,8 +459,8 @@ void Pipelines::prepare(const std::vector<Prepared>& entries, const std::vector<
             const unsigned out_of_window = scene_form(false);
             const unsigned in_window = layer ? scene_form(true) : out_of_window;
             // With the wide variant listed, walk_scene_begin draws every scene wide unless the wide targets cannot be
-            // had (begin_wide_scene: memory, the camera pass): the narrow variant's motion forms are left for after the
-            // first scene, made then or by such a draw.
+            // had (begin_wide_scene: memory, the camera pass): the narrow variant's motion forms are left for a load's
+            // wait (left_jobs_), made then or for such a draw.
             const bool left = (variant & kSceneVariantHdr) == 0u &&
                               std::any_of(variants.begin(), variants.end(),
                                           [](unsigned listed) { return (listed & kSceneVariantHdr) != 0u; });
@@ -488,6 +495,7 @@ void Pipelines::prepare(const std::vector<Prepared>& entries, const std::vector<
         for (Job& job : later) {
             left_jobs_.push_back(std::move(job));
         }
+        later_.fetch_add(static_cast<std::uint32_t>(later.size()), std::memory_order_relaxed);
     }
     wake_.notify_all();
 }
@@ -507,11 +515,9 @@ void Pipelines::worker() {
                 (void)wake_.wait_until(guard, std::chrono::steady_clock::time_point(std::chrono::steady_clock::duration(until)),
                                        [this] { return quit_; });
             }
-            // The left forms only once the queue is empty and a scene has been shown (release_left), or while a load waits.
-            const auto left_ready = [this] {
-                return (scene_shown_.load(std::memory_order_relaxed) || hurried_.load(std::memory_order_relaxed)) &&
-                       !left_jobs_.empty();
-            };
+            // The left forms only once the queue is empty and while a load waits for them (set_hurried): in play no worker
+            // starts one, so no creation of theirs is in flight when a Present comes (present_gate.h).
+            const auto left_ready = [this] { return hurried_.load(std::memory_order_relaxed) && !left_jobs_.empty(); };
             wake_.wait(guard, [&] { return quit_ || !jobs_.empty() || left_ready(); });
             if (quit_) {
                 return;
@@ -590,10 +596,16 @@ void Pipelines::worker() {
             } catch (...) {
             }
         }
-        if (!job.deferred && pending_.fetch_sub(1u, std::memory_order_acq_rel) == 1u) {
+        bool emptied = false;
+        if (job.deferred) {
+            emptied = later_.fetch_sub(1u, std::memory_order_acq_rel) == 1u;
+        } else if (pending_.fetch_sub(1u, std::memory_order_acq_rel) == 1u) {
             drained();
+            emptied = true;
+        }
+        if (emptied) {
             try {
-                { std::lock_guard guard(lock_); }  // wait_drained tests pending_ under the lock
+                { std::lock_guard guard(lock_); }  // drain tests pending_ and later_ under the lock
                 made_.notify_all();
             } catch (...) {
             }
@@ -601,9 +613,15 @@ void Pipelines::worker() {
     }
 }
 
-void Pipelines::wait_drained() {
-    std::unique_lock guard(lock_);
-    made_.wait(guard, [this] { return quit_ || pending_.load(std::memory_order_acquire) == 0u; });
+void Pipelines::drain() {
+    set_hurried(true);
+    {
+        std::unique_lock guard(lock_);
+        made_.wait(guard, [this] {
+            return quit_ || (pending_.load(std::memory_order_acquire) == 0u && later_.load(std::memory_order_acquire) == 0u);
+        });
+    }
+    set_hurried(false);
 }
 
 void Pipelines::note_registered(const PipelineEntry& entry) {
@@ -622,26 +640,20 @@ void Pipelines::defer(const Job& job) noexcept {
             Job later = job;
             later.deferred = true;
             left_jobs_.push_back(std::move(later));
+            later_.fetch_add(1u, std::memory_order_relaxed);
         }
-        // Taken by a waiting worker only once a scene has been shown; before that, release_left wakes them.
+        // Taken by a waiting worker only while a load waits; set_hurried wakes them.
     } catch (...) {
         // Out of memory for the entry: it stays to the draw that first needs it.
     }
-    if (scene_shown_.load(std::memory_order_relaxed)) {
+    if (hurried_.load(std::memory_order_relaxed)) {
         wake_.notify_one();
     }
 }
 
-void Pipelines::release_left() noexcept {
-    try {
-        {
-            std::lock_guard guard(lock_);
-            scene_shown_.store(true, std::memory_order_relaxed);
-        }
-        wake_.notify_all();
-    } catch (...) {
-        // The lock failed: the left forms stay to the draws that first need them, and the next present asks again.
-    }
+void Pipelines::enter_play() noexcept {
+    scene_shown_.store(true, std::memory_order_relaxed);
+    gPresentGate.set_in_play(!hurried_.load(std::memory_order_relaxed));
 }
 
 // The cache files (the driver's pipeline library or cache, both back ends) are written twice at most in a run, never on the

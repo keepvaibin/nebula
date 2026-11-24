@@ -95,7 +95,7 @@ public:
         // still to make before the render thread has been handed it (the title's wait asks in those first frames).
         const std::uint32_t count = registries_.registered_pipeline_count();
         return {static_cast<std::uint32_t>(pipelines_.created()), pipelines_.pending() + (count > queued ? count - queued : 0u),
-                pipelines_.warm()};
+                pipelines_.later(), pipelines_.warm()};
     }
     void set_pipelines_hurried(bool hurried) noexcept { pipelines_.set_hurried(hurried); }
     // Taken by the render thread's next queueing of the registered pipelines (render_api.h).

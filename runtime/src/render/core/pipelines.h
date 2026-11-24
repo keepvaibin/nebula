@@ -64,11 +64,13 @@ public:
     };
     // Queues each entry for every target kind and aux set of the settings, for the background threads: with `motion`, the
     // aux a scene draw of its state can take (scene_aux; 4 for every other with `one_pass`, 3 only with `layer`), and while
-    // the wide variant is listed the narrow variant's left for after the first scene (defer). The jobs are made before
+    // the wide variant is listed the narrow variant's left for a load's wait (defer). The jobs are made before
     // the queue's lock is taken, and the queue takes them all at once.
     void prepare(const std::vector<Prepared>& entries, const std::vector<unsigned>& variants, bool motion, bool layer,
                  bool one_pass);
     [[nodiscard]] std::uint32_t pending() const noexcept { return pending_.load(std::memory_order_relaxed); }
+    // The forms left for a load's wait (left_jobs_): queued, and taken by a worker that has not finished them yet.
+    [[nodiscard]] std::uint32_t later() const noexcept { return later_.load(std::memory_order_acquire); }
     // Whether the cache the driver took holds the start's whole set, made by an earlier run of these programs at these
     // settings (the targets file, decide_warm): each of its pipelines is then a load from the cache, not a compile, and
     // nothing need wait for the workers. False until the first worker has looked, and where the renderer keeps no cache
@@ -78,25 +80,27 @@ public:
     // Pipelines a draw wanted before the workers had made them (missing): each form once, a timeline event each.
     [[nodiscard]] std::uint64_t misses() const noexcept { return misses_.load(std::memory_order_relaxed); }
     // While the game's load waits for its pipelines (the host's NEBULA_OPTION_SCENE_PIPELINES): the workers at the normal
-    // priority, not the lowest, and the forms left for after the first scene (left_jobs_) taken too. Any thread.
+    // priority, not the lowest, and the forms left for a load (left_jobs_) taken, behind the queue; at no other time. Any
+    // thread. A worker that took a left form before the flag fell finishes it: the load waits for later() too.
     void set_hurried(bool hurried) noexcept;
     // Runs of fixed steps (NEBULA_EXT_FIXED_STEPS): a draw whose pipeline is missing waits for the worker that makes it, so a
     // picture holds every draw whatever the workers' pace and two runs draw alike. The render thread, each frame.
     void set_wait_for_missing(bool wait) noexcept { wait_for_missing_.store(wait, std::memory_order_relaxed); }
-    // Until every queued job counted in pending() is done, or the workers stop (the render thread, drain_pipelines).
-    void wait_drained();
+    // The workers hurried until every queued job (pending()) and every left form (later()) is made, or the workers stop
+    // (the render thread, drain_pipelines).
+    void drain();
     // A pipeline the game registered, handed over once when the render thread first queues it. The cook's list
     // (NebulaData/Pipelines.bin) is registered at boot: one registered after the first picture with a scene is not in it, and
     // its record is logged for crates/nebula-import/data/site_pipelines.txt.
     void note_registered(const PipelineEntry& entry);
     [[nodiscard]] std::uint64_t failures() const noexcept { return failures_.load(std::memory_order_relaxed); }
-    // The texture target forms left to the cache at the start (left_to_cache) are made after the first picture with a scene in
-    // it is shown, behind every other job, so the first target pass that draws one finds it made: scene_drawn from the walk
-    // that draws a scene, picture_shown from each present.
+    // Play begins at the first picture with a scene in it (scene_drawn from the walk that draws a scene, picture_shown from
+    // each present): from then a registration or a miss is logged (note_registered, missing), and a Present that waits for a
+    // creation (present_gate.h) while no load waits.
     void scene_drawn() noexcept { scene_drawn_.store(true, std::memory_order_relaxed); }
     void picture_shown() noexcept {
         if (scene_drawn_.load(std::memory_order_relaxed) && !scene_shown_.load(std::memory_order_relaxed)) {
-            release_left();
+            enter_play();
         }
     }
 
@@ -137,15 +141,15 @@ private:
         std::shared_ptr<const PipelineEntry> entry;  // shared by the entry's jobs
         unsigned variant, aux;
         bool optimize = false;  // a draw's quickly linked pipeline, to be replaced by the optimised link
-        bool deferred = false;  // a form left out of the start's set, made after the first scene is shown (defer)
+        bool deferred = false;  // a form left out of the start's set, made while a load waits (defer)
         bool urgent = false;    // a draw's miss: at the queue's front, built at the normal priority (missing)
     };
     // A form the start's set leaves out (a texture target form no run has drawn; any other kind a caller decides the same way):
-    // queued in left_jobs_, made by a worker once jobs_ is empty and a scene has been shown, or while the load waits (hurried),
-    // or at the queue's front when a draw needs it first (missing; the deferred job then finds its cell filled). A deferred job
-    // is not deferred again.
+    // queued in left_jobs_, made by a worker while a load waits (hurried) once jobs_ is empty, or at the queue's front when a
+    // draw needs it first (missing; the deferred job then finds its cell filled). A deferred job is not deferred again.
     void defer(const Job& job) noexcept;
-    void release_left() noexcept;
+    // The first picture with a scene (picture_shown): scene_shown_, and the present gate's play (present_gate.h).
+    void enter_play() noexcept;
     // A draw's pipeline that is not made: never built on the draw's thread. The first time a form is missed it is counted and
     // recorded (timeline PipelineMissed), and either linked at once from parts (build_fast: Vulkan with graphics pipeline
     // libraries, the optimised link queued behind) or queued at the front of the workers' queue as an urgent job. Null then,
@@ -190,7 +194,7 @@ private:
     void worker();
 
     // The texture targets' forms (target_form). Every one prepared and published is in the driver cache, which a later run
-    // loads; a form no target pass has drawn is then left out of the start's set and made after the first scene is shown
+    // loads; a form no target pass has drawn is then left out of the start's set and made while a load waits
     // (left_jobs_), or at the front of the queue when a draw needs it first, a load from the cache, not a compile. The file beside the cache keeps both sets and the hash of the cache data they go with: a cache
     // the driver refused, written by another run, or holding other programs names nothing, and every form is prepared.
     bool targets_open();
@@ -228,9 +232,11 @@ private:
     std::mutex lock_;
     std::condition_variable wake_;
     std::deque<Job> jobs_;
-    // The forms left to the cache, taken by a worker only when jobs_ is empty and scene_shown_ is set (under lock_). Not counted
-    // in pending_: the first drain (drained) is the start's set alone.
+    // The forms left for a load, taken by a worker only when jobs_ is empty and hurried_ is set (under lock_). Not counted
+    // in pending_: the first drain (drained) is the start's set alone. later_: queued there or taken and not finished (raised
+    // under lock_ with each push, lowered when a deferred job ends).
     std::deque<Job> left_jobs_;
+    std::atomic<std::uint32_t> later_{0u};
     std::atomic<bool> scene_drawn_{false}, scene_shown_{false};
     std::atomic<bool> hurried_{false}, wait_for_missing_{false};
     // The forms (id << 9 | key) of the urgent jobs queued and not finished (under lock_); made_ is told when one finishes.
