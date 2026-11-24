@@ -168,7 +168,7 @@ jobs:
           NEBULA_DIAG_ENDPOINT: ${{ vars.NEBULA_DIAG_ENDPOINT }}
           NEBULA_DIAG_PUBLIC_KEY: ${{ vars.NEBULA_DIAG_PUBLIC_KEY }}
         run: bash tools/diag_endpoint_local.sh
-      - name: Build Nebula, NebulaVk and NebulaD11
+      - name: Build Nebula and NebulaD11
         shell: pwsh
         run: |
           . .\tools\enter_msvc_environment.ps1 | Out-Null
@@ -391,7 +391,7 @@ jobs:
         uses: ./.github/actions/start-check-windows
         with:
           folder: ${{ runner.temp }}\bin
-          programs: NebulaD11 Nebula-x86-64-v2 NebulaVk-x86-64-v2 NebulaD11-x86-64-v2
+          programs: NebulaD11 Nebula-x86-64-v2 NebulaD11-x86-64-v2
       - name: The mod kit (a pre-release has none, a release has it)
         shell: bash
         run: |
