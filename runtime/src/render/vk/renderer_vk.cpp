@@ -496,20 +496,10 @@ bool RendererVk::create_layouts() {
         }
     }
     if (bindless_) {
-        // The sampler array: one set of the cache's length (kSamplerHeapSlots), made once and kept. The image set is
-        // made when the texture store is first attached (install_texture_array), sized by its views.
-        const VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_SAMPLER, vk::kBindlessSamplerSlots};
-        VkDescriptorPoolCreateInfo pool{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
-        pool.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
-        pool.maxSets = 1;
-        pool.poolSizeCount = 1;
-        pool.pPoolSizes = &size;
-        vk::check(vkCreateDescriptorPool(device, &pool, nullptr, &bindless_pool_), "sampler array descriptor pool");
-        VkDescriptorSetAllocateInfo allocate{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
-        allocate.descriptorPool = bindless_pool_;
-        allocate.descriptorSetCount = 1;
-        allocate.pSetLayouts = &draw_layout_.sets[2];
-        vk::check(vkAllocateDescriptorSets(device, &allocate, &bindless_samplers_), "sampler array descriptor set");
+        // The sampler array: one set of the cache's length (kSamplerHeapSlots), made again beside the old one when it
+        // fills (reset_sampler_frame). The image set is made when the texture store is first attached
+        // (install_texture_array), sized by its views.
+        make_sampler_array();
     }
     {
         VkPipelineLayoutCreateInfo info{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
@@ -1677,6 +1667,7 @@ void RendererVk::shutdown() {
                 pipeline = VK_NULL_HANDLE;
             }
         }
+        retire_ring_.release_all();
         for (auto& [key, sampler] : samplers_) vkDestroySampler(device, sampler, nullptr);
         samplers_.clear();
         sampler_slots_.reset();
@@ -1948,6 +1939,8 @@ void RendererVk::begin_frame() {
         target_swept_step_ = idle_clock();
         sweep_target_slots();
     }
+    // What this slot gave up goes first: its fence has passed, and the reset may retire the sampler array to it.
+    retire_ring_.release(frame_slot_);
     reset_sampler_frame();
     vk::check(vkResetCommandPool(device, frame.pool, 0), "vkResetCommandPool");
     for (RecordCommands& record : record_commands_[frame_slot_]) {

@@ -43,6 +43,7 @@
 #include "galaxy/render/dynamic_resolution.h"
 #include <nebula_frame_list.h>
 #include "render/core/draw_record.h"
+#include "render/core/retire_ring.h"
 #include "render/core/gpu_encoder.h"
 
 #include <algorithm>
@@ -461,6 +462,8 @@ private:
     void retire(gpu::TextureRef texture);
     void retire_object(mtl::Object object);
     void reset_sampler_frame();
+    void replace_samplers(core::RetireRing& ring, unsigned slot, const RenderConfig& cfg, std::uint32_t config, bool all);
+    [[nodiscard]] std::shared_ptr<mtl::Buffer> make_sampler_array() const;
     void write_sampler(unsigned slot, mtl::Object sampler);
     void fill_sampler_array(mtl::Object sampler);
     [[nodiscard]] mtl::Object sampler_for(const SamplerKey& key, const RenderConfig& cfg);  // id<MTLSamplerState>
@@ -791,6 +794,9 @@ private:
     GpuPass list_pass_ = GpuPass::Scene;
     std::atomic<bool> gpu_timing_wanted_{false};
     GpuPassTimes pass_times_;  // the page's averages and the [metal-gpu] window
+    // What frames in flight may still read when it is given up, per frame slot (core::RetireRing; its first users are the
+    // sampler arrays, samplers and sampler tables a start again leaves behind). Last, so it is emptied before the rest goes.
+    core::RetireRing retire_ring_{kFramesInFlight};
 };
 
 using Renderer = RendererMtl;

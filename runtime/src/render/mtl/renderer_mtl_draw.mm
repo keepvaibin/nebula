@@ -7,6 +7,7 @@
 #include "galaxy/render/texture_store.h"
 #include "galaxy/render/idle_clock.h"
 #include "render/core/frame_core.h"
+#include "render/core/sampler_renewal.h"
 
 #include <nebula_frame_list.h>
 
@@ -230,47 +231,83 @@ gpu::Table RendererMtl::sampler_table_for(const SamplerKey* keys, unsigned count
     return made;
 }
 
-// Between frames: the samplers made again when the settings change, which also makes the walker ask for its lists or
-// tables again. With arrays the sampler array starts again when it is nearly full too, slot 0 the default sampler
-// (wrap, linear, mip point, every level) and the slots written once the GPU is past the frames that read them; else
-// the default table of draws without samplers of their own is made again.
+// Between frames, with nothing recorded (core::renew_samplers): the samplers start again beside the old ones when the
+// settings change, the array is nearly full, or half the samplers the array may hold are made (without arrays, the
+// array's length of the other renderers: the caches stay bounded by the game's own states). A new sampler array, or a
+// new default table, every slot the default sampler (wrap, linear, mip point, every level); what the frames in flight
+// read goes to the retire ring, and the walker writes its lists or tables again (sampler_generation).
 void RendererMtl::reset_sampler_frame() {
     const RenderConfig cfg = get_render_config();
-    const std::uint32_t config = sampler_config_key(cfg);
-    if (bindless_) {
-        const bool full = sampler_slots_.used() + sampler_frame_room(sampler_array_slots_) > sampler_array_slots_;
-        if (sampler_slots_ready_ && config == sampler_config_ && !full) {
-            return;
+    const unsigned used = sampler_slots_.used();
+    struct Samplers {
+        RendererMtl& renderer;
+        const RenderConfig& cfg;
+        [[nodiscard]] std::size_t samplers_made() const noexcept { return renderer.samplers_.size(); }
+        void make_samplers(core::RetireRing& ring, unsigned slot, std::uint32_t config, bool all) {
+            renderer.replace_samplers(ring, slot, cfg, config, all);
         }
-        if (sampler_slots_ready_ && full) {
-            std::fprintf(stderr, "[samplers] %u of %u slots made: the array starts again once the GPU is past them\n",
-                         sampler_slots_.used(), sampler_array_slots_);
+    } samplers{*this, cfg};
+    const std::size_t crowd = bindless_ ? std::max<std::size_t>(sampler_array_slots_ / 2u, 1u) : kSamplerHeapSlots;
+    bool restarted = false;
+    if (core::renew_samplers(samplers, retire_ring_, frame_slot_,
+                             {bindless_ ? &sampler_slots_ : nullptr, sampler_config_, sampler_slots_ready_, sampler_generation_},
+                             sampler_config_key(cfg), sampler_array_slots_, sampler_frame_room(sampler_array_slots_), crowd,
+                             &restarted) &&
+        restarted) {
+        std::fprintf(stderr, "[samplers] %u of %u slots, %zu samplers made: new ones beside the old\n", used,
+                     sampler_array_slots_, samplers_.size());
+    }
+}
+
+std::shared_ptr<mtl::Buffer> RendererMtl::make_sampler_array() const {
+    std::shared_ptr<mtl::Buffer> array = mtl::Context::get().create_buffer(std::uint64_t{sampler_array_slots_} * 8u,
+                                                                           mtl::Storage::Shared, "sampler array");
+    if (!array) {
+        throw std::runtime_error("the sampler array could not be made");
+    }
+    return array;
+}
+
+// The old array (or the old tables) and the samplers of other settings (every one when `all`) go to the retire ring:
+// released once this slot's fence has passed.
+void RendererMtl::replace_samplers(core::RetireRing& ring, unsigned slot, const RenderConfig& cfg, std::uint32_t config,
+                                   bool all) {
+    std::vector<mtl::Object> gone;
+    std::erase_if(samplers_, [&](auto& entry) {
+        if (!all && entry.first.config == config) {
+            return false;
         }
-        if (sampler_slots_ready_ && last_submitted_ != 0u) {
-            wait_for_fence_value(last_submitted_);
-        }
-        if (sampler_slots_ready_ && config != sampler_config_) {
-            // The samplers of the settings before: a device counts every distinct sampler an array may hold.
-            for (auto& [key, sampler] : samplers_) {
+        gone.push_back(entry.second);
+        return true;
+    });
+    if (!gone.empty()) {
+        ring.retire(slot, [gone = std::move(gone)]() mutable {
+            for (mtl::Object& sampler : gone) {
                 mtl::release(sampler);
             }
-            samplers_.clear();
+        });
+    }
+    if (bindless_) {
+        // The first array is the one made at the start; a start again makes its own.
+        if (sampler_slots_ready_ && sampler_array_) {
+            ring.retire(slot, std::move(sampler_array_));
+            sampler_array_ = make_sampler_array();
         }
-        sampler_slots_.reset();
-        sampler_slots_ready_ = true;
-        sampler_config_ = config;
-        ++sampler_generation_;
         fill_sampler_array(sampler_for(kDefaultSamplerKey, cfg));
         return;
     }
-    if (default_sampler_table_.ptr != 0u && config == sampler_config_) {
-        return;
+    std::vector<std::unique_ptr<mtl::BoundSamplers>> tables;
+    tables.reserve(sampler_tables_.size());
+    for (auto& [key, table] : sampler_tables_) {
+        tables.push_back(std::move(table));
+    }
+    sampler_tables_.clear();
+    if (!tables.empty()) {
+        ring.retire(slot, std::move(tables));
     }
     std::array<SamplerKey, mtl::kBoundTableSlots> keys{};
     keys.fill(kDefaultSamplerKey);
     default_sampler_table_ = sampler_table_for(keys.data(), mtl::kBoundTableSlots);
-    sampler_config_ = config;
-    ++sampler_generation_;
 }
 
 gpu::Address RendererMtl::zero_stream(std::uint32_t bytes) {

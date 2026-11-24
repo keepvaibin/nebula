@@ -3,6 +3,7 @@
 // tables. The scene target, its passes, copies, pictures and the renderer's parts are renderer_d3d11_scene.cpp.
 #include "galaxy/render/present_clock.h"
 #include "galaxy/render/d3d11/renderer_d3d11.h"
+#include "render/core/sampler_renewal.h"
 #include "../dxgi_pacing.h"
 
 #include "galaxy/content_viewport.h"
@@ -383,9 +384,11 @@ void RendererD3D11::shutdown() {
         for (Frame& frame : frames_) {
             frame = Frame{};
         }
+        retire_ring_.release_all();
         samplers_.clear();
         sampler_tables_.clear();
         default_sampler_table_ = gpu::Table{};
+        sampler_ready_ = false;
         persistent_tables_.clear();
         retired_tables_.clear();
         free_tables_.clear();
@@ -550,6 +553,8 @@ void RendererD3D11::begin_frame() {
         target_swept_step_ = idle_clock();
         sweep_target_slots();
     }
+    // What this slot gave up goes first: its fence has passed, and the reset may retire samplers to it.
+    retire_ring_.release(frame_slot_);
     reset_sampler_frame();
     // The frame's GPU time: always for the scene's average (interpolation_gpu_cost_ms), a query pair a frame.
     ID3D11Device1* const device = d3d11::Context::get().device();
@@ -1255,18 +1260,54 @@ gpu::Table RendererD3D11::sampler_table_for(const SamplerKey* keys, unsigned cou
     return made;
 }
 
-// Between frames: the samplers made again when the settings change, which also makes the walker ask for its tables again.
+// Between frames, with nothing recorded (core::renew_samplers): the samplers start again beside the old ones when the
+// settings change or half the sampler states a device holds are made (D3D11_REQ_SAMPLER_OBJECT_COUNT_PER_DEVICE), so
+// the cache stays bounded by the game's own states and CreateSamplerState never fails at the limit. The walker asks for
+// its tables again (sampler_generation).
 void RendererD3D11::reset_sampler_frame() {
     const RenderConfig cfg = get_render_config();
-    const std::uint32_t config = sampler_config_key(cfg);
-    if (default_sampler_table_.ptr != 0u && config == sampler_config_) {
-        return;
+    struct Samplers {
+        RendererD3D11& renderer;
+        [[nodiscard]] std::size_t samplers_made() const noexcept { return renderer.samplers_.size(); }
+        void make_samplers(core::RetireRing& ring, unsigned slot, std::uint32_t config, bool all) {
+            renderer.replace_samplers(ring, slot, config, all);
+        }
+    } samplers{*this};
+    constexpr std::size_t kCrowd = D3D11_REQ_SAMPLER_OBJECT_COUNT_PER_DEVICE / 2u;
+    bool restarted = false;
+    if (core::renew_samplers(samplers, retire_ring_, frame_slot_, {nullptr, sampler_config_, sampler_ready_, sampler_generation_},
+                             sampler_config_key(cfg), 0u, 0u, kCrowd, &restarted) &&
+        restarted) {
+        std::fprintf(stderr, "[samplers] %zu sampler states made: new ones beside the old\n", samplers_.size());
+    }
+}
+
+// The samplers of other settings (every one when `all`) and the tables made of them go to the retire ring: released once
+// this slot's fence has passed (draws recorded before still name them).
+void RendererD3D11::replace_samplers(core::RetireRing& ring, unsigned slot, std::uint32_t config, bool all) {
+    std::vector<d3d11::ComPtr<ID3D11SamplerState>> gone;
+    std::erase_if(samplers_, [&](auto& entry) {
+        if (!all && entry.first.config == config) {
+            return false;
+        }
+        gone.push_back(std::move(entry.second));
+        return true;
+    });
+    std::vector<std::unique_ptr<d3d11::BoundTable>> tables;
+    tables.reserve(sampler_tables_.size());
+    for (auto& [key, table] : sampler_tables_) {
+        tables.push_back(std::move(table));
+    }
+    sampler_tables_.clear();
+    if (!gone.empty()) {
+        ring.retire(slot, std::move(gone));
+    }
+    if (!tables.empty()) {
+        ring.retire(slot, std::move(tables));
     }
     std::array<SamplerKey, d3d11::kBoundTableSlots> keys{};
     keys.fill(kDefaultSamplerKey);
     default_sampler_table_ = sampler_table_for(keys.data(), d3d11::kBoundTableSlots);
-    sampler_config_ = config;
-    ++sampler_generation_;
 }
 
 gpu::Address RendererD3D11::zero_stream(std::uint32_t bytes) {

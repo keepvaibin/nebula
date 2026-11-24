@@ -79,10 +79,10 @@ Two frames are in flight (`kFramesInFlight`, `runtime/include/galaxy/render/rend
 
 | Renderer | Per frame | Inside a frame, the whole GPU |
 | --- | --- | --- |
-| Direct3D 12 | the slot about to be used again (`renderer_d3d12.cpp:3809-3817`); the oldest history ring segment when it is reused (:3966-3970); the frame latency waitable, 100 ms bound (:4356); the copy queue's slot before its staging is written again (`gpu_texture_backend_d3d12.cpp:513`, from `texture_store.cpp:666`) | `wait_for_gpu` (:916) in `reset_sampler_frame` (:1410), `prepare_temporal_upscaler` (:5019, :5052), `record_temporal_upscale` (:5214), and a capture's readback (:6889, :6892) |
-| Vulkan | the slot (`runtime/src/render/vk/renderer_vk.cpp:2012`); the history ring segment (:2110) | `vkDeviceWaitIdle` when a size no longer matches: the temporal upscaler's preparation and record (`runtime/src/render/vk/renderer_vk_frame.cpp:922`, :953, :1428) and frame generation's HUD-less targets (:1455, :1495, :1548); the sampler array's restart waits for the last submitted frame (:2710, :2729); the post-process's self-test, in the first frame it is built (`runtime/src/render/vk/post_process_vk.cpp:947`, 1.8) |
+| Direct3D 12 | the slot about to be used again (`renderer_d3d12.cpp:3809-3817`); the oldest history ring segment when it is reused (:3966-3970); the frame latency waitable, 100 ms bound (:4356); the copy queue's slot before its staging is written again (`gpu_texture_backend_d3d12.cpp:513`, from `texture_store.cpp:666`) | `prepare_temporal_upscaler` (:5019, :5052), `record_temporal_upscale` (:5214), and a capture's readback (:6889, :6892) |
+| Vulkan | the slot (`runtime/src/render/vk/renderer_vk.cpp:2012`); the history ring segment (:2110) | `vkDeviceWaitIdle` when a size no longer matches: the temporal upscaler's preparation and record (`runtime/src/render/vk/renderer_vk_frame.cpp:922`, :953, :1428) and frame generation's HUD-less targets (:1455, :1495, :1548); the post-process's self-test, in the first frame it is built (`runtime/src/render/vk/post_process_vk.cpp:947`, 1.8) |
 | Direct3D 11 | the slot (`runtime/src/render/d3d11/renderer_d3d11.cpp:530`); the frame latency waitable, 100 ms bound (:653) | none; a window size change waits for the GPU idle (`runtime/src/render/d3d11/renderer_d3d11_scene.cpp:246`) |
-| Metal | the slot (`runtime/src/render/mtl/renderer_mtl.mm:592`, `wait_for_fence_value`); the history ring segment (:679); a drawable (`nextDrawable`, :1183, in `present`) | `wait_for_gpu_idle` (:499) when the temporal upscaler's size no longer matches (`runtime/src/render/mtl/renderer_mtl_draw.mm:736`, :757); the sampler array restarts when nearly full and waits for the last submitted frame (:244-247, the wait :261; P-066); the post-process's self-test waits once at the renderer's start, before any frame (`PostProcessor::finish_build` in `runtime/src/render/mtl/post_process_mtl.mm`, 1.8; P-065, R1.4) |
+| Metal | the slot (`runtime/src/render/mtl/renderer_mtl.mm:592`, `wait_for_fence_value`); the history ring segment (:679); a drawable (`nextDrawable`, :1183, in `present`) | `wait_for_gpu_idle` (:499) when the temporal upscaler's size no longer matches (`runtime/src/render/mtl/renderer_mtl_draw.mm:736`, :757); the post-process's self-test waits once at the renderer's start, before any frame (`PostProcessor::finish_build` in `runtime/src/render/mtl/post_process_mtl.mm`, 1.8; P-065, R1.4) |
 
 Outside a frame, `wait_for_gpu` drains the GPU at a window size change (:1955), a swap chain's re-creation or resize
 (:3371, :3419), an HDR switch (:4164), shutdown (:3114, :3141) and the pictures at exit (:6754). Those are allowed by the
@@ -228,7 +228,7 @@ with no row has a new one.
 | A draw whose pipeline is not ready compiles it on the render thread | `runtime/src/render/core/pipelines.cpp` (`create_now`) | P-010 (fixed at R1.2: `create_now` is gone; the load's gate waits for the pipelines, a miss in play is left out, counted and made at the queue's front) |
 | Utility pipelines compiled on the render thread at first use, outside the cache | `runtime/src/render/core/pipelines.cpp` | P-052 (fixed at R1.1: Direct3D 12's through the driver cache at the start since caa9ca1e7 and e68b6cd6c) |
 | A present waits for every pipeline creation in flight (Direct3D 12) | `runtime/src/render/core/present_gate.h` | N-1067 (fixed at R1.3: no creation is in flight in play unless a draw missed one or a setting changed; such a wait is a log line and a timeline event) |
-| The sampler heap or array, full, waits for the whole GPU | `renderer_d3d12.cpp:1410`; `runtime/src/render/vk/renderer_vk_frame.cpp:2710`, :2729; `runtime/src/render/mtl/renderer_mtl_draw.mm:261` (each `reset_sampler_frame`) | P-048, P-056, P-066, E3 step 2 |
+| The sampler heap or array, full, waits for the whole GPU: gone at R2.2 (a new one beside the old, the old to `core::RetireRing`, `runtime/src/render/core/sampler_renewal.h`) | each renderer's `reset_sampler_frame` | P-048, P-056, P-066, E3 step 2 |
 | Size changes drain the whole GPU inside a frame | `renderer_d3d12.cpp:5019`, :5052, :5214 (the temporal upscaler), :1955; Vulkan's at size changes inside a frame (1.4) | P-028 (written for Direct3D 12 on engine/b; Vulkan's side open) |
 | The game thread waits for the whole render queue at an aspect change | `host_main.cpp:3228` | N-1081 |
 | A capture's readback waits for the GPU inside a frame | `renderer_d3d12.cpp:6889`, :6892 | N-1082 |
@@ -835,7 +835,8 @@ Read at c8222595e.
      target.
 4. A sampler's key holds the texture's levels, generated levels and a replacement's shift (`draw_walker.cpp:801-813`)
    and the render settings (`make_sampler_slot_key(key, cfg)`, `renderer_d3d12.cpp:2918-2920`). P-048, P-056 and P-066
-   are the heaps' waits when they fill.
+   were the heaps' waits when they fill; since R2.2 a full heap or array, or one for new settings, is made beside the
+   old one between frames and the old one goes to the retire ring (`core::renew_samplers`), with no wait.
 
 **The file.**
 
