@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <new>
+#include <utility>
 #include <iostream>
 
 namespace galaxy::render::d3d11 {
@@ -46,6 +47,17 @@ void set_name(ID3D11DeviceChild* object, const char* name) {
     if (object != nullptr && name != nullptr) {
         object->SetPrivateData(WKPDID_D3DDebugObjectName, static_cast<UINT>(std::strlen(name)), name);
     }
+}
+
+// A texture or view that could not be made, said (the first few): a texture that is missing draws as the null one.
+void log_texture_failure(const char* step, const char* name, DXGI_FORMAT format, std::uint32_t width, std::uint32_t height,
+                         std::uint32_t bind, HRESULT hr) {
+    static int said = 0;
+    if (said++ >= 40) {
+        return;
+    }
+    std::cout << "[gpu] texture " << (name != nullptr ? name : "?") << ' ' << width << 'x' << height << " format=" << static_cast<unsigned>(format)
+              << " bind=0x" << std::hex << bind << ": " << step << " failed 0x" << static_cast<unsigned>(hr) << std::dec << '\n';
 }
 
 std::uint64_t round_up(std::uint64_t value, std::uint64_t step) {
@@ -188,6 +200,23 @@ bool Context::initialize(const std::string& chosen_gpu, bool debug_layer) {
         if (all) {
             caps_.max_samples = samples;
         }
+    }
+    // Which formats the compute passes write (typed UAV stores) and read: Direct3D 11.0 guarantees only the 32-bit
+    // single-channel ones, so a driver may refuse the others (a pass that needs one is then without its texture).
+    for (const auto& [format, label] : {std::pair{DXGI_FORMAT_R32_FLOAT, "r32f"}, std::pair{DXGI_FORMAT_R16_FLOAT, "r16f"},
+                                       std::pair{DXGI_FORMAT_R16G16_FLOAT, "rg16f"},
+                                       std::pair{DXGI_FORMAT_R16G16B16A16_FLOAT, "rgba16f"},
+                                       std::pair{DXGI_FORMAT_R8G8B8A8_UNORM, "rgba8"},
+                                       std::pair{DXGI_FORMAT_R10G10B10A2_UNORM, "rgb10a2"}}) {
+        D3D11_FEATURE_DATA_FORMAT_SUPPORT2 support{format, 0u};
+        UINT basic = 0u;
+        (void)device_->CheckFormatSupport(format, &basic);
+        const bool have2 = SUCCEEDED(device_->CheckFeatureSupport(D3D11_FEATURE_FORMAT_SUPPORT2, &support, sizeof(support)));
+        std::cout << "[gpu] format " << label << ": uav=" << ((basic & D3D11_FORMAT_SUPPORT_TYPED_UNORDERED_ACCESS_VIEW) != 0u ? 1 : 0)
+                  << " store=" << (have2 && (support.OutFormatSupport2 & D3D11_FORMAT_SUPPORT2_UAV_TYPED_STORE) != 0u ? 1 : 0)
+                  << " load=" << (have2 && (support.OutFormatSupport2 & D3D11_FORMAT_SUPPORT2_UAV_TYPED_LOAD) != 0u ? 1 : 0)
+                  << " blend=" << ((basic & D3D11_FORMAT_SUPPORT_BLENDABLE) != 0u ? 1 : 0)
+                  << " msaa=" << ((basic & D3D11_FORMAT_SUPPORT_MULTISAMPLE_RENDERTARGET) != 0u ? 1 : 0) << '\n';
     }
     // The frame fence: ID3D11Fence where the runtime and driver have it (Direct3D 11.4), else event queries.
     {
@@ -369,7 +398,8 @@ std::shared_ptr<Texture> Context::create_texture(std::uint32_t width, std::uint3
     desc.Usage = D3D11_USAGE_DEFAULT;
     desc.BindFlags = bind;
     auto texture = std::make_shared<Texture>();
-    if (FAILED(device_->CreateTexture2D(&desc, initial, &texture->texture))) {
+    if (const HRESULT hr = device_->CreateTexture2D(&desc, initial, &texture->texture); FAILED(hr)) {
+        log_texture_failure("CreateTexture2D", name, format, width, height, bind, hr);
         return {};
     }
     set_name(texture->texture.Get(), name);
@@ -382,7 +412,8 @@ std::shared_ptr<Texture> Context::create_texture(std::uint32_t width, std::uint3
                                                                    : DXGI_FORMAT_R32_FLOAT;
         view.ViewDimension = ms ? D3D11_SRV_DIMENSION_TEXTURE2DMS : D3D11_SRV_DIMENSION_TEXTURE2D;
         view.Texture2D.MipLevels = desc.MipLevels;
-        if (FAILED(device_->CreateShaderResourceView(texture->texture.Get(), &view, &texture->view))) {
+        if (const HRESULT hr = device_->CreateShaderResourceView(texture->texture.Get(), &view, &texture->view); FAILED(hr)) {
+            log_texture_failure("shader resource view", name, format, width, height, bind, hr);
             return {};
         }
         if (depth && format != DXGI_FORMAT_D32_FLOAT) {
@@ -395,7 +426,8 @@ std::shared_ptr<Texture> Context::create_texture(std::uint32_t width, std::uint3
         D3D11_RENDER_TARGET_VIEW_DESC view{};
         view.Format = format;
         view.ViewDimension = ms ? D3D11_RTV_DIMENSION_TEXTURE2DMS : D3D11_RTV_DIMENSION_TEXTURE2D;
-        if (FAILED(device_->CreateRenderTargetView(texture->texture.Get(), &view, &texture->target))) {
+        if (const HRESULT hr = device_->CreateRenderTargetView(texture->texture.Get(), &view, &texture->target); FAILED(hr)) {
+            log_texture_failure("render target view", name, format, width, height, bind, hr);
             return {};
         }
     }
@@ -403,7 +435,8 @@ std::shared_ptr<Texture> Context::create_texture(std::uint32_t width, std::uint3
         D3D11_DEPTH_STENCIL_VIEW_DESC view{};
         view.Format = format;
         view.ViewDimension = ms ? D3D11_DSV_DIMENSION_TEXTURE2DMS : D3D11_DSV_DIMENSION_TEXTURE2D;
-        if (FAILED(device_->CreateDepthStencilView(texture->texture.Get(), &view, &texture->depth))) {
+        if (const HRESULT hr = device_->CreateDepthStencilView(texture->texture.Get(), &view, &texture->depth); FAILED(hr)) {
+            log_texture_failure("depth stencil view", name, format, width, height, bind, hr);
             return {};
         }
         if ((bind & D3D11_BIND_SHADER_RESOURCE) != 0u) {
@@ -415,7 +448,8 @@ std::shared_ptr<Texture> Context::create_texture(std::uint32_t width, std::uint3
         D3D11_UNORDERED_ACCESS_VIEW_DESC view{};
         view.Format = format;
         view.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
-        if (FAILED(device_->CreateUnorderedAccessView(texture->texture.Get(), &view, &texture->storage))) {
+        if (const HRESULT hr = device_->CreateUnorderedAccessView(texture->texture.Get(), &view, &texture->storage); FAILED(hr)) {
+            log_texture_failure("unordered access view", name, format, width, height, bind, hr);
             return {};
         }
     }
