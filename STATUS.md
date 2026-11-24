@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-24 11:05. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 11:27. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 22 of 138 (16%).
 
@@ -71,6 +71,7 @@ In work now:
 - R1.2 P-010: a stage's pipelines made while it loads, a draw never compiles: Real-time play on a cold cache (delete nothing yours; a new install folder): enter three galaxies for the first time and compare the frame times with R1.1's build under --diagnostics timeline; no PipelineMissed event and no frame longer than its neighbours after each stage's first picture (agent 1, 2026-11-23 21:16)
 - R1.4 P-065 (Metal): the renderer's own shader texts compiled at build: On a Mac (and an iPhone when its app exists): start the game and turn on bloom, the post-process (SMAA and FXAA) and ambient occlusion, then MetalFX and SGSR 2: the log shows '[metal] renderer shaders: N from utility.metallib, 0 compiled from their text' and no hitch the first time each is used (agent 1, 2026-11-24 03:48)
 - R2.2 The sampler tables stop filling: P-048, P-056, P-066, P-061: proof 4, the audit's runs: Direct3D 12 with dynamic resolution and --diagnostics timeline, Good Egg 10 minutes, no [samplers] line and no wait; the tablet, the same 10 minutes; Direct3D 11 with --diagnostics resolution-steps through several galaxies, samplers_.size() under 4096; Metal waits counted on an Apple-silicon Mac (needs a Mac). Metal is compiled by the GitHub Mac job only. (agent 1, 2026-11-24 05:34)
+- G2.1 Landing 1: a sequence starts at its arrival; the step keeps its due times: G2.1 proof 3 (I-004, I-013): on a shown window, the pacing measure before G2.1 and after it: at 240 Hz with in-between pictures on, delay_avg_us of the [pace] line (file F: 42.4 ms, expected about 26) and the timeline's RenderBegin to first present; at 120 Hz with in-between pictures on, the timeline's StepWaitEnd against VBlank (tools/perf/timeline_digest.py); the figures and run folders go into the rows' notes (agent 1, 2026-11-24 11:27)
 
 ## Waiting for the owner
 
@@ -92,7 +93,7 @@ Nothing is blocked.
 | M-006 | closed | - | the step tier and section check; a passing tool fault played once more; a waiter left not judged runs itself | 0 | 95 | 2911f6429 |
 | M-007 | closed | - | the section-at-a-time roles: a whole section ahead, wait, hand-off sheets, hard reports, the live page | 0 | 80 | 9ed09cfec |
 
-## Decisions (62)
+## Decisions (68)
 
 - 2026-11-23 S0.2.1: LoadSlice: 32 items a frame; an item is a phase of GameScene::initAfterScenarioChosen, the player, one placement made whole, one piece of FileSelector::initStep, or one Star Bit of the reserve (because the card asks for a fixed count of work and names no count; the count is a constant in one place, no player sees which frame of the load an item falls in, and the load worker (G3.7) replaces the slices)
 - 2026-11-23 S0.2.1: Drawing's random stream (MR::getDrawRandom) is seeded with the same seed as the game's stream, in setRandomSeedFromStageName and setFixedRandomSeed (because a fixed seed keeps the cosmetic numbers the same in every run of a replay and needs no new setting; the draw stream runs through the same sequence as the game's but is advanced only by drawing, so neither changes the other)
@@ -156,6 +157,12 @@ Nothing is blocked.
 - 2026-11-24 R2.5: the store keeps its own copy of each larger painting handed to it (TextureStore::set_built_in copies the record; built_ins_ holds the copies and a device restart stages them again); the game keeps one painting buffer (because the API already says the renderer takes a copy, so the game's code, and any other caller of texture_hd, is right as written; one record per sheet in the game would cost the same memory and leave the store's pointer open to the next caller)
 - 2026-11-24 R2.5: a Joy-Con picture set painted over gives its images back to the store (RenderTexture::forget over its block) and then frees its block at once; the 250 ms wall-clock wait is gone (because the renderer reads only texture ids, never the record's memory: the store holds a freed id's texture until the list it came with has walked, then retires it at the frame fence (TextureStore::release_held, retire); the store kept the set's pointers (sources_) for a restart and a budget restage, which a freed block made read freed memory)
 - 2026-11-24 R2.5: a large painting's memory that the C library refuses: none taken, the icons stay at the game's size, said once in the log, and no larger painting is tried again; the render texture table's refusal is a named panic (because the larger paintings stand in for icons the game draws anyway (as when the sheets are too large to repaint); the texture table is the game's only way to name an image to the renderer)
+- 2026-11-24 G2.1: The bound for missed steps is 250 ms (15 steps, FrameDue::kCatchUpNs): within it a late step clock keeps its due moments and runs the missed steps back to back; further behind it drops them all with one log line and starts from now (because P-274's row says 'a quarter second, say'; a stall that long is a load or a pause, where running even a quarter second of steps back to back would fast-forward the game after it)
+- 2026-11-24 G2.1: A list not marked shown is not held: it is walked as it comes (as with in-between pictures off) after the sequences end, and the present the next step asks for shows it or black (because Read first (2): FM 2.16 target 1 says the held list and the present-only gate go; I-004's row said such a chunk waits as today; the card follows FM)
+- 2026-11-24 G2.1: No switch keeps the old path: the held list and the present-only gate are deleted in this step (because proof 5 asks git grep of their names to return 0 after this landing; the measures that would hold such a switch (proof 3) are the planner's owed runs, and AGENT.md 8 leaves no switch or dead copy unless the card names one, which it does not)
+- 2026-11-24 G2.1: The step clock's delay is bounded by one step, not half (because the delay now covers a list's whole lateness after its own step's moment (the step's work), which on a slow device passes half a step; at one step the reference is where the next step's present request put it before, so no device starts later than today)
+- 2026-11-24 G2.1: P-274's due moments are kept on every host: Windows (next_frame_start's caller), the other hosts' own clock (FrameDue::waited) and the vsync grid of Android and Apple (VsyncGrid::next_slot, its two callers in platform/ log what they drop) (because AGENT.md 8: every platform moves together; the card names the Windows path, the row the step clock as a whole)
+- 2026-11-24 G2.1: Locked rates (a tearing swap chain at a multiple of 60) start a sequence's slots at its reference, moved on by whole slots past the slot last shown when the clock runs (because a sequence now begins at a slot (the waiting sequence's turn) where the reference can lie before the slot last shown; the old rule (the reference itself) could then show a slot twice)
 
 ## Checks changed during the run (70)
 
