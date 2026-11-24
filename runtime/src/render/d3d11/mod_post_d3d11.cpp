@@ -149,7 +149,7 @@ void RendererD3D11::record_native_call(const NebulaCall& call, LumaDrawNativeFra
 void RendererD3D11::release_mod_post() {
     mod_post_shaders_.clear();
     mod_post_epoch_ = 0u;
-    native_state_.Reset();
+   // native_state_.Reset();
     native_state_failed_ = false;
 }
 
