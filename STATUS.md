@@ -4,7 +4,7 @@ Written 2026-11-24 04:52. If this time is more than three hours old, the work ha
 
 Steps landed: 17 of 138 (12%).
 
-Now: R1.4 landed; next: writer for R2
+Now: in work: writer writing package R2 from R2.1
 
 In work now: Nothing started.
 
