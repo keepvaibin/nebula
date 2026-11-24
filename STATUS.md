@@ -6,7 +6,8 @@ Steps landed: 20 of 138 (14%).
 
 Now: in work: lander landing R2.1 to R2.5
 
-In work now: Nothing started.
+In work now:
+- R2.4 The player's swapped images (agent 1)
 
 ## Packages
 
@@ -91,7 +92,7 @@ Nothing is blocked.
 | M-006 | closed | - | the step tier and section check; a passing tool fault played once more; a waiter left not judged runs itself | 0 | 95 | 2911f6429 |
 | M-007 | closed | - | the section-at-a-time roles: a whole section ahead, wait, hand-off sheets, hard reports, the live page | 0 | 80 | 9ed09cfec |
 
-## Decisions (58)
+## Decisions (59)
 
 - 2026-11-23 S0.2.1: LoadSlice: 32 items a frame; an item is a phase of GameScene::initAfterScenarioChosen, the player, one placement made whole, one piece of FileSelector::initStep, or one Star Bit of the reserve (because the card asks for a fixed count of work and names no count; the count is a constant in one place, no player sees which frame of the load an item falls in, and the load worker (G3.7) replaces the slices)
 - 2026-11-23 S0.2.1: Drawing's random stream (MR::getDrawRandom) is seeded with the same seed as the game's stream, in setRandomSeedFromStageName and setFixedRandomSeed (because a fixed seed keeps the cosmetic numbers the same in every run of a replay and needs no new setting; the draw stream runs through the same sequence as the game's but is advanced only by drawing, so neither changes the other)
@@ -151,6 +152,7 @@ Nothing is blocked.
 - 2026-11-24 R2.3: a record has no cook behind it when its source format is NEBULA_TEXTURE_MADE (the game's nebula_texture_init records: icon sheets, the settings menu's mod picture); the store judges those once at registration or when their bytes change, and keeps the answer in the image's Source for every restage and device restart (because every record the importer writes from a disc or a mod's picture names its source format, and the importer's own MADE records have one level, which is never judged drawn by hand)
 - 2026-11-24 R2.3: the cook's generated levels and their flag stay: a draw keeps to the first level (draw_walker forces level 0), the whole image stages its first level alone, and the video-memory budget's smaller copies are the generated levels (a reduced texture's first level) (because without them a texture reduced for the budget would have no smaller level to show; the flag also keeps them out of the judge (never drawn by hand))
 - 2026-11-24 R2.3: the import check is a program of its own, galaxy_authored_levels_check, run on each disc's game.pak (the runtime's judge against the cook's bit on every record); it is built with the tests but not run by ctest (because it needs the discs' data, which a unit test does not have; the cook's judge runs in every import, so the store holds the Rust answer the program compares)
+- 2026-11-24 R2.4: the swapped lists are kept in the material's form state (Material::FormState::mSwaps, SwapTables): the last 4 distinct swaps of one map, keyed by map, texture id and the screen-coordinate sampler, forgotten when the material's or the model data's texture stamp moves; a draw with more than one swapped map builds its list as before (because PlayerModel swaps one map per material (map 0), and its images change between a few (eyes, hands); the form state already keeps the unswapped table under the same stamps; texture ids are never given again after a free, and a table lives while its textures do, so a kept table cannot go stale)
 
 ## Checks changed during the run (70)
 
