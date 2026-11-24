@@ -1,12 +1,13 @@
 # Nebula native plan: status
 
-Written 2026-11-24 03:10. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 03:11. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 15 of 138 (11%).
 
 Now: in work: lander landing R1.3 (written ahead)
 
-In work now: Nothing started.
+In work now:
+- R1.3 N-1067: the present gate waits only on a load screen (agent 1)
 
 ## Packages
 
@@ -136,7 +137,7 @@ Nothing is blocked.
 - 2026-11-23 R1.3: Proof 1 on Vulkan and the tablet is R1.2's count (no line 'missed by a draw in play', no line 'registered after the first picture'); the gate's count is Direct3D 12's (because the read-first question answered from the code: only pipelines_d3d12.cpp takes CreationScope and only renderer_d3d12.cpp takes PresentScope, so Vulkan, Direct3D 11 and Metal have no gate and a creation there never holds a picture)
 - 2026-11-23 R1.3: A settings change in play still queues its new forms at once (prepare), made by the workers at the lowest priority while the settings view shows them as preparing; a Direct3D 12 Present can wait for them, and such a wait is logged (because the row names a later settings change as one of the two creations left in play; holding the new forms until the next load would leave the changed setting's draws out until then, which a player sees)
 
-## Checks changed during the run (57)
+## Checks changed during the run (69)
 
 - 2026-11-22 S0.1.3 tools/verify/console_census.py: the open group gx_sections counts the four section names GXMT, GXTG, GXTM and GXWP with a ceiling of 31, and the closed group fifo excludes only those four whole words (allowed by docs/engine/FRAME-MODEL.md section 2.9)
 - 2026-11-22 U-unattended tools/gate/main_push_guard.py: the guard also refuses a push of a branch named plant/... (allowed by docs/plan/native/TOOL-MEND-PLANTS.md, how a plant is kept from ever landing)
@@ -195,6 +196,18 @@ Nothing is blocked.
 - 2026-11-23 AF tools/gate/tests/plan_commands_test.py: the tour command's test gives agent_tour.py the pictures of its runs (one picture the same) in place of runs that took none (allowed by docs/plan/04-GATE-AND-MAIN.md section 9 (Pictures), the planner's brief AF)
 - 2026-11-23 AF tools/gate/tests/pictures_new_test.py: the declaration lines of the cases have the five words (place, renderer and disc named) (allowed by docs/plan/04-GATE-AND-MAIN.md section 9 (Pictures), the planner's brief AF)
 - 2026-11-23 AF tests/pictures/approved.tsv: 626 rows of the other two discs on Direct3D 11 (314) and Vulkan (312) take the picture the tour of main 53eb71017 draws: each lies from the approved Direct3D 12 picture of the same disc, stop and picture within the gap that renderer had before the trial (Direct3D 11: 19 pixels at most, 1 level, none over 15; Vulkan: 32993 pixels, 230 levels, 13 over 15) (allowed by docs/plan/04-GATE-AND-MAIN.md section 9 (Pictures), the planner's brief AF part 2)
+- 2026-11-23 M-006 tools/gate/scope.py: a step's landing (no --section) leaves out the groups validate, measure_pc and measure_tablet (step_plan); the group section brings them, every picture group and android back (section_plan) (allowed by the owner's order in the session of 11-23 (a step lands on the quick tier, the full main level at a package's end or every 4 steps); docs/plan/04-GATE-AND-MAIN.md section 15, Two tiers)
+- 2026-11-23 M-006 tools/gate/gate.py: landing_level: a step's landing of a change that can move a picture is of the landing's own level (the 12 quick stops on the three renderers and the tablet), not the main level; the main level is the section's check (--section); declared_check passes a line no picture of the 12 stops used at a step's landing, and at the section's check takes a line a step's landing marked as used (allowed by the owner's order in the session of 11-23 (a step lands on the quick tier, the full main level at a package's end or every 4 steps); docs/plan/04-GATE-AND-MAIN.md section 15, Two tiers)
+- 2026-11-23 M-006 tools/gate/pictures.py: approve_landing with carry keeps PICTURES-CHANGE.txt on main with the used lines marked; unused_declarations does not count a marked line (allowed by the owner's order in the session of 11-23 (a step lands on the quick tier, the full main level at a package's end or every 4 steps); docs/plan/04-GATE-AND-MAIN.md section 15, Two tiers)
+- 2026-11-23 M-006 tools/gate/long_results.py: the nightly approval keeps PICTURES-CHANGE.txt (carry) in place of removing it (allowed by the owner's order in the session of 11-23 (a step lands on the quick tier, the full main level at a package's end or every 4 steps); docs/plan/04-GATE-AND-MAIN.md section 15, Two tiers)
+- 2026-11-23 M-006 tools/gate/tests/landing_test.py: test_groups_of_the_union expects a step's groups without validate, measure_pc and measure_tablet; a new case for --section (allowed by the owner's order in the session of 11-23 (a step lands on the quick tier, the full main level at a package's end or every 4 steps); docs/plan/04-GATE-AND-MAIN.md section 15, Two tiers)
+- 2026-11-23 M-006 tools/gate/tests/gate_pictures_set_test.py: test_the_level_of_a_landing expects the landing's own level for a step's game-code plan and the main level for its section's check (allowed by the owner's order in the session of 11-23 (a step lands on the quick tier, the full main level at a package's end or every 4 steps); docs/plan/04-GATE-AND-MAIN.md section 15, Two tiers)
+- 2026-11-23 M-006 tools/gate/tests/plan_ahead_test.py: FIRST_PLAN has a third step, A.2, so that A.1 is not the last step of package A (allowed by the owner's order in the session of 11-23 (a step lands on the quick tier, the full main level at a package's end or every 4 steps); docs/plan/04-GATE-AND-MAIN.md section 15, Two tiers)
+- 2026-11-23 M-006 tools/lumacore/luma_test.py: a test whose play ends in a fault of the tool's that one more play can clear (output-missing, no-exit-record, setup-failed, the runner's own exception) is played once more at once; a pass then is flake once every judge of its lane has left it a pass (tools/gate/kinds.py played_again, judge_cases), no longer tool (allowed by the owner's order in the session of 11-23 (a waiting landing must not end not judged; transient tablet faults are retried inside the tool); the first fault is kept (<renderer>-first, flakes.tsv), and three in seven days set the test aside and open a repair; docs/plan/04-GATE-AND-MAIN.md section 9, Played once more by the runner)
+- 2026-11-24 M-007 tools/gate/tests/plan_page_test.py: the address test: index.html names no address with the fixture's local origin and loads only the copy beside it (load("progress-data.json")); a new test lets exactly one address, the live data's, when one is given (allowed by the owner's order in the session of 11-23 (one section at a time on Opus, a Sonnet agent lands and makes the simple fixes, the hard ones go back to Opus; the page live; approved 'Yes, build it'); docs/plan/native/AGENT.md section 15)
+- 2026-11-24 M-007 tools/gate/tests/plan_page_test.py: the progress branch holds STATUS.md and progress-data.json (was STATUS.md alone) in the first and the second push (allowed by the owner's order in the session of 11-23 (one section at a time on Opus, a Sonnet agent lands and makes the simple fixes, the hard ones go back to Opus; the page live; approved 'Yes, build it'); docs/plan/native/AGENT.md section 15)
+- 2026-11-24 M-007 tools/gate/tests/plan_page_test.py: the node driver's document has the element source, and its fetch stand-ins keep the addresses they were given (allowed by the owner's order in the session of 11-23 (one section at a time on Opus, a Sonnet agent lands and makes the simple fixes, the hard ones go back to Opus; the page live; approved 'Yes, build it'); docs/plan/native/AGENT.md section 15)
+- 2026-11-24 M-007 tools/gate/tests/plan_fixture.py: Tree turns plan.HANDOFF_REQUIRED off for every test that uses it (allowed by the owner's order in the session of 11-23 (one section at a time on Opus, a Sonnet agent lands and makes the simple fixes, the hard ones go back to Opus; the page live; approved 'Yes, build it'); docs/plan/native/AGENT.md section 15)
 
 ## Tool faults
 
