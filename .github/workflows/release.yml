@@ -417,7 +417,7 @@ jobs:
 
   linux:
     name: Linux package
-    needs: [release, lumakit, ffx-shaders]
+    needs: [release, lumakit]
     if: false
     runs-on: ubuntu-24.04
     timeout-minutes: 240
@@ -455,10 +455,7 @@ jobs:
       - name: Dependencies
         run: sh tools/fetch_build_deps.sh "$RUNNER_TEMP/deps"
       # FSR 3's shader headers, made by the ffx-shaders job (its compiler runs on Windows only).
-      - uses: actions/download-artifact@v8
-        with:
-          name: ffx-vk-shaders
-          path: ${{ runner.temp }}/ffx-vk-shaders
+      
       - name: Build Nebula
         # NEBULA_MODS=OFF (no mod support) is read by the script and by every CMake project; NEBULA_REQUIRE_FSR3 by the script and
         # by CMake: without the shader headers the build stops.
