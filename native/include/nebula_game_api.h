@@ -1013,7 +1013,8 @@ typedef struct NebulaHostServices {
     void (*galaxy_select_name)(void* user, uint32_t index, uint32_t star, const uint16_t* name);
     /* `hd`: a texture record, the image handed over at `image` as the game painted it larger; the renderer draws it in
        that image's place while the image's texels are what they are now (a texture pack's name for them wins). NULL:
-       what was handed over for `texture` goes. The renderer takes a copy. */
+       what was handed over for `texture` goes. The renderer takes a copy before this returns (and stages it again after
+       a device restart): the game may write `hd` again at once. */
     void (*texture_hd)(void* user, uint32_t texture, const void* hd);
     /* The Miis in the player's Mii library (any number; nebula_game_mii_changed says when it changed). */
     uint32_t (*mii_count)(void* user);

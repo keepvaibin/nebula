@@ -1741,6 +1741,25 @@ namespace {
     };
     HdPainting sHd = {nullptr, nullptr, -1, 0, 0};
     bool sHdSkippedLogged = false;  // the sheets are too large to repaint at eight times: said once
+    bool sHdNoMemory = false;       // a large painting's memory was refused: none is painted again, said once
+
+    // The memory of a large painting, its record and its band, or false with neither taken (P-216): the icons then stay
+    // at the game's size.
+    bool takeHdMemory(u8** ppRecord, Rgba** ppBand, size_t recordBytes, size_t bandBytes) {
+        u8* pRecord = static_cast< u8* >(malloc(recordBytes));
+        Rgba* pBand = static_cast< Rgba* >(malloc(bandBytes));
+        if (pRecord == nullptr || pBand == nullptr) {
+            free(pRecord);
+            free(pBand);
+            sHdNoMemory = true;
+            nebula_log("NebulaIcons: no memory for a large painting (%u bytes); the icons stay at the game's size\n",
+                       static_cast< unsigned >(recordBytes + bandBytes));
+            return false;
+        }
+        *ppRecord = pRecord;
+        *ppBand = pBand;
+        return true;
+    }
 
     void forgetHdSheet(s32 sheet) {
         if (sheet < sHdSheetNum) {
@@ -1803,6 +1822,9 @@ namespace {
     bool paintHdBand() {
         const s32 width = sFont.mSheetWidth * cHdScale;
         const s32 height = sFont.mSheetHeight * cHdScale;
+        if (sHdNoMemory) {
+            return false;
+        }
         if (width > cHdSheetMax || height > cHdSheetMax) {
             if (!sHdSkippedLogged) {
                 sHdSkippedLogged = true;
@@ -1821,10 +1843,12 @@ namespace {
             if (sHd.mSheet < 0) {
                 return false;
             }
-            if (sHd.mRecord == nullptr) {
-                const size_t bytes = NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(width, height, cHdLevels, NEBULA_TEXTURE_RGBA8);
-                sHd.mRecord = static_cast< u8* >(malloc(bytes));
-                sHd.mBand = static_cast< Rgba* >(malloc(sizeof(Rgba) * sFont.mGlyphWidth * cHdScale * cHdBandRows));
+            if (sHd.mRecord == nullptr &&
+                !takeHdMemory(&sHd.mRecord, &sHd.mBand,
+                              NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(width, height, cHdLevels, NEBULA_TEXTURE_RGBA8),
+                              sizeof(Rgba) * sFont.mGlyphWidth * cHdScale * cHdBandRows)) {
+                sHd.mSheet = -1;
+                return false;
             }
             nebula_texture_init(sHd.mRecord, static_cast< u16 >(width), static_cast< u16 >(height), cHdLevels, NEBULA_TEXTURE_RGBA8,
                                 0);
@@ -2033,10 +2057,12 @@ namespace {
                 continue;
             }
             const s32 size = cPictureSizes[k] * cHdScale;
-            if (rHd.mRecord == nullptr) {
-                rHd.mRecord = static_cast< u8* >(
-                    malloc(NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(size, size, cHdLevels, NEBULA_TEXTURE_RGBA8)));
-                rHd.mBand = static_cast< Rgba* >(malloc(sizeof(Rgba) * size * cHdBandRows));
+            if (sHdNoMemory || (rHd.mRecord == nullptr &&
+                                !takeHdMemory(&rHd.mRecord, &rHd.mBand,
+                                              NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(size, size, cHdLevels, NEBULA_TEXTURE_RGBA8),
+                                              sizeof(Rgba) * size * cHdBandRows))) {
+                rHd.mRow = -1;
+                return;
             }
             if (rHd.mRow == 0) {
                 nebula_texture_init(rHd.mRecord, static_cast< u16 >(size), static_cast< u16 >(size), cHdLevels, NEBULA_TEXTURE_RGBA8, 0);
@@ -2075,8 +2101,7 @@ namespace {
     const s32 cJcBand = 16;  // rows painted at once (whole 4 x 4 tiles)
     const s32 cJcPictures = 2 * NebulaIcons::JoyConLooks;
     const s32 cJcOrder[NebulaIcons::JoyConLooks] = {NebulaIcons::JoyConShown, NebulaIcons::JoyConAway, NebulaIcons::JoyConHeld};
-    const s64 cJcRetireMs = 250;  // a set no longer shown keeps its memory this long (frames still drawing it)
-    const s32 cJcSteady = 3;         // a density asked for this many frames running before a set is painted for it
+    const s32 cJcSteady = 3;  // a density asked for this many frames running before a set is painted for it
 
     // One density's pictures, every half in every look (painted in cJcOrder, both halves of a look in turn), in the
     // game's image.
@@ -2092,7 +2117,7 @@ namespace {
         s32 mRow;   // its rows painted
         s64 mSpent;  // nanoseconds
         s32 mCalls;
-        s64 mRetired;  // when the screen stopped showing it (NebulaClock; 0: it never showed)
+        u32 mBytes;  // mBlock's
     };
     JoyConSet sJoyConSets[2];
     s32 sJoyConShown = -1;  // the set whose pictures the screen shows, or -1
@@ -2309,12 +2334,17 @@ namespace {
     // Set `index` made ready for the density asked for, its pictures unpainted records (each a multiple of 8 bytes, the texture record's widest member).
     void startJoyConSet(s32 index) {
         JoyConSet& rSet = sJoyConSets[index];
-        // The pictures of the density before are given up once the new block is taken.
+        // The pictures of the density before are given up once the new block is taken: their textures first, which the
+        // renderer frees once the frames that drew them are done (its frame fence), then their memory, which no frame
+        // reads (P-216).
         u8* const pOld = rSet.mBlock;
+        const u32 oldBytes = rSet.mBytes;
         memset(&rSet, 0, sizeof(rSet));
         const u32 bytes = (NEBULA_TEXTURE_HEADER + static_cast< u32 >(sJoyConWidth * sJoyConHeight * 4) + 7u) & ~7u;
         rSet.mBlock = static_cast< u8* >(NebulaArena::alloc(bytes * cJcPictures, 16, NebulaArena::root()));
+        rSet.mBytes = bytes * cJcPictures;
         if (pOld != nullptr) {
+            RenderTexture::forget(reinterpret_cast< uintptr_t >(pOld), reinterpret_cast< uintptr_t >(pOld) + oldBytes);
             NebulaArena::free(pOld, NebulaArena::root());
         }
         for (s32 i = 0; i < cJcPictures; i++) {
@@ -2485,9 +2515,9 @@ namespace NebulaIcons {
         JoyConSet& rSet = sJoyConSets[index];
         const s64 start = NebulaClock::nowNs();
         if (!asked(rSet)) {
-            // A density settles over a few frames (the 2D layer's scale follows the window); a set the screen showed is
-            // still being drawn for a few frames after it stops.
-            if (sJoyConAsked < cJcSteady || (rSet.mRetired != 0 && (start - rSet.mRetired) / 1000000 < cJcRetireMs)) {
+            // A density settles over a few frames (the 2D layer's scale follows the window). The set painted over is not
+            // shown: its textures go at the renderer's frame fence (startJoyConSet).
+            if (sJoyConAsked < cJcSteady) {
                 return true;
             }
             startJoyConSet(index);
@@ -2503,9 +2533,6 @@ namespace NebulaIcons {
         nebula_log("NebulaIcons: Joy-Con pictures %d x %d painted in %d us over %d frames\n", static_cast< int >(rSet.mWidth),
                  static_cast< int >(rSet.mHeight), static_cast< int >(rSet.mSpent / 1000),
                  static_cast< int >(rSet.mCalls));
-        if (sJoyConShown >= 0) {
-            sJoyConSets[sJoyConShown].mRetired = NebulaClock::nowNs();
-        }
         sJoyConShown = index;
         return false;
     }

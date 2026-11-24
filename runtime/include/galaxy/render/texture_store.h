@@ -92,7 +92,8 @@ public:
     void update_image(std::uint32_t id, const void* bytes, std::uint32_t size);
     void free_image(std::uint32_t id);
     [[nodiscard]] std::uint32_t new_target();
-    // `record`, the game's larger painting of texture `id`, shown unless a pack names it; null: that one goes.
+    // `record`, the game's larger painting of texture `id` (an RGBA8 record), shown unless a pack names it; null: that one
+    // goes. The store keeps its own copy, staged again after a device restart; a record of another kind is ignored.
     void set_built_in(std::uint32_t id, const void* record);
     // What was queued since the last call: the render thread applies it when the list after it first walks.
     [[nodiscard]] std::shared_ptr<Ops> take_ops();
@@ -255,7 +256,8 @@ private:
     // `registered`: the image's source as registered, whose answer on levels drawn by hand stands (a restage judges nothing).
     bool stage_image(Op& op, const void* bytes, std::uint32_t size, std::uint32_t width, std::uint32_t height,
                      std::uint8_t format, std::uint32_t drop = 0u, const Source* registered = nullptr);
-    void queue_built_in(std::uint32_t id, const void* record);
+    // A BuiltIn op for `id` staged from `record` (checked, the store's copy); null: its painting goes.
+    void queue_built_in(std::uint32_t id, const NebulaTexture* record);
     void create_entry(Op& op);
     // `once`: the texture's levels are written once (a new id), so it may be a direct-write texture; an id that is updated
     // keeps a texture the GPU copies into.
@@ -280,7 +282,7 @@ private:
     std::uint32_t next_image_ = 1u, next_target_ = 1u;
     std::unordered_map<std::uint32_t, LinearImage> linear_images_;
     std::unordered_map<std::uint32_t, Source> sources_;
-    std::unordered_map<std::uint32_t, const void*> built_ins_;
+    std::unordered_map<std::uint32_t, std::vector<std::uint8_t>> built_ins_;  // set_built_in's copies, by id
     std::vector<ResizeRequest> resize_requests_;  // the budget's: staged by the next take_ops
     DeviceGate* gate_ = nullptr;
     ChunkRef arena_chunk_;

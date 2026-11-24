@@ -92,6 +92,10 @@ namespace {
         const u32 room = sRoom != 0 ? sRoom * 2 : 8192;
         const NebulaHostServices* pHost = nebula_host();
         Entry* pNew = static_cast< Entry* >(pHost->heap_alloc(pHost->user, room * sizeof(Entry)));
+        if (pNew == nullptr) {
+            // The table as it was stays whole; the game cannot go on without a number for the image (P-255).
+            NEBULA_PANIC("RenderTexture: no memory for a table of %u textures", static_cast< unsigned >(room));
+        }
         memset(pNew, 0, room * sizeof(Entry));
         u32 used = 0;
         for (u32 i = 0; i < sRoom; i++) {
