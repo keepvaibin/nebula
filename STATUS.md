@@ -1,8 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-24 13:38. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 14:02. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
-Steps landed: 24 of 145 (17%).
+Steps landed: 24 of 138 (17%).
+
+Now: in work: writer writing package G2 from G2.3.1
 
 In work now: Nothing started.
 
@@ -15,7 +17,7 @@ In work now: Nothing started.
 | S0.3 | 2 | 2 |
 | R1 | 4 | 4 |
 | R2 | 5 | 5 |
-| G2 | 2 | 16 |
+| G2 | 2 | 9 |
 | G6 | 0 | 8 |
 | G1 | 0 | 5 |
 | R3 | 0 | 13 |
@@ -37,19 +39,39 @@ In work now: Nothing started.
 
 ## Last 10 landings
 
-None yet.
+| When | Step | Title | Code commit | Main commit |
+| --- | --- | --- | --- | --- |
+| 2026-11-24 13:28 | G2.2 | Landing 2: the lead at whole multiples of 60 Hz | 71aa23551 | 502e0e4bf |
+| 2026-11-24 13:12 | G2.1 | Landing 1: a sequence starts at its arrival; the step keeps its due times | 428c84f7d | 4614f2a97 |
+| 2026-11-24 11:05 | R-005 |  | bd769ade9 | e29e1d6bd |
+| 2026-11-24 09:58 | R2.5 | P-216 and P-255's first part | 884be1caa | 788713537 |
+| 2026-11-24 09:14 | R2.4 | The player's swapped images | d034370b1 | aa1e98a03 |
+| 2026-11-24 08:31 | R2.3 | P-059: the cook decides "authored levels" once | 720958ef9 | 31fa52e92 |
+| 2026-11-24 07:34 | R2.2 | The sampler tables stop filling: P-048, P-056, P-066, P-061 | 63c679c5f | 4f085e54d |
+| 2026-11-24 06:56 | R2.1 | A target is read through its own slot; the walk-level counting test | 9519e05d7 | 8c7031e10 |
+| 2026-11-24 04:51 | R1.4 | P-065 (Metal): the renderer's own shader texts compiled at build | 292b3cc4d | 599592a98 |
+| 2026-11-24 03:28 | R1.3 | N-1067: the present gate waits only on a load screen | 4fcf535b2 | 2d389b3a3 |
 
 ## Repairs
 
-1 open of kind fail, 1 in all.
+0 open of kind fail, 5 in all.
 
 | Id | State | Kind | Check | Renderer | Traced to | Seen |
 | --- | --- | --- | --- | --- | --- | --- |
-| R-001 | open | fail | tour/d3d12 | d3d12 | step S1.1 commit abc | 2 |
+| R-005 | landed | fail | soak | - | not traced | 1 |
+| R-001 | confirmed | fail | build/windows-asan | - | not traced | 1 |
+| R-002 | confirmed | fail | coverage | - | not traced | 1 |
+| R-003 | confirmed | fail | soak | - | not traced | 1 |
+| R-004 | confirmed | fail | coverage | - | not traced | 1 |
 
 ## For the owner to check by hand
 
-Nothing is owed.
+- S0.1.2 Documents: P-096: on the tablet, set up the game once more over an installed one, and once with the setup cut off (close the app mid-copy); then start the launcher: the old game stays playable until the new one is whole, and nothing is left behind (no game.pak.new, no half copy). (agent 1, 2026-11-22 14:18)
+- R1.2 P-010: a stage's pipelines made while it loads, a draw never compiles: Real-time play on a cold cache (delete nothing yours; a new install folder): enter three galaxies for the first time and compare the frame times with R1.1's build under --diagnostics timeline; no PipelineMissed event and no frame longer than its neighbours after each stage's first picture (agent 1, 2026-11-23 21:16)
+- R1.4 P-065 (Metal): the renderer's own shader texts compiled at build: On a Mac (and an iPhone when its app exists): start the game and turn on bloom, the post-process (SMAA and FXAA) and ambient occlusion, then MetalFX and SGSR 2: the log shows '[metal] renderer shaders: N from utility.metallib, 0 compiled from their text' and no hitch the first time each is used (agent 1, 2026-11-24 03:48)
+- R2.2 The sampler tables stop filling: P-048, P-056, P-066, P-061: proof 4, the audit's runs: Direct3D 12 with dynamic resolution and --diagnostics timeline, Good Egg 10 minutes, no [samplers] line and no wait; the tablet, the same 10 minutes; Direct3D 11 with --diagnostics resolution-steps through several galaxies, samplers_.size() under 4096; Metal waits counted on an Apple-silicon Mac (needs a Mac). Metal is compiled by the GitHub Mac job only. (agent 1, 2026-11-24 05:34)
+- G2.1 Landing 1: a sequence starts at its arrival; the step keeps its due times: G2.1 proof 3 (I-004, I-013): on a shown window, the pacing measure before G2.1 and after it: at 240 Hz with in-between pictures on, delay_avg_us of the [pace] line (file F: 42.4 ms, expected about 26) and the timeline's RenderBegin to first present; at 120 Hz with in-between pictures on, the timeline's StepWaitEnd against VBlank (tools/perf/timeline_digest.py); the figures and run folders go into the rows' notes (agent 1, 2026-11-24 11:27)
+- G2.2 Landing 2: the lead at whole multiples of 60 Hz: G2.2 proofs 2 and 3 (I-002): on a shown window at 120 and 240 Hz with in-between pictures on and VSync on, the real pictures shown counted as file F section 1A did (expected near every step, before 5 to 13 of 2,640) and the walks per step (k, before k + 1); the [pace] line's animation_within_1ms before and after, unchanged; the figures and run folders go into I-002's note (agent 1, 2026-11-24 11:51)
 
 ## Waiting for the owner
 
@@ -61,7 +83,15 @@ Nothing is blocked.
 
 ## Tool mends
 
-No tool was mended.
+| Id | State | Step | Title | Attempts | Minutes | Commit |
+| --- | --- | --- | --- | --- | --- | --- |
+| M-001 | closed | R-002 | coverage: the history's key holds the suites that ran, a run that fell is not the next bar | 0 | 0 | 2d7287334 |
+| M-002 | closed | R-003 | soak: a run of eight laps or more is judged from lap 6 (slope and lowest of the last laps), a spike is not growth | 0 | 0 | 2d7287334 |
+| M-003 | closed | R-001 | build_windows.ps1 refuses a build folder configured with another NEBULA_SANITIZE instead of configuring it again | 0 | 117 | c60999ee1 |
+| M-004 | closed | S0.2.1 | the replay check cannot play a run at a time rate of 2 and compare its step hashes with a rate-1 run (S0.2.1 proof 2) | 0 | 94 | fb2b39bc6 |
+| M-005 | closed | R-004 | Coverage measured a program that could not open the game data: its build folder held objects of another tree | 0 | 0 | f9b350784185c77e18d4822f7b13cd8b1381a33e |
+| M-006 | closed | - | the step tier and section check; a passing tool fault played once more; a waiter left not judged runs itself | 0 | 95 | 2911f6429 |
+| M-007 | closed | - | the section-at-a-time roles: a whole section ahead, wait, hand-off sheets, hard reports, the live page | 0 | 80 | 9ed09cfec |
 
 ## Decisions (74)
 
@@ -140,7 +170,7 @@ No tool was mended.
 - 2026-11-24 G2.2: A sequence with no generated pictures takes no lead (because a lead places pictures between two frames; at 60 (k = 1) and for a stopping or capped-to-none sequence every picture is the frame itself, as the card's limit of 60 says)
 - 2026-11-24 G2.2: On locked vblanks a sequence's reference moves to the first vblank at or after it, not the nearest (because the reference is its step's moment plus the delay, about 1.3 ms before a vblank under the host's frame phase; at 480 Hz that is over half a vblank (at 360 Hz with a slightly longer delay too), so the nearest vblank lies before the list arrives and the sequence's first picture would be late or two in one refresh; the first at or after keeps t = 1 on a refresh at every rate)
 
-## Checks changed during the run (72)
+## Checks changed during the run (70)
 
 - 2026-11-22 S0.1.3 tools/verify/console_census.py: the open group gx_sections counts the four section names GXMT, GXTG, GXTM and GXWP with a ceiling of 31, and the closed group fifo excludes only those four whole words (allowed by docs/engine/FRAME-MODEL.md section 2.9)
 - 2026-11-22 U-unattended tools/gate/main_push_guard.py: the guard also refuses a push of a branch named plant/... (allowed by docs/plan/native/TOOL-MEND-PLANTS.md, how a plant is kept from ever landing)
@@ -212,9 +242,17 @@ No tool was mended.
 - 2026-11-24 M-007 tools/gate/tests/plan_page_test.py: the node driver's document has the element source, and its fetch stand-ins keep the addresses they were given (allowed by the owner's order in the session of 11-23 (one section at a time on Opus, a Sonnet agent lands and makes the simple fixes, the hard ones go back to Opus; the page live; approved 'Yes, build it'); docs/plan/native/AGENT.md section 15)
 - 2026-11-24 M-007 tools/gate/tests/plan_fixture.py: Tree turns plan.HANDOFF_REQUIRED off for every test that uses it (allowed by the owner's order in the session of 11-23 (one section at a time on Opus, a Sonnet agent lands and makes the simple fixes, the hard ones go back to Opus; the page live; approved 'Yes, build it'); docs/plan/native/AGENT.md section 15)
 - 2026-11-24 R1.4 .github/workflows/check.yml: the Mac start check keeps its command on one line with the output piped to start.log (set -o pipefail), and fails unless the log has the line "[metal] renderer shaders: N from utility.metallib, 0 compiled from their text, 0 failed" and no "renderer shader compiled from its text" line (allowed by docs/plan/native/04-NATIVE-LANE-R.md section R1.4 (P-065))
-- 2026-11-24 G2.3 split tools/gate/tests/plan_cards_test.py: the real cards read are those of places 12 to 145, not 12 to 138 (LAST_STEP, the function cards_12_to_145, the count test now 134 cards) (allowed by the planner's split of G2.3 on 11-24, after its writer blocked it (PLAN blocked G2.3: nine pieces and proofs a writer may not run); docs/plan/native/02-NATIVE-OVERVIEW.md, the order checked against steps.tsv)
-- 2026-11-24 G2.3 split tools/gate/tests/plan_test.py: the real plan is read as 145 steps in orders 1 to 145 and 145 card headings, not 138 (three tests and the docstring) (allowed by the planner's split of G2.3 on 11-24, after its writer blocked it (PLAN blocked G2.3: nine pieces and proofs a writer may not run); docs/plan/native/02-NATIVE-OVERVIEW.md, the order checked against steps.tsv)
 
 ## Tool faults
 
-0 tool faults recorded.
+5 tool faults recorded.
+
+The last 20:
+
+| When | Step | Test | What happened | What the agent could not do |
+| --- | --- | --- | --- | --- |
+| 2026-11-24 05:33 | nightly | tour/tablet | 101 of 102 pass; not: 013-CocoonExGalaxy-1 tool | - |
+| 2026-11-23 22:44 | - | measure/step/tablet | the measure could not run: the run failed, harness exit 1 | - |
+| 2026-11-23 20:39 | R1.1 | vulkan | approved on Adreno (TM) 740 driver 512.676.1; these runs: Adreno (TM) 740 driver 512.676.1, unknown driver | R1.2's landing waited 38 min behind test/ak-second-run and ended not judged; nothing tested |
+| 2026-11-23 20:39 | R1.1 | 010-CannonFleetGalaxy-1 | harness-error: the runner raised RuntimeError: run-as dev.nebula.galaxy.test gave no folder (is the test app installed, and debuggable?): | - |
+| 2026-11-22 14:33 | - | (by hand) | plan.py land S0.1.3 ended code 4 (not judged): gate.py's push check refused main's move because tools/verify/console_census.py's closed group fifo counts 31 (the card's section names GXMT, GXTG, GXTM, GXWP in native/include/nebula_model.h, runtime/src/render/core/model_sections_tests.cpp, crates/nebula-import/src/cook/model_write.rs); it is a certain refusal of the change, reported as not judged; plan.py toolfault --last then said: agent 1 has no tool fault recorded | - |
