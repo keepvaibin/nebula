@@ -79,18 +79,18 @@ bool RendererD3D11::initialize(int window_width, int window_height, const FrameM
             shutdown();
             return false;
         }
-        report_adapter();
+               report_adapter();
         memory_.attach(d3d11::Context::get().adapter());
+        // The scene's depth as a picture (publish_scene_depth_copy): 16-bit float, which every feature level 11_0
+        // driver renders and filters. R32_FLOAT was probed for before; the Intel Skylake driver reports it as supported
+        // but fails at draw time, so it is not used.
+        depth_copy_format_ = DXGI_FORMAT_R16_FLOAT;
         if (!create_scene_targets(scene_map_, wanted_msaa_samples())) {
             shutdown();
             return false;
         }
         // The scene in a part of its targets, every pass reading that part (dynamic_resolution.h).
         set_dynamic_resolution_offered(true);
-        // The scene's depth as a picture (publish_scene_depth_copy): a format the device draws into and filters.
-       // UINT r32 = 0u;
-       // constexpr UINT kDepthCopyNeeds = D3D11_FORMAT_SUPPORT_RENDER_TARGET | D3D11_FORMAT_SUPPORT_SHADER_SAMPLE;
-        depth_copy_format_ = DXGI_FORMAT_R16_FLOAT;
         // The rings are upload memory with addresses in the renderer's own space; their sizes follow the other renderers'.
         // No ring keeps a frame before the last one readable: nothing on Direct3D 11 reads last frame's vertices (motion).
         gpu::Device* const device = this->device();
@@ -137,7 +137,10 @@ bool RendererD3D11::initialize(int window_width, int window_height, const FrameM
         shutdown();
         return false;
     }
-    std::cout << "[Renderer] Direct3D 11 scene target=" << scene_map_.width << 'x' << scene_map_.height << " depth=D32FS8\n";
+       std::cout << "[Renderer] Direct3D 11 scene target=" << scene_map_.width << 'x' << scene_map_.height
+              << " depth=" << (draw_layout_.depth == DXGI_FORMAT_D24_UNORM_S8_UINT ? "D24S8"
+                             : draw_layout_.depth == DXGI_FORMAT_D32_FLOAT_S8X24_UINT ? "D32FS8"
+                             : "other") << '\n';
     return true;
 }
 
