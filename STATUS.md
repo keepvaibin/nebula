@@ -6,7 +6,8 @@ Steps landed: 18 of 138 (13%).
 
 Now: in work: lander landing R2.1 to R2.5
 
-In work now: Nothing started.
+In work now:
+- R2.2 The sampler tables stop filling: P-048, P-056, P-066, P-061 (agent 1)
 
 ## Packages
 
@@ -91,7 +92,7 @@ Nothing is blocked.
 | M-006 | closed | - | the step tier and section check; a passing tool fault played once more; a waiter left not judged runs itself | 0 | 95 | 2911f6429 |
 | M-007 | closed | - | the section-at-a-time roles: a whole section ahead, wait, hand-off sheets, hard reports, the live page | 0 | 80 | 9ed09cfec |
 
-## Decisions (52)
+## Decisions (55)
 
 - 2026-11-23 S0.2.1: LoadSlice: 32 items a frame; an item is a phase of GameScene::initAfterScenarioChosen, the player, one placement made whole, one piece of FileSelector::initStep, or one Star Bit of the reserve (because the card asks for a fixed count of work and names no count; the count is a constant in one place, no player sees which frame of the load an item falls in, and the load worker (G3.7) replaces the slices)
 - 2026-11-23 S0.2.1: Drawing's random stream (MR::getDrawRandom) is seeded with the same seed as the game's stream, in setRandomSeedFromStageName and setFixedRandomSeed (because a fixed seed keeps the cosmetic numbers the same in every run of a replay and needs no new setting; the draw stream runs through the same sequence as the game's but is advanced only by drawing, so neither changes the other)
@@ -145,6 +146,9 @@ Nothing is blocked.
 - 2026-11-24 R2.1: the target slots live in the texture lists' own buffer (draw_maps plus the target's number), so no renderer file changes: the four renderers bind t18 as before (because a slot region in each renderer's texture array would change three heap layouts and Metal's arrays for the same read; the list chunks are already bound per draw on Direct3D 12, Vulkan and Metal, and DrawRoot's map_bias word is free with the arrays)
 - 2026-11-24 R2.1: a bound table holding a target (Direct3D 11, Vulkan and Metal without descriptor indexing) is still made once per state of the pictures (because a bound table holds the views themselves and shader model 5.0 and those devices index a table only by constants, so no slot can stand between a map and its picture without a binding of its own; FRAME-MODEL 2.10's list part is the pairs list)
 - 2026-11-24 R2.1: the state of the target slots also moves with every picture view made or given up (TextureStore::views_changed), not only with the walk's copies and takes (because a target pass and the scene publish pictures in new views without pictures_moved_ (end_target_pass, the scene's colour and depth at a target pass's start); slots written before such a publication named the old view, and the quick tour's d3d12 EggStar arrive showed the sun's flare through the house)
+- 2026-11-24 R2.2: a sampler is made when the walk first writes a table that names it (R2.1: a table is written once per state), not again in later frames; no registration step stands before the walk (because the skeleton's registration (FM 2.10) is not in the tree, and making a sampler or writing its slot is a CPU descriptor write with no GPU wait; what stalled was the drain, which is gone)
+- 2026-11-24 R2.2: samplers start again beside the old ones at half the device's sampler states: Direct3D 11 half of D3D11_REQ_SAMPLER_OBJECT_COUNT_PER_DEVICE (2048), Vulkan half of maxSamplerAllocationCount, Metal half its array's slots with arrays and 2048 without (because a cache bounded only by the game's own states has no count in the sources; half the limit is Vulkan's existing rule, and the old ones stay alive until their slot's fence, so the new ones must fit beside them)
+- 2026-11-24 R2.2: a frame that makes more new samplers than the array's frame room (512) still throws; P-293's part stays with R7.8 (because the heap or array is replaced only between frames with 512 slots free, and replacing it inside a frame would rewrite the lists already recorded against the old one; the game's distinct sampler states are far fewer)
 
 ## Checks changed during the run (70)
 
