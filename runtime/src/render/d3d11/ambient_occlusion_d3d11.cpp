@@ -114,7 +114,7 @@ void AmbientOcclusion::trim_idle() {
 
 // `count` elements of `stride` bytes (at least one element: an empty list still binds a buffer) into `rows`, copied in
 // after the commands recorded before (the last frame's passes read their own).
-bool AmbientOcclusion::upload(ID3D11DeviceContext1* context, Rows& rows, const void* data, std::uint32_t count,
+bool AmbientOcclusion::upload(ID3D11DeviceContext* context, Rows& rows, const void* data, std::uint32_t count,
                               std::uint32_t stride) {
     const std::uint32_t needed = std::max(count, 1u);
     if (!rows.buffer || rows.capacity < needed) {
@@ -147,7 +147,7 @@ bool AmbientOcclusion::upload(ID3D11DeviceContext1* context, Rows& rows, const v
 
 // One compute pass: t1 the occlusion it reads (t0 the depth, t2 the distances, t3-t4 the models stay bound), u0 its
 // output. Its output's old inputs are let go first (Direct3D 11 nulls a view bound for reading and writing at once).
-void AmbientOcclusion::dispatch(ID3D11DeviceContext1* context, ID3D11ComputeShader* shader,
+void AmbientOcclusion::dispatch(ID3D11DeviceContext* context, ID3D11ComputeShader* shader,
                                 ID3D11ShaderResourceView* occlusion, Texture& output, unsigned width, unsigned height) {
     ID3D11ShaderResourceView* const none = nullptr;
     context->CSSetShaderResources(1u, 1u, &none);
@@ -158,7 +158,7 @@ void AmbientOcclusion::dispatch(ID3D11DeviceContext1* context, ID3D11ComputeShad
     context->Dispatch((width + 7u) / 8u, (height + 7u) / 8u, 1u);
 }
 
-bool AmbientOcclusion::record(ID3D11DeviceContext1* context, const Inputs& in) {
+bool AmbientOcclusion::record(ID3D11DeviceContext* context, const Inputs& in) {
     if (!ready_ || in.depth == nullptr || !in.depth->view || in.color == nullptr || in.width == 0u || in.height == 0u ||
         in.objects == nullptr) {
         return false;
