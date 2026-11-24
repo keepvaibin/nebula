@@ -691,6 +691,83 @@ void test_judged_once(Gpu& gpu) {
     store.shutdown();
 }
 
+// P-216: the game paints each larger picture of its icon sheets in one buffer and hands it over (set_built_in) before
+// painting the next in the same memory. The store keeps its own copy: after a device restart each texture shows its own
+// painting, not what the buffer holds last.
+void test_built_in_restart(Gpu& gpu) {
+    const auto record = [](std::uint32_t side) {
+        std::vector<std::byte> bytes(NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(side, side, 1u, NEBULA_TEXTURE_RGBA8));
+        nebula_texture_init(bytes.data(), side, side, 1u, NEBULA_TEXTURE_RGBA8, 0u);
+        return bytes;
+    };
+    std::vector<std::byte> first = record(16u);
+    std::vector<std::byte> second = record(16u);
+    const auto image_of = [](std::vector<std::byte>& bytes) {
+        NebulaTextureImage image{};
+        image.bytes = bytes.data();
+        image.size = static_cast<std::uint32_t>(bytes.size());
+        image.width = 16u;
+        image.height = 16u;
+        image.format = NEBULA_TEXTURE_IMAGE;
+        image.levels = 1u;
+        return image;
+    };
+    // The painting buffer: the first texture's painting 64 texels square, then the second's 32 in the same memory.
+    std::vector<std::byte> painting(NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(64u, 64u, 1u, NEBULA_TEXTURE_RGBA8));
+    const auto paint = [&](std::uint32_t side) { nebula_texture_init(painting.data(), side, side, 1u, NEBULA_TEXTURE_RGBA8, 0u); };
+    const auto owner = std::make_unique<TextureStore>();
+    TextureStore& store = *owner;
+    DeviceGate gate;
+    gate.set_device(gpu.device.Get());
+    expect(store.initialize(gpu.device.Get(), gate), "store initializes");
+    unsigned frame = 0;
+    std::vector<std::uint32_t> freed;
+    const auto next_frame = [&] {
+        if (frame != 0u) {
+            gpu.run();
+        }
+        store.begin_frame(frame++ % 2u, 2u);
+        store.backend().set_upload_list(gpu.list.Get());
+        if (const auto ops = store.take_ops()) {
+            store.apply_ops(*ops, freed);
+        }
+    };
+    const std::uint32_t first_id = store.register_image(image_of(first));
+    const std::uint32_t second_id = store.register_image(image_of(second));
+    paint(64u);
+    store.set_built_in(first_id, painting.data());
+    paint(32u);
+    store.set_built_in(second_id, painting.data());
+    next_frame();
+    const auto shown_width = [&](std::uint32_t id) {
+        const TextureHandle handle = store.handle(id);
+        return handle.resource != nullptr ? static_cast<std::uint32_t>(handle.resource->GetDesc().Width) : 0u;
+    };
+    expect(shown_width(first_id) == 64u && shown_width(second_id) == 32u, "each texture shows its own painting");
+    gpu.run();
+    store.backend().set_upload_list(nullptr);
+    store.shutdown();
+    store.restart(gpu.device.Get());
+    frame = 0u;
+    next_frame();
+    expect(shown_width(first_id) == 64u && shown_width(second_id) == 32u,
+           "after a device restart each texture shows its own painting again");
+    // Taken back: the game's own texture again, after a restart too.
+    store.set_built_in(first_id, nullptr);
+    next_frame();
+    expect(shown_width(first_id) == 16u, "a painting taken back: the game's texture");
+    gpu.run();
+    store.backend().set_upload_list(nullptr);
+    store.shutdown();
+    store.restart(gpu.device.Get());
+    frame = 0u;
+    next_frame();
+    expect(shown_width(first_id) == 16u && shown_width(second_id) == 32u, "a painting taken back stays gone after a restart");
+    gpu.run();
+    store.backend().set_upload_list(nullptr);
+    store.shutdown();
+}
+
 }  // namespace
 
 // BLOCK4 blocks as ASTC 4x4: two blocks against bytes an independent decoder of the ASTC specification decodes to the
@@ -790,6 +867,7 @@ int main() {
             test_packs(gpu, root);
             test_cache(gpu, root);
             test_judged_once(gpu);
+            test_built_in_restart(gpu);
         } catch (const std::exception& error) {
             std::cerr << "FAILED: threw: " << error.what() << std::endl;
             ++failures;

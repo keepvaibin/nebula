@@ -340,7 +340,7 @@ void TextureStore::restart(gpu::Device* device) {
         }
     }
     for (const auto& [id, record] : built_ins_) {
-        queue_built_in(id, record);
+        queue_built_in(id, nebula_texture_record(record.data()));
     }
 }
 
@@ -590,27 +590,42 @@ void TextureStore::set_built_in(std::uint32_t id, const void* record_bytes) {
     if (id == 0u || is_target(id)) {
         return;
     }
-    gate_->use([&] { queue_built_in(id, record_bytes); });
+    gate_->use([&] {
+        // The store's own copy, as the game's API says (texture_hd): the game paints its next sheet in the same memory at
+        // once, and a device restart stages every painting again from what is kept here (P-216).
+        std::vector<std::uint8_t> copy;
+        if (record_bytes != nullptr) {
+            const NebulaTexture* const record = nebula_texture_record(record_bytes);
+            if (record == nullptr || record->layout != NEBULA_TEXTURE_RGBA8 || record->levels == 0u ||
+                record->levels > NEBULA_TEXTURE_MAX_LEVELS ||
+                NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(record->width, record->height, record->levels, record->layout) >
+                    record->size) {
+                return;
+            }
+            const auto* const first = reinterpret_cast<const std::uint8_t*>(record);
+            copy.assign(first, first + NEBULA_TEXTURE_HEADER +
+                                   nebula_texture_level_bytes(record->width, record->height, record->levels, record->layout));
+            reinterpret_cast<NebulaTexture*>(copy.data())->size = static_cast<std::uint32_t>(copy.size());
+        }
+        queue_built_in(id, copy.empty() ? nullptr : nebula_texture_record(copy.data()));
+        const std::lock_guard guard(lock_);
+        if (copy.empty()) {
+            built_ins_.erase(id);
+        } else {
+            built_ins_[id] = std::move(copy);
+        }
+    });
 }
 
-void TextureStore::queue_built_in(std::uint32_t id, const void* record_bytes) {
+void TextureStore::queue_built_in(std::uint32_t id, const NebulaTexture* record) {
     Op op;
     op.kind = Op::Kind::BuiltIn;
     op.id = id;
-    if (const NebulaTexture* const record = nebula_texture_record(record_bytes)) {
-        if (record->layout != NEBULA_TEXTURE_RGBA8 || record->levels == 0u || record->levels > NEBULA_TEXTURE_MAX_LEVELS ||
-            NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(record->width, record->height, record->levels, record->layout) > record->size) {
-            return;
-        }
+    if (record != nullptr) {
         op.staged = stage(reinterpret_cast<const std::uint8_t*>(record) + NEBULA_TEXTURE_HEADER, record->width, record->height,
                           record->levels, record->layout);
     }
     const std::lock_guard guard(lock_);
-    if (record_bytes != nullptr) {
-        built_ins_[id] = record_bytes;
-    } else {
-        built_ins_.erase(id);
-    }
     queued_->list.push_back(std::move(op));
 }
 

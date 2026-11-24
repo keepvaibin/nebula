@@ -241,10 +241,10 @@ This package finishes render data path step 2 (FM 2.10) after the stack of S0.1 
 ### R2.5 P-216 and P-255's first part
 
 - **What changes.** Plan decision 14: each fault is a bullet; a row closes when its last bullet is done.
-  - P-216, one record for every sheet. `NebulaIcons` paints the picture font's sharp sheets one after another into one record (`sHd.mRecord`) and hands each to the host. The API says the renderer takes a copy (`nebula_game_api.h` 1017-1019); the renderer stages one and also keeps the pointer (`built_ins_` in `texture_store.cpp`), and a device restart stages every kept record again from it, so every sheet then shows what the record holds last. Fix: one record per sheet kept while it is handed over, or the store keeps its own copy as the API says.
-  - P-216, the Joy-Con picture sets are freed 250 ms of wall clock after they stop being shown (`cJcRetireMs`), not when the frames drawing them are done. Fix: retired at the render side's frame fence.
-  - P-216, the `malloc` of the record is unchecked (`NebulaIcons.cpp` 1826-1827 and 2038 as cited at 241395b49). Fix: allocation failures checked.
-  - P-255's first part: `RenderTexture`'s table grows through `heap_alloc` and is cleared with no check (`grow`, 91-95), while the same file treats a null from `heap_alloc` as possible (290-299). Fix: a named panic on a failed allocation, or the table sized at load. Replay identical.
+  - P-216, one record for every sheet. `NebulaIcons` paints the picture font's sharp sheets one after another into one record (`sHd.mRecord`) and hands each to the host. The API says the renderer takes a copy (`nebula_game_api.h` 1017-1019); the renderer stages one and also keeps the pointer (`built_ins_` in `texture_store.cpp`), and a device restart stages every kept record again from it, so every sheet then shows what the record holds last. Fix: the store keeps its own copy, as the API says (decision R2.5#1).
+  - P-216, the Joy-Con picture sets are freed 250 ms of wall clock after they stop being shown (`cJcRetireMs`), not when the frames drawing them are done. Fix: retired at the render side's frame fence (decision R2.5#2).
+  - P-216, the `malloc` of the record is unchecked (`NebulaIcons.cpp` 1826-1827 and 2038 as cited at 241395b49). Fix: allocation failures checked (decision R2.5#3).
+  - P-255's first part: `RenderTexture`'s table grows through `heap_alloc` and is cleared with no check (`grow`, 91-95), while the same file treats a null from `heap_alloc` as possible (290-299). Fix: a named panic on a failed allocation, the table as it was left whole. Replay identical.
 - **Where.** `native/petari/src/Game/Screen/NebulaIcons.cpp` (`sHd.mRecord` 1736, 1824-1831, `cJcRetireMs` and its uses, 2078 and 2490 as cited at 241395b49); `native/include/nebula_game_api.h` (`texture_hd`, "the renderer takes a copy", 1017-1019); `runtime/src/render/texture_store.cpp` (`built_ins_`, the restart that stages them again, 326-338 and 588-596); `native/petari/src/Game/Render/RenderTexture.cpp` (`grow`, 91-95; the null-tolerant allocation, 290-299).
 - **Rows.** P-216: whole. P-255: the render texture table's allocation (its site-mesh part is R4.0, its skeleton part R5.7).
 - **Needs first.** nothing
@@ -261,7 +261,7 @@ This package finishes render data path step 2 (FM 2.10) after the stack of S0.1 
   - [ ] Ride textures loaded by `.bti` name into `GameTexture` (`Creeper.cpp` 171, `PlantStalk.cpp` 207, `SpaceCocoon.cpp` 182, `SwingRope.cpp` 740, `Trapeze.cpp` 734): R4.2, with their sites.
   - [ ] The screen copy handed to an actor as a `ResTIMG` (`WhirlPool.cpp` 138, `MR::getScreenResTIMG`, which other files call too): R4.0, where it becomes a target's id (plan decision).
   - [ ] A glyph sheet found by the address of its bytes (`ResFontBase.cpp` 186-191; INV, the text line "as P-155's textures"): R10.1, with P-229, which names the font's files (plan decision).
-- **Read first.** The row leaves one thing unsettled: whether a retired Joy-Con set's images are released to the store before its block is freed (the store also keeps game images by pointer for a restart, `texture_store.cpp` 514 and 326-333). Decide it in this step.
+- **Read first.** Decided here (R2.5#2): a retired Joy-Con set's images are released to the store (`RenderTexture::forget` over its block) before its block is freed, so the store keeps no pointer into freed memory for a restart or a budget restage; the store frees their textures at the render side's frame fence.
 
 ### Rows of this package
 

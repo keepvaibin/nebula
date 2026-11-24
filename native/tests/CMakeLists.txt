@@ -53,6 +53,8 @@ elseif(NEBULA_SANITIZE MATCHES "thread")
 endif()
 # The tables of draws that swap one map's image, registered once per distinct swap (R2.4, header only).
 native_test(native_swap_tables_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/swap_tables_tests.cpp")
+# The renderer's numbers for the game's textures: kept as the table grows; a table the heap cannot hold panics (P-255).
+native_test(native_render_texture_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/render_texture_tests.cpp" "${game_src}/Render/RenderTexture.cpp")
 # Work done once by the first thread that asks (P-183: the creator index), header only.
 native_test(native_once_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/once_tests.cpp")
 # The frame-list writer, against the list the renderer reads.
