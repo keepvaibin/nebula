@@ -189,11 +189,13 @@ Read for the rules (whole-GPU waits, compiles, file reads on the render thread):
 - Direct3D 12: the post-process programs are made at the renderer's start (`renderer_d3d12.cpp:2713`), where a
   self-test of the anti-aliasing waits for the GPU once (`post_process.cpp:296`, :794); allowed, it is before any frame.
   The temporal upscaler's preparation and record drain the whole GPU (1.4; P-028, written).
-- Vulkan: the bloom's pipelines are built in `begin_frame` the first time it runs (`runtime/src/render/vk/renderer_vk.cpp:1997`,
-  `runtime/src/render/vk/game_bloom_vk.cpp:52`) and the post-process's in `sync_post_process` the first frame that needs them
-  (`runtime/src/render/vk/renderer_vk.cpp:2821`, `runtime/src/render/vk/post_process_vk.cpp:441`): compiles inside a frame, and the post-process's
-  self-test then waits for the GPU in that frame (`runtime/src/render/vk/post_process_vk.cpp:947`). A swap chain made again builds
-  the present pipelines again (`runtime/src/render/vk/post_process_vk.cpp:152-170`, from `create_swapchain`), outside a frame's walk.
+- Vulkan: the bloom's and the post-process's pipelines are made at the renderer's start, each on a worker of its own, while
+  ambient occlusion's and the scene camera's are made on the render thread (`RendererVk::initialize` in
+  `runtime/src/render/vk/renderer_vk.cpp`; `GameBloomVk::initialize`, `PostProcessorVk::build`), and both are joined before the
+  first frame; the post-process's self-test then waits for the GPU once there (`PostProcessorVk::finish_build`), before
+  any frame, as Direct3D 12's does (P-052, R1.1). A swap chain made again builds the present pipelines again
+  (`PostProcessorVk::set_present_pass` in `runtime/src/render/vk/post_process_vk.cpp`, from `create_swapchain`), outside a
+  frame's walk.
 - Metal: the post-process and bloom compile their MSL on a worker from the renderer's start
   (`runtime/src/render/mtl/post_process_mtl.mm:112-130`, `runtime/src/render/mtl/game_bloom_mtl.mm:46-56`); the render thread makes their pipeline states
   from it the first frame it is ready (`poll_ready`, `post_process_mtl.mm:272`, `game_bloom_mtl.mm:107`), and the
@@ -215,7 +217,7 @@ with no row has a new one.
 | Part | Where | Row |
 | --- | --- | --- |
 | A draw whose pipeline is not ready compiles it on the render thread | `runtime/src/render/core/pipelines.cpp:253` (`create_now`) | P-010, E3 step 1 (a form known at load) |
-| Utility pipelines compiled on the render thread at first use, outside the cache | `runtime/src/render/core/pipelines.cpp` | P-052 (written, engine/b) |
+| Utility pipelines compiled on the render thread at first use, outside the cache | `runtime/src/render/core/pipelines.cpp` | P-052 (fixed at R1.1: Direct3D 12's through the driver cache at the start since caa9ca1e7 and e68b6cd6c) |
 | A present waits for every pipeline creation in flight (Direct3D 12) | `runtime/src/render/core/present_gate.h` | N-1067, E3 step 1 |
 | The sampler heap or array, full, waits for the whole GPU | `renderer_d3d12.cpp:1410`; `runtime/src/render/vk/renderer_vk_frame.cpp:2710`, :2729; `runtime/src/render/mtl/renderer_mtl_draw.mm:261` (each `reset_sampler_frame`) | P-048, P-056, P-066, E3 step 2 |
 | Size changes drain the whole GPU inside a frame | `renderer_d3d12.cpp:5019`, :5052, :5214 (the temporal upscaler), :1955; Vulkan's at size changes inside a frame (1.4) | P-028 (written for Direct3D 12 on engine/b; Vulkan's side open) |
@@ -230,7 +232,7 @@ with no row has a new one.
 | A copy before the list writes the frame reads the picture shown last, as the console's frame buffer held it | `draw_walker.cpp:1583` | E4 (the last picture asked for by name) |
 | The scene's camera found at its opaque end, as the game loads its projection after the scene begins | `draw_walker.cpp:1356` | E4 (`GameScene::draw3D` states its passes) |
 | A target's texture table rebuilt each frame; each draw names its textures again | `draw_walker.cpp:878`, :920 | E3 step 2 (each form's texture list) |
-| Vulkan's bloom and post-process pipelines built on the render thread in the first frame that needs them, and the post-process's self-test waiting for the GPU there | `runtime/src/render/vk/renderer_vk.cpp:1997`, :2821; `runtime/src/render/vk/post_process_vk.cpp:947` | P-052 (its Vulkan half: open) |
+| Vulkan's bloom and post-process pipelines built on the render thread in the first frame that needs them, and the post-process's self-test waiting for the GPU there | `runtime/src/render/vk/renderer_vk.cpp:1997`, :2821; `runtime/src/render/vk/post_process_vk.cpp:947` | P-052 (fixed at R1.1: made at the start on workers, the self-test run before the first frame, `RendererVk::initialize`) |
 | Metal's own pipelines made on the render thread in a frame: the utility and scene camera pipelines compiled from source there, the post-process's and bloom's states made from a worker's compile, and the post-process's self-test waiting for the GPU | `mtl/*_mtl.mm` (1.8) | P-065 (its text says every compile is on the render thread: the post-process's and bloom's are on a worker, ambient occlusion's at the start) |
 
 This list covers the render path as read for this file: every file of 1.1 to 1.8, with the files stage 2 item 1
@@ -385,7 +387,7 @@ it. Pile A: the foundation does not touch its code; it comes after. Where this d
 | P-010 | B | F4, E3 step 1 | A draw whose pipeline is not made yet compiles it on the render thread |  |
 | N-1067 | B | F4, E3 step 1 | a Present waits for every pipeline creation in flight (core/present_ga |  |
 | P-157 | B | F4, E3 step 1 | the imported material format still stores the console's register layou |  |
-| P-052 | B | F4, E3 step 1 | Utility pipelines are compiled on the render thread at first use, outs | pile A in the planner's reading: its Direct3D 12 half is written; Vulkan's first-frame bloom and post builds (1.8) are open |
+| P-052 | B | F4, E3 step 1 | Utility pipelines are compiled on the render thread at first use, outs | fixed at R1.1: Direct3D 12's half was on main (caa9ca1e7, e68b6cd6c); Vulkan's bloom and post-process pipelines are made at the start on workers and the self-test runs before the first frame |
 | P-065 | B | F4, E3 step 1 | performance (hitches; Metal): the renderer's own shaders are compiled  | planner: A; it breaks rule 1, so it ends where every pipeline is made at load |
 | P-155 | B | F4, E3 step 2 | a texture is still known by the address of its bytes and described by  |  |
 | P-048 | B | F4, E3 step 2 | The D3D12 sampler heap is drained with a full GPU wait when it fills.  |  |

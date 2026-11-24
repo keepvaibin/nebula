@@ -146,7 +146,6 @@ void PostProcessorVk::initialize(const PostProcessSettings& settings, VkRenderPa
     window_pass_ = window_pass;
     stencil_format_ = stencil_format();
     spirv_quality_ = settings_.smaa_quality;
-    to_build_ = true;
 }
 
 void PostProcessorVk::set_present_pass(VkRenderPass pass) {
@@ -426,7 +425,6 @@ void PostProcessorVk::destroy_pipelines() noexcept {
 }
 
 void PostProcessorVk::shutdown() noexcept {
-    to_build_ = false;
     ready_ = false;
     status_.initialized = false;
     status_.smaa_ok = false;
@@ -438,17 +436,20 @@ void PostProcessorVk::shutdown() noexcept {
     edges_ = weights_ = stencil_ = antialiased_ = scaled_ = {};
 }
 
-bool PostProcessorVk::poll_ready() {
-    if (!to_build_) {
-        return ready_;
-    }
-    to_build_ = false;
+bool PostProcessorVk::build(const std::array<VkRenderPass, 4>& scene_passes) {
     if (!build_pipelines()) {
         std::cerr << "[post-process] scaling pipelines failed; plain blit\n";
         set_reason(status_.skip_reason, "INIT FAILED");
         destroy_pipelines();
-        built_ = true;
         return false;
+    }
+    prepare_pipelines(scene_passes);
+    return true;
+}
+
+void PostProcessorVk::finish_build() {
+    if (!built_) {
+        return;
     }
     self_test();
     status_.initialized = true;
@@ -457,7 +458,6 @@ bool PostProcessorVk::poll_ready() {
               << (status_.smaa_ok ? "" : " smaa-reason=") << status_.smaa_reason.data()
               << " fxaa=" << (status_.fxaa_ok ? "pass" : "fail")
               << (status_.fxaa_ok ? "" : " fxaa-reason=") << status_.fxaa_reason.data() << '\n';
-    return true;
 }
 
 void PostProcessorVk::apply_settings(const PostProcessSettings& settings) {

@@ -30,12 +30,11 @@ public:
         VkRenderPass pass = VK_NULL_HANDLE;
         unsigned samples_log2 = 0;
     };
-    // Starts compiling the passes; the composite's pipelines are made for each of `scene_passes` (every scene target pass
-    // the renderer can open), so none is made in the middle of play.
-    void initialize(std::vector<ScenePass> scene_passes);
+    // Makes the compute pipelines, and the composite's for each of `scene_passes` (every scene target pass the renderer
+    // can open), so none is made in the middle of play (P-052): at the start, on a worker; device objects only. True
+    // when ready; false leaves the game drawing its own bloom.
+    bool initialize(std::vector<ScenePass> scene_passes);
     void shutdown() noexcept;
-    // Builds the compute pipelines and the composite's. True when ready.
-    bool poll_ready();
     [[nodiscard]] bool ready() const noexcept { return ready_; }
 
     // As game_bloom.h's: Restore draws the kept scene alone (the game's own chain, the NATIVE setting).
@@ -121,7 +120,6 @@ private:
     bool ready_ = false;
     bool kept_ = false;
     bool source_given_ = false;  // give_source ran since the last prepare
-    bool to_build_ = false;  // initialized: poll_ready makes the passes
 
     VkDescriptorSetLayout image_layout_ = VK_NULL_HANDLE;    // set 0: t0-t2 sampled, u0-u2 storage
     VkDescriptorSetLayout sampler_layout_ = VK_NULL_HANDLE;  // set 1: s0 linear clamp (immutable)

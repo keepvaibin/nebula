@@ -42,6 +42,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <iostream>
 #include <optional>
 #include <sstream>
@@ -227,44 +228,64 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
         encoder_.configure(encoding);
         encoding_layout_ = encoding;
         reset_sampler_frame();
-        // The game's bloom, built at the first frame with a composite for every scene target pass (8-bit and wide colour at
-        // each sample count, and the texture targets' pass); the game draws its own chains until it is ready.
+        // draw.post's programs compile with the linked HLSL front end (vk/mod_shader_compile_vk.cpp).
+        set_mod_post_compiler(&compile_mod_post_stage, true);
+        // The game's bloom and the presentation post-process, their pipelines made here at the start, each on a worker of
+        // its own (P-052), as Direct3D 12's passes are: the bloom's composite for every scene target pass (8-bit and wide
+        // colour at each sample count, and the texture targets' pass), the post-process's passes with the scene passes'
+        // multisampled ones. Ambient occlusion's and the scene camera's are made meanwhile on this thread. Both workers are
+        // joined before the first frame (a future of std::async waits in its destructor too, so an exception here leaves
+        // none running), then the post-process's self-test waits for the GPU here, outside any frame.
         {
-            std::vector<vk::GameBloomVk::ScenePass> scene_passes;
+            std::vector<vk::GameBloomVk::ScenePass> bloom_passes;
             for (unsigned samples_log2 = 0u; samples_log2 < 4u; ++samples_log2) {
                 for (const unsigned wide : {0u, unsigned{kSceneVariantHdr}}) {
                     if (const VkRenderPass pass = draw_layout_.pass_for(samples_log2 | wide, false); pass != VK_NULL_HANDLE) {
-                        scene_passes.push_back({pass, samples_log2});
+                        bloom_passes.push_back({pass, samples_log2});
                     }
                 }
             }
             if (draw_layout_.target_pass != VK_NULL_HANDLE) {
-                scene_passes.push_back({draw_layout_.target_pass, 0u});
+                bloom_passes.push_back({draw_layout_.target_pass, 0u});
             }
-            bloom_.initialize(std::move(scene_passes));
-        }
-        // draw.post's programs compile with the linked HLSL front end (vk/mod_shader_compile_vk.cpp).
-        set_mod_post_compiler(&compile_mod_post_stage, true);
-        // Presentation post-processing, compiled on a worker; the plain blit presents until it is ready.
-        const RenderConfig cfg = get_render_config();
-        if (cfg.post_process) {
-            post_.initialize(post_process_settings_from(cfg), draw_layout_.scene_pass, color_pass_, rgba8_pass_);
-            if (!ao_.initialize()) {
-                std::cerr << "[ambient-occlusion] off on this device" << std::endl;
+            const std::uint64_t passes_began_ms = galaxy::steady_ms();
+            std::future<bool> bloom = std::async(std::launch::async, [this, passes = std::move(bloom_passes)]() mutable {
+                return bloom_.initialize(std::move(passes));
+            });
+            const RenderConfig cfg = get_render_config();
+            std::future<bool> post;
+            if (cfg.post_process) {
+                post_.initialize(post_process_settings_from(cfg), draw_layout_.scene_pass, color_pass_, rgba8_pass_);
+                post_.set_present_pass(present_pass_);
+                post = std::async(std::launch::async,
+                                  [this, passes = scene_passes(float_scene_)] { return post_.build(passes); });
+                if (!ao_.initialize()) {
+                    std::cerr << "[ambient-occlusion] off on this device" << std::endl;
+                } else {
+                    ao_.prepare_pipelines(scene_passes(false), scene_passes(true));
+                }
+                if (!scene_camera_.initialize()) {
+                    std::cerr << "[scene-camera] off on this device" << std::endl;
+                } else {
+                    scene_camera_.prepare_pipelines(scene_passes(false), scene_passes(true));
+                }
             } else {
-                ao_.prepare_pipelines(scene_passes(false), scene_passes(true));
+                PostProcessStatus off{};
+                std::snprintf(off.skip_reason.data(), off.skip_reason.size(), "CONFIG OFF");
+                set_post_process_status(off);
+                std::cerr << "[post-process] off; presenting with the plain blit\n";
             }
-            if (!scene_camera_.initialize()) {
-                std::cerr << "[scene-camera] off on this device" << std::endl;
-            } else {
-                scene_camera_.prepare_pipelines(scene_passes(false), scene_passes(true));
+            const bool bloom_ready = bloom.get();
+            const bool post_built = post.valid() && post.get();
+            std::cerr << "[pipelines] Vulkan's passes made at the start in " << galaxy::steady_ms() - passes_began_ms
+                      << " ms: bloom " << (bloom_ready ? "ready" : "off") << ", post-process "
+                      << (post_built ? "built" : "off") << '\n';
+            if (post_built) {
+                post_.finish_build();
             }
-            post_.set_present_pass(present_pass_);
-        } else {
-            PostProcessStatus off{};
-            std::snprintf(off.skip_reason.data(), off.skip_reason.size(), "CONFIG OFF");
-            set_post_process_status(off);
-            std::cerr << "[post-process] off; presenting with the plain blit\n";
+            if (cfg.post_process) {
+                set_post_process_status(post_.status());
+            }
         }
     } catch (const std::exception& error) {
         std::cerr << "[Renderer] Vulkan initialize failed: " << error.what() << '\n';
@@ -1878,7 +1899,6 @@ void RendererVk::begin_frame() {
         std::cerr << "[interp] temporal upscaling of generated frames tried again\n";
     }
     sync_post_process();
-    bloom_.poll_ready();
     bloom_.trim_idle();
     ao_.trim_idle();
 
@@ -2681,13 +2701,8 @@ void RendererVk::read_gpu_passes() {
 }
 
 void RendererVk::sync_post_process() {
-    const bool was_ready = post_.ready();
-    if (!post_.poll_ready()) {
+    if (!post_.ready()) {
         return;
-    }
-    if (!was_ready) {
-        set_post_process_status(post_.status());
-        post_.prepare_pipelines(scene_passes(float_scene_));
     }
     const PostProcessSettings next = post_process_settings_from(get_render_config());
     const PostProcessSettings& current = post_.settings();

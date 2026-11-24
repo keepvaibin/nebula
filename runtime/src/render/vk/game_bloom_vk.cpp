@@ -29,14 +29,18 @@ void written(VkCommandBuffer commands) {
 
 }  // namespace
 
-void GameBloomVk::initialize(std::vector<ScenePass> scene_passes) {
+bool GameBloomVk::initialize(std::vector<ScenePass> scene_passes) {
     shutdown();
     scene_passes_ = std::move(scene_passes);
-    to_build_ = true;
+    ready_ = build();
+    if (!ready_) {
+        destroy();
+        std::cerr << "[bloom] Vulkan passes unavailable: the game draws its own bloom\n";
+    }
+    return ready_;
 }
 
 void GameBloomVk::shutdown() noexcept {
-    to_build_ = false;
     destroy();
     ready_ = false;
     kept_ = false;
@@ -47,22 +51,6 @@ void GameBloomVk::shutdown() noexcept {
     }
     for (auto& t : blur_h_) t.reset();
     for (auto& t : blur2_h_) t.reset();
-}
-
-bool GameBloomVk::poll_ready() {
-    if (ready_) {
-        return true;
-    }
-    if (!to_build_) {
-        return false;
-    }
-    to_build_ = false;
-    ready_ = build();
-    if (!ready_) {
-        destroy();
-        std::cerr << "[bloom] Vulkan passes unavailable: the game draws its own bloom\n";
-    }
-    return ready_;
 }
 
 VkShaderModule GameBloomVk::module(Program program) const {
