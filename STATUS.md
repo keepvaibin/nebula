@@ -6,7 +6,8 @@ Steps landed: 12 of 138 (9%).
 
 Now: S0.2.6 landed at 10:25; the trial of S0.2.1 to S0.2.6 ends here: nothing in work, nothing ahead, G6.2 not started
 
-In work now: Nothing started.
+In work now:
+- S0.3.2 Remove what is left (agent 1)
 
 ## Packages
 
