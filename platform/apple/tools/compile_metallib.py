@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""The programs' file as Metal libraries.
+"""The programs' file, and the renderer's own shaders, as Metal libraries.
 
 The Metal renderer's programs are MSL text (programs_msl.bin, written by tools/programs_msl). Metal compiles a text in two
 steps: the text to its own bytecode (a tenth of a second a program on a 2017 MacBook Pro, which a first start would pay
@@ -17,11 +17,18 @@ system has Metal 3). --out-blob is programs_msl.bin's table with, in place of ea
 function (kRecord below; runtime/src/render/mtl/pipelines_mtl.mm reads it). A text that several rows share is one
 function.
 
-Many programs go into one source file, each in a namespace of its own (their types have the same names): a function is
-`p<number>::m`. --work keeps the sources and each compiled file by its source's hash, so a build after a change
-compiles the files that changed. --emit-only writes the sources and the table and compiles nothing. --developer-dir
-names the Xcode whose compiler is used when it is not the machine's selected one (xcode-select): only this tool's own
-commands see it, so the rest of a build keeps its tools.
+  compile_metallib.py --utility utility_msl.bin --out-dir <folder> --work <folder> [the same options]
+
+The renderer's own shaders (platform/apple/tools/utility_msl.cpp writes utility_msl.bin, each text with its hash): written
+to --out-dir as utility.metallib (MSL 2.4), each text the function `u<its hash, 16 hex digits>::m`, the name
+runtime/include/galaxy/render/mtl/utility_msl.h utility_function_name gives it at run time. A hash that is not its text's
+(FNV-1a's 64 bits, as utility_msl_hash) refuses the file: the runtime would ask for a function the library does not have.
+
+Many texts go into one source file, each in a namespace of its own (their types have the same names): a program's
+function is `p<number>::m`. --work keeps the sources and each compiled file by its source's hash, so a build after a
+change compiles the files that changed. --emit-only writes the sources (and the table) and compiles nothing.
+--developer-dir names the Xcode whose compiler is used when it is not the machine's selected one (xcode-select): only
+this tool's own commands see it, so the rest of a build keeps its tools.
 """
 import argparse
 import concurrent.futures
@@ -40,18 +47,68 @@ RECORD_MAGIC = b"NBMTLFN1"
 RECORD_BYTES = 40  # the magic, library u32 (0: 2.4, 1: 3.0), attributes u32 (a vertex program's inputs, a bit each), name[24]
 BATCH = 48
 LIBRARIES = (("programs_2_4.metallib", "2.4"), ("programs_3_0.metallib", "3.0"))
+UTILITY_MAGIC = b"NBUMSL01"
+UTILITY_LIBRARY = ("utility.metallib", "2.4")
 HEADER = ('#pragma clang diagnostic ignored "-Wmissing-prototypes"\n'
           '#pragma clang diagnostic ignored "-Wmissing-braces"\n'
           "#include <metal_stdlib>\n#include <simd/simd.h>\nusing namespace metal;\n")
 DROPPED = {b"#include <metal_stdlib>", b"#include <simd/simd.h>", b"using namespace metal;"}
 ENTRY = re.compile(rb"\bmain0\b")
 ATTRIBUTE = re.compile(rb"\[\[attribute\((\d+)\)\]\]")
+NEWLINE = b"\x0a"
 
 
-def body_of(text):
-    """A program's text as it stands in a namespace: the includes are the file's, and its function is `m`."""
-    lines = [line for line in text.split(b"\n") if line.strip() not in DROPPED]
-    return ENTRY.sub(b"m", b"\n".join(lines))
+def body_of(text, hoisted):
+    """A text as it stands in a namespace: the includes are the file's, and its function is `m`. With `hoisted` (the
+    renderer's texts) every include goes to the file's head (utility_includes)."""
+    lines = [line for line in text.split(NEWLINE)
+             if line.strip() not in DROPPED and not (hoisted and line.lstrip().startswith(b"#include"))]
+    return ENTRY.sub(b"m", NEWLINE.join(lines))
+
+
+def fnv1a64(data):
+    """utility_msl.h utility_msl_hash: FNV-1a's 64 bits of the text's bytes."""
+    value = 14695981039346656037
+    for byte in data:
+        value = ((value ^ byte) * 1099511628211) & 0xFFFFFFFFFFFFFFFF
+    return value
+
+
+def utility_texts(path):
+    """utility_msl.bin's texts, as (hash, text) in the file's order."""
+    with open(path, "rb") as file:
+        blob = file.read()
+    if len(blob) < 16 or blob[:8] != UTILITY_MAGIC:
+        sys.exit(f"{path} is not a texts file of utility_msl")
+    (count,) = struct.unpack_from("<I", blob, 8)
+    at = 16
+    texts = []
+    for index in range(count):
+        if at + 16 > len(blob):
+            sys.exit(f"{path} ends inside text {index}")
+        value, _stage, size = struct.unpack_from("<QII", blob, at)
+        at += 16
+        text = blob[at:at + size]
+        at += size
+        if len(text) != size:
+            sys.exit(f"{path} ends inside text {index}")
+        if fnv1a64(text) != value:
+            sys.exit(f"{path}: text {index} is filed as {value:016x}, its bytes hash to {fnv1a64(text):016x}")
+        texts.append((value, text))
+    if at != len(blob):
+        sys.exit(f"{path}: {len(blob) - at} bytes after the last text")
+    return texts
+
+
+def utility_includes(texts):
+    """The includes the renderer's texts name beyond the file's own, once each, in the order first named."""
+    found = []
+    for text in texts:
+        for line in text.split(NEWLINE):
+            line = line.strip()
+            if line.startswith(b"#include") and line not in DROPPED and line not in found:
+                found.append(line)
+    return found
 
 
 TOOL_ENVIRONMENT = None  # the commands' environment when --developer-dir names an Xcode
@@ -62,10 +119,107 @@ def run(command):
     return done.returncode, done.stdout.decode("utf-8", "replace")
 
 
+def write_sources(args, groups):
+    """Each group's texts in files of BATCH, kept in --work by their hash; their paths by group. A group is (the
+    library's version, [(namespace, text)], the include lines hoisted to each file's head, or None to leave each text's
+    own where it stands)."""
+    os.makedirs(args.work, exist_ok=True)
+    sources = []
+    for version, named, hoisted_includes in groups:
+        hoisted = hoisted_includes is not None
+        includes = hoisted_includes or []
+        paths = []
+        for first in range(0, len(named), BATCH):
+            parts = [HEADER.encode()] + [line + NEWLINE for line in includes]
+            for namespace, text in named[first:first + BATCH]:
+                parts.append(b"namespace %s {\n" % namespace + body_of(text, hoisted) + b"\n}\n")
+            source = b"".join(parts)
+            # The compiled file's name: the source and everything the compile depends on.
+            key = hashlib.sha1(source + f"|{version}|{args.sdk}|{args.min_os}".encode()).hexdigest()
+            path = os.path.join(args.work, f"{key}.metal")
+            if not os.path.exists(path):
+                with open(path + ".partial", "wb") as file:
+                    file.write(source)
+                os.replace(path + ".partial", path)
+            paths.append(path)
+        sources.append(paths)
+    return sources
+
+
+def compile_libraries(args, targets, label):
+    """Each target (library file, version, source paths) compiled with Apple's compiler and linked."""
+    code, where = run(["xcrun", "-sdk", args.sdk, "-f", "metal"])
+    if code != 0:
+        sys.exit("Apple's Metal compiler is not installed (it comes with Xcode): " + where.strip())
+    minimum = {"macosx": "-mmacosx-version-min=", "iphoneos": "-mios-version-min=",
+               "iphonesimulator": "-mios-simulator-version-min="}[args.sdk] + args.min_os
+    # The arithmetic the texts state, as the other renderers' compilers keep it (MTLCompileOptions.fastMathEnabled NO).
+    common = ["xcrun", "-sdk", args.sdk, "metal", "-c", minimum, "-fno-fast-math", "-Wno-unused-variable"]
+
+    def compile_one(job):
+        version, source = job
+        air = source[:-len(".metal")] + ".air"
+        if os.path.exists(air):
+            return None
+        code, said = run(common + [f"-std=metal{version}", source, "-o", air + ".partial"])
+        if code != 0 and "-std" in said:
+            # Compilers before the one language name for every system take the system's own.
+            system = "macos" if args.sdk == "macosx" else "ios"
+            code, said = run(common + [f"-std={system}-metal{version}", source, "-o", air + ".partial"])
+        if code != 0:
+            return f"{source}:\n{said}"
+        os.replace(air + ".partial", air)
+        return None
+
+    jobs = [(version, source) for _target, version, paths in targets for source in paths]
+    failed = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
+        for count, result in enumerate(pool.map(compile_one, jobs), 1):
+            if result is not None:
+                failed.append(result)
+            if count % 50 == 0 or count == len(jobs):
+                print(f"{label}: {count} of {len(jobs)} files compiled", flush=True)
+    if failed:
+        sys.exit("Metal's compiler refused:\n" + "\n".join(failed[:3]))
+    for index, (target_name, _version, paths) in enumerate(targets):
+        target = os.path.join(args.out_dir, target_name)
+        listing = os.path.join(args.work, f"{os.path.splitext(target_name)[0]}.txt")
+        with open(listing, "w") as file:
+            file.write("\n".join(source[:-len(".metal")] + ".air" for source in paths) + "\n")
+        # An empty library is still a library: a file the app can open.
+        code, said = run(["xcrun", "-sdk", args.sdk, "metallib", "-o", target + ".partial", "@" + listing]
+                         if paths else
+                         ["xcrun", "-sdk", args.sdk, "metallib", "-o", target + ".partial"])
+        if code != 0:
+            sys.exit(f"metallib refused {target}:\n{said}")
+        os.replace(target + ".partial", target)
+        print(f"{label}: {target} {os.path.getsize(target)} bytes")
+
+
+def compile_utility(args):
+    texts = utility_texts(args.utility)
+    os.makedirs(args.out_dir, exist_ok=True)
+    named = []
+    seen = set()
+    for value, text in texts:
+        if value not in seen:
+            seen.add(value)
+            named.append((b"u%016x" % value, text))
+    includes = utility_includes([text for _value, text in named])
+    (sources,) = write_sources(args, [(UTILITY_LIBRARY[1], named, includes)])
+    print(f"utility: {len(named)} functions in MSL {UTILITY_LIBRARY[1]} ({len(sources)} files)")
+    if args.emit_only:
+        with open(os.path.join(args.out_dir, "utility_sources.txt"), "w") as file:
+            file.write("\n".join(sources) + "\n")
+        return
+    compile_libraries(args, [(UTILITY_LIBRARY[0], UTILITY_LIBRARY[1], sources)], "utility")
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--programs", required=True)
-    parser.add_argument("--out-blob", required=True)
+    parser.add_argument("--programs", default="")
+    parser.add_argument("--out-blob", default="")
+    parser.add_argument("--utility", default="")
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--work", required=True)
     parser.add_argument("--sdk", default="macosx")
@@ -74,9 +228,14 @@ def main():
     parser.add_argument("--developer-dir", default="")
     parser.add_argument("--emit-only", action="store_true")
     args = parser.parse_args()
+    if bool(args.utility) == bool(args.programs) or bool(args.programs) != bool(args.out_blob):
+        parser.error("give --programs with --out-blob, or --utility")
     if args.developer_dir:
         global TOOL_ENVIRONMENT
         TOOL_ENVIRONMENT = dict(os.environ, DEVELOPER_DIR=args.developer_dir)
+    if args.utility:
+        compile_utility(args)
+        return
 
     with open(args.programs, "rb") as file:
         blob = file.read()
@@ -119,74 +278,16 @@ def main():
             struct.pack_into("<II", out, base + 16 + stored * 8, record_at[(library, number)], RECORD_BYTES)
     out += records
 
-    os.makedirs(args.work, exist_ok=True)
     os.makedirs(args.out_dir, exist_ok=True)
-    sources = [[], []]
-    for library in (0, 1):
-        for first in range(0, len(texts[library]), BATCH):
-            parts = [HEADER.encode()]
-            for number in range(first, min(first + BATCH, len(texts[library]))):
-                parts.append(b"namespace p%d {\n" % number + body_of(texts[library][number]) + b"\n}\n")
-            source = b"".join(parts)
-            # The compiled file's name: the source and everything the compile depends on.
-            key = hashlib.sha1(source + f"|{LIBRARIES[library][1]}|{args.sdk}|{args.min_os}".encode()).hexdigest()
-            path = os.path.join(args.work, f"{key}.metal")
-            if not os.path.exists(path):
-                with open(path + ".partial", "wb") as file:
-                    file.write(source)
-                os.replace(path + ".partial", path)
-            sources[library].append(path)
+    sources = write_sources(args, [(LIBRARIES[library][1],
+                                    [(b"p%d" % number, text) for number, text in enumerate(texts[library])], None)
+                                   for library in (0, 1)])
     print(f"programs: {len(texts[0])} functions in MSL 2.4 ({len(sources[0])} files), "
           f"{len(texts[1])} in MSL 3.0 ({len(sources[1])} files)")
 
     if not args.emit_only:
-        code, where = run(["xcrun", "-sdk", args.sdk, "-f", "metal"])
-        if code != 0:
-            sys.exit("Apple's Metal compiler is not installed (it comes with Xcode): " + where.strip())
-        minimum = {"macosx": "-mmacosx-version-min=", "iphoneos": "-mios-version-min=",
-                   "iphonesimulator": "-mios-simulator-version-min="}[args.sdk] + args.min_os
-        # The arithmetic the programs state, as the other renderers' compilers keep it (MTLCompileOptions.fastMathEnabled NO).
-        common = ["xcrun", "-sdk", args.sdk, "metal", "-c", minimum, "-fno-fast-math", "-Wno-unused-variable"]
-
-        def compile_one(job):
-            library, source = job
-            air = source[:-len(".metal")] + ".air"
-            if os.path.exists(air):
-                return None
-            version = LIBRARIES[library][1]
-            code, said = run(common + [f"-std=metal{version}", source, "-o", air + ".partial"])
-            if code != 0 and "-std" in said:
-                # Compilers before the one language name for every system take the system's own.
-                system = "macos" if args.sdk == "macosx" else "ios"
-                code, said = run(common + [f"-std={system}-metal{version}", source, "-o", air + ".partial"])
-            if code != 0:
-                return f"{source}:\n{said}"
-            os.replace(air + ".partial", air)
-            return None
-
-        jobs = [(library, source) for library in (0, 1) for source in sources[library]]
-        failed = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
-            for count, result in enumerate(pool.map(compile_one, jobs), 1):
-                if result is not None:
-                    failed.append(result)
-                if count % 50 == 0 or count == len(jobs):
-                    print(f"programs: {count} of {len(jobs)} files compiled", flush=True)
-        if failed:
-            sys.exit("Metal's compiler refused:\n" + "\n".join(failed[:3]))
-        for library in (0, 1):
-            target = os.path.join(args.out_dir, LIBRARIES[library][0])
-            listing = os.path.join(args.work, f"library{library}.txt")
-            with open(listing, "w") as file:
-                file.write("\n".join(source[:-len(".metal")] + ".air" for source in sources[library]) + "\n")
-            # An empty library is still a library: a file the app can open.
-            code, said = run(["xcrun", "-sdk", args.sdk, "metallib", "-o", target + ".partial", "@" + listing]
-                             if sources[library] else
-                             ["xcrun", "-sdk", args.sdk, "metallib", "-o", target + ".partial"])
-            if code != 0:
-                sys.exit(f"metallib refused {target}:\n{said}")
-            os.replace(target + ".partial", target)
-            print(f"programs: {target} {os.path.getsize(target)} bytes")
+        compile_libraries(args, [(LIBRARIES[library][0], LIBRARIES[library][1], sources[library]) for library in (0, 1)],
+                          "programs")
     else:
         for library in (0, 1):
             with open(os.path.join(args.out_dir, f"sources{library}.txt"), "w") as file:

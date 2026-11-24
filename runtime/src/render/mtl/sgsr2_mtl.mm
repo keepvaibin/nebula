@@ -50,15 +50,11 @@ static_assert(sizeof(Constants) == 80u, "sgsr2.hlsl's constants");
     return (__bridge id<MTLTexture>)texture.texture;
 }
 
-id<MTLFunction> compile(UtilityShader shader) {
-    MTLCompileOptions* const options = [MTLCompileOptions new];
-    options.fastMathEnabled = NO;
-    options.languageVersion = MTLLanguageVersion2_4;
-    NSError* error = nil;
-    id<MTLLibrary> const library = [device() newLibraryWithSource:@(utility_msl(shader)) options:options error:&error];
-    id<MTLFunction> const made = library != nil ? [library newFunctionWithName:@"main0"] : nil;
+// From utility.metallib (utility_msl.h renderer_function), taken at the renderer's start: here a lookup.
+id<MTLFunction> function_of(UtilityShader shader) {
+    id<MTLFunction> const made = (__bridge_transfer id<MTLFunction>)renderer_function(utility_msl(shader));
     if (made == nil) {
-        std::fprintf(stderr, "[sgsr2] a program did not compile: %s\n", error != nil ? error.localizedDescription.UTF8String : "no main0");
+        std::fprintf(stderr, "[sgsr2] a program could not be made\n");
     }
     return made;
 }
@@ -80,9 +76,9 @@ public:
             point_ = [device() newSamplerStateWithDescriptor:sampler];
             sampler.minFilter = sampler.magFilter = MTLSamplerMinMagFilterLinear;
             linear_ = [device() newSamplerStateWithDescriptor:sampler];
-            id<MTLFunction> const vs = compile(UtilityShader::SgsrVs);
-            id<MTLFunction> const convert = compile(UtilityShader::SgsrConvertPs);
-            id<MTLFunction> const upscale = compile(UtilityShader::SgsrUpscalePs);
+            id<MTLFunction> const vs = function_of(UtilityShader::SgsrVs);
+            id<MTLFunction> const convert = function_of(UtilityShader::SgsrConvertPs);
+            id<MTLFunction> const upscale = function_of(UtilityShader::SgsrUpscalePs);
             if (vs == nil || convert == nil || upscale == nil) {
                 return false;
             }

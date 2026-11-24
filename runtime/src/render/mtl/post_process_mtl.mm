@@ -106,41 +106,45 @@ void PostProcessor::initialize(const PostProcessSettings& settings, Format scene
     set_reason(status_.fxaa_reason, "STARTING");
     scene_format_ = scene_format;
     depth_format_ = depth_format;
-    to_build_ = true;
-    // Every program, at every SMAA quality: a settings change then makes pipelines only.
-    const Object metal_device = Context::get().device();
-    compiling_ = std::async(std::launch::async, [metal_device] {
-        Functions made;
-        made.ok = true;
-        @autoreleasepool {
-            id<MTLDevice> const from = (__bridge id<MTLDevice>)metal_device;
-            MTLCompileOptions* const options = [MTLCompileOptions new];
-            options.fastMathEnabled = NO;
-            options.languageVersion = MTLLanguageVersion2_4;
-            for (unsigned program = 0; program < kProgramCount; ++program) {
-                if (program == kEasuHalfPs) {
-                    continue;  // Vulkan's: Metal runs EASU from kEasuPs
-                }
-                for (unsigned quality = 0; quality < 4u; ++quality) {
-                    if (quality != 0u && !kFollowsQuality[program]) {
-                        made.at[program][quality] = retain(made.at[program][0]);
-                        continue;
-                    }
-                    NSError* error = nil;
-                    id<MTLLibrary> const library = [from newLibraryWithSource:@(post_msl(program, quality)) options:options error:&error];
-                    id<MTLFunction> const function = library != nil ? [library newFunctionWithName:@"main0"] : nil;
-                    if (function == nil) {
-                        std::fprintf(stderr, "[post-process] program %u (quality %u) did not compile: %s\n", program, quality,
-                                     error != nil ? error.localizedDescription.UTF8String : "no main0");
-                        made.ok = false;
-                        continue;
-                    }
-                    made.at[program][quality] = own(function);
-                }
+}
+
+bool PostProcessor::build(std::span<const unsigned> sample_counts, Format present_format) {
+    // Every program at every SMAA quality, from utility.metallib (utility_msl.h renderer_function): a settings change
+    // then makes pipelines only.
+    bool made = true;
+    for (unsigned program = 0; program < kProgramCount; ++program) {
+        if (!metal_uses_post(program)) {
+            continue;  // kEasuHalfPs, Vulkan's: Metal runs EASU from kEasuPs
+        }
+        for (unsigned quality = 0; quality < 4u; ++quality) {
+            if (quality != 0u && !kFollowsQuality[program]) {
+                functions_[program][quality] = retain(functions_[program][0]);
+                continue;
+            }
+            functions_[program][quality] = renderer_function(post_msl(program, quality));
+            if (functions_[program][quality] == nullptr) {
+                std::fprintf(stderr, "[post-process] program %u (quality %u) could not be made\n", program, quality);
+                made = false;
             }
         }
-        return made;
-    });
+    }
+    built_ = made && build_pipelines();
+    if (!built_) {
+        return false;
+    }
+    // The scene's anti-aliasing drawn inside a scene pass (finish_scene_aa): over a traded image every channel, else
+    // the colour alone over the kept alpha.
+    for (const unsigned samples : sample_counts) {
+        static_cast<void>(pipeline(kFullscreenVs, kFxaaPs, scene_format_, depth_format_, kRgba, samples));
+        static_cast<void>(pipeline(kFullscreenVs, kFxaaPs, scene_format_, depth_format_, kRgb, samples));
+        static_cast<void>(pipeline(kSmaaBlendVs, kSmaaBlendPs, scene_format_, depth_format_, kRgba, samples));
+        static_cast<void>(pipeline(kSmaaBlendVs, kSmaaBlendKeepPs, scene_format_, depth_format_, kRgb, samples));
+    }
+    // The last pass into the window's picture (prepare_present).
+    for (const Program fragment : {kEasuPs, kResamplePs, kCopyPs, kRcasPs, kRcasScaledPs}) {
+        static_cast<void>(pipeline(kFullscreenVs, fragment, present_format, Format::None, kRgba));
+    }
+    return true;
 }
 
 void PostProcessor::release_pipelines() noexcept {
@@ -151,17 +155,13 @@ void PostProcessor::release_pipelines() noexcept {
 }
 
 void PostProcessor::shutdown() noexcept {
-    if (compiling_.valid()) {
-        functions_ = compiling_.get();
-    }
     release_pipelines();
-    for (auto& program : functions_.at) {
+    for (auto& program : functions_) {
         for (Object& function : program) {
             release(function);
             function = nullptr;
         }
     }
-    functions_.ok = false;
     for (Object& state : stencil_states_) {
         release(state);
         state = nullptr;
@@ -175,11 +175,11 @@ void PostProcessor::shutdown() noexcept {
     edges_ = weights_ = stencil_ = antialiased_ = scaled_ = spatial_output_ = {};
     spatial_.reset();
     ready_ = false;
-    to_build_ = false;
+    built_ = false;
 }
 
 Object PostProcessor::function(Program program) const {
-    return functions_.at[program][kFollowsQuality[program] ? settings_.smaa_quality : 0u];
+    return functions_[program][kFollowsQuality[program] ? settings_.smaa_quality : 0u];
 }
 
 Object PostProcessor::pipeline(Program vertex, Program fragment, Format color, Format depth, std::uint8_t write_mask,
@@ -269,16 +269,8 @@ bool PostProcessor::build_pipelines() {
     return true;
 }
 
-bool PostProcessor::poll_ready() {
-    if (!to_build_) {
-        return ready_;
-    }
-    if (!compiling_.valid() || compiling_.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
-        return false;
-    }
-    to_build_ = false;
-    functions_ = compiling_.get();
-    if (!functions_.ok || !build_pipelines()) {
+bool PostProcessor::finish_build() {
+    if (!built_) {
         std::cerr << "[post-process] scaling pipelines failed; plain blit\n";
         set_reason(status_.skip_reason, "INIT FAILED");
         release_pipelines();

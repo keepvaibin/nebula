@@ -48,18 +48,11 @@ mtl::Object RendererMtl::utility_function(mtl::UtilityShader shader) {
     if (function != nullptr) {
         return function;
     }
-    @autoreleasepool {
-        MTLCompileOptions* const options = [MTLCompileOptions new];
-        options.fastMathEnabled = NO;
-        options.languageVersion = MTLLanguageVersion2_4;
-        NSError* error = nil;
-        id<MTLLibrary> const library = [metal_device() newLibraryWithSource:@(mtl::utility_msl(shader)) options:options error:&error];
-        id<MTLFunction> const made = library != nil ? [library newFunctionWithName:@"main0"] : nil;
-        if (made == nil) {
-            throw std::runtime_error(std::string("a renderer shader did not compile: ") +
-                                     (error != nil ? error.localizedDescription.UTF8String : "no main0"));
-        }
-        function = own(made);
+    // From utility.metallib, taken at the renderer's start (prepare_renderer_functions): here a lookup.
+    function = mtl::renderer_function(mtl::utility_msl(shader));
+    if (function == nullptr) {
+        throw std::runtime_error(std::string("a renderer shader could not be made: ") +
+                                 mtl::utility_function_name(mtl::utility_msl(shader)).text);
     }
     return function;
 }
@@ -90,6 +83,76 @@ mtl::Object RendererMtl::utility_pipeline(const UtilityKey& key) {
         const mtl::Object pipeline = own(made);
         utility_pipelines_.emplace(key, pipeline);
         return pipeline;
+    }
+}
+
+std::vector<unsigned> RendererMtl::scene_sample_counts() const {
+    std::vector<unsigned> counts{1u};
+    id<MTLDevice> const device = metal_device();
+    for (unsigned samples = 2u; samples <= draw_layout_.max_samples; samples *= 2u) {
+        if ([device supportsTextureSampleCount:samples]) {
+            counts.push_back(samples);
+        }
+    }
+    return counts;
+}
+
+// The pipelines a frame asks for whatever it draws, made at the start (on a worker, initialize), as Vulkan's
+// create_utility_pipelines makes its own: the present's blit into the window's format, the depth copy, the depth
+// resolve where the scene can be multisampled, and the scene pass's clears and copies (scene_pass_pipeline's keys with
+// no extra targets) for each scene pass, 8-bit and wide colour at each sample count. A key beyond these (a picture's own
+// format, a texture target's pass, a pass with extra targets) is made at its first use, from functions already taken.
+// One that cannot be made here is logged and left to its first use, which reports it as it always has.
+void RendererMtl::prepare_utility_pipelines() {
+    const auto make = [this](const UtilityKey& key) {
+        try {
+            static_cast<void>(utility_pipeline(key));
+        } catch (const std::exception& error) {
+            std::fprintf(stderr, "[Renderer] not made at the start: %s\n", error.what());
+        }
+    };
+    UtilityKey present;
+    present.vertex = mtl::UtilityShader::PresentVs;
+    present.fragment = mtl::UtilityShader::BlitPs;
+    present.colors[0] = layer_.format;
+    present.color_count = 1u;
+    present.write_mask = static_cast<std::uint8_t>(kWriteAll);
+    make(present);
+    UtilityKey depth_copy;
+    depth_copy.fragment = mtl::UtilityShader::DepthCopyPs;
+    depth_copy.colors[0] = depth_copy_format_;
+    depth_copy.color_count = 1u;
+    depth_copy.write_mask = static_cast<std::uint8_t>(MTLColorWriteMaskRed);
+    make(depth_copy);
+    const std::vector<unsigned> counts = scene_sample_counts();
+    if (counts.size() > 1u) {
+        UtilityKey resolve;
+        resolve.fragment = mtl::UtilityShader::DepthResolvePs;
+        resolve.depth = true;
+        make(resolve);
+    }
+    for (const unsigned samples : counts) {
+        for (const mtl::Format color : {draw_layout_.scene_color, draw_layout_.wide_color}) {
+            UtilityKey key;
+            key.vertex = mtl::UtilityShader::BlitVs;
+            key.colors[0] = color;
+            key.color_count = 1u;
+            key.samples = static_cast<std::uint8_t>(samples);
+            key.depth = true;
+            key.fragment = mtl::UtilityShader::ClearPs;
+            for (const NSUInteger mask : {kWriteAll, kWriteRgb, NSUInteger{MTLColorWriteMaskAlpha}}) {
+                key.write_mask = static_cast<std::uint8_t>(mask);
+                make(key);
+            }
+            key.fragment = mtl::UtilityShader::ClearDepthPs;
+            key.write_mask = 0u;
+            make(key);
+            key.write_mask = static_cast<std::uint8_t>(kWriteAll);
+            for (const mtl::UtilityShader copy : {mtl::UtilityShader::SceneConversionPs, mtl::UtilityShader::DisplayFilterPs}) {
+                key.fragment = copy;
+                make(key);
+            }
+        }
     }
 }
 

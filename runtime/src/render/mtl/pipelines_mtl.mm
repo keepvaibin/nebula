@@ -192,6 +192,7 @@ struct Programs {
     std::unordered_map<const void*, mtl::Object> functions;     // by a program's text: id<MTLFunction>
     std::unordered_map<std::uint32_t, mtl::Object> depth_states;  // by the state word's depth and stencil bits
     std::atomic<unsigned> failures_told{0u};
+    std::atomic<bool> text_told{false};  // a program compiled from its text was logged
 };
 Programs gPrograms;
 
@@ -265,6 +266,11 @@ mtl::Object function_of(const ProgramBytes& program, bool pixel) {
             }
             return at->second;
         }
+    }
+    // A build made without Apple's Metal compiler carries the texts: each is compiled here, on the pipeline workers, the
+    // first time it is asked for (the system keeps the result), which is logged once.
+    if (!gPrograms.text_told.exchange(true)) {
+        std::fprintf(stderr, "[pipelines] the game's programs are compiled from their text: this build has no Metal libraries\n");
     }
     @autoreleasepool {
         MTLCompileOptions* const options = [MTLCompileOptions new];

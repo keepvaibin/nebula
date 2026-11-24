@@ -13,6 +13,7 @@
 #include "galaxy/render/halton.h"
 #include "galaxy/render/mtl/metalfx_mtl.h"
 #include "galaxy/render/mtl/temporal_upscaler_mtl.h"
+#include "galaxy/render/mtl/utility_msl.h"
 
 #include <algorithm>
 #include <cmath>
@@ -76,25 +77,6 @@ private:
     unsigned input_width_ = 0u, input_height_ = 0u, output_width_ = 0u, output_height_ = 0u;
     Format color_format_ = Format::None, output_format_ = Format::None;
 };
-
-// The scene's depth as a texture of depth alone, where the scaler takes no depth with a stencil beside it: a
-// full-target draw that writes each pixel's depth.
-constexpr char kDepthCopy[] = R"MSL(
-#include <metal_stdlib>
-using namespace metal;
-struct Corner { float4 position [[position]]; };
-vertex Corner corner(uint id [[vertex_id]]) {
-    Corner out;
-    out.position = float4(id == 1u ? 3.0 : -1.0, id == 2u ? -3.0 : 1.0, 0.0, 1.0);
-    return out;
-}
-struct Depth { float depth [[depth(any)]]; };
-fragment Depth depth_of(Corner in, texture2d<float> scene [[texture(0)]]) {
-    Depth out;
-    out.depth = scene.read(uint2(in.position.xy)).r;
-    return out;
-}
-)MSL";
 
 API_AVAILABLE(macos(13.0), ios(16.0))
 class MetalFxTemporal final : public TemporalUpscaler {
@@ -240,15 +222,19 @@ private:
     bool make_depth_copy() {
         depth_copy_ = Context::get().create_texture(render_width_, render_height_, 1u, Format::Depth32f, kUseTarget | kUseSample,
                                                     Storage::Private, "depth for MetalFX");
-        NSError* error = nil;
-        id<MTLLibrary> const library = [device() newLibraryWithSource:@(kDepthCopy) options:nil error:&error];
-        if (!depth_copy_ || library == nil) {
-            std::fprintf(stderr, "[metalfx] the depth copy: %s\n", error != nil ? error.localizedDescription.UTF8String : "no texture");
+        // The scene's depth as a texture of depth alone, where the scaler takes no depth with a stencil beside it: a
+        // full-target draw that writes each pixel's depth (utility_msl.h kDepthCopyVsMsl and kDepthCopyPsMsl, from
+        // utility.metallib).
+        id<MTLFunction> const corner = (__bridge_transfer id<MTLFunction>)renderer_function(kDepthCopyVsMsl);
+        id<MTLFunction> const depth_of = (__bridge_transfer id<MTLFunction>)renderer_function(kDepthCopyPsMsl);
+        if (!depth_copy_ || corner == nil || depth_of == nil) {
+            std::fprintf(stderr, "[metalfx] the depth copy: %s\n", !depth_copy_ ? "no texture" : "its functions could not be made");
             return false;
         }
+        NSError* error = nil;
         MTLRenderPipelineDescriptor* const descriptor = [MTLRenderPipelineDescriptor new];
-        descriptor.vertexFunction = [library newFunctionWithName:@"corner"];
-        descriptor.fragmentFunction = [library newFunctionWithName:@"depth_of"];
+        descriptor.vertexFunction = corner;
+        descriptor.fragmentFunction = depth_of;
         descriptor.depthAttachmentPixelFormat = MTLPixelFormatDepth32Float;
         depth_pipeline_ = [device() newRenderPipelineStateWithDescriptor:descriptor error:&error];
         MTLDepthStencilDescriptor* const depth = [MTLDepthStencilDescriptor new];

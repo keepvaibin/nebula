@@ -110,22 +110,65 @@ bool RendererMtl::initialize(int window_width, int window_height, const FrameMap
         encoder_.configure(encoding);
         encoding_layout_ = encoding;
         reset_sampler_frame();
-        // Presentation post-processing, compiled on a worker; the plain blit presents until it is ready.
-        // The game's bloom, compiled on a worker; the game draws its own chains until it is ready.
-        bloom_.initialize(draw_layout_.depth);
-        if (const RenderConfig cfg = get_render_config(); cfg.post_process) {
-            post_.initialize(post_process_settings_from(cfg), draw_layout_.scene_color, draw_layout_.depth);
-            if (!ao_.initialize(draw_layout_.depth)) {
-                std::cerr << "[ambient-occlusion] off on this device" << std::endl;
+        // The renderer's own passes, made here at the start (P-065; P-052 makes Direct3D 12's and Vulkan's so): every
+        // function taken from utility.metallib and the renderer's own pipelines on one worker, the bloom's passes on a
+        // second, the post-process's on a third, while ambient occlusion's and the scene camera's are made on this
+        // thread. The scene passes' pipelines are made for each pass the renderer can open (8-bit and wide colour at each
+        // sample count, and the texture targets' pass). All are joined before the first frame (a future of std::async
+        // waits in its destructor too, so an exception here leaves none running); then the post-process's self-test
+        // waits for the GPU here, outside any frame.
+        {
+            const std::vector<unsigned> samples = scene_sample_counts();
+            std::vector<mtl::ScenePassFormat> scene_passes;
+            std::vector<mtl::ScenePassFormat> wide_passes;
+            for (const unsigned count : samples) {
+                scene_passes.push_back({draw_layout_.scene_color, count});
+                wide_passes.push_back({draw_layout_.wide_color, count});
             }
-            if (!scene_camera_.initialize(draw_layout_.depth)) {
-                std::cerr << "[scene-camera] off on this device" << std::endl;
+            std::vector<mtl::ScenePassFormat> every_pass = scene_passes;
+            every_pass.insert(every_pass.end(), wide_passes.begin(), wide_passes.end());
+            std::vector<mtl::ScenePassFormat> bloom_passes = every_pass;
+            bloom_passes.push_back({draw_layout_.target_color, 1u});
+            const std::uint64_t passes_began_ms = galaxy::steady_ms();
+            std::future<void> own_passes = std::async(std::launch::async, [this] {
+                mtl::prepare_renderer_functions();
+                prepare_utility_pipelines();
+            });
+            std::future<bool> bloom = std::async(std::launch::async, [this, &bloom_passes] {
+                return bloom_.initialize(draw_layout_.depth, bloom_passes);
+            });
+            const RenderConfig cfg = get_render_config();
+            std::future<bool> post;
+            if (cfg.post_process) {
+                post_.initialize(post_process_settings_from(cfg), draw_layout_.scene_color, draw_layout_.depth);
+                post = std::async(std::launch::async, [this, &samples] { return post_.build(samples, layer_.format); });
+                if (!ao_.initialize(draw_layout_.depth)) {
+                    std::cerr << "[ambient-occlusion] off on this device" << std::endl;
+                } else {
+                    ao_.prepare_pipelines(every_pass);
+                }
+                if (!scene_camera_.initialize(draw_layout_.depth)) {
+                    std::cerr << "[scene-camera] off on this device" << std::endl;
+                } else {
+                    scene_camera_.prepare_pipelines(scene_passes, wide_passes);
+                }
+            } else {
+                PostProcessStatus off{};
+                std::snprintf(off.skip_reason.data(), off.skip_reason.size(), "CONFIG OFF");
+                set_post_process_status(off);
+                std::cerr << "[post-process] off; presenting with the plain blit\n";
             }
-        } else {
-            PostProcessStatus off{};
-            std::snprintf(off.skip_reason.data(), off.skip_reason.size(), "CONFIG OFF");
-            set_post_process_status(off);
-            std::cerr << "[post-process] off; presenting with the plain blit\n";
+            own_passes.get();
+            const bool bloom_ready = bloom.get();
+            const bool post_built = post.valid() && post.get();
+            std::cerr << "[pipelines] Metal's passes made at the start in " << galaxy::steady_ms() - passes_began_ms
+                      << " ms: bloom " << (bloom_ready ? "ready" : "off") << ", post-process " << (post_built ? "built" : "off")
+                      << '\n';
+            mtl::report_renderer_functions();
+            if (cfg.post_process) {
+                post_.finish_build();
+                set_post_process_status(post_.status());
+            }
         }
     } catch (const std::exception& error) {
         std::cerr << "[Renderer] Metal initialize failed: " << error.what() << '\n';
@@ -561,7 +604,6 @@ void RendererMtl::begin_frame() {
         std::cerr << "[interp] temporal upscaling of generated frames tried again\n";
     }
     sync_post_process();
-    bloom_.poll_ready();
     bloom_.trim_idle();
     ao_.trim_idle();
     frame_slot_ = static_cast<unsigned>(frame_index_ % kFramesInFlight);
@@ -927,12 +969,8 @@ std::size_t RendererMtl::gpu_pass_times(GpuPassTime* out, std::size_t capacity) 
 }
 
 void RendererMtl::sync_post_process() {
-    const bool was_ready = post_.ready();
-    if (!post_.poll_ready()) {
+    if (!post_.ready()) {
         return;
-    }
-    if (!was_ready) {
-        set_post_process_status(post_.status());
     }
     const PostProcessSettings next = post_process_settings_from(get_render_config());
     const PostProcessSettings& current = post_.settings();

@@ -462,13 +462,21 @@ jobs:
         with:
           path: ${{ runner.temp }}/sccache
           key: ${{ steps.cache.outputs.key }}
+      # The renderer's own shaders come from the app's utility.metallib (P-065): its start takes every one from there and
+      # compiles none from its text (utility_library_mtl.mm logs each such compile and the count).
       - name: Start check (Metal)
         timeout-minutes: 5
         run: |
+          set -o pipefail
           d="$RUNNER_TEMP/start"
           mkdir -p "$d/data" "$d/settings"
           "$WORK/Nebula.app/Contents/MacOS/Nebula" --start-check 300 --data "$d/data" --settings "$d/settings" \
-            --crash-dumps "$d"
+            --crash-dumps "$d" 2>&1 | tee "$d/start.log"
+          grep -E '^\[metal\] renderer shaders: [1-9][0-9]* from utility\.metallib, 0 compiled from their text, 0 failed' "$d/start.log" \
+            || { echo "the start took a renderer shader from elsewhere than utility.metallib:"; grep -e '^\[metal\]' "$d/start.log"; exit 1; }
+          if grep -q 'renderer shader compiled from its text' "$d/start.log"; then
+            grep 'renderer shader compiled from its text' "$d/start.log"; exit 1
+          fi
       # The program finds its game module and the system loads it (the start check above does not load it), and the app's files
       # name no library outside the system and the app (release.yml has the same checks on the packed zip).
       - name: Module check and the app's files

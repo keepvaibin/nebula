@@ -51,19 +51,10 @@ Object AmbientOcclusion::function(unsigned index) {
     if (functions_[index] != nullptr) {
         return functions_[index];
     }
-    @autoreleasepool {
-        MTLCompileOptions* const options = [MTLCompileOptions new];
-        options.fastMathEnabled = NO;
-        options.languageVersion = MTLLanguageVersion2_4;
-        NSError* error = nil;
-        id<MTLLibrary> const library = [device() newLibraryWithSource:@(utility_msl(kShaders[index])) options:options error:&error];
-        id<MTLFunction> const made = library != nil ? [library newFunctionWithName:@"main0"] : nil;
-        if (made == nil) {
-            std::fprintf(stderr, "[ambient-occlusion] program %u did not compile: %s\n", index,
-                         error != nil ? error.localizedDescription.UTF8String : "no main0");
-            return nullptr;
-        }
-        functions_[index] = own(made);
+    // From utility.metallib (utility_msl.h renderer_function).
+    functions_[index] = renderer_function(utility_msl(kShaders[index]));
+    if (functions_[index] == nullptr) {
+        std::fprintf(stderr, "[ambient-occlusion] program %u could not be made\n", index);
     }
     return functions_[index];
 }
@@ -116,11 +107,20 @@ void AmbientOcclusion::shutdown() noexcept {
     no_depth_ = nullptr;
 }
 
+// Both forms of the multiply for each scene pass, made at the start so finish never makes one in a frame.
+void AmbientOcclusion::prepare_pipelines(std::span<const ScenePassFormat> passes) {
+    for (const ScenePassFormat& pass : passes) {
+        for (const bool fused : {false, true}) {
+            static_cast<void>(apply_pipeline(pass.color, pass.samples, fused));
+        }
+    }
+}
+
 // The multiply: the shader's output times the scene target's colour (RGB; the game's alpha stays), no depth.
-Object AmbientOcclusion::apply_pipeline(Format color_format, unsigned samples) {
+Object AmbientOcclusion::apply_pipeline(Format color_format, unsigned samples, bool fused) {
     Apply* free_slot = nullptr;
     for (Apply& apply : apply_) {
-        if (apply.pipeline != nullptr && apply.color == color_format && apply.samples == samples && apply.fused == fused_) {
+        if (apply.pipeline != nullptr && apply.color == color_format && apply.samples == samples && apply.fused == fused) {
             return apply.pipeline;
         }
         if (apply.pipeline == nullptr && free_slot == nullptr) {
@@ -128,7 +128,7 @@ Object AmbientOcclusion::apply_pipeline(Format color_format, unsigned samples) {
         }
     }
     const Object vs = function(kApplyVs);
-    const Object ps = function(fused_ ? kApplyFusedPs : kApplyPs);
+    const Object ps = function(fused ? kApplyFusedPs : kApplyPs);
     if (free_slot == nullptr || vs == nullptr || ps == nullptr) {
         return nullptr;
     }
@@ -156,7 +156,7 @@ Object AmbientOcclusion::apply_pipeline(Format color_format, unsigned samples) {
                          error != nil ? error.localizedDescription.UTF8String : "");
             return nullptr;
         }
-        *free_slot = Apply{color_format, samples, fused_, own(state)};
+        *free_slot = Apply{color_format, samples, fused, own(state)};
     }
     return free_slot->pipeline;
 }
@@ -258,7 +258,7 @@ bool AmbientOcclusion::prepare(Object commands, const Texture& depth, unsigned p
 }
 
 void AmbientOcclusion::finish(Object encoder, Format color_format, unsigned samples) {
-    const Object pipeline = apply_pipeline(color_format, samples);
+    const Object pipeline = apply_pipeline(color_format, samples, fused_);  // made at the start (prepare_pipelines)
     const Texture* const read = fused_ ? denoised_.get() : scale_.get();
     if (pipeline == nullptr || read == nullptr) {
         return;

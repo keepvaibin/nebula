@@ -27,9 +27,11 @@ public:
     AmbientOcclusion& operator=(const AmbientOcclusion&) = delete;
     ~AmbientOcclusion() { shutdown(); }
 
-    // The compute pipelines; the multiply's are made per scene pass at first use. False leaves the pass off.
-    // `depth_format`: the scene pass's depth and stencil target.
+    // The compute pipelines; the multiply's are made per scene pass by prepare_pipelines at the renderer's start. False
+    // leaves the pass off. `depth_format`: the scene pass's depth and stencil target.
     bool initialize(Format depth_format);
+    // The multiply's pipelines (both forms) for each scene pass the renderer can open: its colour's format and its samples.
+    void prepare_pipelines(std::span<const ScenePassFormat> passes);
     void shutdown() noexcept;
     [[nodiscard]] bool ready() const noexcept { return ready_; }
     // With no encoder open on `commands` (an id<MTLCommandBuffer>), from the scene's single-sample depth: the colour
@@ -50,7 +52,7 @@ public:
 private:
     enum Pass : unsigned { kDistance, kOcclusion, kDenoise, kUpsample, kSsao, kPassCount };
     [[nodiscard]] Object function(unsigned index);  // id<MTLFunction>, by kShaders' order
-    [[nodiscard]] Object apply_pipeline(Format color_format, unsigned samples);
+    [[nodiscard]] Object apply_pipeline(Format color_format, unsigned samples, bool fused);
     [[nodiscard]] bool ensure(std::shared_ptr<Texture>& target, unsigned width, unsigned height, Format format, const char* name);
     void dispatch(Object compute_encoder, Pass pass, const Texture& depth, const Texture& sampled1, const Texture& sampled2,
                   const Texture& storage, unsigned width, unsigned height) const;
@@ -66,7 +68,7 @@ private:
         bool fused = false;         // makes the multiplier from the denoised occlusion (AO_PASS_apply_ps)
         Object pipeline = nullptr;  // id<MTLRenderPipelineState>
     };
-    std::array<Apply, 16> apply_{};
+    std::array<Apply, 24> apply_{};
     // This frame's occlusion is one pixel per scene target pixel: no multiplier image or pass; the multiply reads the
     // denoised occlusion.
     bool fused_ = false;
