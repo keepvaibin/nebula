@@ -32,7 +32,7 @@ order	step	package	title	package_needs	card_file	state	commit
 31	G2.3.7	G2	Landing 3g: the Android fall-back and the surface vote read the step rate	S0.2	05-NATIVE-LANE-G.md	landed	ee6eeda4d
 32	G2.3	G2	Landing 3h: the picture interval published; P-313's restart hitch	S0.2	05-NATIVE-LANE-G.md	landed	3c62eee29
 33	G2.4	G2	Landing 4: no closing spin where a display time is asked	S0.2	05-NATIVE-LANE-G.md	landed	fdc86be24
-34	G2.5	G2	Landing 5: one arbiter, the clock held, the heat input	S0.2	05-NATIVE-LANE-G.md	open	
+34	G2.5	G2	Landing 5: one arbiter, the clock held, the heat input	S0.2	05-NATIVE-LANE-G.md	landed	54e37d4fe
 35	G6.2	G6	Sends and sound settings as typed records (P-221, P-222)	S0.1	05-NATIVE-LANE-G.md	open	
 36	G6.7	G6	The surround law (P-193)	S0.1	05-NATIVE-LANE-G.md	open	
 37	G1.1	G1	The record: the device's own motion, a pointer in the picture's terms, one fixed space for speed	S0.2	05-NATIVE-LANE-G.md	open	
