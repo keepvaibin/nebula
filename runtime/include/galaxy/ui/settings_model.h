@@ -62,6 +62,9 @@ struct FrameRateCaps {
     bool vsync_fixed = false;
     // The display varies its refresh with the presents: every rate shows evenly.
     bool variable_refresh = false;
+    // No display clock runs, so interpolated frames are not timed to the display's refreshes (Linux until its clock
+    // is fitted from the presents, I-005): the INTERPOLATION row says so.
+    bool display_clock_missing = false;
 };
 // A frame-rate target as the settings list it: frames a second, 0 for the display's rate, kUnlimitedTarget for no cap.
 inline constexpr unsigned kUnlimitedTarget = std::numeric_limits<unsigned>::max();

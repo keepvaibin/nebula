@@ -1046,6 +1046,12 @@ private:
     std::uint64_t last_present_id_ = 0;
     std::uint64_t present_id_before_last_ = 0;
     unsigned present_wait_timeouts_ = 0u;
+    // A present wait on a present of this swap chain, 100 ms at most (`timeout_ns` less): present wait 2's form or 1's.
+    VkResult wait_for_present(std::uint64_t id, std::uint64_t timeout_ns);
+    // Linux's display clock (I-005): when a present was last seen reach the display (galaxy::qpc_now()), and the last
+    // present shown at once out of its turn (FIFO relaxed), whose time is off the vblanks.
+    std::int64_t present_stamp_qpc_ = 0;
+    std::uint64_t relaxed_present_id_ = 0;
     std::uint64_t measured_present_count_ = 0;
 
     // A table, a target's picture: what the GPU may still read until a fence passes.

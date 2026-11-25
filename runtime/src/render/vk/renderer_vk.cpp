@@ -1154,6 +1154,7 @@ bool RendererVk::create_swapchain() {
     swapchain_.hdr = hdr_made;
     last_present_id_ = 0u;  // present ids belong to a swap chain: nothing to wait for on the new one
     present_id_before_last_ = 0u;
+    relaxed_present_id_ = 0u;
     swapchain_calls_.get_images(device, handle, &count, nullptr);
     swapchain_.images.resize(count);
     swapchain_calls_.get_images(device, handle, &count, swapchain_.images.data());
@@ -2122,6 +2123,18 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
 // Presents the acquired image after the submission that draws it (end_frame's and a generated frame's), paced to the
 // frame rate: where present timing takes a present's time, at the refresh the schedule drew it for (G2.3.2); else on
 // Android at the display slot it was meant for (VK_GOOGLE_display_timing).
+VkResult RendererVk::wait_for_present(std::uint64_t id, std::uint64_t timeout_ns) {
+    timeout_ns = std::min<std::uint64_t>(timeout_ns, 100'000'000ull);
+    const vk::Context& context = vk::Context::get();
+    if (swapchain_.ids2) {
+        VkPresentWait2InfoKHR wait{VK_STRUCTURE_TYPE_PRESENT_WAIT_2_INFO_KHR};
+        wait.presentId = id;
+        wait.timeout = timeout_ns;
+        return vkWaitForPresent2KHR(context.device(), swapchain_.handle, &wait);
+    }
+    return vkWaitForPresentKHR(context.device(), swapchain_.handle, id, timeout_ns);
+}
+
 void RendererVk::present_swapchain_image() {
     vk::Context& context = vk::Context::get();
     const RenderConfig cfg = get_render_config();
@@ -2179,17 +2192,21 @@ void RendererVk::present_swapchain_image() {
     const bool asked = timed_present && swapchain_.ask_time && moment != 0;
     const std::uint64_t wait_id = moment != 0 ? present_id_before_last_ : last_present_id_;
     if (ids && wait_id != 0u && !asked) {
-        VkResult waited = VK_SUCCESS;
-        if (swapchain_.ids2) {
-            VkPresentWait2InfoKHR wait{VK_STRUCTURE_TYPE_PRESENT_WAIT_2_INFO_KHR};
-            wait.presentId = wait_id;
-            wait.timeout = 100'000'000ull;
-            waited = vkWaitForPresent2KHR(context.device(), swapchain_.handle, &wait);
-        } else {
-            waited = vkWaitForPresentKHR(context.device(), swapchain_.handle, wait_id, 100'000'000ull);
-        }
+        const std::int64_t wait_start = galaxy::qpc_now();
+        const VkResult waited = wait_for_present(wait_id, 100'000'000ull);
         if (waited == VK_TIMEOUT && ++present_wait_timeouts_ <= 4u) {
             std::fprintf(stderr, "[present] the previous frame was not shown within 100 ms\n");
+        }
+        // A wait that blocked returned as its present reached the display: Linux's display clock is fitted from such
+        // moments (host_window::note_present_shown, I-005). One that returned at once says only that it was shown
+        // before, and one shown out of its turn (FIFO relaxed) is off the vblanks; present timing's own times take
+        // their place where the swap chain reports them. The wait is never left to another thread: present wait's
+        // swap chain is externally synchronized with the present itself.
+        const std::int64_t wait_end = galaxy::qpc_now();
+        if (waited == VK_SUCCESS && !swapchain_.timed && wait_id != relaxed_present_id_ &&
+            wait_end - wait_start >= galaxy::qpc_frequency() / 10'000) {
+            host_window::note_present_shown(wait_end, false);
+            present_stamp_qpc_ = wait_end;
         }
     }
     std::uint64_t this_present_id = 0u;
@@ -2353,6 +2370,31 @@ void RendererVk::present_swapchain_image() {
     }
     present_id_before_last_ = queued ? last_present_id_ : 0u;
     last_present_id_ = queued ? this_present_id : 0u;
+    if (queued && this_mode == VK_PRESENT_MODE_FIFO_RELAXED_KHR) {
+        relaxed_present_id_ = this_present_id;
+    }
+#if defined(__linux__) && !defined(__ANDROID__)
+    // Linux's display clock (I-005). A picture paced by that clock is queued once the one before it is shown, so the
+    // wait before the next present seldom blocks and tells nothing. With no present seen reach the display for eight
+    // refreshes or 100 ms (the clock's grid lapses after 250 ms, display_clock.cpp), the render thread waits for this
+    // one: it has nothing to draw before the next slot, which is the refresh this present reaches. Four refreshes at
+    // most, so a window out of sight costs such a wait once in each of those spans.
+    if (queued && result == VK_SUCCESS && this_mode == VK_PRESENT_MODE_FIFO_KHR && !swapchain_.timed &&
+        window_shown_ && display_refresh_hz_ > 1.0) {
+        const std::int64_t refresh =
+            std::llround(static_cast<double>(galaxy::qpc_frequency()) / display_refresh_hz_);
+        const std::int64_t probe_start = galaxy::qpc_now();
+        if (probe_start - present_stamp_qpc_ >= std::min(8 * refresh, galaxy::qpc_frequency() / 10)) {
+            const VkResult shown =
+                wait_for_present(this_present_id, static_cast<std::uint64_t>(std::llround(4e9 / display_refresh_hz_)));
+            const std::int64_t probe_end = galaxy::qpc_now();
+            if (shown == VK_SUCCESS && probe_end - probe_start >= galaxy::qpc_frequency() / 10'000) {
+                host_window::note_present_shown(probe_end, false);
+            }
+            present_stamp_qpc_ = probe_end;
+        }
+    }
+#endif
     streamline_frame_open_ = false;
     vk::note_driver_cpu(vk::DriverCall::Present, vk::thread_cpu_ns() - present_cpu);
     surface_lock_ = {};
@@ -2506,6 +2548,7 @@ void RendererVk::report_present_times() {
                         std::llround(since_ns * static_cast<double>(galaxy::qpc_frequency()) / 1e9);
             }
             galaxy::pacing::displayed(r.presentId, shown, swapchain_.refresh_qpc);
+            host_window::note_present_shown(shown, true);  // Linux's display clock (I-005)
             if (swapchain_.ask_time) {
                 display_model_.displayed(r.presentId, shown, swapchain_.refresh_qpc);  // 0 under a variable refresh
             }

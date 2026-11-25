@@ -90,6 +90,10 @@ void set_state_wake(void* event) noexcept;
 // The grid as last timed, without starting the timing.
 [[nodiscard]] bool vblank_grid_known(std::int64_t& vblank, std::int64_t& period) noexcept;
 [[nodiscard]] bool vblank_grid(NativeWindow window, std::int64_t& vblank, std::int64_t& period) noexcept;
+// A present the renderer saw reach the display at `stamp` (galaxy::qpc_now()'s clock; `exact`: present timing's own
+// time, else the moment present wait returned after waiting): Linux's display clock is fitted from these
+// (platform/sdl/display_clock.cpp, I-005); every other platform has its own vblanks and takes nothing. Render thread.
+void note_present_shown(std::int64_t stamp, bool exact) noexcept;
 // Where the game's frames follow the display's vsync (Android): the latest frame slot, the frame period, the
 // display's vsync interval and now (CLOCK_MONOTONIC nanoseconds), for presents timed to it; else false.
 [[nodiscard]] bool present_grid(std::int64_t& slot_ns, std::int64_t& period_ns, std::int64_t& vsync_ns,
