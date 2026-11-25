@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-24 18:38. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 18:39. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 26 of 145 (18%).
 
-Now: G2.3.2 landed (26 of 145); G2.3.3 hard (Linux compile error), fixer waits for the usage line
+Now: G2.3.3: planner fixes the Linux compile error; waiting for its 'fixed'
 
 In work now: Nothing started.
 
