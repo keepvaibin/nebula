@@ -1,12 +1,13 @@
 # Nebula native plan: status
 
-Written 2026-11-24 19:24. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 19:25. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 27 of 145 (19%).
 
 Now: in work: lander landing G2.3.3 to G2.3.7
 
-In work now: Nothing started.
+In work now:
+- G2.3.4 Landing 3d: Apple's display link (agent 1)
 
 ## Packages
 
@@ -113,7 +114,7 @@ Nothing is blocked.
 | M-006 | closed | - | the step tier and section check; a passing tool fault played once more; a waiter left not judged runs itself | 0 | 95 | 2911f6429 |
 | M-007 | closed | - | the section-at-a-time roles: a whole section ahead, wait, hand-off sheets, hard reports, the live page | 0 | 80 | 9ed09cfec |
 
-## Decisions (87)
+## Decisions (91)
 
 - 2026-11-23 S0.2.1: LoadSlice: 32 items a frame; an item is a phase of GameScene::initAfterScenarioChosen, the player, one placement made whole, one piece of FileSelector::initStep, or one Star Bit of the reserve (because the card asks for a fixed count of work and names no count; the count is a constant in one place, no player sees which frame of the load an item falls in, and the load worker (G3.7) replaces the slices)
 - 2026-11-23 S0.2.1: Drawing's random stream (MR::getDrawRandom) is seeded with the same seed as the game's stream, in setRandomSeedFromStageName and setFixedRandomSeed (because a fixed seed keeps the cosmetic numbers the same in every run of a replay and needs no new setting; the draw stream runs through the same sequence as the game's but is advanced only by drawing, so neither changes the other)
@@ -202,6 +203,10 @@ Nothing is blocked.
 - 2026-11-24 G2.3.3: PresentStampFit fits the period as the least-squares slope of the last 32 stamps on their refresh numbers (clamped to 2 % of the mode), not the median spacing the card names (because the median of single gaps carries one wake's delay over one refresh and missed 1 % and 0.3 ms at 319 and 406 Hz in test_present_stamps; the slope spreads it over the refreshes the points span and passes every sample rate)
 - 2026-11-24 G2.3.3: The Linux mark is NATIVE (NOT SYNCHRONIZED) on the INTERPOLATION row (S.NOT_SYNCHRONIZED in 14 languages; the American cell synchronized, the European synchronised), shown while no display clock grid runs (host_window::vblank_grid_known false), on Linux desktop only (because the card asks the in-between pictures marked until a clock runs; the row is where native interpolation is chosen, and the game's other texts use the American spelling with the European cell where it differs)
 - 2026-11-24 G2.3.3: display_refresh_hz on Linux stays 0 (SDL's mode, read by the host, is the stated period the fit starts from) (because a rate from the fit would feed back into the mode the fit is clamped to)
+- 2026-11-24 G2.3.4: The Metal display link runs only with VSync on and only where the system has it (macOS 14, iOS 17); its drawables replace nextDrawable and are presented at targetPresentationTimestamp; the older link and nextDrawable stay for older systems and VSync off (because with VSync off the layer shows pictures when ready (displaySyncEnabled NO), which a link's timed drawables would undo; the app's minimum systems are older than the link)
+- 2026-11-24 G2.3.4: The link's targetPresentationTimestamp values become the grid's vsyncs only once they have come (kept on the link's thread until then), with no stated period (because the VsyncGrid takes past vsyncs, as the older links give; a refresh planned is a refresh of the display's grid)
+- 2026-11-24 G2.3.4: The rate range rule of P-034 (fastest only while in-between pictures fill it, else 60 with a range up to it) is applied to every link that takes a range: iOS's CADisplayLink and the Metal display link on both systems; CVDisplayLink asks none (because the card states it for iOS from the audit; the Metal display link on a Mac with a ProMotion display has the same choice, and one rule keeps the two systems alike)
+- 2026-11-24 G2.3.4: I-006, P-034 and I-012 stay open in the ledger with dated notes; they close when the owed Mac proofs pass (because no Mac here and GitHub's Mac job runs on main only: nothing of this step is proven before the landing)
 
 ## Checks changed during the run (72)
 
