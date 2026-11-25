@@ -99,7 +99,7 @@ Nothing waits for the owner.
 
 ## Blocked
 
-Nothing is blocked.
+- G2.3.5 Landing 3e: variable refresh, told by the system or proved from the presents: hard: start: the commits of native/G2.3.5 do not apply on origin/main 71a676bbf; first commit 13e257ad8 conflicts in docs/plan/ledger.tsv (stack base cb6c39e6f was before G2.3.4's own commits) (report: D:/NebulaWork/plan/native/hard/G2.3.5.md)
 
 ## Tool mends
 
@@ -113,7 +113,7 @@ Nothing is blocked.
 | M-006 | closed | - | the step tier and section check; a passing tool fault played once more; a waiter left not judged runs itself | 0 | 95 | 2911f6429 |
 | M-007 | closed | - | the section-at-a-time roles: a whole section ahead, wait, hand-off sheets, hard reports, the live page | 0 | 80 | 9ed09cfec |
 
-## Decisions (91)
+## Decisions (97)
 
 - 2026-11-23 S0.2.1: LoadSlice: 32 items a frame; an item is a phase of GameScene::initAfterScenarioChosen, the player, one placement made whole, one piece of FileSelector::initStep, or one Star Bit of the reserve (because the card asks for a fixed count of work and names no count; the count is a constant in one place, no player sees which frame of the load an item falls in, and the load worker (G3.7) replaces the slices)
 - 2026-11-23 S0.2.1: Drawing's random stream (MR::getDrawRandom) is seeded with the same seed as the game's stream, in setRandomSeedFromStageName and setFixedRandomSeed (because a fixed seed keeps the cosmetic numbers the same in every run of a replay and needs no new setting; the draw stream runs through the same sequence as the game's but is advanced only by drawing, so neither changes the other)
@@ -206,6 +206,12 @@ Nothing is blocked.
 - 2026-11-24 G2.3.4: The link's targetPresentationTimestamp values become the grid's vsyncs only once they have come (kept on the link's thread until then), with no stated period (because the VsyncGrid takes past vsyncs, as the older links give; a refresh planned is a refresh of the display's grid)
 - 2026-11-24 G2.3.4: The rate range rule of P-034 (fastest only while in-between pictures fill it, else 60 with a range up to it) is applied to every link that takes a range: iOS's CADisplayLink and the Metal display link on both systems; CVDisplayLink asks none (because the card states it for iOS from the audit; the Metal display link on a Mac with a ProMotion display has the same choice, and one rule keeps the two systems alike)
 - 2026-11-24 G2.3.4: I-006, P-034 and I-012 stay open in the ledger with dated notes; they close when the owed Mac proofs pass (because no Mac here and GitHub's Mac job runs on main only: nothing of this step is proven before the landing)
+- 2026-11-24 G2.3.5: The presents' proof runs with in-between pictures on: while it runs the slots follow the pacer's clock at the probe rate (g_refresh_probe_hz), as under variable refresh at the cap (because the game's 60 real pictures come under the probe rate (1.25 mode periods) on any display above 75 Hz, so a probe of real pictures alone would leave every faster display unproved; the proof reads only when each present was shown, not what it shows)
+- 2026-11-24 G2.3.5: Point 5 (e) counts presents the pacer held (the probe, the cap, a player's limit); a fixed answer with VSync on holds none, so there only events (a) to (d) ask again (because a present not held has no period its time up could be judged against; holding presents under a fixed answer would cost every fixed display a hold it does not need)
+- 2026-11-24 G2.3.5: Metal holds no probe: a Mac screen the system does not describe (no minimum and maximum refresh interval) is taken as fixed (because the system answers on every macOS the app runs on (macOS 12 reads both intervals) and on iOS (fixed until a page says otherwise), and Apple's pictures are timed by its display link, not by the pacer the probe holds)
+- 2026-11-24 G2.3.5: Direct3D 11 and Vulkan ask and cap against the mode's own rate (host_window::display_mode_hz, read when the display changes), never the timed vblanks' rate (because on a variable display the vblanks follow the presents, so their rate is the presents' (the probe's 1.25 periods while it runs), which would move the mode period the proof judges against)
+- 2026-11-24 G2.3.5: Proof 3's Android grid is fed the period Android states (on_refresh_rate), with 0.5 ms of jitter and every seventh callback missed (because the app's minimum (API 31) has the refresh-rate callback, so Android's grid always has the stated period; fed no period at 485 to 495 Hz with every seventh callback missed, VsyncGrid's measured interval drifts 1 to 2 % (found writing the test, not a path any platform takes: Apple's links state theirs too))
+- 2026-11-24 G2.3.5: A probe runs for 600 presents at most after a question (about 5 s at the probe rate); with no answer by then the presents go free and the display is taken as fixed until the next event asks again (because a window whose presents the display never reports (a hidden test window, a remote session, a failing frame-statistics read) would otherwise hold every present at 1.25 mode periods for as long as it runs; 120 counted presents need about 150 presents where the statistics come)
 
 ## Checks changed during the run (72)
 
