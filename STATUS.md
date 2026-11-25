@@ -101,6 +101,7 @@ In work now:
 - G2.5 Landing 5: one arbiter, the clock held, the heat input: Proof 5 (P-318, file 00 4.3): the tablet at 120 Hz holds in all 102 tour stops with dynamic resolution acting, and the PC at every offered rate; the card's rule against a jam applies where a stop fails only by the render thread's time a picture over the slot (record the stops, then P-318 advances here and closes at G2.8) (agent 1, 2026-11-25 02:28)
 - G2.5 Landing 5: one arbiter, the clock held, the heat input: Proof 6 (P-317): two refreshes from step to display at 60 Hz on the tablet, the clock held by the hint at the slot (agent 1, 2026-11-25 02:28)
 - G2.5 Landing 5: one arbiter, the clock held, the heat input: Proof 7 (P-019) and Read first: on the tablet the [arbiter] lines show a headroom read (not 0) and a hot device lowers the pressure; adb shell dumpsys android.hint_manager shows the session's target at the slot; a 5-minute trace in one galaxy compares missed frames with --diagnostics old-governors (agent 1, 2026-11-25 02:28)
+- G2.5 Landing 5: one arbiter, the clock held, the heat input: Proof 8: the game step's time and the walk's on the PC and the tablet, before (--diagnostics old-governors) and after: never slower (measure/step/pc, measure/step/tablet) (agent 1, 2026-11-25 02:28)
 
 ## Waiting for the owner
 
