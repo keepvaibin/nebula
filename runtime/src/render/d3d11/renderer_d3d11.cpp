@@ -14,7 +14,6 @@
 #include "galaxy/frame_timeline.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/platform_time.h"
-#include "galaxy/precise_wait.h"
 #include "galaxy/render/host_window_win32.h"
 #include "galaxy/render/program_table.h"
 #include "galaxy/render/texture_store.h"
@@ -296,7 +295,7 @@ bool RendererD3D11::create_swap_chain() {
         return false;
     }
     context.factory()->MakeWindowAssociation(window_, DXGI_MWA_NO_ALT_ENTER);
-    if (FAILED(swap_chain_->SetMaximumFrameLatency(1u))) {
+    if (FAILED(swap_chain_->SetMaximumFrameLatency(kDxgiFrameLatency))) {
         std::cerr << "[present] SetMaximumFrameLatency failed\n";
     }
     frame_latency_waitable_ = swap_chain_->GetFrameLatencyWaitableObject();
@@ -321,6 +320,10 @@ bool RendererD3D11::create_swap_chain() {
     }
     swap_dirty_ = false;
     return true;
+}
+
+unsigned RendererD3D11::present_queue() const noexcept {
+    return frame_latency_waitable_ != nullptr ? kDxgiFrameLatency : kDxgiDefaultFrameLatency;
 }
 
 bool RendererD3D11::resize_swap_chain(std::uint32_t width, std::uint32_t height) {
@@ -661,11 +664,6 @@ std::uint64_t RendererD3D11::end_frame(bool present_swap_chain, SubmissionCallba
             }
             if (timeline_present) {
                 galaxy::timeline::record(galaxy::timeline::Event::AcquireEnd);
-            }
-            // The present asks no time: a picture ready before the refresh it is drawn for could take is held to it.
-            const std::int64_t from = display_model_.present_from(model_present.slot);
-            if (from > galaxy::qpc_now()) {
-                galaxy::PreciseWait::for_this_thread().until(from);
             }
         }
         const std::int64_t start = galaxy::qpc_now();

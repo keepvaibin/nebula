@@ -307,6 +307,11 @@ public:
         return false;
     }
     [[nodiscard]] bool take_shown(ShownPicture&) noexcept { return false; }
+    [[nodiscard]] unsigned present_queue() const noexcept { return 0u; }
+    [[nodiscard]] bool queue_time(std::int64_t, std::int64_t& shown) const noexcept {
+        shown = 0;
+        return false;
+    }
     [[nodiscard]] UploadRing& vertex_ring() noexcept { return vertex_ring_; }
     [[nodiscard]] UploadRing& index_ring() noexcept { return index_ring_; }
     [[nodiscard]] UploadRing& constant_ring() noexcept { return constant_ring_; }

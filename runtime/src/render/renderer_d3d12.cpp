@@ -15,7 +15,6 @@
 
 #include "galaxy/content_viewport.h"
 #include "galaxy/platform_time.h"
-#include "galaxy/precise_wait.h"
 #include "galaxy/display_aspect.h"
 #include "galaxy/render_api.h"
 #include "galaxy/render/galaxy_select.h"
@@ -3330,10 +3329,14 @@ bool RendererD3D12::create_swap_chain(bool fsr) {
     }
     ComPtr<IDXGISwapChain2> swap_chain2;
     d3d_check(swap_chain_.As(&swap_chain2), "SwapChain2 As");
-    d3d_check(swap_chain2->SetMaximumFrameLatency(1u), "SetMaximumFrameLatency");
+    d3d_check(swap_chain2->SetMaximumFrameLatency(kDxgiFrameLatency), "SetMaximumFrameLatency");
     release_latency_wait();
     latency_wait_ = swap_chain2->GetFrameLatencyWaitableObject();
     return true;
+}
+
+unsigned RendererD3D12::present_queue() const noexcept {
+    return latency_wait_ != nullptr ? kDxgiFrameLatency : kDxgiDefaultFrameLatency;
 }
 
 void RendererD3D12::release_latency_wait() noexcept {
@@ -4333,11 +4336,6 @@ void RendererD3D12::present_to_swap_chain() {
         }
         if (timeline_present) {
             galaxy::timeline::record(galaxy::timeline::Event::AcquireEnd);
-        }
-        // The present asks no time: a picture ready before the refresh it is drawn for could take is held to it.
-        const std::int64_t from = display_model_.present_from(model_present.slot);
-        if (from > galaxy::qpc_now()) {
-            galaxy::PreciseWait::for_this_thread().until(from);
         }
     }
     model_present.call = galaxy::qpc_now();

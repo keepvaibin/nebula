@@ -124,12 +124,15 @@ bool DisplayModel::display_time(std::int64_t present, std::int64_t& shown) const
     return true;
 }
 
-std::int64_t DisplayModel::present_from(std::int64_t slot) const noexcept {
-    if (held_ < 0 || period_ <= 0 || slot == 0) {
-        return 0;
+bool DisplayModel::queue_time(std::int64_t present, std::int64_t& shown) const noexcept {
+    if (!display_time(present, shown)) {
+        return false;
     }
-    const std::int64_t guard = std::min(period_ / 4, frequency_ > 0 ? frequency_ / 2000 : period_ / 4);
-    return slot - (held_ + 1) * period_ + guard;
+    const Present& newest = presents_[(next_ + presents_.size() - 1u) % presents_.size()];
+    if (newest.id != 0u && newest.id == last_id_) {
+        shown = std::max(shown, first_after(newest.call) + (held_ + 1) * period_);
+    }
+    return true;
 }
 
 bool DisplayModel::take_shown(ShownPicture& picture) noexcept {
@@ -272,6 +275,8 @@ void FrameSchedule::begin_waiting(std::int64_t now) {
     observe_shown();
     const bool lead_was = display_lead_ != 0;
     display_lead_ = on_vblanks ? display_lead_for(now, vblank_period) : 0;
+    display_queue_ = display_lead_ != 0 ? display_.present_queue() : 0u;
+    display_refresh_ = display_queue_ != 0u ? vblank_period : 0;
     ++serial_;
     ++counts_.started;
     sequence_ = std::exchange(waiting_, ScheduleSequence{});
@@ -377,10 +382,16 @@ std::int64_t FrameSchedule::display_lead_for(std::int64_t now, std::int64_t vbla
         return 0;
     }
     // At the least the time from a present made now to the refresh that shows it, in whole refreshes; a refresh more
-    // at first (the picture's own work); four game steps at most (present_slots.h).
+    // at first (the picture's own work); four game steps at most (present_slots.h). Where a swap chain's queue paces
+    // the presents, at most its depth in refreshes above the least: a picture started earlier would find the queue
+    // full, its render thread blocked past the next picture's start.
     const std::int64_t unit = to_ns(vblank_period);
     const std::int64_t least = to_ns(shown - now);
-    const std::int64_t depth = display_depth_.depth(least + unit, least, 4 * kGameStepNs, unit);
+    const auto queue = static_cast<std::int64_t>(display_.present_queue());
+    const std::int64_t most =
+        queue != 0 ? std::min<std::int64_t>(4 * kGameStepNs, (least + unit - 1) / unit * unit + queue * unit)
+                   : 4 * kGameStepNs;
+    const std::int64_t depth = display_depth_.depth(least + unit, least, most, unit);
     return (depth + unit / 2) / unit * vblank_period;
 }
 
@@ -881,6 +892,30 @@ SchedulePicture FrameSchedule::next(std::int64_t now, bool flush) {
     if (!busy() || (!flush && now < slot_due())) {
         return picture;
     }
+    // A swap chain's queue paces the presents (no time is asked) and nothing holds a picture once it is presented: it is
+    // shown at the refresh after the one the picture before it is due at, or at the first a present made now reaches,
+    // whichever is later (queue_time), and is drawn for that refresh. Before the slot (the lead above what the queue
+    // holds: no picture before it waiting) the start waits until a present reaches the slot, on the render thread's own
+    // wait for its start (slot_due), so the picture is never shown early. After it (a stall, a late picture) the slot
+    // clock moves to that refresh.
+    std::int64_t reach = 0;
+    const bool queued = !flush && display_queue_ != 0u && !unbounded_ && display_.queue_time(now, reach);
+    if (queued) {
+        // In whole refreshes, the nearest: the model's refreshes and the slot clock's vblanks are the same display's.
+        const std::int64_t offset = reach - slot_due_ + display_refresh_ / 2;
+        const std::int64_t later = (offset >= 0 ? offset : offset - display_refresh_ + 1) / display_refresh_;
+        if (later < 0) {
+            start_slot_ = slot_due_;
+            start_from_ = now - later * display_refresh_;
+            return picture;
+        }
+        if (later > 0) {
+            slot_due_ += later * display_refresh_;
+            const std::int64_t missed = (later * display_refresh_ + slot_period_ - 1) / slot_period_;
+            counts_.late_slots += static_cast<std::uint64_t>(missed);
+            arbiter_.late += static_cast<std::uint64_t>(missed);
+        }
+    }
     // With no slot clock (an unlimited rate) the picture shows the moment it is drawn for.
     const std::int64_t slot = unbounded_ ? now : slot_due_;
     if (waiting_.active) {
@@ -923,8 +958,9 @@ SchedulePicture FrameSchedule::next(std::int64_t now, bool flush) {
     } else if (!flush) {
         slot_due_ = slot + slot_period_;
         ++arbiter_.slots;
-        // A stall skips the slots it missed instead of bunching them (with a display model: whose start it missed).
-        if (now >= slot_due()) {
+        // A stall skips the slots it missed instead of bunching them (with a display model: whose start it missed; where
+        // a queue paces the presents, those a present made then can no longer reach, above).
+        if (!queued && now >= slot_due()) {
             const std::int64_t missed = (now - slot_due()) / slot_period_ + 1;
             counts_.late_slots += static_cast<std::uint64_t>(missed);
             arbiter_.late += static_cast<std::uint64_t>(missed);

@@ -16,6 +16,12 @@
 
 namespace galaxy::render {
 
+// The most presents a Direct3D swap chain queues ahead of the one shown: the frame latency its waitable object is set to
+// (SetMaximumFrameLatency), and DXGI's default where a swap chain has no such object. The presents ask no time, so this
+// queue paces them (frame_schedule.h ScheduleDisplay::present_queue).
+inline constexpr UINT kDxgiFrameLatency = 1u;
+inline constexpr UINT kDxgiDefaultFrameLatency = 3u;
+
 // What a present was drawn for and when it could go: `slot`, the refresh the schedule drew it for (0: none); `ready`,
 // when it was ready to present, before the wait on the frame latency object; `call`, when the Present call was made.
 struct DxgiPresent {
