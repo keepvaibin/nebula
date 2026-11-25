@@ -446,11 +446,17 @@ unsigned settings_refresh_hz(const RenderConfig& render) {
 using ui::Interpolation;
 ui::FrameRateCaps settings_frame_rate_caps(const RenderConfig& render, bool offer = false) {
     const bool vsync_fixed = present_waits_for_refresh();
-    return {settings_refresh_hz(render), offer && frame_generation_offered(),
-            host_window::upscaler_caps().frame_generation, host_window::upscaler_caps().frame_generation_dynamic,
-            host_window::upscaler_caps().frame_generation_max, host_window::upscaler_caps().fsr_frame_generation,
-            render.vsync_interval == 0u && !vsync_fixed, vsync_fixed,
-            galaxy::render::g_variable_refresh.load(std::memory_order_relaxed)};
+    ui::FrameRateCaps caps{settings_refresh_hz(render), offer && frame_generation_offered(),
+                           host_window::upscaler_caps().frame_generation, host_window::upscaler_caps().frame_generation_dynamic,
+                           host_window::upscaler_caps().frame_generation_max, host_window::upscaler_caps().fsr_frame_generation,
+                           render.vsync_interval == 0u && !vsync_fixed, vsync_fixed,
+                           galaxy::render::g_variable_refresh.load(std::memory_order_relaxed)};
+#if defined(__linux__) && !defined(__ANDROID__)
+    // Linux's display clock comes from the presents (platform/sdl/display_clock.cpp): none yet, or none running.
+    std::int64_t vblank = 0, period = 0;
+    caps.display_clock_missing = !host_window::vblank_grid_known(vblank, period);
+#endif
+    return caps;
 }
 Interpolation interpolation_of(const RenderConfig& render) { return ui::interpolation_of(render); }
 std::vector<unsigned> interpolation_targets(const RenderConfig& render, Interpolation mode) {

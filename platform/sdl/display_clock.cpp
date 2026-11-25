@@ -19,6 +19,13 @@
 #include <cstdlib>
 #include <mutex>
 #include <thread>
+#elif defined(__linux__)
+#include <cerrno>
+#include <cstdio>
+#include <time.h>
+
+#include <atomic>
+#include <mutex>
 #endif
 
 namespace galaxy::sdl {
@@ -206,7 +213,95 @@ double display_refresh_hz() noexcept {
     return g_grid.interval_ns != 0 ? 1e9 / static_cast<double>(g_grid.interval_ns) : 0.0;
 }
 
+#elif defined(__linux__)
+
+namespace {
+
+// Linux (I-005): no vsync callback reaches an application, so the grid comes from the presents. The Vulkan renderer
+// tells each present it saw complete (note_present_shown: present wait's return, or present timing's own time) with
+// the display mode's period; PresentStampFit fits them to that period (galaxy/vsync_grid.h) and the VsyncGrid takes
+// the fit with its period stated, so the frame slots come as on Android. No present seen for a quarter second (out of
+// sight, a renderer without present wait or present timing): no grid, and the host's own clock runs the frames.
+std::mutex g_mutex;
+galaxy::PresentStampFit g_fit;
+galaxy::VsyncGrid g_grid;
+std::atomic<std::int64_t> g_frame_slot_ns{0};
+std::atomic<std::int64_t> g_frame_period_ns{0};
+
+std::int64_t monotonic_ns() noexcept {
+    timespec now{};
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return static_cast<std::int64_t>(now.tv_sec) * 1000000000 + now.tv_nsec;
+}
+
+}  // namespace
+
+void note_present_shown(std::int64_t stamp_ns, std::int64_t mode_period_ns, bool exact) noexcept {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    g_fit.mode(mode_period_ns);
+    if (g_fit.note(stamp_ns, exact) && g_fit.interval_ns > 0) {
+        g_grid.note(g_fit.vsync_ns, g_fit.interval_ns);
+    }
+}
+
+bool wait_display_frame(std::int64_t period_ns, std::int64_t& last_ns, bool in_between) noexcept {
+    galaxy::VsyncGrid grid;
+    {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        grid = g_grid;
+    }
+    std::int64_t target = 0;
+    std::int64_t frame_period = 0;
+    std::int64_t dropped = 0;
+    if (!grid.next_slot(period_ns, last_ns, monotonic_ns(), in_between, target, frame_period, &dropped)) {
+        g_frame_slot_ns.store(0, std::memory_order_relaxed);
+        return false;
+    }
+    if (dropped > 0) {
+        std::fprintf(stderr,
+                     "[pacing] the game's steps were %.0f ms behind the display's vsync: those steps are dropped\n",
+                     static_cast<double>(dropped) / 1e6);
+    }
+    // A slot already past (the clock catching up, P-274) returns at once. Only an interruption sleeps again.
+    const timespec wake{static_cast<time_t>(target / 1000000000), static_cast<long>(target % 1000000000)};
+    while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &wake, nullptr) == EINTR) {
+    }
+    last_ns = target;
+    g_frame_period_ns.store(frame_period, std::memory_order_relaxed);
+    g_frame_slot_ns.store(target, std::memory_order_release);
+    return true;
+}
+
+// The presents stop by themselves while the window is out of sight; nothing to hold.
+void set_display_clock_held(bool) noexcept {}
+
+bool display_grid(std::int64_t& slot_ns, std::int64_t& period_ns, std::int64_t& vsync_ns,
+                  std::int64_t& now_ns) noexcept {
+    slot_ns = g_frame_slot_ns.load(std::memory_order_acquire);
+    period_ns = g_frame_period_ns.load(std::memory_order_relaxed);
+    {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        vsync_ns = g_grid.interval_ns;
+    }
+    now_ns = monotonic_ns();
+    return slot_ns != 0 && period_ns != 0 && vsync_ns != 0 && now_ns - slot_ns <= 4 * period_ns;
+}
+
+bool vsync_grid(std::int64_t& vsync_ns, std::int64_t& interval_ns) noexcept {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    vsync_ns = g_grid.vsync_ns;
+    interval_ns = g_grid.interval_ns;
+    return vsync_ns != 0 && interval_ns != 0 && monotonic_ns() - vsync_ns <= 250000000;
+}
+
+// No stated period of the system's own beside SDL's display mode, which the host reads (host_window_sdl.cpp).
+double display_refresh_hz() noexcept {
+    return 0.0;
+}
+
 #elif !defined(NEBULA_HOST_APPLE)  // Apple's display link: platform/apple/display_clock_apple.mm
+
+void note_present_shown(std::int64_t, std::int64_t, bool) noexcept {}
 
 bool wait_display_frame(std::int64_t, std::int64_t&, bool) noexcept {
     return false;

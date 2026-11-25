@@ -13,6 +13,7 @@ class Host final : public galaxy::ui::GraphicsPageHost {
 public:
     bool temporal = false;
     bool folders = true;
+    bool clock_missing = false;
     unsigned refresh_hz = 144;
     mutable int opened = -1;
     galaxy::ui::GraphicsPageState query(const galaxy::ui::RenderConfig&) const override {
@@ -20,6 +21,7 @@ public:
         state.upscalers = {0, 1, 5};
         state.render_percent = 50;
         state.frame_rates.refresh_hz = refresh_hz;
+        state.frame_rates.display_clock_missing = clock_missing;
         state.temporal_upscaling = temporal;
         state.folders_open = folders;
         state.anti_aliasing_text = "ANTI-ALIASING: OFF";
@@ -67,6 +69,16 @@ int main() {
         check(host.opened == static_cast<int>(galaxy::ui::GraphicsFolder::TextureDumps), "texture folder action");
         row(rows, "MOVIES FOLDER").press(config, 0);
         check(host.opened == static_cast<int>(galaxy::ui::GraphicsFolder::Movies), "movie folder action");
+
+        // Native interpolation with no display clock to time its frames by (Linux before its clock runs, I-005): the
+        // row says they are not synchronized; with a clock it says nothing more.
+        rows = galaxy::ui::graphics_page(config, host);
+        check(row(rows, "INTERPOLATION").value == "NATIVE", "native interpolation on a display clock");
+        host.clock_missing = true;
+        rows = galaxy::ui::graphics_page(config, host);
+        check(row(rows, "INTERPOLATION").value == "NATIVE (NOT SYNCHRONIZED)",
+              "native interpolation with no display clock is marked not synchronized");
+        host.clock_missing = false;
 
         // An upscaler on: its mode sets the resolution, the exact height is not offered beside it.
         rows = galaxy::ui::graphics_page(config, host);

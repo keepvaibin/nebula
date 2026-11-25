@@ -5,6 +5,7 @@
 // whose vsyncs do not divide the frame period.
 #include "galaxy/vsync_grid.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -258,6 +259,87 @@ void test_every_rate() {
     check(wrong == 0u, "every sample rate: the step follows the grid at the multiples only, each slot a vsync");
 }
 
+// G2.3.3 proof 1 (I-005): Linux's display clock, fitted from when presents completed (PresentStampFit), at every sample
+// rate of the "Any refresh rate" paragraph. The mode states a period 0.1 % off the display's own (59.94 against 60);
+// presents complete on most refreshes, a refresh missed now and then (two and three apart), each stamp taken up to a
+// quarter millisecond after its refresh by a thread that woke, one in 40 a third of a period late (a slow wake), and a
+// pause of half a second. After the first 200 stamps the fitted period is within 1 % of the display's and its latest
+// refresh within the wake's jitter of a real one; fed to the VsyncGrid with the fitted period stated, the slots it
+// gives at a locked rate are a whole number of the display's refreshes apart and each is a refresh. Present timing's
+// exact times are taken as they are.
+void test_present_stamps() {
+    std::vector<double> rates{40.0, 48.0, 50.0, 59.94, 60.0, 72.0, 75.0, 82.37, 90.0, 100.0, 119.88, 120.0,
+                              144.0, 165.0, 180.0, 200.0, 240.0, 360.0, 480.0, 500.0};
+    std::mt19937 random(20261124u);
+    std::uniform_real_distribution<double> any(40.0, 500.0);
+    for (int i = 0; i < 300; ++i) rates.push_back(any(random));
+    std::uniform_int_distribution<std::int64_t> wake(0, 250000);
+    unsigned wrong = 0;
+    for (const double rate : rates) for (const bool probed : {false, true}) {
+        const double period = 1e9 / rate;
+        const auto vblank = [&](std::int64_t n) { return 1000000000 + std::llround(static_cast<double>(n) * period); };
+        // Probed (renderer_vk.cpp: a picture paced by the clock is waited for once no present was seen reach the
+        // display for eight refreshes or 100 ms): a stamp every that many refreshes, or one more.
+        const std::int64_t apart = std::clamp<std::int64_t>(static_cast<std::int64_t>(std::ceil(0.1 * rate)), 1, 8);
+        galaxy::PresentStampFit fit;
+        fit.mode(std::llround(period * 1.001));
+        std::int64_t n = 0;
+        bool ok = true;
+        double worst_interval = 0.0;
+        std::int64_t worst_phase = 0;
+        for (int i = 0; i < 600; ++i) {
+            n += probed ? apart + (i % 3 == 0 ? 1 : 0) + (i % 17 == 5 ? 1 : 0) : i % 17 == 5 ? 2 : i % 29 == 11 ? 3 : 1;
+            if (i == 300) n += static_cast<std::int64_t>(0.5 * rate);  // half a second out of sight
+            const std::int64_t late = i % 40 == 7 ? std::llround(period / 3.0) : 0;
+            (void)fit.note(vblank(n) + wake(random) + late, false);
+            if (i < 200 || (i >= 300 && i < 360)) continue;
+            const double interval_error = std::abs(static_cast<double>(fit.interval_ns) - period) / period;
+            // The latest refresh against the nearest real one.
+            const double at = static_cast<double>(fit.vsync_ns - 1000000000) / period;
+            const std::int64_t phase = fit.vsync_ns - vblank(std::llround(at));
+            worst_interval = std::max(worst_interval, interval_error);
+            worst_phase = std::max(worst_phase, std::llabs(phase));
+            ok = ok && interval_error <= std::max(0.01, 60000.0 / period) && std::llabs(phase) <= 300000;
+        }
+        // The fit as the display clock's grid (display_clock.cpp: each stamp noted, the fitted period stated): at a
+        // locked rate each slot is a refresh, about a frame period after the one before.
+        galaxy::VsyncGrid grid;
+        std::int64_t slot = 0, frame_period = 0, last = 0;
+        for (int i = 0; i < 30; ++i) {
+            const std::int64_t now = vblank(n) + 1000;
+            grid.note(fit.vsync_ns, fit.interval_ns);
+            if (!grid.next_slot(kGamePeriod, last, now, false, slot, frame_period)) {
+                break;  // a rate the step does not lock to
+            }
+            const double at = static_cast<double>(slot - 1000000000) / period;
+            const std::int64_t quarter = std::llround(period / 4.0);
+            ok = ok && std::llabs(slot - vblank(std::llround(at))) <= quarter &&
+                 (last == 0 || std::llabs(slot - last - frame_period) <= quarter);
+            last = slot;
+            // The refreshes up to that slot, each present completing on one.
+            while (vblank(n) < slot) {
+                ++n;
+                (void)fit.note(vblank(n) + wake(random), false);
+            }
+        }
+        if (!ok && wrong++ < 10u) {
+            std::printf("  %.3f Hz%s: period off by %.3f %%, latest refresh off by %.3f ms\n", rate,
+                        probed ? " (probed)" : "", worst_interval * 100.0, static_cast<double>(worst_phase) / 1e6);
+        }
+    }
+    check(wrong == 0u, "every sample rate: the presents' stamps fit the display's period and refreshes");
+
+    // Present timing's times are exact; no mode, no fit; another mode starts again.
+    galaxy::PresentStampFit exact;
+    check(!exact.note(1000000000, true), "no mode: no stamp taken");
+    exact.mode(kHz120);
+    for (int i = 0; i < 10; ++i) (void)exact.note(1000000000 + i * kHz120, true);
+    check(exact.vsync_ns == 1000000000 + 9 * kHz120 && exact.interval_ns == kHz120, "exact times: the grid as given");
+    check(!exact.note(1000000000 + 9 * kHz120 + 1000, true), "the same refresh again is not a stamp");
+    exact.mode(kHz60);
+    check(exact.vsync_ns == 0 && exact.interval_ns == kHz60, "another mode starts the fit again");
+}
+
 }  // namespace
 
 int main() {
@@ -267,6 +349,7 @@ int main() {
     test_stated_and_gaps();
     test_slots();
     test_every_rate();
+    test_present_stamps();
     if (failures == 0) {
         std::printf("vsync grid tests: all pass\n");
     }

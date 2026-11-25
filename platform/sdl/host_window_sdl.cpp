@@ -2126,6 +2126,18 @@ bool vblank_grid_known(std::int64_t& vblank, std::int64_t& period) noexcept {
     return vblank_grid(nullptr, vblank, period);
 }
 
+// Linux's display clock is fitted from the presents, on the mode of the display the window is on (read on SDL's
+// thread); Android's Choreographer gives the vsyncs and takes nothing.
+void note_present_shown(std::int64_t stamp, bool exact) noexcept {
+#if defined(NEBULA_SDL_DESKTOP) && defined(__linux__)
+    const double hz = galaxy::sdl::g_window_display_hz.load(std::memory_order_relaxed);
+    galaxy::sdl::note_present_shown(stamp, hz > 1.0 ? std::llround(1e9 / hz) : 0, exact);
+#else
+    (void)stamp;
+    (void)exact;
+#endif
+}
+
 bool vblank_grid(NativeWindow, std::int64_t& vblank, std::int64_t& period) noexcept {
     return galaxy::sdl::vsync_grid(vblank, period);  // qpc_now() is CLOCK_MONOTONIC nanoseconds off Windows
 }

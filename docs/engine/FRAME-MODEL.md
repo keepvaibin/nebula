@@ -1727,6 +1727,29 @@ at the picture's moment; every platform does the same or says on screen why not.
      run log's `[vulkan] swapchain ... pictures ask their time:` line.
    - P-317 (the tablet's three refreshes at 60 Hz) is the depth's rule meeting a GPU at its low clock; the rule is the
      shared one, and the figure is taken again at G2.5, where the clock is held.
+   Answered at G2.3.3 (11-24, on G2.3.2):
+   - Linux (I-005): the display clock comes from the presents. The Vulkan renderer tells the host each present it saw
+     reach the display (`host_window::note_present_shown`): present timing's own times where the swap chain reports
+     them (exact), else the moment a present wait that blocked returned. A picture paced by the clock is queued once
+     the one before it is shown, so that wait seldom blocks: with none seen for eight refreshes or 100 ms, the render
+     thread waits for the present it just queued (it has nothing to draw before the next slot, the refresh that
+     present reaches), four refreshes at most. Present wait is never left to a waiter thread: its swap chain is
+     externally synchronized with the present (`vkWaitForPresentKHR`'s `swapchain`, `externsync` in the registry).
+   - `PresentStampFit` (vsync_grid.h) fits the stamps to the display mode's period (SDL's mode of the window's
+     display): each gap a whole number of periods, the period the least-squares slope of the last 32 stamps on their
+     refresh numbers within 2 % of the mode's, the latest refresh taken from a stamp earlier than predicted at once and
+     an eighth of the way toward a later one; a stamp a quarter period off the grid is a late wake, a gap over 16
+     refreshes a pause. The VsyncGrid takes the fit with its period stated, so `wait_display_frame` gives the slots as
+     the Choreographer's give Android's, and `vblank_grid` answers the schedule. A present shown out of its turn (FIFO
+     relaxed) is off the vblanks and gives no stamp.
+   - No present seen for 250 ms (out of sight, a renderer with neither present wait nor present timing): no grid, the
+     host's own clock runs the frames (the old path), and the INTERPOLATION row says NATIVE (NOT SYNCHRONIZED)
+     (`FrameRateCaps::display_clock_missing`, the text `S.NOT_SYNCHRONIZED` in its 14 languages).
+   - Presenting at a requested time on Linux is G2.3.2's: the same Vulkan code asks each picture's time where present
+     timing offers it.
+   - Proven by `vsync_grid_tests.cpp` (`test_present_stamps`: every sample rate, stamps on most refreshes and at the
+     probe's spacing, wake jitter, missed refreshes, slow wakes, a pause) and `settings_graphics_page_tests.cpp`; the
+     run on a Linux display at 144 Hz is owed (PLAN owed).
 4. The spin. Where a display time is asked (Vulkan present timing, Android display timing, Metal's display link), the
    render thread starts a picture its lead ahead and the display holds it to its time; the closing spin of
    `PreciseWait` stays only where no time can be asked. The render thread's CPU time a second is measured on the tablet

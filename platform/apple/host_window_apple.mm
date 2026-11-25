@@ -1368,6 +1368,9 @@ bool vblank_grid_known(std::int64_t& vblank, std::int64_t& period) noexcept {
     return vblank_grid(nullptr, vblank, period);
 }
 
+// The display link gives the vblanks: a present's time adds nothing.
+void note_present_shown(std::int64_t, bool) noexcept {}
+
 bool vblank_grid(NativeWindow, std::int64_t& vblank, std::int64_t& period) noexcept {
     return galaxy::sdl::vsync_grid(vblank, period);
 }

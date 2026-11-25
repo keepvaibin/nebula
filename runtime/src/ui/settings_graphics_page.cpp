@@ -149,6 +149,10 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
             if (!state.frame_rates.generated_supported) value += " (AFTER RESTART)";
             else if (render.upscaler != 3u) value += " (NEEDS DLSS)";
         }
+        // Nebula's own frames with no display clock to time them by (Linux before its clock runs, I-005).
+        if (mode == Interpolation::kNative && state.frame_rates.display_clock_missing) {
+            value += " (NOT SYNCHRONIZED)";
+        }
         rows.push_back({"INTERPOLATION", value,
                         [&host, fsr_generation_upscaler](RenderConfig& draft, int delta) {
                             const auto modes = interpolation_modes(host.query(draft).frame_rates);

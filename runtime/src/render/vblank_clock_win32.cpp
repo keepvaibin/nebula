@@ -187,6 +187,9 @@ bool vblank_grid(NativeWindow window, std::int64_t& vblank, std::int64_t& period
     return period != 0;
 }
 
+// The monitor's vblanks are timed here: a present's time adds nothing.
+void note_present_shown(std::int64_t, bool) noexcept {}
+
 bool vblank_grid_known(std::int64_t& vblank, std::int64_t& period) noexcept {
     const std::lock_guard<std::mutex> lock(g_mutex);
     vblank = g_vblank;

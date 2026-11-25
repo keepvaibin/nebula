@@ -32,6 +32,11 @@ void pump_events(int timeout_ms) noexcept;
 // no recent vsyncs (out of sight, not yet shown), the display's rate does not divide the period, or the platform has
 // no display clock: the host's own clock times the frame then.
 bool wait_display_frame(std::int64_t period_ns, std::int64_t& last_ns, bool in_between) noexcept;
+// Linux (no vsync callbacks): a present completed at `stamp_ns` (CLOCK_MONOTONIC; `exact`: present timing's own time,
+// else when the render thread saw it complete), on a display mode `mode_period_ns` apart (0: not known). The display
+// clock's grid is fitted from these (galaxy/vsync_grid.h PresentStampFit). Any thread; called on Linux only
+// (host_window_sdl.cpp note_present_shown).
+void note_present_shown(std::int64_t stamp_ns, std::int64_t mode_period_ns, bool exact) noexcept;
 // The app out of sight: the display clock asks for no vsyncs (Android's Choreographer callbacks, Apple's display link)
 // until it is let go, so no thread wakes at the display's rate for a game that waits. Any thread.
 void set_display_clock_held(bool held) noexcept;
