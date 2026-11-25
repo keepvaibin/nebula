@@ -1,12 +1,13 @@
 # Nebula native plan: status
 
-Written 2026-11-25 03:50. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-25 03:53. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 32 of 145 (22%).
 
 Now: G2.3 landed (32 of 145); G2.4 hard (tablet render_ms worse); told the planner
 
-In work now: Nothing started.
+In work now:
+- G2.4 Landing 4: no closing spin where a display time is asked (agent 1)
 
 ## Packages
 
@@ -108,7 +109,7 @@ Nothing waits for the owner.
 
 ## Blocked
 
-- G2.4 Landing 4: no closing spin where a display time is asked: hard: measure/step/tablet worse: render_ms 1.17536 (median 1.0155, band 0.117867); the sheet predicted no step or walk time to move (report: D:/NebulaWork/plan/native/hard/G2.4.md)
+Nothing is blocked.
 
 ## Tool mends
 
@@ -122,7 +123,7 @@ Nothing waits for the owner.
 | M-006 | closed | - | the step tier and section check; a passing tool fault played once more; a waiter left not judged runs itself | 0 | 95 | 2911f6429 |
 | M-007 | closed | - | the section-at-a-time roles: a whole section ahead, wait, hand-off sheets, hard reports, the live page | 0 | 80 | 9ed09cfec |
 
-## Decisions (105)
+## Decisions (106)
 
 - 2026-11-23 S0.2.1: LoadSlice: 32 items a frame; an item is a phase of GameScene::initAfterScenarioChosen, the player, one placement made whole, one piece of FileSelector::initStep, or one Star Bit of the reserve (because the card asks for a fixed count of work and names no count; the count is a constant in one place, no player sees which frame of the load an item falls in, and the load worker (G3.7) replaces the slices)
 - 2026-11-23 S0.2.1: Drawing's random stream (MR::getDrawRandom) is seeded with the same seed as the game's stream, in setRandomSeedFromStageName and setFixedRandomSeed (because a fixed seed keeps the cosmetic numbers the same in every run of a replay and needs no new setting; the draw stream runs through the same sequence as the game's but is advanced only by drawing, so neither changes the other)
@@ -229,6 +230,7 @@ Nothing waits for the owner.
 - 2026-11-24 G2.3: FrameSchedule publishes its slot length itself: every write of slot_period_ goes through set_slot_period, which stores g_slot_period_qpc (present_clock.h) beside it (because the schedule is the one place the length is set (configure and begin_waiting), on the render thread, so the published value can never lag the one the slots use, and frame_schedule_tests.cpp checks it against slot_period() on a vblank grid, under variable refresh and with no slot clock)
 - 2026-11-25 G2.4: The old path's switch is --diagnostics slot-spin (launch_args.h kDiagnoseSlotSpin): with it the render thread's wait to a slot spins its margin also where the display holds the picture to its asked time (because the card keeps the spin beside the new wait until the measures hold, and the tablet's before measure is owed (a writer runs no tablet): a diagnostics name reaches every platform's command line, the tablet's test harness included, so before and after are measured on one build)
 - 2026-11-25 G2.4: A held wait (PreciseWait::until_held) sleeps to the slot on the timer alone and is not woken early by the margin; the HOME Menu's repeated picture keeps the precise wait (because a wake before the slot would find the slot not yet due and wait again with no sleep left to take, a loop; the timer's lateness is taken in by the display lead, which follows the pictures shown (DisplayModel on present timing, PresentDepth on display timing); the repeated picture's present asks no time)
+- 2026-11-25 G2.4: The tablet walk time (render_ms) rises from a median of 1.016 ms to 1.175 and 1.215 ms (two runs of landing dbd1d88bd) and is taken as the new baseline (planner, measure.py keep and accept at dbd1d88bd) (because the same runs show the render thread's CPU a frame down from 3.65 to 3.11 ms and all CPU from 10.61 to 8.45 ms, with late pictures a minute 7.2 to 4.2 and the 99th gap unchanged: with no spin at the slot the CPU clocks down and the same walk takes longer in wall time while nothing reaches the screen later (8.3 ms a refresh at 120 Hz); the owed slot-spin A/B (PLAN owed G2.4) confirms it, and a walk that stays long with the spin back reopens this)
 
 ## Checks changed during the run (72)
 
