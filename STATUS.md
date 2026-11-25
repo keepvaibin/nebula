@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-24 16:29. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 16:51. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 25 of 145 (17%).
 
@@ -78,6 +78,7 @@ In work now:
 - G2.3.2 Landing 3b: Vulkan and Android present at the asked time: [pace] of file 00 4.3 on the PC with Vulkan in a shown window (tools/gate/pace.py) at 60, 120 and 240 Hz (the modes the monitor lists; 144 and 165 Hz are not listed and are proven by frame_schedule_tests.cpp test_display_model_asked), VSync on and off; read first the run log's '[vulkan] swapchain ... pictures ask their time:' line: 'present timing' means each picture asked its refresh, 'no' means the driver or surface does not offer presentAtAbsoluteTime and the run shows present wait as before; with the timeline, DisplayModel events (39) against DisplayStats (agent 1, 2026-11-24 16:29)
 - G2.3.2 Landing 3b: Vulkan and Android present at the asked time: [pace] of file 00 4.3 on the tablet at 60 and 120 Hz in every tour stop (all 102 at 120 Hz), with Android's lead at 60 Hz recorded (P-317: three refreshes before G2.5, two once G2.5 holds the GPU clock), R1.2's 'missed by a draw in play' count and R2.2's '[samplers] ... starts again' lines beside each stop (a stop with either above 0 measured again); the run log's 'pictures ask their time:' says whether the tablet takes present timing or keeps display timing (agent 1, 2026-11-24 16:29)
 - G2.3.2 Landing 3b: Vulkan and Android present at the asked time: The game step's time and the walk's, PC and tablet, before and after (FM 2.16's proof): the section's speed checks measure/step/pc and measure/step/tablet (agent 1, 2026-11-24 16:29)
+- G2.3.3 Landing 3c: Linux's display clock: Linux (I-005) at 144 Hz with present-stats on a shown window, Vulkan: the vblank-steps histogram filled and no two pictures in one refresh over 3000 pictures; the log shows the grid running (the INTERPOLATION row without NOT SYNCHRONIZED) and, at 60 and 144 Hz, the render thread's probe waits (one each eight refreshes or 100 ms at most). This PC runs no Linux. (agent 1, 2026-11-24 16:51)
 
 ## Waiting for the owner
 
@@ -99,7 +100,7 @@ Nothing is blocked.
 | M-006 | closed | - | the step tier and section check; a passing tool fault played once more; a waiter left not judged runs itself | 0 | 95 | 2911f6429 |
 | M-007 | closed | - | the section-at-a-time roles: a whole section ahead, wait, hand-off sheets, hard reports, the live page | 0 | 80 | 9ed09cfec |
 
-## Decisions (83)
+## Decisions (87)
 
 - 2026-11-23 S0.2.1: LoadSlice: 32 items a frame; an item is a phase of GameScene::initAfterScenarioChosen, the player, one placement made whole, one piece of FileSelector::initStep, or one Star Bit of the reserve (because the card asks for a fixed count of work and names no count; the count is a constant in one place, no player sees which frame of the load an item falls in, and the load worker (G3.7) replaces the slices)
 - 2026-11-23 S0.2.1: Drawing's random stream (MR::getDrawRandom) is seeded with the same seed as the game's stream, in setRandomSeedFromStageName and setFixedRandomSeed (because a fixed seed keeps the cosmetic numbers the same in every run of a replay and needs no new setting; the draw stream runs through the same sequence as the game's but is advanced only by drawing, so neither changes the other)
@@ -184,6 +185,10 @@ Nothing is blocked.
 - 2026-11-24 G2.3.2: A present that asks its time waits for no earlier present (present wait), and its renderer holds nothing: the display holds it to the refresh it asked (targetTime half a refresh before the slot, in the swap chain's time domain) (because the card keeps present wait only where no time can be asked; the schedule starts each picture its display lead before its refresh, which a wait for the present before the last pushes later at leads of three refreshes and more; half a refresh before the slot keeps the slot's own refresh however the reporting stage sits against the vblank, as the display timing path asks)
 - 2026-11-24 G2.3.2: DisplayModel learns the display's hold from an asked present only where its asked refresh was no later than the model's refresh for its call, or where it was shown later than asked; a window of reports with no such present keeps the last hold (because a present held to a later refresh by its own asked time shows only that it was in time; counted as a hold it would raise the least to the lead itself, and the lead could never come down; a hold that grows shows in late pictures, one that shrinks is not seen while every picture asks a later refresh, and is learnt again with a new swap chain (the model is reset there))
 - 2026-11-24 G2.3.2: P-317 closes here by the rule, not by a figure: Android's lead follows PresentDepth's rule (shared since G2.3.1) and its 60 Hz figure is taken again at G2.5 with the clock held; the measure is PLAN owed (because card Read first (2), a plan decision: the lead at 60 Hz is set by how late the GPU's pictures come at its low clock, which G2.5 holds; nothing in this step changes the game's own frames at 60 Hz on display timing)
+- 2026-11-24 G2.3.3: Linux's present stamps are taken on the render thread (present waits that blocked, and a probe wait for the present just queued once none was seen for eight refreshes or 100 ms), not by a waiter thread as the card says (because vkWaitForPresentKHR's and vkWaitForPresent2KHR's swapchain is externsync in the Vulkan registry: a second thread waiting on it while the render thread presents is undefined; the probe costs nothing a paced picture needs, since the render thread has nothing to draw before the refresh that present reaches)
+- 2026-11-24 G2.3.3: PresentStampFit fits the period as the least-squares slope of the last 32 stamps on their refresh numbers (clamped to 2 % of the mode), not the median spacing the card names (because the median of single gaps carries one wake's delay over one refresh and missed 1 % and 0.3 ms at 319 and 406 Hz in test_present_stamps; the slope spreads it over the refreshes the points span and passes every sample rate)
+- 2026-11-24 G2.3.3: The Linux mark is NATIVE (NOT SYNCHRONIZED) on the INTERPOLATION row (S.NOT_SYNCHRONIZED in 14 languages; the American cell synchronized, the European synchronised), shown while no display clock grid runs (host_window::vblank_grid_known false), on Linux desktop only (because the card asks the in-between pictures marked until a clock runs; the row is where native interpolation is chosen, and the game's other texts use the American spelling with the European cell where it differs)
+- 2026-11-24 G2.3.3: display_refresh_hz on Linux stays 0 (SDL's mode, read by the host, is the stated period the fit starts from) (because a rate from the fit would feed back into the mode the fit is clamped to)
 
 ## Checks changed during the run (72)
 
