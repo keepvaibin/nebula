@@ -80,85 +80,41 @@ struct NativeGameAudio::State {
     float audible{1.0f};
     std::vector<float> speaker_frame;  // the remote speaker's frame on its own, while `audible` ramps
     std::vector<float> mods;           // the mods' voices and streams (luma_audio::mix), before the master
-    galaxy::SoundOutput sound_output{galaxy::SoundOutput::Stereo};
-    // The frames made and not yet pulled, interleaved; the device's thread only. Center, surround left and right apart
-    // from them while the device has rear speakers.
-    std::vector<float> pending;
-    std::vector<float> pending_surround;
-    std::size_t pending_read{};
+    // The frames made and not yet pulled, in the form they were made in, and their placing on the device's speakers
+    // (speaker_law.h); the device's thread only.
+    galaxy::audio::SpeakerStage stage;
+    std::vector<float> front;  // a frame's left and right, then its center and rear (placed), on their way to the stage
+    std::vector<float> apart;
     std::function<void()> tick;
     std::atomic<bool> running{false};
     bool started{};
 
-    // `count` frames from `at` onto the device's speakers. A surround split between sides and backs; a center with no
-    // speaker of its own goes to left and right.
-    void place(float* out, std::span<const Speaker> speakers, std::size_t at, std::size_t count) const {
-        constexpr float kHalfPower = 0.70710678f;
-        const auto has = [speakers](Speaker wanted) { return std::find(speakers.begin(), speakers.end(), wanted) != speakers.end(); };
-        const float center_side = has(Speaker::Center) ? 0.0f : kHalfPower;
-        const float rear = has(Speaker::SideLeft) && has(Speaker::BackLeft) ? kHalfPower : 1.0f;
-        const float* front = pending.data() + at * 2u;
-        const float* apart = pending_surround.data() + at * 3u;
-        for (std::size_t i = 0; i < count; ++i, front += 2, apart += 3) {
-            for (const Speaker speaker : speakers) {
-                float value = 0.0f;
-                switch (speaker) {
-                case Speaker::Left: value = front[0] + center_side * apart[0]; break;
-                case Speaker::Right: value = front[1] + center_side * apart[0]; break;
-                case Speaker::Center: value = apart[0]; break;
-                case Speaker::SideLeft:
-                case Speaker::BackLeft: value = rear * apart[1]; break;
-                case Speaker::SideRight:
-                case Speaker::BackRight: value = rear * apart[2]; break;
-                default: break;
-                }
-                *out++ = std::clamp(value, -1.0f, 1.0f);
-            }
-        }
-    }
-
     void render(float* out, std::uint32_t frames, std::uint32_t rate) {
         const std::span<const Speaker> speakers = device->speakers();
-        const std::size_t channels = speakers.size();
-        const bool discrete = channels > 2u;
-        // What waits was made for the last device.
-        if (mixer->rate() != rate || mixer->discrete() != discrete) {
-            if (mixer->rate() != rate) {
-                mixer->set_rate(rate);
-            }
-            mixer->set_discrete(discrete);
-            pending.clear();
-            pending_surround.clear();
-            pending_read = 0u;
+        // The device's report goes to the Speakers row and the game's mode; a placed layout asks the device for every
+        // speaker it has (the law, points 2 and 10).
+        const std::uint8_t reported = device->reported();
+        galaxy::audio::publish_device_speakers(reported);
+        const galaxy::SpeakerChoice choice = galaxy::get_runtime_settings().audio.speakers;
+        device->set_all_speakers(galaxy::audio::resolve_speakers(choice, reported).placed());
+        // What waits was made at another rate: it is dropped, and the next frames fade in.
+        if (mixer->rate() != rate) {
+            mixer->set_rate(rate);
+            stage.clear();
         }
-        std::size_t filled = 0u;
-        while (filled < frames) {
-            const std::size_t have = pending.size() / 2u - pending_read;
-            if (have == 0u) {
-                pending.clear();
-                pending_surround.clear();
-                pending_read = 0u;
+        stage.render(
+            out, speakers, reported, choice, frames, rate,
+            [this] {
+                const std::size_t before = stage.waiting();
                 if (running.load(std::memory_order_acquire)) {
                     tick();
                 }
-                if (pending.empty()) {
-                    break;
-                }
-                continue;
-            }
-            const std::size_t take = std::min<std::size_t>(have, frames - filled);
-            if (discrete) {
-                place(out + filled * channels, speakers, pending_read, take);
-            } else {
-                std::copy_n(pending.data() + pending_read * 2u, take * 2u, out + filled * 2u);
-            }
-            pending_read += take;
-            filled += take;
-        }
-        std::fill(out + filled * channels, out + static_cast<std::size_t>(frames) * channels, 0.0f);
+                return stage.waiting() > before;
+            },
+            [this](const galaxy::audio::PlayedLayout& played) { mixer->set_layout(played.placed(), played.rear()); });
         // What the mixer made and has not been played: what waits here, what just went out and what the device holds. A
         // movie's picture follows this.
-        const std::uint64_t unplayed = pending.size() / 2u - pending_read + frames + device->queued_frames();
+        const std::uint64_t unplayed = stage.waiting() + frames + device->queued_frames();
         mixer->movie().set_unplayed(static_cast<std::size_t>(unplayed * galaxy::audio::MovieAudio::kRate / rate));
     }
 };
@@ -176,9 +132,11 @@ void NativeGameAudio::setup(NebulaVoice* voices, std::uint32_t count, const Nebu
                                                                                     : open_audio_device();
         rate = s.device->rate();
     }
-    s.sound_output = galaxy::get_runtime_settings().audio.sound_output;
     if (s.device != nullptr) {
-        s.device->set_surround(s.sound_output == galaxy::SoundOutput::Surround);
+        const std::uint8_t reported = s.device->reported();
+        galaxy::audio::publish_device_speakers(reported);
+        s.device->set_all_speakers(
+            galaxy::audio::resolve_speakers(galaxy::get_runtime_settings().audio.speakers, reported).placed());
     }
     s.mixer = std::make_unique<galaxy::audio::AudioMixer>(rate);
     s.mixer->setup(voices, count, effects);
@@ -217,12 +175,6 @@ void NativeGameAudio::frame() {
     const galaxy::RuntimeAudioSettings audio = galaxy::get_runtime_settings().audio;
     // A mod's music (audio.music) fades the game's own out and back.
     s.mixer->set_category_gains({1.0f, audio.music * galaxy::luma_audio::game_music_share(), audio.voice, audio.sfx, audio.ambience, audio.cutscene});
-    if (audio.sound_output != s.sound_output) {
-        s.sound_output = audio.sound_output;
-        if (s.device != nullptr) {
-            s.device->set_surround(s.sound_output == galaxy::SoundOutput::Surround);
-        }
-    }
     // Muted in the background: the mix goes on at full pace and the master ramps to silence, so nothing clicks. Under
     // the benchmark's cover the master fades with it (benchmark_cover.h).
     const bool muted = galaxy::background_muted();
@@ -237,9 +189,8 @@ void NativeGameAudio::frame() {
     if (frames == 0u) {
         return;
     }
-    const std::size_t at = s.pending.size();
-    s.pending.resize(at + frames * 2u);
-    const std::span<float> out(s.pending.data() + at, frames * 2u);
+    s.front.resize(frames * 2u);
+    const std::span<float> out(s.front.data(), frames * 2u);
     // The mods' sound (LumaCore audio, services/audio.md) joins the game's front left and right before the master
     // volume, each bus at the player's volume for it: effects and ui follow Sound effects.
     const float buses[4] = {audio.sfx, audio.sfx, audio.voice, audio.music};
@@ -250,13 +201,12 @@ void NativeGameAudio::frame() {
         out[i * 2u] = (mods ? samples[i * 2u] + s.mods[i * 2u] : samples[i * 2u]) * gain;
         out[i * 2u + 1u] = (mods ? samples[i * 2u + 1u] + s.mods[i * 2u + 1u] : samples[i * 2u + 1u]) * gain;
     }
+    s.apart.resize(apart.empty() ? 0u : frames * 3u);
     if (!apart.empty()) {
-        const std::size_t apart_at = s.pending_surround.size();
-        s.pending_surround.resize(apart_at + frames * 3u);
         for (std::size_t i = 0; i < frames; ++i) {
             const float gain = start + (target - start) * static_cast<float>(i + 1u) / static_cast<float>(frames);
             for (std::size_t k = 0; k < 3u; ++k) {
-                s.pending_surround[apart_at + i * 3u + k] = apart[i * 3u + k] * gain;
+                s.apart[i * 3u + k] = apart[i * 3u + k] * gain;
             }
         }
     }
@@ -274,7 +224,10 @@ void NativeGameAudio::frame() {
             out[i * 2u + 1u] += s.speaker_frame[i * 2u + 1u] * gain;
         }
     }
-    if (audio.sound_output == galaxy::SoundOutput::Mono) {
+    // Mono (the game's mode 0 already pans nothing): the mean of the two channels on both.
+    const galaxy::audio::PlayedLayout form =
+        s.device != nullptr ? s.stage.form() : galaxy::audio::resolve_speakers(audio.speakers, galaxy::audio::kSpeakersFront);
+    if (form.two == galaxy::audio::TwoChannel::Mono) {
         for (std::size_t i = 0; i < frames; ++i) {
             const float both = 0.5f * (out[i * 2u] + out[i * 2u + 1u]);
             out[i * 2u] = both;
@@ -294,8 +247,9 @@ void NativeGameAudio::frame() {
     for (float& value : out) {
         value = std::clamp(value, -1.0f, 1.0f);
     }
-    if (s.device == nullptr) {
-        s.pending.clear();  // nothing pulls: the frame goes no further than the extensions
+    // Without a device nothing pulls: the frame goes no further than the extensions.
+    if (s.device != nullptr) {
+        s.stage.push(out, s.apart);
     }
 }
 

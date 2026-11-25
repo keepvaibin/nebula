@@ -6,10 +6,12 @@
 #include <memory>
 #include <span>
 
+#include "galaxy/speaker_law.h"
+
 namespace galaxy::host {
 
-// What each of a device's channels is. Others: silent.
-enum class Speaker : std::uint8_t { Left, Right, Center, SideLeft, SideRight, BackLeft, BackRight, Other };
+// What each of a device's channels is (speaker_law.h), named from its bit or the platform's order, never by position.
+using galaxy::audio::Speaker;
 
 class AudioDevice {
 public:
@@ -21,14 +23,15 @@ public:
     [[nodiscard]] virtual std::uint32_t rate() const = 0;
     virtual void start(Render render) = 0;
     virtual void set_paused(bool paused) = 0;
-    // The channels as of this render call (on the device's thread). Left and right unless surround was asked for and the
-    // device has rear speakers.
+    // The channels opened, as of this render call (on the device's thread).
     [[nodiscard]] virtual std::span<const Speaker> speakers() const noexcept {
         static constexpr Speaker kStereo[] = {Speaker::Left, Speaker::Right};
         return kStereo;
     }
-    // Rear speakers are wanted, where the device has them.
-    virtual void set_surround(bool) {}
+    // The speakers the device has (galaxy::audio::SpeakerKinds), whatever was opened; any thread.
+    [[nodiscard]] virtual std::uint8_t reported() const noexcept { return galaxy::audio::kSpeakersFront; }
+    // Every speaker the device has is wanted (a placed layout), else the front pair (a two-channel form).
+    virtual void set_all_speakers(bool) {}
     // The frames given to the device that it has not played yet, as of the last call of the render function.
     [[nodiscard]] virtual std::uint32_t queued_frames() const { return 0u; }
 };

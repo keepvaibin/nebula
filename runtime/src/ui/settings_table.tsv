@@ -62,7 +62,8 @@ audio_voice_gain	runtime	voice	float	0..2/0.05	1	Audio	-	y	y	-	Voices
 audio_ambience_gain	runtime	ambience	float	0..2/0.05	1	Audio	-	y	y	-	Ambience
 audio_cutscene_gain	runtime	cutscene	float	0..2/0.05	1	Audio	-	y	y	-	Cutscenes
 audio_wiimote_speaker_gain	runtime	wiimote_speaker	float	0..2/0.05	0	Audio	-	y	y	-	Wiimote sounds
-audio_sound_output	runtime	sound_output	enum	mono|stereo|surround	stereo	Audio	-	y	y	-	Sound output
+audio_speakers	runtime	speakers	enum	auto|mono|stereo|encoded|3.1|5.1|7.1	auto	Audio	-	y	y	the layouts the device has speakers for	Speakers
+audio_sound_output	runtime	-	enum	mono|stereo|surround	-	-	-	-	-	read into audio_speakers (mono, encoded, auto), never written	-
 text_speed	runtime	text_speed	int	1..4	1	General	-	y	y	-	Text speed
 language	runtime	language	enum	auto|english|german|french|spanish|italian|dutch|japanese	auto	General	-	y	y	languages the game's data holds	Language
 button_icons	runtime	button_icons	enum	auto|game|xbox|nintendo|playstation|keyboard	auto	General	-	y	y	-	Button icons

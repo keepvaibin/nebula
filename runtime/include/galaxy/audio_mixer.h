@@ -7,8 +7,10 @@
 // Kaiser-windowed sinc (cutoff 0.753 of the source's Nyquist, beta 7.05: the response the game's sound was made
 // with), through its FIR and IIR filters (their 32 kHz responses carried to the output rate), then into the buses with
 // ramped volumes or through the surround panner (quarter-sine pan law). The effect lines are feedback delays with an
-// 8-tap FIR; the surround buses are matrix-encoded into left and right one subframe later; center and the inverted
-// right join at the output. Volume categories (music, voices, effects, ambience, cutscenes) scale each voice. The
+// 8-tap FIR. On two channels the surround buses are matrix-encoded into left and right one subframe later and center
+// and the inverted right join at the output, as made; on speakers of their own (set_layout, speaker_law.h) every note
+// with a rear amount is placed by the panner's law, the surround buses are the rear with no delay, and the panner's rear
+// effect sends feed two rear echo lines unmatrixed. Volume categories (music, voices, effects, ambience, cutscenes) scale each voice. The
 // movie player's sound (movie_audio.h) joins each frame at 32 kHz through a 128-tap windowed sinc.
 #pragma once
 
@@ -87,11 +89,13 @@ public:
     // Ends the frame: the movie's sound for the subframes mixed since the last call is added; returns that output,
     // interleaved (left, right), valid until the next call.
     std::span<const float> end_frame();
-    // The surround buses and center on speakers of their own instead of matrix-encoded into left and right. The frame
-    // being built starts over.
-    void set_discrete(bool on) noexcept;
-    [[nodiscard]] bool discrete() const noexcept { return discrete_; }
-    // With set_discrete: the frame end_frame returned, its center, surround left and surround right, interleaved.
+    // The output's form (speaker_law.h PlayedLayout): `placed` speakers of their own instead of the two-channel matrix,
+    // `rear` with rear speakers among them (else the panner folds the rear into the front). A change starts the frame
+    // being built over.
+    void set_layout(bool placed, bool rear) noexcept;
+    [[nodiscard]] bool placed() const noexcept { return placed_; }
+    [[nodiscard]] bool rear() const noexcept { return rear_; }
+    // Placed: the frame end_frame returned, its center, rear left and rear right, interleaved.
     [[nodiscard]] std::span<const float> surround() const noexcept { return surround_out_; }
     [[nodiscard]] MovieAudio& movie() noexcept { return movie_; }
 
@@ -139,6 +143,11 @@ private:
         std::uint32_t category_ramp{};
         std::uint8_t category_bus{NEBULA_SOUND_EFFECT};
         bool category_set{};
+        // Placed: the panner's gains (front left, front right, rear left, rear right) and effect send of the last subframe,
+        // the start of this one's ramp.
+        std::array<float, 4> placed_gains{};
+        float placed_send{};
+        bool placed_set{};
     };
 
     struct EffectState {
@@ -176,13 +185,15 @@ private:
     void apply_iir(VoiceState& state, const NebulaVoice& voice, float* samples);
     void apply_category(VoiceState& state, const NebulaVoice& voice, float* samples);
     void mix_sends(NebulaVoice& voice, const float* samples);
-    void mix_panner(NebulaVoice& voice, const float* samples);
+    void mix_panner(NebulaVoice& voice, VoiceState& state, const float* samples);
     // destination += source * (start + ramp over the first 4/5 of the subframe) / 65536
     void ramp_mix(float* destination, const float* source, float start, float delta) const;
     // ramp_'s positions for this subframe's sample count.
     void make_ramp();
     void effects_begin();
     void effects_end();
+    // The lines running: the game's four, and placed with rear speakers the two rear echo lines.
+    [[nodiscard]] std::size_t effect_lines() const noexcept { return placed_ && rear_ ? 6u : 4u; }
     [[nodiscard]] const std::byte* wave_bytes(const NebulaVoice& voice, std::uint32_t offset,
                                               std::uint32_t size) const;
     [[nodiscard]] std::uint32_t authored_to_output_delay(double authored_samples) const noexcept;
@@ -205,13 +216,15 @@ private:
     std::array<float, kMaxSubframe> voice_out_{};
     std::vector<float> source_;
     std::vector<VoiceState> voice_states_;
-    std::array<EffectState, 4> effect_states_{};
+    // The game's four lines, then the rear echo lines: line 2's and line 3's settings, returning to rear left and right.
+    std::array<EffectState, 6> effect_states_{};
     SampleDelay fold_left_, fold_right_;           // the surround buses, one subframe late
     SampleDelay panner_send_left_, panner_send_right_;  // the panner's rear sends: one subframe, half a subframe
     std::vector<float> frame_;                     // the frame's output so far, interleaved (left, right)
     std::vector<float> frame_surround_, surround_out_;
     double stream_place_ = 0.0;
-    bool discrete_ = false;
+    bool placed_ = false;
+    bool rear_ = false;
 
     // The movie player's sound and its last 32 kHz samples, interleaved (left, right).
     MovieAudio movie_;

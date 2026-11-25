@@ -303,6 +303,44 @@ int main() {
             read_text(settings_path).find("audio_wiimote_speaker_gain=0.5") != std::string::npos,
         "the Wiimote sounds gain is saved with the other audio settings");
 
+    // Speakers (the surround law, test 11): the old audio_sound_output is read once into audio_speakers and never
+    // written again; a stored choice reads back.
+    struct OldOutput {
+        const char* file;
+        galaxy::SpeakerChoice speakers;
+        const char* written;
+    };
+    const OldOutput old_outputs[] = {
+        {"audio_sound_output=mono\n", galaxy::SpeakerChoice::Mono, "audio_speakers=mono\n"},
+        {"audio_sound_output=surround\n", galaxy::SpeakerChoice::Encoded, "audio_speakers=encoded\n"},
+        {"audio_sound_output=stereo\n", galaxy::SpeakerChoice::Auto, "audio_speakers=auto\n"},
+        {"audio_master_gain=1\n", galaxy::SpeakerChoice::Auto, "audio_speakers=auto\n"},
+    };
+    for (const OldOutput& old : old_outputs) {
+        write_text(settings_path, old.file);
+        galaxy::load_runtime_settings_from_file();
+        passed &= expect(galaxy::get_runtime_settings().audio.speakers == old.speakers,
+                         "an old sound output (or none) gives its Speakers value");
+        const bool saved = galaxy::save_runtime_settings_to_file();
+        const std::string written = read_text(settings_path);
+        passed &= expect(saved && written.find(old.written) != std::string::npos &&
+                             written.find("audio_sound_output") == std::string::npos,
+                         "the file then written has audio_speakers and no audio_sound_output");
+    }
+    const galaxy::SpeakerChoice stored[] = {galaxy::SpeakerChoice::Auto,     galaxy::SpeakerChoice::Mono,
+                                            galaxy::SpeakerChoice::Stereo,   galaxy::SpeakerChoice::Encoded,
+                                            galaxy::SpeakerChoice::Layout31, galaxy::SpeakerChoice::Layout51,
+                                            galaxy::SpeakerChoice::Layout71};
+    for (const galaxy::SpeakerChoice choice : stored) {
+        galaxy::RuntimeSettings chosen = galaxy::get_runtime_settings();
+        chosen.audio.speakers = choice;
+        galaxy::set_runtime_settings(chosen);
+        passed &= expect(galaxy::save_runtime_settings_to_file(), "the speakers choice is saved");
+        galaxy::set_runtime_settings(galaxy::RuntimeSettings{});
+        galaxy::load_runtime_settings_from_file();
+        passed &= expect(galaxy::get_runtime_settings().audio.speakers == choice, "a stored speakers choice reads back");
+    }
+
     galaxy::RuntimeSettings invalid_audio = galaxy::get_runtime_settings();
     invalid_audio.audio.master = -1.0f;
     invalid_audio.audio.music = 2.0f;

@@ -125,33 +125,56 @@ public:
         return std::span<const Speaker>(speakers_.data(), speaker_count_);
     }
 
-    void set_surround(bool on) override {
-        if (surround_.exchange(on, std::memory_order_relaxed) != on) {
+    [[nodiscard]] std::uint8_t reported() const noexcept override { return reported_.load(std::memory_order_relaxed); }
+
+    // The stream is opened again when what it would open changes: the device's whole mask, or the front pair.
+    void set_all_speakers(bool on) override {
+        if (all_.exchange(on, std::memory_order_relaxed) != on &&
+            (reported_.load(std::memory_order_relaxed) & ~galaxy::audio::kSpeakersFront) != 0u) {
             SetEvent(changed_);
         }
     }
 
 private:
-    // The channels of a channel mask, in the order the device takes them.
+    // The 18 speaker positions a channel mask names (SPEAKER_FRONT_LEFT to SPEAKER_TOP_BACK_RIGHT); the reserved bits
+    // and SPEAKER_ALL name no channel.
+    static constexpr DWORD kNamedSpeakers = 0x3FFFFu;
+
+    [[nodiscard]] static Speaker speaker_of(DWORD bit) noexcept {
+        switch (bit) {
+        case SPEAKER_FRONT_LEFT: return Speaker::Left;
+        case SPEAKER_FRONT_RIGHT: return Speaker::Right;
+        case SPEAKER_FRONT_CENTER: return Speaker::Center;
+        case SPEAKER_LOW_FREQUENCY: return Speaker::LowFrequency;
+        case SPEAKER_SIDE_LEFT: return Speaker::SideLeft;
+        case SPEAKER_SIDE_RIGHT: return Speaker::SideRight;
+        case SPEAKER_BACK_LEFT: return Speaker::BackLeft;
+        case SPEAKER_BACK_RIGHT: return Speaker::BackRight;
+        default: return Speaker::Other;  // front wide, back centre, the heights: silent
+        }
+    }
+
+    // The channels of a channel mask, in the order the device takes them: the mask's bit order.
     void set_speakers(DWORD mask) {
         speaker_count_ = 0u;
-        for (DWORD bit = 1u; bit != 0u && speaker_count_ < speakers_.size(); bit <<= 1u) {
-            if ((mask & bit) == 0u) {
-                continue;
+        mask &= kNamedSpeakers;
+        for (DWORD bit = 1u; bit <= kNamedSpeakers && speaker_count_ < speakers_.size(); bit <<= 1u) {
+            if ((mask & bit) != 0u) {
+                speakers_[speaker_count_++] = speaker_of(bit);
             }
-            Speaker speaker = Speaker::Other;
-            switch (bit) {
-            case SPEAKER_FRONT_LEFT: speaker = Speaker::Left; break;
-            case SPEAKER_FRONT_RIGHT: speaker = Speaker::Right; break;
-            case SPEAKER_FRONT_CENTER: speaker = Speaker::Center; break;
-            case SPEAKER_SIDE_LEFT: speaker = Speaker::SideLeft; break;
-            case SPEAKER_SIDE_RIGHT: speaker = Speaker::SideRight; break;
-            case SPEAKER_BACK_LEFT: speaker = Speaker::BackLeft; break;
-            case SPEAKER_BACK_RIGHT: speaker = Speaker::BackRight; break;
-            default: break;
-            }
-            speakers_[speaker_count_++] = speaker;
         }
+    }
+
+    // The speakers a mask names, as kinds (the device's report).
+    [[nodiscard]] static std::uint8_t kinds_of(DWORD mask) noexcept {
+        std::array<Speaker, 18> named{};
+        std::size_t count = 0u;
+        for (DWORD bit = 1u; bit <= kNamedSpeakers; bit <<= 1u) {
+            if ((mask & bit) != 0u) {
+                named[count++] = speaker_of(bit);
+            }
+        }
+        return galaxy::audio::speaker_kinds(std::span<const Speaker>(named.data(), count));
     }
 
     bool activate(IMMDevice* device) {
@@ -176,6 +199,7 @@ private:
     }
 
     bool initialize(IMMDevice* device, DWORD rate, DWORD mask) {
+        mask &= kNamedSpeakers;
         const WORD channels = static_cast<WORD>(std::popcount(mask));
         WAVEFORMATEXTENSIBLE format{};
         format.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
@@ -206,7 +230,6 @@ private:
 
     bool open_endpoint(IMMDeviceEnumerator* endpoints) {
         constexpr DWORD kStereo = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT;
-        constexpr DWORD kRear = SPEAKER_SIDE_LEFT | SPEAKER_SIDE_RIGHT | SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT;
         set_speakers(kStereo);
         ComPtr<IMMDevice> device;
         if (FAILED(endpoints->GetDefaultAudioEndpoint(eRender, eConsole, &device)) || !activate(device.Get())) {
@@ -217,15 +240,16 @@ private:
         if (FAILED(client_->GetMixFormat(&mix)) || mix == nullptr) {
             return false;
         }
+        // The device's report: the mix format's channel mask (a plain format of two channels or fewer is the front pair).
         const DWORD rate = mix->nSamplesPerSec;
-        DWORD mask = kStereo;
-        if (surround_.load(std::memory_order_relaxed) && mix->wFormatTag == WAVE_FORMAT_EXTENSIBLE) {
-            const DWORD device_mask = reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(mix)->dwChannelMask;
-            if ((device_mask & kRear) != 0u && (device_mask & kStereo) == kStereo) {
-                mask = device_mask;
-            }
-        }
+        const DWORD device_mask = mix->wFormatTag == WAVE_FORMAT_EXTENSIBLE
+                                      ? reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(mix)->dwChannelMask & kNamedSpeakers
+                                      : kStereo;
         CoTaskMemFree(mix);
+        const bool front = (device_mask & kStereo) == kStereo;
+        reported_.store(front ? kinds_of(device_mask) : galaxy::audio::kSpeakersFront, std::memory_order_relaxed);
+        // Every speaker when a placed layout asks for them; else the front pair, the rest silent.
+        const DWORD mask = all_.load(std::memory_order_relaxed) && front && device_mask != kStereo ? device_mask : kStereo;
         if (rate < 8000u || rate > 192000u) {
             return false;
         }
@@ -395,7 +419,8 @@ private:
     Render render_;
     std::atomic<std::uint32_t> queued_{0u};
     std::atomic<bool> paused_{false};
-    std::atomic<bool> surround_{false};
+    std::atomic<bool> all_{false};
+    std::atomic<std::uint8_t> reported_{galaxy::audio::kSpeakersFront};
     std::atomic<std::uint32_t> rate_{48000u};
     std::array<Speaker, 18> speakers_{Speaker::Left, Speaker::Right};
     std::uint32_t speaker_count_{2u};

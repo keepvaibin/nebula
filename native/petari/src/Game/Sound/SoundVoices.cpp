@@ -536,7 +536,7 @@ s32 Voices::initialUpdate(s32 slot) {
             voice->panner_volume = voice->panner_target;
         } else {
             voice->panner_volume = 0;
-            voice->panner = 1;
+            voice->panner = NEBULA_VOICE_PANNER;
         }
     }
     if (rNote.mOwner != OWNER_NONE) {
@@ -577,6 +577,9 @@ s32 Voices::initialUpdate(s32 slot) {
     for (u8 i = 0; i < 6; i++) {
         voice->sends[i].current = volumes[i];
         voice->sends[i].target = volumes[i];
+    }
+    if (voice->panner == NEBULA_VOICE_PLACED) {
+        voice->panner_volume = voice->panner_target;
     }
     f32 pitch = SoundMath::pow2(rNote.mParams.mBend + (rNote.mKey + rNote.mKeySweep) / 12.0f + effect.mVibrato * rNote.mVibrato.getValue());
     pitch = rNote.mSound.mPitch * effect.mPitch * pitch * rNote.mParams.mPitch;
@@ -681,9 +684,19 @@ void Voices::effectorParams(SoundNote& rNote, NebulaVoice* pVoice, f32* pVolumes
         pVoice->rear = dolby;
         pVoice->panner_send = fxmix;
         pVoice->panner_target = volume * cNoteGain;
-        pVoice->panner = 1;
+        pVoice->panner = NEBULA_VOICE_PANNER;
     } else {
         mixerVolumes(rNote, volume, pan, fxmix, dolby, pVolumes);
+        // Sends with a rear amount: the panner's pan, rear and volume too, which speakers of their own play instead.
+        if (mEngine->outputMode() == 2 && SoundSends::carriesRear(rNote.mSends)) {
+            pVoice->pan = pan;
+            pVoice->rear = dolby;
+            pVoice->panner_send = fxmix;
+            pVoice->panner_target = SoundMath::clamp01(volume) * cNoteGain;
+            pVoice->panner = NEBULA_VOICE_PLACED;
+        } else {
+            pVoice->panner = NEBULA_VOICE_SENDS;
+        }
     }
 }
 

@@ -171,11 +171,21 @@ void apply_kv(RuntimeSettings& settings, const char* key, const char* value) {
         }
     } else if (std::strcmp(key, "menu_text_size") == 0) {
         settings.menu_text_size = static_cast<unsigned>(std::strtoul(value, nullptr, 10));
-    } else if (std::strcmp(key, "audio_sound_output") == 0) {
-        for (unsigned i = 0; i <= static_cast<unsigned>(SoundOutput::Surround); ++i) {
-            if (::galaxy::text_iequal(value, sound_output_key(static_cast<SoundOutput>(i)))) {
-                settings.audio.sound_output = static_cast<SoundOutput>(i);
+    } else if (std::strcmp(key, "audio_speakers") == 0) {
+        for (unsigned i = 0; i <= static_cast<unsigned>(SpeakerChoice::Layout71); ++i) {
+            if (::galaxy::text_iequal(value, speaker_choice_key(static_cast<SpeakerChoice>(i)))) {
+                settings.audio.speakers = static_cast<SpeakerChoice>(i);
             }
+        }
+    } else if (std::strcmp(key, "audio_sound_output") == 0) {
+        // The setting before Speakers, read and never written: mono stays Mono, surround (matrix-encoded on two channels)
+        // is Encoded stereo; stereo, every file's default, carries no choice and is Auto.
+        if (::galaxy::text_iequal(value, "mono")) {
+            settings.audio.speakers = SpeakerChoice::Mono;
+        } else if (::galaxy::text_iequal(value, "surround")) {
+            settings.audio.speakers = SpeakerChoice::Encoded;
+        } else if (::galaxy::text_iequal(value, "stereo")) {
+            settings.audio.speakers = SpeakerChoice::Auto;
         }
     } else if (std::strcmp(key, "button_icons") == 0) {
         for (unsigned i = 0; i <= static_cast<unsigned>(ButtonIcons::Keyboard); ++i) {
@@ -421,11 +431,15 @@ bool running_game_language(GameLanguage& language) noexcept {
     return true;
 }
 
-const char* sound_output_key(SoundOutput output) noexcept {
-    switch (output) {
-    case SoundOutput::Mono: return "mono";
-    case SoundOutput::Surround: return "surround";
-    default: return "stereo";
+const char* speaker_choice_key(SpeakerChoice choice) noexcept {
+    switch (choice) {
+    case SpeakerChoice::Mono: return "mono";
+    case SpeakerChoice::Stereo: return "stereo";
+    case SpeakerChoice::Encoded: return "encoded";
+    case SpeakerChoice::Layout31: return "3.1";
+    case SpeakerChoice::Layout51: return "5.1";
+    case SpeakerChoice::Layout71: return "7.1";
+    default: return "auto";
     }
 }
 
@@ -547,7 +561,7 @@ bool save_runtime_settings_to_file() {
                  << "audio_ambience_gain=" << settings.audio.ambience << '\n'
                  << "audio_cutscene_gain=" << settings.audio.cutscene << '\n'
                  << "audio_wiimote_speaker_gain=" << settings.audio.wiimote_speaker << '\n'
-                 << "audio_sound_output=" << sound_output_key(settings.audio.sound_output) << '\n'
+                 << "audio_speakers=" << speaker_choice_key(settings.audio.speakers) << '\n'
                  << "text_speed=" << settings.text_speed << '\n'
                  << "language=" << game_language_key(settings.language) << '\n'
                  << "discord_status=" << (settings.discord_status ? 1 : 0) << '\n'

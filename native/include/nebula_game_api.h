@@ -52,12 +52,22 @@ enum {
     NEBULA_AUDIO_BUS_EFFECT1,
     NEBULA_AUDIO_BUS_EFFECT2,
     NEBULA_AUDIO_BUS_EFFECT3,
-    NEBULA_AUDIO_BUS_SURROUND_RIGHT, /* matrix-encoded into left and right one subframe later */
+    NEBULA_AUDIO_BUS_SURROUND_RIGHT, /* two channels: matrix-encoded into left and right one subframe later; speakers of
+                                        their own: the rear right (speaker_law.h) */
     NEBULA_AUDIO_BUS_SURROUND_LEFT,
-    NEBULA_AUDIO_BUS_RIGHT_INVERTED, /* subtracted from the right */
+    NEBULA_AUDIO_BUS_RIGHT_INVERTED, /* two channels: subtracted from the right; speakers of their own: added to it */
     NEBULA_AUDIO_BUS_DISCARD,
-    NEBULA_AUDIO_BUS_CENTER, /* both sides at -3 dB */
+    NEBULA_AUDIO_BUS_CENTER, /* two channels: both sides at -3 dB; its own speaker where there is one */
     NEBULA_AUDIO_BUSES
+};
+
+/* What plays a voice (NebulaVoice.panner): its sends, the surround panner (pan, rear, panner_send, panner_volume), or
+   its sends on two channels and the panner where the output has speakers of their own (a note whose sends carry a rear
+   amount: the panner's constant-power law places it there, speaker_law.h). */
+enum {
+    NEBULA_VOICE_SENDS = 0,
+    NEBULA_VOICE_PANNER = 1,
+    NEBULA_VOICE_PLACED = 2,
 };
 
 /* A voice's source (NebulaVoice.format). Wave data is PCM16 in host order (the importer decodes the disc's forms). */
@@ -121,7 +131,7 @@ typedef struct NebulaVoice {
     float fir[8];
     float iir[4];
     NebulaAudioSend sends[6];
-    uint16_t panner;         /* nonzero: the surround panner plays the voice instead of its sends */
+    uint16_t panner;         /* NEBULA_VOICE_*: what plays the voice */
     float pan;               /* 0 left .. 1 right */
     float rear;              /* 0 front .. 1 rear */
     float panner_send;       /* effect send */

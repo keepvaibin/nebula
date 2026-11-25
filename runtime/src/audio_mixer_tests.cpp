@@ -232,8 +232,9 @@ void test_panner() {
            out[2u * 300u + 1u]);
 }
 
-// Its own speakers: a rear voice leaves left and right silent and comes out of surround left, one subframe late.
-void test_discrete_surround() {
+// Speakers of their own (the surround law, point 5): a rear voice leaves left and right silent and comes out of the rear
+// left at once, no subframe late.
+void test_placed_surround() {
     Game game;
     for (std::uint32_t i = 0; i < 4096u; ++i) {
         game.put16(i * 2u, 16384);
@@ -246,21 +247,23 @@ void test_discrete_surround() {
     v.panner_target = 0.25f;
     AudioMixer mixer(48000u);
     game.attach(mixer);
-    mixer.set_discrete(true);
+    mixer.set_layout(true, true);
     for (int i = 0; i < 3; ++i) {
         mixer.mix(1.0f);
     }
     const std::span<const float> front = mixer.end_frame();
     const std::span<const float> rear = mixer.surround();
     expect(rear.size() == front.size() / 2u * 3u, "three more channels a frame", static_cast<double>(rear.size()));
-    const double gain = std::sin(kPi * 127.0 / 256.0) * std::sin(kPi * 127.0 / 256.0);
-    const double level = 0.5 * gain * 16384.0 / 65536.0;
-    expect(near(front[2u * 300u], 0.0, 1e-6), "rear voice: left silent", front[2u * 300u]);
-    expect(near(front[2u * 300u + 1u], 0.0, 1e-6), "rear voice: right silent", front[2u * 300u + 1u]);
-    expect(near(rear[3u * 300u], 0.0, 1e-6), "rear voice: center silent", rear[3u * 300u]);
-    expect(near(rear[3u * 300u + 1u], level, 2e-4), "rear voice: surround left", rear[3u * 300u + 1u]);
-    expect(near(rear[3u * 300u + 2u], 0.0, 1e-6), "rear voice: surround right silent", rear[3u * 300u + 2u]);
-    mixer.set_discrete(false);
+    const double level = 0.5 * 16384.0 / 65536.0;
+    // Sample 60 is in the first subframe (120 at 48 kHz): the old fold put nothing there.
+    for (const std::size_t at : {std::size_t{60}, std::size_t{150}, std::size_t{300}}) {
+        expect(near(front[2u * at], 0.0, 1e-6), "rear voice: left silent", front[2u * at]);
+        expect(near(front[2u * at + 1u], 0.0, 1e-6), "rear voice: right silent", front[2u * at + 1u]);
+        expect(near(rear[3u * at], 0.0, 1e-6), "rear voice: center silent", rear[3u * at]);
+        expect(near(rear[3u * at + 1u], level, 2e-4), "rear voice: rear left from the first samples", rear[3u * at + 1u]);
+        expect(near(rear[3u * at + 2u], 0.0, 1e-6), "rear voice: rear right silent", rear[3u * at + 2u]);
+    }
+    mixer.set_layout(false, false);
     mixer.mix(1.0f);
     (void)mixer.end_frame();
     expect(mixer.surround().empty(), "matrix again: nothing apart", static_cast<double>(mixer.surround().size()));
@@ -507,7 +510,7 @@ int main() {
     test_pcm_loop();
     test_effect_delay();
     test_panner();
-    test_discrete_surround();
+    test_placed_surround();
     test_fir_delay();
     test_iir();
     test_square();

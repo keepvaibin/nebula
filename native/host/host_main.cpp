@@ -106,6 +106,7 @@
 #include "galaxy/wiimote_hid.h"
 #endif
 #include "galaxy/runtime_settings.h"
+#include "galaxy/speaker_law.h"
 #include "galaxy/render/galaxy_select.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/texture_store.h"
@@ -3763,7 +3764,9 @@ uint32_t svc_system_setting(void*, uint32_t item) {
 #endif
     case NEBULA_SETTING_SOUND_MODE:
 #if defined(NEBULA_HOST_RENDERER)
-        return static_cast<uint32_t>(galaxy::get_runtime_settings().audio.sound_output);
+        // The Speakers choice against the device's last report (speaker_law.h): 0 mono, 1 stereo, 2 with a rear amount.
+        return galaxy::audio::game_sound_mode(
+            galaxy::audio::resolve_speakers(galaxy::get_runtime_settings().audio.speakers, galaxy::audio::device_speakers()));
 #else
         return 1;  // stereo
 #endif

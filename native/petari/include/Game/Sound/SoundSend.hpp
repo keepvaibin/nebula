@@ -92,6 +92,25 @@ namespace SoundSends {
         return curve == SEND_CURVE_FX_MIX || curve == SEND_CURVE_FX_MIX_REVERSED;
     }
 
+    // The sends carry a rear amount: one feeds a surround bus or the inverted right (the two-channel matrix's rear), or
+    // follows the rear curve. Where the output has speakers of their own such a note is placed by the panner's law instead
+    // (NEBULA_VOICE_PLACED, the surround law's point 3).
+    inline bool carriesRear(const SoundSend* pSends) {
+        for (u32 i = 0; i < 6; i++) {
+            const SoundSend& rSend = pSends[i];
+            if (rSend.mBus == NEBULA_AUDIO_BUS_SURROUND_LEFT || rSend.mBus == NEBULA_AUDIO_BUS_SURROUND_RIGHT ||
+                rSend.mBus == NEBULA_AUDIO_BUS_RIGHT_INVERTED) {
+                return true;
+            }
+            for (u32 k = 0; k < 2; k++) {
+                if (rSend.mCurve[k] == SEND_CURVE_DOLBY || rSend.mCurve[k] == SEND_CURVE_DOLBY_REVERSED) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     // A send's gain from the note's volume, pan, effect send and rear amount, before the note's gain: the effect send
     // linear, the rest by a quarter sine (linear in mono, `flat`); a rear amount as the second curve by the matrix's rear
     // curve. 0 for a send to no bus.

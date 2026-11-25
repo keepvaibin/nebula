@@ -24,8 +24,9 @@ enum class RuntimeInputMode : std::uint32_t {
     return mode == RuntimeInputMode::RealWiimote || mode == RuntimeInputMode::WiimoteMotion;
 }
 
-// The game's sound modes. Surround is matrix-encoded on two speakers and has its own speakers where the output has them.
-enum class SoundOutput : std::uint8_t { Mono, Stereo, Surround };
+// The speakers the game plays on (speaker_law.h): Auto the device's report; Mono, Stereo and Encoded (the game's surround
+// matrix-encoded for a receiver that decodes it) on the front pair; 3.1, 5.1 and 7.1 where the device has them.
+enum class SpeakerChoice : std::uint8_t { Auto, Mono, Stereo, Encoded, Layout31, Layout51, Layout71 };
 
 struct RuntimeAudioSettings {
     float master = 1.0f;
@@ -37,7 +38,7 @@ struct RuntimeAudioSettings {
     float cutscene = 1.0f;
     // What the game plays on the Wii Remote speaker, mixed into the output; off unless chosen.
     float wiimote_speaker = 0.0f;
-    SoundOutput sound_output = SoundOutput::Stereo;
+    SpeakerChoice speakers = SpeakerChoice::Auto;
 
     friend bool operator==(const RuntimeAudioSettings&, const RuntimeAudioSettings&) = default;
 };
@@ -107,7 +108,8 @@ void set_game_languages(std::span<const std::string> folders) noexcept;
 [[nodiscard]] const char* game_language_key(GameLanguage language) noexcept;
 // "auto", "game", "xbox", "nintendo", "playstation" or "keyboard" (runtime_settings.ini; "wii" is read as "game").
 [[nodiscard]] const char* button_icons_key(ButtonIcons icons) noexcept;
-[[nodiscard]] const char* sound_output_key(SoundOutput output) noexcept;
+// "auto", "mono", "stereo", "encoded", "3.1", "5.1" or "7.1" (runtime_settings.ini audio_speakers).
+[[nodiscard]] const char* speaker_choice_key(SpeakerChoice choice) noexcept;
 // "keep", "pause" or "mute" (runtime_settings.ini).
 [[nodiscard]] const char* focus_loss_key(FocusLoss focus_loss) noexcept;
 

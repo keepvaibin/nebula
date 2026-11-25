@@ -211,6 +211,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/switch_controller.cpp
     ${rt}/tilt.cpp
     ${rt}/audio_mixer.cpp
+    ${rt}/speaker_law.cpp
     ${rt}/native_audio.cpp
     ${rt}/movie_audio.cpp
     ${rt}/atomic_file.cpp

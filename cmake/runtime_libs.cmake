@@ -78,6 +78,6 @@ target_link_libraries(galaxy_native_input PUBLIC galaxy_runtime_abi)
 galaxy_runtime_lib_options(galaxy_native_input)
 
 # The game's sound mixed natively (audio_mixer.h).
-add_library(galaxy_audio_mixer STATIC ${galaxy_rt}/audio_mixer.cpp ${galaxy_rt}/movie_audio.cpp)
+add_library(galaxy_audio_mixer STATIC ${galaxy_rt}/audio_mixer.cpp ${galaxy_rt}/movie_audio.cpp ${galaxy_rt}/speaker_law.cpp)
 target_include_directories(galaxy_audio_mixer PUBLIC "${galaxy_root}/runtime/include" "${galaxy_root}/native/include")
 galaxy_runtime_lib_options(galaxy_audio_mixer)

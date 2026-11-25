@@ -1,6 +1,7 @@
 #include "galaxy/audio_mixer.h"
 #include "galaxy/benchmark.h"
 #include "galaxy/loss_report.h"
+#include "galaxy/speaker_law.h"
 
 #include <algorithm>
 #include <chrono>
@@ -12,11 +13,12 @@ namespace {
 
 constexpr double kPi = 3.14159265358979323846;
 
-// Mix constants (15-bit fractions): the surround matrix and the center's -3 dB.
-constexpr float kUnit = 32767.0f / 32768.0f;
-constexpr float kFold = 26500.0f / 32768.0f;
-constexpr float kMatrix = 18400.0f / 32768.0f;
-constexpr float kCenterGain = 23170.0f / 32768.0f;
+// The surround matrix and the center's -3 dB: kUnit, kFold, kMatrix, kCenterGain (speaker_law.h).
+
+// Placed, with rear speakers: the panner's rear effect sends into the rear echo lines at the power the matrix gives them
+// on two channels (kUnit^2 + kMatrix^2 of a line's), the echo returning through the rear buses (kRearGain at the
+// speaker): sqrt(kUnit^2 + kMatrix^2) / kRearGain = 1 / kFold.
+constexpr float kRearEchoSend = 1.0f / kFold;
 
 // A forced stop's next gain: half, down to nothing below the 16-bit output's step.
 [[nodiscard]] float halved(float gain) noexcept {
@@ -209,10 +211,28 @@ float* AudioMixer::bus(std::uint32_t index) noexcept {
     return index != NEBULA_AUDIO_BUS_NONE && index < kBusCount ? buses_[index].data() : nullptr;
 }
 
-void AudioMixer::set_discrete(bool on) noexcept {
-    discrete_ = on;
+void AudioMixer::set_layout(bool placed, bool rear) noexcept {
+    rear = placed && rear;
+    if (placed == placed_ && rear == rear_) {
+        return;
+    }
+    placed_ = placed;
+    rear_ = rear;
     frame_.clear();
     frame_surround_.clear();
+    // The matrix's delays start silent when the two channels come back; the rear echo lines start silent.
+    const std::size_t subframe = (rate_ + kSubframesPerSecond - 1u) / kSubframesPerSecond;
+    fold_left_.reset(subframe);
+    fold_right_.reset(subframe);
+    panner_send_left_.reset(subframe);
+    panner_send_right_.reset(subframe / 2u);
+    for (std::size_t line = 4u; line < effect_states_.size(); ++line) {
+        effect_states_[line].subframes = 0xFFFFu;
+        effect_states_[line].fir.clear();
+    }
+    for (VoiceState& state : voice_states_) {
+        state.placed_set = false;
+    }
 }
 
 void AudioMixer::mix(float gain, std::uint32_t used) {
@@ -241,25 +261,34 @@ void AudioMixer::mix(float gain, std::uint32_t used) {
         }
     }
 
-    // The surround buses one subframe late, matrix-encoded into left and right unless they have their own speakers.
+    float* left = buses_[kLeft].data();
+    float* right = buses_[kRight].data();
+    const float* center = buses_[kCenter].data();
+    const float* inverted = buses_[kRightInverted].data();
+    if (placed_) {
+        // Speakers of their own (the law, point 5): the surround buses are the rear with no delay, the inverted right
+        // joins the right as it is, the center apart; the speakers' gains are the output's (speaker_law.h).
+        const float* rear_left = buses_[kSurroundLeft].data();
+        const float* rear_right = buses_[kSurroundRight].data();
+        for (std::size_t i = 0; i < n; ++i) {
+            frame_.push_back(left[i] * gain);
+            frame_.push_back((right[i] + inverted[i]) * gain);
+            frame_surround_.push_back(center[i] * gain);
+            frame_surround_.push_back(rear_left[i] * gain);
+            frame_surround_.push_back(rear_right[i] * gain);
+        }
+        effects_end();
+        stats_.mix_ns += static_cast<std::uint64_t>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - begin).count());
+        return;
+    }
+    // Two channels, as made: the surround buses one subframe late, matrix-encoded into left and right.
     // Written for [0, n) by the delays before any read: no fill.
     std::array<float, kMaxSubframe> late_left;
     std::array<float, kMaxSubframe> late_right;
     fold_left_.process(buses_[kSurroundLeft].data(), late_left.data(), n);
     fold_right_.process(buses_[kSurroundRight].data(), late_right.data(), n);
-    float* left = buses_[kLeft].data();
-    float* right = buses_[kRight].data();
-    const float* center = buses_[kCenter].data();
-    const float* inverted = buses_[kRightInverted].data();
-    for (std::size_t i = 0; discrete_ && i < n; ++i) {
-        right[i] -= inverted[i];
-        frame_.push_back(left[i] * gain);
-        frame_.push_back(right[i] * gain);
-        frame_surround_.push_back(center[i] * gain);
-        frame_surround_.push_back(late_left[i] * gain);
-        frame_surround_.push_back(late_right[i] * gain);
-    }
-    for (std::size_t i = 0; !discrete_ && i < n; ++i) {
+    for (std::size_t i = 0; i < n; ++i) {
         left[i] += kFold * (kUnit * late_left[i] + kMatrix * late_right[i]) + kCenterGain * center[i];
         right[i] += kFold * (-kMatrix * late_left[i] - kUnit * late_right[i]) + kCenterGain * center[i] - inverted[i];
         frame_.push_back(left[i] * gain);
@@ -337,6 +366,7 @@ void AudioMixer::render_voice(std::uint32_t index, NebulaVoice& voice) {
         state.loop_pending = false;
         state.fir_history.clear();
         state.iir.x1 = state.iir.x2 = state.iir.y1 = state.iir.y2 = 0.0f;
+        state.placed_set = false;
     }
     if (paused) {
         std::fill_n(out, samples_, state.last);
@@ -348,10 +378,20 @@ void AudioMixer::render_voice(std::uint32_t index, NebulaVoice& voice) {
     if (category_gains_set_) {
         apply_category(state, voice, out);
     }
-    if (voice.panner != 0u) {
-        mix_panner(voice, out);
+    // A note with a rear amount on its sends is placed by the panner on speakers of their own (the law, point 3); the
+    // path not taken keeps its volumes at their targets, so a change of output starts from them.
+    if (voice.panner == NEBULA_VOICE_PANNER || (placed_ && voice.panner == NEBULA_VOICE_PLACED)) {
+        mix_panner(voice, state, out);
+        if (voice.panner == NEBULA_VOICE_PLACED) {
+            for (NebulaAudioSend& send : voice.sends) {
+                send.current = send.target;
+            }
+        }
     } else {
         mix_sends(voice, out);
+        if (voice.panner == NEBULA_VOICE_PLACED) {
+            voice.panner_volume = voice.panner_target;
+        }
     }
     if (!paused) {
         voice.starting = 0u;
@@ -702,14 +742,36 @@ void AudioMixer::mix_sends(NebulaVoice& voice, const float* samples) {
 }
 
 // The surround panner: pan and front/rear positions pick quarter-sine gains; the volume ramps to its target; the
-// effect send feeds effect lines 2 and 3 from the front and the panner's rear sends from the back.
-void AudioMixer::mix_panner(NebulaVoice& voice, const float* samples) {
+// effect send feeds effect lines 2 and 3 from the front and the panner's rear sends from the back. Placed, the gains are
+// the law's (speaker_law.h panner_gains) and ramp from the last subframe's with the volume (point 7).
+void AudioMixer::mix_panner(NebulaVoice& voice, VoiceState& state, const float* samples) {
     ++stats_.panner_renders;
     if (voice.forced_stop != 0u) {
         voice.panner_target = halved(voice.panner_volume);
         if (voice.panner_volume == 0.0f) {
             voice.finished = 1u;
         }
+    }
+    if (placed_) {
+        const PannerGains law = panner_gains(voice.pan, voice.rear, rear_);
+        const std::array<float, 4> gains{law.front_left, law.front_right, law.rear_left, law.rear_right};
+        const std::array<float, 4>& was = state.placed_set ? state.placed_gains : gains;
+        const float send = voice.panner_send;
+        const float send_was = state.placed_set ? state.placed_send : send;
+        const float current = voice.panner_volume;
+        const float target = voice.panner_target;
+        const std::array<std::uint32_t, 4> dry{kLeft, kRight, kSurroundLeft, kSurroundRight};
+        const std::array<std::uint32_t, 4> wet{kEffect0 + 2u, kEffect0 + 3u, kPannerSendLeft, kPannerSendRight};
+        for (std::size_t i = 0; i < 4u; ++i) {
+            const float start = was[i] * current;
+            ramp_mix(bus(dry[i]), samples, start, gains[i] * target - start);
+            ramp_mix(bus(wet[i]), samples, start * send_was, gains[i] * target * send - start * send_was);
+        }
+        state.placed_gains = gains;
+        state.placed_send = send;
+        state.placed_set = true;
+        voice.panner_volume = target;
+        return;
     }
     const float left = pan_gain(1.0f - voice.pan);
     const float right = pan_gain(voice.pan);
@@ -732,14 +794,15 @@ void AudioMixer::mix_panner(NebulaVoice& voice, const float* samples) {
 void AudioMixer::effects_begin() {
     const std::size_t n = samples_;
     // A line's row is written for [0, n) before its sends read it: no fill.
-    std::array<std::array<float, kMaxSubframe>, 4> sends;
-    for (std::size_t line = 0; line < effect_states_.size(); ++line) {
+    std::array<std::array<float, kMaxSubframe>, 6> sends;
+    const std::size_t lines = effect_lines();
+    for (std::size_t line = 0; line < lines; ++line) {
         EffectState& e = effect_states_[line];
         std::fill_n(e.input.begin(), n, 0.0f);
         if (effects_ == nullptr) {
             continue;
         }
-        const NebulaEffectLine& config = effects_[line];
+        const NebulaEffectLine& config = effects_[line < 4u ? line : line - 2u];
         if (config.generation != e.generation || config.subframes != e.subframes) {
             e.generation = config.generation;
             e.subframes = config.subframes;
@@ -782,15 +845,19 @@ void AudioMixer::effects_begin() {
             run_fir(e.fir, e.history_b, e.input.data(), n);
         }
     }
-    // The sends, after every line's feedback is in place (a line may send into another's input).
-    for (std::size_t line = 0; line < effect_states_.size() && effects_ != nullptr; ++line) {
-        const NebulaEffectLine& config = effects_[line];
+    // The sends, after every line's feedback is in place (a line may send into another's input). A rear echo line
+    // returns its line's left and right to the rear left and right, nothing else.
+    const auto rear_return = [](std::uint32_t target) -> std::uint32_t {
+        return target == kLeft ? kSurroundLeft : (target == kRight ? kSurroundRight : NEBULA_AUDIO_BUS_NONE);
+    };
+    for (std::size_t line = 0; line < lines && effects_ != nullptr; ++line) {
+        const NebulaEffectLine& config = effects_[line < 4u ? line : line - 2u];
         if (config.filter == 0u || config.subframes == 0u) {
             continue;
         }
         for (const auto& [target, volume] : {std::pair{config.bus_a, config.volume_a},
                                              std::pair{config.bus_b, config.volume_b}}) {
-            float* destination = bus(target);
+            float* destination = bus(line < 4u ? target : rear_return(target));
             if (destination == nullptr || volume == 0.0f) {
                 continue;
             }
@@ -803,22 +870,35 @@ void AudioMixer::effects_begin() {
 
 void AudioMixer::effects_end() {
     const std::size_t n = samples_;
-    // The panner's rear effect sends: the left one subframe late, the right half a subframe late, matrixed into
-    // effect lines 2 and 3.
-    // Written for [0, n) by the delays before any read: no fill.
-    std::array<float, kMaxSubframe> late_left;
-    std::array<float, kMaxSubframe> late_right;
-    panner_send_left_.process(buses_[kPannerSendLeft].data(), late_left.data(), n);
-    panner_send_right_.process(buses_[kPannerSendRight].data(), late_right.data(), n);
-    float* line2 = effect_states_[2].input.data();
-    float* line3 = effect_states_[3].input.data();
-    for (std::size_t i = 0; i < n; ++i) {
-        line2[i] += kUnit * late_left[i] - kMatrix * late_right[i];
-        line3[i] += -kMatrix * late_left[i] + kUnit * late_right[i];
+    if (!placed_) {
+        // Two channels: the panner's rear effect sends, the left one subframe late, the right half a subframe late,
+        // matrixed into effect lines 2 and 3.
+        // Written for [0, n) by the delays before any read: no fill.
+        std::array<float, kMaxSubframe> late_left;
+        std::array<float, kMaxSubframe> late_right;
+        panner_send_left_.process(buses_[kPannerSendLeft].data(), late_left.data(), n);
+        panner_send_right_.process(buses_[kPannerSendRight].data(), late_right.data(), n);
+        float* line2 = effect_states_[2].input.data();
+        float* line3 = effect_states_[3].input.data();
+        for (std::size_t i = 0; i < n; ++i) {
+            line2[i] += kUnit * late_left[i] - kMatrix * late_right[i];
+            line3[i] += -kMatrix * late_left[i] + kUnit * late_right[i];
+        }
+    } else if (rear_) {
+        // Rear speakers (the law, point 5): each rear send into its rear echo line, no delay, no matrix.
+        const float* send_left = buses_[kPannerSendLeft].data();
+        const float* send_right = buses_[kPannerSendRight].data();
+        float* line4 = effect_states_[4].input.data();
+        float* line5 = effect_states_[5].input.data();
+        for (std::size_t i = 0; i < n; ++i) {
+            line4[i] += kRearEchoSend * send_left[i];
+            line5[i] += kRearEchoSend * send_right[i];
+        }
     }
-    for (std::size_t line = 0; line < effect_states_.size() && effects_ != nullptr; ++line) {
+    const std::size_t lines = effect_lines();
+    for (std::size_t line = 0; line < lines && effects_ != nullptr; ++line) {
         EffectState& e = effect_states_[line];
-        const NebulaEffectLine& config = effects_[line];
+        const NebulaEffectLine& config = effects_[line < 4u ? line : line - 2u];
         if (config.filter == 0u || config.subframes == 0u || e.delay.empty()) {
             continue;
         }
