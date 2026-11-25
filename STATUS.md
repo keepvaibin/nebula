@@ -6,7 +6,8 @@ Steps landed: 34 of 145 (23%).
 
 Now: G2 landed (34 of 145); in work: writer writing package G6 from G6.2
 
-In work now: Nothing started.
+In work now:
+- G6.2 Sends and sound settings as typed records (P-221, P-222) (agent 1)
 
 ## Packages
 
