@@ -14,37 +14,27 @@ namespace {
     }
 }  // namespace
 
-u16 AudSoundInfo::getSoundSw(SoundID soundID) const {
+SoundSwitches AudSoundInfo::getSwitches(SoundID soundID) const {
     u32 type;
     const SoundItem* data = item(soundID, &type);
-    return type == DATA_BGM || type == DATA_SE ? data->mSoundSw : 0;
+    return type == DATA_BGM || type == DATA_SE ? data->mSwitches : SoundSwitches{};
 }
 
 bool AudSoundInfo::isLimitNumPlaying(SoundID soundID) const {
     s32 numOfPlaying = AudWrap::getSystem()->getNumOfPlaying(soundID);
-    u16 sw = (getSoundSw(soundID) >> 3) & 3;
-    if (sw == 0) {
+    const s32 most = getSwitches(soundID).mMostPlaying;
+    if (most == 0) {
         return false;
     }
-    return sw <= numOfPlaying;
+    return most <= numOfPlaying;
 }
 
 bool AudSoundInfo::isLimitCountPlaying(SoundID soundID) const {
-    u32 max;
-    switch (getSoundSw(soundID) & 0x60) {
-    case 0x20:
-        max = 1;
-        break;
-    case 0x40:
-        max = 5;
-        break;
-    case 0x60:
-        max = 10;
-        break;
-    default:
+    const u32 gap = getSwitches(soundID).mStartGap;
+    if (gap == 0) {
         return false;
     }
-    return AudWrap::getSystem()->getPlayCountMin(soundID) < max;
+    return AudWrap::getSystem()->getPlayCountMin(soundID) < gap;
 }
 
 u16 AudSoundInfo::getChordResIdBgm(SoundID soundID) const {
@@ -56,23 +46,23 @@ u16 AudSoundInfo::getChordResIdBgm(SoundID soundID) const {
 bool AudSoundInfo::isRhythmBgm(SoundID soundID) const {
     u32 type;
     item(soundID, &type);
-    return type == DATA_BGM && (getSoundSw(soundID) & 1) != 0;
+    return type == DATA_BGM && (getSwitches(soundID).mFlags & SoundSwitches::RHYTHM) != 0;
 }
 
 bool AudSoundInfo::isFanfareSe(SoundID soundID) const {
     u32 type;
     item(soundID, &type);
-    return type == DATA_SE && ((getSoundSw(soundID) >> 8) & 1) != 0;
+    return type == DATA_SE && (getSwitches(soundID).mFlags & SoundSwitches::FANFARE) != 0;
 }
 
 bool AudSoundInfo::isUseFxMix(SoundID soundID) const {
     u32 type;
     const SoundItem* data = item(soundID, &type);
-    return type == DATA_SE && ((data->mSoundSw >> 9) & 1) != 0;
+    return type == DATA_SE && (data->mSwitches.mFlags & SoundSwitches::FX_MIX) != 0;
 }
 
 bool AudSoundInfo::isUseLpf(SoundID soundID) const {
     u32 type;
     const SoundItem* data = item(soundID, &type);
-    return type == DATA_SE && ((data->mSoundSw >> 10) & 1) != 0;
+    return type == DATA_SE && (data->mSwitches.mFlags & SoundSwitches::LOW_PASS) != 0;
 }

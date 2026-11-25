@@ -2,11 +2,12 @@
 
 #include "Game/Sound/StdSoundInfo.hpp"
 
-// The game's reading of the sound table: the sound switches' bits.
+// The game's reading of the sound table: the sound switches.
 class AudSoundInfo : public StdSoundInfo {
 public:
 
-    u16 getSoundSw(SoundID) const;
+    // An effect's or a music sequence's switches; none for another sound.
+    SoundSwitches getSwitches(SoundID) const;
     bool isLimitNumPlaying(SoundID) const;
     bool isLimitCountPlaying(SoundID) const;
     u16 getChordResIdBgm(SoundID) const;

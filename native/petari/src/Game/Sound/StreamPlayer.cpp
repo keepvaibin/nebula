@@ -24,7 +24,6 @@ void StreamPlayer::init() {
         mChannelFxMix[i] = 0.0f;
         mChannelDolby[i] = 0.0f;
     }
-    mMixConfig[0] = 0xffff;
     mConsumed = static_cast< u32 >(mConsumed) + mMessageCount;
     mMessageHead = 0;
     mMessageCount = 0;
@@ -194,12 +193,12 @@ void StreamPlayer::channelStart() {
         prepared.mOwner = OWNER_STREAM;
         prepared.mOwnerData = this;
         prepared.mPriority = 0x7f7f;
-        for (u32 j = 0; j < sizeof(prepared.mMixConfig) / sizeof(prepared.mMixConfig[0]); j++) {
-            prepared.mMixConfig[j] = mMixConfig[j];
+        for (u32 j = 0; j < 6; j++) {
+            prepared.mSends[j] = SoundSends::cPanner[j];
         }
         prepared.mSourceRate = static_cast< f32 >(mHeader.rate);
         prepared.mOsc[0].initStart(&cStreamEnv);
-        prepared.mFormat = SoundNote::FORMAT_PCM16;
+        prepared.mCategory = NEBULA_SOUND_MUSIC;
         prepared.mLoop = mHeader.loop != 0 ? 0xffffffffu : 0u;
         prepared.mLoopStart = mHeader.loop_start;
         prepared.mLoopEnd = mHeader.loop_end;

@@ -116,20 +116,19 @@ namespace {
         for (int i = 0; i < 8; i++) {
             pVoice->fir[i] = 0.0f;
         }
-        pVoice->fir[0] = 32767.0f / 32768.0f;
+        pVoice->fir[0] = VoiceFilter::cPass;
         for (int i = 0; i < 4; i++) {
             pVoice->iir[i] = 0.0f;
         }
-        pVoice->iir[0] = 32767.0f / 32768.0f;
+        pVoice->iir[0] = VoiceFilter::cPass;
     }
 
-    // `skip`: samples to start into the wave (1: from its loop start). A wave stored as PCM16 in the game's data is music unless a sound
-    // names the voice.
+    // `skip`: samples to start into the wave (1: from its loop start). The wave's category holds until a sound names the
+    // voice.
     void setVoiceWave(NebulaVoice* pVoice, const SoundNote& rNote, u32 skip) {
-        const u8 kind = rNote.mFormat & SoundNote::FORMAT_MASK;
         pVoice->wave = rNote.mWave;
-        pVoice->format = kind < SoundNote::FORMAT_SAMPLED_NUM ? NEBULA_AUDIO_PCM16 : NEBULA_AUDIO_SILENT;
-        pVoice->category = kind == SoundNote::FORMAT_PCM16 ? NEBULA_SOUND_MUSIC : NEBULA_SOUND_EFFECT;
+        pVoice->format = rNote.mPlayable ? NEBULA_AUDIO_PCM16 : NEBULA_AUDIO_SILENT;
+        pVoice->category = rNote.mCategory;
         pVoice->restart = 0;
         if (pVoice->format == NEBULA_AUDIO_SILENT) {
             return;
@@ -532,7 +531,7 @@ void Voices::nameSound(s32 slot) {
 s32 Voices::initialUpdate(s32 slot) {
     SoundNote& rNote = mNotes[slot];
     NebulaVoice* voice = &mVoices[slot];
-    if (rNote.isDolbyMode()) {
+    if (rNote.isPannerMode()) {
         if (voice->panner) {
             voice->panner_volume = voice->panner_target;
         } else {
@@ -562,20 +561,7 @@ s32 Voices::initialUpdate(s32 slot) {
     }
     const u32 outputMode = mEngine->outputMode();
     for (u8 i = 0; i < 6; i++) {
-        u8 bus = rNote.mMixConfig[i] >> 8;
-        if (outputMode == 0) {
-            switch (bus) {
-            case 8:
-                bus = 11;
-                break;
-            case 9:
-                bus = 2;
-                break;
-            }
-        } else if (outputMode == 1 && bus == 8) {
-            bus = 11;
-        }
-        voice->sends[i].bus = bus < NEBULA_AUDIO_BUSES ? bus : static_cast< u32 >(NEBULA_AUDIO_BUS_NONE);
+        voice->sends[i].bus = SoundSends::busFor(rNote.mSends[i], outputMode);
     }
     OscEffect effect;
     for (u32 i = 0; i < 2; i++) {
@@ -686,7 +672,7 @@ void Voices::effectorParams(SoundNote& rNote, NebulaVoice* pVoice, f32* pVolumes
     pan = SoundMath::clamp01(pan);
     fxmix = SoundMath::clamp01(fxmix);
     dolby = SoundMath::clamp01(dolby);
-    if (rNote.isDolbyMode()) {
+    if (rNote.isPannerMode()) {
         if (mEngine->outputMode() == 0) {
             volume *= 0.707f;
         }
@@ -704,83 +690,6 @@ void Voices::effectorParams(SoundNote& rNote, NebulaVoice* pVoice, f32* pVolumes
 void Voices::mixerVolumes(const SoundNote& rNote, f32 volumeIn, f32 pan, f32 fxmix, f32 dolby, f32* pVolumes) {
     const bool flat = mEngine->outputMode() == 0;
     for (u32 i = 0; i < 6; i++) {
-        f32 volume = volumeIn;
-        const u16 config = rNote.mMixConfig[i];
-        const u8 bus = config >> 8;
-        const u8 mode0 = (config >> 4) & 0xf;
-        const u8 mode1 = config & 0xf;
-        if (bus == 0) {
-            pVolumes[i] = 0.0f;
-            continue;
-        }
-        f32 scale = 0.0f;
-        if (mode0 != 0) {
-            switch (mode0) {
-            case 1:
-                scale = pan;
-                break;
-            case 2:
-                scale = fxmix;
-                break;
-            case 3:
-                scale = dolby;
-                break;
-            case 5:
-                scale = 1.0f - pan;
-                break;
-            case 6:
-                scale = 1.0f - fxmix;
-                break;
-            case 7:
-                scale = 1.0f - dolby;
-                break;
-            }
-            switch (mode0) {
-            case 2:
-            case 6:
-                volume *= scale;
-                break;
-            default:
-                volume *= flat ? scale : Angle::sinRadian(scale * FloatUtil::PI() * 0.5f);
-                break;
-            }
-        }
-        if (mode1 != 0) {
-            switch (mode1) {
-            case 1:
-                scale = pan;
-                break;
-            case 2:
-                scale = fxmix;
-                break;
-            case 3:
-                scale = dolby;
-                break;
-            case 5:
-                scale = 1.0f - pan;
-                break;
-            case 6:
-                scale = 1.0f - fxmix;
-                break;
-            case 7:
-                scale = 1.0f - dolby;
-                break;
-            }
-            switch (mode1) {
-            case 3:
-            case 7:
-                volume *= Angle::sinRadian((scale * 0.34776f + 0.32612f) * FloatUtil::PI() * 0.5f);
-                break;
-            case 2:
-            case 6:
-                volume *= scale;
-                break;
-            default:
-                volume *= flat ? scale : Angle::sinRadian(scale * FloatUtil::PI() * 0.5f);
-                break;
-            }
-        }
-        volume = SoundMath::clamp01(volume);
-        pVolumes[i] = volume * cNoteGain;
+        pVolumes[i] = SoundSends::gain(rNote.mSends[i], volumeIn, pan, fxmix, dolby, flat) * cNoteGain;
     }
 }

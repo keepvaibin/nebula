@@ -275,7 +275,8 @@ bool SoundBanks::prepareNote(const SoundBank* pBank, const WaveBank* pWaves, s32
         return false;
     }
     pNote->mPriority = priority;
-    pNote->mFormat = entry->mFormat;
+    pNote->mPlayable = entry->mPlayable != 0;
+    pNote->mCategory = entry->mCategory;
     pNote->mBaseKey = entry->mBaseKey;
     pNote->mLoop = entry->mLoop;
     pNote->mLoopStart = entry->mLoopStart;

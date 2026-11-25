@@ -63,8 +63,8 @@ private:
     SeqTrack* mFree = nullptr;
 };
 
-// The filter coefficients of a cutoff index 0 to 128.
-extern const s16 cIIRCutoff[129][4];
+// The IIR coefficients of a cutoff index 0 to 128.
+extern const f32 cIIRCutoff[129][4];
 
 class SeqTrack {
 public:
@@ -125,8 +125,8 @@ public:
     void setTempoRate(f32 rate);
     void setTimebase(u16 timebase);
     void setSecondsClock(SecondsClock clock, void* pData);
-    void setIIR(const s16* pCoefficients);
-    void setFIR(const u8* pBigEndian);
+    void setIIR(const f32* pCoefficients);
+    void setFIR(const f32* pCoefficients);
     void writePort(u32 port, u16 value);
     u16 readPort(u32 port);
     u16 port(u32 port) const {
@@ -292,9 +292,12 @@ private:
     f32 mTremPitch = 1.0f;
     u16 mVibDelay = 0;
     u16 mTremDelay = 0;
-    s16 mFIR[8] = {};
-    s16 mIIR[8] = {};
-    u8 mFilterMode = 0;
+    // The filters its notes play through (VoiceFilter::set): the FIR's taps (0 off) and weights, the IIR on or off and its
+    // coefficients.
+    f32 mFIR[8] = {};
+    f32 mIIR[4] = {};
+    u8 mFirTaps = 0;
+    bool mIirOn = false;
     f32 mPanPower = 1.0f;
     SecondsClock mSecondsClock = nullptr;
     void* mSecondsClockData = nullptr;
@@ -305,7 +308,7 @@ private:
     u8 mNoteOnPrio = 0x40;
     u8 mReleasePrio = 0;
     u8 mGateRate = 100;
-    u16 mMixConfig[6] = {};
+    SoundSend mSends[6] = {};
 };
 
 // What a rhythm parser adds to a track's program: it hears the track's notes and some settings.
