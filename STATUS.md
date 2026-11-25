@@ -90,6 +90,7 @@ In work now:
 - G2.3.5 Landing 3e: variable refresh, told by the system or proved from the presents: Proof 5: the game step's time and the walk's on the PC and the tablet before and after G2.3.5 (never slower; the probe's 1-2 s at 1.25 mode periods after each display event included) (agent 1, 2026-11-24 17:32)
 - G2.3.6 Landing 3f: P-281, the Android and Linux host's four faults: Tablet: touch and pad input with the pump's wake (P-281): play a stretch with touch and a pad, read [host-events] lines (waits per second, main-thread CPU, which must not rise over the 8 ms sleep's) and check no input lags; then background the app and return it 10 times, and once with the render thread held past 2 s (a debug hold), reading [window] and [vulkan] lines for the device-lost path and a picture after (agent 1, 2026-11-24 17:47)
 - G2.3.6 Landing 3f: P-281, the Android and Linux host's four faults: Linux: a run with the pump's wake event (menu keys and rumble from the game thread wake SDL_WaitEventTimeout) and the display clock's sleep, read [host-events] and [pacing] lines; a Wii Remote on a DolphinBar on the tablet after nativeInit (the published JNI table) (agent 1, 2026-11-24 17:47)
+- G2.3.6 Landing 3f: P-281, the Android and Linux host's four faults: Proof 2: the game step's time and the walk's on the PC and the tablet, before and after G2.3.6, never slower (agent 1, 2026-11-24 17:47)
 
 ## Waiting for the owner
 
