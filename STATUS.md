@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-24 17:32. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 17:47. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 25 of 145 (17%).
 
@@ -88,6 +88,7 @@ In work now:
 - G2.3.5 Landing 3e: variable refresh, told by the system or proved from the presents: A Mac and an iPhone or iPad: a ProMotion MacBook's minimumRefreshInterval and maximumRefreshInterval read as variable (log '[pacing] vrr ... (the system says)', the row says VARIABLE), a fixed external display fixed; iOS fixed; GitHub's Mac job compiles the new Apple code first (agent 1, 2026-11-24 17:32)
 - G2.3.5 Landing 3e: variable refresh, told by the system or proved from the presents: Linux on a variable display: VK_EXT_present_timing's refreshInterval where offered, else the stamps' proof answering variable at 144 Hz and fixed on a fixed display; GitHub's Linux job compiles the new SDL code first (agent 1, 2026-11-24 17:32)
 - G2.3.5 Landing 3e: variable refresh, told by the system or proved from the presents: Proof 5: the game step's time and the walk's on the PC and the tablet before and after G2.3.5 (never slower; the probe's 1-2 s at 1.25 mode periods after each display event included) (agent 1, 2026-11-24 17:32)
+- G2.3.6 Landing 3f: P-281, the Android and Linux host's four faults: Tablet: touch and pad input with the pump's wake (P-281): play a stretch with touch and a pad, read [host-events] lines (waits per second, main-thread CPU, which must not rise over the 8 ms sleep's) and check no input lags; then background the app and return it 10 times, and once with the render thread held past 2 s (a debug hold), reading [window] and [vulkan] lines for the device-lost path and a picture after (agent 1, 2026-11-24 17:47)
 
 ## Waiting for the owner
 
@@ -109,7 +110,7 @@ Nothing is blocked.
 | M-006 | closed | - | the step tier and section check; a passing tool fault played once more; a waiter left not judged runs itself | 0 | 95 | 2911f6429 |
 | M-007 | closed | - | the section-at-a-time roles: a whole section ahead, wait, hand-off sheets, hard reports, the live page | 0 | 80 | 9ed09cfec |
 
-## Decisions (96)
+## Decisions (101)
 
 - 2026-11-23 S0.2.1: LoadSlice: 32 items a frame; an item is a phase of GameScene::initAfterScenarioChosen, the player, one placement made whole, one piece of FileSelector::initStep, or one Star Bit of the reserve (because the card asks for a fixed count of work and names no count; the count is a constant in one place, no player sees which frame of the load an item falls in, and the load worker (G3.7) replaces the slices)
 - 2026-11-23 S0.2.1: Drawing's random stream (MR::getDrawRandom) is seeded with the same seed as the game's stream, in setRandomSeedFromStageName and setFixedRandomSeed (because a fixed seed keeps the cosmetic numbers the same in every run of a replay and needs no new setting; the draw stream runs through the same sequence as the game's but is advanced only by drawing, so neither changes the other)
@@ -207,6 +208,11 @@ Nothing is blocked.
 - 2026-11-24 G2.3.5: Metal holds no probe: a Mac screen the system does not describe (no minimum and maximum refresh interval) is taken as fixed (because the system answers on every macOS the app runs on (macOS 12 reads both intervals) and on iOS (fixed until a page says otherwise), and Apple's pictures are timed by its display link, not by the pacer the probe holds)
 - 2026-11-24 G2.3.5: Direct3D 11 and Vulkan ask and cap against the mode's own rate (host_window::display_mode_hz, read when the display changes), never the timed vblanks' rate (because on a variable display the vblanks follow the presents, so their rate is the presents' (the probe's 1.25 periods while it runs), which would move the mode period the proof judges against)
 - 2026-11-24 G2.3.5: Proof 3's Android grid is fed the period Android states (on_refresh_rate), with 0.5 ms of jitter and every seventh callback missed (because the app's minimum (API 31) has the refresh-rate callback, so Android's grid always has the stated period; fed no period at 485 to 495 Hz with every seventh callback missed, VsyncGrid's measured interval drifts 1 to 2 % (found writing the test, not a path any platform takes: Apple's links state theirs too))
+- 2026-11-24 G2.3.5: A probe runs for 600 presents at most after a question (about 5 s at the probe rate); with no answer by then the presents go free and the display is taken as fixed until the next event asks again (because a window whose presents the display never reports (a hidden test window, a remote session, a failing frame-statistics read) would otherwise hold every present at 1.25 mode periods for as long as it runs; 120 counted presents need about 150 presents where the statistics come)
+- 2026-11-24 G2.3.6: Queued requests wake the pump by pushing a registered SDL event (wake_pump), on every SDL host; on Android an event watch turns every pushed event, that one and the system's, into the WakeWait's wake (because one path serves both hosts: SDL_WaitEventTimeout on Linux ends on a pushed event, and Android's block needs a signal for touch and pad events pushed from the activity's threads anyway)
+- 2026-11-24 G2.3.6: The display clock's sleep goes again only on EINTR on Linux too (sleep_to, shared), and any other error hands the frame to the host's clock there as well (because Linux's loop retried only on EINTR but then took the frame as slept without sleeping, so the game ran unpaced on such an error; one helper serves both and is under host_wait_tests.cpp)
+- 2026-11-24 G2.3.6: Past the 2 s the platform sets host_window::surface_overdue; the Vulkan renderer checks it before the acquire and again just before the queue present, and runs lose_device instead of presenting; it clears the flag when it releases its surface or makes a new one (because the card asks for the device-lost path rather than a present into a surface that may be gone; checking at the last moment shrinks the window to the instant between the check and the call, and clearing on release and on a new surface keeps a late flag from losing a device whose surface is new)
+- 2026-11-24 G2.3.6: The pump's 8 ms stays as its bound, and rumble wakes the pump only when its pad or level changes (because sensors and pads SDL polls are read only by a pump, so the bound keeps them at most 8 ms old; a rumble renewed with the same values needs no wake)
 
 ## Checks changed during the run (72)
 
