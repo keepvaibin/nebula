@@ -57,7 +57,7 @@ void DisplayModel::presented(std::uint64_t id, std::int64_t slot, std::int64_t r
         reset();  // a new swap chain counts its presents from the start
     }
     last_id_ = id;
-    presents_[next_] = {id, slot, ready, call, asked && slot != 0};
+    presents_[next_] = {id, slot, ready, call, 0, asked && slot != 0};
     next_ = (next_ + 1u) % presents_.size();
 }
 
@@ -72,23 +72,35 @@ void DisplayModel::displayed(std::uint64_t id, std::int64_t shown, std::int64_t 
     last_displayed_ = id;
     refresh_ = shown;
     period_ = period;
-    const Present* present = nullptr;
-    for (const Present& p : presents_) {
+    Present* present = nullptr;
+    const Present* before = nullptr;
+    for (Present& p : presents_) {
         if (p.id == id) {
             present = &p;
+        } else if (p.id + 1u == id) {
+            before = &p;
         }
     }
     if (present == nullptr) {
         return;
     }
-    // The refreshes it was held past the first after its call: the queue's and the compositor's, and a GPU late for
-    // that refresh. The least over a window is the display's own. A present that asked for a refresh later than the
-    // model's for its call and was shown at it was held by its own time: it tells no more than that it was in time.
-    const bool own = !present->asked || shown > present->slot + period / 2 ||
-                     present->slot <= first_after(present->call) + std::max<std::int64_t>(held_, 0) * period;
+    present->shown = shown;
+    // The refreshes it was held past the first after its call: the compositor's, and a GPU late for that refresh. The
+    // least over a window is the display's own. A present that asked for a refresh later than the model's for its call
+    // and was shown at it was held by its own time: it tells no more than that it was in time. A present made while
+    // the one before it still waited for a refresh it could have reached itself (a flip queue's order, not unknown) was
+    // held by that one as much as by the display: it tells only that the display holds it no longer, so it counts
+    // where it says less than the model knows (a queue kept full by the presents themselves would otherwise read as
+    // the display's own hold, and a lead built on it keeps the queue full).
+    const std::int64_t after = shown - present->call;
+    const std::int64_t held = after <= 0 ? 0 : (after + period - 1) / period - 1;
+    const bool queued = before == nullptr || before->shown == 0 ||
+                        before->shown >= first_after(present->call) - period / 2;
+    const bool late = present->slot != 0 && shown > present->slot + period / 2;
+    const bool own = (!present->asked || late ||
+                      present->slot <= first_after(present->call) + std::max<std::int64_t>(held_, 0) * period) &&
+                     (!queued || late || held_ < 0 || held < held_);
     if (own) {
-        const std::int64_t after = shown - present->call;
-        const std::int64_t held = after <= 0 ? 0 : (after + period - 1) / period - 1;
         window_held_ = window_held_ < 0 ? held : std::min(window_held_, held);
         if (held_ < 0 || window_start_ == 0) {
             held_ = held;
@@ -128,9 +140,29 @@ bool DisplayModel::queue_time(std::int64_t present, std::int64_t& shown) const n
     if (!display_time(present, shown)) {
         return false;
     }
-    const Present& newest = presents_[(next_ + presents_.size() - 1u) % presents_.size()];
-    if (newest.id != 0u && newest.id == last_id_) {
-        shown = std::max(shown, first_after(newest.call) + (held_ + 1) * period_);
+    // A present made now is shown a refresh after the newest before it at the soonest. The newest is shown at the first
+    // refresh after its call and the display's hold, or a refresh after the one before it, whichever is later: the
+    // queue's order, from the newest present the display reported shown (a picture late for its refresh delays every
+    // present queued behind it, which the frame latency object lets go a refresh before the one ahead is shown).
+    const std::uint64_t from = std::max(last_displayed_, last_id_ > presents_.size() ? last_id_ - presents_.size() + 1u
+                                                                                     : std::uint64_t{1});
+    std::int64_t due = 0;
+    for (std::uint64_t id = from; id != 0u && id <= last_id_; ++id) {
+        const Present* queued = nullptr;
+        for (const Present& p : presents_) {
+            if (p.id == id) queued = &p;
+        }
+        if (queued == nullptr) {
+            due = 0;
+        } else if (queued->shown != 0) {
+            due = queued->shown;
+        } else {
+            const std::int64_t own = first_after(queued->call) + held_ * period_;
+            due = due == 0 ? own : std::max(own, due + period_);
+        }
+    }
+    if (due != 0) {
+        shown = std::max(shown, due + period_);
     }
     return true;
 }
@@ -234,6 +266,21 @@ void FrameSchedule::start(std::int64_t now, std::int64_t arrived, std::int64_t s
     waiting_.active = true;
     waiting_.frame_qpc = arrival + display_delay_qpc_;
     waiting_.step_qpc = step_qpc;
+    // A reference locked to the vblanks keeps its place on the steps' cadence, the same vblanks after its step as the
+    // one before, while its arrival stays within a quarter of a millisecond (an eighth of a vblank at most) of the
+    // vblank before it or after the one after: the delay's own small moves never flip it a refresh (each flip shows a
+    // picture twice or skips one, and moves every picture's moment against its step's). Set a quarter of a vblank
+    // before it, so the slot clock's vblanks and the begin's take it whatever their rounding.
+    if (locked_period_ > 0 && locked_step_ != 0 && step_qpc > locked_step_ &&
+        step_qpc - locked_step_ <= 4 * frequency / kGameStepsPerSecond) {
+        const std::int64_t vblanks = (step_qpc - locked_step_ + locked_period_ / 2) / locked_period_;
+        const std::int64_t kept = locked_reference_ + vblanks * locked_period_;
+        const std::int64_t give = std::min(frequency / 4000, locked_period_ / 8);
+        const std::int64_t from = kept - waiting_.frame_qpc;
+        if (from >= -give && from < locked_period_ + give) {
+            waiting_.frame_qpc = kept - locked_period_ / 4;
+        }
+    }
     waiting_.stopping = stopping;
     // Nothing plays: the sequence begins at once (a slot at or before its reference waits, next). Else the playing one
     // shows the slots before the reference at their own t.
@@ -296,9 +343,9 @@ void FrameSchedule::begin_waiting(std::int64_t now) {
     // between the previous frame (0) and this one (1); the first slot with t >= 1 presents this frame itself. A slot
     // clock of k times 60 whose ticks the step's start keeps to locks to each reference with lead 1/k: k - 1 generated
     // pictures at i / k, then the frame itself on a slot, so no walk of it is thrown away (I-002). That clock is the
-    // display's vblanks when every vblank is a slot and the step is locked to them (galaxy/step_lock.h, exact with
+    // display's vblanks, all of them or every n-th, when the step is locked to them (galaxy/step_lock.h, exact with
     // in-between pictures on: the host's frame phase and display clocks start each step on the display's cadence), the
-    // reference then moved to the first vblank at or after it (the nearest one can lie before the list came, where the
+    // reference then moved to the first slot at or after it (the nearest one can lie before the list came, where the
     // delay is over half a vblank: at 480 Hz); or the pacer's own clock (a swap chain that tears, a variable
     // refresh), the step on the host's clock at exactly 60 and the slots spaced from the reference itself. Other rates
     // keep lead 0 and a free-running clock (on vblanks, the vblanks): content time is then linear in present time (the
@@ -313,15 +360,12 @@ void FrameSchedule::begin_waiting(std::int64_t now) {
     // A lead needs pictures between the frames: none at 60 (every picture a real one) or with none generated.
     const std::int64_t slots = unbounded_ || sequence_.generated == 0u ? 0 : slots_per_step(rate);
     const bool locked_to_vblanks =
-        on_vblanks && slots != 0 && slot_vblanks == 1 &&
+        on_vblanks && slots != 0 &&
         step_lock_refreshes(kGameStepNs,
                             std::llround(static_cast<double>(vblank_period) * 1e9 / static_cast<double>(frequency)),
-                            true, false) == slots;  // on vblanks: the display is not taken as variable
+                            true, false) == slots * slot_vblanks;  // on vblanks: the display is not taken as variable
     const bool locked = locked_to_vblanks || (!on_vblanks && slots != 0);
     sequence_.lead = locked ? 1.0 / static_cast<double>(slots) : 0.0;
-    if (locked_to_vblanks) {
-        sequence_.frame_qpc = first_tick_from(vblank, vblank_period, arrival);
-    }
     if (on_vblanks) {
         // The next slot moves to the vblank nearest where it was due, so the clock follows the display without adding
         // or dropping a slot; a clock not running starts at the vblank nearest a display lead from now.
@@ -329,6 +373,20 @@ void FrameSchedule::begin_waiting(std::int64_t now) {
             slot_due_ != 0 && std::llabs(slot_due_ - display_lead_ - now) <= slot_period_ ? slot_due_ : now + display_lead_;
         slot_due_ = vblank + std::llround(static_cast<double>(due - vblank) / static_cast<double>(vblank_period)) *
                                  vblank_period;
+        // A locked reference moves to the first slot at or after it: a vblank where every vblank is a slot, else one of
+        // the slots' vblanks (120 pictures a second on a 240 Hz display: every second one, the step four), whose next
+        // reference is then the same slots on (the step keeps the vblanks' cadence).
+        if (locked_to_vblanks) {
+            sequence_.frame_qpc = first_tick_from(slot_due_, slot_period_, arrival);
+        }
+    }
+    // The locked reference the next sequence keeps its place by (start).
+    const bool keeps = locked_to_vblanks && sequence_.step_qpc != 0;
+    locked_reference_ = keeps ? sequence_.frame_qpc : 0;
+    locked_step_ = keeps ? sequence_.step_qpc : 0;
+    locked_period_ = keeps ? slot_period_ : 0;
+    if (on_vblanks) {
+        // The slot clock is set above, with the reference.
     } else if (unbounded_) {
         slot_due_ = now;
     } else if (!locked) {
@@ -363,7 +421,8 @@ void FrameSchedule::begin_waiting(std::int64_t now) {
                             : first_tick_from(vblank, vblank_period, from);
             frames_anchor_ = slot_due_;
         } else {
-            slot_due_ = std::min(slot_due_, from);
+            // On vblanks the refresh at or after it: a slot off the vblanks is shown at the next, its own a refresh late.
+            slot_due_ = std::min(slot_due_, on_vblanks ? first_tick_from(vblank, vblank_period, from) : from);
         }
     }
     // The pictures drawn before the lead came in were not drawn for their refreshes: the lead's rule leaves them out.
@@ -383,15 +442,18 @@ std::int64_t FrameSchedule::display_lead_for(std::int64_t now, std::int64_t vbla
     }
     // At the least the time from a present made now to the refresh that shows it, in whole refreshes; a refresh more
     // at first (the picture's own work); four game steps at most (present_slots.h). Where a swap chain's queue paces
-    // the presents, at most its depth in refreshes above the least: a picture started earlier would find the queue
-    // full, its render thread blocked past the next picture's start.
+    // the presents, the least at first: a picture started then and presented as soon as it is ready reaches its
+    // refresh with the queue empty before it. A deeper lead fills the queue (the render thread presents behind the
+    // picture before, which waits a refresh in it, the queue's time added to every picture's delay), so it comes only
+    // from pictures late for their refreshes, at most the queue's depth above the least: a picture started earlier
+    // would find the queue full, its render thread blocked past the next picture's start.
     const std::int64_t unit = to_ns(vblank_period);
     const std::int64_t least = to_ns(shown - now);
     const auto queue = static_cast<std::int64_t>(display_.present_queue());
-    const std::int64_t most =
-        queue != 0 ? std::min<std::int64_t>(4 * kGameStepNs, (least + unit - 1) / unit * unit + queue * unit)
-                   : 4 * kGameStepNs;
-    const std::int64_t depth = display_depth_.depth(least + unit, least, most, unit);
+    const std::int64_t least_whole = (least + unit - 1) / unit * unit;
+    const std::int64_t depth = queue != 0
+                                   ? display_depth_.depth(least_whole, least, least_whole + queue * unit, unit)
+                                   : display_depth_.depth(least + unit, least, 4 * kGameStepNs, unit);
     return (depth + unit / 2) / unit * vblank_period;
 }
 
@@ -874,6 +936,7 @@ void FrameSchedule::forget() noexcept {
     sequence_ = {};
     waiting_ = {};
     shown_list_ = nullptr;
+    locked_reference_ = locked_step_ = locked_period_ = 0;
 }
 
 double FrameSchedule::t_at(std::int64_t slot, std::int64_t reference, double lead) const noexcept {

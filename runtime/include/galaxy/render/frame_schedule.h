@@ -93,6 +93,7 @@ private:
         std::int64_t slot = 0;
         std::int64_t ready = 0;
         std::int64_t call = 0;
+        std::int64_t shown = 0;  // the refresh that showed it (0: not reported)
         bool asked = false;
     };
     std::array<Present, 16> presents_{};
@@ -363,6 +364,11 @@ private:
     // The slot whose start waits (next) and the moment from which a present reaches it; for that slot only.
     std::int64_t start_slot_ = 0;
     std::int64_t start_from_ = 0;
+    // The last sequence locked to the vblanks with a step moment: its reference, its step's moment and the vblanks'
+    // period (start keeps the next reference on its cadence); 0: none.
+    std::int64_t locked_reference_ = 0;
+    std::int64_t locked_step_ = 0;
+    std::int64_t locked_period_ = 0;
 
     // The arrival clock and the step clock's delay (start): the delay follows the lists' lateness after their steps'
     // moments, at most one step.
