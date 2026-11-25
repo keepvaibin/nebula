@@ -86,6 +86,7 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
     static native void nativeSurfaceReturned();
     static native void nativePhoneMotion(float ax, float ay, float az, float gx, float gy, float gz, long timeNs);
     static native void nativePanelRate(float hz);
+    static native float nativeStepRate();
     static native void nativeDisplayVaries(int sdk, boolean hasArrSupport);
     static native void nativeTouchSlop(float px);
     static native float nativeWantedFrameRate();
@@ -176,32 +177,26 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
     }
 
     // The frame-rate setting saved last (config.ini max_fps; 0: the display's own; unlimited: infinite), before the
-    // game has read it.
+    // game has read it; with config.ini missing or unreadable, the game's step rate (FrameRates.saved).
     private float savedFrameRate() {
-        float maxFps = 60.0f;
+        final float stepRate = nativeStepRate();
         try (BufferedReader reader = new BufferedReader(new FileReader(new File(nativeData(), "config.ini")))) {
-            for (String line; (line = reader.readLine()) != null; ) {
-                if (line.startsWith("max_fps=")) {
-                    final String value = line.substring("max_fps=".length()).trim();
-                    maxFps = value.equals("unlimited") ? Float.POSITIVE_INFINITY : Float.parseFloat(value);
-                }
-            }
+            return FrameRates.saved(reader, stepRate);
         } catch (Exception e) {
-            return 60.0f;
+            return stepRate;
         }
-        return maxFps;
     }
 
     // The display mode for a frame-rate setting (max_fps; 0: the display's own; infinite: unlimited, the fastest
     // mode). Interpolated rates take the mode that
     // shows them (DisplayRate.modeFor): without the request most variable-rate panels hold the game at 60 Hz. The
-    // game's own 30 or 60 frames leave the mode to the system.
+    // game's own frames (FrameRates.own: up to the step rate) leave the mode to the system.
     private void applyDisplayRate(float maxFps) {
         final Display display = getDisplay();
         if (display == null) {
             return;
         }
-        final boolean own = maxFps > 0.0f && maxFps <= 61.0f;
+        final boolean own = FrameRates.own(maxFps, nativeStepRate());
         final Display.Mode mode = own ? null : DisplayRate.modeFor(display, maxFps);
         final int wanted = mode != null ? mode.getModeId() : 0;
         final WindowManager.LayoutParams attributes = getWindow().getAttributes();

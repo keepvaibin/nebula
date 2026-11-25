@@ -31,6 +31,8 @@ set(render_src "${galaxy_rt}/render")
 galaxy_test(galaxy_test_wait_tests SOURCES ${rt}/test_wait_tests.cpp)
 # The SDL host's waits (galaxy/host_wait.h, P-281): the event pump's block a wake ends, the display clock's sleep.
 galaxy_test(galaxy_host_wait_tests SOURCES ${rt}/host_wait_tests.cpp)
+# The game's own frame rates by the step rate (galaxy/game_step.h own_frame_rate; Android's vote and display mode).
+galaxy_test(galaxy_game_step_tests SOURCES ${rt}/game_step_tests.cpp)
 # The process's output: every line whole, whichever threads write.
 galaxy_test(galaxy_frame_due_tests SOURCES ${rt}/frame_due_tests.cpp)
 galaxy_test(galaxy_start_watch_tests SOURCES ${rt}/start_watch_tests.cpp)
