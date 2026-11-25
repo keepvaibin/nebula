@@ -1,12 +1,13 @@
 # Nebula native plan: status
 
-Written 2026-11-24 23:17. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 23:19. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 28 of 145 (19%).
 
 Now: G2.3.4 landed (28 of 145); G2.3.5 hard (ledger.tsv conflict on main), fixer waits for the usage line
 
-In work now: Nothing started.
+In work now:
+- G2.3.5 Landing 3e: variable refresh, told by the system or proved from the presents (agent 1)
 
 ## Packages
 
@@ -99,7 +100,7 @@ Nothing waits for the owner.
 
 ## Blocked
 
-- G2.3.5 Landing 3e: variable refresh, told by the system or proved from the presents: hard: start: the commits of native/G2.3.5 do not apply on origin/main 71a676bbf; first commit 13e257ad8 conflicts in docs/plan/ledger.tsv (stack base cb6c39e6f was before G2.3.4's own commits) (report: D:/NebulaWork/plan/native/hard/G2.3.5.md)
+Nothing is blocked.
 
 ## Tool mends
 
