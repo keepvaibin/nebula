@@ -7,7 +7,8 @@
 // thread woken late starts its frame late: the game's step and every picture's moment would carry that lateness. The
 // spin's length (the margin) is the timer's own lateness as this thread has seen it: up at once to the latest late wake
 // with a guard, down slowly while wakes are on time, held between kLeastMargin and kMostMargin. Each thread keeps its
-// own waiter (timer and margin).
+// own waiter (timer and margin). Where the display holds a picture to the time its present asks, the render thread's
+// wait to the picture's slot spins nothing (until_held).
 
 #include "galaxy/platform_time.h"
 
@@ -120,6 +121,17 @@ public:
             now = qpc_now();
         }
         lateness_.add((now - due) * 1'000'000 / frequency);
+    }
+
+    // Returns at `due` or after it, on the OS timer alone: no closing spin (FRAME-MODEL 2.16 target 4). For a wait whose
+    // lateness no one sees: a picture the display holds to the time its present asks starts its display lead before
+    // that time, and the lead takes in the timer's lateness as it follows the pictures shown. A wake before the moment
+    // sleeps again. Neither the margin nor the lateness counts (those are the precise waits').
+    void until_held(std::int64_t due) noexcept {
+        const std::int64_t frequency = qpc_frequency();
+        for (std::int64_t now = qpc_now(); now < due; now = qpc_now()) {
+            sleep_for_ticks(due - now, frequency);
+        }
     }
 
     // How late this thread's waits returned (WaitLateness), for the variable-refresh cap's margin.

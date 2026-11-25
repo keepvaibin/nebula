@@ -494,8 +494,9 @@ private:
     core::WalkTime interp_walk_time(const ListEntry& entry, float t, bool count);
     // `entry` walked at t (presented or not): the picture the temporal history now holds.
     void note_interp_walked(const ListEntry& entry, float t) noexcept;
-    // Render thread: until a present slot's moment (qpc_now() ticks), precisely (precise_wait.h).
-    static void interp_wait_until(std::int64_t due_qpc);
+    // Render thread: until a present slot's moment (qpc_now() ticks), precisely (precise_wait.h until); `held`: the
+    // display holds the picture to the time its present asks, so the wait spins nothing (until_held).
+    static void interp_wait_until(std::int64_t due_qpc, bool held);
     float scene_jitter_px_[2]{};
     // The walked list's scene camera, kept at its scene's end for the passes after it (draw.post's depth, draw.native's
     // matrices): the view (3x4 rows, the game's), its projection terms and viewport; `post_scene_known_` false before a

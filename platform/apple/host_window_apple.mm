@@ -1616,6 +1616,10 @@ bool metal_link_drawable(void*& drawable, double& shown_at, std::int64_t wait_ns
     return galaxy::sdl::metal_link_drawable(drawable, shown_at, wait_ns);
 }
 
+bool metal_link_runs() noexcept {
+    return galaxy::sdl::metal_link_runs();
+}
+
 void set_display_fills(bool fills) noexcept {
     galaxy::sdl::set_display_fills(fills);
 }

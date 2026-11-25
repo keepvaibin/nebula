@@ -295,6 +295,10 @@ public:
     // The moment the next present shows (RenderCore's interpolation slots): this API has no presentation times, so
     // the presents pace themselves (PresentPacer, the swap chain's vblanks).
     void set_present_moment(std::int64_t) noexcept {}
+    // The display holds the next picture to its time: where the Metal display link gives the drawables, each is shown
+    // at its update's targetPresentationTimestamp, so RenderCore's wait to the slot needs no closing spin; the layer's
+    // own drawables go up at the first refresh after they are ready, and the wait ends on the slot precisely.
+    [[nodiscard]] bool present_held_to_moment() const noexcept { return host_window::metal_link_runs(); }
     [[nodiscard]] bool take_present_skip() noexcept { return false; }
     // No display model yet (G2.3.1 gives Direct3D's; this platform's comes in its own landing): the schedule's slots
     // are the moments the pictures start.

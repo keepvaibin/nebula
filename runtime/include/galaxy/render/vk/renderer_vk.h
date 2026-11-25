@@ -407,6 +407,10 @@ public:
     // refresh the picture is drawn for and asks it; with VK_GOOGLE_display_timing alone the picture is shown at that
     // moment and a pipeline depth (PresentTiming).
     void set_present_moment(std::int64_t qpc) noexcept { present_moment_ = qpc; }
+    // The display holds the next picture with a moment to the time its present asks (present timing's target, or
+    // VK_GOOGLE_display_timing's desired time): a start a little after its slot shows it at the same refresh, so
+    // RenderCore's wait to the slot needs no closing spin (precise_wait.h until_held). False where no time is asked.
+    [[nodiscard]] bool present_held_to_moment() const;
     // True once when the presentation times lower the depth by one picture fewer: the next slot is skipped
     // (PresentSlots::take_skip).
     [[nodiscard]] bool take_present_skip() noexcept { return present_timing_.slots.take_skip(); }
@@ -1094,6 +1098,12 @@ private:
     std::array<bool, kFramesInFlight> frame_scene_drawn_{};
     // Presents the acquired image (swap_image_) after its submission.
     void present_swapchain_image();
+    // A present now may ask present timing for its time and results: a swap chain made for it, a shown window (a hidden
+    // window's timed present never finishes), no frame generation, room in the results' queue.
+    [[nodiscard]] bool present_timing_open() const noexcept;
+    // Presents ask VK_GOOGLE_display_timing for their times: the device offers it, the swap chain keeps every picture
+    // (present_slots.h presents_timed), and pictures do not ask present timing instead.
+    [[nodiscard]] bool display_timing_open() const noexcept;
     [[nodiscard]] vk::TemporalUpscaleInputs temporal_inputs(const vk::Texture& color, const vk::Texture& depth, const vk::Texture& motion,
                                                             const vk::Texture& reactive, const vk::Texture& output) const;
     // A depth or colour picture of the open scene target through open_frame_for_pass, until close_frame_for_pass.

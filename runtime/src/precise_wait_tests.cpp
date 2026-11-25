@@ -44,6 +44,22 @@ int main() {
         worst_late = std::max(worst_late, now - due);
     }
     std::cout << "worst lateness " << worst_late * 1'000'000 / frequency << " us, margin " << wait.margin_us() << " us\n";
+    // A held wait (a picture the display holds to its asked time, FRAME-MODEL 2.16 target 4) sleeps to its moment, never
+    // before it, and spins nothing: the precise waits' margin and lateness are left as they were.
+    {
+        const std::int64_t margin_before = wait.margin_us();
+        const std::uint64_t counted = wait.lateness().count();
+        for (int i = 0; i < 20; ++i) {
+            const std::int64_t due = galaxy::qpc_now() + frequency / 500;
+            wait.until_held(due);
+            expect(galaxy::qpc_now() >= due, "a held wait is never early");
+        }
+        expect(wait.margin_us() == margin_before, "a held wait leaves the margin");
+        expect(wait.lateness().count() == counted, "a held wait is not counted as a precise one");
+        const std::int64_t past = galaxy::qpc_now();
+        wait.until_held(past - frequency);
+        expect(galaxy::qpc_now() - past < frequency * 30, "a held wait for a past moment returns at once");
+    }
     // A moment already past returns at once.
     const std::int64_t before = galaxy::qpc_now();
     wait.until(before - frequency);

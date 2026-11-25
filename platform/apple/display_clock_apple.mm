@@ -390,6 +390,10 @@ void metal_link_layer(void* layer) noexcept {
     }
 }
 
+bool metal_link_runs() noexcept {
+    return g_metal_link_runs.load(std::memory_order_relaxed);
+}
+
 bool metal_link_drawable(void*& drawable, double& shown_at, std::int64_t wait_ns) noexcept {
     drawable = nullptr;
     shown_at = 0.0;
