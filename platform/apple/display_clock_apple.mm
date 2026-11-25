@@ -97,13 +97,14 @@ CAFrameRateRange asked_range() API_AVAILABLE(macos(12.0), ios(15.0)) {
 // The Metal display link's state. It lives on a thread of its own with its own run loop (Apple's advice for this
 // link: its updates are not held up by the main thread's work); every change to it is a block on that run loop.
 // Its drawable for the render thread: one at a time, a newer update's taking the place of one not taken (the older
-// goes back to the layer unused), with the time it will be shown (CACurrentMediaTime's clock, seconds).
+// goes back to the layer unused), with the time it will be shown (CACurrentMediaTime's clock, seconds). While the link
+// is on a layer, the layer's own nextDrawable never returns (seen on GitHub's macOS 15 runner, 11-24): a link that
+// gives no drawable in the render thread's wait is let go of, and waited for, before the layer's own are taken.
 std::mutex g_link_mutex;
 std::condition_variable g_link_ready;
 id<CAMetalDrawable> g_link_drawable = nil;  // under g_link_mutex
 double g_link_shown_at = 0.0;               // under g_link_mutex
 bool g_link_runs = false;                   // under g_link_mutex: the link gives the drawables
-bool g_link_silent = false;                 // under g_link_mutex: a wait for its drawable ran out, none came since
 std::atomic<bool> g_metal_link_runs{false}; // the same, for the older link's start and stop
 CFRunLoopRef g_link_loop = nullptr;         // the link thread's run loop, set once
 std::once_flag g_link_thread;
@@ -136,7 +137,6 @@ void metal_link_update(id<CAMetalDrawable> drawable, double shown_at) {
         }
         g_link_drawable = drawable;
         g_link_shown_at = shown_at;
-        g_link_silent = false;
     }
     g_link_ready.notify_one();
 }
@@ -321,7 +321,6 @@ void place_metal_link(CAMetalLayer* layer) API_AVAILABLE(macos(14.0), ios(17.0))
     {
         const std::lock_guard<std::mutex> lock(g_link_mutex);
         g_link_runs = layer != nil;
-        g_link_silent = false;
         g_link_drawable = nil;
     }
     g_link_ready.notify_all();
@@ -338,6 +337,16 @@ void follow_metal_link() API_AVAILABLE(macos(14.0), ios(17.0)) {
         link.paused = g_held.load(std::memory_order_relaxed);
         link.preferredFrameRateRange = asked_range();
     }
+}
+
+// From any thread but the link's: the link let go of on its thread, waited for (a second at most), so that the
+// layer's own drawables may be taken once this returns.
+void let_go_of_metal_link() API_AVAILABLE(macos(14.0), ios(17.0)) {
+    on_link_thread(^{
+        place_metal_link(nil);
+    });
+    std::unique_lock<std::mutex> lock(g_link_mutex);
+    g_link_ready.wait_for(lock, std::chrono::seconds(1), [] { return !g_link_runs; });
 }
 
 // The start check waits so: on the main thread its run loop runs (the links start and are held on the main queue).
@@ -361,6 +370,10 @@ namespace galaxy::sdl {
 void metal_link_layer(void* layer) noexcept {
     if (@available(macOS 14.0, iOS 17.0, *)) {
         std::call_once(g_started, [] { start_clock(); });
+        if (layer == nullptr) {
+            let_go_of_metal_link();  // the caller lets the layer go, or takes its own drawables, once this returns
+            return;
+        }
         CAMetalLayer* const metal_layer = (__bridge CAMetalLayer*)layer;
         on_link_thread(^{
             place_metal_link(metal_layer);
@@ -375,14 +388,20 @@ bool metal_link_drawable(void*& drawable, double& shown_at, std::int64_t wait_ns
     if (!g_link_runs) {
         return false;
     }
-    // A link that let a wait run out (held, or a display that gives it no updates) is not waited for again until it
-    // gives an update: the layer's own drawables meanwhile.
-    if (!g_link_silent) {
-        g_link_ready.wait_for(lock, std::chrono::nanoseconds(wait_ns),
-                              [] { return g_link_drawable != nil || !g_link_runs; });
-    }
+    g_link_ready.wait_for(lock, std::chrono::nanoseconds(wait_ns), [] { return g_link_drawable != nil || !g_link_runs; });
     if (g_link_drawable == nil) {
-        g_link_silent = g_link_runs;
+        if (!g_link_runs) {
+            return false;
+        }
+        // No update in the wait (held, or a display that gives the link none): the link is let go of, so that the
+        // layer's own drawables can be taken; the older link gives the vsyncs from now on.
+        lock.unlock();
+        std::fprintf(stderr, "[display] the Metal display link gave no drawable in %lld ms: it lets the layer go, whose "
+                             "own drawables are taken from now on\n",
+                     static_cast<long long>(wait_ns / 1'000'000));
+        if (@available(macOS 14.0, iOS 17.0, *)) {
+            let_go_of_metal_link();
+        }
         return false;
     }
     drawable = (__bridge_retained void*)g_link_drawable;
