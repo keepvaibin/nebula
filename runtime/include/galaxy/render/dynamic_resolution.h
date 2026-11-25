@@ -9,6 +9,7 @@
 #include "galaxy/launch_args.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/render/frame_pass.h"
+#include "galaxy/render/present_clock.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/resolution_governor.h"
 
@@ -32,13 +33,41 @@ class DynamicResolution {
 public:
     // Once a picture, before its scene. `on`: the setting, where the renderer offers it; `extent`: the size the scene
     // targets are made at; `floor`: the smallest share (sixteenths) the upscaler takes, 8 without one; `gpu_ms`: the
-    // scene pictures' GPU time (the running average; 0 while none is measured); `budget_ms`: resolution_budget_ms.
-    // Returns the step's rectangle: `extent` itself while off.
+    // scene pictures' GPU time (the running average; 0 while none is measured); `budget_ms`: resolution_budget_ms, which
+    // the picture arbiter's budget replaces where it gives one (present_clock.h g_resolution_budget_ms: the slot in use,
+    // so the resolution and the in-between pictures answer to one budget, I-010). The step drawn is published for the
+    // arbiter (g_resolution_sixteenths, g_resolution_floor). Returns the step's rectangle: `extent` itself while off.
     FrameMap update(bool on, const FrameMap& extent, unsigned floor, double gpu_ms, double budget_ms) noexcept {
+        const FrameMap rect = choose(on, extent, floor, gpu_ms, budget_ms);
+        g_resolution_sixteenths.store(sixteenths(), std::memory_order_relaxed);
+        g_resolution_floor.store(lowest_sixteenths(), std::memory_order_relaxed);
+        return rect;
+    }
+    // --diagnostics resolution-steps: on whatever the setting, walking the steps (update) instead of following the GPU.
+    void set_walk(bool walk) noexcept { walk_ = walk; }
+    // The step's rectangle of the extent (the extent while off).
+    [[nodiscard]] FrameMap rectangle() const noexcept {
+        if (!on_) {
+            return extent_;
+        }
+        const auto [width, height] = resolution_rectangle(extent_.width, extent_.height, governor_.sixteenths());
+        return FrameMap(width, height);
+    }
+    [[nodiscard]] bool on() const noexcept { return on_; }
+    [[nodiscard]] unsigned sixteenths() const noexcept { return on_ ? governor_.sixteenths() : 16u; }
+    // The smallest step the rectangle may take (16 while off): what the passes' images are made for.
+    [[nodiscard]] unsigned lowest_sixteenths() const noexcept { return on_ ? governor_.floor_sixteenths() : 16u; }
+
+private:
+    FrameMap choose(bool on, const FrameMap& extent, unsigned floor, double gpu_ms, double budget_ms) noexcept {
         const std::int64_t now = qpc_now();
         if (!(on || walk_) || extent.empty()) {
             on_ = false;
             return extent;
+        }
+        const double arbiter_ms = g_resolution_budget_ms.load(std::memory_order_relaxed);
+        if (arbiter_ms > 0.0) {
+            budget_ms = arbiter_ms;
         }
         if (!on_ || extent != extent_) {
             // Turned on, or a new render size: from the whole of it.
@@ -60,22 +89,7 @@ public:
         }
         return rectangle();
     }
-    // --diagnostics resolution-steps: on whatever the setting, walking the steps (update) instead of following the GPU.
-    void set_walk(bool walk) noexcept { walk_ = walk; }
-    // The step's rectangle of the extent (the extent while off).
-    [[nodiscard]] FrameMap rectangle() const noexcept {
-        if (!on_) {
-            return extent_;
-        }
-        const auto [width, height] = resolution_rectangle(extent_.width, extent_.height, governor_.sixteenths());
-        return FrameMap(width, height);
-    }
-    [[nodiscard]] bool on() const noexcept { return on_; }
-    [[nodiscard]] unsigned sixteenths() const noexcept { return on_ ? governor_.sixteenths() : 16u; }
-    // The smallest step the rectangle may take (16 while off): what the passes' images are made for.
-    [[nodiscard]] unsigned lowest_sixteenths() const noexcept { return on_ ? governor_.floor_sixteenths() : 16u; }
 
-private:
     ResolutionGovernor governor_;
     FrameMap extent_{};
     bool on_ = false;

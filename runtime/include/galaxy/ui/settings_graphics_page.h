@@ -25,6 +25,9 @@ struct GraphicsPageState {
     bool dynamic_resolution_offered = false;
     bool folders_open = true;  // the platform shows a folder's files (host_window::folders_open)
     double measured_fps = 0;
+    // The pictures have missed their slots for a sustained time with the resolution as low as it goes (the picture
+    // arbiter, present_clock.h g_target_missed): TARGET FRAME RATE says what to change.
+    bool target_missed = false;
     FrameRateCaps frame_rates;
     std::string anti_aliasing_text;
     TexturePackSummary texture_packs;

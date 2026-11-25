@@ -58,6 +58,20 @@ inline std::atomic<bool> g_variable_refresh{false};
 // rate where its own clock runs (a swap chain that tears, a variable refresh at the cap); 0 with no slot clock (no
 // in-between pictures, an unlimited rate). Any thread reads it (G8.2, through one host call).
 inline std::atomic<std::int64_t> g_slot_period_qpc{0};
+// Dynamic resolution's budget for a picture's GPU time (ms), the picture arbiter's (FrameSchedule, G2.5): the slot in
+// use times its pressure; 0 where it gives none (in-between pictures off, the old path), and the present rate's period
+// is the budget (dynamic_resolution.h). Written by the render thread's schedule, read by the renderer's scene.
+inline std::atomic<double> g_resolution_budget_ms{0.0};
+// Dynamic resolution as the renderer last drew, for the arbiter: the scene's share and its floor in sixteenths of a
+// side (both 16 while it is off).
+inline std::atomic<unsigned> g_resolution_sixteenths{16u};
+inline std::atomic<unsigned> g_resolution_floor{16u};
+// The pictures missed their slots for a sustained time with the resolution at its floor (FrameSchedule::target_missed):
+// the settings' TARGET FRAME RATE row says what to change.
+inline std::atomic<bool> g_target_missed{false};
+// A picture's GPU time (ms) as the renderer estimates a generated one, for the performance hint's report (perf_hint.cpp,
+// Android's newest call takes the GPU time beside the CPU's); 0 not known.
+inline std::atomic<double> g_picture_gpu_ms{0.0};
 // The window's way to the display changed (full screen entered or left, focus lost or gained, another display, the
 // display's mode): the renderer asks again whether the display is variable (I-007, point 5). Set by the hosts.
 inline std::atomic<bool> g_display_recheck{false};

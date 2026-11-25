@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/perf_hint.h"
 #include "galaxy/game_step.h"
+#include "galaxy/render/present_clock.h"
 
 #include <atomic>
 #include <mutex>
@@ -35,6 +36,8 @@
 #include <unistd.h>
 
 #include <cstdio>
+#include <thread>
+#include <type_traits>
 #endif
 
 namespace galaxy::host {
@@ -138,6 +141,15 @@ struct Api {
     int (*report)(void*, std::int64_t) = nullptr;
     void (*close_session)(void*) = nullptr;
     int (*update_target)(void*, std::int64_t) = nullptr;  // optional: without it a new target makes a new session
+    // The newest report (API 35): the work's wall, CPU and GPU times in one AWorkDuration. Optional: without it the
+    // wall time alone (reportActualWorkDuration).
+    void* (*duration_create)() = nullptr;
+    void (*duration_release)(void*) = nullptr;
+    void (*duration_start)(void*, std::int64_t) = nullptr;
+    void (*duration_total)(void*, std::int64_t) = nullptr;
+    void (*duration_cpu)(void*, std::int64_t) = nullptr;
+    void (*duration_gpu)(void*, std::int64_t) = nullptr;
+    int (*report2)(void*, void*) = nullptr;
     bool loaded = false;
 };
 
@@ -167,14 +179,46 @@ bool load_api() {
         reinterpret_cast<decltype(g_api.close_session)>(dlsym(library, "APerformanceHint_closeSession"));
     g_api.update_target = reinterpret_cast<decltype(g_api.update_target)>(
         dlsym(library, "APerformanceHint_updateTargetWorkDuration"));
+    const auto find = [library](auto& to, const char* name) {
+        to = reinterpret_cast<std::remove_reference_t<decltype(to)>>(dlsym(library, name));
+    };
+    find(g_api.duration_create, "AWorkDuration_create");
+    find(g_api.duration_release, "AWorkDuration_release");
+    find(g_api.duration_start, "AWorkDuration_setWorkPeriodStartTimestampNanos");
+    find(g_api.duration_total, "AWorkDuration_setActualTotalDurationNanos");
+    find(g_api.duration_cpu, "AWorkDuration_setActualCpuDurationNanos");
+    find(g_api.duration_gpu, "AWorkDuration_setActualGpuDurationNanos");
+    find(g_api.report2, "APerformanceHint_reportActualWorkDuration2");
     g_api.loaded = g_api.get_manager != nullptr && g_api.create_session != nullptr && g_api.report != nullptr &&
         g_api.close_session != nullptr;
     return g_api.loaded;
 }
 
+// The target the session holds: the frame's, or with in-between pictures the slot (present_clock.h g_slot_period_qpc,
+// FRAME-MODEL 2.16 target 5: the hint holds the clock for each picture, so no GPU or CPU time is read under a clock the
+// pictures' own lighter load let fall).
+std::int64_t g_held_ns = 0;
+
 void report(std::int64_t work_ns) {
     if (!load_api()) {
         return;
+    }
+    const std::int64_t slot_qpc = galaxy::render::g_slot_period_qpc.load(std::memory_order_relaxed);
+    const std::int64_t slot_ns = slot_qpc > 0 ? galaxy::qpc_to_ns(slot_qpc) : 0;
+    const std::int64_t held = slot_ns > 0 && slot_ns < g_target_ns ? slot_ns : g_target_ns;
+    if (held != g_held_ns) {
+        g_held_ns = held;
+        if (g_session != nullptr && g_api.update_target != nullptr && !g_session_stale) {
+            (void)g_api.update_target(g_session, held);
+        } else {
+            g_session_stale = true;
+        }
+        std::fprintf(stderr, "[perf] hint target %.2f ms%s\n", static_cast<double>(held) / 1e6,
+                     held < g_target_ns ? " (a picture's slot)" : "");
+    }
+    // A picture's work: the step's over the slots in it.
+    if (held < g_target_ns && g_target_ns > 0) {
+        work_ns = work_ns * held / g_target_ns;
     }
     if (g_session_stale) {
         g_session_stale = false;
@@ -187,13 +231,33 @@ void report(std::int64_t work_ns) {
             tids.push_back(thread.tid);
         }
         void* manager = g_api.get_manager();
-        g_session = manager != nullptr ? g_api.create_session(manager, tids.data(), tids.size(), g_target_ns) : nullptr;
+        g_session = manager != nullptr ? g_api.create_session(manager, tids.data(), tids.size(), g_held_ns) : nullptr;
         std::fprintf(stderr, "[perf] performance hint session: %zu threads, target %.2f ms%s\n", tids.size(),
-                     static_cast<double>(g_target_ns) / 1e6, g_session != nullptr ? "" : " (not available)");
+                     static_cast<double>(g_held_ns) / 1e6, g_session != nullptr ? "" : " (not available)");
     }
-    if (g_session != nullptr && work_ns > 0) {
-        g_api.report(g_session, work_ns);
+    if (g_session == nullptr || work_ns <= 0) {
+        return;
     }
+    // With the newest call the session is told a picture's GPU time beside its CPU time (the renderer's estimate of a
+    // generated picture, present_clock.h g_picture_gpu_ms), so the hint holds the GPU's clock as well as the CPU's.
+    const double gpu_ms = galaxy::render::g_picture_gpu_ms.load(std::memory_order_relaxed);
+    if (g_api.report2 != nullptr && g_api.duration_create != nullptr && g_api.duration_release != nullptr &&
+        g_api.duration_start != nullptr && g_api.duration_total != nullptr && g_api.duration_cpu != nullptr &&
+        g_api.duration_gpu != nullptr) {
+        if (void* const duration = g_api.duration_create(); duration != nullptr) {
+            const std::int64_t gpu_ns = gpu_ms > 0.0 ? static_cast<std::int64_t>(gpu_ms * 1e6) : 0;
+            g_api.duration_start(duration, std::max<std::int64_t>(steady_ns() - work_ns, 1));
+            g_api.duration_total(duration, std::max(work_ns, gpu_ns));
+            g_api.duration_cpu(duration, work_ns);
+            g_api.duration_gpu(duration, gpu_ns);
+            const int refused = g_api.report2(g_session, duration);
+            g_api.duration_release(duration);
+            if (refused == 0) {
+                return;
+            }
+        }
+    }
+    g_api.report(g_session, work_ns);
 }
 #endif
 
@@ -240,11 +304,7 @@ void perf_hint_set_target(std::int64_t target_ns) noexcept {
         return;
     }
     g_target_ns = target_ns;
-    if (g_session != nullptr && g_api.update_target != nullptr && !g_session_stale) {
-        (void)g_api.update_target(g_session, target_ns);
-    } else {
-        g_session_stale = true;  // made again with the new target at the next report
-    }
+    g_held_ns = 0;  // the next report tells the session its target (the frame's, or the slot)
     std::fprintf(stderr, "[perf] frame target %.2f ms\n", static_cast<double>(target_ns) / 1e6);
 #else
     (void)target_ns;
@@ -327,6 +387,60 @@ bool perf_hint_on_battery() noexcept {
 #else
 bool perf_hint_on_battery() noexcept {
     return false;
+}
+#endif
+
+#if defined(__ANDROID__)
+namespace {
+
+// The device's thermal headroom (android/thermal.h, API 31), looked up at run time and read once a second on a thread
+// of its own: AThermal_getThermalHeadroom may take a binder call, which no frame thread waits for. The system answers
+// at most once a second; a refused read (NaN) keeps 0.
+std::atomic<double> g_headroom{0.0};
+std::once_flag g_thermal_started;
+
+void start_thermal_reader() {
+    void* library = dlopen("libandroid.so", RTLD_NOW | RTLD_LOCAL);
+    if (library == nullptr) {
+        return;
+    }
+    using Acquire = void* (*)();
+    using Headroom = float (*)(void*, int);
+    const auto acquire = reinterpret_cast<Acquire>(dlsym(library, "AThermal_acquireManager"));
+    const auto headroom = reinterpret_cast<Headroom>(dlsym(library, "AThermal_getThermalHeadroom"));
+    if (acquire == nullptr || headroom == nullptr) {
+        std::fprintf(stderr, "[thermal] no thermal headroom on this system\n");
+        return;
+    }
+    void* const manager = acquire();
+    if (manager == nullptr) {
+        return;
+    }
+    std::thread([manager, headroom] {
+        for (;;) {
+            // The forecast one second on: the arbiter acts before the device throttles.
+            const float read = headroom(manager, 1);
+            g_headroom.store(read == read && read >= 0.0f ? static_cast<double>(read) : 0.0, std::memory_order_relaxed);
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+    }).detach();
+}
+
+}  // namespace
+
+double thermal_headroom() noexcept {
+    try {
+        std::call_once(g_thermal_started, [] { start_thermal_reader(); });
+    } catch (...) {
+        // No thread for the reader: the headroom stays not known.
+    }
+    return g_headroom.load(std::memory_order_relaxed);
+}
+#else
+// No platform here gives the app its thermal headroom to read (Windows, Linux, Apple; the benchmark's own heat measure
+// is not a live input): 0, not known.
+double thermal_headroom() noexcept {
+    return 0.0;
 }
 #endif
 

@@ -1824,6 +1824,25 @@ at the picture's moment; every platform does the same or says on screen why not.
    acts its pictures are placed on every n-th refresh by the display clock (T5). A target missed for a sustained time
    is said in the settings with what to change; nothing switches by itself. The first start's measure picks a target
    the device holds.
+   - Done at G2.5: `FrameSchedule::arbiter` owns k and dynamic resolution's budget against the slot in use. Every half
+     second it judges a window: the share of slots late, the render thread's time a generated picture against the
+     slot, the GPU time and the thermal headroom. Dynamic resolution's budget is the slot times the pressure
+     (`g_resolution_budget_ms`, read by `DynamicResolution::update`), so the two read one budget (I-010). k falls only
+     where the generated pictures' GPU time scaled to the resolution floor does not fit the step, two windows in a row
+     and never within the settle after a change (P-315); a higher k is tried, kept when its slots and its own reading
+     fit, with back-off from 2 s to 64 s. Late pictures, a render thread over the slot (P-318) and headroom at 0.9 or
+     above (P-019) lower the pressure to no less than one half: they act by resolution, never by k. Ten seconds late
+     with the resolution at its floor sets the missed target; the TARGET FRAME RATE row's help says what to change.
+     Under variable refresh k is at most cap / 60 - 1 (at least one) with the slots still at the cap. With no
+     generated pictures on a display at n x 60 Hz the frames keep their own clock, every n-th refresh from the frame
+     before, at the first such refresh from the list (P-316; the slot clock runs at 61 and above, every refresh, so a
+     frame at the next slot took either phase). The hint's target is the
+     slot where the slot is shorter than the step, its work scaled to it, and Android 15's
+     `reportActualWorkDuration2` takes the CPU and GPU time. The cadence guard stays; the old governors stay behind
+     `--diagnostics old-governors` until the measures hold. The first start's measure is the resolution calibration
+     (`calibrate_first_start`): with the default of 60 it picks the internal height the device holds. Read first,
+     answered: the heat input is Android's `AThermal_getThermalHeadroom`, read once a second off the frame threads;
+     Apple, Linux and Windows give none to the arbiter (0, never hot). The tablet and PC measures are owed.
 6. Fresh input (6.5). The pointer and the menu's cursor are drawn from the newest device sample at the picture's
    moment; the game's logic keeps its per-step value. A mod's free-look camera: the host applies the newest look
    rotation to the picture's view through one call; LumaKit's mark for it waits for the mods' work (parked 11-18).

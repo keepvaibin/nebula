@@ -791,6 +791,27 @@ bool RenderCore::ScheduleView::last_shown(ShownPicture& picture) {
     return core_.renderer_.take_shown(picture);
 }
 
+// Dynamic resolution as the renderer last drew (dynamic_resolution.h publishes it each scene picture).
+bool RenderCore::ScheduleView::resolution(unsigned& sixteenths, unsigned& floor) const {
+    sixteenths = g_resolution_sixteenths.load(std::memory_order_relaxed);
+    floor = g_resolution_floor.load(std::memory_order_relaxed);
+    return floor < 16u;
+}
+
+void RenderCore::ScheduleView::set_resolution_budget(double budget_ms) {
+    g_resolution_budget_ms.store(budget_ms, std::memory_order_relaxed);
+    g_target_missed.store(budget_ms > 0.0 && core_.schedule_.target_missed(), std::memory_order_relaxed);
+    g_picture_gpu_ms.store(budget_ms > 0.0 ? generated_gpu_ms() : 0.0, std::memory_order_relaxed);
+}
+
+double RenderCore::ScheduleView::thermal_headroom() const {
+    return ::galaxy::host::thermal_headroom();
+}
+
+bool RenderCore::ScheduleView::old_governors() const {
+    return ::galaxy::diagnosing(::galaxy::kDiagnoseOldGovernors);
+}
+
 void RenderCore::start_interp_sequence(ListEntry& entry, std::int64_t arrived, std::int64_t step) {
     // A list before the waiting one began: that one begins now, replacing the playing one.
     begin_waiting_interp_sequence();

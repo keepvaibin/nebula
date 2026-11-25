@@ -276,10 +276,16 @@ void FrameSchedule::begin_waiting(std::int64_t now) {
     ++counts_.started;
     sequence_ = std::exchange(waiting_, ScheduleSequence{});
     const std::int64_t arrival = sequence_.frame_qpc;
-    sequence_.generated = gpu_governor(rate, sequence_.stopping, now);
+    old_path_ = display_.old_governors();
+    sequence_.generated = old_path_ ? gpu_governor(rate, sequence_.stopping, now) : arbiter(rate, sequence_.stopping, now);
     if (on_vblanks) {
         fit_rate_to_vblanks();  // a rate the governors lowered
     }
+    // Dynamic resolution's budget is the slot in use, at the arbiter's pressure (I-010: one budget for k and the
+    // resolution); the old path leaves it to the present rate's.
+    display_.set_resolution_budget(!old_path_ && frames_ != 0u && std::isfinite(rate) && rate > 0.0
+                                       ? 1000.0 / rate * arbiter_.pressure
+                                       : 0.0);
     sequence_.next = 0u;
     // Present slots run on one clock at the present rate. A slot shows the game at t = (slot - reference) * 60 + lead
     // between the previous frame (0) and this one (1); the first slot with t >= 1 presents this frame itself. A slot
@@ -336,8 +342,24 @@ void FrameSchedule::begin_waiting(std::int64_t now) {
     }
     // With no generated pictures there is no interval to interpolate. A reference slightly in the future must not hold
     // the only picture back while a busy queue replaces it with another sequence.
+    // On a display whose refresh is n times the step's 60 (n of 2 or more) such a sequence takes the first refresh at or
+    // after now and the lead on the frames' own clock, every n-th refresh from the frame before: the frames keep one
+    // refresh of n when the cadence guard or the arbiter leaves no picture between (P-316), where a slot pulled to now,
+    // or one already past, is shown at the next refresh of any phase (the slot clock runs at 61 and above, every
+    // refresh). A clock that stopped (a list later than two frames) starts again at the first refresh from the list.
     if (sequence_.generated == 0u) {
-        slot_due_ = std::min(slot_due_, now + display_lead_);
+        const std::int64_t from = now + display_lead_;
+        const std::int64_t per_step =
+            on_vblanks ? slots_per_step(static_cast<double>(frequency) / static_cast<double>(vblank_period)) : 0;
+        if (per_step >= 2) {
+            const std::int64_t frame_period = per_step * vblank_period;
+            slot_due_ = frames_anchor_ != 0 && std::llabs(frames_anchor_ - from) <= 2 * frame_period
+                            ? first_tick_from(frames_anchor_, frame_period, from)
+                            : first_tick_from(vblank, vblank_period, from);
+            frames_anchor_ = slot_due_;
+        } else {
+            slot_due_ = std::min(slot_due_, from);
+        }
     }
     // The pictures drawn before the lead came in were not drawn for their refreshes: the lead's rule leaves them out.
     if (display_lead_ != 0 && !lead_was) {
@@ -430,6 +452,185 @@ unsigned FrameSchedule::gpu_governor(double& rate, bool stopping, std::int64_t n
     return generated;
 }
 
+// The arbiter (FRAME-MODEL 2.16 target 5; I-010, P-315, P-318, P-019). One owner of k and of dynamic resolution's
+// budget, against one budget: the slot in use. The display's rate is filled first (k up to what it takes), and
+// resolution has the rest of the slot (begin_waiting gives dynamic resolution the slot times the pressure). Over
+// budget, resolution falls first: k falls only when the generated pictures' GPU time, scaled to the resolution floor,
+// does not fit the step, two windows in a row and never on a time read within the settle after a change (whose own
+// load moved the clock: P-315), and then to the most that fit at the floor. k comes back by trial, kept when its window
+// keeps its slots and its own GPU reading fits. Pictures late or the
+// render thread's time a picture over the slot (P-318), and a device near its heat limit (P-019), lower the pressure:
+// they act by resolution, never by k. Late windows with the resolution at its floor for ten seconds are the missed
+// target the settings say (target_missed); nothing switches by itself. Judged every half second.
+unsigned FrameSchedule::arbiter(double& rate, bool stopping, std::int64_t now) {
+    const unsigned configured = stopping ? 0u : frames_;
+    if (configured == 0u) {
+        return 0u;
+    }
+    const unsigned display_most = arbiter_most(configured);
+    const unsigned most = std::min(display_most, cadence_cap_);
+    if (!display_.benchmark() && now - arbiter_.window >= frequency_ / 2) {
+        judge_window(most, now);
+    }
+    // A benchmark shows as many generated pictures as the GPU makes (render_config.h apply_benchmark_presenting).
+    const unsigned generated = display_.benchmark() ? most : std::min(most, arbiter_.cap);
+    if (generated >= configured) {
+        return configured;
+    }
+    // Under variable refresh at the cap the display's own bound limits k, not the rate: the slots stay at the cap (the
+    // pacer's clock, G2.2 and G2.3), the display's rate filled.
+    if (generated == display_most) {
+        return generated;
+    }
+    ++counts_.gpu_capped;
+    rate = kGameStepRate * static_cast<double>(generated + 1u);
+    return generated;
+}
+
+unsigned FrameSchedule::arbiter_most(unsigned configured) const {
+    double cap = 0.0;
+    if (display_.variable_refresh(cap) && cap > 1.0) {
+        // At least one under a cap between 60 and 120, whose pictures between the frames are one or none a step.
+        const double fits = std::floor(cap / kGameStepRate + 1e-3) - 1.0;
+        return std::min(configured, fits < 1.0 ? 1u : static_cast<unsigned>(fits));
+    }
+    return configured;
+}
+
+void FrameSchedule::judge_window(unsigned most, std::int64_t now) {
+    Arbiter& a = arbiter_;
+    const std::int64_t frequency = frequency_;
+    const bool trace = display_.tracing();
+    const double late_share =
+        a.slots + a.late != 0u ? static_cast<double>(a.late) / static_cast<double>(a.slots + a.late) : 0.0;
+    const double slot_ms = static_cast<double>(slot_period_ > 0 ? slot_period_ : frequency / kGameStepsPerSecond) *
+                           1000.0 / static_cast<double>(frequency);
+    const double wall_ms =
+        a.drawn != 0u ? static_cast<double>(a.spent) * 1000.0 / static_cast<double>(frequency) / static_cast<double>(a.drawn)
+                      : 0.0;
+    const bool late = late_share > kLateShare || wall_ms > slot_ms;
+    const bool calm = late_share <= kCalmShare && wall_ms < 0.8 * slot_ms;
+    a.window = now;
+    a.slots = a.late = a.drawn = a.spent = 0u;
+    // The arbiter's own limit (above `most` it limits nothing: the cadence guard's or the display's is lower).
+    const unsigned running = std::min(a.cap, most);
+    unsigned sixteenths = 16u;
+    unsigned floor = 16u;
+    const bool scaled = display_.resolution(sixteenths, floor);
+    const double headroom = display_.thermal_headroom();
+    const auto say = [&](const char* what) {
+        if (trace) {
+            std::cerr << "[arbiter] " << what << " k=" << a.cap << " pressure=" << a.pressure << " late=" << late_share
+                      << " wall-ms=" << wall_ms << " slot-ms=" << slot_ms << " sixteenths=" << sixteenths << '/' << floor
+                      << " headroom=" << headroom << '\n';
+        }
+    };
+    // The generated pictures' GPU time scaled to the resolution floor, against the step (resolution first: k answers
+    // only for what the floor cannot take). With the temporal upscaler on generated pictures the frame at t = 1 is one
+    // too.
+    const double gpu_ms = display_.generated_gpu_ms();
+    const double shrink = scaled && sixteenths > 0u
+                              ? static_cast<double>(floor) * static_cast<double>(floor) /
+                                    (static_cast<double>(sixteenths) * static_cast<double>(sixteenths))
+                              : 1.0;
+    const double at_floor = gpu_ms * std::min(shrink, 1.0);
+    const double extra = display_.temporal_upscaling() ? 2.0 : 1.0;
+    const auto fits = [&](unsigned k) {
+        return !(gpu_ms > 0.0) || (static_cast<double>(k) + extra) * at_floor <= 0.9 * 1000.0 / kGameStepRate;
+    };
+    // A trial of a higher k ends: kept when its window kept its slots and its GPU time, read under the load it made,
+    // fits; else undone and the next try twice as far off.
+    if (a.trial_until != 0 && now >= a.trial_until) {
+        if ((late || !fits(running)) && a.trial_from != kUnboundedGeneratedFrames) {
+            a.cap = a.trial_from;
+            a.backoff_s = std::min<std::int64_t>(a.backoff_s * 2, 64);
+            a.settle_until = now + 2 * frequency;
+            say("trial undone");
+        } else {
+            a.backoff_s = std::max<std::int64_t>(a.backoff_s / 2, 2);
+            say("trial kept");
+        }
+        a.trial_until = 0;
+        a.trial_from = kUnboundedGeneratedFrames;
+        a.next_try = now + a.backoff_s * frequency;
+        return;
+    }
+    // Resolution first: k falls only where the GPU time at the floor does not fit the step.
+    if (now >= a.settle_until && gpu_ms > 0.0 && running > 0u && a.trial_until == 0) {
+        if (!fits(running)) {
+            if (++a.over >= 2u) {
+                // The most that fit at the floor (running may be unbounded: an unlimited rate).
+                const double room = std::floor(0.9 * 1000.0 / kGameStepRate / at_floor + 1e-9) - extra;
+                const unsigned k = room < 1.0 ? 0u : static_cast<unsigned>(std::min(room, static_cast<double>(running)));
+                if (k == 0u && display_.temporal_upscaling()) {
+                    display_.suspend_temporal_upscaling(gpu_ms);
+                }
+                a.cap = k;
+                a.over = 0u;
+                a.settle_until = now + 2 * frequency;
+                a.next_try = now + a.backoff_s * frequency;
+                say("k falls");
+                return;
+            }
+        } else {
+            a.over = 0u;
+        }
+    }
+    // The display's rate filled first: a higher k tried, judged by its slots, not by a GPU time its own lower load left.
+    if (a.cap < most && a.trial_until == 0 && now >= a.next_try && now >= a.settle_until && !late) {
+        a.trial_from = a.cap;
+        a.cap = std::min(most, step_up(a.cap));
+        a.trial_until = now + 2 * frequency;
+        a.settle_until = now + frequency;
+        say("trial");
+        return;
+    }
+    // The pressure: late pictures, a render thread over the slot or a device near its heat limit lower the resolution's
+    // share of the slot; a calm, cool window lets a lower one be tried higher, with back-off.
+    const bool hot = headroom >= 0.9;
+    if (late || hot) {
+        if (a.pressure_trial) {
+            a.pressure_backoff_s = std::min<std::int64_t>(a.pressure_backoff_s * 2, 64);
+            a.pressure_trial = false;
+        }
+        const double before = a.pressure;
+        a.pressure = std::max(kLeastPressure, a.pressure * (late ? 0.85 : 0.9));
+        a.pressure_try = now + a.pressure_backoff_s * frequency;
+        if (a.pressure != before) say(late ? "late: resolution falls" : "hot: resolution falls");
+    } else if (calm && headroom < 0.75) {
+        if (a.pressure_trial) {
+            a.pressure_backoff_s = std::max<std::int64_t>(a.pressure_backoff_s / 2, 2);
+            a.pressure_trial = false;
+        }
+        if (a.pressure < 1.0 && now >= a.pressure_try) {
+            a.pressure = std::min(1.0, a.pressure * 1.1);
+            a.pressure_trial = true;
+            a.pressure_try = now + a.pressure_backoff_s * frequency;
+            say("calm: resolution tried higher");
+        }
+    }
+    // The missed target: late windows with the resolution at its floor (or none to lower) for ten seconds; it clears
+    // after ten seconds of windows that are not late.
+    const bool floor_reached = !scaled || sixteenths <= floor;
+    if (late && floor_reached) {
+        a.kept_since = 0;
+        if (a.missed_since == 0) a.missed_since = now;
+        if (!a.missed && now - a.missed_since >= 10 * frequency) {
+            a.missed = true;
+            say("target missed");
+        }
+    } else {
+        a.missed_since = 0;
+        if (!late) {
+            if (a.kept_since == 0) a.kept_since = now;
+            if (a.missed && now - a.kept_since >= 10 * frequency) {
+                a.missed = false;
+                say("target held");
+            }
+        }
+    }
+}
+
 // Generated frames must never cost the game its own frames. Each game frame shown is timed against the frame period: an
 // interval above 1.5 periods missed VIs. A miss is the generated frames' when the interval would not have missed without
 // their render-thread time: the game waited on the render thread, and would have waited that much less (at most what
@@ -441,6 +642,12 @@ unsigned FrameSchedule::gpu_governor(double& rate, bool stopping, std::int64_t n
 // miss of the generated frames'. Tries and probes follow a clean interval that doubles after each failed one (2 s to
 // 64 s: a scene's first frames back the render thread up for a second or two) and halves after a try that held.
 void FrameSchedule::restart_governors(std::int64_t now) {
+    arbiter_ = Arbiter{};
+    arbiter_.window = now;
+    arbiter_.settle_until = now + frequency_;  // one second of generated-picture times left out
+    if (frames_ == 0u) {
+        display_.set_resolution_budget(0.0);
+    }
     gpu_cap_ = kUnboundedGeneratedFrames;
     gpu_cap_serial_ = serial_;
     gpu_checked_ = serial_;
@@ -712,12 +919,15 @@ SchedulePicture FrameSchedule::next(std::int64_t now, bool flush) {
     }
     if (!flush && unbounded_) {
         slot_due_ = now;
+        ++arbiter_.slots;
     } else if (!flush) {
         slot_due_ = slot + slot_period_;
+        ++arbiter_.slots;
         // A stall skips the slots it missed instead of bunching them (with a display model: whose start it missed).
         if (now >= slot_due()) {
             const std::int64_t missed = (now - slot_due()) / slot_period_ + 1;
             counts_.late_slots += static_cast<std::uint64_t>(missed);
+            arbiter_.late += static_cast<std::uint64_t>(missed);
             slot_due_ += missed * slot_period_;
         }
     }
@@ -737,6 +947,8 @@ SchedulePicture FrameSchedule::next(std::int64_t now, bool flush) {
 
 void FrameSchedule::generated_drawn(std::uint64_t spent, bool presented) noexcept {
     generated_spent_ += spent;
+    arbiter_.spent += spent;
+    ++arbiter_.drawn;
     if (presented) {
         ++presented_total_;
     }

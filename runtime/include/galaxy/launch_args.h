@@ -43,6 +43,9 @@ enum Diagnostic : unsigned {
     kDiagnoseSlotSpin = 1u << 21u,  // slot-spin: the render thread's wait to a picture's slot spins its last margin
                                     // also where the display holds the picture to the time its present asks (the old
                                     // path beside FRAME-MODEL 2.16 landing 4, for its before measure; render_core.cpp)
+    kDiagnoseOldGovernors = 1u << 22u,  // old-governors: the GPU governor picks the in-between pictures and dynamic
+                                        // resolution budgets the present rate, as before the picture arbiter (the old
+                                        // path beside FRAME-MODEL 2.16 landing 5, for its before measure)
 };
 
 // The names --diagnostics takes, each one item or a set. "1" is the launcher's recording.
@@ -75,6 +78,7 @@ inline constexpr DiagnosticName kDiagnosticNames[] = {
     {"frame-plans", kDiagnoseFramePlans},
     {"constants-watch", kDiagnoseConstantsWatch},
     {"slot-spin", kDiagnoseSlotSpin},
+    {"old-governors", kDiagnoseOldGovernors},
     {"frames", kDiagnoseFrames},
     {"gpu", kDiagnoseGpuPasses},
     {"threads", kDiagnoseThreadCpu | kDiagnoseProfile},

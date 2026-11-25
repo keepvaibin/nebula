@@ -13,6 +13,7 @@
 #include "galaxy/precise_wait.h"
 #include "galaxy/render/present_clock.h"
 #include "galaxy/render/render_config.h"
+#include "galaxy/render/resolution_governor.h"
 #include "galaxy/render/variable_refresh.h"
 #include "galaxy/step_lock.h"
 #include "galaxy/vsync_grid.h"
@@ -60,6 +61,24 @@ struct SimDisplay final : ScheduleDisplay {
     unsigned suspended = 0;
     unsigned resets = 0;
     DisplayModel* model = nullptr;  // the display model's answers (G2.3.1); none: the platform gives none
+    // G2.5, the arbiter's inputs. With `full_gpu_ms` the GPU's time for a generated picture follows dynamic resolution
+    // (the share's area, the renderer's own ResolutionGovernor fed the arbiter's budget each sequence) and the clock:
+    // `idle_rise` times longer while the arbiter runs fewer generated pictures than `configured` (a GPU whose time rises
+    // as it idles: its clock falls with its load, P-315), `spike_ms` while `spike` (a loading screen's low clock).
+    bool dynres = false;
+    unsigned floor16 = 8u;
+    double full_gpu_ms = 0.0;
+    double idle_rise = 1.0;
+    double spike_ms = 0.0;
+    bool spike = false;
+    unsigned configured = 0u;
+    const FrameSchedule* schedule = nullptr;
+    ResolutionGovernor governor;
+    double budget_ms = -1.0;
+    double headroom = 0.0;
+    bool old_path = false;
+    unsigned resolution_changes = 0u;     // the governor's steps taken
+    unsigned sixteenths_at_k_fall = 0u;   // the resolution when the schedule first ran fewer than `configured`
 
     ScheduleSettings settings() const override { return {rate, vsync_on}; }
     bool display_time(std::int64_t present, std::int64_t& shown) const override {
@@ -77,7 +96,33 @@ struct SimDisplay final : ScheduleDisplay {
         held = variable ? cap : 0.0;
         return variable;
     }
-    double generated_gpu_ms() const override { return gpu_ms; }
+    double generated_gpu_ms() const override {
+        if (full_gpu_ms <= 0.0) return gpu_ms;
+        if (spike) return spike_ms;
+        const double share = dynres ? static_cast<double>(governor.sixteenths()) / 16.0 : 1.0;
+        const bool idle = schedule != nullptr && std::min(schedule->gpu_cap(), configured) < configured;
+        return full_gpu_ms * share * share * (idle ? idle_rise : 1.0);
+    }
+    bool resolution(unsigned& sixteenths, unsigned& floor) const override {
+        sixteenths = dynres ? governor.sixteenths() : 16u;
+        floor = dynres ? floor16 : 16u;
+        return dynres;
+    }
+    void set_resolution_budget(double ms) override {
+        budget_ms = ms;
+        if (dynres && full_gpu_ms > 0.0) {
+            if (sixteenths_at_k_fall == 0u && schedule != nullptr && std::min(schedule->gpu_cap(), configured) < configured) {
+                sixteenths_at_k_fall = governor.sixteenths();
+            }
+            governor.set_floor(floor16);
+            const unsigned before = governor.sixteenths();
+            if (governor.update(generated_gpu_ms(), ms > 0.0 ? ms : 1000.0 / rate, 1000.0 / kGameStepRate) != before) {
+                ++resolution_changes;
+            }
+        }
+    }
+    double thermal_headroom() const override { return headroom; }
+    bool old_governors() const override { return old_path; }
     bool temporal_upscaling() const override { return temporal; }
     void suspend_temporal_upscaling(double) override { ++suspended; }
     void reset_generated_gpu_ms() override { ++resets; }
@@ -983,9 +1028,11 @@ void test_waiting() {
 }
 
 // The GPU governor: generated pictures that do not fit in nine tenths of a step are dropped once its warm second and
-// 30 sequences have passed, and come back 120 sequences after they fit again.
+// 30 sequences have passed, and come back 120 sequences after they fit again. The old path beside the arbiter
+// (--diagnostics old-governors) until G2.5's measures hold.
 void test_gpu_governor() {
     SimDisplay display;
+    display.old_path = true;
     display.gpu_ms = 10.0;  // 15 ms budget at 60 steps: the frame and one picture do not fit
     FrameSchedule schedule(display, kFrequency);
     schedule.configure(1u, kFrequency);
@@ -1011,6 +1058,7 @@ void test_gpu_governor() {
     check(display.suspended == 0u, "no upscaler to suspend");
 
     SimDisplay upscaled;
+    upscaled.old_path = true;
     upscaled.gpu_ms = 10.0;
     upscaled.temporal = true;
     FrameSchedule with_upscaler(upscaled, kFrequency);
@@ -1403,6 +1451,206 @@ void test_published_interval() {
     }
 }
 
+// G2.5: the arbiter (FRAME-MODEL 2.16 target 5).
+
+// The moment `steps` game steps after the first of a run started at kFrequency: where a run goes on from the one before.
+std::int64_t steps_on(int steps) {
+    return kFrequency + static_cast<std::int64_t>(std::llround(static_cast<double>(steps) * kStep));
+}
+
+// The generated pictures of the sequences a run showed, from picture `skip` on: the least, the most, how often it changed.
+struct GeneratedSeen {
+    unsigned least = kUnboundedGeneratedFrames;
+    unsigned most = 0u;
+    unsigned changes = 0u;
+};
+GeneratedSeen generated_seen(const Run& r, std::size_t skip) {
+    GeneratedSeen seen;
+    for (std::size_t i = skip; i < r.shown.size(); ++i) {
+        const unsigned k = r.shown[i].generated;
+        seen.least = std::min(seen.least, k);
+        seen.most = std::max(seen.most, k);
+        if (i > skip && k != r.shown[i - 1u].generated) ++seen.changes;
+    }
+    return seen;
+}
+
+// Proof 9: under variable refresh k is bounded by the cap, not by the mode's rate: a 240 Hz variable display with a cap
+// of 224 gives at most 2 generated pictures, its slots still at the cap; a fixed 240 Hz display gives 3.
+void test_arbiter_variable_cap() {
+    const std::vector<std::int64_t> steady{kFrequency / 500};
+    {
+        SimDisplay display = display_at(240.0, true);
+        display.variable = true;
+        display.cap = 224.0;
+        FrameSchedule schedule(display, kFrequency);
+        schedule.configure(interpolated_frames_per_game_frame(224.0), 0);
+        const Run r = run(schedule, 600, kFrequency, steady);
+        const GeneratedSeen seen = generated_seen(r, 0u);
+        check(seen.most == 2u && seen.least == 2u, "variable 240 Hz under a cap of 224: 2 generated pictures, never 3");
+        check(schedule.slot_period() == static_cast<std::int64_t>(static_cast<double>(kFrequency) / 224.0),
+              "and the slots stay at the cap");
+    }
+    {
+        SimDisplay display = display_at(240.0, true);
+        FrameSchedule schedule(display, kFrequency);
+        schedule.configure(interpolated_frames_per_game_frame(240.0), 0);
+        const Run r = run(schedule, 600, kFrequency, steady);
+        check(generated_seen(r, 0u).most == 3u, "a fixed 240 Hz display: 3 generated pictures");
+    }
+}
+
+// Proofs 1 and 2 (I-010): a heavy scene at 144 Hz, 9 ms a generated picture at the whole size, fits its slot only at a
+// lower resolution. The display's rate is filled first (k = 2 throughout) and dynamic resolution, given the slot in use
+// as its budget, falls to fit: one stable (k, sixteenths) over 3000 pictures. The old path beside it (old-governors)
+// gives the pictures up instead. A scene that does not fit even at the floor lowers the resolution to it first, then k.
+void test_arbiter_resolution_first() {
+    const std::vector<std::int64_t> steady{kFrequency / 500};
+    {
+        SimDisplay display = display_at(144.0, true);
+        display.dynres = true;
+        display.full_gpu_ms = 9.0;
+        display.configured = interpolated_frames_per_game_frame(144.0);
+        FrameSchedule schedule(display, kFrequency);
+        display.schedule = &schedule;
+        schedule.configure(display.configured, 0);
+        const Run first = run(schedule, 300, kFrequency, steady);
+        const unsigned settled = display.governor.sixteenths();
+        const unsigned changes = display.resolution_changes;
+        check(settled < 16u && settled >= display.floor16, "144 Hz, 9 ms a picture: the resolution falls to fit the slot");
+        check(std::abs(display.budget_ms - 1000.0 / 144.0) < 1e-3, "dynamic resolution's budget is the slot in use");
+        const Run more = run(schedule, 1000, steps_on(300), steady);
+        check(first.shown.size() + more.shown.size() >= 3000u, "over 3000 pictures");
+        const GeneratedSeen seen_first = generated_seen(first, 0u);
+        const GeneratedSeen seen_more = generated_seen(more, 0u);
+        check(seen_first.least == 2u && seen_more.least == 2u && seen_more.changes == 0u && display.sixteenths_at_k_fall == 0u,
+              "the display's rate filled first: k = 2 throughout");
+        check(display.governor.sixteenths() == settled && display.resolution_changes == changes,
+              "one stable (k, sixteenths): no alternation");
+    }
+    {
+        SimDisplay display = display_at(144.0, true);
+        display.old_path = true;
+        display.gpu_ms = 9.0;
+        FrameSchedule schedule(display, kFrequency);
+        schedule.configure(interpolated_frames_per_game_frame(144.0), 0);
+        const Run r = run(schedule, 600, kFrequency, steady);
+        check(generated_seen(r, r.shown.size() / 2u).most == 0u && display.budget_ms == 0.0,
+              "the old path: the GPU governor alone gives the pictures up, dynamic resolution on its own budget");
+    }
+    {
+        SimDisplay display = display_at(144.0, true);
+        display.dynres = true;
+        display.full_gpu_ms = 26.0;  // 6.5 ms at the floor: 3 x 6.5 is over 15 ms, 2 x 6.5 is not
+        display.configured = interpolated_frames_per_game_frame(144.0);
+        FrameSchedule schedule(display, kFrequency);
+        display.schedule = &schedule;
+        schedule.configure(display.configured, 0);
+        (void)run(schedule, 900, kFrequency, steady);
+        check(display.sixteenths_at_k_fall == display.floor16, "over budget: the resolution at its floor before k falls");
+        check(std::min(schedule.gpu_cap(), display.configured) == 1u, "then k falls to what fits at the floor");
+    }
+}
+
+// Proofs 1 and 4 (P-315): a GPU whose time rises when it idles. A loading screen's low clock reads 14 ms a picture and k
+// falls; after it the GPU reads 1.8 times its time while k is lower (its clock fell with its load), which alone would
+// keep k down. The arbiter comes back by trying: the trial's own reading, under the load it makes, fits, and k stays.
+void test_arbiter_returns_by_trial() {
+    const std::vector<std::int64_t> steady{kFrequency / 500};
+    SimDisplay display = display_at(120.0, true);
+    display.full_gpu_ms = 5.0;  // 2 x 5 fits 15 ms; 2 x 9, read while idle, does not
+    display.idle_rise = 1.8;
+    display.spike_ms = 14.0;
+    display.configured = interpolated_frames_per_game_frame(120.0);
+    FrameSchedule schedule(display, kFrequency);
+    display.schedule = &schedule;
+    schedule.configure(display.configured, 0);
+    (void)run(schedule, 180, kFrequency, steady);
+    check(std::min(schedule.gpu_cap(), display.configured) == 1u, "120 Hz: k = 1 before the loading screen");
+    display.spike = true;
+    (void)run(schedule, 120, steps_on(180), steady);
+    check(std::min(schedule.gpu_cap(), display.configured) == 0u, "the loading screen's reading: k falls");
+    display.spike = false;
+    check(display.generated_gpu_ms() > 7.5, "idle, the GPU reads a time that does not fit");
+    const Run after = run(schedule, 1800, steps_on(300), steady);
+    check(std::min(schedule.gpu_cap(), display.configured) == 1u, "k comes back by trial, not by the reading its fall left");
+    check(generated_seen(after, after.shown.size() / 2u).least == 1u, "and stays");
+}
+
+// Proofs 1 and 5 (P-318, P-019): pictures that cost the render thread more than their slot, and a device near its heat
+// limit, lower dynamic resolution's share of the slot; k stays (nothing switches to 60 by itself). A calm, cool device
+// lets the share come back by trial. Ten seconds late with nothing left to lower is the missed target the settings say.
+void test_arbiter_pressure() {
+    const std::vector<std::int64_t> steady{kFrequency / 500};
+    SimDisplay display = display_at(120.0, true);
+    display.gpu_ms = 1.0;
+    FrameSchedule schedule(display, kFrequency);
+    schedule.configure(interpolated_frames_per_game_frame(120.0), 0);
+    const std::int64_t slow = kFrequency * 9 / 1000;  // 9 ms a generated picture against an 8.3 ms slot
+    int steps = 300;
+    const Run late = run(schedule, steps, kFrequency, steady, slow);
+    check(schedule.resolution_pressure() < 1.0 && display.budget_ms < 1000.0 / 120.0 - 1e-3,
+          "pictures over their slot: the resolution's budget falls");
+    check(generated_seen(late, 0u).least == 1u, "k stays: no switch to 60");
+    check(!schedule.target_missed(), "five seconds late is not yet a missed target");
+    (void)run(schedule, 600, steps_on(steps), steady, slow);
+    steps += 600;
+    check(schedule.target_missed(), "fifteen seconds late with nothing to lower: the target is missed");
+    (void)run(schedule, 2400, steps_on(steps), steady);
+    steps += 2400;
+    check(!schedule.target_missed() && schedule.resolution_pressure() == 1.0,
+          "calm again: the share comes back by trial and the target holds");
+    display.headroom = 0.95;
+    (void)run(schedule, 300, steps_on(steps), steady);
+    steps += 300;
+    check(schedule.resolution_pressure() < 1.0, "near the heat limit: the resolution's budget falls");
+    check(std::min(schedule.gpu_cap(), 1u) == 1u && !schedule.target_missed(), "heat acts by resolution, not by k");
+    display.headroom = 0.5;
+    (void)run(schedule, 3000, steps_on(steps), steady);
+    check(schedule.resolution_pressure() == 1.0, "cool again: the share comes back");
+}
+
+// Proof 3 (P-316): with no in-between pictures left on a 120 Hz display, the 60 frames a second keep every second
+// refresh, one of the two, whatever their lists' lateness, between the arbiter's trials of a higher k: a slot pulled to
+// the moment the list came leaves the vblanks, and the next sequence's nearest vblank can be the other one.
+void test_capped_frames_keep_their_refresh() {
+    const std::vector<std::int64_t> jitter{kFrequency / 2000, kFrequency / 250, kFrequency / 1000, kFrequency / 160,
+                                           kFrequency / 400};
+    SimDisplay display = display_at(120.0, true);
+    display.gpu_ms = 20.0;  // nothing fits: k = 0
+    display.temporal = true;
+    FrameSchedule schedule(display, kFrequency);
+    schedule.configure(interpolated_frames_per_game_frame(120.0), 0);
+    const Run r = run(schedule, 1800, kFrequency, jitter);
+    std::size_t frames = 0;
+    std::size_t off_vblank = 0;
+    std::size_t phase_changes = 0;
+    std::int64_t phase = -1;
+    for (std::size_t i = r.shown.size() / 4u; i < r.shown.size(); ++i) {
+        const Shown& s = r.shown[i];
+        if (s.generated != 0u) {
+            phase = -1;  // a trial of a higher k: its own clock
+            continue;
+        }
+        const std::int64_t from = s.picture.slot - display.vblank0;
+        if (from % display.period != 0) {
+            ++off_vblank;
+            continue;
+        }
+        const std::int64_t at = (from / display.period) % 2;
+        if (phase >= 0 && at != phase) ++phase_changes;
+        phase = at;
+        ++frames;
+    }
+    char what[200];
+    std::snprintf(what, sizeof what,
+                  "capped frames keep every second refresh, the same one: %zu frames, %zu off the vblanks, %zu changes "
+                  "of the refresh",
+                  frames, off_vblank, phase_changes);
+    check(frames > 800u && off_vblank == 0u && phase_changes == 0u, what);
+    check(display.suspended > 0u, "none fits: the generated pictures' temporal upscaling suspended");
+}
+
 }  // namespace
 
 int main() {
@@ -1433,6 +1681,11 @@ int main() {
     test_refresh_cap();
     test_variable_step_unlocked();
     test_published_interval();
+    test_arbiter_variable_cap();
+    test_arbiter_resolution_first();
+    test_arbiter_returns_by_trial();
+    test_arbiter_pressure();
+    test_capped_frames_keep_their_refresh();
     if (failures != 0) {
         std::printf("%d failed\n", failures);
         return 1;
