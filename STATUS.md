@@ -6,7 +6,8 @@ Steps landed: 27 of 145 (19%).
 
 Now: G2.3.3 landed (27 of 145); G2.3.4 hard (ledger rows vs sheet), fixer waits for the usage line
 
-In work now: Nothing started.
+In work now:
+- G2.3.4 Landing 3d: Apple's display link (agent 1)
 
 ## Packages
 
@@ -99,7 +100,7 @@ Nothing waits for the owner.
 
 ## Blocked
 
-- G2.3.4 Landing 3d: Apple's display link: hard: land refusal before the queue: the card (05-NATIVE-LANE-G.md lines 522,525,530) closes I-006, P-034, I-012 at G2.3.4 so plan.py wants state fixed in docs/plan/ledger.tsv, but the hand-off sheet says they stay open until the Mac proofs (report: D:/NebulaWork/plan/native/hard/G2.3.4.md)
+Nothing is blocked.
 
 ## Tool mends
 
