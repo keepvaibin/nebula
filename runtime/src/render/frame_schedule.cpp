@@ -50,12 +50,13 @@ std::int64_t DisplayModel::first_after(std::int64_t moment) const noexcept {
     return refresh_ + (whole + 1) * period_;
 }
 
-void DisplayModel::presented(std::uint64_t id, std::int64_t slot, std::int64_t ready, std::int64_t call) noexcept {
+void DisplayModel::presented(std::uint64_t id, std::int64_t slot, std::int64_t ready, std::int64_t call,
+                             bool asked) noexcept {
     if (id <= last_id_) {
         reset();  // a new swap chain counts its presents from the start
     }
     last_id_ = id;
-    presents_[next_] = {id, slot, ready, call};
+    presents_[next_] = {id, slot, ready, call, asked && slot != 0};
     next_ = (next_ + 1u) % presents_.size();
 }
 
@@ -80,19 +81,27 @@ void DisplayModel::displayed(std::uint64_t id, std::int64_t shown, std::int64_t 
         return;
     }
     // The refreshes it was held past the first after its call: the queue's and the compositor's, and a GPU late for
-    // that refresh. The least over a window is the display's own.
-    const std::int64_t after = shown - present->call;
-    const std::int64_t held = after <= 0 ? 0 : (after + period - 1) / period - 1;
-    window_held_ = window_held_ < 0 ? held : std::min(window_held_, held);
-    if (held_ < 0 || window_start_ == 0) {
-        held_ = held;
-        window_start_ = shown;
-    } else if (frequency_ > 0 && shown - window_start_ >= frequency_) {
-        held_ = window_held_;
+    // that refresh. The least over a window is the display's own. A present that asked for a refresh later than the
+    // model's for its call and was shown at it was held by its own time: it tells no more than that it was in time.
+    const bool own = !present->asked || shown > present->slot + period / 2 ||
+                     present->slot <= first_after(present->call) + std::max<std::int64_t>(held_, 0) * period;
+    if (own) {
+        const std::int64_t after = shown - present->call;
+        const std::int64_t held = after <= 0 ? 0 : (after + period - 1) / period - 1;
+        window_held_ = window_held_ < 0 ? held : std::min(window_held_, held);
+        if (held_ < 0 || window_start_ == 0) {
+            held_ = held;
+            window_start_ = shown;
+        }
+    }
+    if (held_ >= 0 && frequency_ > 0 && shown - window_start_ >= frequency_) {
+        if (window_held_ >= 0) {
+            held_ = window_held_;
+        }
         window_held_ = -1;
         window_start_ = shown;
     }
-    if (present->slot == 0) {
+    if (present->slot == 0 || held_ < 0) {
         return;
     }
     shown_.slot = present->slot;

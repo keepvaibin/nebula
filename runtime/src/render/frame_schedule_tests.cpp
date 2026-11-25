@@ -139,10 +139,14 @@ struct Run {
 // latency object's wait) and not before the model's present_from for its slot (the renderer's hold), and shown at the
 // first refresh after its present and `held` refreshes more, never with the one before. Each present's display reaches
 // the model at a later present, as the frame statistics read after a present give the newest present shown by then.
+// With `asks`, a swap chain that takes each present's time, as Vulkan's present timing (renderer_vk.cpp, G2.3.2), on the
+// PC (held 0) and on Android's compositor (held 1): a picture is presented when ready, with no wait and no hold of the
+// renderer's, and shown no sooner than the refresh at or after half a refresh before its slot.
 struct SimSwapChain {
     const SimDisplay& display;
     DisplayModel model{kFrequency};
     std::int64_t held = 0;
+    bool asks = false;
     std::uint64_t id = 0;
     std::int64_t last_shown = 0;
     std::vector<std::pair<std::uint64_t, std::int64_t>> pending;  // presents not yet reported: id, shown
@@ -150,9 +154,16 @@ struct SimSwapChain {
     // Presents a picture drawn for `slot` (0: none), ready at `ready`: the moment the present call returns.
     std::int64_t present(std::int64_t slot, std::int64_t ready) {
         const std::int64_t period = display.period;
-        const std::int64_t call = std::max({ready, last_shown - held * period, model.present_from(slot)});
+        const std::int64_t call =
+            asks ? ready : std::max({ready, last_shown - held * period, model.present_from(slot)});
         const std::int64_t first = display.vblank0 + ((call - display.vblank0) / period + 1) * period;
-        const std::int64_t shown = std::max(first + held * period, last_shown + period);
+        std::int64_t shown = std::max(first + held * period, last_shown + period);
+        if (asks && slot != 0) {
+            const std::int64_t from = slot - period / 2 - display.vblank0;
+            const std::int64_t asked =
+                display.vblank0 + (from >= 0 ? (from + period - 1) / period : -(-from / period)) * period;
+            shown = std::max(shown, asked);
+        }
         std::size_t newest = pending.size();
         for (std::size_t i = 0; i < pending.size(); ++i) {
             if (pending[i].second <= call) newest = i;
@@ -161,7 +172,7 @@ struct SimSwapChain {
             model.displayed(pending[newest].first, pending[newest].second, period);
             pending.erase(pending.begin(), pending.begin() + static_cast<std::ptrdiff_t>(newest) + 1);
         }
-        model.presented(++id, slot, ready, call);
+        model.presented(++id, slot, ready, call, asks);
         pending.emplace_back(id, shown);
         last_shown = shown;
         return call;
@@ -735,6 +746,84 @@ void test_display_model() {
     }
 }
 
+// The Vulkan and Android answers (G2.3.2): a swap chain that takes each present's time (present timing) holds a picture
+// to the refresh it asks for, with no wait or hold of the renderer's. At every sample rate, the display holding 0 (the
+// PC), 1 and 2 refreshes (Android's compositor), each picture is shown at its slot, which is the refresh its t was drawn
+// for, and the lead comes down to the least the display allows.
+void test_display_model_asked() {
+    const std::vector<std::int64_t> steady{kFrequency / 500};
+    const std::int64_t walk = kFrequency / 2000;
+    const auto off_slots = [](const Run& r, std::size_t from) {
+        std::size_t off = 0;
+        for (std::size_t i = from; i < r.shown.size(); ++i) {
+            off += !r.shown[i].picture.flush && r.displayed[i] != r.shown[i].picture.slot ? 1u : 0u;
+        }
+        return off;
+    };
+    unsigned bad = 0;
+    std::size_t runs = 0;
+    for (const double refresh : sample_rates()) {
+        const unsigned generated = interpolated_frames_per_game_frame(refresh);
+        if (generated == 0u) continue;  // no slots: each picture a game frame, shown at once
+        for (const std::int64_t held : {std::int64_t{0}, std::int64_t{1}, std::int64_t{2}}) {
+            ++runs;
+            SimDisplay display = display_at(refresh, true);
+            SimSwapChain chain{display};
+            chain.held = held;
+            chain.asks = true;
+            display.model = &chain.model;
+            FrameSchedule schedule(display, kFrequency);
+            schedule.configure(generated, 0);
+            const Run r = run(schedule, 900, kFrequency, steady, walk, true, nullptr, kStep, &display, nullptr, &chain);
+            const std::size_t from = r.shown.size() * 2 / 3;
+            const std::size_t off = off_slots(r, from);
+            const Evenness e = evenness(r, from, display.period, &display);
+            const std::int64_t lead = schedule.display_lead();
+            const std::int64_t least = (held + 1) * display.period;
+            // A calm stretch steps the lead down while a picture is ready a refresh and 2 ms before its last moment: one
+            // refresh above the least does so where a refresh is 2.5 ms or more (the walk takes 0.5 ms).
+            const bool lead_ok = display.period >= kFrequency * 26 / 10'000 ? lead == least
+                                 : display.period <= kFrequency * 24 / 10'000
+                                     ? lead == least + display.period
+                                     : lead == least || lead == least + display.period;
+            const bool ok = off == 0u && e.early == 0u && e.frames_once && e.rising && e.on_grid && lead_ok &&
+                            chain.model.held() == held;
+            if (!ok && bad++ < 10u) {
+                std::printf("  asked, %.2f Hz held %lld: off their slots %zu of %zu, early %zu, frames once %d, rising "
+                            "%d, on grid %d, lead %lld ticks (least %lld), model held %lld\n",
+                            refresh, static_cast<long long>(held), off, r.shown.size() - from, e.early,
+                            e.frames_once ? 1 : 0, e.rising ? 1 : 0, e.on_grid ? 1 : 0, static_cast<long long>(lead),
+                            static_cast<long long>(least), static_cast<long long>(chain.model.held()));
+            }
+        }
+    }
+    char what[180];
+    std::snprintf(what, sizeof what,
+                  "the asked times at every sample rate, held 0, 1 and 2: %u of %zu runs wrong", bad, runs);
+    check(runs > 700u && bad == 0u, what);
+
+    // 240 Hz: the display starts holding a refresh more after 15 s; the late pictures show it and the lead follows.
+    {
+        SimDisplay display = display_at(240.0, true);
+        SimSwapChain chain{display};
+        chain.asks = true;
+        display.model = &chain.model;
+        FrameSchedule schedule(display, kFrequency);
+        schedule.configure(interpolated_frames_per_game_frame(240.0), 0);
+        (void)run(schedule, 900, kFrequency, steady, walk, true, nullptr, kStep, &display, nullptr, &chain);
+        const std::int64_t before = schedule.display_lead();
+        chain.held = 1;
+        const Run r = run(schedule, 900, kFrequency + static_cast<std::int64_t>(std::llround(900 * kStep)), steady, walk,
+                          true, nullptr, kStep, &display, nullptr, &chain);
+        const std::size_t off = off_slots(r, r.shown.size() * 2 / 3);
+        std::snprintf(what, sizeof what,
+                      "240 Hz asked, the display holding a refresh more: lead %lld then %lld ticks, %zu pictures off "
+                      "their slots",
+                      static_cast<long long>(before), static_cast<long long>(schedule.display_lead()), off);
+        check(before == display.period && schedule.display_lead() == 2 * display.period && off == 0u, what);
+    }
+}
+
 // The model alone: a present's held refreshes, the least over a window of a second, the answers' end a second after
 // the last report, a new swap chain starting it again.
 void test_display_model_answers() {
@@ -763,6 +852,31 @@ void test_display_model_answers() {
     check(!model.display_time(v + 2 * kFrequency + 3 * period, shown), "no answer a second after the last report");
     model.presented(1u, 0, v, v);
     check(!model.display_time(v, shown), "a new swap chain (its count from the start): no answer until a report");
+
+    // Presents that asked their time (G2.3.2). One shown a refresh later than asked: the display's own hold, 1.
+    const std::int64_t f = kFrequency;
+    DisplayModel asked(f);
+    asked.presented(1u, v + period, v, v + 10, true);
+    asked.displayed(1u, v + 2 * period, period);
+    check(asked.held() == 1, "an asked picture shown later than asked: the hold it shows is the display's");
+    // Asked three refreshes past the model's and shown there: held by its own time, no sample. The window that ends
+    // keeps the sample it had (1); the next ends with none and keeps the last.
+    asked.presented(2u, v + f + 4 * period, v + f + 10, v + f + 10, true);
+    asked.displayed(2u, v + f + 4 * period, period);
+    asked.presented(3u, v + 2 * f + 4 * period, v + 2 * f + 10, v + 2 * f + 10, true);
+    asked.displayed(3u, v + 2 * f + 4 * period, period);
+    check(asked.held() == 1 && asked.display_time(v + 2 * f + 4 * period + 1, shown),
+          "pictures held to a later asked refresh say nothing of the hold: a window with none keeps it, answers go on");
+    check(asked.take_shown(picture) && picture.slot == v + 2 * f + 4 * period &&
+              picture.shown == v + 2 * f + 4 * period,
+          "an asked picture shown at its slot is reported as shown there");
+    // Shown two refreshes later than asked: the display holds 2 now; at the window's end the least of the window.
+    asked.presented(4u, v + 2 * f + 5 * period, v + 2 * f + 4 * period + 10, v + 2 * f + 4 * period + 10, true);
+    asked.displayed(4u, v + 2 * f + 7 * period, period);
+    check(asked.held() == 1, "within the window the held stays");
+    asked.presented(5u, v + 3 * f + 5 * period, v + 3 * f + 4 * period + 10, v + 3 * f + 4 * period + 10, true);
+    asked.displayed(5u, v + 3 * f + 7 * period, period);
+    check(asked.held() == 2, "pictures shown later than asked show the display's hold, which the model takes");
 }
 
 // No step moments: the arrival clock smooths the lists' times to the game's period.
@@ -1017,6 +1131,7 @@ int main() {
     test_variable_clock();
     test_variable_refresh();
     test_display_model();
+    test_display_model_asked();
     test_display_model_answers();
     test_arrival_clock();
     test_unlimited();

@@ -48,13 +48,18 @@ struct ShownPicture {
 // refreshes the swap chain's queue and the compositor held it past the first refresh after its call. Their least over
 // a second of reports is the model's `held`: a picture presented at p is shown at the first refresh after p and held
 // refreshes more. Answers stop a second after the last report (a hidden window, frame generation's swap chain).
+// A swap chain that takes a present's time (Vulkan present timing, renderer_vk.cpp, G2.3.2) holds a picture to the
+// refresh it asked for: such a present tells the display's own hold only where that refresh was no later than the
+// model's for its call, or where it was shown later than asked; a window of reports with none keeps the last `held`.
 class DisplayModel {
 public:
     // `frequency`: the clock's ticks a second.
     explicit DisplayModel(std::int64_t frequency) noexcept : frequency_(frequency) {}
     // A present of the platform's increasing `id`: drawn for `slot` (0: a picture with no slot, not reported back),
-    // ready at `ready`, its call at `call`. An id not above the last starts the model again (a new swap chain).
-    void presented(std::uint64_t id, std::int64_t slot, std::int64_t ready, std::int64_t call) noexcept;
+    // ready at `ready`, its call at `call`; `asked`: the present asked the display for the refresh `slot`. An id not
+    // above the last starts the model again (a new swap chain).
+    void presented(std::uint64_t id, std::int64_t slot, std::int64_t ready, std::int64_t call,
+                   bool asked = false) noexcept;
     // The display showed present `id` at the refresh `shown`, the refreshes `period` apart.
     void displayed(std::uint64_t id, std::int64_t shown, std::int64_t period) noexcept;
     // When a picture presented at `present` will be shown; false with no report in the second before it.
@@ -79,6 +84,7 @@ private:
         std::int64_t slot = 0;
         std::int64_t ready = 0;
         std::int64_t call = 0;
+        bool asked = false;
     };
     std::array<Present, 16> presents_{};
     std::size_t next_ = 0;

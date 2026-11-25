@@ -403,19 +403,19 @@ public:
                                                                 : SwapQueue::Tearing;
     }
     // The moment the next present shows, on galaxy::qpc_now()'s clock (RenderCore's interpolation slot, a vblank); 0
-    // when it has none. With presentation times (VK_GOOGLE_display_timing) the picture is shown at that moment and a
-    // pipeline depth (PresentTiming).
+    // when it has none. On a swap chain that asks each picture's time (present timing, Swapchain::ask_time) it is the
+    // refresh the picture is drawn for and asks it; with VK_GOOGLE_display_timing alone the picture is shown at that
+    // moment and a pipeline depth (PresentTiming).
     void set_present_moment(std::int64_t qpc) noexcept { present_moment_ = qpc; }
     // True once when the presentation times lower the depth by one picture fewer: the next slot is skipped
     // (PresentSlots::take_skip).
     [[nodiscard]] bool take_present_skip() noexcept { return present_timing_.slots.take_skip(); }
-    // No display model yet (G2.3.1 gives Direct3D's; this platform's comes in its own landing): the schedule's slots
-    // are the moments the pictures start.
-    [[nodiscard]] bool display_time(std::int64_t, std::int64_t& shown) const noexcept {
-        shown = 0;
-        return false;
+    // The display model (frame_schedule.h DisplayModel), fed by present timing's results where a present asks its time
+    // (G2.3.2); no answer elsewhere: the schedule's slots are then the moments the pictures start.
+    [[nodiscard]] bool display_time(std::int64_t present, std::int64_t& shown) const noexcept {
+        return display_model_.display_time(present, shown);
     }
-    [[nodiscard]] bool take_shown(ShownPicture&) noexcept { return false; }
+    [[nodiscard]] bool take_shown(ShownPicture& picture) noexcept { return display_model_.take_shown(picture); }
     [[nodiscard]] UploadRing& vertex_ring() noexcept { return vertex_ring_; }
     [[nodiscard]] UploadRing& index_ring() noexcept { return index_ring_; }
     [[nodiscard]] UploadRing& constant_ring() noexcept { return constant_ring_; }
@@ -500,6 +500,10 @@ private:
         std::uint64_t calibration_local = 0;
         std::int64_t calibration_qpc = 0;
         VkPresentStageFlagsEXT timing_stage = 0;
+        // Timed, and the device and surface take a present at an absolute time (presentAtAbsoluteTime): each picture
+        // with a slot asks for its refresh, the display model learns from the results, and VK_GOOGLE_display_timing is
+        // not used (G2.3.2).
+        bool ask_time = false;
         std::int64_t refresh_qpc = 0;               // the swap chain's refresh duration (0: variable or unknown)
         std::uint64_t timing_properties_counter = 0;
         std::uint32_t timing_outstanding = 0;       // presents asked for timing whose results are not read yet
@@ -1084,6 +1088,9 @@ private:
     // a pipeline depth after its moment or frame start) half a vsync early, so the compositor shows it at that vsync.
     // The past presentation times set the depth and report how the presents went ([present-timing], every ten seconds).
     std::int64_t present_moment_ = 0;
+    // The display model of a swap chain that asks each picture's time (Swapchain::ask_time): its presents and present
+    // timing's results (report_present_times).
+    DisplayModel display_model_{galaxy::qpc_frequency()};
     struct PresentTiming {
         std::uint32_t next_id = 0;
         std::int64_t vsync_ns = 0;  // the display's vsync interval (Choreographer)
