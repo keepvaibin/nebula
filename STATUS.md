@@ -4,7 +4,7 @@ Written 2026-11-24 18:38. If this time is more than three hours old, the work ha
 
 Steps landed: 26 of 145 (18%).
 
-Now: in work: lander landing G2.3.2 to G2.3.7
+Now: G2.3.2 landed (26 of 145); G2.3.3 hard (Linux compile error), fixer waits for the usage line
 
 In work now: Nothing started.
 
