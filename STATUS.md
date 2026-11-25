@@ -59,7 +59,7 @@ In work now: Nothing started.
 | Id | State | Kind | Check | Renderer | Traced to | Seen |
 | --- | --- | --- | --- | --- | --- | --- |
 | R-006 | open | fail | soak | - | not traced | 1 |
-| R-007 | set-aside | worse | pace D3D 240 Hz | - | step G2.3.1 commit d7682d740 | 1 |
+| R-007 | started | worse | pace D3D 240 Hz | - | step G2.3.1 commit d7682d740 | 1 |
 | R-005 | landed | fail | soak | - | not traced | 1 |
 | R-001 | confirmed | fail | build/windows-asan | - | not traced | 1 |
 | R-002 | confirmed | fail | coverage | - | not traced | 1 |
