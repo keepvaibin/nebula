@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-24 22:34. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 22:35. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 27 of 145 (19%).
 
-Now: G2.3.4 hard again (Mac start check: frame 1 not let go of); told the planner
+Now: in work: lander landing G2.3.4 to G2.3.7 (Mac hang fixed by the planner)
 
 In work now:
 - G2.3.4 Landing 3d: Apple's display link (agent 1)
