@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-25 12:25. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-25 12:43. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 35 of 155 (23%).
 
@@ -331,12 +331,13 @@ Nothing waits for the owner.
 
 ## Tool faults
 
-6 tool faults recorded.
+7 tool faults recorded.
 
 The last 20:
 
 | When | Step | Test | What happened | What the agent could not do |
 | --- | --- | --- | --- | --- |
+| 2026-11-25 12:43 | R-008 | gate.py | could not be started: [Errno 22] Invalid argument | - |
 | 2026-11-24 23:26 | - | build/windows | game: 1 job(s) failed in the compiler cache, not in the compiler; built again (sccache: error: Only one usage of each socket address (protocol/network address/port) is normally permitted. (os error 10048)) | nothing: the build was run again by itself |
 | 2026-11-24 05:33 | nightly | tour/tablet | 101 of 102 pass; not: 013-CocoonExGalaxy-1 tool | - |
 | 2026-11-23 22:44 | - | measure/step/tablet | the measure could not run: the run failed, harness exit 1 | - |
