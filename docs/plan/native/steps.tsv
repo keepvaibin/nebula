@@ -27,7 +27,7 @@ order	step	package	title	package_needs	card_file	state	commit
 26	G2.3.2	G2	Landing 3b: Vulkan and Android present at the asked time	S0.2	05-NATIVE-LANE-G.md	landed	4e97053c9
 27	G2.3.3	G2	Landing 3c: Linux's display clock	S0.2	05-NATIVE-LANE-G.md	landed	b5b205311
 28	G2.3.4	G2	Landing 3d: Apple's display link	S0.2	05-NATIVE-LANE-G.md	landed	bfba5ffa0
-29	G2.3.5	G2	Landing 3e: variable refresh, told by the system or proved from the presents	S0.2	05-NATIVE-LANE-G.md	open	
+29	G2.3.5	G2	Landing 3e: variable refresh, told by the system or proved from the presents	S0.2	05-NATIVE-LANE-G.md	landed	07beb002c
 30	G2.3.6	G2	Landing 3f: P-281, the Android and Linux host's four faults	S0.2	05-NATIVE-LANE-G.md	open	
 31	G2.3.7	G2	Landing 3g: the Android fall-back and the surface vote read the step rate	S0.2	05-NATIVE-LANE-G.md	open	
 32	G2.3	G2	Landing 3h: the picture interval published; P-313's restart hitch	S0.2	05-NATIVE-LANE-G.md	open	
