@@ -761,9 +761,10 @@ void test_variable_refresh() {
 // G2.3.1 proof 1: the display model, Direct3D's (SimSwapChain: frame latency 1, the frame statistics read after each
 // present). At every sample rate of the head that has in-between pictures, with the compositor holding pictures 0 and
 // 1 refreshes, steady lateness: once the lead has settled, each picture is shown at the refresh it was drawn for (its
-// slot, whose t it shows), every slot a vblank, one picture a refresh, none early, no frame twice. The lead is the least
-// the display allows (held + 1 refreshes) at every rate: the queue paces the presents, and a picture ready in time
-// reaches its refresh with the queue empty before it (R-008; before it, a refresh more below 2.6 ms). A compositor that
+// slot, whose t it shows), every slot a vblank, one picture a refresh, none early, no frame twice. The lead comes down
+// to the least the display allows (held + 1 refreshes) where a picture's margin leaves a refresh and 2 ms to spare
+// (refreshes of 2.5 ms and longer, with a walk of 0.5 ms; nothing holds a picture before its Present since R-007), and
+// is never more than a refresh above it. A compositor that
 // starts holding a refresh more raises the lead from what was shown, and the pictures reach their slots again. A
 // variable refresh (the pacer's clock) and a display with no answers keep lead 0: today's slots.
 void test_display_model() {
@@ -796,7 +797,10 @@ void test_display_model() {
             const Evenness e = evenness(r, from, display.period, &display);
             const std::int64_t lead = schedule.display_lead();
             const std::int64_t least = (held + 1) * display.period;
-            const bool lead_ok = lead == least;
+            const bool lead_ok = display.period >= kFrequency * 26 / 10'000 ? lead == least
+                                 : display.period <= kFrequency * 24 / 10'000
+                                     ? lead == least + display.period
+                                     : lead == least || lead == least + display.period;
             const bool ok = off == 0u && e.early == 0u && e.frames_once && e.rising && e.on_grid && lead_ok;
             if (!ok && bad++ < 10u) {
                 std::printf("  %.2f Hz held %lld: off their slots %zu of %zu, early %zu, frames once %d, rising %d, "
