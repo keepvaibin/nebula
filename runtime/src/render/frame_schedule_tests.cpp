@@ -19,6 +19,7 @@
 #include "galaxy/vsync_grid.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -229,7 +230,10 @@ struct SimSwapChain {
     // Presents a picture drawn for `slot` (0: none), ready at `ready`: the moment the present call returns.
     std::int64_t present(std::int64_t slot, std::int64_t ready) {
         const std::int64_t period = display.period;
-        const std::int64_t call = asks ? ready : std::max(ready, last_shown - held * period);
+        // Frame latency 1: the object lets a present go once the one before it is taken for its refresh, a refresh before
+        // that refresh (and the compositor's hold before it), not when it shows: the present then waits a refresh in
+        // the queue behind it (as Direct3D 12's timeline shows at 240 Hz, R-008).
+        const std::int64_t call = asks ? ready : std::max(ready, last_shown - (held + 1) * period);
         const std::int64_t first = display.vblank0 + ((call - display.vblank0) / period + 1) * period;
         std::int64_t shown = std::max(first + held * period, last_shown + period);
         if (asks && slot != 0) {
@@ -646,6 +650,35 @@ void test_lead_at_multiples() {
             check(moved_wrong == 0u, what);
         }
     }
+    // R-008: a present rate under the display's, a whole multiple of 60 whose slots are every n-th vblank (120 a
+    // second on 240 Hz: every second vblank, the step four): locked too, each sequence lead 1/k, its frame shown at
+    // t = 1, the slots n vblanks apart (before: lead 0, the frame walked unseen, the delay measured on the few frames
+    // that came out on a slot).
+    for (const std::array<double, 2> pair : {std::array<double, 2>{240.0, 120.0}, std::array<double, 2>{360.0, 120.0},
+                                             std::array<double, 2>{480.0, 240.0}, std::array<double, 2>{480.0, 120.0}}) {
+        for (const std::vector<std::int64_t>* late : {&steady, &varying}) {
+            SimDisplay display = display_at(pair[0], true);
+            display.rate = pair[1];
+            FrameSchedule schedule(display, kFrequency);
+            const unsigned generated = interpolated_frames_per_game_frame(pair[1]);
+            schedule.configure(generated, 0);
+            const std::size_t k = generated + 1u;
+            const std::int64_t n = std::llround(pair[0] / pair[1]);
+            const std::int64_t budget = *std::max_element(late->begin(), late->end()) + kFrequency * 15 / 10'000;
+            const std::int64_t first = display.vblank0 + 600 * display.period - budget;
+            const Run r = run(schedule, 600, first, *late, kFrequency / 2000, true, nullptr,
+                              static_cast<double>(static_cast<std::int64_t>(k) * n * display.period));
+            const ListShows l = list_shows(r, 300, 590, k, 1.0 / static_cast<double>(k), n * display.period, &display);
+            char what[220];
+            std::snprintf(what, sizeof what,
+                          "%.0f Hz at %.0f a second, %s lateness: real pictures %zu of %zu lists, walks other than %zu: "
+                          "%zu, lead not 1/%zu: %zu, slots not %lld vblanks apart: %zu, on vblanks %d",
+                          pair[0], pair[1], late == &steady ? "steady" : "1-6 ms", l.real, l.lists, k, l.walks_wrong, k,
+                          l.lead_wrong, static_cast<long long>(n), l.off_spacing, l.on_grid ? 1 : 0);
+            check(l.real == l.lists && l.walks_wrong == 0u && l.lead_wrong == 0u && l.off_spacing == 0u && l.on_grid,
+                  what);
+        }
+    }
     // The step not locked (59.94 Hz's multiple, 119.88 Hz, is 0.1 % off: in-between pictures keep the step at exactly
     // 60): lead 0.
     SimDisplay display = display_at(119.88, true);
@@ -728,10 +761,9 @@ void test_variable_refresh() {
 // G2.3.1 proof 1: the display model, Direct3D's (SimSwapChain: frame latency 1, the frame statistics read after each
 // present). At every sample rate of the head that has in-between pictures, with the compositor holding pictures 0 and
 // 1 refreshes, steady lateness: once the lead has settled, each picture is shown at the refresh it was drawn for (its
-// slot, whose t it shows), every slot a vblank, one picture a refresh, none early, no frame twice. The lead comes down
-// to the least the display allows (held + 1 refreshes) where a picture's margin leaves a refresh and 2 ms to spare
-// (refreshes of 2.5 ms and longer, with a walk of 0.5 ms; nothing holds a picture before its Present since R-007), and
-// is never more than a refresh above it. A compositor that
+// slot, whose t it shows), every slot a vblank, one picture a refresh, none early, no frame twice. The lead is the least
+// the display allows (held + 1 refreshes) at every rate: the queue paces the presents, and a picture ready in time
+// reaches its refresh with the queue empty before it (R-008; before it, a refresh more below 2.6 ms). A compositor that
 // starts holding a refresh more raises the lead from what was shown, and the pictures reach their slots again. A
 // variable refresh (the pacer's clock) and a display with no answers keep lead 0: today's slots.
 void test_display_model() {
@@ -764,10 +796,7 @@ void test_display_model() {
             const Evenness e = evenness(r, from, display.period, &display);
             const std::int64_t lead = schedule.display_lead();
             const std::int64_t least = (held + 1) * display.period;
-            const bool lead_ok = display.period >= kFrequency * 26 / 10'000 ? lead == least
-                                 : display.period <= kFrequency * 24 / 10'000
-                                     ? lead == least + display.period
-                                     : lead == least || lead == least + display.period;
+            const bool lead_ok = lead == least;
             const bool ok = off == 0u && e.early == 0u && e.frames_once && e.rising && e.on_grid && lead_ok;
             if (!ok && bad++ < 10u) {
                 std::printf("  %.2f Hz held %lld: off their slots %zu of %zu, early %zu, frames once %d, rising %d, "
@@ -999,11 +1028,12 @@ void test_display_queue() {
             const bool ok = refreshes > 0 && gaps <= 3 * static_cast<std::int64_t>(hitches) && off == 0u &&
                             r.lead_most <= lead_most;
             std::printf("  flip queue %.0f Hz held %lld: %lld refreshes, %zu pictures, %lld without a new picture, "
-                        "%zu hitches, %zu off their refresh, lead at most %.2f refreshes (bound %lld)\n",
+                        "%zu hitches, %zu off their refresh, lead at most %.2f refreshes (bound %lld), at the end %.2f\n",
                         refresh, static_cast<long long>(held), static_cast<long long>(refreshes),
                         r.shown.size() - from, static_cast<long long>(gaps), hitches, off,
                         static_cast<double>(r.lead_most) / static_cast<double>(display.period),
-                        static_cast<long long>(held + 2));
+                        static_cast<long long>(held + 2),
+                        static_cast<double>(schedule.display_lead()) / static_cast<double>(display.period));
             bad += ok ? 0u : 1u;
         }
     }
