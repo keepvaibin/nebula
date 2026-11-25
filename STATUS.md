@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-25 03:53. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-25 03:56. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 32 of 145 (22%).
 
-Now: G2.3 landed (32 of 145); G2.4 hard (tablet render_ms worse); told the planner
+Now: in work: lander landing G2.4 and G2.5
 
 In work now:
 - G2.4 Landing 4: no closing spin where a display time is asked (agent 1)
