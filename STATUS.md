@@ -4,7 +4,7 @@ Written 2026-11-25 08:52. If this time is more than three hours old, the work ha
 
 Steps landed: 35 of 145 (24%).
 
-Now: G6.2 landed (35 of 145); G6.7 hard (ASan overflow in its new test), fixer waits for the usage line
+Now: in work: fixer for urgent repair R-007 (D3D hold before Present, 17 steps/s at 240 Hz)
 
 In work now: Nothing started.
 
