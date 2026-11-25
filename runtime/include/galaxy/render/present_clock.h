@@ -53,6 +53,11 @@ inline std::atomic<bool> g_in_between_on{false};
 // The display varies its refresh with the presents (render/variable_refresh.h: the system's answer, else the presents'
 // proof): any frame rate shows evenly, and the game's step is never locked to the display (galaxy/step_lock.h).
 inline std::atomic<bool> g_variable_refresh{false};
+// The picture interval (qpc ticks): FrameSchedule::slot_period() as the display model leaves it, written by the render
+// thread's schedule each time it sets it: the vblank grid's slot length (every n-th vblank), or one over the pacer's
+// rate where its own clock runs (a swap chain that tears, a variable refresh at the cap); 0 with no slot clock (no
+// in-between pictures, an unlimited rate). Any thread reads it (G8.2, through one host call).
+inline std::atomic<std::int64_t> g_slot_period_qpc{0};
 // The window's way to the display changed (full screen entered or left, focus lost or gained, another display, the
 // display's mode): the renderer asks again whether the display is variable (I-007, point 5). Set by the hosts.
 inline std::atomic<bool> g_display_recheck{false};

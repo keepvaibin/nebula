@@ -247,7 +247,7 @@ public:
     [[nodiscard]] std::int64_t slot_due() const noexcept { return slot_due_ - display_lead_; }
     // The next slot: the moment its picture shows (with a display model, the refresh it is drawn for).
     [[nodiscard]] std::int64_t slot_shown() const noexcept { return slot_due_; }
-    // A slot's length; 0 with no slot clock.
+    // A slot's length; 0 with no slot clock. Published as it is set (present_clock.h g_slot_period_qpc).
     [[nodiscard]] std::int64_t slot_period() const noexcept { return slot_period_; }
     // An unlimited present rate: no slot clock, each picture drawn as soon as the one before is.
     [[nodiscard]] bool unbounded() const noexcept { return unbounded_; }
@@ -278,6 +278,8 @@ private:
     unsigned gpu_governor(double& rate, bool stopping, std::int64_t now);
     void restart_governors(std::int64_t now);
     void note_cadence(std::int64_t now, std::uint64_t waited_total);
+    // The slot clock's length, kept and published to the host (g_slot_period_qpc).
+    void set_slot_period(std::int64_t period) noexcept;
 
     // t at `slot` of a sequence whose reference is `reference`.
     [[nodiscard]] double t_at(std::int64_t slot, std::int64_t reference, double lead) const noexcept;

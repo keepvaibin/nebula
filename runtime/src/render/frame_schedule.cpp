@@ -2,6 +2,7 @@
 #include "galaxy/render/frame_schedule.h"
 
 #include "galaxy/game_step.h"
+#include "galaxy/render/present_clock.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/step_lock.h"
 
@@ -151,9 +152,14 @@ void FrameSchedule::configure(unsigned generated, std::int64_t now) {
     restart_governors(now);
     if (generated == 0u) {
         // No slot clock left (RenderCore's overlay presents keep the game's own rate).
-        slot_period_ = 0;
+        set_slot_period(0);
         unbounded_ = false;
     }
+}
+
+void FrameSchedule::set_slot_period(std::int64_t period) noexcept {
+    slot_period_ = period;
+    g_slot_period_qpc.store(period, std::memory_order_relaxed);
 }
 
 void FrameSchedule::start(std::int64_t now, std::int64_t arrived, std::int64_t step, bool stopping) {
@@ -290,9 +296,9 @@ void FrameSchedule::begin_waiting(std::int64_t now) {
     // An unlimited rate (render_config.h kUnlimitedFrameRate) has no slot clock: each picture is drawn as soon as the
     // one before is and shows the moment it is drawn for (next).
     unbounded_ = !on_vblanks && !std::isfinite(rate);
-    slot_period_ = on_vblanks ? slot_vblanks * vblank_period
-        : unbounded_          ? 0
-                              : std::max<std::int64_t>(1, static_cast<std::int64_t>(static_cast<double>(frequency) / rate));
+    set_slot_period(on_vblanks ? slot_vblanks * vblank_period
+                    : unbounded_ ? 0
+                                 : std::max<std::int64_t>(1, static_cast<std::int64_t>(static_cast<double>(frequency) / rate)));
     // A lead needs pictures between the frames: none at 60 (every picture a real one) or with none generated.
     const std::int64_t slots = unbounded_ || sequence_.generated == 0u ? 0 : slots_per_step(rate);
     const bool locked_to_vblanks =

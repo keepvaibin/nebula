@@ -11,6 +11,7 @@
 #include "galaxy/frame_phase.h"
 #include "galaxy/game_step.h"
 #include "galaxy/precise_wait.h"
+#include "galaxy/render/present_clock.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/variable_refresh.h"
 #include "galaxy/step_lock.h"
@@ -1357,6 +1358,51 @@ void test_variable_step_unlocked() {
     }
 }
 
+// G2.3 proof 1: the picture interval published to the host (present_clock.h g_slot_period_qpc) is slot_period() as the
+// display model leaves it: on a vblank grid the slot's vblanks, under variable refresh one over the pacer's rate at the
+// cap, and 0 with no slot clock (no in-between pictures, an unlimited rate). Each case starts from a value no schedule
+// writes, so a schedule that publishes nothing fails.
+void test_published_interval() {
+    const std::vector<std::int64_t> steady{kFrequency / 500};
+    constexpr std::int64_t kUnwritten = -1;
+    {
+        SimDisplay display = display_at(240.0, true);
+        display.rate = 120.0;
+        g_slot_period_qpc.store(kUnwritten);
+        FrameSchedule schedule(display, kFrequency);
+        schedule.configure(interpolated_frames_per_game_frame(120.0), 0);
+        (void)run(schedule, 120, kFrequency, steady);
+        check(schedule.slot_period() == 2 * display.period, "120 Hz on a 240 Hz grid: a slot is two vblanks");
+        check(g_slot_period_qpc.load() == schedule.slot_period(), "the vblank grid's slot length is published");
+        schedule.configure(0u, 3 * kFrequency);
+        check(schedule.slot_period() == 0 && g_slot_period_qpc.load() == 0, "no in-between pictures: 0 is published");
+    }
+    {
+        SimDisplay display = display_at(144.0, true);
+        display.variable = true;
+        display.cap = 140.0;
+        display.rate = 240.0;
+        g_slot_period_qpc.store(kUnwritten);
+        FrameSchedule schedule(display, kFrequency);
+        schedule.configure(interpolated_frames_per_game_frame(140.0), 0);
+        (void)run(schedule, 120, kFrequency, steady);
+        const auto at_cap = static_cast<std::int64_t>(static_cast<double>(kFrequency) / 140.0);
+        check(schedule.slot_period() == at_cap, "variable refresh: a slot is one over the cap");
+        check(g_slot_period_qpc.load() == at_cap, "variable refresh: the pacer's slot length is published");
+    }
+    {
+        SimDisplay display;
+        display.timed = false;
+        display.vsync_on = false;
+        display.rate = std::numeric_limits<double>::infinity();
+        g_slot_period_qpc.store(kUnwritten);
+        FrameSchedule schedule(display, kFrequency);
+        schedule.configure(kUnboundedGeneratedFrames, 0);
+        arrive(schedule, kFrequency, kFrequency, kFrequency - kFrequency / 500, true);
+        check(schedule.unbounded() && g_slot_period_qpc.load() == 0, "an unlimited rate: 0 is published");
+    }
+}
+
 }  // namespace
 
 int main() {
@@ -1386,6 +1432,7 @@ int main() {
     test_below_range();
     test_refresh_cap();
     test_variable_step_unlocked();
+    test_published_interval();
     if (failures != 0) {
         std::printf("%d failed\n", failures);
         return 1;
