@@ -9,6 +9,7 @@
 #include "galaxy/playstation_controller.h"
 #include "galaxy/steam_controller.h"
 #include "galaxy/controller_hid.h"
+#include "galaxy/game_step.h"
 #include "galaxy/host_wait.h"
 #include "galaxy/input/host_input.h"
 #include "galaxy/input/key_positions.h"
@@ -391,11 +392,11 @@ std::atomic<int> g_android_sdk{0};
 std::atomic<bool> g_display_arr{false};
 
 // The surface's frame-rate vote for the frame-rate setting (max_fps; 0: the display's own; unlimited: the panel's
-// fastest). The game's own 30 or 60
-// frames are a fixed source, so a variable-rate panel shows each for the same time; interpolated rates are the app's
-// own rate, switched to at once (the player chose it) rather than at the next seamless moment.
+// fastest). The game's own frames (galaxy::own_frame_rate: up to the step rate) are a fixed source, so a variable-rate
+// panel shows each for the same time; interpolated rates are the app's own rate, switched to at once (the player chose
+// it) rather than at the next seamless moment.
 void vote_frame_rate(ANativeWindow* native, float max_fps) {
-    if (max_fps > 0.0f && max_fps <= 61.0f) {
+    if (galaxy::own_frame_rate(max_fps)) {
         ANativeWindow_setFrameRate(native, max_fps, ANATIVEWINDOW_FRAME_RATE_COMPATIBILITY_FIXED_SOURCE);
         return;
     }
@@ -2004,6 +2005,11 @@ extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeSurf
 // The panel's fastest refresh rate at its resolution (on start and whenever the display changes).
 extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativePanelRate(JNIEnv*, jclass, jfloat hz) {
     galaxy::sdl::g_panel_fastest_hz.store(hz > 1.0f ? hz : 0.0f, std::memory_order_relaxed);
+}
+
+// The game's step rate (galaxy::kGameStepRate), the one number the activity's fall-back setting and display mode read.
+extern "C" JNIEXPORT jfloat JNICALL Java_dev_nebula_galaxy_GameActivity_nativeStepRate(JNIEnv*, jclass) {
+    return static_cast<jfloat>(galaxy::kGameStepRate);
 }
 
 // The API level and the display's adaptive refresh (Display.hasArrSupport, API 36; false below it), with the panel's
