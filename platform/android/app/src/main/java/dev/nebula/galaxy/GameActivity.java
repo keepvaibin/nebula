@@ -86,6 +86,7 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
     static native void nativeSurfaceReturned();
     static native void nativePhoneMotion(float ax, float ay, float az, float gx, float gy, float gz, long timeNs);
     static native void nativePanelRate(float hz);
+    static native void nativeDisplayVaries(int sdk, boolean hasArrSupport);
     static native void nativeTouchSlop(float px);
     static native float nativeWantedFrameRate();
     static native void nativePadSensorDevice(int id, String name, String descriptor, int vendor, int product, boolean gyro, boolean accel);
@@ -213,11 +214,14 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
                 maxFps + " (was " + display.getMode().getRefreshRate() + " Hz)");
     }
 
-    // The panel's fastest rate, which the game's settings offer interpolation by.
+    // The panel's fastest rate, which the game's settings offer interpolation by, and whether the display varies its
+    // refresh by itself (Display.hasArrSupport, API 36; not asked below it): the game's variable-refresh answer.
     private void reportPanelRate() {
         final Display display = getDisplay();
         if (display != null) {
             nativePanelRate(DisplayRate.fastestMode(display).getRefreshRate());
+            final int sdk = android.os.Build.VERSION.SDK_INT;
+            nativeDisplayVaries(sdk, sdk >= 36 && display.hasArrSupport());
         }
     }
 
@@ -349,6 +353,8 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
+        // Focus gained or lost: the display's answer is read again (G2.3.5 point 5 (b)).
+        reportPanelRate();
         if (hasFocus) {
             // The whole display for the picture; the bars come back with a swipe from the edge.
             final WindowInsetsController insets = getWindow().getInsetsController();

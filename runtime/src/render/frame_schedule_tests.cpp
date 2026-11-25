@@ -8,8 +8,13 @@
 // history pairing are tested on their own.
 #include "galaxy/render/frame_schedule.h"
 
+#include "galaxy/frame_phase.h"
 #include "galaxy/game_step.h"
+#include "galaxy/precise_wait.h"
 #include "galaxy/render/render_config.h"
+#include "galaxy/render/variable_refresh.h"
+#include "galaxy/step_lock.h"
+#include "galaxy/vsync_grid.h"
 
 #include <algorithm>
 #include <cmath>
@@ -1117,6 +1122,241 @@ void test_rate_steps() {
     check(schedule.step_up(1u) == 3u, "up from one: three");
 }
 
+// G2.3.5: variable refresh, told by the system or proved from the presents (render/variable_refresh.h).
+
+// Presents held `held` ticks apart from `from` on a display of `mode_hz`, each shown at the first refresh after its call
+// (fixed: the vblanks every mode period from `vblank0`) or 1 ms after its call (variable: the refresh follows the present),
+// each moment off by up to `jitter` ticks as a stamp is; the question hears of each (its id, call, held period, shown).
+struct ProofPresents {
+    double mode_hz = 144.0;
+    bool variable = false;
+    std::int64_t held = 0;
+    std::int64_t jitter = kFrequency / 20000;  // 50 us
+    std::int64_t vblank0 = 777;
+    std::uint64_t id = 0;
+    std::int64_t now = kFrequency;
+    std::mt19937 random{20261124u};
+
+    [[nodiscard]] std::int64_t mode() const { return std::llround(static_cast<double>(kFrequency) / mode_hz); }
+    void present(RefreshQuestion& question, int count, std::int64_t spacing = 0) {
+        std::uniform_int_distribution<std::int64_t> noise(-jitter, jitter);
+        for (int i = 0; i < count; ++i) {
+            now += spacing != 0 ? spacing : held;
+            const std::int64_t period = mode();
+            const std::int64_t shown =
+                variable ? now + kFrequency / 1000 : vblank0 + ((now - vblank0) / period + 1) * period;
+            question.presented(++id, now, held);
+            question.shown(id, shown + noise(random));
+        }
+    }
+};
+
+// Proof 1, point 5 (Windows' frame statistics) and point 7 (Vulkan's present-completion stamps): the decision as a unit at
+// the head's sample rates. A fixed display (each picture on whole refreshes: a composed window is one too) answers fixed,
+// a variable one variable, after 120 counted presents at the probe rate. A machine with no tearing support answers fixed
+// whatever the presents show. Each of the five events asks again: (a) to (d) through ask (the hosts' g_display_recheck,
+// the renderers' monitor_changed), (e) when 120 presents counted no longer fit the answer held.
+void test_refresh_proof() {
+    for (const double mode_hz : {60.0, 75.0, 82.37, 100.0, 120.0, 144.0, 165.0, 240.0, 360.0}) {
+        for (const bool variable : {false, true}) {
+            RefreshQuestion question;
+            ProofPresents presents;
+            presents.mode_hz = mode_hz;
+            presents.variable = variable;
+            question.ask(presents.mode());
+            presents.held = presents.mode() + presents.mode() / 4;
+            char what[160];
+            std::snprintf(what, sizeof what, "%.2f Hz %s: probing before an answer", mode_hz, variable ? "variable" : "fixed");
+            check(question.probing(true, true) && !question.probing(true, false) && !question.probing(false, true), what);
+            presents.present(question, 150);
+            const RefreshKind want = variable ? RefreshKind::kVariable : RefreshKind::kFixed;
+            std::snprintf(what, sizeof what, "%.2f Hz %s: the presents prove it", mode_hz, variable ? "variable" : "fixed");
+            check(question.proved() == want && !question.probing(true, true), what);
+            std::snprintf(what, sizeof what, "%.2f Hz %s: no tearing support answers fixed", mode_hz,
+                          variable ? "variable" : "fixed");
+            check(question.varies(true) == variable && !question.varies(false), what);
+            // (e): the other kind's presents, counted at the probe rate, ask again; then they prove the other kind.
+            presents.variable = !variable;
+            const RefreshKind other = variable ? RefreshKind::kFixed : RefreshKind::kVariable;
+            bool asked_again = false;
+            for (int i = 0; i < 480 && question.proved() != other; ++i) {
+                presents.present(question, 1);
+                asked_again |= question.proved() == RefreshKind::kUnknown && question.probing(true, true);
+            }
+            std::snprintf(what, sizeof what, "%.2f Hz %s: statistics that no longer fit ask again, then prove the other",
+                          mode_hz, variable ? "variable" : "fixed");
+            check(asked_again && question.proved() == other, what);
+            // (a) to (d): ask.
+            question.ask(presents.mode());
+            std::snprintf(what, sizeof what, "%.2f Hz: an event asks again", mode_hz);
+            check(question.proved() == RefreshKind::kUnknown && question.probing(true, true), what);
+        }
+    }
+    // A composed window on a variable display: the compositor shows each picture at its own fixed refresh.
+    {
+        RefreshQuestion question;
+        ProofPresents presents;
+        presents.mode_hz = 165.0;
+        question.ask(presents.mode());
+        presents.held = presents.mode() + presents.mode() / 4;
+        presents.present(question, 150);
+        check(question.proved() == RefreshKind::kFixed && !question.varies(true), "a composed window answers fixed");
+    }
+    // Shown moments with the stamp's jitter at 240 Hz and twice that: a quarter of a period of noise answers nothing
+    // wrong (no present fits one kind and not the other, so none is counted).
+    {
+        RefreshQuestion question;
+        ProofPresents presents;
+        presents.mode_hz = 240.0;
+        presents.jitter = presents.mode() / 4;
+        question.ask(presents.mode());
+        presents.held = presents.mode() + presents.mode() / 4;
+        presents.present(question, 600);
+        check(question.proved() != RefreshKind::kVariable, "a fixed display under heavy stamp noise never answers variable");
+    }
+    // A window whose presents are never reported (hidden, a remote session): the probe stops after its presents, no
+    // answer (fixed), until asked again.
+    {
+        RefreshQuestion question;
+        const std::int64_t mode = std::llround(kFrequency / 144.0);
+        question.ask(mode);
+        for (int i = 1; i < RefreshQuestion::kProbePresents; ++i) question.presented(static_cast<std::uint64_t>(i), i * mode, mode);
+        const bool still = question.probing(true, true);
+        question.presented(static_cast<std::uint64_t>(RefreshQuestion::kProbePresents), RefreshQuestion::kProbePresents * mode, mode);
+        const bool stopped = !question.probing(true, true) && !question.varies(true);
+        question.ask(mode);
+        check(still && stopped && question.probing(true, true), "an unreported window stops probing after its presents");
+    }
+    // Point 7: what Vulkan's present timing says outright, and the system's word over the presents'.
+    check(vulkan_refresh_kind(std::numeric_limits<std::uint64_t>::max(), 4166667u) == RefreshKind::kVariable,
+          "refreshInterval UINT64_MAX: variable");
+    check(vulkan_refresh_kind(4166667u, 4166667u) == RefreshKind::kFixed, "refreshInterval = refreshDuration: fixed");
+    check(vulkan_refresh_kind(0u, 4166667u) == RefreshKind::kUnknown && vulkan_refresh_kind(8333333u, 4166667u) == RefreshKind::kUnknown,
+          "refreshInterval 0 (or another value): the presents decide");
+    check(refresh_varies(true, RefreshKind::kFixed, RefreshKind::kVariable) == false &&
+              refresh_varies(true, RefreshKind::kVariable, RefreshKind::kFixed) &&
+              refresh_varies(true, RefreshKind::kUnknown, RefreshKind::kVariable) &&
+              !refresh_varies(true, RefreshKind::kUnknown, RefreshKind::kUnknown),
+          "the system's answer over the presents', not known taken as fixed");
+    {
+        RefreshQuestion question;
+        question.ask(std::llround(kFrequency / 144.0));
+        question.told(RefreshKind::kVariable, 1.0 / 144.0);
+        check(!question.probing(true, true) && question.varies(true), "a system that says it: no probe");
+    }
+    // Point 6: Android's hasArrSupport as it answers, never asked below API level 36.
+    check(android_refresh_kind(36, true) == RefreshKind::kVariable && android_refresh_kind(37, true) == RefreshKind::kVariable,
+          "Android 16 and up: hasArrSupport true is variable");
+    check(android_refresh_kind(36, false) == RefreshKind::kFixed, "Android 16: hasArrSupport false is fixed");
+    check(android_refresh_kind(35, true) == RefreshKind::kFixed && android_refresh_kind(31, true) == RefreshKind::kFixed,
+          "below API 36 the answer is fixed, whatever was fed");
+    // A Mac: a range of refresh intervals is variable.
+    check(mac_refresh_kind(1.0 / 120.0, 1.0 / 24.0) == RefreshKind::kVariable &&
+              mac_refresh_kind(1.0 / 60.0, 1.0 / 60.0) == RefreshKind::kFixed &&
+              mac_refresh_kind(0.0, 0.0) == RefreshKind::kUnknown,
+          "macOS: minimum and maximum refresh intervals");
+}
+
+// Proof 1, point 1: below the range. Presents slower than the display's longest interval (a machine too slow, a limit under
+// the range) never count, so the answer held is not judged again from them; fed to the schedule with the answer variable
+// (the pacer's clock at the cap), after 10 such pictures and after 1000 no slot is planned twice, no list's frame is shown
+// twice and the lead stays 0, as inside the range.
+void test_below_range() {
+    for (const bool variable : {false, true}) {
+        RefreshQuestion question;
+        ProofPresents presents;
+        presents.variable = variable;
+        question.ask(presents.mode());
+        presents.held = presents.mode() + presents.mode() / 4;
+        presents.present(question, 150);
+        const RefreshKind answer = question.proved();
+        presents.variable = !variable;  // what slow presents show must not matter
+        presents.held = 0;              // the pacer held none
+        presents.present(question, 1000, kFrequency / 30);
+        presents.held = kFrequency / 30;  // or held to a rate under half the mode's
+        presents.present(question, 1000);
+        check(question.proved() == answer, "presents below the range are never counted");
+    }
+    const std::vector<std::int64_t> steady{kFrequency / 500};
+    for (const int slow : {10, 1000}) {
+        SimDisplay display = display_at(144.0, false);
+        display.vsync_on = true;
+        display.variable = true;
+        display.cap = 138.0;
+        FrameSchedule schedule(display, kFrequency);
+        schedule.configure(interpolated_frames_per_game_frame(138.0), 0);
+        const Run inside = run(schedule, 300, kFrequency, steady);
+        // Each picture 30 ms of the render thread: under 34 a second, below any range's lowest rate read (48 Hz).
+        const Run below = run(schedule, slow, inside.steps.back() + static_cast<std::int64_t>(kStep), steady,
+                              kFrequency * 3 / 100);
+        const Evenness e = evenness(below, 0, 1, nullptr);
+        bool lead = true;
+        for (const Shown& s : below.shown) lead &= s.lead == 0.0;
+        for (const Shown& s : inside.shown) lead &= s.lead == 0.0;
+        char what[160];
+        std::snprintf(what, sizeof what, "below the range, %d slow lists: slots rising %d, frames once %d, lead 0 %d", slow,
+                      e.rising ? 1 : 0, e.frames_once ? 1 : 0, lead ? 1 : 0);
+        check(e.rising && e.frames_once && lead && !below.shown.empty(), what);
+    }
+}
+
+// Proof 1, point 2: the cap is one over (the shortest interval + the margin), the margin the 99.9th percentile of the
+// precise wait's lateness, 1/3600 s until 1000 waits are in.
+void test_refresh_cap() {
+    check(std::abs(variable_refresh_cap_hz(1.0 / 240.0, kStartMarginSeconds) - 225.0) < 1e-9,
+          "240 Hz with the start margin: 225 Hz");
+    check(std::abs(variable_refresh_cap_hz(1.0 / 144.0, 0.0) - 144.0) < 1e-9 && variable_refresh_cap_hz(0.0, 0.001) == 0.0,
+          "no margin: the shortest interval's rate; no interval: no cap");
+    galaxy::WaitLateness lateness;
+    for (int i = 0; i < 999; ++i) lateness.add(20);
+    check(lateness.percentile_999_s(kStartMarginSeconds) == kStartMarginSeconds, "under 1000 waits: the start margin");
+    lateness.add(3000);
+    check(std::abs(lateness.percentile_999_s(kStartMarginSeconds) - 30e-6) < 1e-12,
+          "999 waits 20 us late and one 3 ms: the 99.9th percentile is 30 us (its step's top)");
+    for (int i = 0; i < 10; ++i) lateness.add(3000);
+    check(lateness.percentile_999_s(kStartMarginSeconds) > 3e-3, "ten waits in 1010 3 ms late: the margin covers them");
+    lateness.reset();
+    check(lateness.count() == 0u && lateness.percentile_999_s(kStartMarginSeconds) == kStartMarginSeconds,
+          "a display change measures again");
+    const double cap = variable_refresh_cap_hz(1.0 / 144.0, 30e-6);
+    check(cap < 144.0 && 1.0 / cap - 1.0 / 144.0 > 29e-6, "the cap's period is the shortest interval and the margin");
+}
+
+// Proof 1, point 4: under variable refresh the step is never locked to the display, at 60, 120, 180 and 240 Hz, in each
+// of step_lock_refreshes' three callers (Windows' frame phase, Android's and Linux's grid, Apple's display link on the
+// same grid); under a fixed display it locks.
+void test_variable_step_unlocked() {
+    constexpr std::int64_t kGameNs = 16666667;
+    for (const int hz : {60, 120, 180, 240}) {
+        const std::int64_t refresh = std::llround(1e9 / hz);
+        char what[160];
+        for (const bool in_between : {false, true}) {
+            std::snprintf(what, sizeof what, "%d Hz: step_lock_refreshes 0 under variable, %d under fixed", hz, hz / 60);
+            check(galaxy::step_lock_refreshes(kGameNs, refresh, in_between, true) == 0 &&
+                      galaxy::step_lock_refreshes(kGameNs, refresh, in_between, false) == hz / 60,
+                  what);
+            galaxy::VsyncGrid grid;
+            for (int i = 0; i < 240; ++i) grid.note(1000000000 + i * refresh, 0);
+            std::int64_t slot = 0, frame_period = 0;
+            const std::int64_t now = grid.vsync_ns + 1000;
+            std::snprintf(what, sizeof what, "%d Hz: the grid's next_slot locks under fixed only", hz);
+            check(grid.next_slot(kGameNs, 0, now, in_between, false, slot, frame_period) &&
+                      !grid.next_slot(kGameNs, 0, now, in_between, true, slot, frame_period),
+                  what);
+            galaxy::host::FramePhase fixed_phase;
+            galaxy::host::FramePhase variable_phase;
+            const std::int64_t last = 5'000'000'000;
+            // A refresh 3 ms off the cadence: a locked step moves its start toward it.
+            const galaxy::host::DisplayRefresh fixed{last + 3'000'000, refresh, false};
+            const galaxy::host::DisplayRefresh variable{last + 3'000'000, refresh, true};
+            std::snprintf(what, sizeof what, "%d Hz: the frame phase follows the host's clock under variable", hz);
+            check(variable_phase.next_start(last, 2'000'000, kGameNs, variable, in_between) == last + kGameNs &&
+                      fixed_phase.next_start(last, 2'000'000, kGameNs, fixed, in_between) != last + kGameNs,
+                  what);
+        }
+    }
+}
+
 }  // namespace
 
 int main() {
@@ -1142,6 +1382,10 @@ int main() {
     test_walk_pairing();
     test_configure();
     test_rate_steps();
+    test_refresh_proof();
+    test_below_range();
+    test_refresh_cap();
+    test_variable_step_unlocked();
     if (failures != 0) {
         std::printf("%d failed\n", failures);
         return 1;

@@ -678,7 +678,7 @@ private:
     // one refresh.
     [[nodiscard]] UINT present_sync_interval(unsigned configured, float max_fps);
     // The display's rate for pacing; `read_mode`: the mode's rate read again (the display changed).
-    void refresh_display_rate(bool read_mode);
+    void refresh_display_rate(bool read_mode, bool ask);
     void wait_for_gpu();            // shutdown, resize and finish_pictures only
     // Applies a pending window resize (the extent mailbox in renderer_d3d12.cpp).
     // Called only from begin_frame(), between command-list recordings.
@@ -1279,9 +1279,12 @@ private:
     // telemetry window, how many refreshes each displayed frame stayed on
     // screen (DXGI frame statistics; index 4 counts 4 or more).
     double display_refresh_hz_ = 0.0;
-    // The display varies its refresh with the presents (next_variable_refresh): display_refresh_hz_ is then the cap that keeps
-    // it in its range (variable_refresh_cap), the sync interval is the configured one, and presents are spaced at the cap.
+    // The display varies its refresh with the presents (refresh_answer_, proved from the presents' frame statistics):
+    // display_refresh_hz_ is then the cap that keeps it in its range, the sync interval is the configured one, and presents
+    // are held at the cap. refresh_probe_hz_: the presents' proof holds them at this rate now (0: none).
     bool variable_refresh_ = false;
+    RefreshAnswer refresh_answer_;
+    double refresh_probe_hz_ = 0.0;
     galaxy::ClockInterval display_refresh_{500, true};  // refresh_display_rate twice a second on the clock
     double display_mode_hz_ = 0.0;             // the mode's rate, read when the display changes
     // The output's colour space and luminances as last read (read_display_output; read_output_hdr), and whether it has been read.

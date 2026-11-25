@@ -1768,6 +1768,37 @@ at the picture's moment; every platform does the same or says on screen why not.
    - P-034: the links ask the display's fastest rate only while in-between pictures fill it, else 60 with a range up
      to it (`set_display_fills`); the hold stops or pauses whichever link runs; the Mac start check counts vsyncs held
      and let go (`check_display_clock_hold`).
+   Answered at G2.3.5 (11-24, written on G2.3.4; the real variable-display runs owed):
+   - I-007: `next_variable_refresh`'s 0.8 test and `variable_refresh_cap` are deleted on all four renderers. The answer
+     (`runtime/include/galaxy/render/variable_refresh.h`, kept per renderer by `RefreshAnswer` in `renderer_common.h`) is the system's where it
+     says: Vulkan present timing's `refreshInterval` (`UINT64_MAX` variable, equal to `refreshDuration` fixed, 0 not
+     known), Android's `Display.hasArrSupport()` at API 36 and up (fixed below it, never asked; GameActivity
+     `nativeDisplayVaries`), a Mac screen's `minimumRefreshInterval` and `maximumRefreshInterval` (differing: variable),
+     iOS fixed. Elsewhere (Windows, Linux) the presents prove it: with VSync on, the game's own chain and no answer held,
+     the pacer holds presents at 1.25 mode periods (`g_refresh_probe_hz`: the slots follow its clock, as under variable
+     refresh at the cap, in-between pictures included, since the game's 60 real pictures come under the probe rate on
+     any display above 75 Hz); DXGI's frame statistics (a sample at the refresh that showed it needs no period) or
+     Vulkan's present-completion stamps (present timing's results, else a present wait on the probe's present) say when
+     each was shown. 120 counted presents, 90 % on whole mode periods is fixed, 90 % on their own spacing variable; a
+     present counts only when held between one and two mode periods with its spacing within 5 % and its time up fits one
+     kind and not the other. A probe runs 600 presents at most (a window whose presents are never reported goes free,
+     fixed, until asked again). No tearing support answers fixed. Asked again at full screen entered or left, focus lost or
+     gained, another display, the mode (each host sets `g_display_recheck`; Windows' `monitor_changed` as before), and
+     when 120 counted presents no longer fit the answer (point 5 (e)); a fixed answer with VSync on holds no present, so
+     there only (a) to (d) ask again.
+   - The cap (point 2): one over (the shortest interval + the margin); the shortest interval is the system's where it
+     gives one (Vulkan's `refreshDuration` under variable, the Mac's `minimumRefreshInterval`), else the mode's period
+     (Windows reads the mode's own rate, `host_window::display_mode_hz`, never the vblanks', which follow the presents).
+     The margin is the 99.9th percentile of the render thread's precise-wait lateness (`WaitLateness`, 10 us steps),
+     measured again after each display change; 1/3600 s until 1000 waits are in. Under variable refresh with VSync on the
+     pacer holds every present whole at the cap (`PresentPacer::pace` with `hold`), the next slot counted from the
+     present's own moment.
+   - Point 4: `step_lock_refreshes` takes the answer; under variable the step is never locked (the frame phase's
+     `DisplayRefresh::variable`, `VsyncGrid::next_slot`'s `variable` for Android, Linux and Apple).
+   - Point 9: the REFRESH RATE row reads `144 HZ (VARIABLE)` with the help THE DISPLAY REFRESHES AS EACH PICTURE COMES.
+   - Proven by `frame_schedule_tests.cpp` (`test_refresh_proof`, `test_below_range`, `test_refresh_cap`,
+     `test_variable_step_unlocked`), `vsync_grid_tests.cpp` (`test_android_any_rate`) and
+     `settings_display_page_tests.cpp`; the runs on a real variable display, the tablet, a Mac and Linux are owed.
 4. The spin. Where a display time is asked (Vulkan present timing, Android display timing, Metal's display link), the
    render thread starts a picture its lead ahead and the display holds it to its time; the closing spin of
    `PreciseWait` stays only where no time can be asked. The render thread's CPU time a second is measured on the tablet

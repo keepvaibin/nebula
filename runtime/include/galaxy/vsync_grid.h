@@ -81,14 +81,15 @@ struct VsyncGrid {
     // `dropped`, when given, is set to the time dropped. `frame_period`: the period in whole vsyncs. False, and the host's
     // own clock runs the frames, when there is no grid (no vsync yet, or none for a quarter second: out of sight, the
     // display asleep) or the step does not lock to it (galaxy/step_lock.h: `in_between`, in-between pictures on;
-    // 59.94, 60, 120 or 240 Hz keep the game on the grid with them off; at 50, 61, 75 or 90 Hz the host's clock runs it).
+    // 59.94, 60, 120 or 240 Hz keep the game on the grid with them off; at 50, 61, 75 or 90 Hz the host's clock runs it;
+    // `variable`, a display whose refreshes follow the pictures: never locked, I-007).
     [[nodiscard]] bool next_slot(std::int64_t period, std::int64_t last, std::int64_t now, bool in_between,
-                                 std::int64_t& slot, std::int64_t& frame_period,
+                                 bool variable, std::int64_t& slot, std::int64_t& frame_period,
                                  std::int64_t* dropped = nullptr) const noexcept {
         if (vsync_ns == 0 || interval_ns == 0 || now - vsync_ns > 250000000) {
             return false;
         }
-        const std::int64_t vsyncs = step_lock_refreshes(period, interval_ns, in_between);
+        const std::int64_t vsyncs = step_lock_refreshes(period, interval_ns, in_between, variable);
         if (vsyncs == 0) {
             return false;
         }

@@ -1104,6 +1104,8 @@ bool RendererVk::create_swapchain() {
     std::string time_domains;  // the swap chain's, logged where none is usable
     swapchain_.timing_stage = timing_stage;
     swapchain_.refresh_qpc = 0;
+    swapchain_.refresh_kind = RefreshKind::kUnknown;
+    swapchain_.shortest_s = 0.0;
     swapchain_.timing_properties_counter = ~std::uint64_t{0};
     swapchain_.timing_outstanding = 0u;
     if (swapchain_.ids2) {
@@ -2138,12 +2140,19 @@ VkResult RendererVk::wait_for_present(std::uint64_t id, std::uint64_t timeout_ns
 void RendererVk::present_swapchain_image() {
     vk::Context& context = vk::Context::get();
     const RenderConfig cfg = get_render_config();
-    // On a variable refresh display with VSync on the pacer holds presents under the refresh (paced_present_rate); a frame
+    // On a variable refresh display with VSync on the pacer holds every present whole under the cap (paced_present_rate),
+    // and at the probe rate while the presents' proof runs (FIFO, each present at a refresh; G2.3.5 point 7); a frame
     // under the cap goes out as soon as it is ready. Interpolated pictures are paced by their slot clock (RenderCore), as
     // on Direct3D: a second wait after the slot would carry a picture past the refresh it was drawn for.
-    const float paced_fps = paced_present_rate(presented_max_fps(cfg), cfg.vsync_interval, variable_refresh_, display_refresh_hz_);
-    const double pace_wait_ms =
-        interpolation_mode() ? 0.0 : present_pacer_.pace(variable_refresh_ ? 0u : cfg.vsync_interval, paced_fps);
+    refresh_probe_hz_ = refresh_answer_.probe(true, swapchain_.mode == VK_PRESENT_MODE_FIFO_KHR && !swapchain_fsr_ &&
+                                                        !frame_generation_running());
+    const float paced_fps = paced_proof_rate(
+        paced_present_rate(presented_max_fps(cfg), cfg.vsync_interval, variable_refresh_, display_refresh_hz_), refresh_probe_hz_);
+    const bool hold = refresh_probe_hz_ > 0.0 || (variable_refresh_ && cfg.vsync_interval != 0u);
+    const double pace_wait_ms = interpolation_mode()
+        ? 0.0
+        : present_pacer_.pace(variable_refresh_ || hold ? 0u : cfg.vsync_interval, paced_fps, hold);
+    const std::int64_t held = hold ? held_period(paced_fps, galaxy::qpc_frequency()) : 0;
     const std::int64_t present_start = galaxy::qpc_now();
     {
         // The target rate: dynamic multi frame generation reaches it, a fixed multiplier is the largest multiple of 60 at or
@@ -2258,7 +2267,8 @@ void RendererVk::present_swapchain_image() {
     // is shown at once rather than held for the next refresh.
     VkPresentModeKHR this_mode = VK_PRESENT_MODE_FIFO_KHR;
     VkSwapchainPresentModeInfoEXT mode_info{VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODE_INFO_EXT};
-    if (swapchain_.relaxed && swap_present_qpc_ != 0 && !frame_generation_running()) {
+    // Not while the presents' proof runs: a present shown out of its turn would read as a variable display.
+    if (swapchain_.relaxed && swap_present_qpc_ != 0 && !frame_generation_running() && refresh_probe_hz_ <= 0.0) {
         const double since = static_cast<double>(galaxy::qpc_now() - swap_present_qpc_) / static_cast<double>(galaxy::qpc_frequency());
         const double wanted = 1.0 / present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, display_refresh_hz_);
         if (since > wanted * 1.25) {
@@ -2372,6 +2382,22 @@ void RendererVk::present_swapchain_image() {
     last_present_id_ = queued ? this_present_id : 0u;
     if (queued && this_mode == VK_PRESENT_MODE_FIFO_RELAXED_KHR) {
         relaxed_present_id_ = this_present_id;
+    }
+    // The presents' proof (G2.3.5 point 7): each present with an id, the period it was held to, and when it was shown:
+    // present timing's results (report_present_times) where the swap chain is timed, else this wait, while the proof
+    // runs. The render thread has nothing to draw before the next probe slot, which comes after the refresh this
+    // present reaches; four refreshes at most.
+    if (this_present_id != 0u && (result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR)) {
+        refresh_answer_.presented(this_present_id, present_call, held);
+        if (queued && refresh_probe_hz_ > 0.0 && !swapchain_.timed && window_shown_ && display_refresh_hz_ > 1.0) {
+            const std::int64_t wait_start = galaxy::qpc_now();
+            const VkResult shown =
+                wait_for_present(this_present_id, static_cast<std::uint64_t>(std::llround(4e9 / display_refresh_hz_)));
+            const std::int64_t wait_end = galaxy::qpc_now();
+            if (shown == VK_SUCCESS && wait_end - wait_start >= galaxy::qpc_frequency() / 10'000) {
+                refresh_answer_.shown(this_present_id, wait_end);
+            }
+        }
     }
 #if defined(__linux__) && !defined(__ANDROID__)
     // Linux's display clock (I-005). A picture paced by that clock is queued once the one before it is shown, so the
@@ -2522,9 +2548,15 @@ void RendererVk::report_present_times() {
         std::uint64_t counter = 0;
         if (vkGetSwapchainTimingPropertiesEXT(device, swapchain_.handle, &timing, &counter) == VK_SUCCESS) {
             swapchain_.timing_properties_counter = counter;
+            // What the display is (refreshInterval: UINT64_MAX variable, refreshDuration fixed, 0 not known; G2.3.5
+            // point 7); a variable one's refreshDuration is its shortest interval, the cap's (point 2).
+            swapchain_.refresh_kind = vulkan_refresh_kind(timing.refreshInterval, timing.refreshDuration);
+            const bool varies = swapchain_.refresh_kind == RefreshKind::kVariable;
+            swapchain_.shortest_s = varies ? static_cast<double>(timing.refreshDuration) / 1e9 : 0.0;
             // Nanoseconds to the runtime's ticks; 0 where the refresh varies.
-            swapchain_.refresh_qpc = static_cast<std::int64_t>(static_cast<double>(timing.refreshDuration) *
-                                                               static_cast<double>(galaxy::qpc_frequency()) / 1e9);
+            swapchain_.refresh_qpc = varies ? 0
+                                            : static_cast<std::int64_t>(static_cast<double>(timing.refreshDuration) *
+                                                                        static_cast<double>(galaxy::qpc_frequency()) / 1e9);
         }
     }
     const std::uint32_t count = std::min(properties.presentationTimingCount, kResults);
@@ -2549,6 +2581,7 @@ void RendererVk::report_present_times() {
             }
             galaxy::pacing::displayed(r.presentId, shown, swapchain_.refresh_qpc);
             host_window::note_present_shown(shown, true);  // Linux's display clock (I-005)
+            refresh_answer_.shown(r.presentId, shown);     // the presents' proof (G2.3.5 point 7)
             if (swapchain_.ask_time) {
                 display_model_.displayed(r.presentId, shown, swapchain_.refresh_qpc);  // 0 under a variable refresh
             }
@@ -2801,28 +2834,26 @@ bool RendererVk::vblank_grid(std::int64_t& vblank, std::int64_t& period) const n
     return window_ != nullptr && host_window::vblank_grid(window_, vblank, period);
 }
 
-void RendererVk::refresh_display_rate() {
+void RendererVk::refresh_display_rate(bool ask) {
     const double mode_hz = host_window::display_refresh_hz(window_);
     if (mode_hz <= 1.0) {
         return;
     }
-    // The vblanks' own rate (where the platform times them): a display that varies its refresh with the presents shows a rate
-    // well under the mode's.
-    std::int64_t vblank = 0;
-    std::int64_t period = 0;
-    const double measured_hz = vblank_grid(vblank, period) && period > 0
-        ? static_cast<double>(galaxy::qpc_frequency()) / static_cast<double>(period) : 0.0;
-    const bool variable = next_variable_refresh(variable_refresh_, mode_hz, measured_hz);
-    const double hz = variable ? variable_refresh_cap(mode_hz) : mode_hz;
-    if (variable != variable_refresh_ || (variable && std::abs(hz - display_refresh_hz_) >= 0.1)) {
-        if (variable) {
-            std::cerr << "[pacing] vrr " << mode_hz << " Hz cap " << hz << '\n';
-        } else {
-            std::cerr << "[pacing] vrr off\n";
-        }
+    // What the system says: present timing's refreshInterval where the swap chain reports it (G2.3.5 point 7), else the
+    // host's (Android's hasArrSupport, point 6); else the presents prove it. Every Vulkan surface shows a present at once
+    // where the display varies.
+    const bool timing_says = swapchain_.refresh_kind != RefreshKind::kUnknown;
+    const RefreshKind system = timing_says ? swapchain_.refresh_kind : host_window::system_refresh_kind(window_);
+    // Against the mode's own rate (Windows times the vblanks, which follow the presents on a variable display).
+    // Read when the display changes (on Windows the query reaches the driver).
+    if (ask || display_mode_hz_ <= 1.0) {
+        display_mode_hz_ = host_window::display_mode_hz(window_);
     }
+    const double own_hz = display_mode_hz_ > 1.0 ? display_mode_hz_ : mode_hz;
+    const bool variable =
+        refresh_answer_.update(own_hz, true, ask, system, timing_says ? swapchain_.shortest_s : 0.0);
+    const double hz = variable ? refresh_answer_.cap_hz(own_hz) : mode_hz;
     variable_refresh_ = variable;
-    g_variable_refresh.store(variable, std::memory_order_relaxed);
     if (std::abs(hz - display_refresh_hz_) >= 0.1) {
         if (!variable) {
             std::cerr << "[display] refresh-hz=" << hz << '\n';
@@ -2990,8 +3021,10 @@ void RendererVk::follow_window_and_resize() {
         vkDeviceWaitIdle(vk::Context::get().device());
         create_swapchain();
     }
-    if (monitor_moved || display_refresh_.due()) {
-        refresh_display_rate();
+    // Asked again at once when the window's way to the display changed (G2.3.5 point 5) or the answer moved.
+    const bool recheck = g_display_recheck.exchange(false, std::memory_order_acq_rel);
+    if (monitor_moved || recheck || display_refresh_.due() || refresh_answer_.changed(true)) {
+        refresh_display_rate(monitor_moved || recheck);
     }
 }
 

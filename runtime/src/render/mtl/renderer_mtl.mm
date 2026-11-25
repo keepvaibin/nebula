@@ -753,13 +753,14 @@ std::uint64_t RendererMtl::end_frame(bool present_swap_chain, SubmissionCallback
             (*times)[1].store(done.GPUEndTime, std::memory_order_release);
         }];
         if (presenting) {
-            // On a variable refresh display with VSync on the pacer holds presents under the refresh
+            // On a variable refresh display with VSync on the pacer holds every present whole under the cap
             // (paced_present_rate); a frame under the cap goes out as soon as it is ready. Interpolated pictures are paced
             // by their slot clock (RenderCore), as on Direct3D.
             const RenderConfig cfg = get_render_config();
             const float paced_fps = paced_present_rate(presented_max_fps(cfg), cfg.vsync_interval, variable_refresh_, display_refresh_hz_);
+            const bool hold = variable_refresh_ && cfg.vsync_interval != 0u;
             pace_wait_ms = interpolation_mode() ? 0.0
-                                                : present_pacer_.pace(variable_refresh_ ? 0u : cfg.vsync_interval, paced_fps);
+                                                : present_pacer_.pace(variable_refresh_ ? 0u : cfg.vsync_interval, paced_fps, hold);
             present_start = galaxy::qpc_now();
             if (trace_present_stats_enabled()) {
                 // Where in a refresh the picture is handed over.
@@ -1016,28 +1017,20 @@ bool RendererMtl::vblank_grid(std::int64_t& vblank, std::int64_t& period) const 
     return window_ != nullptr && host_window::vblank_grid(window_, vblank, period);
 }
 
-void RendererMtl::refresh_display_rate() {
+void RendererMtl::refresh_display_rate(bool ask) {
     const double mode_hz = host_window::display_refresh_hz(window_);
     if (mode_hz <= 1.0) {
         return;
     }
-    // The vblanks' own rate (where the platform times them): a display that varies its refresh with the presents
-    // shows a rate well under the mode's.
-    std::int64_t vblank = 0;
-    std::int64_t period = 0;
-    const double measured_hz = vblank_grid(vblank, period) && period > 0
-        ? static_cast<double>(galaxy::qpc_frequency()) / static_cast<double>(period) : 0.0;
-    const bool variable = next_variable_refresh(variable_refresh_, mode_hz, measured_hz);
-    const double hz = variable ? variable_refresh_cap(mode_hz) : mode_hz;
-    if (variable != variable_refresh_ || (variable && std::abs(hz - display_refresh_hz_) >= 0.1)) {
-        if (variable) {
-            std::cerr << "[pacing] vrr " << mode_hz << " Hz cap " << hz << '\n';
-        } else {
-            std::cerr << "[pacing] vrr off\n";
-        }
-    }
+    // What the system says (G2.3.5): a Mac's screen through its shortest and longest refresh intervals, which differ on
+    // a display with a range (macOS 12); iOS gives no call that says it, so its answer is fixed. The shortest interval is
+    // the cap's (point 2). Apple's pictures are timed by its display link (display_clock_apple.mm): no present here is
+    // held to a probe, so a screen the system does not describe is taken as fixed.
+    double shortest_s = 0.0;
+    const RefreshKind system = host_window::system_refresh_kind(window_, &shortest_s);
+    const bool variable = refresh_answer_.update(mode_hz, true, ask, system, shortest_s);
+    const double hz = variable ? refresh_answer_.cap_hz(mode_hz) : mode_hz;
     variable_refresh_ = variable;
-    g_variable_refresh.store(variable, std::memory_order_relaxed);
     if (std::abs(hz - display_refresh_hz_) >= 0.1) {
         if (!variable) {
             std::cerr << "[display] refresh-hz=" << hz << '\n';
@@ -1080,9 +1073,11 @@ void RendererMtl::follow_window_and_resize() {
         }
         (void)configure_layer();
     }
-    // Twice a second on the clock, whatever the present rate.
-    if (display_refresh_.due()) {
-        refresh_display_rate();
+    // Twice a second on the clock, whatever the present rate; at once when the window's way to the display changed
+    // (G2.3.5 point 5: full screen, focus, another screen).
+    const bool recheck = g_display_recheck.exchange(false, std::memory_order_acq_rel);
+    if (recheck || display_refresh_.due()) {
+        refresh_display_rate(recheck);
     }
 }
 

@@ -58,7 +58,7 @@ Result run(const DisplayRefresh& display, std::int64_t work, std::int64_t frame 
 
 void test_counts() {
     const auto refreshes_per_frame = [](std::int64_t period, std::int64_t refresh) {
-        return galaxy::step_lock_refreshes(period, refresh, false);
+        return galaxy::step_lock_refreshes(period, refresh, false, false);
     };
     expect(refreshes_per_frame(kFrame, 1'000'000'000 / 60) == 1, "60 Hz: one refresh a frame");
     expect(refreshes_per_frame(kFrame, 16'683'350) == 1, "59.94 Hz: one refresh a frame");
@@ -76,7 +76,7 @@ void test_settles() {
             const Result r = run(display, work);
             expect(r.last_gap >= FramePhase::kMarginNs - 100'000 && r.last_gap <= FramePhase::kMarginNs + 2'000'000,
                    "a settled present lands just before a refresh");
-            const std::int64_t step = galaxy::step_lock_refreshes(kFrame, refresh, false) * refresh;
+            const std::int64_t step = galaxy::step_lock_refreshes(kFrame, refresh, false, false) * refresh;
             expect(std::llabs(r.shortest - step) <= 1'000 && std::llabs(r.longest - step) <= 1'000, "settled frames keep the display's period");
         }
     }
@@ -149,13 +149,13 @@ void test_in_step() {
 // 59.94 Hz display ran the game 0.1% slow.
 void test_lock_rule() {
     using galaxy::step_lock_refreshes;
-    expect(step_lock_refreshes(kFrame, 16'683'350, false) == 1, "59.94 Hz, in-between pictures off: locked");
-    expect(step_lock_refreshes(kFrame, 16'683'350, true) == 0, "59.94 Hz, in-between pictures on: exactly 60");
-    expect(step_lock_refreshes(kFrame, 16'528'926, false) == 0, "60.5 Hz (0.8% off): exactly 60");
-    expect(step_lock_refreshes(kFrame, 16'260'163, false) == 0, "61.5 Hz (2.5% off): exactly 60");
-    expect(step_lock_refreshes(kFrame, 1'000'000'000 / 240, true) == 4, "240 Hz, in-between pictures on: locked");
-    expect(step_lock_refreshes(kFrame, 1'000'000'000 / 120, true) == 2, "120 Hz, in-between pictures on: locked");
-    expect(step_lock_refreshes(kFrame, 4'170'837, true) == 0, "239.76 Hz, in-between pictures on: exactly 60");
+    expect(step_lock_refreshes(kFrame, 16'683'350, false, false) == 1, "59.94 Hz, in-between pictures off: locked");
+    expect(step_lock_refreshes(kFrame, 16'683'350, true, false) == 0, "59.94 Hz, in-between pictures on: exactly 60");
+    expect(step_lock_refreshes(kFrame, 16'528'926, false, false) == 0, "60.5 Hz (0.8% off): exactly 60");
+    expect(step_lock_refreshes(kFrame, 16'260'163, false, false) == 0, "61.5 Hz (2.5% off): exactly 60");
+    expect(step_lock_refreshes(kFrame, 1'000'000'000 / 240, true, false) == 4, "240 Hz, in-between pictures on: locked");
+    expect(step_lock_refreshes(kFrame, 1'000'000'000 / 120, true, false) == 2, "120 Hz, in-between pictures on: locked");
+    expect(step_lock_refreshes(kFrame, 4'170'837, true, false) == 0, "239.76 Hz, in-between pictures on: exactly 60");
     // The frame phase: in-between pictures on a 59.94 Hz display keep the game's own period.
     FramePhase phase;
     const DisplayRefresh ntsc{987'654, 16'683'350};
@@ -245,7 +245,7 @@ void test_every_rate() {
             if (expected < 0) continue;
             ++checked;
             const std::int64_t refresh = std::llround(1e9 / rate);
-            bool ok = galaxy::step_lock_refreshes(kFrame, refresh, in_between) == expected;
+            bool ok = galaxy::step_lock_refreshes(kFrame, refresh, in_between, false) == expected;
             FramePhase phase;
             const DisplayRefresh display{987'654, refresh};
             std::int64_t start = 12'345'678;

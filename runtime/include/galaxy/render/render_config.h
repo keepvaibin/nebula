@@ -363,6 +363,15 @@ void note_frame_generation_allowed(bool allowed) noexcept;
     }
     return max_fps > 0.0f ? std::min(max_fps, refresh) : refresh;
 }
+// While the presents' proof runs (`probe_hz` above 0; render/variable_refresh.h) the pacer holds presents at the probe
+// rate, or at the rate above where that is lower (the player's limit is never passed).
+[[nodiscard]] inline float paced_proof_rate(float paced, double probe_hz) noexcept {
+    if (probe_hz <= 0.0) {
+        return paced;
+    }
+    const auto probe = static_cast<float>(probe_hz);
+    return paced > 0.0f && std::isfinite(paced) ? std::min(paced, probe) : probe;
+}
 void set_render_config(const RenderConfig& cfg);
 
 // Whether the renderer refines curved surfaces: the CURVED SURFACES row is offered and

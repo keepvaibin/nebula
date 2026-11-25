@@ -28,7 +28,7 @@ std::int64_t FramePhase::next_start(std::int64_t last_start_ns, std::int64_t wor
     }
     budget_ns_ = std::min(budget_ns_, period_ns - kMarginNs);
     if (!refresh || plain_frames_ != 0 || budget_ns_ > period_ns - period_ns / 4) return last_start_ns + period_ns;
-    const std::int64_t count = step_lock_refreshes(period_ns, refresh->period_ns, in_between);
+    const std::int64_t count = step_lock_refreshes(period_ns, refresh->period_ns, in_between, refresh->variable);
     if (count == 0) return last_start_ns + period_ns;
     const std::int64_t step = count * refresh->period_ns;
     const std::int64_t cadence = last_start_ns + step;

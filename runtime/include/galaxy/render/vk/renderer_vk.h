@@ -505,6 +505,10 @@ private:
         // not used (G2.3.2).
         bool ask_time = false;
         std::int64_t refresh_qpc = 0;               // the swap chain's refresh duration (0: variable or unknown)
+        // What its timing properties say of the display (refreshInterval, variable_refresh.h vulkan_refresh_kind) and,
+        // when variable, its shortest interval (refreshDuration, seconds).
+        RefreshKind refresh_kind = RefreshKind::kUnknown;
+        double shortest_s = 0.0;
         std::uint64_t timing_properties_counter = 0;
         std::uint32_t timing_outstanding = 0;       // presents asked for timing whose results are not read yet
         std::vector<VkImage> images;
@@ -669,7 +673,7 @@ private:
     [[nodiscard]] VkFramebuffer scene_framebuffer();
     [[nodiscard]] VkDescriptorSet scene_color_source();
     [[nodiscard]] VkFramebuffer framebuffer_for(vk::Texture& texture);
-    void refresh_display_rate();
+    void refresh_display_rate(bool ask);
     void follow_window_and_resize();
 #if defined(_WIN32)
     // The window's mode (windowed or borderless fullscreen), monitor and windowed size from the settings, at a frame
@@ -1027,9 +1031,13 @@ private:
     [[nodiscard]] std::shared_ptr<vk::Buffer> capture_buffer(std::uint64_t bytes, const char* name);
     std::atomic<double> measured_present_hz_{0.0};
     double display_refresh_hz_ = 0.0;
-    // The display varies its refresh with the presents (next_variable_refresh): display_refresh_hz_ is then the cap that keeps
-    // it in its range, and presents are spaced at the cap.
+    // The display varies its refresh with the presents (refresh_answer_: present timing's refreshInterval or the host's
+    // system answer, else proved from present-completion stamps): display_refresh_hz_ is then the cap that keeps it in its
+    // range, and presents are held at the cap. refresh_probe_hz_: the proof holds presents at this rate now (0: none).
     bool variable_refresh_ = false;
+    RefreshAnswer refresh_answer_;
+    double refresh_probe_hz_ = 0.0;
+    double display_mode_hz_ = 0.0;  // the mode's own rate, read when the display changes
     // The display's rate is read again twice a second on the clock, whatever the present rate (an unlimited one presents
     // thousands a second).
     galaxy::ClockInterval display_refresh_{500, true};

@@ -24,6 +24,8 @@
 #include "galaxy/render/desktop_display.h"
 #include "galaxy/render/display_modes.h"
 #include "galaxy/render/host_window.h"
+#include "galaxy/render/present_clock.h"
+#include "galaxy/render/variable_refresh.h"
 #if defined(NEBULA_GPU_METAL)
 #include <cstdint>
 #include <ctime>
@@ -363,6 +365,10 @@ void run_activity_calls() {
 // interpolation by it, not by the rate the system holds the app to now: a game showing 60 frames is held at 60 Hz on
 // most variable-rate panels until it asks for more.
 std::atomic<float> g_panel_fastest_hz{0.0f};
+// What Android says of the display (G2.3.5 point 6): its API level and Display.hasArrSupport() (asked only at API 36
+// and above); 0 until GameActivity reports them.
+std::atomic<int> g_android_sdk{0};
+std::atomic<bool> g_display_arr{false};
 
 // The surface's frame-rate vote for the frame-rate setting (max_fps; 0: the display's own; unlimited: the panel's
 // fastest). The game's own 30 or 60
@@ -1529,6 +1535,15 @@ void pump_events(int timeout_ms) noexcept {
         case SDL_EVENT_DISPLAY_USABLE_BOUNDS_CHANGED:
         case SDL_EVENT_WINDOW_SHOWN:
             g_displays_dirty.store(true, std::memory_order_release);
+            // The window's way to the display changed: the renderer asks again whether the display is variable
+            // (G2.3.5 point 5 (c), (d)).
+            galaxy::render::g_display_recheck.store(true, std::memory_order_release);
+            break;
+        // Full screen entered or left, or the window on another display (point 5 (a), (c)).
+        case SDL_EVENT_WINDOW_ENTER_FULLSCREEN:
+        case SDL_EVENT_WINDOW_LEAVE_FULLSCREEN:
+        case SDL_EVENT_WINDOW_DISPLAY_CHANGED:
+            galaxy::render::g_display_recheck.store(true, std::memory_order_release);
             break;
 #endif
         case SDL_EVENT_WINDOW_MOUSE_ENTER:
@@ -1537,10 +1552,13 @@ void pump_events(int timeout_ms) noexcept {
         case SDL_EVENT_WINDOW_MOUSE_LEAVE:
             g_input.mouse_inside = false;
             break;
+        // Focus gained or lost (point 5 (b)).
         case SDL_EVENT_WINDOW_FOCUS_GAINED:
             g_input.window_focused = true;
+            galaxy::render::g_display_recheck.store(true, std::memory_order_release);
             break;
         case SDL_EVENT_WINDOW_FOCUS_LOST:
+            galaxy::render::g_display_recheck.store(true, std::memory_order_release);
             g_input.window_focused = false;
             g_input.keys = {};
             galaxy::luma_input::text_focus_lost();
@@ -1953,6 +1971,18 @@ extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativePane
     galaxy::sdl::g_panel_fastest_hz.store(hz > 1.0f ? hz : 0.0f, std::memory_order_relaxed);
 }
 
+// The API level and the display's adaptive refresh (Display.hasArrSupport, API 36; false below it), with the panel's
+// rate. A change asks the variable-refresh question again (G2.3.5 point 6).
+extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeDisplayVaries(JNIEnv*, jclass, jint sdk,
+                                                                                         jboolean has_arr) {
+    const bool arr = has_arr == JNI_TRUE;
+    const int was_sdk = galaxy::sdl::g_android_sdk.exchange(static_cast<int>(sdk), std::memory_order_relaxed);
+    const bool was_arr = galaxy::sdl::g_display_arr.exchange(arr, std::memory_order_relaxed);
+    if (was_sdk != static_cast<int>(sdk) || was_arr != arr) {
+        galaxy::render::g_display_recheck.store(true, std::memory_order_release);
+    }
+}
+
 // The display's touch slop in window pixels (ViewConfiguration.getScaledTouchSlop).
 extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeTouchSlop(JNIEnv*, jclass, jfloat px) {
     galaxy::sdl::g_touch_slop_px.store(px > 0.0f ? px : 0.0f, std::memory_order_relaxed);
@@ -2118,6 +2148,26 @@ double display_refresh_hz(NativeWindow window) noexcept {
 #endif
     const SDL_DisplayMode* mode = SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(static_cast<SDL_Window*>(window)));
     return mode != nullptr && mode->refresh_rate > 1.0f ? static_cast<double>(mode->refresh_rate) : 0.0;
+}
+
+double display_mode_hz(NativeWindow window) noexcept {
+    return display_refresh_hz(window);
+}
+
+// Android: hasArrSupport as GameActivity reported it (fixed until it has); Apple: the screen's refresh-interval range
+// (display_clock_apple.mm); Linux: no call says it (the presents prove it, G2.3.5 point 7).
+galaxy::render::RefreshKind system_refresh_kind(NativeWindow, double* shortest_s) noexcept {
+    if (shortest_s != nullptr) {
+        *shortest_s = 0.0;
+    }
+#if defined(__ANDROID__)
+    return galaxy::render::android_refresh_kind(galaxy::sdl::g_android_sdk.load(std::memory_order_relaxed),
+                                                galaxy::sdl::g_display_arr.load(std::memory_order_relaxed));
+#elif defined(__APPLE__)
+    return galaxy::sdl::apple_refresh_kind(shortest_s);
+#else
+    return galaxy::render::RefreshKind::kUnknown;
+#endif
 }
 
 void set_state_wake(void*) noexcept {}

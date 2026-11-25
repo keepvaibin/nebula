@@ -17,6 +17,7 @@
 #include "galaxy/render/display_modes.h"
 #include "galaxy/render/galaxy_select.h"
 #include "galaxy/render/post_process_settings.h"
+#include "galaxy/render/present_clock.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/renderer_check.h"
 #include "galaxy/render/renderer_common.h"
@@ -644,6 +645,11 @@ double display_refresh_hz(NativeWindow window) noexcept {
     if (vblank_grid_known(vblank, period)) {
         return std::round(static_cast<double>(galaxy::qpc_frequency()) / static_cast<double>(period) * 100.0) / 100.0;
     }
+    return display_mode_hz(window);
+}
+
+// The mode's own rate (whole hertz), never the vblanks': a display whose refreshes follow the presents shows their rate.
+double display_mode_hz(NativeWindow window) noexcept {
     const HMONITOR monitor = MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
     MONITORINFOEXW info{};
     info.cbSize = sizeof(info);
@@ -654,6 +660,14 @@ double display_refresh_hz(NativeWindow window) noexcept {
         return 0.0;
     }
     return static_cast<double>(mode.dmDisplayFrequency);
+}
+
+// Windows says nothing of whether the display varies: the presents prove it (G2.3.5 point 5).
+RefreshKind system_refresh_kind(NativeWindow, double* shortest_s) noexcept {
+    if (shortest_s != nullptr) {
+        *shortest_s = 0.0;
+    }
+    return RefreshKind::kUnknown;
 }
 
 // Raw relative mouse motion (WM_INPUT) for the window while it is in front: no input sink and no legacy suppression, so
@@ -766,7 +780,10 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 placement->rect.bottom - placement->rect.top,
                 SWP_FRAMECHANGED | SWP_NOACTIVATE |
                     (placement->borderless ? 0u : SWP_NOZORDER));
-            host_window::borderless_active.store(placement->borderless, std::memory_order_release);
+            // Full screen entered or left: the renderer asks again whether the display is variable (G2.3.5 point 5 (a)).
+            if (host_window::borderless_active.exchange(placement->borderless, std::memory_order_acq_rel) != placement->borderless) {
+                galaxy::render::g_display_recheck.store(true, std::memory_order_release);
+            }
         }
         return 0;
     }
@@ -1038,6 +1055,8 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         galaxy::host::hold_high_resolution_timer(wp != FALSE || galaxy::launch_args().no_focus);
         // What the game does without focus is the host's to decide (runtime_settings focus_loss): it is woken to look.
         s_background.store(wp == FALSE, std::memory_order_relaxed);
+        // Focus lost or regained: whether the system composes the window may change (G2.3.5 point 5 (b)).
+        galaxy::render::g_display_recheck.store(true, std::memory_order_release);
         wake_main_thread();
     }
     if (msg == WM_SIZE) {

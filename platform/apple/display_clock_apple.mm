@@ -8,6 +8,7 @@
 #include "sdl_host.h"
 
 #include "galaxy/launch_args.h"
+#include "galaxy/render/present_clock.h"
 #include "galaxy/vsync_grid.h"
 
 #import <Foundation/Foundation.h>
@@ -41,6 +42,10 @@ std::atomic<std::int64_t> g_display_period_ns{0};  // the display's stated refre
 std::atomic<std::int64_t> g_frame_slot_ns{0};
 std::atomic<std::int64_t> g_frame_period_ns{0};
 std::atomic<std::uint64_t> g_vsyncs{0};  // every vsync a link gave (the start check counts them, P-034)
+// The window's screen's shortest and longest refresh intervals (NSScreen minimumRefreshInterval and
+// maximumRefreshInterval, macOS 12; seconds, 0: not read): they differ on a display with a range (G2.3.5).
+std::atomic<double> g_screen_shortest_s{0.0};
+std::atomic<double> g_screen_longest_s{0.0};
 std::once_flag g_started;
 
 const mach_timebase_info_data_t& timebase() noexcept {
@@ -191,8 +196,12 @@ void follow_window(NSWindow* window) {
     if (@available(macOS 12.0, *)) {
         if (window.screen != nil) {
             g_fastest_fps.store(static_cast<int>(window.screen.maximumFramesPerSecond), std::memory_order_relaxed);
+            g_screen_shortest_s.store(static_cast<double>(window.screen.minimumRefreshInterval), std::memory_order_relaxed);
+            g_screen_longest_s.store(static_cast<double>(window.screen.maximumRefreshInterval), std::memory_order_relaxed);
         }
     }
+    // Another screen: the renderer asks again whether the display is variable (G2.3.5 point 5 (c)).
+    galaxy::render::g_display_recheck.store(true, std::memory_order_release);
 }
 
 void follow_older_link() {
@@ -462,7 +471,7 @@ bool wait_display_frame(std::int64_t period_ns, std::int64_t& last_ns, bool in_b
     std::int64_t target = 0;
     std::int64_t frame_period = 0;
     std::int64_t dropped = 0;
-    if (!grid.next_slot(period_ns, last_ns, now_ns(), in_between, target, frame_period, &dropped)) {
+    if (!grid.next_slot(period_ns, last_ns, now_ns(), in_between, galaxy::render::g_variable_refresh.load(std::memory_order_relaxed), target, frame_period, &dropped)) {
         g_frame_slot_ns.store(0, std::memory_order_relaxed);
         return false;
     }
@@ -524,6 +533,24 @@ bool vsync_grid(std::int64_t& vsync_ns, std::int64_t& interval_ns) noexcept {
     vsync_ns = g_grid.vsync_ns;
     interval_ns = stated > 0 ? stated : g_grid.interval_ns;
     return vsync_ns != 0 && interval_ns != 0;
+}
+
+galaxy::render::RefreshKind apple_refresh_kind(double* shortest_s) noexcept {
+#if TARGET_OS_OSX
+    const double shortest = g_screen_shortest_s.load(std::memory_order_relaxed);
+    const galaxy::render::RefreshKind kind =
+        galaxy::render::mac_refresh_kind(shortest, g_screen_longest_s.load(std::memory_order_relaxed));
+    if (shortest_s != nullptr) {
+        *shortest_s = kind == galaxy::render::RefreshKind::kVariable ? shortest : 0.0;
+    }
+    return kind;
+#else
+    // No iOS page read gives a call that says it: fixed until one is read (G2.3.5).
+    if (shortest_s != nullptr) {
+        *shortest_s = 0.0;
+    }
+    return galaxy::render::RefreshKind::kFixed;
+#endif
 }
 
 double display_refresh_hz() noexcept {

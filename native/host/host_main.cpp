@@ -1165,7 +1165,8 @@ std::optional<galaxy::host::DisplayRefresh> display_refresh() {
             const uint64_t part = qpc % static_cast<uint64_t>(frequency.QuadPart);
             return static_cast<int64_t>(whole * 1000000000ull + part * 1000000000ull / static_cast<uint64_t>(frequency.QuadPart));
         };
-        const galaxy::host::DisplayRefresh now{to_ns(timing.qpcVBlank), to_ns(timing.qpcRefreshPeriod)};
+        const galaxy::host::DisplayRefresh now{to_ns(timing.qpcVBlank), to_ns(timing.qpcRefreshPeriod),
+                                               galaxy::render::g_variable_refresh.load(std::memory_order_relaxed)};
         if (earlier_vblank_ns != 0 && galaxy::host::refreshes_in_step(earlier_vblank_ns, now)) known = now;
         earlier_vblank_ns = now.vblank_ns;
     }

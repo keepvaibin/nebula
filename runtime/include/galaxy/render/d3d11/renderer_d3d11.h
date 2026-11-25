@@ -452,7 +452,7 @@ private:
     void utility_draw(Utility shader, ID3D11ShaderResourceView* source, const void* constants, std::size_t constant_bytes,
                       const D3D11_VIEWPORT& viewport, const gpu::Rect& rect, std::uint8_t write_mask = 0xFu,
                       DepthUse depth = DepthUse::None);
-    void refresh_display_rate();
+    void refresh_display_rate(bool ask);
     void follow_window_and_resize();
     void report_present_stats(double pace_wait_ms, double present_ms);
     void grow_rings();
@@ -621,7 +621,11 @@ private:
     [[nodiscard]] d3d11::ComPtr<ID3D11Texture2D> capture_staging(unsigned width, unsigned height, DXGI_FORMAT format);
     std::atomic<double> measured_present_hz_{0.0};
     double display_refresh_hz_ = 0.0;
+    // Variable refresh, as on Direct3D 12 (renderer_d3d12.h): the answer, and the probe rate while the presents' proof runs.
     bool variable_refresh_ = false;
+    RefreshAnswer refresh_answer_;
+    double refresh_probe_hz_ = 0.0;
+    double display_mode_hz_ = 0.0;  // the mode's own rate, read when the display changes
     // The display's rate is read again twice a second on the clock, whatever the present rate (an unlimited one presents
     // thousands a second).
     galaxy::ClockInterval display_refresh_{500, true};
