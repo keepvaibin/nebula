@@ -20,6 +20,7 @@
 #include <TargetConditionals.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -28,6 +29,7 @@
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
+#include <thread>
 
 namespace galaxy::render {
 
@@ -57,6 +59,10 @@ bool RendererMtl::initialize(int window_width, int window_height, const FrameMap
     frame_extent_ = scene_extent_ = scene_rectangle_ = frame;
     frame_slot_ = 0;
     frame_index_ = 0;
+    if (const char* const delay = std::getenv("NEBULA_TEST_RENDER_DELAY_MS"); delay != nullptr) {
+        test_delay_ms_ = static_cast<unsigned>(std::strtoul(delay, nullptr, 10));
+        std::fprintf(stderr, "[metal] test: the render thread sleeps %u ms before every 30th drawable\n", test_delay_ms_);
+    }
     if (window_ != nullptr) {
         window_shown_ = true;
     } else {
@@ -356,6 +362,12 @@ bool RendererMtl::configure_layer() {
     layer_.hdr_asked = wants_hdr();
     layer_.hdr = false;
     layer_dirty_ = false;
+    // With VSync, the Metal display link (macOS 14, iOS 17) times the display clock and gives this layer's drawables,
+    // each with the time it will be shown; without, the layer's own drawables go up as soon as they are ready.
+    if (void* const linked = vsync ? layer_.layer : nullptr; linked != link_layer_) {
+        host_window::metal_link_layer(linked);
+        link_layer_ = linked;
+    }
     return true;
 }
 
@@ -469,6 +481,10 @@ void RendererMtl::shutdown() {
             for (UploadRing* ring : {&vertex_ring_, &index_ring_, &constant_ring_, &matrix_ring_}) {
                 ring->release_into(old);
             }
+        }
+        if (link_layer_ != nullptr) {
+            host_window::metal_link_layer(nullptr);  // the display link lets the layer go before it does
+            link_layer_ = nullptr;
         }
         if (layer_.layer != nullptr) {
             ((__bridge CAMetalLayer*)layer_.layer).device = nil;
@@ -790,9 +806,29 @@ std::uint64_t RendererMtl::end_frame(bool present_swap_chain, SubmissionCallback
                     }
                 }];
             }
-            // Shown as soon as the frame's commands are scheduled: never at a time asked for.
-            [commands_of(frame.lists.back()) presentDrawable:(__bridge id<CAMetalDrawable>)drawable_];
+            // The line of pictures (present): one more handed over, one less once it is shown or never will be.
+            {
+                const std::shared_ptr<std::atomic<int>> out = drawables_out_;
+                out->fetch_add(1, std::memory_order_acq_rel);
+                [(__bridge id<CAMetalDrawable>)drawable_ addPresentedHandler:^(id<MTLDrawable>) {
+                    out->fetch_sub(1, std::memory_order_acq_rel);
+                }];
+            }
+            // A drawable of the Metal display link at the time the link will show it (I-012, Apple's half: a present
+            // at a requested time); the layer's own as soon as the frame's commands are scheduled.
+            if (drawable_shown_at_ > 0.0) {
+                [commands_of(frame.lists.back()) presentDrawable:(__bridge id<CAMetalDrawable>)drawable_
+                                                          atTime:drawable_shown_at_];
+            } else {
+                [commands_of(frame.lists.back()) presentDrawable:(__bridge id<CAMetalDrawable>)drawable_];
+            }
+            drawable_shown_at_ = 0.0;
             galaxy::pacing::presented(pacing_id);
+            // The rate the display links ask (P-034): the display's fastest only while in-between pictures fill it.
+            if (const int fills = interpolation_mode() ? 1 : 0; fills != display_fills_) {
+                display_fills_ = fills;
+                host_window::set_display_fills(fills != 0);
+            }
         }
         for (std::size_t i = 0; i + 1u < frame.lists.size(); ++i) {
             (void)context.commit(frame.lists[i]);
@@ -1172,11 +1208,22 @@ bool RendererMtl::present(const DisplayTexture* source, bool capture_backbuffer,
         content = galaxy::ContentViewport{0, 0, bb_w, bb_h};
     }
     (void)galaxy::g_presentation_content.publish(bb_w, bb_h, content);
+    if (test_delay_ms_ != 0u && ++test_delay_count_ % 30u == 0u) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(test_delay_ms_));
+    }
     @autoreleasepool {
-        // The drawable is taken as late as the frame allows: it is one of a few, and held until it is shown.
+        // The drawable is taken as late as the frame allows: it is one of a few, and held until it is shown. Where
+        // the Metal display link runs it gives the drawable, with the time it will be shown (50 ms bounds a link held
+        // or a display that gives it no updates, and then the layer's own until the link gives one again); else the
+        // layer's own.
         const std::int64_t asked = galaxy::qpc_now();
         galaxy::timeline::record_at(galaxy::timeline::Event::AcquireBegin, static_cast<std::uint64_t>(asked));
-        id<CAMetalDrawable> const drawable = [(__bridge CAMetalLayer*)layer_.layer nextDrawable];
+        void* linked = nullptr;
+        double shown_at = 0.0;
+        id<CAMetalDrawable> const drawable =
+            host_window::metal_link_drawable(linked, shown_at, 50'000'000)
+                ? (__bridge_transfer id<CAMetalDrawable>)linked
+                : [(__bridge CAMetalLayer*)layer_.layer nextDrawable];
         galaxy::timeline::record(galaxy::timeline::Event::AcquireEnd, 0u, drawable == nil ? 1u : 0u);
         const double waited = static_cast<double>(galaxy::qpc_now() - asked) * 1000.0 / static_cast<double>(galaxy::qpc_frequency());
         stats_.drawable_wait_ms += waited;
@@ -1187,21 +1234,19 @@ bool RendererMtl::present(const DisplayTexture* source, bool capture_backbuffer,
         }
         // A synchronised layer puts up one picture a refresh, in the order handed over, and nothing handed over is
         // ever replaced (Direct3D's swap chains and Android's compositor take a newer picture in place of a waiting
-        // one). The game makes one picture a refresh, so pictures that once queued (a start's first frames come
-        // faster than the display; after a slow frame the late picture and the next come together) stay queued:
-        // every picture after them is seen a refresh late for each one waiting. The layer says when its line is
-        // full: it has no drawable to give, and the frame waits for one to come off the screen at the next refresh.
-        // That frame's picture is then not handed over (the drawable goes back unused), which takes one picture out
-        // of the line; never two frames running, so a GPU too slow for the display still shows every second frame.
-        // Measured in a window on a 2017 MacBook Pro: 48.6 ms from hand-over to screen with the line left full,
-        // 37.6 ms kept so, every picture up for exactly one refresh either way.
-        if (layer_.vsync && !capture_backbuffer && waited > kDrawableWaitMs && !held_last_) {
-            held_last_ = true;
+        // one). Pictures that once queued (a start's first frames come faster than the display; after a slow frame
+        // the late picture and the next come together) would stay queued, every picture after them seen a refresh
+        // late for each one waiting. So the line is counted: a picture whose drawable comes while two handed over are
+        // not yet shown is held back (the drawable goes back unused), and the line drains by one. A picture is never
+        // held for a slow wait alone (I-006: that dropped in-between pictures and left a refresh showing the one
+        // before). Measured in a window on a 2017 MacBook Pro with the older rule: 48.6 ms from hand-over to screen
+        // with the line left full, 37.6 ms kept short.
+        if (layer_.vsync && !capture_backbuffer && drawables_out_->load(std::memory_order_acquire) >= 2) {
             ++pictures_held_;
             surface_lock_ = {};
             return false;
         }
-        held_last_ = false;
+        drawable_shown_at_ = shown_at;
         drawable_ = own(drawable);
         draw_presented_picture((__bridge void*)drawable.texture, layer_.format, shown, content, true);
     }

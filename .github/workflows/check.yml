@@ -477,6 +477,10 @@ jobs:
           if grep -q 'renderer shader compiled from its text' "$d/start.log"; then
             grep 'renderer shader compiled from its text' "$d/start.log"; exit 1
           fi
+          # P-034: after the frames the display clock is held for a second (no vsyncs while held, some once let go:
+          # exit 6 otherwise); the line says what was counted, or that this machine's display gives no vsyncs.
+          grep -E '^start check: display clock: ' "$d/start.log" \
+            || { echo "the start check did not look at the display clock's hold"; exit 1; }
       # The program finds its game module and the system loads it (the start check above does not load it), and the app's files
       # name no library outside the system and the app (release.yml has the same checks on the packed zip).
       - name: Module check and the app's files

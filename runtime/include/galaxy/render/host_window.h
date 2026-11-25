@@ -180,6 +180,16 @@ void save_native_settings_now();
 // The window's Metal layer (a CAMetalLayer*, the window's to keep), which the Metal renderer draws to; null when the
 // window has none. Its drawable size is the renderer's to set.
 [[nodiscard]] void* metal_layer(NativeWindow window);
+// The Metal display link (CAMetalDisplayLink, macOS 14 and iOS 17), which times the display clock and gives the
+// layer's drawables, each with the time it will be shown: the layer it runs on (null: none, the older link and the
+// layer's own drawables as before). Nothing where the system has no such link.
+void metal_link_layer(void* layer) noexcept;
+// The link's next drawable (a retained CAMetalDrawable*, the caller's to release) and the time it will be shown
+// (CACurrentMediaTime's seconds), waiting up to `wait_ns`. False where no link gives drawables or none came in time
+// (a held link, a display that gives it no updates): the caller takes the layer's own.
+[[nodiscard]] bool metal_link_drawable(void*& drawable, double& shown_at, std::int64_t wait_ns) noexcept;
+// In-between pictures fill the display's fastest rate (the display link asks that rate; else 60 with a range up to it).
+void set_display_fills(bool fills) noexcept;
 #endif
 
 #if defined(NEBULA_GPU_VULKAN)

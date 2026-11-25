@@ -757,11 +757,21 @@ private:
     std::shared_ptr<Shown> shown_ = std::make_shared<Shown>();
     std::uint64_t pacing_present_id_ = 0;  // the pacing recorder's id for each present
     void choose_first_start_scale();
-    // The layer's line of pictures (present): a frame that waited this long for a drawable waited for a refresh, the
-    // line full; whether the last frame's picture was held back for it; and how many have been.
-    static constexpr double kDrawableWaitMs = 1.5;
-    bool held_last_ = false;
+    // The layer's line of pictures (present): the drawables handed over and not yet presented (up at presentDrawable,
+    // down in the presented handler on Metal's threads, a presented time of 0 included); a picture whose drawable comes
+    // while two are in the line is held back; and how many have been.
+    std::shared_ptr<std::atomic<int>> drawables_out_ = std::make_shared<std::atomic<int>>(0);
     std::uint64_t pictures_held_ = 0;
+    // The Metal display link (host_window::metal_link_layer): the layer it runs on (null: none), the time the link
+    // will show the drawable taken for this frame (CACurrentMediaTime's seconds; 0: shown when ready), and whether
+    // in-between pictures fill the display (-1: not yet told).
+    void* link_layer_ = nullptr;
+    double drawable_shown_at_ = 0.0;
+    int display_fills_ = -1;
+    // A test's late render thread (NEBULA_TEST_RENDER_DELAY_MS, I-006's proof): that many milliseconds slept before
+    // every 30th picture's drawable is asked.
+    unsigned test_delay_ms_ = 0u;
+    std::uint64_t test_delay_count_ = 0;
     struct PresentStats {
         std::int64_t window_start_qpc = 0;
         std::int64_t last_present_qpc = 0;

@@ -2512,6 +2512,15 @@ void* metal_layer(NativeWindow window) {
     }
     return view != nullptr ? SDL_Metal_GetLayer(view) : nullptr;
 }
+void metal_link_layer(void* layer) noexcept {
+    galaxy::sdl::metal_link_layer(layer);
+}
+bool metal_link_drawable(void*& drawable, double& shown_at, std::int64_t wait_ns) noexcept {
+    return galaxy::sdl::metal_link_drawable(drawable, shown_at, wait_ns);
+}
+void set_display_fills(bool fills) noexcept {
+    galaxy::sdl::set_display_fills(fills);
+}
 #else
 std::vector<const char*> vulkan_instance_extensions() {
     Uint32 count = 0;

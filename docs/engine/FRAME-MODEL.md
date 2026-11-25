@@ -1750,6 +1750,21 @@ at the picture's moment; every platform does the same or says on screen why not.
    - Proven by `vsync_grid_tests.cpp` (`test_present_stamps`: every sample rate, stamps on most refreshes and at the
      probe's spacing, wake jitter, missed refreshes, slow wakes, a pause) and `settings_graphics_page_tests.cpp`; the
      run on a Linux display at 144 Hz is owed (PLAN owed).
+   Answered at G2.3.4 (11-24, written on G2.3.3; no Mac here, every Apple proof owed):
+   - Apple's Metal display link (`CAMetalDisplayLink`, macOS 14 and iOS 17; Apple's documentation: `initWithMetalLayer:`,
+     the delegate's `metalDisplayLink:needsUpdate:`, `preferredFrameRateRange`, `paused`, `addToRunLoop:forMode:`,
+     `invalidate`; the update's `drawable`, `targetTimestamp` and `targetPresentationTimestamp`) runs on the Metal
+     renderer's layer while VSync is on (`host_window::metal_link_layer`), on a thread of its own with its own run loop.
+     It replaces the older link (CVDisplayLink, CADisplayLink), which stops while it runs: the refreshes its updates
+     will show become the grid's vsyncs once they have come, and its drawable goes to the render thread
+     (`metal_link_drawable`, a newer update's taking the place of one not taken), which waits for it (50 ms at most)
+     and presents it at its `targetPresentationTimestamp` (`presentDrawable:atTime:`, I-012's Apple half). Without the
+     link (an older system, VSync off) the layer's own drawables go up when ready, as before.
+   - I-006: the drop on a slow drawable wait is gone; the drawables handed over and not yet presented are counted and a
+     picture is held back only when two are in the line as its drawable comes.
+   - P-034: the links ask the display's fastest rate only while in-between pictures fill it, else 60 with a range up
+     to it (`set_display_fills`); the hold stops or pauses whichever link runs; the Mac start check counts vsyncs held
+     and let go (`check_display_clock_hold`).
 4. The spin. Where a display time is asked (Vulkan present timing, Android display timing, Metal's display link), the
    render thread starts a picture its lead ahead and the display holds it to its time; the closing spin of
    `PreciseWait` stays only where no time can be asked. The render thread's CPU time a second is measured on the tablet
