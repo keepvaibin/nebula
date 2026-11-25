@@ -408,6 +408,10 @@ private:
         [[nodiscard]] bool tracing() const override;
         [[nodiscard]] bool display_time(std::int64_t present, std::int64_t& shown) const override;
         [[nodiscard]] bool last_shown(ShownPicture& picture) override;
+        [[nodiscard]] bool resolution(unsigned& sixteenths, unsigned& floor) const override;
+        void set_resolution_budget(double budget_ms) override;
+        [[nodiscard]] double thermal_headroom() const override;
+        [[nodiscard]] bool old_governors() const override;
 
     private:
         RenderCore& core_;

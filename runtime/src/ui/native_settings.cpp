@@ -2127,6 +2127,7 @@ public:
         state.measured_fps = host_window::measured_present_hz.load(std::memory_order_relaxed) *
                              (frame_generation_running() ? static_cast<double>(host_window::upscaler_caps().frames_presented) : 1.0);
         state.frame_rates = settings_frame_rate_caps(render, true);
+        state.target_missed = g_target_missed.load(std::memory_order_relaxed);
         state.anti_aliasing_text = anti_aliasing_row_text(render.aa_mode, render.smaa_quality, get_post_process_status());
         if (render.texture_packs) {
             const auto packs = TexturePacks::summary();

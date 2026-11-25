@@ -30,6 +30,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 
 namespace galaxy::render {
 
@@ -150,6 +151,18 @@ public:
         picture = {};
         return false;
     }
+    // Dynamic resolution as the renderer last drew (G2.5): the scene's share and the lowest it may take, in sixteenths
+    // of a side; false while it is off (the GPU time is then the whole size's).
+    [[nodiscard]] virtual bool resolution(unsigned& sixteenths, unsigned& floor) const {
+        sixteenths = floor = 16u;
+        return false;
+    }
+    // The arbiter's budget for a picture's GPU time, ms, which dynamic resolution aims at (0: none, the present rate's).
+    virtual void set_resolution_budget(double budget_ms) { (void)budget_ms; }
+    // The device's thermal headroom (Android's AThermal_getThermalHeadroom: 1 is where it throttles; 0: not known).
+    [[nodiscard]] virtual double thermal_headroom() const { return 0.0; }
+    // The old path beside the arbiter (--diagnostics old-governors): the GPU governor and the present rate's budget.
+    [[nodiscard]] virtual bool old_governors() const { return false; }
 };
 
 // The playing game frame's sequence, or the one waiting for its reference.
@@ -266,16 +279,32 @@ public:
     // The fewest generated pictures above `generated` that present at a higher rate: all of them when none.
     [[nodiscard]] unsigned step_up(unsigned generated) const;
 
-    [[nodiscard]] unsigned gpu_cap() const noexcept { return gpu_cap_; }
+    [[nodiscard]] unsigned gpu_cap() const noexcept { return old_path_ ? gpu_cap_ : arbiter_.cap; }
     [[nodiscard]] unsigned cadence_cap() const noexcept { return cadence_cap_; }
+    // The arbiter's share of the slot that dynamic resolution's budget gets (1: the whole slot; down to kLeastPressure
+    // when pictures come late, the render thread's time a picture is over the slot, or the device runs hot).
+    [[nodiscard]] double resolution_pressure() const noexcept { return arbiter_.pressure; }
+    // The pictures have missed their slots for a sustained time with the resolution at its floor: the settings say so.
+    [[nodiscard]] bool target_missed() const noexcept { return arbiter_.missed; }
     [[nodiscard]] double game_fps() const noexcept { return cadence_fps_; }
     [[nodiscard]] std::int64_t delay_qpc() const noexcept { return delay_qpc_; }
     [[nodiscard]] std::uint64_t serial() const noexcept { return serial_; }
     // The counts since the last take; the step delay's maximum and the counts start over.
     [[nodiscard]] ScheduleCounts take_counts() noexcept;
 
+    // The arbiter's bounds: its window, the least share of the slot it gives resolution, the late share it acts on.
+    static constexpr double kLeastPressure = 0.5;
+    static constexpr double kLateShare = 0.05;
+    static constexpr double kCalmShare = 0.01;
+
 private:
     unsigned gpu_governor(double& rate, bool stopping, std::int64_t now);
+    // The arbiter (FRAME-MODEL 2.16 target 5): the generated pictures a step and dynamic resolution's budget.
+    unsigned arbiter(double& rate, bool stopping, std::int64_t now);
+    void judge_window(unsigned most, std::int64_t now);
+    // The most generated pictures the display's rate takes: under variable refresh those whose 60 x (k + 1) stays
+    // under the cap (floor(cap / 60) - 1, at least one; the slots stay at the cap), else all the settings ask for.
+    [[nodiscard]] unsigned arbiter_most(unsigned configured) const;
     void restart_governors(std::int64_t now);
     void note_cadence(std::int64_t now, std::uint64_t waited_total);
     // The slot clock's length, kept and published to the host (g_slot_period_qpc).
@@ -299,6 +328,9 @@ private:
     // The present slot clock: the next slot and a slot's length (on the display's vblanks when they are timed).
     std::int64_t slot_due_ = 0;
     std::int64_t slot_period_ = 0;
+    // The slot of the last sequence with no generated pictures on a display at n x 60 Hz: the frames' own clock, every
+    // n-th refresh from it (P-316, begin_waiting). 0: none yet.
+    std::int64_t frames_anchor_ = 0;
     bool unbounded_ = false;
 
     // The display model's lead (display_lead), its rule, and the references' part that follows it.
@@ -314,7 +346,39 @@ private:
     std::int64_t delay_qpc_ = 0;
     std::int64_t late_quantile_ = 0;
 
-    // The GPU governor.
+    // The arbiter (arbiter, judge_window). Its window counts the slots served and those a stall skipped, and the
+    // render thread's time for the generated pictures. `cap`: the generated pictures it allows; a raise is a trial,
+    // kept when the trial's window keeps its slots and its own GPU reading fits, else undone with the next try twice as
+    // far off (2 s to 64 s).
+    // A GPU time read within `settle_until` (a second after a change, two after a fall, whose lower load lets the
+    // clock fall) decides nothing (P-315).
+    // No limit: kUnboundedGeneratedFrames (render_config.h), which this header does not include.
+    static constexpr unsigned kNoLimit = std::numeric_limits<unsigned>::max();
+    struct Arbiter {
+        unsigned cap = kNoLimit;
+        double pressure = 1.0;
+        bool missed = false;
+        std::int64_t window = 0;
+        std::uint64_t slots = 0;
+        std::uint64_t late = 0;
+        std::uint64_t drawn = 0;
+        std::uint64_t spent = 0;
+        std::int64_t settle_until = 0;
+        unsigned over = 0;  // windows in a row the GPU time at the floor did not fit
+        unsigned trial_from = kNoLimit;
+        std::int64_t trial_until = 0;
+        std::int64_t next_try = 0;
+        std::int64_t backoff_s = 2;
+        std::int64_t pressure_try = 0;  // the earliest a lower pressure is tried higher again
+        std::int64_t pressure_backoff_s = 2;
+        bool pressure_trial = false;
+        std::int64_t missed_since = 0;  // late windows at the floor since; 0: none
+        std::int64_t kept_since = 0;    // calm windows since; 0: none
+    };
+    Arbiter arbiter_{};
+    bool old_path_ = false;
+
+    // The GPU governor (the old path, --diagnostics old-governors).
     unsigned gpu_cap_;
     std::uint64_t gpu_cap_serial_ = 0;
     std::uint64_t gpu_checked_ = 0;

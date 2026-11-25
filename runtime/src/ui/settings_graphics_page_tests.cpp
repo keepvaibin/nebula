@@ -14,6 +14,8 @@ public:
     bool temporal = false;
     bool folders = true;
     bool clock_missing = false;
+    bool missed = false;
+    bool dynamic_offered = false;
     unsigned refresh_hz = 144;
     mutable int opened = -1;
     galaxy::ui::GraphicsPageState query(const galaxy::ui::RenderConfig&) const override {
@@ -22,6 +24,8 @@ public:
         state.render_percent = 50;
         state.frame_rates.refresh_hz = refresh_hz;
         state.frame_rates.display_clock_missing = clock_missing;
+        state.target_missed = missed;
+        state.dynamic_resolution_offered = dynamic_offered;
         state.temporal_upscaling = temporal;
         state.folders_open = folders;
         state.anti_aliasing_text = "ANTI-ALIASING: OFF";
@@ -79,6 +83,23 @@ int main() {
         check(row(rows, "INTERPOLATION").value == "NATIVE (NOT SYNCHRONIZED)",
               "native interpolation with no display clock is marked not synchronized");
         host.clock_missing = false;
+
+        // A target missed for a sustained time (the picture arbiter, G2.5) is said under TARGET FRAME RATE with what to
+        // change; the frame rate is not changed.
+        check(row(rows, "TARGET FRAME RATE").help.rfind("SHOWING", 0) == 0, "a held target shows the frame rate");
+        host.missed = true;
+        rows = galaxy::ui::graphics_page(config, host);
+        check(row(rows, "TARGET FRAME RATE").help == "FRAMES ARE LATE. LOWER THE TARGET FRAME RATE", "a missed target is said");
+        host.dynamic_offered = true;
+        config.dynamic_resolution = false;
+        rows = galaxy::ui::graphics_page(config, host);
+        check(row(rows, "TARGET FRAME RATE").help ==
+                  "FRAMES ARE LATE. LOWER THE TARGET FRAME RATE OR TURN ON DYNAMIC RESOLUTION",
+              "a missed target with dynamic resolution off names it");
+        check(config.max_fps == 0, "a missed target changes no setting");
+        host.missed = false;
+        host.dynamic_offered = false;
+        rows = galaxy::ui::graphics_page(config, host);
 
         // An upscaler on: its mode sets the resolution, the exact height is not offered beside it.
         rows = galaxy::ui::graphics_page(config, host);

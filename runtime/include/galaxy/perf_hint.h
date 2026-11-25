@@ -99,5 +99,9 @@ std::size_t perf_hint_work_cpu(galaxy::ThreadCpuSample* out, std::size_t capacit
 // Background threads that start on battery ask the OS for efficiency (windows_power.h lower_current_thread_priority); the
 // game and render threads never do. False elsewhere.
 [[nodiscard]] bool perf_hint_on_battery() noexcept;
+// The device's thermal headroom for the picture arbiter (P-019, FRAME-MODEL 2.16 target 5): Android's
+// AThermal_getThermalHeadroom forecast a second on, read once a second off the frame threads (1 is where the device
+// throttles); 0 where it is not known (before the first read, Android before 11, every other platform). Any thread.
+[[nodiscard]] double thermal_headroom() noexcept;
 
 }  // namespace galaxy::host

@@ -222,7 +222,12 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                             draft.max_fps = frame_rate_of_target(targets[settings_step(
                                 static_cast<unsigned>(index), static_cast<unsigned>(targets.size()), delta)]);
                         },
-                        now});
+                        // A target missed for a sustained time is said here with what to change; nothing switches
+                        // by itself (FRAME-MODEL 2.16 target 5).
+                        !state.target_missed ? std::string(now)
+                        : state.dynamic_resolution_offered && !render.dynamic_resolution
+                            ? std::string("FRAMES ARE LATE. LOWER THE TARGET FRAME RATE OR TURN ON DYNAMIC RESOLUTION")
+                            : std::string("FRAMES ARE LATE. LOWER THE TARGET FRAME RATE")});
     }
 
     rows.push_back({"DETAIL", {}, nullptr, {}, true});
