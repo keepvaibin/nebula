@@ -298,7 +298,7 @@ void test_present_stamps() {
             const double at = static_cast<double>(fit.vsync_ns - 1000000000) / period;
             const std::int64_t phase = fit.vsync_ns - vblank(std::llround(at));
             worst_interval = std::max(worst_interval, interval_error);
-            worst_phase = std::max(worst_phase, std::llabs(phase));
+            worst_phase = std::max<std::int64_t>(worst_phase, std::llabs(phase));  // llabs gives long long; int64_t is long on Linux
             ok = ok && interval_error <= std::max(0.01, 60000.0 / period) && std::llabs(phase) <= 300000;
         }
         // The fit as the display clock's grid (display_clock.cpp: each stamp noted, the fitted period stated): at a
