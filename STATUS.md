@@ -59,7 +59,7 @@ In work now: Nothing started.
 | Id | State | Kind | Check | Renderer | Traced to | Seen |
 | --- | --- | --- | --- | --- | --- | --- |
 | R-006 | open | fail | soak | - | not traced | 1 |
-| R-007 | open | worse | pace D3D 240 Hz | - | step G2.3.1 commit d7682d740 | 1 |
+| R-007 | started | worse | pace D3D 240 Hz | - | step G2.3.1 commit d7682d740 | 1 |
 | R-005 | landed | fail | soak | - | not traced | 1 |
 | R-001 | confirmed | fail | build/windows-asan | - | not traced | 1 |
 | R-002 | confirmed | fail | coverage | - | not traced | 1 |
@@ -124,7 +124,7 @@ Nothing waits for the owner.
 | M-006 | closed | - | the step tier and section check; a passing tool fault played once more; a waiter left not judged runs itself | 0 | 95 | 2911f6429 |
 | M-007 | closed | - | the section-at-a-time roles: a whole section ahead, wait, hand-off sheets, hard reports, the live page | 0 | 80 | 9ed09cfec |
 
-## Decisions (130)
+## Decisions (119)
 
 - 2026-11-23 S0.2.1: LoadSlice: 32 items a frame; an item is a phase of GameScene::initAfterScenarioChosen, the player, one placement made whole, one piece of FileSelector::initStep, or one Star Bit of the reserve (because the card asks for a fixed count of work and names no count; the count is a constant in one place, no player sees which frame of the load an item falls in, and the load worker (G3.7) replaces the slices)
 - 2026-11-23 S0.2.1: Drawing's random stream (MR::getDrawRandom) is seeded with the same seed as the game's stream, in setRandomSeedFromStageName and setFixedRandomSeed (because a fixed seed keeps the cosmetic numbers the same in every run of a replay and needs no new setting; the draw stream runs through the same sequence as the game's but is advanced only by drawing, so neither changes the other)
@@ -245,17 +245,6 @@ Nothing waits for the owner.
 - 2026-11-25 G6.2: An effect line command carries a pointer to its settings (EffectLineSettings, AudEffector::cFxLine, which live as long as the game), null for a line off (because With float gains and weights the settings are 52 bytes, past the sound ring's 48-byte payload (SoundCommand::cPayloadBytes))
 - 2026-11-25 G6.2: An effect's far distance is scaled by a float (1, 2, 4 or 0.5) where the table's two bits gave 1, 2, 4 or 8 meaning a half (because The old half divided by 2.0f and the new one multiplies by 0.5f: both give the exact half, the same float for every finite distance; 1, 2 and 4 multiply as before)
 - 2026-11-25 G6.2: Proof 3's search is over the card's items: the sends' and switches' old names and every 32768 in native/petari/src/Game/Sound, native/petari/include/Game/Sound and native/petari/src/Game/AudioLib; the envelope points' Q15 values (Oscillator) and the parameter operands over 32767 and 16383 stay, given row P-372 (because Those are not P-222's items (its four are named in the row) and the envelope tables are G6.1's (P-186); a search wider than the card would make this step rewrite them unasked)
-- 2026-11-25 G6.7: In mode 2 a note whose sends carry a rear (a surround or inverted-right bus, or a rear curve) is placed by the panner (NEBULA_VOICE_PLACED) on placed outputs and plays through its sends on two channels; a note with front-only sends plays as made (because Point 3 places every note by pan and rear when the output has rear speakers; front-only sends already give the law's gains at rear 0 (their left and right quarter sines), and the US disc's census has only the front-only default and the panner word)
-- 2026-11-25 G6.7: On placed outputs the inverted right bus joins the right bus un-inverted (because Point 5: no inversion on a speaker of its own; the bus carries the matrix's right rear part, which belongs to the right side)
-- 2026-11-25 G6.7: Rear echo lines: effect states 4 and 5 take line 2's and line 3's settings and return to the rear left and right buses; their input is the panner's rear sends times 1/kFold, with no delay and no matrix; they run only when placed with rear speakers (because Point 3 and 5: an effect line's rear return of the same power, unmatrixed; the game has no settings of its own for rear lines, and lines 2 and 3 are the ones the rear sends fed on two channels)
-- 2026-11-25 G6.7: A layout is offered when the device has every speaker it names, the low-frequency speaker included (3.1: front, centre, low frequency; 5.1: and sides or backs; 7.1: both pairs); Auto on a device with nothing past the front pair is Stereo (because The card's 'Offered' (a device with all its speakers); the .1 names a speaker the device must have even though it stays silent (point 2))
-- 2026-11-25 G6.7: A layout change: old-form frames still waiting fade out over at most 10 ms with their own form's gains and no fold (the rest dropped); the new form starts with 2.5 ms of silence, then a 10 ms fade in; a change that keeps the mixer's output moves each gain over 10 ms; before an incompatible switch the mixer makes old-form frames until 10 ms of them wait (because Point 7 (a layout change ramps, 10 ms) with the mixer making one form at a time; the 2.5 ms covers the two-channel matrix's late surround buses, so the fade in never starts mid-step)
-- 2026-11-25 G6.7: Power equal to two channels' is measured per bus: a surround bus's two-channel power is kFold^2 (kUnit^2 + kMatrix^2) (because Point 4's words; the front buses keep power 1 on both outputs)
-- 2026-11-25 G6.7: The Apple host stays at two channels (because Its device file is not in the card's Where list; the law's two-channel path plays there unchanged)
-- 2026-11-25 G6.7: SDL hosts: channels named per SDL_audio.h's order for each count; the stream follows a device change by reading its device-side format each pull and setting its input to it (because Point 8 and the card's device change on the SDL hosts (the sources did not say; SDL's stream changes its device side when the default device changes, UpdateAudioStreamFormatsPhysical))
-- 2026-11-25 G6.7: WASAPI names the mask's first 18 bits, low frequency among them, reports the endpoint's mask, and opens the whole mask only when the resolved choice places sound (because Point 2 and 8; a two-channel choice opens the front pair as before)
-- 2026-11-25 G6.7: The two-channel bit-for-bit hashes of test 10(c) are recorded and checked on MSVC x64; on other compilers the test checks the stage's left and right equal the mixer's bit for bit (because Float rounding of the same code differs by compiler and processor; the recorded numbers come from the mixer before this step built with the project's MSVC flags)
-- 2026-11-25 G6.7: The reset help text 'Every volume and the sound output back to their defaults' is kept (because It still says what the reset does in all 14 languages; renaming it would change 14 translated cells the card does not name)
 
 ## Checks changed during the run (72)
 
