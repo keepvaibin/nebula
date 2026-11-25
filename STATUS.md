@@ -6,7 +6,8 @@ Steps landed: 31 of 145 (21%).
 
 Now: G2.3.7 landed (31 of 145); in work: writer finishing G2.3's sheet, then G2.4, G2.5
 
-In work now: Nothing started.
+In work now:
+- G2.3 Landing 3h: the picture interval published; P-313's restart hitch (agent 1)
 
 ## Packages
 
@@ -113,7 +114,7 @@ Nothing is blocked.
 | M-006 | closed | - | the step tier and section check; a passing tool fault played once more; a waiter left not judged runs itself | 0 | 95 | 2911f6429 |
 | M-007 | closed | - | the section-at-a-time roles: a whole section ahead, wait, hand-off sheets, hard reports, the live page | 0 | 80 | 9ed09cfec |
 
-## Decisions (102)
+## Decisions (103)
 
 - 2026-11-23 S0.2.1: LoadSlice: 32 items a frame; an item is a phase of GameScene::initAfterScenarioChosen, the player, one placement made whole, one piece of FileSelector::initStep, or one Star Bit of the reserve (because the card asks for a fixed count of work and names no count; the count is a constant in one place, no player sees which frame of the load an item falls in, and the load worker (G3.7) replaces the slices)
 - 2026-11-23 S0.2.1: Drawing's random stream (MR::getDrawRandom) is seeded with the same seed as the game's stream, in setRandomSeedFromStageName and setFixedRandomSeed (because a fixed seed keeps the cosmetic numbers the same in every run of a replay and needs no new setting; the draw stream runs through the same sequence as the game's but is advanced only by drawing, so neither changes the other)
@@ -217,6 +218,7 @@ Nothing is blocked.
 - 2026-11-24 G2.3.6: Past the 2 s the platform sets host_window::surface_overdue; the Vulkan renderer checks it before the acquire and again just before the queue present, and runs lose_device instead of presenting; it clears the flag when it releases its surface or makes a new one (because the card asks for the device-lost path rather than a present into a surface that may be gone; checking at the last moment shrinks the window to the instant between the check and the call, and clearing on release and on a new surface keeps a late flag from losing a device whose surface is new)
 - 2026-11-24 G2.3.6: The pump's 8 ms stays as its bound, and rumble wakes the pump only when its pad or level changes (because sensors and pads SDL polls are read only by a pump, so the bound keeps them at most 8 ms old; a rumble renewed with the same values needs no wake)
 - 2026-11-24 G2.3.7: The allowance is galaxy::kOwnFrameRateAllowance (1) beside the step rate in game_step.h, with the decision own_frame_rate(rate, step_rate); Java keeps FrameRates.OWN_RATE_ALLOWANCE, the same 1, named after it, and asks the library only for the step rate (nativeStepRate) (because the card asks for one native call and no Java copy of the step rate; the allowance is a named constant on each side, and the Java decision lives in FrameRates.java, free of Android's classes, so FrameRatesTest.kt runs it on the JVM at 60 and at a fed 50)
+- 2026-11-24 G2.3: FrameSchedule publishes its slot length itself: every write of slot_period_ goes through set_slot_period, which stores g_slot_period_qpc (present_clock.h) beside it (because the schedule is the one place the length is set (configure and begin_waiting), on the render thread, so the published value can never lag the one the slots use, and frame_schedule_tests.cpp checks it against slot_period() on a vblank grid, under variable refresh and with no slot clock)
 
 ## Checks changed during the run (72)
 
