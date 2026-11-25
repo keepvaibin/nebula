@@ -61,8 +61,9 @@ enum class Event : std::uint16_t {
     GateWaitEnd = 37,
     PipelineMissed = 38,   // render: a draw found its pipeline not made yet (core/pipelines.cpp, missing): left out, or
                            // waited for with fixed steps, and made at the workers' queue's front. a=pipeline id, b=its key
-    DisplayModel = 39,     // render, Direct3D: a present of a picture drawn for a refresh (dxgi_pacing.h). qpc=that
-                           // refresh, a=the present's count (DisplayStats' PresentCount), b=when it was ready to present
+    DisplayModel = 39,     // render, Direct3D and Vulkan: a present of a picture drawn for a refresh (dxgi_pacing.h; on
+                           // Vulkan the refresh it asked for with present timing, renderer_vk.cpp). qpc=that refresh,
+                           // a=the present's count (DisplayStats' PresentCount) or id, b=when it was ready to present
 };
 
 struct Record {

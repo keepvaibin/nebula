@@ -185,6 +185,9 @@ public:
     // VK_EXT_present_timing with present id 2 and present wait 2 (and surface capabilities 2 on the instance), enabled:
     // a swap chain made for it reports when each present reached the display (renderer_vk.cpp report_present_times).
     [[nodiscard]] bool present_timing() const noexcept { return present_timing_; }
+    // Present timing's presentAtAbsoluteTime, enabled: a present may ask the refresh it is shown at, where its surface
+    // takes it (renderer_vk.cpp create_swapchain, present_swapchain_image).
+    [[nodiscard]] bool present_at_time() const noexcept { return present_at_time_; }
     // VK_EXT_swapchain_colorspace on the instance (the surface can list HDR10 formats) and VK_EXT_hdr_metadata on the device
     // (vkSetHdrMetadataEXT), each where it is here.
     [[nodiscard]] bool swapchain_colorspace() const noexcept { return swapchain_colorspace_; }
@@ -340,6 +343,7 @@ private:
     bool display_timing_ = false;  // VK_GOOGLE_display_timing
     bool present_wait_ = false;             // VK_KHR_present_wait and present_id, enabled
     bool present_timing_ = false;           // VK_EXT_present_timing, present_id2 and present_wait2, enabled
+    bool present_at_time_ = false;          // present timing's presentAtAbsoluteTime feature, enabled
     bool surface_capabilities2_ = false;    // VK_KHR_get_surface_capabilities2 on the instance
     bool pipeline_libraries_ = false;       // VK_EXT_graphics_pipeline_library, enabled, fast linking
     bool present_mode_switching_ = false;   // swapchain maintenance 1, enabled

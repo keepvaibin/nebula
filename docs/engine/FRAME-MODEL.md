@@ -1701,6 +1701,32 @@ at the picture's moment; every platform does the same or says on screen why not.
      and `AcquireEnd` on Direct3D, the refresh asked as `DisplayModel` (event 39) beside `DisplayStats`.
    - The PC's monitor (read 11-24): 3840x2160, at 240 Hz, lists 29, 30, 59, 60, 119, 120 and 240 Hz; 144 and 165 Hz
      are not listed there and are proven by the simulated displays of `frame_schedule_tests.cpp`.
+   Answered at G2.3.2 (11-24, on main's c403072d3):
+   - The timeline half of I-012 is on main (71e31e86e): `frame_timeline.h` records on every platform, on
+     `galaxy::qpc_now()`'s clock (QueryPerformanceCounter, CLOCK_MONOTONIC on Linux and Android, CLOCK_UPTIME_RAW on
+     Apple's), and `frame_timeline_tests.cpp` runs on every desktop system. Only presenting at a requested time was left.
+   - Vulkan, on every system where it runs (Windows, Linux, Android): a swap chain made for present timing whose device
+     and surface take a present at an absolute time (`presentAtAbsoluteTime` in the device's features and the surface's
+     `VkPresentTimingSurfaceCapabilitiesEXT`, `Swapchain::ask_time`) asks each picture with a slot for that refresh:
+     `targetTime` half a refresh before the slot, in the swap chain's time domain (the runtime's clock, or its own mapped
+     by the calibration), so the slot's own refresh whatever the reporting stage's offset from the vblank. Such a
+     present waits for no earlier one and the renderer holds nothing: the display holds it, and the schedule starts it
+     the display lead before its refresh. Present wait stays for every present that asks no time.
+   - The model is `DisplayModel`, fed by those presents (the refresh asked, when the picture was ready, the call) and
+     by present timing's results (`report_present_times`), and reset with each new swap chain. A present held to its
+     asked refresh tells only that it was in time, so the hold is learnt from presents whose asked refresh was no later
+     than the model's for their call (the least lead) and from those shown later than asked; a window with none keeps
+     the hold it had. A hold that grows shows in late pictures; one that shrinks is not seen while every picture asks a
+     later refresh, and is learnt again with the next swap chain. With no present timing, or one that cannot ask a time,
+     the model gives no answers and the slots are those of before (lead 0, present wait).
+   - Android: present timing, where the device offers it as above, is picked at the swap chain's start; there
+     `VK_GOOGLE_display_timing` is not used. Elsewhere display timing stays the path, with its own depth
+     (`PresentSlots`, which shares `PresentDepth` with the model): the schedule's lead and that depth are never stacked.
+     The game's own frames at 60 Hz have no schedule and stay on `PresentSlots` with display timing; on a swap chain
+     that asks times with present timing they go with present wait, as on the PC. The tablet's offer is read from the
+     run log's `[vulkan] swapchain ... pictures ask their time:` line.
+   - P-317 (the tablet's three refreshes at 60 Hz) is the depth's rule meeting a GPU at its low clock; the rule is the
+     shared one, and the figure is taken again at G2.5, where the clock is held.
 4. The spin. Where a display time is asked (Vulkan present timing, Android display timing, Metal's display link), the
    render thread starts a picture its lead ahead and the display holds it to its time; the closing spin of
    `PreciseWait` stays only where no time can be asked. The render thread's CPU time a second is measured on the tablet

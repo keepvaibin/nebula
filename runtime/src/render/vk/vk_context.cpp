@@ -969,8 +969,10 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         present_id2.pNext = nullptr;
         present_wait2.pNext = nullptr;
         present_timing.pNext = nullptr;
-        // Only the reports: no present at a time asked for.
-        present_timing.presentAtAbsoluteTime = VK_FALSE;
+        // A present at an absolute time where the device offers it (each picture asks the refresh it was drawn for);
+        // never at a time relative to the one before.
+        present_at_time_ = present_timing_ && present_timing.presentAtAbsoluteTime == VK_TRUE;
+        present_timing.presentAtAbsoluteTime = present_at_time_ ? VK_TRUE : VK_FALSE;
         present_timing.presentAtRelativeTime = VK_FALSE;
     }
     // A present mode per present (the surface side was enabled on the instance): swapchain maintenance 1 and its feature.
