@@ -1757,8 +1757,11 @@ at the picture's moment; every platform does the same or says on screen why not.
      renderer's layer while VSync is on (`host_window::metal_link_layer`), on a thread of its own with its own run loop.
      It replaces the older link (CVDisplayLink, CADisplayLink), which stops while it runs: the refreshes its updates
      will show become the grid's vsyncs once they have come, and its drawable goes to the render thread
-     (`metal_link_drawable`, a newer update's taking the place of one not taken), which waits for it (50 ms at most)
-     and presents it with `presentDrawable:`: the link shows it at its update's `targetPresentationTimestamp` (I-012's Apple half; a timed present of a link's drawable is refused by Core Animation). Without the
+     (`metal_link_drawable`, a newer update's taking the place of one not taken), which waits for it (50 ms at most;
+     a link that gives none in that time lets the layer go before the layer's own drawables are taken, as the layer's
+     `nextDrawable` never returns while a link is on it) and presents it with `presentDrawable:`: the link shows it
+     at its update's `targetPresentationTimestamp` (I-012's Apple half; a timed present of a link's drawable is
+     refused by Core Animation). Without the
      link (an older system, VSync off) the layer's own drawables go up when ready, as before.
    - I-006: the drop on a slow drawable wait is gone; the drawables handed over and not yet presented are counted and a
      picture is held back only when two are in the line as its drawable comes.

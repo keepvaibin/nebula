@@ -1209,9 +1209,11 @@ bool RendererMtl::present(const DisplayTexture* source, bool capture_backbuffer,
     }
     @autoreleasepool {
         // The drawable is taken as late as the frame allows: it is one of a few, and held until it is shown. Where
-        // the Metal display link runs it gives the drawable, with the time it will be shown (50 ms bounds a link held
-        // or a display that gives it no updates, and then the layer's own until the link gives one again); else the
-        // layer's own. The link shows its drawable at `shown_at` on its own, so the time is not used for the present.
+        // the Metal display link runs it gives the drawable, with the time it will be shown; else the layer's own. A
+        // link that gives none in 50 ms (held, or a display that gives it no updates) has let the layer go when the
+        // call returns (the layer's nextDrawable never returns while the link is on it), and the layer's own are
+        // taken until the layer is made again. The link shows its drawable at `shown_at` on its own, so the time is
+        // not used for the present.
         const std::int64_t asked = galaxy::qpc_now();
         galaxy::timeline::record_at(galaxy::timeline::Event::AcquireBegin, static_cast<std::uint64_t>(asked));
         void* linked = nullptr;
