@@ -1,13 +1,12 @@
 # Nebula native plan: status
 
-Written 2026-11-25 08:31. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-25 08:32. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 35 of 145 (24%).
 
 Now: in work: lander landing G6.2 and G6.7
 
-In work now:
-- G6.7 The surround law (P-193) (agent 1)
+In work now: Nothing started.
 
 ## Packages
 
@@ -110,7 +109,7 @@ Nothing waits for the owner.
 
 ## Blocked
 
-Nothing is blocked.
+- G6.7 The surround law (P-193): hard: build/windows + github Linux sanitizers: galaxy_speaker_law_tests aborts with an AddressSanitizer heap-buffer-overflow on the GitHub Linux ASAN/UBSAN job (run 45652159093); the Windows gate stopped on it (report: D:/NebulaWork/plan/native/hard/G6.7.md)
 
 ## Tool mends
 
