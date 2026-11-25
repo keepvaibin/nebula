@@ -4,7 +4,7 @@ Written 2026-11-24 21:23. If this time is more than three hours old, the work ha
 
 Steps landed: 27 of 145 (19%).
 
-Now: in work: lander landing G2.3.4 to G2.3.7 (Mac abort fixed by the planner)
+Now: G2.3.4 hard again (Mac start check: frame 1 not let go of); told the planner
 
 In work now: Nothing started.
 
