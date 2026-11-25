@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-24 17:47. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 18:04. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 25 of 145 (17%).
 
@@ -91,6 +91,7 @@ In work now:
 - G2.3.6 Landing 3f: P-281, the Android and Linux host's four faults: Tablet: touch and pad input with the pump's wake (P-281): play a stretch with touch and a pad, read [host-events] lines (waits per second, main-thread CPU, which must not rise over the 8 ms sleep's) and check no input lags; then background the app and return it 10 times, and once with the render thread held past 2 s (a debug hold), reading [window] and [vulkan] lines for the device-lost path and a picture after (agent 1, 2026-11-24 17:47)
 - G2.3.6 Landing 3f: P-281, the Android and Linux host's four faults: Linux: a run with the pump's wake event (menu keys and rumble from the game thread wake SDL_WaitEventTimeout) and the display clock's sleep, read [host-events] and [pacing] lines; a Wii Remote on a DolphinBar on the tablet after nativeInit (the published JNI table) (agent 1, 2026-11-24 17:47)
 - G2.3.6 Landing 3f: P-281, the Android and Linux host's four faults: Proof 2: the game step's time and the walk's on the PC and the tablet, before and after G2.3.6, never slower (agent 1, 2026-11-24 17:47)
+- G2.3.7 Landing 3g: the Android fall-back and the surface vote read the step rate: Tablet: a first start with config.ini removed from a copy of the app data (adb, tablet lock, restored after): logcat's 'display mode the system's for frame rate 60.0' and the game at the step rate; then a setting of 90 and of 61 (the vote's FIXED_SOURCE line and the display mode); the step and walk times before and after (agent 1, 2026-11-24 18:04)
 
 ## Waiting for the owner
 
@@ -112,7 +113,7 @@ Nothing is blocked.
 | M-006 | closed | - | the step tier and section check; a passing tool fault played once more; a waiter left not judged runs itself | 0 | 95 | 2911f6429 |
 | M-007 | closed | - | the section-at-a-time roles: a whole section ahead, wait, hand-off sheets, hard reports, the live page | 0 | 80 | 9ed09cfec |
 
-## Decisions (101)
+## Decisions (102)
 
 - 2026-11-23 S0.2.1: LoadSlice: 32 items a frame; an item is a phase of GameScene::initAfterScenarioChosen, the player, one placement made whole, one piece of FileSelector::initStep, or one Star Bit of the reserve (because the card asks for a fixed count of work and names no count; the count is a constant in one place, no player sees which frame of the load an item falls in, and the load worker (G3.7) replaces the slices)
 - 2026-11-23 S0.2.1: Drawing's random stream (MR::getDrawRandom) is seeded with the same seed as the game's stream, in setRandomSeedFromStageName and setFixedRandomSeed (because a fixed seed keeps the cosmetic numbers the same in every run of a replay and needs no new setting; the draw stream runs through the same sequence as the game's but is advanced only by drawing, so neither changes the other)
@@ -215,6 +216,7 @@ Nothing is blocked.
 - 2026-11-24 G2.3.6: The display clock's sleep goes again only on EINTR on Linux too (sleep_to, shared), and any other error hands the frame to the host's clock there as well (because Linux's loop retried only on EINTR but then took the frame as slept without sleeping, so the game ran unpaced on such an error; one helper serves both and is under host_wait_tests.cpp)
 - 2026-11-24 G2.3.6: Past the 2 s the platform sets host_window::surface_overdue; the Vulkan renderer checks it before the acquire and again just before the queue present, and runs lose_device instead of presenting; it clears the flag when it releases its surface or makes a new one (because the card asks for the device-lost path rather than a present into a surface that may be gone; checking at the last moment shrinks the window to the instant between the check and the call, and clearing on release and on a new surface keeps a late flag from losing a device whose surface is new)
 - 2026-11-24 G2.3.6: The pump's 8 ms stays as its bound, and rumble wakes the pump only when its pad or level changes (because sensors and pads SDL polls are read only by a pump, so the bound keeps them at most 8 ms old; a rumble renewed with the same values needs no wake)
+- 2026-11-24 G2.3.7: The allowance is galaxy::kOwnFrameRateAllowance (1) beside the step rate in game_step.h, with the decision own_frame_rate(rate, step_rate); Java keeps FrameRates.OWN_RATE_ALLOWANCE, the same 1, named after it, and asks the library only for the step rate (nativeStepRate) (because the card asks for one native call and no Java copy of the step rate; the allowance is a named constant on each side, and the Java decision lives in FrameRates.java, free of Android's classes, so FrameRatesTest.kt runs it on the JVM at 60 and at a fed 50)
 
 ## Checks changed during the run (72)
 
