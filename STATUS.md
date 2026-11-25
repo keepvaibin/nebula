@@ -4,7 +4,7 @@ Written 2026-11-25 10:24. If this time is more than three hours old, the work ha
 
 Steps landed: 35 of 145 (24%).
 
-Now: R-007 landing refused by the gate (repair check field not a gate check); waiting for the planner
+Now: in work: lander landing repair R-007 again (check field fixed)
 
 In work now: Nothing started.
 
@@ -59,7 +59,7 @@ In work now: Nothing started.
 | Id | State | Kind | Check | Renderer | Traced to | Seen |
 | --- | --- | --- | --- | --- | --- | --- |
 | R-006 | open | fail | soak | - | not traced | 1 |
-| R-007 | started | worse | pace D3D 240 Hz | - | step G2.3.1 commit d7682d740 | 1 |
+| R-007 | started | worse | measure/step/pc | - | step G2.3.1 commit d7682d740 | 1 |
 | R-005 | landed | fail | soak | - | not traced | 1 |
 | R-001 | confirmed | fail | build/windows-asan | - | not traced | 1 |
 | R-002 | confirmed | fail | coverage | - | not traced | 1 |
