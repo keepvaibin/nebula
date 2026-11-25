@@ -762,11 +762,9 @@ private:
     // while two are in the line is held back; and how many have been.
     std::shared_ptr<std::atomic<int>> drawables_out_ = std::make_shared<std::atomic<int>>(0);
     std::uint64_t pictures_held_ = 0;
-    // The Metal display link (host_window::metal_link_layer): the layer it runs on (null: none), the time the link
-    // will show the drawable taken for this frame (CACurrentMediaTime's seconds; 0: shown when ready), and whether
+    // The Metal display link (host_window::metal_link_layer): the layer it runs on (null: none), and whether
     // in-between pictures fill the display (-1: not yet told).
     void* link_layer_ = nullptr;
-    double drawable_shown_at_ = 0.0;
     int display_fills_ = -1;
     // A test's late render thread (NEBULA_TEST_RENDER_DELAY_MS, I-006's proof): that many milliseconds slept before
     // every 30th picture's drawable is asked.

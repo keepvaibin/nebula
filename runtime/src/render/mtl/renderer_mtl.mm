@@ -814,15 +814,11 @@ std::uint64_t RendererMtl::end_frame(bool present_swap_chain, SubmissionCallback
                     out->fetch_sub(1, std::memory_order_acq_rel);
                 }];
             }
-            // A drawable of the Metal display link at the time the link will show it (I-012, Apple's half: a present
-            // at a requested time); the layer's own as soon as the frame's commands are scheduled.
-            if (drawable_shown_at_ > 0.0) {
-                [commands_of(frame.lists.back()) presentDrawable:(__bridge id<CAMetalDrawable>)drawable_
-                                                          atTime:drawable_shown_at_];
-            } else {
-                [commands_of(frame.lists.back()) presentDrawable:(__bridge id<CAMetalDrawable>)drawable_];
-            }
-            drawable_shown_at_ = 0.0;
+            // A drawable of the Metal display link is shown at its update's targetPresentationTimestamp by the link
+            // itself (I-012, Apple's half: a present at a requested time); a timed present of it is refused (Core
+            // Animation raises CAMetalDrawableInvalidOperation, "-presentAtTime should not be called when using
+            // CAMetalDisplayLink"). The layer's own goes up as soon as the frame's commands are scheduled.
+            [commands_of(frame.lists.back()) presentDrawable:(__bridge id<CAMetalDrawable>)drawable_];
             galaxy::pacing::presented(pacing_id);
             // The rate the display links ask (P-034): the display's fastest only while in-between pictures fill it.
             if (const int fills = interpolation_mode() ? 1 : 0; fills != display_fills_) {
@@ -1215,7 +1211,7 @@ bool RendererMtl::present(const DisplayTexture* source, bool capture_backbuffer,
         // The drawable is taken as late as the frame allows: it is one of a few, and held until it is shown. Where
         // the Metal display link runs it gives the drawable, with the time it will be shown (50 ms bounds a link held
         // or a display that gives it no updates, and then the layer's own until the link gives one again); else the
-        // layer's own.
+        // layer's own. The link shows its drawable at `shown_at` on its own, so the time is not used for the present.
         const std::int64_t asked = galaxy::qpc_now();
         galaxy::timeline::record_at(galaxy::timeline::Event::AcquireBegin, static_cast<std::uint64_t>(asked));
         void* linked = nullptr;
@@ -1246,7 +1242,6 @@ bool RendererMtl::present(const DisplayTexture* source, bool capture_backbuffer,
             surface_lock_ = {};
             return false;
         }
-        drawable_shown_at_ = shown_at;
         drawable_ = own(drawable);
         draw_presented_picture((__bridge void*)drawable.texture, layer_.format, shown, content, true);
     }
