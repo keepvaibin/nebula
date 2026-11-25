@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-25 02:43. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-25 02:44. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 31 of 145 (21%).
 
-Now: G2.3, G2.4, G2.5 written; next: lander for G2.3 to G2.5
+Now: in work: lander landing G2.3 to G2.5
 
 In work now:
 - G2.3 Landing 3h: the picture interval published; P-313's restart hitch (agent 1)
