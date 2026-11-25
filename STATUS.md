@@ -4,7 +4,7 @@ Written 2026-11-25 10:19. If this time is more than three hours old, the work ha
 
 Steps landed: 35 of 145 (24%).
 
-Now: in work: fixer for urgent repair R-007 (D3D hold before Present, 17 steps/s at 240 Hz)
+Now: R-007 partly fixed (60 steps/s back at 240 Hz), blocked on pace rows; waiting for the planner
 
 In work now: Nothing started.
 
