@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-24 18:12. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 18:13. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 25 of 145 (17%).
 
@@ -100,7 +100,7 @@ Nothing waits for the owner.
 
 ## Blocked
 
-Nothing is blocked.
+- G2.3 Landing 3h: the picture interval published; P-313's restart hitch: Done: the picture interval (g_slot_period_qpc, FrameSchedule::set_slot_period, test_published_interval), committed 265f023b0. Left: P-313, the Vulkan picture 50-60 ms late at a scene restart, traced and fixed where it lies. In the way: the hitch is a shown window's in real time; a writer's runs (the quick tour, engine tests) are fixed-step in a hidden window, where RendererVk::present presents nothing (unseen_), so no timeline of it can be taken. The trace (a visible real-time Vulkan run with the 11-17 audit kit, Mario falling twice) is owed (PLAN owed G2.3). G2.4 needs G2.3.
 
 ## Tool mends
 
