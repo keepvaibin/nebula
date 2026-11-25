@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-25 02:28. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-25 02:43. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 31 of 145 (21%).
 
-Now: G2.3.7 landed (31 of 145); in work: writer finishing G2.3's sheet, then G2.4, G2.5
+Now: G2.3, G2.4, G2.5 written; next: lander for G2.3 to G2.5
 
 In work now:
 - G2.3 Landing 3h: the picture interval published; P-313's restart hitch (agent 1)
@@ -236,8 +236,8 @@ Nothing is blocked.
 - 2026-11-25 G2.5: Late slots over 5 %, the render thread's time a generated picture over the slot, or a thermal headroom of 0.9 and above lower the pressure (x0.85 late, x0.9 hot, never under 0.5); a calm cool window (late 1 % or less, time under 0.8 of the slot, headroom under 0.75) tries it x1.1 higher with back-off; ten seconds late at the floor sets the missed target (because the card's order is resolution first, then nothing else: what is shown and the heat act through resolution, never through k, and nothing switches by itself; the settings say what to change)
 - 2026-11-25 G2.5: Under variable refresh k is at most floor(cap / 60) - 1, at least one, and that bound lowers k, not the rate: the slots stay at the cap (because the card bounds k by the cap (proof 9), while G2.2 and G2.3 keep the slots at the cap under variable refresh (test_variable_clock, test_published_interval); lowering the rate to 60 x (k + 1) would show 180 pictures a second on a display that takes 224)
 - 2026-11-25 G2.5: The performance hint's target is the slot (g_slot_period_qpc) where it is shorter than the step, its reported work scaled to one picture; Android 15's reportActualWorkDuration2 takes the CPU and the GPU time (g_picture_gpu_ms), else reportActualWorkDuration (because the card asks the hint to hold the clock for each picture with the newest calls the system has; the host sets the step's target, and reading the slot in the report follows every change of k without a call from the render thread)
-- 2026-11-25 G2.5: With no generated pictures on a display at n x 60 Hz (n of 2 or more) a sequence takes the first refresh from its list on the frames' own clock, every n-th refresh from the frame before (frames_anchor_); a list two frames late starts the clock again (because P-316's cause: a rate of 60 keeps the slot clock at every refresh (vblanks_per_slot holds it at 61 and above), so a frame at the next slot took either phase; test_capped_frames_keep_their_refresh counted 928 phase changes in 1163 frames before)
 - 2026-11-25 G2.5: The thermal input is Android's AThermal_getThermalHeadroom (forecast 1 s) read once a second on a thread of its own; Apple, Linux and Windows give 0 (not known, never hot) (because the card's Read first names Android's calls only and the sources name none for the other systems; a binder call is kept off the frame threads)
+- 2026-11-25 G2.5: With no generated pictures on a display at n x 60 Hz (n of 2 or more) a sequence takes the first refresh from its list on the frames' own clock, every n-th refresh from the frame before (frames_anchor_); a list two frames late starts the clock again (because P-316's cause: a rate of 60 keeps the slot clock at every refresh (vblanks_per_slot holds it at 61 and above), and the frame took the next slot from its list, or now itself: test_capped_frames_keep_their_refresh with the old line counts 235 frames off the vblanks and 926 changes of phase in 929 on them, and none with this)
 
 ## Checks changed during the run (72)
 
