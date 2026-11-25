@@ -98,6 +98,7 @@ In work now:
 - G2.5 Landing 5: one arbiter, the clock held, the heat input: Proof 2 (I-010): a heavy galaxy at 144 Hz on the PC with dynamic resolution on, shown, --diagnostics present-stats: the [dynres] and [interp-stats] gpu-generated-cap lines and the [arbiter] lines give one stable k and resolution step, against the same run with --diagnostics old-governors (agent 1, 2026-11-25 02:28)
 - G2.5 Landing 5: one arbiter, the clock held, the heat input: Proof 3 (P-316): the tablet at 120 Hz with the in-between pictures capped off (the cadence guard or the arbiter at k = 0): the 60 pictures a second keep every second refresh after twenty seconds ([pace] measures; today 120 of 120 at first, then 24 and 24 of 120) (agent 1, 2026-11-25 02:28)
 - G2.5 Landing 5: one arbiter, the clock held, the heat input: Proof 4 (P-315): the tablet at 120 Hz through a loading screen, --diagnostics present-stats: the in-between pictures do not switch off on the loading screen's reading, or come back by an [arbiter] trial that is kept (agent 1, 2026-11-25 02:28)
+- G2.5 Landing 5: one arbiter, the clock held, the heat input: Proof 5 (P-318, file 00 4.3): the tablet at 120 Hz holds in all 102 tour stops with dynamic resolution acting, and the PC at every offered rate; the card's rule against a jam applies where a stop fails only by the render thread's time a picture over the slot (record the stops, then P-318 advances here and closes at G2.8) (agent 1, 2026-11-25 02:28)
 
 ## Waiting for the owner
 
