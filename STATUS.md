@@ -2,7 +2,7 @@
 
 Written 2026-11-25 10:58. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
-Steps landed: 35 of 145 (24%).
+Steps landed: 35 of 155 (23%).
 
 Now: R-007 landed (main a360c2e0a); in work: fixer for R-008 (the remaining pace rows)
 
@@ -19,6 +19,7 @@ In work now: Nothing started.
 | R2 | 5 | 5 |
 | G2 | 12 | 16 |
 | G6 | 1 | 8 |
+| G10 | 0 | 10 |
 | G1 | 0 | 5 |
 | R3 | 0 | 13 |
 | R4 | 0 | 10 |
@@ -59,7 +60,7 @@ In work now: Nothing started.
 | Id | State | Kind | Check | Renderer | Traced to | Seen |
 | --- | --- | --- | --- | --- | --- | --- |
 | R-006 | open | fail | soak | - | not traced | 1 |
-| R-008 | open | worse | measure/step/pc | - | commit a360c2e0a | 1 |
+| R-008 | started | worse | measure/step/pc | - | commit a360c2e0a | 1 |
 | R-005 | landed | fail | soak | - | not traced | 1 |
 | R-007 | landed | worse | measure/step/pc | - | step G2.3.1 commit d7682d740 | 1 |
 | R-001 | confirmed | fail | build/windows-asan | - | not traced | 1 |
@@ -251,7 +252,7 @@ Nothing waits for the owner.
 - 2026-11-25 R-007: Where the queue holds no picture before it, a start before its slot waits on the render thread's own wait for its start (slot_due) until a present reaches the slot; nothing waits between a picture's work and its Present (because with no hold a picture presented to an empty queue shows at the first refresh it reaches, and one picture shown early keeps every later one early (the unit test showed it at 360 to 500 Hz); a wait before the work never runs into the next picture's start, as the hold before Present did)
 - 2026-11-25 R-007: Vulkan answers present_queue 0 and keeps its lead rule unchanged (because its lead moves only on presents that asked their time; the brief and the fault are Direct3D's, and Vulkan's pacing at 240 Hz measured good)
 
-## Checks changed during the run (72)
+## Checks changed during the run (74)
 
 - 2026-11-22 S0.1.3 tools/verify/console_census.py: the open group gx_sections counts the four section names GXMT, GXTG, GXTM and GXWP with a ceiling of 31, and the closed group fifo excludes only those four whole words (allowed by docs/engine/FRAME-MODEL.md section 2.9)
 - 2026-11-22 U-unattended tools/gate/main_push_guard.py: the guard also refuses a push of a branch named plant/... (allowed by docs/plan/native/TOOL-MEND-PLANTS.md, how a plant is kept from ever landing)
@@ -325,6 +326,8 @@ Nothing waits for the owner.
 - 2026-11-24 R1.4 .github/workflows/check.yml: the Mac start check keeps its command on one line with the output piped to start.log (set -o pipefail), and fails unless the log has the line "[metal] renderer shaders: N from utility.metallib, 0 compiled from their text, 0 failed" and no "renderer shader compiled from its text" line (allowed by docs/plan/native/04-NATIVE-LANE-R.md section R1.4 (P-065))
 - 2026-11-24 G2.3 split tools/gate/tests/plan_cards_test.py: the real cards read are those of places 12 to 145, not 12 to 138 (LAST_STEP, the function cards_12_to_145, the count test now 134 cards) (allowed by the planner's split of G2.3 on 11-24, after its writer blocked it (PLAN blocked G2.3: nine pieces and proofs a writer may not run); docs/plan/native/02-NATIVE-OVERVIEW.md, the order checked against steps.tsv)
 - 2026-11-24 G2.3 split tools/gate/tests/plan_test.py: the real plan is read as 145 steps in orders 1 to 145 and 145 card headings, not 138 (three tests and the docstring) (allowed by the planner's split of G2.3 on 11-24, after its writer blocked it (PLAN blocked G2.3: nine pieces and proofs a writer may not run); docs/plan/native/02-NATIVE-OVERVIEW.md, the order checked against steps.tsv)
+- 2026-11-25 G10 plan tools/gate/tests/plan_test.py: the real plan is read as 155 steps in orders 1 to 155 and 155 card headings, not 145 (two test names, four counts, the docstring) (allowed by the planner's order of 11-25 (Android pacing perfected, brief AB, the owner: "I will not accept 3 instead of two and just 99.8%"); docs/plan/native/02-NATIVE-OVERVIEW.md, the order checked against steps.tsv)
+- 2026-11-25 G10 plan tools/gate/tests/plan_cards_test.py: the real cards read are those of places 12 to 155, not 12 to 145 (LAST_STEP, the function cards_12_to_155, the count test now 144 cards) (allowed by the planner's order of 11-25 (Android pacing perfected, brief AB, the owner: "I will not accept 3 instead of two and just 99.8%"); docs/plan/native/02-NATIVE-OVERVIEW.md, the order checked against steps.tsv)
 
 ## Tool faults
 
