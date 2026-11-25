@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-25 10:24. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-25 10:57. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 35 of 145 (24%).
 
@@ -41,6 +41,7 @@ In work now: Nothing started.
 
 | When | Step | Title | Code commit | Main commit |
 | --- | --- | --- | --- | --- |
+| 2026-11-25 10:57 | R-007 |  | 2f44ff877 | a360c2e0a |
 | 2026-11-25 08:14 | G6.2 | Sends and sound settings as typed records (P-221, P-222) | c8820d8be | 22070d096 |
 | 2026-11-25 05:30 | G2.5 | Landing 5: one arbiter, the clock held, the heat input | 54e37d4fe | 45ba38cea |
 | 2026-11-25 04:44 | G2.4 | Landing 4: no closing spin where a display time is asked | fdc86be24 | e563ab61c |
@@ -50,7 +51,6 @@ In work now: Nothing started.
 | 2026-11-25 00:11 | G2.3.5 | Landing 3e: variable refresh, told by the system or proved from the presents | 07beb002c | b3cb2daf5 |
 | 2026-11-24 23:16 | G2.3.4 | Landing 3d: Apple's display link | bfba5ffa0 | 71a676bbf |
 | 2026-11-24 19:24 | G2.3.3 | Landing 3c: Linux's display clock | b5b205311 | ea9e3c57c |
-| 2026-11-24 18:32 | G2.3.2 | Landing 3b: Vulkan and Android present at the asked time | 4e97053c9 | 859c3c098 |
 
 ## Repairs
 
@@ -59,8 +59,8 @@ In work now: Nothing started.
 | Id | State | Kind | Check | Renderer | Traced to | Seen |
 | --- | --- | --- | --- | --- | --- | --- |
 | R-006 | open | fail | soak | - | not traced | 1 |
-| R-007 | started | worse | measure/step/pc | - | step G2.3.1 commit d7682d740 | 1 |
 | R-005 | landed | fail | soak | - | not traced | 1 |
+| R-007 | landed | worse | measure/step/pc | - | step G2.3.1 commit d7682d740 | 1 |
 | R-001 | confirmed | fail | build/windows-asan | - | not traced | 1 |
 | R-002 | confirmed | fail | coverage | - | not traced | 1 |
 | R-003 | confirmed | fail | soak | - | not traced | 1 |
