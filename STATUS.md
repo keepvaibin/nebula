@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-24 23:16. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 23:17. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 28 of 145 (19%).
 
-Now: in work: lander landing G2.3.4 to G2.3.7 (Mac hang fixed by the planner)
+Now: G2.3.4 landed (28 of 145); G2.3.5 hard (ledger.tsv conflict on main), fixer waits for the usage line
 
 In work now: Nothing started.
 
