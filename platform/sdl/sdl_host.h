@@ -7,6 +7,7 @@
 
 #include "galaxy/controller_roster.h"
 #include "galaxy/input_bindings.h"
+#include "galaxy/render/variable_refresh.h"
 
 #include <array>
 #include <cstdint>
@@ -63,6 +64,10 @@ void set_display_fills(bool fills) noexcept;
 // The start check's look at the clock's hold (P-034): vsyncs counted for 0.5 s, held for 1 s (none expected), let
 // go (some again). Prints its counts; 0 when the hold holds or no vsyncs come on this machine, 6 when it does not.
 [[nodiscard]] int check_display_clock_hold() noexcept;
+// What the system says of the screen the window is on (G2.3.5): a Mac's through NSScreen's minimum and maximum refresh
+// intervals (macOS 12; read on the main thread as the clock follows the window), iOS fixed. `shortest_s` (may be null):
+// the screen's shortest interval where read (seconds; 0 otherwise). Any thread.
+[[nodiscard]] galaxy::render::RefreshKind apple_refresh_kind(double* shortest_s) noexcept;
 #endif
 // Android, when `adb shell setprop debug.nebula.profile <seconds>` asks: that many seconds on, the render, host-main and
 // game threads' instruction pointers are sampled for 2 s each and the busiest places logged (thread_sampler.cpp).

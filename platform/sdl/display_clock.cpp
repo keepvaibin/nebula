@@ -3,6 +3,7 @@
 
 #include "sdl_host.h"
 #include "galaxy/display_timeline.h"
+#include "galaxy/render/present_clock.h"
 #include "galaxy/vsync_grid.h"
 
 #if defined(__ANDROID__)
@@ -110,8 +111,12 @@ void on_timeline(const AChoreographerFrameCallbackData* data, void* choreographe
     post_next(static_cast<AChoreographer*>(choreographer));
 }
 
+// A mode switch (120 to 60 Hz) is a display change: the grid follows the new period and the variable-refresh answer is
+// asked again (G2.3.5 point 6).
 void on_refresh_rate(std::int64_t vsync_period_ns, void*) {
-    g_display_period_ns.store(vsync_period_ns, std::memory_order_relaxed);
+    if (g_display_period_ns.exchange(vsync_period_ns, std::memory_order_relaxed) != vsync_period_ns) {
+        galaxy::render::g_display_recheck.store(true, std::memory_order_release);
+    }
 }
 
 void clock_thread() {
@@ -156,7 +161,7 @@ bool wait_display_frame(std::int64_t period_ns, std::int64_t& last_ns, bool in_b
     std::int64_t target = 0;
     std::int64_t frame_period = 0;
     std::int64_t dropped = 0;
-    if (!grid.next_slot(period_ns, last_ns, monotonic_ns(), in_between, target, frame_period, &dropped)) {
+    if (!grid.next_slot(period_ns, last_ns, monotonic_ns(), in_between, galaxy::render::g_variable_refresh.load(std::memory_order_relaxed), target, frame_period, &dropped)) {
         g_frame_slot_ns.store(0, std::memory_order_relaxed);
         return false;
     }
@@ -253,7 +258,7 @@ bool wait_display_frame(std::int64_t period_ns, std::int64_t& last_ns, bool in_b
     std::int64_t target = 0;
     std::int64_t frame_period = 0;
     std::int64_t dropped = 0;
-    if (!grid.next_slot(period_ns, last_ns, monotonic_ns(), in_between, target, frame_period, &dropped)) {
+    if (!grid.next_slot(period_ns, last_ns, monotonic_ns(), in_between, galaxy::render::g_variable_refresh.load(std::memory_order_relaxed), target, frame_period, &dropped)) {
         g_frame_slot_ns.store(0, std::memory_order_relaxed);
         return false;
     }

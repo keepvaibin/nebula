@@ -6,6 +6,7 @@
 // host_window_win32.cpp (Windows) and the SDL host's window (platform/sdl).
 
 #include "galaxy/render/render_config.h"
+#include "galaxy/render/variable_refresh.h"
 #include "galaxy/render/window_owner.h"
 
 #include <atomic>
@@ -83,6 +84,14 @@ void show_window(NativeWindow window) noexcept;
 [[nodiscard]] bool window_unseen(NativeWindow window) noexcept;
 // The refresh rate of the display the window is on, or 0 when unknown.
 [[nodiscard]] double display_refresh_hz(NativeWindow window) noexcept;
+// The display mode's own rate, never its vblanks' (Windows: the mode's whole hertz; a display whose refreshes follow the
+// presents times them at the presents' rate); elsewhere the rate above. 0 when unknown.
+[[nodiscard]] double display_mode_hz(NativeWindow window) noexcept;
+// What the system says of that display (render/variable_refresh.h, G2.3.5): Android's Display.hasArrSupport (API 36),
+// a Mac screen's refresh-interval range (macOS 12), iOS fixed; kUnknown where no call says it (Windows, Linux), where
+// the presents prove it. `shortest_s` (may be null): the display's shortest interval where the system gives one
+// (seconds; 0 otherwise). Render thread.
+[[nodiscard]] RefreshKind system_refresh_kind(NativeWindow window, double* shortest_s = nullptr) noexcept;
 // The display's vblanks: the latest and the interval between them, on galaxy::qpc_now()'s clock (Windows: timed on
 // the window's monitor; Android: Choreographer's); false while not known.
 // An event set when the window is minimised or restored and when it closes (the main thread sleeps on it).

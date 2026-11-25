@@ -22,6 +22,7 @@ public:
     bool held = false;
     bool refused = false;
     bool vsync_fixed = false;
+    bool variable = false;
     mutable int last = -1;
     mutable int calibrations = 0;
     galaxy::ui::DisplayPageState query(const galaxy::ui::RenderConfig& render) const override {
@@ -33,6 +34,7 @@ public:
         if (!empty_sizes) state.window_sizes = {{640, 480}, {1280, 720}, {1920, 1080}};
         state.frame_rates.refresh_hz = refresh_hz;
         state.frame_rates.vsync_fixed = vsync_fixed;
+        state.frame_rates.variable_refresh = variable;
         state.hdr_offered = hdr;
         state.hdr_active = hdr_active;
         state.hdr_in_use = hdr_in_use;
@@ -81,6 +83,16 @@ int main() {
         rows = galaxy::ui::display_page(config, host);
         check(row(rows, "REFRESH RATE").value == "UNKNOWN", "a refresh rate the system did not report is said so");
         host.refresh_hz = 144;
+        // A variable refresh display (G2.3.5 point 9): the row says so, and how it shows the pictures.
+        host.variable = true;
+        rows = galaxy::ui::display_page(config, host);
+        check(row(rows, "REFRESH RATE").value == "144 HZ (VARIABLE)", "a variable display is said so");
+        check(row(rows, "REFRESH RATE").help == "THE DISPLAY REFRESHES AS EACH PICTURE COMES", "a variable display's help");
+        host.variable = false;
+        rows = galaxy::ui::display_page(config, host);
+        check(row(rows, "REFRESH RATE").value == "144 HZ" &&
+                  row(rows, "REFRESH RATE").help == "SET IN THE SYSTEM DISPLAY SETTINGS",
+              "a fixed display's row");
         // A display that always waits for its refresh: VSYNC is ON whatever was chosen, with no choice and the reason.
         config.vsync_interval = 0u;
         host.vsync_fixed = true;

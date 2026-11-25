@@ -12,6 +12,7 @@ namespace galaxy::host {
 struct DisplayRefresh {
     std::int64_t vblank_ns = 0;
     std::int64_t period_ns = 0;
+    bool variable = false;  // the refreshes follow the pictures (render/variable_refresh.h): the step is never locked
 };
 
 class FramePhase {

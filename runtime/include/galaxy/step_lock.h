@@ -18,10 +18,12 @@ namespace galaxy {
 inline constexpr std::int64_t kStepLockNear = 500;    // 1/500: 0.2%
 inline constexpr std::int64_t kStepLockExact = 5000;  // 1/5000: 0.02%
 
-// The refreshes in a step of `period_ns` when the step follows the display, else 0.
+// The refreshes in a step of `period_ns` when the step follows the display, else 0. A variable refresh display
+// (`variable`, render/variable_refresh.h) follows the pictures, so the step is never locked to it: the host's clock runs
+// the 60 steps (I-007).
 [[nodiscard]] constexpr std::int64_t step_lock_refreshes(std::int64_t period_ns, std::int64_t refresh_ns,
-                                                         bool in_between) noexcept {
-    if (period_ns <= 0 || refresh_ns <= 0) {
+                                                         bool in_between, bool variable) noexcept {
+    if (variable || period_ns <= 0 || refresh_ns <= 0) {
         return 0;
     }
     const std::int64_t count = (period_ns + refresh_ns / 2) / refresh_ns;

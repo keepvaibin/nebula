@@ -299,7 +299,7 @@ void FrameSchedule::begin_waiting(std::int64_t now) {
         on_vblanks && slots != 0 && slot_vblanks == 1 &&
         step_lock_refreshes(kGameStepNs,
                             std::llround(static_cast<double>(vblank_period) * 1e9 / static_cast<double>(frequency)),
-                            true) == slots;
+                            true, false) == slots;  // on vblanks: the display is not taken as variable
     const bool locked = locked_to_vblanks || (!on_vblanks && slots != 0);
     sequence_.lead = locked ? 1.0 / static_cast<double>(slots) : 0.0;
     if (locked_to_vblanks) {

@@ -604,7 +604,7 @@ void RendererD3D11::begin_frame() {
 
 unsigned RendererD3D11::present_sync_interval(unsigned configured, float max_fps) {
     const bool game_frame = std::exchange(present_game_frame_, false);
-    return dxgi_sync_interval(configured, variable_refresh_, display_refresh_hz_, max_fps, game_frame,
+    return dxgi_sync_interval(configured, variable_refresh_ || refresh_probe_hz_ > 0.0, display_refresh_hz_, max_fps, game_frame,
                               [this] { return interpolation_mode(); });
 }
 
@@ -634,11 +634,19 @@ std::uint64_t RendererD3D11::end_frame(bool present_swap_chain, SubmissionCallba
     double present_ms = 0.0;
     if (presenting) {
         const RenderConfig cfg = get_render_config();
+        // The presents' proof: presents held at the probe rate, with VSync on (renderer_d3d12.cpp).
+        refresh_probe_hz_ = refresh_answer_.probe(tearing_, cfg.vsync_interval != 0u);
         const UINT vsync = present_sync_interval(std::min(2u, cfg.vsync_interval), cfg.max_fps);
         const UINT flags = vsync == 0u && tearing_ ? DXGI_PRESENT_ALLOW_TEARING : 0u;
-        // Interpolation presents on the render core's slot clock; otherwise the pacer holds presents to the cap.
-        const float paced_fps = paced_present_rate(presented_max_fps(cfg), cfg.vsync_interval, variable_refresh_, display_refresh_hz_);
-        pace_wait_ms = interpolation_mode() ? 0.0 : present_pacer_.pace(variable_refresh_ ? 0u : cfg.vsync_interval, paced_fps);
+        // Interpolation presents on the render core's slot clock; otherwise the pacer holds presents to the cap, whole
+        // under variable refresh with VSync on and at the probe rate while the proof runs.
+        const float paced_fps = paced_proof_rate(
+            paced_present_rate(presented_max_fps(cfg), cfg.vsync_interval, variable_refresh_, display_refresh_hz_), refresh_probe_hz_);
+        const bool hold = refresh_probe_hz_ > 0.0 || (variable_refresh_ && cfg.vsync_interval != 0u);
+        pace_wait_ms = interpolation_mode()
+            ? 0.0
+            : present_pacer_.pace(variable_refresh_ || hold ? 0u : cfg.vsync_interval, paced_fps, hold);
+        const std::int64_t held = hold ? held_period(paced_fps, galaxy::qpc_frequency()) : 0;
         // The display's own signal that a frame may be queued, awaited asleep and bounded (renderer_d3d12.cpp); it holds a
         // picture drawn early for its refresh until the one before it is shown.
         const bool timeline_present = galaxy::timeline::enabled();
@@ -690,7 +698,7 @@ std::uint64_t RendererD3D11::end_frame(bool present_swap_chain, SubmissionCallba
         swap_present_qpc_ = end;
         std::int64_t vblank = 0, period = 0;
         report_dxgi_present(swap_chain_.Get(), hr == S_OK, vblank_grid(vblank, period) ? period : 0, display_model_,
-                            model_present);
+                            model_present, refresh_answer_, held);
     }
     surface_lock_ = {};
     const std::uint64_t fence = d3d11::Context::get().signal();
@@ -833,28 +841,21 @@ bool RendererD3D11::vblank_grid(std::int64_t& vblank, std::int64_t& period) cons
     return window_ != nullptr && host_window::vblank_grid(window_, vblank, period);
 }
 
-void RendererD3D11::refresh_display_rate() {
+void RendererD3D11::refresh_display_rate(bool ask) {
     const double mode_hz = host_window::display_refresh_hz(window_);
     if (mode_hz <= 1.0) {
         return;
     }
-    // The vblanks' own rate: a display that varies its refresh with the presents shows a rate well under the mode's.
-    std::int64_t vblank = 0;
-    std::int64_t period = 0;
-    const double measured_hz =
-        vblank_grid(vblank, period) && period > 0 ? static_cast<double>(galaxy::qpc_frequency()) / static_cast<double>(period) : 0.0;
-    // Tearing is what a variable refresh display needs to engage on a flip-model chain.
-    const bool variable = tearing_ && next_variable_refresh(variable_refresh_, mode_hz, measured_hz);
-    const double hz = variable ? variable_refresh_cap(mode_hz) : mode_hz;
-    if (variable != variable_refresh_) {
-        if (variable) {
-            std::cerr << "[pacing] vrr " << mode_hz << " Hz cap " << hz << '\n';
-        } else {
-            std::cerr << "[pacing] vrr off\n";
-        }
+    // Tearing is what a variable refresh display needs to engage on a flip-model chain; the presents prove the rest
+    // (report_dxgi_present), against the mode's own rate (the vblanks' follows the presents on a variable display).
+    // Read when the display changes (the query reaches the driver).
+    if (ask || display_mode_hz_ <= 1.0) {
+        display_mode_hz_ = host_window::display_mode_hz(window_);
     }
+    const double own_hz = display_mode_hz_ > 1.0 ? display_mode_hz_ : mode_hz;
+    const bool variable = refresh_answer_.update(own_hz, tearing_, ask, RefreshKind::kUnknown, 0.0);
+    const double hz = variable ? refresh_answer_.cap_hz(own_hz) : mode_hz;
     variable_refresh_ = variable;
-    g_variable_refresh.store(variable, std::memory_order_relaxed);
     if (std::abs(hz - display_refresh_hz_) >= 0.1) {
         if (!variable) {
             std::cerr << "[display] refresh-hz=" << hz << '\n';
@@ -885,8 +886,11 @@ void RendererD3D11::follow_window_and_resize() {
         (void)resize_swap_chain(host_window::backbuffer_width, host_window::backbuffer_height);
     }
     swap_vsync_ = wants_vsync();
-    if (host_window::monitor_changed.exchange(false, std::memory_order_acq_rel) || display_refresh_.due()) {
-        refresh_display_rate();
+    // Asked again at once when the window's way to the display changed (G2.3.5 point 5) or the presents' proof answered.
+    const bool moved = host_window::monitor_changed.exchange(false, std::memory_order_acq_rel);
+    const bool recheck = g_display_recheck.exchange(false, std::memory_order_acq_rel);
+    if (moved || recheck || display_refresh_.due() || refresh_answer_.changed(tearing_)) {
+        refresh_display_rate(moved || recheck);
     }
 }
 

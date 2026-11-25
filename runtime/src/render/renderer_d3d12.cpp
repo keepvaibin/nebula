@@ -3974,7 +3974,7 @@ bool RendererD3D12::vblank_grid(std::int64_t& vblank, std::int64_t& period) cons
     return window_ != nullptr && host_window::vblank_grid(window_, vblank, period);
 }
 
-void RendererD3D12::refresh_display_rate(bool read_mode) {
+void RendererD3D12::refresh_display_rate(bool read_mode, bool ask) {
     // The mode's rate (whole hertz: 239 or 240 for 239.76), read when the display changes (the output's query reaches the
     // driver), and the vblanks' own when they are timed.
     if (read_mode && swap_chain_ != nullptr) {
@@ -3994,18 +3994,12 @@ void RendererD3D12::refresh_display_rate(bool read_mode) {
     const bool timed = vblank_grid(vblank, period);
     const double measured_hz =
         timed ? std::round(static_cast<double>(qpc_frequency_.QuadPart) / static_cast<double>(period) * 100.0) / 100.0 : 0.0;
-    // A flip-model chain that may tear is what a variable refresh display needs to engage (DXGI_FEATURE_PRESENT_ALLOW_TEARING).
-    const bool variable = tearing_allowed_ && next_variable_refresh(variable_refresh_, mode_hz, measured_hz);
-    if (variable != variable_refresh_ || (variable && std::abs(variable_refresh_cap(mode_hz) - display_refresh_hz_) >= 0.1)) {
-        if (variable) {
-            std::cerr << "[pacing] vrr " << mode_hz << " Hz cap " << variable_refresh_cap(mode_hz) << '\n';
-        } else {
-            std::cerr << "[pacing] vrr off\n";
-        }
-    }
+    // A flip-model chain that may tear is what a variable refresh display needs to engage (DXGI_FEATURE_PRESENT_ALLOW_TEARING):
+    // without it every present waits for a refresh, and the answer is fixed. DXGI says nothing of the display itself: the
+    // presents prove it (G2.3.5 point 5, fed by report_dxgi_present).
+    const bool variable = refresh_answer_.update(mode_hz, tearing_allowed_, ask, RefreshKind::kUnknown, 0.0);
     variable_refresh_ = variable;
-    g_variable_refresh.store(variable, std::memory_order_relaxed);
-    const double hz = variable ? variable_refresh_cap(mode_hz) : (timed ? measured_hz : mode_hz);
+    const double hz = variable ? refresh_answer_.cap_hz(mode_hz) : (timed ? measured_hz : mode_hz);
     if (hz <= 1.0) {
         return;
     }
@@ -4239,7 +4233,8 @@ ID3D12Resource* RendererD3D12::hdr_capture_picture(const DisplayTexture& source,
 
 UINT RendererD3D12::present_sync_interval(unsigned configured, float max_fps) {
     const bool game_frame = std::exchange(present_game_frame_, false);
-    return dxgi_sync_interval(configured, variable_refresh_, display_refresh_hz_, max_fps, game_frame,
+    // While the presents' proof holds the presents, the configured interval (each present at a refresh), as under variable.
+    return dxgi_sync_interval(configured, variable_refresh_ || refresh_probe_hz_ > 0.0, display_refresh_hz_, max_fps, game_frame,
                               [this] { return interpolation_mode(); });
 }
 
@@ -4259,23 +4254,31 @@ void RendererD3D12::present_to_swap_chain() {
     if (display_moved) {
         read_display_output();
     }
-    // The rate twice a second on the clock, whatever the present rate (an unlimited one presents thousands a second).
-    if (display_refresh_.due() || display_moved) {
-        refresh_display_rate(display_moved || display_mode_hz_ == 0.0);
+    // The rate twice a second on the clock, whatever the present rate (an unlimited one presents thousands a second); at
+    // once when the window's way to the display changed (g_display_recheck, G2.3.5 point 5) or the presents' proof answered.
+    const bool recheck = g_display_recheck.exchange(false, std::memory_order_acq_rel);
+    if (display_refresh_.due() || display_moved || recheck || refresh_answer_.changed(tearing_allowed_)) {
+        refresh_display_rate(display_moved || display_mode_hz_ == 0.0, display_moved || recheck);
     }
     const RenderConfig cfg = get_render_config();
     const bool generating = frame_generation_running();
+    // The presents' proof: presents held at the probe rate, with VSync on, on the game's own chain.
+    refresh_probe_hz_ = refresh_answer_.probe(tearing_allowed_, cfg.vsync_interval != 0u && !generating && !fsr_swap_chain_);
     // With frame generation the sync interval is 0 or 1 (Streamline paces the generated frames).
     const UINT vsync = generating ? std::min(1u, cfg.vsync_interval)
                                   : present_sync_interval(std::min(2u, cfg.vsync_interval), cfg.max_fps);
     const UINT present_flags =
         vsync == 0u && tearing_allowed_ && !generating && !fsr_swap_chain_ ? DXGI_PRESENT_ALLOW_TEARING : 0u;
     // Interpolation presents on its own slot clock.
-    // On a variable refresh display with VSync on the pacer holds presents under the refresh (paced_present_rate); a frame
-    // under the cap goes out as soon as it is ready.
-    const float paced_fps = paced_present_rate(presented_max_fps(cfg), cfg.vsync_interval, variable_refresh_, display_refresh_hz_);
-    const double pace_wait_ms =
-        interpolation_mode() ? 0.0 : present_pacer_.pace(variable_refresh_ ? 0u : cfg.vsync_interval, paced_fps);
+    // On a variable refresh display with VSync on the pacer holds every present whole under the cap (paced_present_rate),
+    // and at the probe rate while the presents' proof runs; a frame under the cap goes out as soon as it is ready.
+    const float paced_fps = paced_proof_rate(
+        paced_present_rate(presented_max_fps(cfg), cfg.vsync_interval, variable_refresh_, display_refresh_hz_), refresh_probe_hz_);
+    const bool hold = refresh_probe_hz_ > 0.0 || (variable_refresh_ && cfg.vsync_interval != 0u);
+    const double pace_wait_ms = interpolation_mode()
+        ? 0.0
+        : present_pacer_.pace(variable_refresh_ || hold ? 0u : cfg.vsync_interval, paced_fps, hold);
+    const std::int64_t held = hold ? held_period(paced_fps, qpc_frequency_.QuadPart) : 0;
     if (trace_present_stats_enabled()) {
         telemetry_pace_wait_ms_ += pace_wait_ms;
         telemetry_pace_wait_max_ms_ = std::max(telemetry_pace_wait_max_ms_, pace_wait_ms);
@@ -4406,7 +4409,7 @@ void RendererD3D12::present_to_swap_chain() {
     {
         std::int64_t vblank = 0, period = 0;
         report_dxgi_present(swap_chain_.Get(), !generating && !fsr_swap_chain_ && present_hr == S_OK,
-                            vblank_grid(vblank, period) ? period : 0, display_model_, model_present);
+                            vblank_grid(vblank, period) ? period : 0, display_model_, model_present, refresh_answer_, held);
     }
     {
         LARGE_INTEGER now{};

@@ -29,6 +29,7 @@
 #include "galaxy/power_policy.h"
 #include "galaxy/render/display_modes.h"
 #include "galaxy/render/host_window.h"
+#include "galaxy/render/present_clock.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render_api.h"
 #include "galaxy/runtime_settings.h"
@@ -790,11 +791,13 @@ void files_opened(NSArray<NSURL*>* urls) {
 - (void)windowDidEnterFullScreen:(NSNotification*)notification {
     galaxy::render::host_window::borderless_active.store(true, std::memory_order_relaxed);
     std::fprintf(stderr, "[window] full screen\n");
+    galaxy::render::g_display_recheck.store(true, std::memory_order_release);  // G2.3.5 point 5 (a)
     [self sizeChanged];
 }
 - (void)windowDidExitFullScreen:(NSNotification*)notification {
     galaxy::render::host_window::borderless_active.store(false, std::memory_order_relaxed);
     std::fprintf(stderr, "[window] left full screen\n");
+    galaxy::render::g_display_recheck.store(true, std::memory_order_release);  // G2.3.5 point 5 (a)
     [self sizeChanged];
 }
 - (void)windowDidFailToEnterFullScreen:(NSWindow*)window {
@@ -824,6 +827,7 @@ void files_opened(NSArray<NSURL*>* urls) {
         const std::lock_guard<std::mutex> lock(galaxy::sdl::g_input_mutex);
         galaxy::sdl::g_input.window_focused = true;
     }
+    galaxy::render::g_display_recheck.store(true, std::memory_order_release);  // G2.3.5 point 5 (b)
     if (std::exchange(galaxy::sdl::g_full_screen_owed, false)) {
         galaxy::sdl::g_applied_mode = ~0u;  // the next pump puts the display mode in again
     }
@@ -836,6 +840,7 @@ void files_opened(NSArray<NSURL*>* urls) {
         galaxy::sdl::g_input.window_focused = false;
         galaxy::sdl::g_input.keys = {};
     }
+    galaxy::render::g_display_recheck.store(true, std::memory_order_release);  // G2.3.5 point 5 (b)
     galaxy::sdl::update_cursor();
     [self lumaDisplayChanged];
 }
@@ -1360,6 +1365,15 @@ double display_refresh_hz(NativeWindow) noexcept {
         return std::round(vsync);
     }
     return 0.0;
+}
+
+double display_mode_hz(NativeWindow window) noexcept {
+    return display_refresh_hz(window);
+}
+
+// The screen's refresh-interval range (display_clock_apple.mm; G2.3.5).
+RefreshKind system_refresh_kind(NativeWindow, double* shortest_s) noexcept {
+    return galaxy::sdl::apple_refresh_kind(shortest_s);
 }
 
 void set_state_wake(void*) noexcept {}

@@ -12,7 +12,9 @@
 #include "galaxy/platform_time.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <thread>
 
@@ -49,6 +51,40 @@ inline constexpr std::int64_t kFirstMarginUs = 1000;
     return std::max(wanted, margin_us - (margin_us - wanted + 15) / 16);
 }
 
+// How late a precise wait returns past its moment (the spin's end, preemption included), counted in 10 us steps to
+// 5 ms; the 99.9th percentile is the variable-refresh cap's margin (render/variable_refresh.h). One thread's.
+class WaitLateness {
+public:
+    static constexpr std::int64_t kStepUs = 10;
+    static constexpr std::size_t kSteps = 500;
+    static constexpr std::uint64_t kEnough = 1000;  // waits before the percentile stands
+    void add(std::int64_t late_us) noexcept {
+        const std::int64_t step = std::clamp<std::int64_t>(late_us / kStepUs, 0, static_cast<std::int64_t>(kSteps) - 1);
+        ++steps_[static_cast<std::size_t>(step)];
+        ++count_;
+    }
+    void reset() noexcept {
+        steps_ = {};
+        count_ = 0;
+    }
+    [[nodiscard]] std::uint64_t count() const noexcept { return count_; }
+    // The lateness 999 waits in 1000 stay under (seconds, the top of its step); `fallback` before kEnough waits.
+    [[nodiscard]] double percentile_999_s(double fallback) const noexcept {
+        if (count_ < kEnough) return fallback;
+        const std::uint64_t under = count_ - count_ / 1000;
+        std::uint64_t seen = 0;
+        for (std::size_t i = 0; i < kSteps; ++i) {
+            seen += steps_[i];
+            if (seen >= under) return static_cast<double>((static_cast<std::int64_t>(i) + 1) * kStepUs) / 1e6;
+        }
+        return static_cast<double>(static_cast<std::int64_t>(kSteps) * kStepUs) / 1e6;
+    }
+
+private:
+    std::array<std::uint32_t, kSteps> steps_{};
+    std::uint64_t count_ = 0;
+};
+
 class PreciseWait {
 public:
     PreciseWait() noexcept {
@@ -83,7 +119,11 @@ public:
             pause();
             now = qpc_now();
         }
+        lateness_.add((now - due) * 1'000'000 / frequency);
     }
+
+    // How late this thread's waits returned (WaitLateness), for the variable-refresh cap's margin.
+    [[nodiscard]] WaitLateness& lateness() noexcept { return lateness_; }
 
     // The thread's own waiter.
     static PreciseWait& for_this_thread() noexcept {
@@ -132,6 +172,7 @@ private:
     HANDLE timer_ = nullptr;
 #endif
     std::int64_t margin_us_ = kFirstMarginUs;
+    WaitLateness lateness_;
 };
 
 // A moment on the qpc_now() clock given in nanoseconds of that clock (qpc_to_ns of a qpc_now() reading, plus lengths of

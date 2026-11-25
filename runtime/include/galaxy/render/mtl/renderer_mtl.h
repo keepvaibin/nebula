@@ -478,7 +478,7 @@ private:
     void write_table(mtl::BoundTextures& table, const TextureHandle* handles, unsigned count, const TextureStore& cache);
     void record_conversion_blit(mtl::Texture& dest, unsigned dest_w, unsigned dest_h, std::uint8_t copy_format, float src_x,
                                 float src_y, float step_x, float step_y);
-    void refresh_display_rate();
+    void refresh_display_rate(bool ask);
     void follow_window_and_resize();
     void report_present_stats();
     void grow_rings();
@@ -712,7 +712,10 @@ private:
                                 const galaxy::ContentViewport& content, bool window_pass);
     std::atomic<double> measured_present_hz_{0.0};
     double display_refresh_hz_ = 0.0;
+    // The display varies its refresh with the presents (refresh_answer_, the system's answer): display_refresh_hz_ is then
+    // the cap that keeps it in its range.
     bool variable_refresh_ = false;
+    RefreshAnswer refresh_answer_;
     galaxy::ClockInterval display_refresh_{500, true};  // refresh_display_rate twice a second on the clock
     std::int64_t measured_present_window_qpc_ = 0;
     std::int64_t swap_present_qpc_ = 0;

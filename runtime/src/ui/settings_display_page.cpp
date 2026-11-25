@@ -5,6 +5,7 @@
 #include <cstring>
 #include <functional>
 #include <iterator>
+#include <string>
 #include <utility>
 
 namespace galaxy::ui {
@@ -81,7 +82,15 @@ std::vector<SettingsRow> display_page(const RenderConfig& render, const DisplayP
         } else {
             std::snprintf(text, sizeof(text), "UNKNOWN");
         }
-        rows.push_back({"REFRESH RATE", text, nullptr, state.fullscreen_only ? "FOLLOWS THE PHONE DISPLAY" : "SET IN THE SYSTEM DISPLAY SETTINGS"});
+        std::string value = text;
+        const char* help = state.fullscreen_only ? "FOLLOWS THE PHONE DISPLAY" : "SET IN THE SYSTEM DISPLAY SETTINGS";
+        // A display whose refreshes follow the pictures (G2.3.5): its mode's rate is the fastest, and each picture is
+        // shown as it comes.
+        if (state.frame_rates.variable_refresh) {
+            value += " (VARIABLE)";
+            help = "THE DISPLAY REFRESHES AS EACH PICTURE COMES";
+        }
+        rows.push_back({"REFRESH RATE", value, nullptr, help});
     }
     {
         static constexpr const char* kAspects[] = {"AUTO", "4:3", "3:2", "16:10", "16:9", "21:9", "32:9", "48:9"};

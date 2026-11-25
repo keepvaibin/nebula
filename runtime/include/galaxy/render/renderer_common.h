@@ -10,6 +10,7 @@
 #include "galaxy/render/frame_pass.h"
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/render_config.h"
+#include "galaxy/render/variable_refresh.h"
 #include "galaxy/render_api.h"
 
 #include <algorithm>
@@ -155,24 +156,12 @@ inline constexpr unsigned kSceneConversionConstantCount = 7u;
                                                                              float step_x, float step_y, float limit_x = 0.0f,
                                                                              float limit_y = 0.0f) noexcept;
 
-// Variable refresh. A display whose refreshes follow the presents (G-SYNC, FreeSync, Adaptive-Sync) shows itself in the vblank grid:
-// IDXGIOutput::WaitForVBlank returns at each refresh, so the interval between wakes is the frame time, well over the mode's own
-// period, where a fixed-rate display gives the mode's period. `was` keeps the answer between the two thresholds.
-[[nodiscard]] inline bool next_variable_refresh(bool was, double mode_hz, double measured_hz) noexcept {
-    if (mode_hz <= 1.0 || measured_hz <= 1.0) {
-        return was;
-    }
-    return was ? measured_hz < mode_hz * 0.95 : measured_hz < mode_hz * 0.8;
-}
-// The rate a variable refresh display is held under so that it stays in its range: a presented frame never waits for a
-// refresh. The mode's rate less mode^2 / 3600 (the rule the latency-reduction libraries use: 144 gives 138.2, 60 gives 59).
-[[nodiscard]] inline double variable_refresh_cap(double mode_hz) noexcept {
-    return mode_hz > 1.0 ? mode_hz - mode_hz * mode_hz / 3600.0 : 0.0;
-}
+// Variable refresh: render/variable_refresh.h (whether the display is variable, and the cap it is held under).
 
 // Present pacing with vsync off and a frame-rate cap. The game's frame clock paces presents; the pacer smooths one that arrives
 // early by waiting at most 2 ms toward its slot at the cap: a high-resolution sleep to 0.2 ms before the target,
-// then yields.
+// then yields. Holding (`hold`: a variable refresh display at its cap, or the presents' proof at its probe rate), every
+// present waits for its slot whole, by the precise wait, so no two presents come closer than the period.
 class PresentPacer {
 public:
     PresentPacer() noexcept;
@@ -180,7 +169,7 @@ public:
     PresentPacer(const PresentPacer&) = delete;
     PresentPacer& operator=(const PresentPacer&) = delete;
     // Waits for this present's turn; the milliseconds waited.
-    double pace(unsigned vsync_interval, float max_fps);
+    double pace(unsigned vsync_interval, float max_fps, bool hold = false);
     void reset() noexcept;
 
 private:
@@ -192,6 +181,37 @@ private:
     // Sleeps until a target `remaining_ms` away.
     void sleep_before(double remaining_ms);
 };
+
+// Every renderer's variable-refresh answer (render/variable_refresh.h), kept on the render thread (the pacer's: its precise
+// waits give point 2's margin). `update` at a frame boundary where `ask` (point 5's events, a display change) or a change of
+// the mode asks again; it takes the system's answer, publishes the result (g_variable_refresh) and logs a change.
+class RefreshAnswer {
+public:
+    // `can_vary`: a present can be shown at once (a flip-model chain that may tear; every Vulkan and Metal surface);
+    // `system`/`shortest_s`: what the system says (RefreshQuestion::told). Returns whether the display is variable.
+    bool update(double mode_hz, bool can_vary, bool ask, RefreshKind system, double shortest_s);
+    // The proof changed its answer since `update` (each present's statistics feed it): act on it at this boundary.
+    [[nodiscard]] bool changed(bool can_vary) const noexcept { return question_.varies(can_vary) != variable_; }
+    [[nodiscard]] bool variable() const noexcept { return variable_; }
+    // Point 2's cap for the mode (hertz).
+    [[nodiscard]] double cap_hz(double mode_hz) const;
+    // The rate presents are held at for the presents' proof now (0: none), published for the schedule (g_refresh_probe_hz).
+    double probe(bool can_vary, bool vsync);
+    // The present's id, call and the period it was held to; when one was shown.
+    void presented(std::uint64_t id, std::int64_t call, std::int64_t held) noexcept { question_.presented(id, call, held); }
+    void shown(std::uint64_t id, std::int64_t at) noexcept { question_.shown(id, at); }
+
+private:
+    RefreshQuestion question_;
+    double asked_mode_hz_ = 0.0;
+    bool variable_ = false;
+    RefreshKind proved_ = RefreshKind::kUnknown;
+};
+
+// The period (clock ticks) a present held at `rate` hertz was held to; 0 when none (`rate` 0 or unlimited).
+[[nodiscard]] inline std::int64_t held_period(double rate, std::int64_t frequency) noexcept {
+    return rate > 1.0 && rate < 1e6 ? static_cast<std::int64_t>(static_cast<double>(frequency) / rate + 0.5) : 0;
+}
 
 #if defined(_WIN32)
 // The adapter's user-mode driver version as Windows shows it ("32.0.15.6094"); empty when it does not say.

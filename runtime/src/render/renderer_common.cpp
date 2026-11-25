@@ -4,6 +4,8 @@
 #include "galaxy/render/renderer_common.h"
 #include "galaxy/render/post_process_settings.h"
 #include "galaxy/platform_time.h"
+#include "galaxy/precise_wait.h"
+#include "galaxy/render/present_clock.h"
 
 #if defined(_WIN32)
 #include "galaxy/windows_api.h"
@@ -19,6 +21,7 @@
 #include <condition_variable>
 #include <cstring>
 #include <fstream>
+#include <iostream>
 #include <mutex>
 #include <thread>
 
@@ -336,7 +339,7 @@ void PresentPacer::sleep_before(double remaining_ms) {
 // The longest wait for a present's slot at the frame-rate cap.
 constexpr double kSmoothPresentMaxWaitUs = 2000.0;
 
-double PresentPacer::pace(unsigned vsync_interval, float max_fps) {
+double PresentPacer::pace(unsigned vsync_interval, float max_fps, bool hold) {
     // Gameplay is paced by the frame clock. A bounded render-thread wait
     // smooths the handoff to DXGI when a frame edge arrives a little early; the cap
     // keeps it from throttling the producer or hiding missing pictures behind
@@ -366,7 +369,10 @@ double PresentPacer::pace(unsigned vsync_interval, float max_fps) {
         now + static_cast<std::int64_t>(
                   (static_cast<double>(frequency_) * kSmoothPresentMaxWaitUs) /
                   1'000'000.0);
-    if (now < target && now < wait_limit) {
+    if (hold && now < target) {
+        galaxy::PreciseWait::for_this_thread().until(target);
+        now = galaxy::qpc_now();
+    } else if (now < target && now < wait_limit) {
         const double remaining_ms =
             static_cast<double>(std::min<std::int64_t>(target, wait_limit) - now) * 1000.0 /
             static_cast<double>(frequency_);
@@ -380,11 +386,55 @@ double PresentPacer::pace(unsigned vsync_interval, float max_fps) {
 
     const auto max_lag =
         static_cast<std::int64_t>(ticks_per_frame * 2.0);
+    // Holding, the next slot counts from this present's own moment: a late present never lets the next come closer.
     last_qpc_ =
-        now < target
+        (hold || now < target)
             ? now
             : ((now - target > max_lag) ? now : target);
     return wait_ms;
+}
+
+namespace {
+[[nodiscard]] const char* refresh_kind_name(RefreshKind kind) noexcept {
+    return kind == RefreshKind::kVariable ? "variable" : kind == RefreshKind::kFixed ? "fixed" : "not known";
+}
+}  // namespace
+
+bool RefreshAnswer::update(double mode_hz, bool can_vary, bool ask, RefreshKind system, double shortest_s) {
+    question_.told(system, shortest_s);
+    if (ask || std::abs(mode_hz - asked_mode_hz_) >= 0.5) {
+        // A new question, and point 2's margin measured again on the display it is now on.
+        asked_mode_hz_ = mode_hz;
+        question_.ask(held_period(mode_hz, galaxy::qpc_frequency()));
+        galaxy::PreciseWait::for_this_thread().lateness().reset();
+        proved_ = RefreshKind::kUnknown;
+    }
+    if (question_.proved() != proved_) {
+        proved_ = question_.proved();
+        std::cerr << "[pacing] the presents prove the display " << refresh_kind_name(proved_) << '\n';
+    }
+    const bool variable = question_.varies(can_vary);
+    if (variable != variable_) {
+        if (variable) {
+            std::cerr << "[pacing] vrr " << mode_hz << " Hz cap " << cap_hz(mode_hz)
+                      << (system != RefreshKind::kUnknown ? " (the system says)\n" : " (the presents prove)\n");
+        } else {
+            std::cerr << "[pacing] vrr off\n";
+        }
+    }
+    variable_ = variable;
+    g_variable_refresh.store(variable, std::memory_order_relaxed);
+    return variable;
+}
+
+double RefreshAnswer::cap_hz(double mode_hz) const {
+    return question_.cap_hz(mode_hz, galaxy::PreciseWait::for_this_thread().lateness().percentile_999_s(kStartMarginSeconds));
+}
+
+double RefreshAnswer::probe(bool can_vary, bool vsync) {
+    const double hz = question_.probing(can_vary, vsync) ? question_.probe_hz(galaxy::qpc_frequency()) : 0.0;
+    g_refresh_probe_hz.store(hz, std::memory_order_relaxed);
+    return hz;
 }
 
 namespace {

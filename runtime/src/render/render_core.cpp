@@ -743,9 +743,14 @@ bool RenderCore::ScheduleView::vblank_grid(std::int64_t& vblank, std::int64_t& p
     return pictures_on_refreshes(core_.renderer_.swap_queue()) && core_.renderer_.vblank_grid(vblank, period);
 }
 
-// The renderer's own finding (next_variable_refresh); its refresh is then the cap it holds the display under
-// (variable_refresh_cap).
+// The renderer's answer (render/variable_refresh.h); its refresh is then the cap it holds the display under. While the
+// presents' proof runs, the slots follow the pacer's clock at the probe rate in the same way.
 bool RenderCore::ScheduleView::variable_refresh(double& cap) const {
+    const double probe = g_refresh_probe_hz.load(std::memory_order_relaxed);
+    if (probe > 1.0) {
+        cap = probe;
+        return true;
+    }
     const bool variable = g_variable_refresh.load(std::memory_order_relaxed);
     cap = variable ? core_.renderer_.display_refresh_hz() : 0.0;
     return variable;

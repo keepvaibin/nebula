@@ -50,6 +50,13 @@ private:
 inline StepWork g_step_work;
 // In-between pictures on (RenderCore, per list): the game's step keeps exactly 60 (galaxy/step_lock.h).
 inline std::atomic<bool> g_in_between_on{false};
-// The display varies its refresh with the presents (the renderer's own detection): any frame rate shows evenly.
+// The display varies its refresh with the presents (render/variable_refresh.h: the system's answer, else the presents'
+// proof): any frame rate shows evenly, and the game's step is never locked to the display (galaxy/step_lock.h).
 inline std::atomic<bool> g_variable_refresh{false};
+// The window's way to the display changed (full screen entered or left, focus lost or gained, another display, the
+// display's mode): the renderer asks again whether the display is variable (I-007, point 5). Set by the hosts.
+inline std::atomic<bool> g_display_recheck{false};
+// The presents' proof holds presents at this rate (hertz; 0: no proof running, render/variable_refresh.h RefreshQuestion):
+// the slots follow the pacer's clock at it, as under variable refresh at the cap.
+inline std::atomic<double> g_refresh_probe_hz{0.0};
 }

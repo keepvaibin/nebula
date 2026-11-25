@@ -166,7 +166,7 @@ galaxy_test(galaxy_frame_interpolation_tests SOURCES ${render_src}/frame_interpo
 galaxy_test(galaxy_present_slots_tests SOURCES ${render_src}/present_slots_tests.cpp ${render_src}/present_slots.cpp)
 # When each picture between two game frames is shown, on simulated displays (I-016).
 galaxy_test(galaxy_frame_schedule_tests SOURCES ${render_src}/frame_schedule_tests.cpp ${render_src}/frame_schedule.cpp
-            ${render_src}/present_slots.cpp)
+            ${render_src}/present_slots.cpp ${rt}/frame_phase.cpp)
 # The GPU's time by pass, one copy for the four renderers (P-022).
 galaxy_test(galaxy_gpu_pass_times_tests SOURCES ${render_src}/gpu_pass_times_tests.cpp ${render_src}/gpu_pass_times.cpp)
 # The temporal upscaler's hold on generated frames ends (header-only).
