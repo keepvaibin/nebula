@@ -49,6 +49,21 @@ void set_display_clock_held(bool held) noexcept;
 [[nodiscard]] bool vsync_grid(std::int64_t& vsync_ns, std::int64_t& interval_ns) noexcept;
 // The display's refresh rate: the vsync period the system states, else as its vsyncs measure it (0: not known).
 [[nodiscard]] double display_refresh_hz() noexcept;
+#if defined(__APPLE__)
+// Apple's Metal display link (CAMetalDisplayLink, macOS 14 and iOS 17; display_clock_apple.mm). The layer (a
+// CAMetalLayer*; null: none) whose drawables the link gives and whose refreshes it times, in place of the older link;
+// nothing where the system has no such link. Any thread.
+void metal_link_layer(void* layer) noexcept;
+// The link's latest drawable not yet taken (retained: the caller releases it) and the time it will be shown
+// (CACurrentMediaTime's seconds), waiting up to `wait_ns` for one (not again after a wait ran out, until the link
+// gives an update). False where no link gives drawables or none came: the caller asks the layer itself.
+[[nodiscard]] bool metal_link_drawable(void*& drawable, double& shown_at, std::int64_t wait_ns) noexcept;
+// In-between pictures fill the display's fastest rate: the links ask it, else 60 with a range up to it (P-034).
+void set_display_fills(bool fills) noexcept;
+// The start check's look at the clock's hold (P-034): vsyncs counted for 0.5 s, held for 1 s (none expected), let
+// go (some again). Prints its counts; 0 when the hold holds or no vsyncs come on this machine, 6 when it does not.
+[[nodiscard]] int check_display_clock_hold() noexcept;
+#endif
 // Android, when `adb shell setprop debug.nebula.profile <seconds>` asks: that many seconds on, the render, host-main and
 // game threads' instruction pointers are sampled for 2 s each and the busiest places logged (thread_sampler.cpp).
 void start_thread_sampler() noexcept;

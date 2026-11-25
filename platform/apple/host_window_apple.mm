@@ -1593,6 +1593,18 @@ void* metal_layer(NativeWindow) {
     return galaxy::sdl::g_layer.load(std::memory_order_acquire);
 }
 
+void metal_link_layer(void* layer) noexcept {
+    galaxy::sdl::metal_link_layer(layer);
+}
+
+bool metal_link_drawable(void*& drawable, double& shown_at, std::int64_t wait_ns) noexcept {
+    return galaxy::sdl::metal_link_drawable(drawable, shown_at, wait_ns);
+}
+
+void set_display_fills(bool fills) noexcept {
+    galaxy::sdl::set_display_fills(fills);
+}
+
 }  // namespace galaxy::render::host_window
 
 // The window functions the host and the backend call (render_api.h).

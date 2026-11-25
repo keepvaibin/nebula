@@ -2160,7 +2160,8 @@ void submit_frame_unchecked(bool present, bool black, bool list_shows = false) {
 // game's files, on a computer with no game data and perhaps no graphics card. The settings, the window and the renderer
 // start (a software adapter is allowed in this mode alone), then N frames of a cleared picture go through the frame
 // walk and the present as the game's do. Exit 0: every frame was drawn and at least one picture shown; 3: the renderer
-// did not start; 4: no picture was shown; 5: the renderer kept a frame for 10 seconds. A crash ends it as a crash.
+// did not start; 4: no picture was shown; 5: the renderer kept a frame for 10 seconds; 6 (Apple): the display clock
+// gave vsyncs while held, or none once let go. A crash ends it as a crash.
 int run_start_check(unsigned frames) {
     // The two clocks the host knows, side by side (frame_due.h): equal on a machine that never slept (GitHub's), hours apart on a
     // Mac that has. The program keeps its moments on the runtime's clock only.
@@ -2221,6 +2222,16 @@ int run_start_check(unsigned frames) {
     const galaxy::render::DisplayPresentStats shown = galaxy::render::display_present_stats();
     std::printf("start check: %u frames drawn, %llu pictures shown\n", frames, static_cast<unsigned long long>(shown.presented));
     galaxy::whole_lines::flush();
+#if defined(NEBULA_HOST_SDL) && defined(__APPLE__)
+    // P-034: the display clock held for a second gives no vsyncs, and gives them again once let go (6 when not).
+    if (shown.presented != 0u) {
+        const int held = galaxy::sdl::check_display_clock_hold();
+        std::fflush(stdout);
+        if (held != 0) {
+            return held;
+        }
+    }
+#endif
     return shown.presented != 0u ? 0 : 4;
 }
 
