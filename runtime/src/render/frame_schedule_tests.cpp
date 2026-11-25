@@ -61,6 +61,7 @@ struct SimDisplay final : ScheduleDisplay {
     unsigned suspended = 0;
     unsigned resets = 0;
     DisplayModel* model = nullptr;  // the display model's answers (G2.3.1); none: the platform gives none
+    unsigned queue = 0u;            // the presents ask no time and a queue this deep paces them (Direct3D's: 1)
     // G2.5, the arbiter's inputs. With `full_gpu_ms` the GPU's time for a generated picture follows dynamic resolution
     // (the share's area, the renderer's own ResolutionGovernor fed the arbiter's budget each sequence) and the clock:
     // `idle_rise` times longer while the arbiter runs fewer generated pictures than `configured` (a GPU whose time rises
@@ -86,6 +87,11 @@ struct SimDisplay final : ScheduleDisplay {
         return model != nullptr && model->display_time(present, shown);
     }
     bool last_shown(ShownPicture& picture) override { return model != nullptr && model->take_shown(picture); }
+    unsigned present_queue() const override { return queue; }
+    bool queue_time(std::int64_t present, std::int64_t& shown) const override {
+        shown = 0;
+        return model != nullptr && model->queue_time(present, shown);
+    }
     bool vblank_grid(std::int64_t& vblank, std::int64_t& grid) const override {
         if (!timed) return false;
         vblank = vblank0;
@@ -182,17 +188,21 @@ struct Run {
     std::vector<std::int64_t> references;  // each sequence's reference as it began
     std::vector<std::int64_t> steps;       // each list's step moment
     std::vector<std::int64_t> displayed;   // with a swap chain: the refresh that showed each picture of `shown`
+    std::vector<bool> hitched;             // with a swap chain: the picture's own work was a hitch (SimSwapChain::work)
+    std::int64_t lead_most = 0;            // the largest display lead a picture was drawn with
     std::uint64_t superseded = 0;
 };
 
 // A flip-model swap chain on a SimDisplay's vblanks, as Direct3D's with frame latency 1 (renderer_d3d12.cpp
 // present_to_swap_chain): a picture ready at `ready` is presented once the compositor took the one before it (the frame
-// latency object's wait) and not before the model's present_from for its slot (the renderer's hold), and shown at the
-// first refresh after its present and `held` refreshes more, never with the one before. Each present's display reaches
-// the model at a later present, as the frame statistics read after a present give the newest present shown by then.
-// With `asks`, a swap chain that takes each present's time, as Vulkan's present timing (renderer_vk.cpp, G2.3.2), on the
-// PC (held 0) and on Android's compositor (held 1): a picture is presented when ready, with no wait and no hold of the
-// renderer's, and shown no sooner than the refresh at or after half a refresh before its slot.
+// latency object's wait), at once, and shown at the first refresh after its present and `held` refreshes more, never
+// with the one before. Each present's display reaches the model at a later present, as the frame statistics read after
+// a present give the newest present shown by then. With `asks`, a swap chain that takes each present's time, as
+// Vulkan's present timing (renderer_vk.cpp, G2.3.2), on the PC (held 0) and on Android's compositor (held 1): a picture
+// is presented when ready, with no wait, and shown no sooner than the refresh at or after half a refresh before its slot.
+// The render thread's time for a picture is `cost` (run), or with `work_most` any time from `cost` to it at random, and
+// one picture in `hitch_every` takes `hitch_from` to `hitch_to` (a page fault, a pipeline made late); its wake for a
+// slot is up to `wake_most` late (the timer's).
 struct SimSwapChain {
     const SimDisplay& display;
     DisplayModel model{kFrequency};
@@ -201,12 +211,25 @@ struct SimSwapChain {
     std::uint64_t id = 0;
     std::int64_t last_shown = 0;
     std::vector<std::pair<std::uint64_t, std::int64_t>> pending;  // presents not yet reported: id, shown
+    std::mt19937 random{20261125u};
+    std::int64_t work_most = 0;
+    std::int64_t wake_most = 0;
+    unsigned hitch_every = 0u;
+    std::int64_t hitch_from = 0;
+    std::int64_t hitch_to = 0;
+    bool hitched = false;  // the last picture's work was a hitch
+
+    std::int64_t work(std::int64_t cost) {
+        hitched = hitch_every != 0u && std::uniform_int_distribution<unsigned>(1u, hitch_every)(random) == 1u;
+        if (hitched) return std::uniform_int_distribution<std::int64_t>(hitch_from, hitch_to)(random);
+        return work_most > cost ? std::uniform_int_distribution<std::int64_t>(cost, work_most)(random) : cost;
+    }
+    std::int64_t wake() { return wake_most > 0 ? std::uniform_int_distribution<std::int64_t>(0, wake_most)(random) : 0; }
 
     // Presents a picture drawn for `slot` (0: none), ready at `ready`: the moment the present call returns.
     std::int64_t present(std::int64_t slot, std::int64_t ready) {
         const std::int64_t period = display.period;
-        const std::int64_t call =
-            asks ? ready : std::max({ready, last_shown - held * period, model.present_from(slot)});
+        const std::int64_t call = asks ? ready : std::max(ready, last_shown - held * period);
         const std::int64_t first = display.vblank0 + ((call - display.vblank0) / period + 1) * period;
         std::int64_t shown = std::max(first + held * period, last_shown + period);
         if (asks && slot != 0) {
@@ -242,16 +265,19 @@ Run run(FrameSchedule& schedule, int frames, std::int64_t first_step, const std:
     const auto record = [&](const SchedulePicture& picture) {
         const ScheduleSequence& s = schedule.sequence();
         result.shown.push_back({picture, s.step_qpc, s.frame_qpc, s.lead, s.generated, playing});
+        result.lead_most = std::max(result.lead_most, schedule.display_lead());
         if (picture.kind == SchedulePicture::Kind::Generated) {
-            schedule.generated_drawn(static_cast<std::uint64_t>(cost), true);
-            now += cost;
+            const std::int64_t spent = chain != nullptr ? chain->work(cost) : cost;
+            schedule.generated_drawn(static_cast<std::uint64_t>(spent), true);
+            now += spent;
         } else if (chain != nullptr) {
-            now += cost;  // the frame's own walk
+            now += chain->work(cost);  // the frame's own walk
         }
         if (chain != nullptr) {
             // The present: the render thread waits for the swap chain's queue.
             now = std::max(now, chain->present(picture.flush ? 0 : picture.slot, now));
             result.displayed.push_back(chain->last_shown);
+            result.hitched.push_back(chain->hitched);
         }
     };
     const auto begin = [&] {
@@ -273,8 +299,8 @@ Run run(FrameSchedule& schedule, int frames, std::int64_t first_step, const std:
     };
     const auto serve = [&](std::int64_t until) {
         while (schedule.busy() && schedule.slot_due() <= until) {
-            now = std::max(now, schedule.slot_due());
             const std::int64_t due = schedule.slot_due();
+            if (now < due) now = due + (chain != nullptr ? chain->wake() : 0);
             const std::size_t count = result.shown.size();
             draw();
             if (result.shown.size() == count && schedule.slot_due() == due && !schedule.waiting()) break;
@@ -704,8 +730,8 @@ void test_variable_refresh() {
 // 1 refreshes, steady lateness: once the lead has settled, each picture is shown at the refresh it was drawn for (its
 // slot, whose t it shows), every slot a vblank, one picture a refresh, none early, no frame twice. The lead comes down
 // to the least the display allows (held + 1 refreshes) where a picture's margin leaves a refresh and 2 ms to spare
-// (refreshes of 3.1 ms and longer, with a walk of 0.5 ms and the hold's guard of 0.5 ms, which the render thread waits
-// out before the next picture), and is never more than a refresh above it. A compositor that
+// (refreshes of 2.5 ms and longer, with a walk of 0.5 ms; nothing holds a picture before its Present since R-007), and
+// is never more than a refresh above it. A compositor that
 // starts holding a refresh more raises the lead from what was shown, and the pictures reach their slots again. A
 // variable refresh (the pacer's clock) and a display with no answers keep lead 0: today's slots.
 void test_display_model() {
@@ -729,6 +755,7 @@ void test_display_model() {
             SimSwapChain chain{display};
             chain.held = held;
             display.model = &chain.model;
+            display.queue = 1u;
             FrameSchedule schedule(display, kFrequency);
             schedule.configure(generated, 0);
             const Run r = run(schedule, 900, kFrequency, steady, walk, true, nullptr, kStep, &display, nullptr, &chain);
@@ -737,8 +764,8 @@ void test_display_model() {
             const Evenness e = evenness(r, from, display.period, &display);
             const std::int64_t lead = schedule.display_lead();
             const std::int64_t least = (held + 1) * display.period;
-            const bool lead_ok = display.period >= kFrequency * 31 / 10'000 ? lead == least
-                                 : display.period <= kFrequency * 29 / 10'000
+            const bool lead_ok = display.period >= kFrequency * 26 / 10'000 ? lead == least
+                                 : display.period <= kFrequency * 24 / 10'000
                                      ? lead == least + display.period
                                      : lead == least || lead == least + display.period;
             const bool ok = off == 0u && e.early == 0u && e.frames_once && e.rising && e.on_grid && lead_ok;
@@ -928,6 +955,61 @@ void test_display_model_answers() {
     asked.presented(5u, v + 3 * f + 5 * period, v + 3 * f + 4 * period + 10, v + 3 * f + 4 * period + 10, true);
     asked.displayed(5u, v + 3 * f + 7 * period, period);
     check(asked.held() == 2, "pictures shown later than asked show the display's hold, which the model takes");
+}
+
+// R-007: Direct3D's flip queue paces the pictures, with no hold before Present. A flip queue of frame latency 1
+// (SimSwapChain) at 240, 144, 75 and 60 Hz, the compositor holding 0 and 1 refreshes; the render thread's work for a
+// picture jitters from a tenth of a refresh to nine tenths, its wake is up to 0.5 ms late, and one picture in 50 is a
+// hitch of 1.5 to 3 refreshes. After the first 2 s: no refresh goes without a new picture but those a hitch took (three
+// at most for each), the lead never goes above its least and the queue's depth (held + 2 refreshes), and each picture
+// whose own work was no hitch is shown at the refresh it was drawn for, whose t it shows. On G2.3.1's rule (the render
+// thread held to the refresh before the slot) the same runs fail: the held thread starts the next picture late, the
+// lead climbs to four game steps and a picture shows about every fifteen refreshes at 240 Hz.
+void test_display_queue() {
+    const std::vector<std::int64_t> steady{kFrequency / 500};
+    unsigned bad = 0;
+    for (const double refresh : {240.0, 144.0, 75.0, 60.0}) {
+        for (const std::int64_t held : {std::int64_t{0}, std::int64_t{1}}) {
+            SimDisplay display = display_at(refresh, true);
+            display.queue = 1u;
+            SimSwapChain chain{display};
+            chain.held = held;
+            chain.work_most = display.period * 9 / 10;
+            chain.wake_most = kFrequency / 2000;
+            chain.hitch_every = 50u;
+            chain.hitch_from = display.period * 3 / 2;
+            chain.hitch_to = display.period * 3;
+            display.model = &chain.model;
+            FrameSchedule schedule(display, kFrequency);
+            schedule.configure(interpolated_frames_per_game_frame(refresh), 0);
+            const Run r = run(schedule, 600, kFrequency, steady, display.period / 10, true, nullptr, kStep, &display,
+                              nullptr, &chain);
+            std::size_t from = 0;
+            while (from < r.shown.size() && r.displayed[from] < r.displayed.front() + 2 * kFrequency) ++from;
+            std::int64_t gaps = 0;
+            std::size_t hitches = 0;
+            std::size_t off = 0;
+            for (std::size_t i = from; i < r.shown.size(); ++i) {
+                hitches += r.hitched[i] ? 1u : 0u;
+                if (i > from) gaps += (r.displayed[i] - r.displayed[i - 1]) / display.period - 1;
+                off += !r.shown[i].picture.flush && !r.hitched[i] && r.displayed[i] != r.shown[i].picture.slot ? 1u : 0u;
+            }
+            const std::int64_t refreshes = (r.displayed.back() - r.displayed[from]) / display.period;
+            const std::int64_t lead_most = (held + 2) * display.period;
+            const bool ok = refreshes > 0 && gaps <= 3 * static_cast<std::int64_t>(hitches) && off == 0u &&
+                            r.lead_most <= lead_most;
+            std::printf("  flip queue %.0f Hz held %lld: %lld refreshes, %zu pictures, %lld without a new picture, "
+                        "%zu hitches, %zu off their refresh, lead at most %.2f refreshes (bound %lld)\n",
+                        refresh, static_cast<long long>(held), static_cast<long long>(refreshes),
+                        r.shown.size() - from, static_cast<long long>(gaps), hitches, off,
+                        static_cast<double>(r.lead_most) / static_cast<double>(display.period),
+                        static_cast<long long>(held + 2));
+            bad += ok ? 0u : 1u;
+        }
+    }
+    char what[120];
+    std::snprintf(what, sizeof what, "Direct3D's flip queue paces the pictures, work jittering: %u of 8 runs wrong", bad);
+    check(bad == 0u, what);
 }
 
 // No step moments: the arrival clock smooths the lists' times to the game's period.
@@ -1667,6 +1749,7 @@ int main() {
     test_display_model();
     test_display_model_asked();
     test_display_model_answers();
+    test_display_queue();
     test_arrival_clock();
     test_unlimited();
     test_stall();

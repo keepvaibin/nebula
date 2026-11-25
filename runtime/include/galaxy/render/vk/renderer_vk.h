@@ -420,6 +420,12 @@ public:
         return display_model_.display_time(present, shown);
     }
     [[nodiscard]] bool take_shown(ShownPicture& picture) noexcept { return display_model_.take_shown(picture); }
+    // No queue bounds the display lead here (frame_schedule.h present_queue): the lead moves only on pictures shown that
+    // asked their time.
+    [[nodiscard]] unsigned present_queue() const noexcept { return 0u; }
+    [[nodiscard]] bool queue_time(std::int64_t present, std::int64_t& shown) const noexcept {
+        return display_model_.queue_time(present, shown);
+    }
     [[nodiscard]] UploadRing& vertex_ring() noexcept { return vertex_ring_; }
     [[nodiscard]] UploadRing& index_ring() noexcept { return index_ring_; }
     [[nodiscard]] UploadRing& constant_ring() noexcept { return constant_ring_; }

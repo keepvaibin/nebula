@@ -1687,10 +1687,29 @@ at the picture's moment; every platform does the same or says on screen why not.
      wait) and when the Present call was made; and the frame statistics' newest present shown. `held` is the refreshes
      a present was shown past the first after its call (the flip queue's and the compositor's), its least over each
      second of reports; a present at p is predicted at the first refresh after p and `held` more. Answers stop a second
-     after the last report (a hidden window, a swap chain of frame generation's). The swap chain asks no time, so a
-     picture ready before the refresh from which it reaches its slot (`DisplayModel::present_from`: `held` + 1
-     refreshes before the slot, and a guard of a quarter refresh, 0.5 ms at most) is held to it by the precise wait
-     before its Present; without that hold a lead above the least would show every picture early.
+     after the last report (a hidden window, a swap chain of frame generation's). The swap chain asks no time: its own
+     queue paces the presents (`ScheduleDisplay::present_queue`, the frame latency object's maximum, 1). A picture is
+     presented as soon as it is ready and the object lets it go, and is shown at the refresh after the one the picture
+     before it is due at or at the first a present made at its start reaches, whichever is later
+     (`DisplayModel::queue_time`); `FrameSchedule::next` draws it for that refresh, moving the slot clock to it where a
+     stall or a late picture put it past the next slot. The lead is at most the queue's depth above its least (`held` +
+     2 refreshes at frame latency 1): a picture started earlier would wait for the queue past the next picture's start.
+     Corrected by R-007 (11-25): G2.3.1 held each picture on the render thread before its Present until `held` + 1
+     refreshes before its slot (`present_from`). The render thread is serial, so with the lead above the least and a
+     refresh that hold ran into the next picture's start; that picture started late, the lead's rule counted it late
+     and raised the lead, which lengthened the hold, up to the cap of four game steps. At 240 Hz with VSync on Direct3D
+     12 and 11 then showed a picture every 12 to 16 refreshes and ran the game at 17 steps a second
+     (bisect-d3d-20261125.md). The hold and `present_from` are deleted. Where the queue holds no picture before it, a
+     start before its slot waits on the render thread's own wait for its start (`slot_due`) until a present reaches the
+     slot: with no hold a picture presented to an empty queue shows at the first refresh it reaches, and one shown
+     early keeps every later one early. Measured 11-25 at 240 Hz, shown window, pace.py: game speed 60.00 steps a
+     second on Direct3D 12, 11 and Vulkan in every test; "match" with no missed or doubled refresh on all three, every
+     Direct3D 12 present shown at the refresh it was drawn for (11,972 of 11,972 in a timeline run). Not passing:
+     Direct3D's "match" animation error (78 to 81 % within 1 ms) and delay (p99 26.5 ms, average 24.5 to 25.0, against
+     22.7; Vulkan 19.2): the lead stays at the queue's two refreshes, and the locked sequences' references, snapped to
+     a vblank, flip by a refresh as the step's phase against the vblanks wanders (frame_phase.cpp aims the step at the
+     vblank less its work budget; it was 91.9 % on Direct3D 12 before G2.3.1). rate-60 and rate-120 miss 1 to 5
+     refreshes on Direct3D and 26 at rate-60 on Vulkan, as before this repair.
    - M2 read from the code (the statistics on a shown window are the planner's owed measure): with frame latency 1 the
      latency object lets a present go only once the one before is shown. Slots started on a vblank, so after one
      present missed its refresh every later one waited a whole refresh on the object (P-312's 4 ms a picture) and
@@ -1808,8 +1827,8 @@ at the picture's moment; every platform does the same or says on screen why not.
      VK_GOOGLE_display_timing places it on the vsyncs (`display_timing_open`, the timed vsyncs, a step no shorter than
      one), Metal while the display link gives the drawables (`host_window::metal_link_runs`), Direct3D never. There the
      render thread's wait to the slot is `PreciseWait::until_held`: the timer alone, its lateness taken in by the
-     display lead as it follows the pictures shown. The spin stays on Direct3D (the display model's `present_from`
-     wait), for the HOME Menu's repeated picture (no moment), the pacer with VSync off (`PresentPacer`) and the game
+     display lead as it follows the pictures shown. The spin stays on Direct3D (its wait to the slot; the display
+     model's `present_from` wait it also had is gone since R-007), for the HOME Menu's repeated picture (no moment), the pacer with VSync off (`PresentPacer`) and the game
      step's wait (`host_main.cpp`). The old path stays beside it behind `--diagnostics slot-spin` until the measures
      hold. Read first, answered: the tablet's "before" was not measured; it is taken on the same build with
      `--diagnostics slot-spin` against the run without, with `thread-cpu`, at 120 Hz with in-between pictures on (at 60

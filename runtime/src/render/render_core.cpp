@@ -791,6 +791,15 @@ bool RenderCore::ScheduleView::last_shown(ShownPicture& picture) {
     return core_.renderer_.take_shown(picture);
 }
 
+unsigned RenderCore::ScheduleView::present_queue() const {
+    return core_.renderer_.present_queue();
+}
+
+bool RenderCore::ScheduleView::queue_time(std::int64_t present, std::int64_t& shown) const {
+    shown = 0;
+    return pictures_on_refreshes(core_.renderer_.swap_queue()) && core_.renderer_.queue_time(present, shown);
+}
+
 // Dynamic resolution as the renderer last drew (dynamic_resolution.h publishes it each scene picture).
 bool RenderCore::ScheduleView::resolution(unsigned& sixteenths, unsigned& floor) const {
     sixteenths = g_resolution_sixteenths.load(std::memory_order_relaxed);

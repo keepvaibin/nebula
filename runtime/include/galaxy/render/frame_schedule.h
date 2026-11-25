@@ -24,9 +24,17 @@
 // so a picture starts as late as it safely can. The sequences' references hold the lead (display_delay_qpc), moved by
 // the step delay's bounds, so the content keeps to the wall clock. A platform with no answers keeps lead 0: its slots
 // are the moments the pictures start, as before.
+// A swap chain whose presents ask no time (Direct3D's flip model, ScheduleDisplay::present_queue) is paced by its own
+// queue: each picture is presented as soon as it is ready and the frame latency object lets it go, and is shown at the
+// refresh after the one before it or at the first a present made at its start reaches, whichever is later. That refresh
+// is the one it is drawn for (next): nothing holds the render thread between a picture's work and its Present. Where no
+// picture before it waits in the queue, a start before the slot waits for the moment from which a present reaches the
+// slot (slot_due), so no picture is shown early. Its lead is at most the queue's depth above its least
+// (present_slots.h), the most the queue lets a picture wait for its refresh.
 
 #include "galaxy/render/present_slots.h"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -65,10 +73,10 @@ public:
     void displayed(std::uint64_t id, std::int64_t shown, std::int64_t period) noexcept;
     // When a picture presented at `present` will be shown; false with no report in the second before it.
     [[nodiscard]] bool display_time(std::int64_t present, std::int64_t& shown) const noexcept;
-    // The moment from which a present reaches the refresh `slot` and no refresh before it (the refresh `held` + 1
-    // before the slot, and a guard of a quarter refresh, half a millisecond at most, for a present made just before
-    // it): the swap chain asks no time, so a picture ready before it is held to it. 0 with no answer.
-    [[nodiscard]] std::int64_t present_from(std::int64_t slot) const noexcept;
+    // The same behind the presents before it, on a swap chain whose queue shows every present in order, one a refresh
+    // (a flip model's): display_time's refresh, or the refresh after the one the newest present is due at (the first
+    // after its call and `held` more), whichever is later.
+    [[nodiscard]] bool queue_time(std::int64_t present, std::int64_t& shown) const noexcept;
     // The newest picture with a slot shown since the last call.
     [[nodiscard]] bool take_shown(ShownPicture& picture) noexcept;
     // The refreshes the display holds a picture past the first after its present (the least of the last window).
@@ -150,6 +158,14 @@ public:
     [[nodiscard]] virtual bool last_shown(ShownPicture& picture) {
         picture = {};
         return false;
+    }
+    // The presents ask no time and the swap chain's queue paces them: the most presents it holds ahead of the one shown
+    // (Direct3D's frame latency object's maximum). 0: the presents ask their time, or no display model answers.
+    [[nodiscard]] virtual unsigned present_queue() const { return 0u; }
+    // Where a queue paces the presents: when a picture presented at `present` will be shown behind the presents before
+    // it (DisplayModel::queue_time). false where the platform gives no answer.
+    [[nodiscard]] virtual bool queue_time(std::int64_t present, std::int64_t& shown) const {
+        return display_time(present, shown);
     }
     // Dynamic resolution as the renderer last drew (G2.5): the scene's share and the lowest it may take, in sixteenths
     // of a side; false while it is off (the GPU time is then the whole size's).
@@ -256,8 +272,11 @@ public:
     [[nodiscard]] const ScheduleSequence& sequence() const noexcept { return sequence_; }
     // t of the next slot in the playing sequence.
     [[nodiscard]] double slot_t() const noexcept;
-    // When the next slot's picture starts: the slot less the display lead.
-    [[nodiscard]] std::int64_t slot_due() const noexcept { return slot_due_ - display_lead_; }
+    // When the next slot's picture starts: the slot less the display lead; where a queue paces the presents and holds no
+    // picture before it, not before a present reaches the slot (next).
+    [[nodiscard]] std::int64_t slot_due() const noexcept {
+        return start_slot_ == slot_due_ ? std::max(slot_due_ - display_lead_, start_from_) : slot_due_ - display_lead_;
+    }
     // The next slot: the moment its picture shows (with a display model, the refresh it is drawn for).
     [[nodiscard]] std::int64_t slot_shown() const noexcept { return slot_due_; }
     // A slot's length; 0 with no slot clock. Published as it is set (present_clock.h g_slot_period_qpc).
@@ -338,6 +357,12 @@ private:
     PresentDepth display_depth_{};
     std::int64_t display_delay_qpc_ = 0;
     std::int64_t display_from_ = 0;  // the first slot drawn with the lead since it came in (observe_shown)
+    // A swap chain's queue paces the presents (present_queue, with a lead): its depth and the refresh period; 0: none.
+    unsigned display_queue_ = 0;
+    std::int64_t display_refresh_ = 0;
+    // The slot whose start waits (next) and the moment from which a present reaches it; for that slot only.
+    std::int64_t start_slot_ = 0;
+    std::int64_t start_from_ = 0;
 
     // The arrival clock and the step clock's delay (start): the delay follows the lists' lateness after their steps'
     // moments, at most one step.

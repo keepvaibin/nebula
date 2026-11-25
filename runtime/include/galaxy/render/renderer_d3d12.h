@@ -654,6 +654,11 @@ public:
         return display_model_.display_time(present, shown);
     }
     [[nodiscard]] bool take_shown(ShownPicture& picture) noexcept { return display_model_.take_shown(picture); }
+    // The presents ask no time: the frame latency object's queue paces them (frame_schedule.h present_queue).
+    [[nodiscard]] unsigned present_queue() const noexcept;
+    [[nodiscard]] bool queue_time(std::int64_t present, std::int64_t& shown) const noexcept {
+        return display_model_.queue_time(present, shown);
+    }
     [[nodiscard]] UploadRing& vertex_ring() { return vertex_ring_; }
     [[nodiscard]] UploadRing& index_ring() { return index_ring_; }
     [[nodiscard]] UploadRing& constant_ring() { return constant_ring_; }
