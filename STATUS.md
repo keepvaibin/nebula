@@ -6,8 +6,7 @@ Steps landed: 32 of 145 (22%).
 
 Now: in work: lander landing G2.3 to G2.5
 
-In work now:
-- G2.4 Landing 4: no closing spin where a display time is asked (agent 1)
+In work now: Nothing started.
 
 ## Packages
 
@@ -109,7 +108,7 @@ Nothing waits for the owner.
 
 ## Blocked
 
-Nothing is blocked.
+- G2.4 Landing 4: no closing spin where a display time is asked: hard: measure/step/tablet worse: render_ms 1.17536 (median 1.0155, band 0.117867); the sheet predicted no step or walk time to move (report: D:/NebulaWork/plan/native/hard/G2.4.md)
 
 ## Tool mends
 
