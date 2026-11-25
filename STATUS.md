@@ -4,7 +4,7 @@ Written 2026-11-25 10:58. If this time is more than three hours old, the work ha
 
 Steps landed: 35 of 145 (24%).
 
-Now: in work: lander landing repair R-007 again (check field fixed)
+Now: R-007 landed (main a360c2e0a); in work: fixer for R-008 (the remaining pace rows)
 
 In work now: Nothing started.
 
