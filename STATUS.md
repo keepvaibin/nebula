@@ -1,12 +1,13 @@
 # Nebula native plan: status
 
-Written 2026-11-24 16:18. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 16:19. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 25 of 145 (17%).
 
 Now: in work: writer writing package G2 from G2.3.2
 
-In work now: Nothing started.
+In work now:
+- G2.3.2 Landing 3b: Vulkan and Android present at the asked time (agent 1)
 
 ## Packages
 
