@@ -4,7 +4,7 @@ Written 2026-11-24 20:09. If this time is more than three hours old, the work ha
 
 Steps landed: 27 of 145 (19%).
 
-Now: in work: lander landing G2.3.4 to G2.3.7
+Now: G2.3.4 hard (Mac start check crash); fixer waits for the usage line
 
 In work now: Nothing started.
 
