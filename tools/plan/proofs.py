@@ -5,7 +5,7 @@ program the agent may not run (S0.2.6, proof 6: `tools/verify/size_probe.py`, wh
 profile that cannot be run. This reads a card's proofs and says, for each program, script or test the proof names, whether it exists on main,
 whether AGENT.md forbids running it (the list under "Programs you never run"), and whether each option written beside a program is one that
 program takes, where that can be read from its source. A self-test (tools/gate/tests/plan_cards_test.py) runs it over the cards of steps 12 to
-138. It changes no card. Python standard library only.
+155. It changes no card. Python standard library only.
 
 What is read as a name:
   a program or script  a backtick span (or a bare word) ending .py, .ps1 or .sh, with the options and the sub-command written after it in the span;
