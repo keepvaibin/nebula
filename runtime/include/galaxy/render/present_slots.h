@@ -53,8 +53,10 @@ struct PresentClock {
 // The depth from a picture's moment to the refresh asked for it, set by past presentations (observe): PresentSlots' and
 // the frame schedule's display lead (frame_schedule.h, a display model's platforms). Every time in nanoseconds.
 // Where the presents ask no time (Direct3D's flip model) the swap chain's queue paces them: a picture is shown at the
-// first refresh after its present that the one before it leaves free, so the lead starts at the least and rises only
-// by pictures late for their refreshes, at most the queue's depth above it (FrameSchedule::display_lead_for).
+// first refresh after its present that the one before it leaves free, so the depth is at most the queue's depth (the
+// frame latency object's maximum) in refreshes above the least. A picture started earlier waits for the queue on the
+// render thread past the next picture's start, and nothing holds a picture to its refresh: a lateness is the picture's
+// own (FrameSchedule::display_lead_for).
 class PresentDepth {
 public:
     // The depth in whole `unit`s, at least `least` and at most `most` (both rounded up to whole units): `initial` at the

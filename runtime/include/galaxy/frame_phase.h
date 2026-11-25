@@ -21,13 +21,17 @@ public:
     static constexpr std::int64_t kMarginNs = 1'500'000;
     // How far one frame's start moves towards its place: unseen, since a present lands on a refresh anyway.
     static constexpr std::int64_t kSlewNs = 500'000;
-    // A frame past its budget has missed its refresh: plain pacing for this many frames.
+    // A frame past its budget has missed its refresh (in-between pictures off): plain pacing for this many frames.
     static constexpr int kPlainFrames = 600;
+    // With in-between pictures the budget's rise a step at most: 0.24 ms a second.
+    static constexpr std::int64_t kBetweenRiseNs = 4'000;
 
     // The frame that started at `last_start_ns` took `work_ns` to its present (0: not known yet). `period_ns`: the
     // frame's length; `in_between`: in-between pictures are on. Returns the next frame's start. Without refreshes, on
     // a display the step does not lock to (galaxy/step_lock.h), after a missed frame, or when the work leaves no room
-    // to start later, frames simply follow `period_ns`.
+    // to start later, frames simply follow `period_ns`. Locked with in-between pictures (two refreshes a step or more), a
+    // frame keeps the game's own clock: one frame takes a refresh more or fewer when the refreshes' cadence has drifted
+    // half a refresh from it (a display a little off 240 Hz, as 239.966 Hz: the game's speed stays 60).
     [[nodiscard]] std::int64_t next_start(std::int64_t last_start_ns, std::int64_t work_ns, std::int64_t period_ns,
                                           const std::optional<DisplayRefresh>& refresh, bool in_between) noexcept;
     [[nodiscard]] std::int64_t budget_ns() const noexcept { return budget_ns_; }
@@ -36,6 +40,7 @@ public:
 private:
     std::int64_t budget_ns_ = 8'000'000;
     int plain_frames_ = 0;
+    std::int64_t ideal_ns_ = 0;  // locked: this frame's start on the game's own clock (0: not locked)
 };
 
 // Two readings of the display's clock agree: a whole number of refreshes apart. Not on a variable refresh display, whose

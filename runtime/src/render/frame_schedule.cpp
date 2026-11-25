@@ -440,20 +440,18 @@ std::int64_t FrameSchedule::display_lead_for(std::int64_t now, std::int64_t vbla
     if (vblank_period <= 0 || !display_.display_time(now, shown) || shown <= now) {
         return 0;
     }
-    // At the least the time from a present made now to the refresh that shows it, in whole refreshes; a refresh more
-    // at first (the picture's own work); four game steps at most (present_slots.h). Where a swap chain's queue paces
-    // the presents, the least at first: a picture started then and presented as soon as it is ready reaches its
-    // refresh with the queue empty before it. A deeper lead fills the queue (the render thread presents behind the
-    // picture before, which waits a refresh in it, the queue's time added to every picture's delay), so it comes only
-    // from pictures late for their refreshes, at most the queue's depth above the least: a picture started earlier
-    // would find the queue full, its render thread blocked past the next picture's start.
+    // At the least the time from a present made now to the refresh that shows it, in whole refreshes (the display's own
+    // hold, learnt from presents the queue did not hold: DisplayModel::displayed); a refresh more at first (the
+    // picture's own work), down where the presents leave room (present_slots.h); four game steps at most. Where a swap
+    // chain's queue paces the presents, at most the queue's depth above the least: a picture started earlier would find
+    // the queue full, its render thread blocked past the next picture's start. A lead that came down and went up again
+    // moves every picture's moment by a refresh twice (R-008: on Direct3D at 240 Hz the least alone left pictures late
+    // and the lead went up and down every few seconds).
     const std::int64_t unit = to_ns(vblank_period);
     const std::int64_t least = to_ns(shown - now);
     const auto queue = static_cast<std::int64_t>(display_.present_queue());
-    const std::int64_t least_whole = (least + unit - 1) / unit * unit;
-    const std::int64_t depth = queue != 0
-                                   ? display_depth_.depth(least_whole, least, least_whole + queue * unit, unit)
-                                   : display_depth_.depth(least + unit, least, 4 * kGameStepNs, unit);
+    const std::int64_t most = queue != 0 ? (least + unit - 1) / unit * unit + queue * unit : 4 * kGameStepNs;
+    const std::int64_t depth = display_depth_.depth(least + unit, least, std::min<std::int64_t>(most, 4 * kGameStepNs), unit);
     return (depth + unit / 2) / unit * vblank_period;
 }
 

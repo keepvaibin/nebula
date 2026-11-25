@@ -125,6 +125,16 @@ void test_falls_back() {
     for (int i = 0; i < 4; ++i) start = phase.next_start(start, 3'000'000, kFrame, display, false);
     expect(!phase.plain(), "the phase comes back after its pause");
 
+    // R-008: with in-between pictures a step past its budget misses no refresh (its pictures start later, the display
+    // lead takes it): the phase stays, the budget rises to it.
+    FramePhase between;
+    std::int64_t at = 1'000'000;
+    for (int i = 0; i < 1000; ++i) at = between.next_start(at, 3'000'000, kFrame, display, true);
+    const std::int64_t budget = between.budget_ns();
+    const std::int64_t past = between.next_start(at, budget + 1'000'000, kFrame, display, true);
+    expect(!between.plain() && between.budget_ns() > budget && std::llabs(past - (at + kFrame)) <= FramePhase::kSlewNs,
+           "in-between pictures: a step past its budget keeps the phase");
+
     // Work near the frame's length leaves nothing to gain.
     FramePhase weak;
     std::int64_t weak_start = 0;
@@ -249,14 +259,25 @@ void test_every_rate() {
             FramePhase phase;
             const DisplayRefresh display{987'654, refresh};
             std::int64_t start = 12'345'678;
+            const std::int64_t first = start;
+            int other = 0;  // locked steps a refresh shorter or longer: the game's clock kept (R-008)
             for (int i = 0; i < 1200; ++i) {
                 const std::int64_t next = phase.next_start(start, 3'000'000, kFrame, display, in_between);
                 if (i > 600) {
-                    ok = ok && (expected == 0 ? next - start == kFrame
-                                              : std::llabs(next - start - expected * refresh) <= 1'000);
+                    const std::int64_t d = next - start;
+                    const bool whole = std::llabs(d - expected * refresh) <= 1'000;
+                    other += !whole ? 1 : 0;
+                    ok = ok && (expected == 0 ? d == kFrame
+                                              : whole || std::llabs(std::llabs(d - expected * refresh) - refresh) <= 1'000);
                 }
                 start = next;
             }
+            // With in-between pictures, two refreshes a step or more: 60 steps a second on the game's clock, within a
+            // refresh and a half of it after 20 s, a step of another length only where the refreshes drifted half a
+            // refresh from it. Else every locked step the display's whole refreshes.
+            const bool clock = in_between && expected >= 2;
+            ok = ok && (!clock || std::llabs(start - first - 1200 * kFrame) <= refresh * 3 / 2) && (clock || expected == 0 || other == 0) &&
+                 other <= 1 + static_cast<int>(600 * std::llabs(expected * refresh - kFrame) / std::max<std::int64_t>(1, refresh / 2));
             if (expected != 0) {
                 const std::int64_t gap = to_refresh(start + 3'000'000, display);
                 ok = ok && gap >= FramePhase::kMarginNs - 100'000 && gap <= FramePhase::kMarginNs + 2'000'000;
@@ -271,6 +292,34 @@ void test_every_rate() {
     expect(wrong == 0u, "every sample rate: the step locks at the multiples only, else exactly 60 Hz");
 }
 
+// R-008: a display a little off 240 Hz (239.966 Hz, the pace measures' monitor), in-between pictures on: locked, the
+// steps keep 60 a second within 0.01 % over two minutes, each step four refreshes but the few that keep the game's
+// clock (three or five), and every start at the same place before its refresh but for the slew after those.
+void test_game_clock() {
+    const std::int64_t refresh = std::llround(1e9 / 239.966);
+    const DisplayRefresh display{0, refresh};
+    FramePhase phase;
+    std::int64_t start = 5'000'000;
+    for (int i = 0; i < 600; ++i) start = phase.next_start(start, 2'000'000, kFrame, display, true);
+    const std::int64_t first = start;
+    int others = 0;
+    bool spacing = true;
+    constexpr int kSteps = 7200;
+    for (int i = 0; i < kSteps; ++i) {
+        const std::int64_t next = phase.next_start(start, 2'000'000, kFrame, display, true);
+        const std::int64_t d = next - start;
+        if (std::llabs(d - 4 * refresh) > 1'000) {
+            ++others;
+            spacing = spacing && std::llabs(std::llabs(d - 4 * refresh) - refresh) <= FramePhase::kSlewNs;
+        }
+        start = next;
+    }
+    const double rate = 1e9 * kSteps / static_cast<double>(start - first);
+    std::printf("  239.966 Hz: %.4f steps a second, %d steps of other lengths\n", rate, others);
+    expect(std::abs(rate - 60.0) <= 60.0 * 0.0001 && spacing && others >= 1 && others <= 8,
+           "a display a little off 240 Hz: 60 steps a second, a refresh more or less now and then");
+}
+
 }  // namespace
 
 int main() {
@@ -283,6 +332,7 @@ int main() {
     test_in_step();
     test_step_work();
     test_every_rate();
+    test_game_clock();
     if (g_failures != 0) {
         std::cerr << g_failures << " check(s) failed\n";
         return 1;
