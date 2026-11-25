@@ -19,7 +19,8 @@ namespace galaxy::sdl {
 bool start() noexcept;
 // A fatal error, for the player: a message box, and <data>/last_error.txt for the app's launcher.
 void show_fatal(const char* message) noexcept;
-// Window, touch, key and gamepad events, waiting up to `timeout_ms` for the first.
+// Window, touch, key and gamepad events, waiting up to `timeout_ms` for the first or for a request another thread
+// leaves (menu keys, rumble, the activity's calls), whichever comes first.
 void pump_events(int timeout_ms) noexcept;
 // The app is out of sight (Android: the activity stopped); the host stops the game's clocks meanwhile.
 [[nodiscard]] bool in_background() noexcept;

@@ -9,6 +9,7 @@
 #include "galaxy/playstation_controller.h"
 #include "galaxy/steam_controller.h"
 #include "galaxy/controller_hid.h"
+#include "galaxy/host_wait.h"
 #include "galaxy/input/host_input.h"
 #include "galaxy/input/key_positions.h"
 #include "galaxy/mod_import.h"
@@ -118,8 +119,24 @@ std::atomic<bool> g_direct_touch{false};
 
 // SDL's thread, the only one that calls SDL's window, gamepad and Java functions. The game's threads run on stacks of
 // their own, which the Java VM refuses to attach (it aborts the process), so they leave requests here instead, done
-// after each pump (every 4 ms at most).
+// after each pump; leaving one wakes the pump (wake_pump).
 std::thread::id g_sdl_thread;
+// The pump's wake (P-281): an event of this type, pushed by a thread that leaves a request, ends SDL's event wait at
+// once (0: SDL gave no type; the request waits for the pump's bound). On Android, where the pump blocks on
+// g_pump_wake rather than in SDL's wait, an event watch wakes it for every event pushed, this one and the system's.
+std::atomic<Uint32> g_wake_event{0u};
+#if defined(__ANDROID__)
+galaxy::WakeWait g_pump_wake;
+#endif
+
+void wake_pump() noexcept {
+    if (const Uint32 type = g_wake_event.load(std::memory_order_acquire); type != 0u) {
+        SDL_Event wake{};
+        wake.type = type;
+        (void)SDL_PushEvent(&wake);
+    }
+}
+
 // Keys the settings menu takes from other threads and from the pads, in order, on SDL's thread.
 std::mutex g_menu_keys_mutex;
 std::deque<std::uintptr_t> g_menu_keys;
@@ -335,8 +352,11 @@ void call_activity_now(const ActivityCall& call) {
 // any other thread the call waits for SDL's next pump.
 void call_activity(ActivityCall call) {
     if (std::this_thread::get_id() != g_sdl_thread) {
-        const std::lock_guard<std::mutex> lock(g_activity_calls_mutex);
-        g_activity_calls.push_back(call);
+        {
+            const std::lock_guard<std::mutex> lock(g_activity_calls_mutex);
+            g_activity_calls.push_back(call);
+        }
+        wake_pump();
         return;
     }
     call_activity_now(call);
@@ -1349,6 +1369,13 @@ bool start() noexcept {
         std::fprintf(stderr, "[sdl] SDL_Init failed: %s\n", SDL_GetError());
         return false;
     }
+    g_wake_event.store(SDL_RegisterEvents(1), std::memory_order_release);
+#if defined(__ANDROID__)
+    // Every event pushed (touch, keys and pads from the activity's threads, the wake above) ends the pump's block.
+    if (!SDL_AddEventWatch([](void*, SDL_Event*) -> bool { g_pump_wake.wake(); return true; }, nullptr)) {
+        std::fprintf(stderr, "[sdl] no event watch (%s): events wait for the pump's bound\n", SDL_GetError());
+    }
+#endif
     return true;
 }
 
@@ -1450,11 +1477,14 @@ void pump_events(int timeout_ms) noexcept {
 #if defined(__ANDROID__)
     sync_display_rate();
     // SDL's timed event wait polls without sleeping on Android, keeping a core busy: the events are pumped here and
-    // the thread sleeps between pumps.
+    // the thread blocks between pumps until an event is pushed or a request left (g_pump_wake, P-281), `timeout_ms` at
+    // most (what only a pump reads: sensors, pads SDL polls). A wake from before this look is dropped: the look sees
+    // what it was for; one after it ends the block at once.
+    g_pump_wake.clear();
     SDL_PumpEvents();
     bool any = SDL_PollEvent(&event);
     if (!any && timeout_ms > 0) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(timeout_ms));
+        (void)g_pump_wake.wait_for(std::chrono::milliseconds(timeout_ms));
         SDL_PumpEvents();
         any = SDL_PollEvent(&event);
     }
@@ -1804,9 +1834,11 @@ void set_mouse_look(bool hold) noexcept {
 }
 
 void rumble(std::uint32_t pad_id, float strength) noexcept {
-    g_rumble_level.store(static_cast<std::uint32_t>(std::clamp(strength, 0.0f, 1.0f) * 65535.0f),
-                         std::memory_order_relaxed);
-    g_rumble_pad.store(pad_id, std::memory_order_relaxed);
+    const std::uint32_t level = static_cast<std::uint32_t>(std::clamp(strength, 0.0f, 1.0f) * 65535.0f);
+    const bool changed = g_rumble_level.exchange(level, std::memory_order_relaxed) != level;
+    if (g_rumble_pad.exchange(pad_id, std::memory_order_relaxed) != pad_id || changed) {
+        wake_pump();  // a new rumble is sent at once (run_requests), not at the pump's bound
+    }
 }
 
 }  // namespace galaxy::sdl
@@ -1951,13 +1983,16 @@ extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeSetV
 }
 
 // The activity's SurfaceView is going (surfaceDestroyed, before SDL lets the window go): returns once no present uses
-// it (host_window.h). Two seconds at most, so a stalled render thread cannot hold the UI thread.
+// it (host_window.h). Two seconds at most, so a stalled render thread cannot hold the UI thread: past them the surface
+// goes with the renderer still holding it, which then presents nothing into it and makes its device again
+// (surface_overdue, P-281).
 extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeSurfaceWithdrawn(JNIEnv*, jclass) {
     galaxy::render::host_window::surface_withdrawn.store(true, std::memory_order_release);
     if (galaxy::render::host_window::surface_use.try_lock_for(std::chrono::seconds(2))) {
         galaxy::render::host_window::surface_use.unlock();
     } else {
-        std::fprintf(stderr, "[window] the renderer kept the surface past 2 s\n");
+        galaxy::render::host_window::surface_overdue.store(true, std::memory_order_release);
+        std::fprintf(stderr, "[window] the renderer kept the surface past 2 s: it goes, and the renderer's device is made again\n");
     }
 }
 
@@ -2012,6 +2047,7 @@ std::atomic<bool> quit_request{false};
 std::atomic<std::uint64_t> pending_resize_extent{0u};
 std::atomic<bool> surface_withdrawn{false};
 std::timed_mutex surface_use;
+std::atomic<bool> surface_overdue{false};
 
 OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_height) {
     const bool hidden = hidden_window_mode_enabled();
@@ -2650,13 +2686,19 @@ host::HostPointerTransitionPoll poll_host_pointer_transition(std::uint64_t) noex
 }
 
 void native_settings_post_key(std::uintptr_t virtual_key) noexcept {
-    const std::lock_guard<std::mutex> lock(galaxy::sdl::g_menu_keys_mutex);
-    galaxy::sdl::g_menu_keys.push_back(virtual_key);
+    {
+        const std::lock_guard<std::mutex> lock(galaxy::sdl::g_menu_keys_mutex);
+        galaxy::sdl::g_menu_keys.push_back(virtual_key);
+    }
+    galaxy::sdl::wake_pump();
 }
 
 void native_settings_post_keyboard_key(std::uintptr_t virtual_key) noexcept {
-    const std::lock_guard<std::mutex> lock(galaxy::sdl::g_menu_keys_mutex);
-    galaxy::sdl::g_menu_keys.push_back(virtual_key | kMenuKeyKeyboard);
+    {
+        const std::lock_guard<std::mutex> lock(galaxy::sdl::g_menu_keys_mutex);
+        galaxy::sdl::g_menu_keys.push_back(virtual_key | kMenuKeyKeyboard);
+    }
+    galaxy::sdl::wake_pump();
 }
 
 }  // namespace galaxy::render

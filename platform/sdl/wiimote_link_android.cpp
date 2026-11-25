@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstddef>
@@ -41,7 +42,9 @@ struct Java {
 struct State {
     std::mutex lock;
     std::condition_variable changed;
-    Java java;
+    // WiimoteUsb's methods, published once by nativeInit (release) and read by any thread without the lock (acquire);
+    // never freed, as the state is not (P-281: the table was a plain struct read unlocked while nativeInit wrote it).
+    std::atomic<const Java*> java{nullptr};
     bool arrived = false;
     bool woken = false;
     int slot = -1;  // the open slot's key
@@ -68,16 +71,16 @@ public:
     explicit Slot(int key) : key_(key) {}
 
     bool send(std::span<const std::uint8_t> report) override {
-        State& s = state();
+        const Java* const java = state().java.load(std::memory_order_acquire);
         JNIEnv* env = static_cast<JNIEnv*>(SDL_GetAndroidJNIEnv());
-        if (env == nullptr || s.java.cls == nullptr || report.empty()) return false;
+        if (env == nullptr || java == nullptr || report.empty()) return false;
         jbyteArray bytes = env->NewByteArray(static_cast<jsize>(report.size()));
         if (bytes == nullptr) {
             cleared(env);
             return false;
         }
         env->SetByteArrayRegion(bytes, 0, static_cast<jsize>(report.size()), reinterpret_cast<const jbyte*>(report.data()));
-        const bool sent = env->CallStaticBooleanMethod(s.java.cls, s.java.write, key_, bytes,
+        const bool sent = env->CallStaticBooleanMethod(java->cls, java->write, key_, bytes,
                                                       static_cast<jint>(report.size())) == JNI_TRUE;
         env->DeleteLocalRef(bytes);
         return !cleared(env) && sent;
@@ -113,9 +116,10 @@ void start() {}
 
 void each_remote(const std::function<bool(Link&)>& use) {
     State& s = state();
+    const Java* const java = s.java.load(std::memory_order_acquire);
     JNIEnv* env = static_cast<JNIEnv*>(SDL_GetAndroidJNIEnv());
-    if (env == nullptr || s.java.cls == nullptr) return;
-    auto* found = static_cast<jintArray>(env->CallStaticObjectMethod(s.java.cls, s.java.slots));
+    if (env == nullptr || java == nullptr) return;
+    auto* found = static_cast<jintArray>(env->CallStaticObjectMethod(java->cls, java->slots));
     if (cleared(env) || found == nullptr) return;
     std::vector<jint> keys(static_cast<std::size_t>(env->GetArrayLength(found)));
     env->GetIntArrayRegion(found, 0, static_cast<jsize>(keys.size()), keys.data());
@@ -127,10 +131,10 @@ void each_remote(const std::function<bool(Link&)>& use) {
             s.gone = false;
             s.reports.clear();
         }
-        if (env->CallStaticBooleanMethod(s.java.cls, s.java.open, key) != JNI_TRUE || cleared(env)) continue;
+        if (env->CallStaticBooleanMethod(java->cls, java->open, key) != JNI_TRUE || cleared(env)) continue;
         Slot slot(key);
         const bool answered = use(slot);
-        env->CallStaticVoidMethod(s.java.cls, s.java.close, key);
+        env->CallStaticVoidMethod(java->cls, java->close, key);
         cleared(env);
         {
             const std::lock_guard<std::mutex> hold(s.lock);
@@ -174,8 +178,8 @@ namespace wl = galaxy::host::wiimote_link;
 
 extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_WiimoteUsb_nativeInit(JNIEnv* env, jclass cls) {
     wl::State& s = wl::state();
-    const std::lock_guard<std::mutex> hold(s.lock);
-    if (s.java.cls != nullptr) return;
+    const std::lock_guard<std::mutex> hold(s.lock);  // two inits at once publish one table
+    if (s.java.load(std::memory_order_relaxed) != nullptr) return;
     wl::Java java;
     java.slots = env->GetStaticMethodID(cls, "slots", "()[I");
     java.open = env->GetStaticMethodID(cls, "open", "(I)Z");
@@ -185,7 +189,11 @@ extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_WiimoteUsb_nativeInit(J
         return;
     }
     java.cls = static_cast<jclass>(env->NewGlobalRef(cls));
-    s.java = java;
+    if (java.cls == nullptr) {
+        wl::cleared(env);
+        return;
+    }
+    s.java.store(new wl::Java(java), std::memory_order_release);
 }
 
 extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_WiimoteUsb_nativeArrived(JNIEnv*, jclass) {

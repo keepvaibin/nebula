@@ -535,6 +535,9 @@ private:
     // The window's surface withdrawn (host_window::surface_withdrawn) or lost, and made again once it is back.
     void release_surface() noexcept;
     [[nodiscard]] bool restore_surface();
+    // The platform let the surface go under this frame (host_window::surface_overdue, P-281): true, the device-lost path
+    // asked (lose_device) and the swap chain and surface marked to go; the caller presents nothing.
+    [[nodiscard]] bool surface_let_go();
     [[nodiscard]] bool surface_changed() const;
     bool create_layouts();
     // The adapter as the settings and the launcher see it (RenderFeatureCaps, rtx_adapter, adapter.ini), as the D3D12

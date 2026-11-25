@@ -196,6 +196,7 @@ std::atomic<bool> quit_request{false};
 std::atomic<std::uint64_t> pending_resize_extent{0};
 std::atomic<bool> surface_withdrawn{false};
 std::timed_mutex surface_use;
+std::atomic<bool> surface_overdue{false};  // never set on Windows
 // RendererD3D12::suspend_temporal_interpolation (the FRAME RATE row says so).
 
 }  // namespace host_window
