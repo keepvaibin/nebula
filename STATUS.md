@@ -1,13 +1,12 @@
 # Nebula native plan: status
 
-Written 2026-11-24 19:25. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 19:27. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 27 of 145 (19%).
 
 Now: in work: lander landing G2.3.3 to G2.3.7
 
-In work now:
-- G2.3.4 Landing 3d: Apple's display link (agent 1)
+In work now: Nothing started.
 
 ## Packages
 
@@ -100,7 +99,7 @@ Nothing waits for the owner.
 
 ## Blocked
 
-Nothing is blocked.
+- G2.3.4 Landing 3d: Apple's display link: hard: land refusal before the queue: the card (05-NATIVE-LANE-G.md lines 522,525,530) closes I-006, P-034, I-012 at G2.3.4 so plan.py wants state fixed in docs/plan/ledger.tsv, but the hand-off sheet says they stay open until the Mac proofs (report: D:/NebulaWork/plan/native/hard/G2.3.4.md)
 
 ## Tool mends
 
