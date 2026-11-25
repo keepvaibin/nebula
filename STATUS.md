@@ -87,6 +87,7 @@ In work now:
 - G2.3.5 Landing 3e: variable refresh, told by the system or proved from the presents: Proof 2 (b) on the tablet (R52WA0FXE5J, Vulkan): its Android version and hasArrSupport() answer as GameActivity reports them (logcat), whether its 120 Hz panel varies continuously or only switches among 120, 60 and 30 Hz, and the REFRESH RATE row; then 60 and 120 Hz runs in every tour stop with the mode switch asking again (agent 1, 2026-11-24 17:32)
 - G2.3.5 Landing 3e: variable refresh, told by the system or proved from the presents: A Mac and an iPhone or iPad: a ProMotion MacBook's minimumRefreshInterval and maximumRefreshInterval read as variable (log '[pacing] vrr ... (the system says)', the row says VARIABLE), a fixed external display fixed; iOS fixed; GitHub's Mac job compiles the new Apple code first (agent 1, 2026-11-24 17:32)
 - G2.3.5 Landing 3e: variable refresh, told by the system or proved from the presents: Linux on a variable display: VK_EXT_present_timing's refreshInterval where offered, else the stamps' proof answering variable at 144 Hz and fixed on a fixed display; GitHub's Linux job compiles the new SDL code first (agent 1, 2026-11-24 17:32)
+- G2.3.5 Landing 3e: variable refresh, told by the system or proved from the presents: Proof 5: the game step's time and the walk's on the PC and the tablet before and after G2.3.5 (never slower; the probe's 1-2 s at 1.25 mode periods after each display event included) (agent 1, 2026-11-24 17:32)
 
 ## Waiting for the owner
 
