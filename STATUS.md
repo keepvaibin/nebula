@@ -4,7 +4,7 @@ Written 2026-11-25 15:07. If this time is more than three hours old, the work ha
 
 Steps landed: 35 of 155 (23%).
 
-Now: R-008 round 2 partial, pace rows unmet; waiting for the planner (case 4)
+Now: in work: R-008 fixer measures main vs candidate pace tables (planner's landing condition)
 
 In work now: Nothing started.
 
