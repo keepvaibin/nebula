@@ -1,12 +1,13 @@
 # Nebula native plan: status
 
-Written 2026-11-24 20:09. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 20:48. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 27 of 145 (19%).
 
 Now: G2.3.4 hard (Mac start check crash); fixer waits for the usage line
 
-In work now: Nothing started.
+In work now:
+- G2.3.4 Landing 3d: Apple's display link (agent 1)
 
 ## Packages
 
@@ -99,7 +100,7 @@ Nothing waits for the owner.
 
 ## Blocked
 
-- G2.3.4 Landing 3d: Apple's display link: hard: github/Mac start check (Metal): abort 'CAMetalDrawableInvalidOperation: -presentAtTime should not be called when using CAMetalDisplayLink' on the G2.3.4 display link; also harness/self 56 of 113 and description/self 0 of 4 fail (report: D:/NebulaWork/plan/native/hard/G2.3.4.md)
+Nothing is blocked.
 
 ## Tool mends
 
