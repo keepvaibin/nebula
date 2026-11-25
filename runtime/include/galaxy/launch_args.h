@@ -40,6 +40,9 @@ enum Diagnostic : unsigned {
                                          // (frame-plans-<pid>.txt; walk_plan_tests' fixtures, ledger P-044)
     kDiagnoseConstantsWatch = 1u << 20u,  // constants-watch: Direct3D 11 checks a compute read of its constant ring once
                                           // a frame and prints "[constants] watch" on a wrong read (ledger P-332)
+    kDiagnoseSlotSpin = 1u << 21u,  // slot-spin: the render thread's wait to a picture's slot spins its last margin
+                                    // also where the display holds the picture to the time its present asks (the old
+                                    // path beside FRAME-MODEL 2.16 landing 4, for its before measure; render_core.cpp)
 };
 
 // The names --diagnostics takes, each one item or a set. "1" is the launcher's recording.
@@ -71,6 +74,7 @@ inline constexpr DiagnosticName kDiagnosticNames[] = {
     {"hdr-highlights", kDiagnoseHdrHighlights},
     {"frame-plans", kDiagnoseFramePlans},
     {"constants-watch", kDiagnoseConstantsWatch},
+    {"slot-spin", kDiagnoseSlotSpin},
     {"frames", kDiagnoseFrames},
     {"gpu", kDiagnoseGpuPasses},
     {"threads", kDiagnoseThreadCpu | kDiagnoseProfile},

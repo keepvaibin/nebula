@@ -2154,6 +2154,40 @@ VkResult RendererVk::wait_for_present(std::uint64_t id, std::uint64_t timeout_ns
     return vkWaitForPresentKHR(context.device(), swapchain_.handle, id, timeout_ns);
 }
 
+namespace {
+
+// Presents step by one present period: the game's frame period times 60 / the present rate (90 Hz: 1.5 presents per
+// game frame), in ns (qpc_now()'s clock off Windows, the presentation times' clock). An unlimited rate (render_config.h
+// kUnlimitedFrameRate) gives 1: such pictures have no slot.
+std::int64_t present_step_ns(const RenderConfig& cfg, double refresh_hz) {
+    const double rate = present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, refresh_hz);
+    return std::max<std::int64_t>(1, std::llround(1e9 / rate));
+}
+
+}  // namespace
+
+bool RendererVk::present_timing_open() const noexcept {
+    return swapchain_.timed && window_shown_ && !frame_generation_running() && swapchain_.timing_outstanding < 31u;
+}
+
+bool RendererVk::display_timing_open() const noexcept {
+    return vk::Context::get().display_timing() && presents_timed(swap_queue()) && !swapchain_.ask_time;
+}
+
+// The same rules present_swapchain_image follows for a present with a moment: present timing asks the refresh it was
+// drawn for (`asked`); display timing places it on the vsyncs (`by_moment`, a step no shorter than a vsync).
+bool RendererVk::present_held_to_moment() const {
+    if (swapchain_.handle == VK_NULL_HANDLE) {
+        return false;
+    }
+    if (swapchain_.ask_time) {
+        return present_timing_open();
+    }
+    std::int64_t grid = 0, vsync = 0;
+    return display_timing_open() && vblank_grid(grid, vsync) &&
+           present_step_ns(get_render_config(), display_refresh_hz_) >= vsync - vsync / 16;
+}
+
 void RendererVk::present_swapchain_image() {
     vk::Context& context = vk::Context::get();
     const RenderConfig cfg = get_render_config();
@@ -2212,8 +2246,7 @@ void RendererVk::present_swapchain_image() {
     // and presents that do not finish (a hidden window) leave their results unread. Only while the window is shown: a
     // present of a window never shown (a hidden test run) that asks for its timing never finishes, and every present
     // wait after it runs out its time (measured: 15 steps a second instead of 60).
-    const bool timed_present =
-        swapchain_.timed && window_shown_ && !frame_generation_running() && swapchain_.timing_outstanding < 31u;
+    const bool timed_present = present_timing_open();
     // Its time asked: the refresh it was drawn for (RenderCore's slot on the display model's answers).
     const bool asked = timed_present && swapchain_.ask_time && moment != 0;
     const std::uint64_t wait_id = moment != 0 ? present_id_before_last_ : last_present_id_;
@@ -2299,18 +2332,17 @@ void RendererVk::present_swapchain_image() {
     VkPresentTimeGOOGLE present_time{};
     VkPresentTimesInfoGOOGLE present_times{VK_STRUCTURE_TYPE_PRESENT_TIMES_INFO_GOOGLE};
     std::int64_t frame_start = 0, period = 0, vsync = 0, now = 0;
-    // Presents step by one present period: the game's frame period times 60 / the present rate (90 Hz: 1.5 presents
-    // per game frame). Pictures less than a vsync apart (an unlimited rate, render_config.h kUnlimitedFrameRate)
-    // have no slot: each is shown at the next vsync, the newest in place of one still queued.
-    const double rate = present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, display_refresh_hz_);
-    const std::int64_t step = std::max<std::int64_t>(1, std::llround(1e9 / rate));
+    // Presents step by one present period (present_step_ns). Pictures less than a vsync apart (an unlimited rate,
+    // render_config.h kUnlimitedFrameRate) have no slot: each is shown at the next vsync, the newest in place of one
+    // still queued.
+    const std::int64_t step = present_step_ns(cfg, display_refresh_hz_);
     // An interpolated picture is timed by its moment on the display's vsync grid, at any refresh rate; the game's own
     // frames by the game's frame slots, which follow the vsyncs where the refresh rate is a multiple of 60.
     // qpc_now() is CLOCK_MONOTONIC nanoseconds off Windows: the presentation times' clock.
     // Timed only where the swap chain keeps every picture (present_slots.h presents_timed): MAILBOX on Android is the
     // BufferQueue's async mode, whose next present replaces a picture held for its slot. Not on a swap chain whose
     // pictures ask their time with present timing (each picked at the swap chain's start by what the device offers).
-    const bool timed = context.display_timing() && presents_timed(swap_queue()) && !swapchain_.ask_time;
+    const bool timed = display_timing_open();
     std::int64_t grid = 0;
     const bool by_moment = timed && moment != 0 && vblank_grid(grid, vsync);
     const bool by_frames = !by_moment && timed && host_window::present_grid(frame_start, period, vsync, now);

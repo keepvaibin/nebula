@@ -836,9 +836,17 @@ bool RenderCore::overlay_idle_presents() const noexcept {
 }
 
 // Render thread: the last part of the wait to a present slot (at most about 2 ms, after the coarse wait), ended on the
-// slot's moment: a timer woken late would present the picture late for the moment it shows.
-void RenderCore::interp_wait_until(std::int64_t due_qpc) {
-    galaxy::PreciseWait::for_this_thread().until(due_qpc);
+// slot's moment: a timer woken late would present the picture late for the moment it shows. Where the display holds
+// the picture to the time its present asks (FRAME-MODEL 2.16 target 4), the timer's lateness only takes from the
+// display lead, which follows the pictures shown: no closing spin. --diagnostics slot-spin keeps the spin there too
+// (the old path, for the before measure).
+void RenderCore::interp_wait_until(std::int64_t due_qpc, bool held) {
+    galaxy::PreciseWait& wait = galaxy::PreciseWait::for_this_thread();
+    if (held && !galaxy::diagnosing(galaxy::kDiagnoseSlotSpin)) {
+        wait.until_held(due_qpc);
+    } else {
+        wait.until(due_qpc);
+    }
 }
 
 namespace {
@@ -1420,7 +1428,7 @@ void RenderCore::render_loop() {
                 } else if (remaining_us > 0) {
                     const std::int64_t due = schedule_.slot_due();
                     lock.unlock();
-                    interp_wait_until(due);
+                    interp_wait_until(due, renderer_.present_held_to_moment());
                     lock.lock();
                 }
             } else if (overlay_idle && frame_queue_.empty()) {
@@ -1433,7 +1441,8 @@ void RenderCore::render_loop() {
                 } else if (remaining_us > 0) {
                     const std::int64_t due = overlay_idle_due_qpc_;
                     lock.unlock();
-                    interp_wait_until(due);
+                    // The picture again asks no time (it has no slot's moment): its wait ends on the moment.
+                    interp_wait_until(due, false);
                     lock.lock();
                 }
             } else {

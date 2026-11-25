@@ -34,6 +34,7 @@ Files go to the `diagnostics` folder in Nebula's data folder, named with the pro
 | `resolution-steps` | A test: dynamic resolution is on and walks every step from the whole render size to the smallest the upscaler allows and back, 120 pictures each, whatever the GPU's time. Each change is logged. |
 | `rt-inputs` | The world's lights in each frame list, checked against their rules and counted every 300 lists (`[rt-inputs] lights` lines). |
 | `scene-loads` | The phases, presses and placed objects of each scene change. |
+| `slot-spin` | A test of pacing: the render thread spins the end of its wait for each picture, as it did before, also where the display holds the picture to its asked time. It is the old way beside the new, for a before and after measure of the render thread's CPU time. |
 | `telemetry` | Frame counts in shared memory each second, for `tools/telemetry`. |
 | `thread-cpu` | Each thread's CPU time and context switches, each second. |
 | `timeline` | The frame pipeline's events, written at exit to `timeline-PROCESS-ID.bin`, or to the file `--timeline` names. `tools/perf/timeline_digest.py` reads it. |

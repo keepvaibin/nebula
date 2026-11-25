@@ -292,6 +292,9 @@ public:
     // time: the display model (display_time) tells when a present shows, and the frame latency object holds a present
     // that is early until the one before it is shown.
     void set_present_moment(std::int64_t qpc) noexcept { present_moment_ = qpc; }
+    // The display holds the next picture with a moment to the time its present asks: never here (no time is asked), so
+    // RenderCore's wait to the slot ends on it precisely (precise_wait.h until).
+    [[nodiscard]] bool present_held_to_moment() const noexcept { return false; }
     [[nodiscard]] bool take_present_skip() noexcept { return false; }
     // The display model (frame_schedule.h DisplayModel), fed by every present's frame statistics (dxgi_pacing.h).
     [[nodiscard]] bool display_time(std::int64_t present, std::int64_t& shown) const noexcept {

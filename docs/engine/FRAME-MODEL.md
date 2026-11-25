@@ -1803,6 +1803,17 @@ at the picture's moment; every platform does the same or says on screen why not.
    render thread starts a picture its lead ahead and the display holds it to its time; the closing spin of
    `PreciseWait` stays only where no time can be asked. The render thread's CPU time a second is measured on the tablet
    before and after.
+   - Done at G2.4: the renderer says whether the display holds its next picture to the time the present asks
+     (`present_held_to_moment`): Vulkan where present timing asks the refresh (`present_timing_open`) or
+     VK_GOOGLE_display_timing places it on the vsyncs (`display_timing_open`, the timed vsyncs, a step no shorter than
+     one), Metal while the display link gives the drawables (`host_window::metal_link_runs`), Direct3D never. There the
+     render thread's wait to the slot is `PreciseWait::until_held`: the timer alone, its lateness taken in by the
+     display lead as it follows the pictures shown. The spin stays on Direct3D (the display model's `present_from`
+     wait), for the HOME Menu's repeated picture (no moment), the pacer with VSync off (`PresentPacer`) and the game
+     step's wait (`host_main.cpp`). The old path stays beside it behind `--diagnostics slot-spin` until the measures
+     hold. Read first, answered: the tablet's "before" was not measured; it is taken on the same build with
+     `--diagnostics slot-spin` against the run without, with `thread-cpu`, at 120 Hz with in-between pictures on (at 60
+     no slot wait runs; owed with the planner's pacing measures).
 5. Holding the target (6.4). One arbiter in the schedule, pure and under its tests, replaces the GPU governor's
    picture cap and feeds dynamic resolution. Its inputs: the share of pictures on time and the late moments (the
    pacing recorder's counts), the wall time from picture to picture against the slot, the GPU time, and the device's

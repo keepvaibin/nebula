@@ -201,6 +201,9 @@ void metal_link_layer(void* layer) noexcept;
 // (CACurrentMediaTime's seconds), waiting up to `wait_ns`. False where no link gives drawables or none came in time
 // (a held link, a display that gives it no updates): the caller takes the layer's own.
 [[nodiscard]] bool metal_link_drawable(void*& drawable, double& shown_at, std::int64_t wait_ns) noexcept;
+// The link gives the drawables, each shown at its update's time: the display holds a picture to it (false: no link, or
+// one let go of). Any thread.
+[[nodiscard]] bool metal_link_runs() noexcept;
 // In-between pictures fill the display's fastest rate (the display link asks that rate; else 60 with a range up to it).
 void set_display_fills(bool fills) noexcept;
 #endif
