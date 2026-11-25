@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-24 23:19. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 23:25. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 28 of 145 (19%).
 
-Now: G2.3.4 landed (28 of 145); G2.3.5 hard (ledger.tsv conflict on main), fixer waits for the usage line
+Now: in work: lander landing G2.3.5 to G2.3.7
 
 In work now:
 - G2.3.5 Landing 3e: variable refresh, told by the system or proved from the presents (agent 1)
