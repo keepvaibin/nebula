@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-25 01:42. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-25 01:43. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 31 of 145 (21%).
 
@@ -93,6 +93,7 @@ In work now:
 - G2.3.6 Landing 3f: P-281, the Android and Linux host's four faults: Proof 2: the game step's time and the walk's on the PC and the tablet, before and after G2.3.6, never slower (agent 1, 2026-11-24 17:47)
 - G2.3.7 Landing 3g: the Android fall-back and the surface vote read the step rate: Tablet: a first start with config.ini removed from a copy of the app data (adb, tablet lock, restored after): logcat's 'display mode the system's for frame rate 60.0' and the game at the step rate; then a setting of 90 and of 61 (the vote's FIXED_SOURCE line and the display mode); the step and walk times before and after (agent 1, 2026-11-24 18:04)
 - G2.3 Landing 3h: the picture interval published; P-313's restart hitch: P-313's trace: a real-time Vulkan run in a visible window (the 11-17 audit kit: a stage reached by a LumaScript mod, Mario falling twice by scripted input, --diagnostics present-stats,timeline,thread-cpu,frame-tails --timeline <file>), the render thread's timeline around the restarted scene's first picture, against the same run on Direct3D 12; then proof 2 (no hitch over one refresh at a scene's start from the second run on) and proof 3 (step and walk times on the PC and the tablet) (agent 1, 2026-11-24 18:12)
+- G2.3 Landing 3h: the picture interval published; P-313's restart hitch: Proof 2: the game step's time and the walk's on the tablet (R52WA0FXE5J) and the PC, before and after G2.3, never slower: the section's speed checks measure/step/tablet and measure/step/pc (the tablet's owed when it does not answer at the landing); G2.3 adds one relaxed store of the slot length where the schedule sets it (agent 1, 2026-11-25 01:43)
 
 ## Waiting for the owner
 
