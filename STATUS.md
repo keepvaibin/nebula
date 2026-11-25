@@ -1,13 +1,12 @@
 # Nebula native plan: status
 
-Written 2026-11-24 18:13. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 18:32. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
-Steps landed: 25 of 145 (17%).
+Steps landed: 26 of 145 (18%).
 
 Now: in work: lander landing G2.3.2 to G2.3.7
 
-In work now:
-- G2.3.2 Landing 3b: Vulkan and Android present at the asked time (agent 1)
+In work now: Nothing started.
 
 ## Packages
 
@@ -18,7 +17,7 @@ In work now:
 | S0.3 | 2 | 2 |
 | R1 | 4 | 4 |
 | R2 | 5 | 5 |
-| G2 | 3 | 16 |
+| G2 | 4 | 16 |
 | G6 | 0 | 8 |
 | G1 | 0 | 5 |
 | R3 | 0 | 13 |
@@ -42,6 +41,7 @@ In work now:
 
 | When | Step | Title | Code commit | Main commit |
 | --- | --- | --- | --- | --- |
+| 2026-11-24 18:32 | G2.3.2 | Landing 3b: Vulkan and Android present at the asked time | 4e97053c9 | 859c3c098 |
 | 2026-11-24 15:18 | G2.3.1 | Landing 3a: the display model; Windows | bc751e350 | c403072d3 |
 | 2026-11-24 13:28 | G2.2 | Landing 2: the lead at whole multiples of 60 Hz | 71aa23551 | 502e0e4bf |
 | 2026-11-24 13:12 | G2.1 | Landing 1: a sequence starts at its arrival; the step keeps its due times | 428c84f7d | 4614f2a97 |
@@ -51,7 +51,6 @@ In work now:
 | 2026-11-24 08:31 | R2.3 | P-059: the cook decides "authored levels" once | 720958ef9 | 31fa52e92 |
 | 2026-11-24 07:34 | R2.2 | The sampler tables stop filling: P-048, P-056, P-066, P-061 | 63c679c5f | 4f085e54d |
 | 2026-11-24 06:56 | R2.1 | A target is read through its own slot; the walk-level counting test | 9519e05d7 | 8c7031e10 |
-| 2026-11-24 04:51 | R1.4 | P-065 (Metal): the renderer's own shader texts compiled at build | 292b3cc4d | 599592a98 |
 
 ## Repairs
 
@@ -114,7 +113,7 @@ Nothing waits for the owner.
 | M-006 | closed | - | the step tier and section check; a passing tool fault played once more; a waiter left not judged runs itself | 0 | 95 | 2911f6429 |
 | M-007 | closed | - | the section-at-a-time roles: a whole section ahead, wait, hand-off sheets, hard reports, the live page | 0 | 80 | 9ed09cfec |
 
-## Decisions (103)
+## Decisions (83)
 
 - 2026-11-23 S0.2.1: LoadSlice: 32 items a frame; an item is a phase of GameScene::initAfterScenarioChosen, the player, one placement made whole, one piece of FileSelector::initStep, or one Star Bit of the reserve (because the card asks for a fixed count of work and names no count; the count is a constant in one place, no player sees which frame of the load an item falls in, and the load worker (G3.7) replaces the slices)
 - 2026-11-23 S0.2.1: Drawing's random stream (MR::getDrawRandom) is seeded with the same seed as the game's stream, in setRandomSeedFromStageName and setFixedRandomSeed (because a fixed seed keeps the cosmetic numbers the same in every run of a replay and needs no new setting; the draw stream runs through the same sequence as the game's but is advanced only by drawing, so neither changes the other)
@@ -199,26 +198,6 @@ Nothing waits for the owner.
 - 2026-11-24 G2.3.2: A present that asks its time waits for no earlier present (present wait), and its renderer holds nothing: the display holds it to the refresh it asked (targetTime half a refresh before the slot, in the swap chain's time domain) (because the card keeps present wait only where no time can be asked; the schedule starts each picture its display lead before its refresh, which a wait for the present before the last pushes later at leads of three refreshes and more; half a refresh before the slot keeps the slot's own refresh however the reporting stage sits against the vblank, as the display timing path asks)
 - 2026-11-24 G2.3.2: DisplayModel learns the display's hold from an asked present only where its asked refresh was no later than the model's refresh for its call, or where it was shown later than asked; a window of reports with no such present keeps the last hold (because a present held to a later refresh by its own asked time shows only that it was in time; counted as a hold it would raise the least to the lead itself, and the lead could never come down; a hold that grows shows in late pictures, one that shrinks is not seen while every picture asks a later refresh, and is learnt again with a new swap chain (the model is reset there))
 - 2026-11-24 G2.3.2: P-317 closes here by the rule, not by a figure: Android's lead follows PresentDepth's rule (shared since G2.3.1) and its 60 Hz figure is taken again at G2.5 with the clock held; the measure is PLAN owed (because card Read first (2), a plan decision: the lead at 60 Hz is set by how late the GPU's pictures come at its low clock, which G2.5 holds; nothing in this step changes the game's own frames at 60 Hz on display timing)
-- 2026-11-24 G2.3.3: Linux's present stamps are taken on the render thread (present waits that blocked, and a probe wait for the present just queued once none was seen for eight refreshes or 100 ms), not by a waiter thread as the card says (because vkWaitForPresentKHR's and vkWaitForPresent2KHR's swapchain is externsync in the Vulkan registry: a second thread waiting on it while the render thread presents is undefined; the probe costs nothing a paced picture needs, since the render thread has nothing to draw before the refresh that present reaches)
-- 2026-11-24 G2.3.3: PresentStampFit fits the period as the least-squares slope of the last 32 stamps on their refresh numbers (clamped to 2 % of the mode), not the median spacing the card names (because the median of single gaps carries one wake's delay over one refresh and missed 1 % and 0.3 ms at 319 and 406 Hz in test_present_stamps; the slope spreads it over the refreshes the points span and passes every sample rate)
-- 2026-11-24 G2.3.3: The Linux mark is NATIVE (NOT SYNCHRONIZED) on the INTERPOLATION row (S.NOT_SYNCHRONIZED in 14 languages; the American cell synchronized, the European synchronised), shown while no display clock grid runs (host_window::vblank_grid_known false), on Linux desktop only (because the card asks the in-between pictures marked until a clock runs; the row is where native interpolation is chosen, and the game's other texts use the American spelling with the European cell where it differs)
-- 2026-11-24 G2.3.3: display_refresh_hz on Linux stays 0 (SDL's mode, read by the host, is the stated period the fit starts from) (because a rate from the fit would feed back into the mode the fit is clamped to)
-- 2026-11-24 G2.3.4: The Metal display link runs only with VSync on and only where the system has it (macOS 14, iOS 17); its drawables replace nextDrawable and are presented at targetPresentationTimestamp; the older link and nextDrawable stay for older systems and VSync off (because with VSync off the layer shows pictures when ready (displaySyncEnabled NO), which a link's timed drawables would undo; the app's minimum systems are older than the link)
-- 2026-11-24 G2.3.4: The link's targetPresentationTimestamp values become the grid's vsyncs only once they have come (kept on the link's thread until then), with no stated period (because the VsyncGrid takes past vsyncs, as the older links give; a refresh planned is a refresh of the display's grid)
-- 2026-11-24 G2.3.4: The rate range rule of P-034 (fastest only while in-between pictures fill it, else 60 with a range up to it) is applied to every link that takes a range: iOS's CADisplayLink and the Metal display link on both systems; CVDisplayLink asks none (because the card states it for iOS from the audit; the Metal display link on a Mac with a ProMotion display has the same choice, and one rule keeps the two systems alike)
-- 2026-11-24 G2.3.4: I-006, P-034 and I-012 stay open in the ledger with dated notes; they close when the owed Mac proofs pass (because no Mac here and GitHub's Mac job runs on main only: nothing of this step is proven before the landing)
-- 2026-11-24 G2.3.5: The presents' proof runs with in-between pictures on: while it runs the slots follow the pacer's clock at the probe rate (g_refresh_probe_hz), as under variable refresh at the cap (because the game's 60 real pictures come under the probe rate (1.25 mode periods) on any display above 75 Hz, so a probe of real pictures alone would leave every faster display unproved; the proof reads only when each present was shown, not what it shows)
-- 2026-11-24 G2.3.5: Point 5 (e) counts presents the pacer held (the probe, the cap, a player's limit); a fixed answer with VSync on holds none, so there only events (a) to (d) ask again (because a present not held has no period its time up could be judged against; holding presents under a fixed answer would cost every fixed display a hold it does not need)
-- 2026-11-24 G2.3.5: Metal holds no probe: a Mac screen the system does not describe (no minimum and maximum refresh interval) is taken as fixed (because the system answers on every macOS the app runs on (macOS 12 reads both intervals) and on iOS (fixed until a page says otherwise), and Apple's pictures are timed by its display link, not by the pacer the probe holds)
-- 2026-11-24 G2.3.5: Direct3D 11 and Vulkan ask and cap against the mode's own rate (host_window::display_mode_hz, read when the display changes), never the timed vblanks' rate (because on a variable display the vblanks follow the presents, so their rate is the presents' (the probe's 1.25 periods while it runs), which would move the mode period the proof judges against)
-- 2026-11-24 G2.3.5: Proof 3's Android grid is fed the period Android states (on_refresh_rate), with 0.5 ms of jitter and every seventh callback missed (because the app's minimum (API 31) has the refresh-rate callback, so Android's grid always has the stated period; fed no period at 485 to 495 Hz with every seventh callback missed, VsyncGrid's measured interval drifts 1 to 2 % (found writing the test, not a path any platform takes: Apple's links state theirs too))
-- 2026-11-24 G2.3.5: A probe runs for 600 presents at most after a question (about 5 s at the probe rate); with no answer by then the presents go free and the display is taken as fixed until the next event asks again (because a window whose presents the display never reports (a hidden test window, a remote session, a failing frame-statistics read) would otherwise hold every present at 1.25 mode periods for as long as it runs; 120 counted presents need about 150 presents where the statistics come)
-- 2026-11-24 G2.3.6: Queued requests wake the pump by pushing a registered SDL event (wake_pump), on every SDL host; on Android an event watch turns every pushed event, that one and the system's, into the WakeWait's wake (because one path serves both hosts: SDL_WaitEventTimeout on Linux ends on a pushed event, and Android's block needs a signal for touch and pad events pushed from the activity's threads anyway)
-- 2026-11-24 G2.3.6: The display clock's sleep goes again only on EINTR on Linux too (sleep_to, shared), and any other error hands the frame to the host's clock there as well (because Linux's loop retried only on EINTR but then took the frame as slept without sleeping, so the game ran unpaced on such an error; one helper serves both and is under host_wait_tests.cpp)
-- 2026-11-24 G2.3.6: Past the 2 s the platform sets host_window::surface_overdue; the Vulkan renderer checks it before the acquire and again just before the queue present, and runs lose_device instead of presenting; it clears the flag when it releases its surface or makes a new one (because the card asks for the device-lost path rather than a present into a surface that may be gone; checking at the last moment shrinks the window to the instant between the check and the call, and clearing on release and on a new surface keeps a late flag from losing a device whose surface is new)
-- 2026-11-24 G2.3.6: The pump's 8 ms stays as its bound, and rumble wakes the pump only when its pad or level changes (because sensors and pads SDL polls are read only by a pump, so the bound keeps them at most 8 ms old; a rumble renewed with the same values needs no wake)
-- 2026-11-24 G2.3.7: The allowance is galaxy::kOwnFrameRateAllowance (1) beside the step rate in game_step.h, with the decision own_frame_rate(rate, step_rate); Java keeps FrameRates.OWN_RATE_ALLOWANCE, the same 1, named after it, and asks the library only for the step rate (nativeStepRate) (because the card asks for one native call and no Java copy of the step rate; the allowance is a named constant on each side, and the Java decision lives in FrameRates.java, free of Android's classes, so FrameRatesTest.kt runs it on the JVM at 60 and at a fed 50)
-- 2026-11-24 G2.3: FrameSchedule publishes its slot length itself: every write of slot_period_ goes through set_slot_period, which stores g_slot_period_qpc (present_clock.h) beside it (because the schedule is the one place the length is set (configure and begin_waiting), on the render thread, so the published value can never lag the one the slots use, and frame_schedule_tests.cpp checks it against slot_period() on a vblank grid, under variable refresh and with no slot clock)
 
 ## Checks changed during the run (72)
 
