@@ -60,6 +60,22 @@ void log_texture_failure(const char* step, const char* name, DXGI_FORMAT format,
               << " bind=0x" << std::hex << bind << ": " << step << " failed 0x" << static_cast<unsigned>(hr) << std::dec << '\n';
 }
 
+// Adds the time between its making and its end, in QueryPerformanceCounter ticks, to `sink`.
+struct TickSpan {
+    explicit TickSpan(std::uint64_t& sink_in) noexcept : sink(sink_in) {
+        QueryPerformanceCounter(&start);
+    }
+    ~TickSpan() {
+        LARGE_INTEGER now;
+        QueryPerformanceCounter(&now);
+        sink += static_cast<std::uint64_t>(now.QuadPart - start.QuadPart);
+    }
+    TickSpan(const TickSpan&) = delete;
+    TickSpan& operator=(const TickSpan&) = delete;
+    std::uint64_t& sink;
+    LARGE_INTEGER start{};
+};
+
 std::uint64_t round_up(std::uint64_t value, std::uint64_t step) {
     return (value + step - 1u) / step * step;
 }
@@ -261,8 +277,8 @@ void Context::shutdown() noexcept {
     dynamic_scratch_ = {};
     dynamic_scratch_bytes_ = {};
     copy_scratch_ = {};
-    upload_scratch_.Reset();
-    upload_scratch_bytes_ = 0u;
+    upload_scratch_ = {};
+    upload_scratch_bytes_ = {};
     ring_bytes_ = 0u;
     ring_written_ = ring_done_ = 0u;
     ring_marks_.clear();
@@ -556,6 +572,7 @@ Buffer::~Buffer() {
 }
 
 void Context::upload_written() {
+    const TickSpan span(diag.upload_ticks);
     std::lock_guard guard(buffers_mutex_);
     std::vector<void*>& pages = written_pages_;
     static const bool full_upload = GetEnvironmentVariableA("NEBULA_D3D11_FULL_UPLOAD", nullptr, 0u) != 0u;
@@ -619,6 +636,8 @@ void Context::upload_written() {
         if (upload_runs_.empty()) {
             continue;
         }
+        ++diag.uploads;
+        diag.upload_bytes += total;
         // Direct3D 11.0's boxed UpdateSubresource of a buffer is not trusted (this path replaced it): the runs are packed
         // into a DYNAMIC buffer written with Map DISCARD (a new one for each upload, so no copy still to run reads what
         // is overwritten), and each run is copied from it into every video-memory copy with CopySubresourceRegion.
@@ -656,11 +675,20 @@ ID3D11Buffer* Context::upload_scratch(std::size_t bytes) noexcept {
     if (bytes == 0u) {
         return nullptr;
     }
-    if (upload_scratch_ == nullptr || upload_scratch_bytes_ < bytes) {
-        std::size_t want = std::size_t{1} << 20u;
+    unsigned index = 0u;
+    std::size_t want = std::size_t{16} << 10u;
+    while (index + 1u < kUploadClasses && want < bytes) {
+        ++index;
+        want <<= 2u;
+    }
+    if (index + 1u == kUploadClasses) {
+        // The last class grows by powers of two to the biggest upload.
+        want = std::max<std::size_t>(want, upload_scratch_bytes_[index]);
         while (want < bytes) {
             want <<= 1u;
         }
+    }
+    if (upload_scratch_[index] == nullptr || upload_scratch_bytes_[index] < want) {
         D3D11_BUFFER_DESC desc{};
         desc.ByteWidth = static_cast<UINT>(want);
         desc.Usage = D3D11_USAGE_DYNAMIC;
@@ -670,10 +698,10 @@ ID3D11Buffer* Context::upload_scratch(std::size_t bytes) noexcept {
         if (FAILED(device_->CreateBuffer(&desc, nullptr, &made))) {
             return nullptr;
         }
-        upload_scratch_ = std::move(made);
-        upload_scratch_bytes_ = want;
+        upload_scratch_[index] = std::move(made);
+        upload_scratch_bytes_[index] = want;
     }
-    return upload_scratch_.Get();
+    return upload_scratch_[index].Get();
 }
 
 // The ring is an arena in system memory (d3d11_context.h); `ring_` is a one-constant buffer that only gives the places a
@@ -838,7 +866,10 @@ void Context::bind_scratch(unsigned stages, UINT slot, ID3D11Buffer* buffer) noe
 }
 
 void Context::bind_place(unsigned stages, UINT slot, const ConstantPlace& place) noexcept {
+    const TickSpan span(diag.bind_ticks);
+    ++diag.places;
     if (slot >= kComputeScratch || place.buffer == nullptr || place.count == 0u) {
+        ++diag.place_failures;
         bind_scratch(stages, slot, nullptr);
         return;
     }
@@ -846,6 +877,7 @@ void Context::bind_place(unsigned stages, UINT slot, const ConstantPlace& place)
     ID3D11Buffer* const scratch = dynamic_scratch(slot, bytes);
     D3D11_MAPPED_SUBRESOURCE mapped{};
     if (scratch == nullptr || FAILED(immediate_->Map(scratch, 0u, D3D11_MAP_WRITE_DISCARD, 0u, &mapped))) {
+        ++diag.place_failures;
         bind_scratch(stages, slot, nullptr);
         return;
     }
@@ -880,8 +912,11 @@ void Context::bind_compute_place(const ConstantPlace& place, bool clear_after) n
 }
 
 void Context::bind_buffer_window(unsigned stages, UINT slot, ID3D11Buffer* source, UINT first, UINT count) noexcept {
+    const TickSpan span(diag.bind_ticks);
+    ++diag.windows;
     ID3D11Buffer* const scratch = slot < kComputeScratch && source != nullptr && count != 0u ? copy_scratch(slot) : nullptr;
     if (scratch == nullptr) {
+        ++diag.window_failures;
         bind_scratch(stages, slot, nullptr);
         return;
     }

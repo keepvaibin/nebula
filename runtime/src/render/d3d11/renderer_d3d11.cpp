@@ -647,7 +647,11 @@ std::uint64_t RendererD3D11::end_frame(bool present_swap_chain, SubmissionCallba
                 loss_asked_ = false;  // lose_device: as the driver reports a removed device
                 hr = DXGI_ERROR_DEVICE_REMOVED;
             } else {
+                LARGE_INTEGER began, ended;
+                QueryPerformanceCounter(&began);
                 hr = swap_chain_->Present(vsync, flags);
+                QueryPerformanceCounter(&ended);
+                d3d11::Context::get().diag.present_ticks += static_cast<std::uint64_t>(ended.QuadPart - began.QuadPart);
             }
         }
         if (timeline_present) {
@@ -938,6 +942,7 @@ void RendererD3D11::flush_draws() {
     // The draws go to the scene target: a multisampled one's resolve is stale from here.
     scene_.color_dirty |= scene_.samples > 1u;
     ID3D11DeviceContext* const ctx = context();
+    std::size_t drawn = 0u;
     const auto bind_root = [this, &device](UINT first) {
         // a DrawRoot's 256 bytes (program.hlsli cbuffer Draw), from the constant ring's arena
         device.bind_place(d3d11::kVertexConstants | d3d11::kPixelConstants, 3u,
@@ -1032,13 +1037,33 @@ void RendererD3D11::flush_draws() {
             break;
         }
         case gpu::DrawOp::Kind::DrawIndexed:
+            ++drawn;
             ctx->DrawIndexedInstanced(op.w[0], op.w[1], op.w[2], static_cast<INT>(op.w[3]), 0u);
             break;
         case gpu::DrawOp::Kind::Draw:
+            ++drawn;
             ctx->DrawInstanced(op.w[0], op.w[1], op.w[2], 0u);
             break;
         case gpu::DrawOp::Kind::Arrays:
             break;  // never recorded: no arrays on Direct3D 11
+        }
+    }
+    {
+        // The first flushes, then every 300th: draws issued, and the constant bindings that fell back to an empty slot.
+        static std::uint64_t flushes = 0u, total = 0u;
+        total += drawn;
+        if (drawn != 0u && (flushes < 12u || flushes % 300u == 0u)) {
+            const d3d11::Context::Diagnostics& d = device.diag;
+            LARGE_INTEGER frequency;
+            QueryPerformanceFrequency(&frequency);
+            const auto ms = [&](std::uint64_t ticks) { return static_cast<double>(ticks) * 1000.0 / static_cast<double>(frequency.QuadPart); };
+            std::cout << "[draws] flush " << flushes << ": " << drawn << " draws (" << total << " in all), places " << d.places << " (failed "
+                      << d.place_failures << "), windows " << d.windows << " (failed " << d.window_failures << "), uploads " << d.uploads
+                      << " (" << d.upload_bytes / 1024u << " KB); ms in uploads " << ms(d.upload_ticks) << ", binds " << ms(d.bind_ticks)
+                      << ", present " << ms(d.present_ticks) << '\n';
+        }
+        if (drawn != 0u) {
+            ++flushes;
         }
     }
     pass_ops_.clear();

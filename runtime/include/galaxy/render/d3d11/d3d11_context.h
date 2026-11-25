@@ -220,6 +220,15 @@ public:
     // recorded reads what it was recorded with). A null source or no constants empties the slot.
     void bind_buffer_window(unsigned stages, UINT slot, ID3D11Buffer* source, UINT first, UINT count) noexcept;
 
+    // Counts the constant bindings above make (the renderer prints them now and then): bindings made, and those that fell
+    // back to an empty slot because a buffer or its Map was missing.
+    struct Diagnostics {
+        std::uint64_t places = 0u, place_failures = 0u, windows = 0u, window_failures = 0u;
+        std::uint64_t uploads = 0u, upload_bytes = 0u;                  // upload_written: buffers brought up to date, bytes
+        std::uint64_t upload_ticks = 0u, bind_ticks = 0u, present_ticks = 0u;  // QueryPerformanceCounter ticks spent
+    };
+    Diagnostics diag;
+
     // The address space (gpu::Address): an address's top bits name a buffer and its low kAddressShift bits a byte in it.
     static constexpr unsigned kAddressShift = 40;
     struct BufferOffset {
@@ -257,8 +266,11 @@ private:
     void bind_scratch(unsigned stages, UINT slot, ID3D11Buffer* buffer) noexcept;
     // A DYNAMIC buffer of at least `bytes` that upload_written packs a buffer's written runs into and copies them out of.
     [[nodiscard]] ID3D11Buffer* upload_scratch(std::size_t bytes) noexcept;
-    ComPtr<ID3D11Buffer> upload_scratch_;
-    std::size_t upload_scratch_bytes_ = 0u;
+    // Size classes (16 KB, 64 KB, 256 KB, 1 MB, 4 MB, then one that grows): a DISCARD of a small upload does not rename a
+    // megabyte.
+    static constexpr unsigned kUploadClasses = 6u;
+    std::array<ComPtr<ID3D11Buffer>, kUploadClasses> upload_scratch_{};
+    std::array<std::size_t, kUploadClasses> upload_scratch_bytes_{};
     std::vector<std::pair<std::uint64_t, std::uint64_t>> upload_runs_;  // upload_written's runs: byte begin and end
 
     // The constant ring. Places count up through every byte ever handed out (ring_written_), a place's offset in the
