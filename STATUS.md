@@ -1,12 +1,13 @@
 # Nebula native plan: status
 
-Written 2026-11-24 21:23. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 22:34. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 27 of 145 (19%).
 
 Now: G2.3.4 hard again (Mac start check: frame 1 not let go of); told the planner
 
-In work now: Nothing started.
+In work now:
+- G2.3.4 Landing 3d: Apple's display link (agent 1)
 
 ## Packages
 
@@ -99,7 +100,7 @@ Nothing waits for the owner.
 
 ## Blocked
 
-- G2.3.4 Landing 3d: Apple's display link: hard: github/Mac Start check (Metal): 'start check: frame 1 was not let go of in 10 seconds' (exit 5) after the presentDrawable fix; also measure/step/tablet worse render_ms 1.188 vs median 0.985 (band 0.120) (report: D:/NebulaWork/plan/native/hard/G2.3.4.md)
+Nothing is blocked.
 
 ## Tool mends
 
