@@ -1,12 +1,13 @@
 # Nebula native plan: status
 
-Written 2026-11-24 18:39. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-24 18:43. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 26 of 145 (18%).
 
-Now: G2.3.3: planner fixes the Linux compile error; waiting for its 'fixed'
+Now: in work: lander landing G2.3.3 to G2.3.7
 
-In work now: Nothing started.
+In work now:
+- G2.3.3 Landing 3c: Linux's display clock (agent 1)
 
 ## Packages
 
@@ -99,7 +100,7 @@ Nothing waits for the owner.
 
 ## Blocked
 
-- G2.3.3 Landing 3c: Linux's display clock: hard: github/Linux (unit tests, sanitizers): runtime/src/vsync_grid_tests.cpp:301:27 error: no matching function for call to 'max' (Linux clang build of galaxy_vsync_grid_tests); Windows checks passed to the point GitHub was read (report: D:/NebulaWork/plan/native/hard/G2.3.3.md)
+Nothing is blocked.
 
 ## Tool mends
 
