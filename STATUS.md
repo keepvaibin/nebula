@@ -1,12 +1,13 @@
 # Nebula native plan: status
 
-Written 2026-11-25 03:05. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-25 03:06. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 32 of 145 (22%).
 
 Now: in work: lander landing G2.3 to G2.5
 
-In work now: Nothing started.
+In work now:
+- G2.4 Landing 4: no closing spin where a display time is asked (agent 1)
 
 ## Packages
 
@@ -122,7 +123,7 @@ Nothing is blocked.
 | M-006 | closed | - | the step tier and section check; a passing tool fault played once more; a waiter left not judged runs itself | 0 | 95 | 2911f6429 |
 | M-007 | closed | - | the section-at-a-time roles: a whole section ahead, wait, hand-off sheets, hard reports, the live page | 0 | 80 | 9ed09cfec |
 
-## Decisions (103)
+## Decisions (105)
 
 - 2026-11-23 S0.2.1: LoadSlice: 32 items a frame; an item is a phase of GameScene::initAfterScenarioChosen, the player, one placement made whole, one piece of FileSelector::initStep, or one Star Bit of the reserve (because the card asks for a fixed count of work and names no count; the count is a constant in one place, no player sees which frame of the load an item falls in, and the load worker (G3.7) replaces the slices)
 - 2026-11-23 S0.2.1: Drawing's random stream (MR::getDrawRandom) is seeded with the same seed as the game's stream, in setRandomSeedFromStageName and setFixedRandomSeed (because a fixed seed keeps the cosmetic numbers the same in every run of a replay and needs no new setting; the draw stream runs through the same sequence as the game's but is advanced only by drawing, so neither changes the other)
@@ -227,6 +228,8 @@ Nothing is blocked.
 - 2026-11-24 G2.3.6: The pump's 8 ms stays as its bound, and rumble wakes the pump only when its pad or level changes (because sensors and pads SDL polls are read only by a pump, so the bound keeps them at most 8 ms old; a rumble renewed with the same values needs no wake)
 - 2026-11-24 G2.3.7: The allowance is galaxy::kOwnFrameRateAllowance (1) beside the step rate in game_step.h, with the decision own_frame_rate(rate, step_rate); Java keeps FrameRates.OWN_RATE_ALLOWANCE, the same 1, named after it, and asks the library only for the step rate (nativeStepRate) (because the card asks for one native call and no Java copy of the step rate; the allowance is a named constant on each side, and the Java decision lives in FrameRates.java, free of Android's classes, so FrameRatesTest.kt runs it on the JVM at 60 and at a fed 50)
 - 2026-11-24 G2.3: FrameSchedule publishes its slot length itself: every write of slot_period_ goes through set_slot_period, which stores g_slot_period_qpc (present_clock.h) beside it (because the schedule is the one place the length is set (configure and begin_waiting), on the render thread, so the published value can never lag the one the slots use, and frame_schedule_tests.cpp checks it against slot_period() on a vblank grid, under variable refresh and with no slot clock)
+- 2026-11-25 G2.4: The old path's switch is --diagnostics slot-spin (launch_args.h kDiagnoseSlotSpin): with it the render thread's wait to a slot spins its margin also where the display holds the picture to its asked time (because the card keeps the spin beside the new wait until the measures hold, and the tablet's before measure is owed (a writer runs no tablet): a diagnostics name reaches every platform's command line, the tablet's test harness included, so before and after are measured on one build)
+- 2026-11-25 G2.4: A held wait (PreciseWait::until_held) sleeps to the slot on the timer alone and is not woken early by the margin; the HOME Menu's repeated picture keeps the precise wait (because a wake before the slot would find the slot not yet due and wait again with no sleep left to take, a loop; the timer's lateness is taken in by the display lead, which follows the pictures shown (DisplayModel on present timing, PresentDepth on display timing); the repeated picture's present asks no time)
 
 ## Checks changed during the run (72)
 
