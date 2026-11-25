@@ -4,7 +4,7 @@ Written 2026-11-25 07:37. If this time is more than three hours old, the work ha
 
 Steps landed: 34 of 145 (23%).
 
-Now: G6.2, G6.7 written; next: lander for G6
+Now: in work: lander landing G6.2 and G6.7
 
 In work now:
 - G6.2 Sends and sound settings as typed records (P-221, P-222) (agent 1)
