@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/Sound/Sound.hpp"
+#include "Game/Sound/SoundData.hpp"
 #include "Game/Sound/SoundGlobal.hpp"
 
 // Each sound's values in the archive's sound table. One lives while the sound system does (the archive always has a table).
@@ -18,8 +19,9 @@ public:
 
     // 0 for a sound with no item.
     u32 getPriority(SoundID) const;
-    // 0xffff for a sound that is not an effect.
-    u16 getAudibleSw(SoundID) const;
+    // Every switch on (cAllAudible) for a sound that is not an effect.
+    const SoundAudibleSwitches& getAudibleSwitches(SoundID) const;
+    static const SoundAudibleSwitches cAllAudible;
     // 0xffff for a sound that is not music.
     u16 getBgmSeqResourceID(SoundID) const;
     // The store entry of a stream (or of a mod's track), -1 for none.

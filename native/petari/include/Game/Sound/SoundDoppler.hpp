@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Game/Sound/SoundParams.hpp"
-#include "Game/Sound/SoundAudibleParam.hpp"
 #include <nebula_geometry.hpp>
 
 class SoundDopplerAbsPos {

@@ -1,5 +1,4 @@
 #include "Game/Sound/SoundAudience3D.hpp"
-#include "Game/Sound/SoundAudibleParam.hpp"
 
 void SoundAudience3DSetting::init() {
     mFarDistance = 7000.0f;

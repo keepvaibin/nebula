@@ -252,22 +252,139 @@ fn a_me_stack_bound_counts_calls_loops_and_children() {
 fn a_cooked_archives_sound_names_are_read_in_order() {
     let names = b"SE_A\0SE_B\0\0\0";
     let mut file = b"NSND".to_vec();
-    for v in [1u32, 1, 1, 4, 0, 0, 0, names.len() as u32, 0, 0, 3] {
+    for v in [ARCHIVE_VERSION, 1, 1, 4, 0, 0, 0, names.len() as u32, 0, 0, 3] {
         file.extend_from_slice(&v.to_le_bytes());
     }
     file.extend_from_slice(&[0; 32]); // a section and a group (not read)
     for (flags, name) in [(3u8, 5u32), (1, u32::MAX), (2, 0), (2, 5)] {
-        let mut record = [0u8; 24];
+        let mut record = [0u8; ITEM_BYTES];
         record[1] = flags;
-        record[20..24].copy_from_slice(&name.to_le_bytes());
+        record[36..40].copy_from_slice(&name.to_le_bytes());
         file.extend_from_slice(&record);
     }
     file.extend_from_slice(names);
     assert_eq!(sound_names(&file).unwrap(), ["SE_B", "SE_A"]);
     // A name past the names, or an archive cut short, is an error, not a guess.
     let mut bad = file.clone();
-    bad[48 + 32 + 20..48 + 32 + 24].copy_from_slice(&99u32.to_le_bytes());
+    bad[48 + 32 + 36..48 + 32 + 40].copy_from_slice(&99u32.to_le_bytes());
     assert!(sound_names(&bad).is_err());
     assert!(sound_names(&file[..file.len() - 4]).is_err());
     assert!(sound_names(b"AA_<").is_err());
+}
+
+/// Every mix word a send can be given: the panner word, or a bus of the mixer's with two known curves as its fields (the
+/// driver's bus << 8 | first << 4 | second, as the game decoded it at every update before), and every other word refused.
+/// native/tests/sound_send_tests.cpp proves the game's gains from these records equal the words' for every one of them.
+#[test]
+fn every_mix_word_is_typed_or_refused() {
+    let mut typed = 0;
+    for word in 0..=0xFFFFu32 {
+        let got = send_record(word);
+        if word == 0xFFFF {
+            assert_eq!(got.unwrap(), [0, 0, 0, 1]);
+            continue;
+        }
+        let (bus, first, second) = (word >> 8, word >> 4 & 0xF, word & 0xF);
+        let known = |c: u32| c <= 3 || (5..=7).contains(&c);
+        if bus < 12 && known(first) && known(second) {
+            assert_eq!(got.unwrap(), [bus, first, second, 0], "{word:#x}");
+            typed += 1;
+        } else {
+            assert!(got.is_err(), "{word:#x}");
+        }
+    }
+    assert_eq!(typed, 12 * 7 * 7);
+}
+
+/// A program's sends and filter coefficients as the game reads them: a send as its record, an IIR set's coefficients
+/// as float bits, a FIR set's as floats after the program's bytes; each read from a register refused.
+#[test]
+fn a_programs_sends_and_filters_are_typed() {
+    #[rustfmt::skip]
+    let b = [
+        0xEA, 0x02, 0x03, 0x52,                         // 0x00: send 2: bus 3, curves 5 and 2
+        0xEA, 0x00, 0xFF, 0xFF,                         // 0x04: send 0: the panner
+        0xEC, 0x7F, 0xFF, 0x80, 0x00, 0x40, 0x00, 0x00, 0x01, // 0x08: IIR set
+        0xED, 0x00, 0x00, 0x1A,                         // 0x11: FIR set at 0x1A
+        0xED, 0x00, 0x00, 0x1A,                         // 0x15: the same set again
+        0xFF,                                           // 0x19: finish
+        0x7F, 0xFF, 0x00, 0x00, 0x10, 0x00, 0xC0, 0x00, // 0x1A: eight coefficients
+        0x00, 0x00, 0x00, 0x00, 0x3F, 0xFF, 0xFF, 0xFF,
+    ];
+    let file = sequence(&b).unwrap();
+    let ops = word(&file, 2) as usize;
+    assert_eq!(ops, 6);
+    // The header's 12 words, one group bound pair, one entry, the offsets, then each operation's code word and arguments.
+    let op = |i: usize| -> Vec<u32> { (0..5).map(|a| word(&file, 12 + 2 + 1 + ops + 6 * i + 1 + a)).collect() };
+    assert_eq!(op(0), [2, 3, 5, 2, 0]);
+    assert_eq!(op(1), [0, 0, 0, 0, 1]);
+    let iir: Vec<f32> = op(2)[..4].iter().map(|v| f32::from_bits(*v)).collect();
+    assert_eq!(iir, [32767.0 / 32768.0, -1.0, 0.5, 1.0 / 32768.0]);
+    let data_at = 4 * (12 + 2 + 1 + ops + 6 * ops);
+    let authored = b.len();
+    assert_eq!(word(&file, 3) as usize, authored.div_ceil(4) * 4 + 32);
+    assert_eq!(&file[data_at..data_at + authored], &b);
+    let set = op(3)[0] as usize;
+    assert_eq!(set, authored.div_ceil(4) * 4);
+    assert_eq!(op(4)[0] as usize, set);
+    let fir: Vec<f32> = (0..8).map(|i| f32::from_le_bytes(file[data_at + set + 4 * i..][..4].try_into().unwrap())).collect();
+    assert_eq!(fir, [32767.0 / 32768.0, 0.0, 0.125, -0.5, 0.0, 0.0, 16383.0 / 32768.0, -1.0 / 32768.0]);
+    // 0x91, mask 0x40: the send's mix word from register 1.
+    assert!(sequence(&[0x91, 0x40, 0xEA, 0x00, 0x01, 0xFF]).is_err());
+    // A send to bus 12, and one with curve 4.
+    assert!(sequence(&[0xEA, 0x00, 0x0C, 0x10, 0xFF]).is_err());
+    assert!(sequence(&[0xEA, 0x00, 0x01, 0x40, 0xFF]).is_err());
+}
+
+/// Each disc format code's playable flag and category: the game's old rule (the low three bits; below 4 plays; 3 music).
+#[test]
+fn a_waves_format_code_gives_its_flag_and_category() {
+    for format in 0..=255u8 {
+        let kind = format & 7;
+        assert_eq!(wave_kind(format), (kind < 4, if kind == 3 { 0 } else { 2 }), "{format}");
+    }
+}
+
+/// Every switch word as the named records give it, against the game's old shifts (SoundAudibleParam, AudSoundInfo,
+/// StdSoundInfo::applyStream).
+#[test]
+fn every_switch_word_is_named() {
+    for sw in 0..=0xFFFFu16 {
+        let s = sound_switches(sw);
+        let bit = |b: u16| sw >> b & 1 != 0;
+        assert_eq!(s[0] & SWITCH_RHYTHM != 0, bit(0));
+        assert_eq!(s[0] & SWITCH_FANFARE != 0, bit(8));
+        assert_eq!(s[0] & SWITCH_FX_MIX != 0, bit(9));
+        assert_eq!(s[0] & SWITCH_LOW_PASS != 0, bit(10));
+        assert_eq!(u16::from(s[1]), (sw >> 3) & 3);
+        let gap = match sw & 0x60 {
+            0x20 => 1,
+            0x40 => 5,
+            0x60 => 10,
+            _ => 0,
+        };
+        assert_eq!(s[2], gap);
+        let a = audible_switches(sw);
+        assert_eq!(a[0] & AUDIBLE_VOLUME != 0, bit(10));
+        assert_eq!(a[0] & AUDIBLE_FX_MIX != 0, bit(9));
+        assert_eq!(a[0] & AUDIBLE_PAN != 0, bit(7));
+        assert_eq!(a[0] & AUDIBLE_DOLBY != 0, bit(6));
+        assert_eq!(a[0] & AUDIBLE_DISTANCE_PRIORITY != 0, bit(11));
+        assert_eq!(a[0] & AUDIBLE_FAR_DROPS != 0, bit(8));
+        let doppler = f32::from_le_bytes(a[4..8].try_into().unwrap());
+        assert_eq!(doppler.to_bits(), (u32::from((sw >> 12) & 0xF) as f32 * (1.0f32 / 15.0f32)).to_bits());
+        let far = f32::from_le_bytes(a[8..12].try_into().unwrap());
+        let dist_bit = 1u32 << ((sw >> 4) & 3);
+        assert_eq!(far, if dist_bit == 8 { 0.5 } else { dist_bit as f32 });
+        let mut bits = sw;
+        for place in channel_places(sw) {
+            assert_eq!(u16::from(place), bits & 3);
+            bits >>= 2;
+        }
+    }
+    // A sound with no table entry has every audible switch on (0xffff): StdSoundInfo's record for it.
+    let all = audible_switches(0xFFFF);
+    assert_eq!(all[0], 63);
+    assert_eq!(f32::from_le_bytes(all[4..8].try_into().unwrap()), 15.0 * (1.0f32 / 15.0f32));
+    assert_eq!(f32::from_le_bytes(all[8..12].try_into().unwrap()), 0.5);
 }

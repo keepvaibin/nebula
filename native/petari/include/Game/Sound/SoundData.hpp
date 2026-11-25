@@ -4,12 +4,13 @@
 
 // The store's cooked sound data (crates/nebula-import/src/cook/sound.rs writes it): host order, fixed records, read in place.
 
-// A sequence program: the authored program's bytes (its tables, envelopes and filters are read from them as authored, big-endian)
-// and its operations decoded, in byte order, branch targets as operation indices. A file holds one program with one or more
-// entry points (a sound effect collection: groups of entries).
+// A sequence program: the authored program's bytes (its tables and envelopes are read from them as authored, big-endian),
+// then each FIR set the program names as eight floats, and its operations decoded, in byte order, branch targets as
+// operation indices, a send as its SoundSend's fields, filter coefficients as floats. A file holds one program with one or
+// more entry points (a sound effect collection: groups of entries).
 struct SeqFile {
     static const u32 cMagic = 0x5145534e;  // "NSEQ"
-    static const u32 cVersion = 2;
+    static const u32 cVersion = 3;
 
     u32 mMagic;
     u32 mVersion;
@@ -25,7 +26,8 @@ struct SeqFile {
     u32 mEnvelopePoints;
     u32 mReserved[2];
     // Then: u32 groupFirst[mGroupCount + 1] (into the entries), u32 entries[mEntryCount] (operation indices), u32 offsets[mOpCount]
-    // (each operation's byte offset, ascending), SeqOp ops[mOpCount], u8 data[mDataBytes].
+    // (each operation's byte offset, ascending), SeqOp ops[mOpCount], u8 data[mDataBytes] (the authored bytes, then the FIR sets
+    // at 4-byte boundaries).
 };
 static_assert(sizeof(SeqFile) == 48, "NSEQ header");
 
@@ -85,10 +87,10 @@ enum SeqCode : u16 {
     SEQ_ENV_SCALE,      // oscillator, scale (over 16383)
     SEQ_ENV_SET,        // oscillator, points (byte offset)
     SEQ_SIMPLE_ADSR,    // attack, decay, sustain, release time, direct release
-    SEQ_BUS_CONNECT,    // send, bus
+    SEQ_BUS_CONNECT,    // send, bus, first curve, second curve, panner (SoundSend)
     SEQ_IIR_CUTOFF,     // cutoff
-    SEQ_IIR_SET,        // four coefficients
-    SEQ_FIR_SET,        // coefficients (byte offset)
+    SEQ_IIR_SET,        // four coefficients (each a float's bits)
+    SEQ_FIR_SET,        // coefficients (byte offset of eight floats)
     SEQ_WAIT,           // ticks
     SEQ_INTERRUPT_TABLE,    // table (byte offset)
     SEQ_INTERRUPT_ON,   // mask
@@ -195,7 +197,7 @@ struct BankOsc {
 // highest active group holds it.
 struct WaveBankFile {
     static const u32 cMagic = 0x4b42574e;  // "NWBK"
-    static const u32 cVersion = 1;
+    static const u32 cVersion = 2;
 
     u32 mMagic;
     u32 mVersion;
@@ -217,9 +219,10 @@ struct WaveGroup {
 
 struct WaveEntry {
     u32 mId;
-    u8 mFormat;
+    u8 mPlayable;       // 0: its disc format is not a sampled one, and it plays silence
     u8 mBaseKey;
-    u16 mReserved;
+    u8 mCategory;       // NEBULA_SOUND_MUSIC (PCM16 on the disc) or NEBULA_SOUND_EFFECT, until a sound names its voice
+    u8 mReserved;
     f32 mSampleRate;
     u32 mOffset;        // bytes into the group's file
     u32 mBytes;
@@ -235,7 +238,7 @@ static_assert(sizeof(WaveEntry) == 36, "NWBK wave");
 // an entry says which of the two hold it.
 struct SoundArchiveFile {
     static const u32 cMagic = 0x444e534e;  // "NSND"
-    static const u32 cVersion = 1;
+    static const u32 cVersion = 2;
 
     u32 mMagic;
     u32 mVersion;
@@ -272,8 +275,48 @@ struct SoundGroup {
     u32 mNameCount;
 };
 
-// The fields of the item's type: an effect (0x50) has its audible and sound switches, a sequence (0x60) its resource, chord
-// resource and sound switch, a stream (0x70) its channel control and file path.
+// A sound's switches (an effect's or a sequence's).
+struct SoundSwitches {
+    enum Flag : u8 {
+        RHYTHM = 1,     // music: the rhythm follows its beat
+        FANFARE = 2,    // an effect: a fanfare
+        FX_MIX = 4,     // an effect: sent to the effect lines
+        LOW_PASS = 8,   // an effect: through the low-pass filter
+    };
+    u8 mFlags;
+    u8 mMostPlaying;    // a new start is refused while this many play (0: no limit)
+    u8 mStartGap;       // a new start is refused while one playing has counted fewer (0: no limit)
+    u8 mReserved;
+};
+static_assert(sizeof(SoundSwitches) == 4, "NSND switches");
+
+// An effect's audible switch: which of its values the distance and position change.
+struct SoundAudibleSwitches {
+    enum Flag : u8 {
+        VOLUME = 1,
+        FX_MIX = 2,
+        PAN = 4,
+        DOLBY = 8,
+        DISTANCE_PRIORITY = 16,  // its priority falls with the distance (else it keeps the highest)
+        FAR_DROPS = 32,          // past the far distance it has no priority at all
+    };
+    u8 mFlags;
+    u8 mReserved[3];
+    f32 mDopplerPower;  // 0: no doppler
+    f32 mFarScale;      // the far distance's scale: 1, 2, 4 or 0.5
+};
+static_assert(sizeof(SoundAudibleSwitches) == 12, "NSND audible switches");
+
+// Where a stream's channel plays.
+enum StreamChannelPlace : u8 {
+    CHANNEL_KEPT,       // as the stream set it
+    CHANNEL_CENTRE,
+    CHANNEL_LEFT,
+    CHANNEL_RIGHT,
+};
+
+// The fields of the item's type: an effect (0x50) has its audible switches and switches, a sequence (0x60) its resource,
+// chord resource and switches, a stream (0x70) its channels' places and file path.
 struct SoundItem {
     u8 mType;           // the table's type byte, kept for an entry the table leaves out too
     u8 mIn;
@@ -281,14 +324,13 @@ struct SoundItem {
     u8 mVolume;
     u16 mResource;
     u16 mChordResource;
-    u16 mAudibleSw;
-    u16 mSoundSw;
-    u16 mChannelCtrl;
-    u16 mReserved;
+    SoundSwitches mSwitches;
+    SoundAudibleSwitches mAudible;
+    u8 mChannelPlace[8];  // StreamChannelPlace of each of the first eight channels
     u32 mStreamPath;    // in the names, ~0 none
     u32 mName;          // in the names, ~0 none (the name table's entry was 0)
 };
-static_assert(sizeof(SoundItem) == 24, "NSND item");
+static_assert(sizeof(SoundItem) == 40, "NSND item");
 
 static const u32 cInTable = 1;
 static const u32 cInNames = 2;

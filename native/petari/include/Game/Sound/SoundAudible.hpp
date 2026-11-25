@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Game/Sound/SoundAudibleParam.hpp"
+#include "Game/Sound/SoundData.hpp"
 #include "Game/Sound/SoundDoppler.hpp"
 #include "Game/Util/Array.hpp"
 #include <nebula_geometry.hpp>
@@ -9,8 +9,8 @@
 // Part of its Sound; the channel room grows only past one listener.
 class SoundAudible {
 public:
-    void start(const Vec3f& rPos, SoundAudibleParam param, s32 channelCount) {
-        mAudibleParam = param;
+    void start(const Vec3f& rPos, const SoundAudibleSwitches& rSwitches, s32 channelCount) {
+        mAudibleSwitches = rSwitches;
         mAbsPos.init(&mPos, rPos, nullptr);
         mChannelCount = channelCount;
         for (s32 i = 0; i < channelCount; i++) {
@@ -52,12 +52,8 @@ public:
         mPos.set(rPos);
     }
 
-    const SoundAudibleParam& getAudibleParam() const {
-        return mAudibleParam;
-    }
-
-    u32 getVolDistBit() const {
-        return mAudibleParam.getVolDistBit();
+    const SoundAudibleSwitches& getAudibleSwitches() const {
+        return mAudibleSwitches;
     }
 
     const Vec3f& getVelocity() const {
@@ -65,7 +61,7 @@ public:
     }
 
     Vec3f mPos;
-    SoundAudibleParam mAudibleParam;
+    SoundAudibleSwitches mAudibleSwitches;
     SoundDopplerAbsPos mAbsPos;
     MR::GrowTable< SoundDopplerChannel, 1 > mChannels;
     s32 mChannelCount;

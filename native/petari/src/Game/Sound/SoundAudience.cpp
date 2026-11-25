@@ -84,7 +84,7 @@ bool SoundAudience::startAudible(SoundAudible* pAudible, const Vec3f& rPos, Soun
         return false;
     }
 
-    pAudible->start(rPos, SoundAudibleParam(StdSoundInfo::getInstance()->getAudibleSw(soundID), -1), mListenerCount);
+    pAudible->start(rPos, StdSoundInfo::getInstance()->getAudibleSwitches(soundID), mListenerCount);
     for (s32 i = 0; i < mListenerCount; i++) {
         mListeners.begin()[i].convertAbsToRel(pAudible->getPos(), &pAudible->getChannel(i).mRelPos);
     }
@@ -93,7 +93,8 @@ bool SoundAudience::startAudible(SoundAudible* pAudible, const Vec3f& rPos, Soun
 
 u32 SoundAudience::calcPriority(SoundAudible* pAudible) const {
     const s32 count = pAudible->getChannelCount();
-    if (pAudible->getAudibleParam().get_BIT11() == 0) {
+    const SoundAudibleSwitches& rSwitches = pAudible->getAudibleSwitches();
+    if ((rSwitches.mFlags & SoundAudibleSwitches::DISTANCE_PRIORITY) == 0) {
         for (s32 i = 0; i < count; i++) {
             mListeners.begin()[i].convertAbsToRel(pAudible->getPos(), &pAudible->getChannel(i).mRelPos);
         }
@@ -104,10 +105,9 @@ u32 SoundAudience::calcPriority(SoundAudible* pAudible) const {
     u32 priority = -1;
     for (s32 i = 0; i < count; i++) {
         SoundDopplerChannel& rChannel = pAudible->getChannel(i);
-        const u32 volDistBit = pAudible->getAudibleParam().getVolDistBit();
         mListeners.begin()[i].convertAbsToRel(pAudible->getPos(), &rChannel.mRelPos);
-        const bool bit = pAudible->getAudibleParam().get_BIT8();
-        const u32 deltaPriority = calcDeltaPriority_(rChannel.mRelPos.getDist(), bit, volDistBit);
+        const bool farDrops = (rSwitches.mFlags & SoundAudibleSwitches::FAR_DROPS) != 0;
+        const u32 deltaPriority = calcDeltaPriority_(rChannel.mRelPos.getDist(), farDrops, rSwitches.mFarScale);
         if (deltaPriority < priority) {
             priority = deltaPriority;
         }
@@ -118,11 +118,11 @@ u32 SoundAudience::calcPriority(SoundAudible* pAudible) const {
 
 void SoundAudience::mixChannelOut(const SoundParams& rParams, SoundAudible* pAudible, s32 channel) const {
     SoundDopplerChannel* pChannel = &pAudible->getChannel(channel);
-    const SoundAudibleParam& rParam = pAudible->getAudibleParam();
+    const SoundAudibleSwitches& rSwitches = pAudible->getAudibleSwitches();
     SoundParams params;
 
-    if (rParam.calcVolume()) {
-        params.mVolume = calcVolume_(pChannel->mRelPos.getDist(), pAudible->getVolDistBit());
+    if (rSwitches.mFlags & SoundAudibleSwitches::VOLUME) {
+        params.mVolume = calcVolume_(pChannel->mRelPos.getDist(), rSwitches.mFarScale);
         const f32 vol = !pAudible->mIsResetting ? ease(params.mVolume, pAudible->mVolume) : params.mVolume;
         pAudible->mVolume = vol;
         params.mVolume = vol;
@@ -130,7 +130,7 @@ void SoundAudience::mixChannelOut(const SoundParams& rParams, SoundAudible* pAud
         params.mVolume = 1.0f;
     }
 
-    if (rParam.calcDolby()) {
+    if (rSwitches.mFlags & SoundAudibleSwitches::DOLBY) {
         params.mDolby = calcDolby_(pChannel->mRelPos.getPos());
         const f32 dolby = !pAudible->mIsResetting ? ease(params.mDolby, pAudible->mDolby) : params.mDolby;
         pAudible->mDolby = dolby;
@@ -139,7 +139,7 @@ void SoundAudience::mixChannelOut(const SoundParams& rParams, SoundAudible* pAud
         params.mDolby = 0.1f;
     }
 
-    if (rParam.calcPan()) {
+    if (rSwitches.mFlags & SoundAudibleSwitches::PAN) {
         if (mListenerCount > 2) {
             params.mPan = (channel & 1) != 0 ? 1.0f : 0.0f;
         } else {
@@ -159,8 +159,8 @@ void SoundAudience::mixChannelOut(const SoundParams& rParams, SoundAudible* pAud
     pAudible->mIsResetting = false;
 }
 
-u32 SoundAudience::calcDeltaPriority_(f32 dist, bool excludeFar, s32 distVolBit) const {
-    f32 farDist = distVolBit == 8 ? mSetting.mFarDistance / 2.0f : mSetting.mFarDistance * distVolBit;
+u32 SoundAudience::calcDeltaPriority_(f32 dist, bool excludeFar, f32 farScale) const {
+    f32 farDist = mSetting.mFarDistance * farScale;
 
     if (mFarCamera) {
         farDist *= 3.0f;
@@ -178,12 +178,12 @@ u32 SoundAudience::calcDeltaPriority_(f32 dist, bool excludeFar, s32 distVolBit)
         return 0;
     }
 
-    f32 priorityRate = distVolBit == 1 ? mPriorityRate : mSetting.mPriorityDownRange / (farDist - mSetting.mNearDistance);
+    f32 priorityRate = farScale == 1.0f ? mPriorityRate : mSetting.mPriorityDownRange / (farDist - mSetting.mNearDistance);
     return priorityRate * (dist - mSetting.mNearDistance);
 }
 
-f32 SoundAudience::calcVolume_(f32 dist, s32 distVolBit) const {
-    f32 farDist = distVolBit == 8 ? mSetting.mFarDistance / 2.0f : mSetting.mFarDistance * distVolBit;
+f32 SoundAudience::calcVolume_(f32 dist, f32 farScale) const {
+    f32 farDist = mSetting.mFarDistance * farScale;
 
     if (mFarCamera) {
         farDist *= 3.0f;
@@ -197,7 +197,7 @@ f32 SoundAudience::calcVolume_(f32 dist, s32 distVolBit) const {
         return 1.0f;
     }
 
-    f32 volumeRate = distVolBit == 1 ? mVolumeRate : (mSetting.mMinVolume - 1.0f) / (farDist - mSetting.mNearDistance);
+    f32 volumeRate = farScale == 1.0f ? mVolumeRate : (mSetting.mMinVolume - 1.0f) / (farDist - mSetting.mNearDistance);
     return MR::clamp(volumeRate * (dist - mSetting.mNearDistance) + 1.0f, 0.0f, 1.0f);
 }
 
@@ -225,12 +225,11 @@ f32 SoundAudience::calcPan_(f32 dist, const Vec3f& rPos) const {
 }
 
 f32 SoundAudience::calcPitch(SoundDopplerChannel* pChannel, const SoundAudible* pAudible, const SoundListener& rListener) const {
-    const SoundAudibleParam& rParam = pAudible->getAudibleParam();
-    if (rParam.getDoppler() == 0) {
+    const f32 doppler = pAudible->getAudibleSwitches().mDopplerPower;
+    if (doppler == 0.0f) {
         return 1.0f;
     }
 
-    f32 doppler = rParam.getDopplerPower();
     f32 vel1 = doppler * pChannel->getDir().dot(rListener.getVelocity());
     f32 vel2 = doppler * pChannel->getDir().dot(pAudible->getVelocity());
     f32 pitch = (mSetting.mSonicSpeed + vel1) / (mSetting.mSonicSpeed + vel2);
@@ -257,7 +256,7 @@ f32 SoundAudience::calcPitch(SoundDopplerChannel* pChannel, const SoundAudible* 
 }
 
 f32 SoundAudience::calcFxMix(const SoundDopplerChannel* pChannel, const SoundAudible* pAudible) const {
-    if (!pAudible->getAudibleParam().calcFxMix()) {
+    if ((pAudible->getAudibleSwitches().mFlags & SoundAudibleSwitches::FX_MIX) == 0) {
         return 0.0f;
     }
 

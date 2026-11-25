@@ -1,6 +1,7 @@
 #include "Game/Sound/SeqTrack.hpp"
 #include "Game/Sound/SoundBank.hpp"
 #include "Game/Sound/SoundEngine.hpp"
+#include <cstring>
 #include <new>
 #include <nebula_geometry.hpp>
 
@@ -222,19 +223,19 @@ void SeqTrack::init() {
     mNoteOnPrio = 0x40;
     mReleasePrio = 0;
     mGateRate = 100;
-    mMixConfig[0] = 0x150;
-    mMixConfig[1] = 0x210;
-    mMixConfig[2] = 0x352;
-    mMixConfig[3] = 0x412;
-    mMixConfig[4] = 0;
-    mMixConfig[5] = 0;
-    for (u32 i = 0; i < 8; i++) {
-        mFIR[i] = 0;
-        mIIR[i] = 0;
+    for (u32 i = 0; i < 6; i++) {
+        mSends[i] = SoundSends::cDefault[i];
     }
-    mFIR[0] = 0x7fff;
-    mIIR[0] = 0x7fff;
-    mFilterMode = 0;
+    for (u32 i = 0; i < 8; i++) {
+        mFIR[i] = 0.0f;
+    }
+    for (u32 i = 0; i < 4; i++) {
+        mIIR[i] = 0.0f;
+    }
+    mFIR[0] = VoiceFilter::cPass;
+    mIIR[0] = VoiceFilter::cPass;
+    mFirTaps = 0;
+    mIirOn = false;
     mPauseFlag = false;
     mIsMute = false;
     mIsDirectlyPlayed = true;
@@ -265,11 +266,14 @@ void SeqTrack::inherit(const SeqTrack& rParent) {
     mSkipSample = rParent.mSkipSample;
     for (u32 i = 0; i < 8; i++) {
         mFIR[i] = rParent.mFIR[i];
+    }
+    for (u32 i = 0; i < 4; i++) {
         mIIR[i] = rParent.mIIR[i];
     }
-    mFilterMode = rParent.mFilterMode;
+    mFirTaps = rParent.mFirTaps;
+    mIirOn = rParent.mIirOn;
     for (u32 i = 0; i < 6; i++) {
-        mMixConfig[i] = rParent.mMixConfig[i];
+        mSends[i] = rParent.mSends[i];
     }
 }
 
@@ -442,7 +446,7 @@ SoundNote* SeqTrack::channelStart(ChannelMgr* pMgr, u32 key, u32 velocity, u32 u
     note->mTremolo.mDelay = mTremDelay;
     note->mParams = pMgr->mParams;
     for (u32 i = 0; i < 6; i++) {
-        note->mMixConfig[i] = mMixConfig[i];
+        note->mSends[i] = mSends[i];
     }
     overwriteOsc(note);
     if (mDirectRelease != 0) {
@@ -736,19 +740,18 @@ void SeqTrack::setOscAdsr(s16 attack, s16 decay, s16 sustain, s16 release, u16 d
     mDirectRelease = directRelease;
 }
 
-void SeqTrack::setFIR(const u8* pBigEndian) {
+void SeqTrack::setFIR(const f32* pCoefficients) {
     for (u32 i = 0; i < 8; i++) {
-        mFIR[i] = static_cast< s16 >(be16(pBigEndian + i * 2));
+        mFIR[i] = pCoefficients[i];
     }
-    mFilterMode &= 0x20;
-    mFilterMode |= 8;
+    mFirTaps = 8;
 }
 
-void SeqTrack::setIIR(const s16* pCoefficients) {
-    for (u32 i = 0; i < 8; i++) {
+void SeqTrack::setIIR(const f32* pCoefficients) {
+    for (u32 i = 0; i < 4; i++) {
         mIIR[i] = pCoefficients[i];
     }
-    mFilterMode |= 0x20;
+    mIirOn = true;
 }
 
 void SeqTrack::writePort(u32 port, u16 value) {
@@ -769,13 +772,7 @@ void SeqTrack::updateChannel(SoundNote* pNote, NebulaVoice* pVoice) {
     pNote->mVibrato.mPitch = mVibPitch;
     pNote->mTremolo.mDepth = mTremDepth;
     pNote->mTremolo.mPitch = mTremPitch;
-    if (mFilterMode & 0x20) {
-        VoiceFilter::setIIR(pVoice, mIIR);
-    }
-    if (mFilterMode & 0x1f) {
-        VoiceFilter::setFIR8(pVoice, mFIR);
-    }
-    VoiceFilter::setMode(pVoice, mFilterMode);
+    VoiceFilter::set(pVoice, mFirTaps, mFIR, mIirOn, mIIR);
 }
 
 void SeqTrack::noteEvent(u32 event, SoundNote* pNote, NebulaVoice* pVoice, ChannelMgr* pMgr) {
@@ -1554,7 +1551,7 @@ s32 SeqTrack::step() {
         break;
     case SEQ_BUS_CONNECT:
         if (a[0] < 6) {
-            mMixConfig[a[0]] = static_cast< u16 >(a[1]);
+            mSends[a[0]] = {static_cast< u8 >(a[1]), {static_cast< u8 >(a[2]), static_cast< u8 >(a[3])}, static_cast< u8 >(a[4])};
         }
         break;
     case SEQ_IIR_CUTOFF:
@@ -1563,16 +1560,17 @@ s32 SeqTrack::step() {
         }
         break;
     case SEQ_IIR_SET: {
-        s16 iir[8] = {};
-        for (u32 i = 0; i < 4; i++) {
-            iir[i] = static_cast< s16 >(a[i]);
-        }
+        f32 iir[4];
+        memcpy(iir, a, sizeof(iir));
         setIIR(iir);
         break;
     }
-    case SEQ_FIR_SET:
-        setFIR(mData + a[0]);
+    case SEQ_FIR_SET: {
+        f32 fir[8];
+        memcpy(fir, mData + a[0], sizeof(fir));
+        setFIR(fir);
         break;
+    }
     case SEQ_WAIT:
         mTimer = static_cast< s32 >(a[0]);
         break;

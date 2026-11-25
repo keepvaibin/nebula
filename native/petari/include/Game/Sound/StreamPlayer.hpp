@@ -98,5 +98,4 @@ private:
     f32 mChannelPan[cChannels] = {};
     f32 mChannelFxMix[cChannels] = {};
     f32 mChannelDolby[cChannels] = {};
-    u16 mMixConfig[6] = {};
 };

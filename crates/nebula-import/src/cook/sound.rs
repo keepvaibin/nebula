@@ -4,8 +4,9 @@
 //! - NSND, the sound archive (AudioRes/SMR.szs, the disc's BAA): the sound table (BST) and its names (BSTN) as one tree,
 //!   the effect programs (BSC) as one NSEQ, the instrument banks (IBNK) as NBNK, the wave systems (WSYS) as NWBK.
 //! - NSEQ, a sequence program (the BSC, and each BMS of AudioRes/Seqs/JaiSeq.arc): its operations decoded along every
-//!   path from its entries, immediate branch targets as operation indices. The program's bytes stay for the tables,
-//!   envelopes and filters the operations name.
+//!   path from its entries, immediate branch targets as operation indices, a send's mix word as its bus, curves and
+//!   panner flag, filter coefficients as floats. The program's bytes stay for the tables and envelopes the operations
+//!   name; the FIR sets follow them as floats.
 //! - NMES, the Me phrases (AudioRes/Info/JaiMe.arc's BME): the program's bytes, and per entry its start and the tracks
 //!   it can have alive at once.
 //!
@@ -16,13 +17,13 @@ use anyhow::{bail, Context, Result};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 const SEQ_MAGIC: &[u8; 4] = b"NSEQ";
-const SEQ_VERSION: u32 = 2;
+const SEQ_VERSION: u32 = 3;
 const BANK_MAGIC: &[u8; 4] = b"NBNK";
 const BANK_VERSION: u32 = 1;
 const WAVE_BANK_MAGIC: &[u8; 4] = b"NWBK";
-const WAVE_BANK_VERSION: u32 = 1;
+const WAVE_BANK_VERSION: u32 = 2;
 const ARCHIVE_MAGIC: &[u8; 4] = b"NSND";
-const ARCHIVE_VERSION: u32 = 1;
+const ARCHIVE_VERSION: u32 = 2;
 const ME_MAGIC: &[u8; 4] = b"NMES";
 const ME_VERSION: u32 = 2;
 
@@ -612,9 +613,94 @@ fn envelope_points(data: &[u8], op: &Op) -> Result<u32> {
 }
 
 /// A program as NSEQ: its bytes `data`, entered at the byte offsets of `groups`.
-fn program_file(data: &[u8], groups: &[Vec<usize>]) -> Result<Vec<u8>> {
+/// The mixer's buses (NEBULA_AUDIO_BUSES, native/include/nebula_game_api.h); the driver's bus numbers are the mixer's.
+const BUSES: u32 = 12;
+/// The mix word that puts a note on the surround panner instead of its sends.
+const PANNER_WORD: u32 = 0xFFFF;
+
+/// A send's mix word (bus << 8 | first curve << 4 | second curve, or the panner word) as the send operation's arguments 1
+/// to 4: bus, first curve, second curve, panner (SoundSend, native/petari/include/Game/Sound/SoundSend.hpp). Curves: 0
+/// none, 1 pan, 2 effect send, 3 rear, 5 to 7 the same reversed. A bus past the mixer's or another curve is refused (the
+/// game's programs have none).
+pub(crate) fn send_record(word: u32) -> Result<[u32; 4]> {
+    if word == PANNER_WORD {
+        return Ok([0, 0, 0, 1]);
+    }
+    let (bus, first, second) = (word >> 8, word >> 4 & 0xF, word & 0xF);
+    if bus >= BUSES {
+        bail!("a send to bus {bus} (mix word {word:#x}; the mixer has {BUSES})");
+    }
+    for curve in [first, second] {
+        if !matches!(curve, 0..=3 | 5..=7) {
+            bail!("a send with curve {curve} (mix word {word:#x})");
+        }
+    }
+    Ok([bus, first, second, 0])
+}
+
+/// A DSP coefficient (a 16-bit two's complement fraction of 32768) as the float it stands for, exactly.
+fn coefficient(value: u32) -> f32 {
+    f32::from(value as u16 as i16) / 32768.0
+}
+
+/// The sends and filter coefficients of `program` in the forms the game reads: each send as send_record, an IIR set's
+/// four coefficients as float bits, each FIR set's eight as floats appended to `data` (at a 4-byte boundary, once per
+/// set), its operation naming their byte offset. One read from a register is refused (none of the game's programs has
+/// one).
+fn type_settings(program: &mut Program, data: &mut Vec<u8>) -> Result<()> {
+    let authored = data.len();
+    let mut fir_sets: HashMap<u32, u32> = HashMap::new();
+    for op in &mut program.ops {
+        match op.code {
+            Code::BusConnect => {
+                if op.registers & 2 != 0 {
+                    bail!("a send's mix word read from a register at {:#x}", op.at);
+                }
+                let record = send_record(op.args[1]).with_context(|| format!("the send at {:#x}", op.at))?;
+                op.args[1..5].copy_from_slice(&record);
+            }
+            Code::IirSet => {
+                if op.registers & 0xF != 0 {
+                    bail!("an IIR coefficient read from a register at {:#x}", op.at);
+                }
+                for a in &mut op.args[..4] {
+                    *a = coefficient(*a).to_bits();
+                }
+            }
+            Code::FirSet => {
+                if op.registers & 1 != 0 {
+                    bail!("FIR coefficients at an address in a register at {:#x}", op.at);
+                }
+                let from = op.args[0];
+                if let Some(at) = fir_sets.get(&from) {
+                    op.args[0] = *at;
+                    continue;
+                }
+                let mut set = [0f32; 8];
+                for (i, v) in set.iter_mut().enumerate() {
+                    let at = from as usize + 2 * i;
+                    *v = coefficient(be16(&data[..authored], at).with_context(|| format!("the FIR set of {:#x}", op.at))?);
+                }
+                align(data, 4);
+                let at = size32(data.len(), "a program")?;
+                for v in set {
+                    putf32(data, v);
+                }
+                fir_sets.insert(from, at);
+                op.args[0] = at;
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+fn program_file(authored: &[u8], groups: &[Vec<usize>]) -> Result<Vec<u8>> {
     let roots: Vec<usize> = groups.iter().flatten().copied().collect();
-    let program = decode_program(data, &roots)?;
+    let mut program = decode_program(authored, &roots)?;
+    let mut data = authored.to_vec();
+    type_settings(&mut program, &mut data)?;
+    let data = data.as_slice();
     let entries: Vec<u32> = roots.iter().map(|at| program.index[at]).collect();
     let mut memo = HashMap::new();
     let mut open = HashSet::new();
@@ -1100,6 +1186,17 @@ fn bank_file(b: &[u8], base: usize, wave_bank: u32) -> Result<Vec<u8>> {
 // ---- wave banks (NWBK)
 
 /// A wave system (WSYS) at `base` as NWBK, each wave's place the cooked AW file's (`layout`).
+/// The volume settings a voice follows (NEBULA_SOUND_MUSIC and NEBULA_SOUND_EFFECT, native/include/nebula_game_api.h).
+const SOUND_MUSIC: u8 = 0;
+const SOUND_EFFECT: u8 = 2;
+
+/// Whether a wave of the disc's format code plays, and the volume setting it follows until a sound names it (WaveEntry):
+/// the code's low three bits, 0 to 3 a sampled format (the store's samples are all PCM16), 3 (PCM16 on the disc) music.
+pub(crate) fn wave_kind(format: u8) -> (bool, u8) {
+    let kind = format & 7;
+    (kind < 4, if kind == 3 { SOUND_MUSIC } else { SOUND_EFFECT })
+}
+
 fn wave_bank_file(b: &[u8], base: usize, number: u32, layout: &BTreeMap<String, Vec<WavePlace>>) -> Result<Vec<u8>> {
     if b.get(base..base + 4) != Some(b"WSYS".as_slice()) {
         bail!("no WSYS magic");
@@ -1144,10 +1241,12 @@ fn wave_bank_file(b: &[u8], base: usize, number: u32, layout: &BTreeMap<String, 
             let disc_length = be32(b, wave + 0xC)? as usize;
             let place = audio_data::place_of(layout, &key, disc_offset, disc_length, format)
                 .with_context(|| format!("wave {w} of group {g} ({key}) not in the wave layout (format {format})"))?;
+            let (playable, category) = wave_kind(format);
             put32(&mut waves, id);
-            waves.push(format);
+            waves.push(u8::from(playable));
             waves.push(be8(b, wave + 2)? as u8);
-            put16(&mut waves, 0);
+            waves.push(category);
+            waves.push(0);
             putf32(&mut waves, bef32(b, wave + 4)?);
             put32(&mut waves, size32(place.new_offset, "a wave archive")?);
             put32(&mut waves, size32(place.new_length, "a wave")?);
@@ -1196,6 +1295,67 @@ struct Tree {
 
 /// The sound table (BST at `table`) and its names (BSTN at `names`) as one tree:
 /// each level as long as the longer of the two, and each entry saying which trees hold it.
+/// A SoundItem's bytes (SoundData.hpp).
+const ITEM_BYTES: usize = 40;
+
+/// SoundSwitches::mFlags (SoundData.hpp).
+const SWITCH_RHYTHM: u8 = 1;
+const SWITCH_FANFARE: u8 = 2;
+const SWITCH_FX_MIX: u8 = 4;
+const SWITCH_LOW_PASS: u8 = 8;
+/// SoundAudibleSwitches::mFlags (SoundData.hpp).
+const AUDIBLE_VOLUME: u8 = 1;
+const AUDIBLE_FX_MIX: u8 = 2;
+const AUDIBLE_PAN: u8 = 4;
+const AUDIBLE_DOLBY: u8 = 8;
+const AUDIBLE_DISTANCE_PRIORITY: u8 = 16;
+const AUDIBLE_FAR_DROPS: u8 = 32;
+
+/// A sound's switches (the table's 16 bits) as SoundSwitches: flags (bit 0 rhythm, 8 fanfare, 9 effect send, 10 low-pass),
+/// the most playing at once (bits 3-4, 0 no limit), the start gap (bits 5-6: none, 1, 5, 10). The bits the game never read
+/// are not kept.
+pub(crate) fn sound_switches(sw: u16) -> [u8; 4] {
+    let mut flags = 0;
+    for (bit, flag) in [(0, SWITCH_RHYTHM), (8, SWITCH_FANFARE), (9, SWITCH_FX_MIX), (10, SWITCH_LOW_PASS)] {
+        if sw >> bit & 1 != 0 {
+            flags |= flag;
+        }
+    }
+    [flags, (sw >> 3 & 3) as u8, [0, 1, 5, 10][usize::from(sw >> 5 & 3)], 0]
+}
+
+/// An effect's audible switch (the table's 16 bits) as SoundAudibleSwitches: flags (bit 10 volume, 9 effect send, 7 pan,
+/// 6 rear, 11 priority by distance, 8 dropped when far), the doppler power (bits 12-15 in fifteenths, as the game
+/// multiplied them) and the far distance's scale (bits 4-5: 1, 2, 4, a half).
+pub(crate) fn audible_switches(sw: u16) -> [u8; 12] {
+    let mut flags = 0;
+    for (bit, flag) in [
+        (10, AUDIBLE_VOLUME),
+        (9, AUDIBLE_FX_MIX),
+        (7, AUDIBLE_PAN),
+        (6, AUDIBLE_DOLBY),
+        (11, AUDIBLE_DISTANCE_PRIORITY),
+        (8, AUDIBLE_FAR_DROPS),
+    ] {
+        if sw >> bit & 1 != 0 {
+            flags |= flag;
+        }
+    }
+    let doppler = f32::from(sw >> 12 & 0xF) * (1.0f32 / 15.0f32);
+    let far = [1.0f32, 2.0, 4.0, 0.5][usize::from(sw >> 4 & 3)];
+    let mut out = [0u8; 12];
+    out[0] = flags;
+    out[4..8].copy_from_slice(&doppler.to_le_bytes());
+    out[8..12].copy_from_slice(&far.to_le_bytes());
+    out
+}
+
+/// A stream's channel control (two bits a channel, from the first) as eight StreamChannelPlace: 0 kept, 1 centre, 2 left,
+/// 3 right.
+pub(crate) fn channel_places(ctrl: u16) -> [u8; 8] {
+    std::array::from_fn(|i| (ctrl >> (2 * i) & 3) as u8)
+}
+
 fn sound_tree(b: &[u8], table: Option<usize>, name_table: Option<usize>, names: &mut Names) -> Result<Tree> {
     let root = |at: Option<usize>, magic: &[u8; 4]| -> Result<Option<(usize, Vec<usize>)>> {
         let Some(base) = at else { return Ok(None) };
@@ -1263,7 +1423,7 @@ fn sound_tree(b: &[u8], table: Option<usize>, name_table: Option<usize>, names: 
             put32(&mut tree.groups, items_names as u32);
             tree.counts[1] += 1;
             for i in 0..items_table.max(items_names) {
-                let mut record = [0u8; 24];
+                let mut record = [0u8; ITEM_BYTES];
                 let mut item_in = 0u8;
                 let mut stream_path = u32::MAX;
                 if let Some((base, words)) = &items {
@@ -1276,22 +1436,19 @@ fn sound_tree(b: &[u8], table: Option<usize>, name_table: Option<usize>, names: 
                             let item = base + at;
                             record[2] = be8(b, item)? as u8;
                             record[3] = be8(b, item + 1)? as u8;
-                            let mut field = |slot: usize, at: usize| -> Result<()> {
-                                record[slot..slot + 2].copy_from_slice(&(be16(b, at)? as u16).to_le_bytes());
-                                Ok(())
-                            };
+                            let half = |at: usize| -> Result<u16> { Ok(be16(b, at)? as u16) };
                             match kind & 0xF0 {
                                 0x50 => {
-                                    field(8, item + 2)?;
-                                    field(10, item + 4)?;
+                                    record[12..24].copy_from_slice(&audible_switches(half(item + 2)?));
+                                    record[8..12].copy_from_slice(&sound_switches(half(item + 4)?));
                                 }
                                 0x60 => {
-                                    field(4, item + 2)?;
-                                    field(6, item + 4)?;
-                                    field(10, item + 6)?;
+                                    record[4..6].copy_from_slice(&half(item + 2)?.to_le_bytes());
+                                    record[6..8].copy_from_slice(&half(item + 4)?.to_le_bytes());
+                                    record[8..12].copy_from_slice(&sound_switches(half(item + 6)?));
                                 }
                                 0x70 => {
-                                    field(12, item + 2)?;
+                                    record[24..32].copy_from_slice(&channel_places(half(item + 2)?));
                                     stream_path = names.add(text(b, offset(b, *base, item + 4)?)?)?;
                                 }
                                 t => bail!("a sound item of type {t:#x} at {item:#x}"),
@@ -1309,8 +1466,8 @@ fn sound_tree(b: &[u8], table: Option<usize>, name_table: Option<usize>, names: 
                     }
                 }
                 record[1] = item_in;
-                record[16..20].copy_from_slice(&stream_path.to_le_bytes());
-                record[20..24].copy_from_slice(&name.to_le_bytes());
+                record[32..36].copy_from_slice(&stream_path.to_le_bytes());
+                record[36..40].copy_from_slice(&name.to_le_bytes());
                 tree.items.extend_from_slice(&record);
                 tree.counts[2] += 1;
             }
@@ -1472,15 +1629,15 @@ pub fn sound_names(nsnd: &[u8]) -> Result<Vec<String>> {
         .and_then(|v| v.checked_add(groups.checked_mul(16)?))
         .context("groups")?;
     let names_at = items_at
-        .checked_add(items.checked_mul(24).context("items")?)
+        .checked_add(items.checked_mul(ITEM_BYTES).context("items")?)
         .and_then(|v| v.checked_add(banks.checked_add(wave_banks)?.checked_mul(8)?))
         .context("banks")?;
     let names = nsnd.get(names_at..names_at.checked_add(names_size).context("names")?).context("the sound names past the archive")?;
     let mut out = Vec::new();
     let mut seen = HashSet::new();
     for i in 0..items {
-        let record = &nsnd[items_at + 24 * i..items_at + 24 * i + 24];
-        let name = u32::from_le_bytes(record[20..24].try_into().unwrap());
+        let record = &nsnd[items_at + ITEM_BYTES * i..items_at + ITEM_BYTES * (i + 1)];
+        let name = u32::from_le_bytes(record[36..40].try_into().unwrap());
         if u32::from(record[1]) & IN_NAMES == 0 || name == u32::MAX {
             continue;
         }

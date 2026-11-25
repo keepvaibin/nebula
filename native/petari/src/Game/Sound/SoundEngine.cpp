@@ -12,14 +12,6 @@ extern "C" const NebulaHostServices* nebula_host(void);
 SoundEngine* SoundEngine::sEngine;
 
 namespace {
-    // The buses an effect line's two sends name (mBusA and mBusB).
-    const u16 cEffectDestinations[12] = {
-        NEBULA_AUDIO_BUS_LEFT,           NEBULA_AUDIO_BUS_RIGHT,         NEBULA_AUDIO_BUS_EFFECT0,
-        NEBULA_AUDIO_BUS_EFFECT1,        NEBULA_AUDIO_BUS_EFFECT2,       NEBULA_AUDIO_BUS_EFFECT3,
-        NEBULA_AUDIO_BUS_SURROUND_RIGHT, NEBULA_AUDIO_BUS_SURROUND_LEFT, NEBULA_AUDIO_BUS_RIGHT_INVERTED,
-        NEBULA_AUDIO_BUS_DISCARD,        NEBULA_AUDIO_BUS_CENTER,        NEBULA_AUDIO_BUS_NONE,
-    };
-
     void* zeroed(NebulaArena* pArena, u32 bytes, int alignment) {
         void* memory = NebulaArena::alloc(bytes, alignment, pArena);
         if (memory == nullptr) {
@@ -595,23 +587,24 @@ void SoundEngine::setOutputLevel(f32 level) {
 // is off.
 void SoundEngine::setEffectLine(const EffectLineCommand& rLine) {
     NebulaEffectLine& rEffect = mEffects[rLine.mLine];
-    if (rLine.mHasConfig) {
-        rEffect.volume_a = rLine.mVolumeA / 32768.0f;
-        rEffect.bus_a = cEffectDestinations[rLine.mBusA];
-        rEffect.volume_b = rLine.mVolumeB / 32768.0f;
-        rEffect.bus_b = cEffectDestinations[rLine.mBusB];
-        rEffect.subframes = static_cast< u16 >(rLine.mSubframes);
+    const EffectLineSettings* const settings = rLine.mSettings;
+    if (settings != nullptr) {
+        rEffect.volume_a = settings->mVolumeA;
+        rEffect.bus_a = settings->mBusA;
+        rEffect.volume_b = settings->mVolumeB;
+        rEffect.bus_b = settings->mBusB;
+        rEffect.subframes = settings->mSubframes;
         for (int i = 0; i < 8; i++) {
-            rEffect.fir[i] = rLine.mFir[i] / 32768.0f;
+            rEffect.fir[i] = settings->mFir[i];
         }
     }
-    if (rLine.mRestart && rLine.mHasConfig) {
+    if (rLine.mRestart && settings != nullptr) {
         mEffectStarted[rLine.mLine] = true;
         rEffect.generation++;
-    } else if (!rLine.mHasConfig) {
+    } else if (settings == nullptr) {
         mEffectStarted[rLine.mLine] = rLine.mRestart;
     }
-    rEffect.filter = mEffectStarted[rLine.mLine] && rLine.mHasConfig ? rLine.mFilter : 0;
+    rEffect.filter = mEffectStarted[rLine.mLine] && settings != nullptr ? settings->mFilter : 0;
 }
 
 // The reset: the level down to nothing over the ticks asked, then every playing note dropped.

@@ -24,9 +24,18 @@ u16 StdSoundInfo::getBgmSeqResourceID(SoundID soundID) const {
     return data != nullptr ? data->mResource : 0xffff;
 }
 
-u16 StdSoundInfo::getAudibleSw(SoundID soundID) const {
+// The table's all-ones switch: every flag, a doppler of fifteen fifteenths, half the far distance.
+const SoundAudibleSwitches StdSoundInfo::cAllAudible = {
+    SoundAudibleSwitches::VOLUME | SoundAudibleSwitches::FX_MIX | SoundAudibleSwitches::PAN | SoundAudibleSwitches::DOLBY |
+        SoundAudibleSwitches::DISTANCE_PRIORITY | SoundAudibleSwitches::FAR_DROPS,
+    {},
+    15.0f * (1.0f / 15.0f),
+    0.5f,
+};
+
+const SoundAudibleSwitches& StdSoundInfo::getAudibleSwitches(SoundID soundID) const {
     const SoundItem* data = item(soundID, DATA_SE);
-    return data != nullptr ? data->mAudibleSw : 0xffff;
+    return data != nullptr ? data->mAudible : cAllAudible;
 }
 
 u32 StdSoundInfo::getPriority(SoundID soundID) const {
@@ -41,7 +50,7 @@ void StdSoundInfo::applySound(SoundID soundID, Sound* pSound) const {
     }
 }
 
-// The channel control: two bits a channel, from the first (0 leaves it, 1 centre, 2 left, 3 right).
+// Each of the first eight channels where the table places it.
 void StdSoundInfo::applyStream(SoundID soundID, StreamSound* pStream) const {
     applySound(soundID, pStream);
 
@@ -50,11 +59,10 @@ void StdSoundInfo::applyStream(SoundID soundID, StreamSound* pStream) const {
         return;
     }
 
-    u16 bits = data->mChannelCtrl;
-    int numChild = pStream->getNumChild();
-    for (int idx = 0; idx < numChild && bits != 0; idx++, bits >>= 2) {
-        u16 ctrl = bits & 0b11;
-        if (ctrl == 0) {
+    const int count = pStream->getNumChild();
+    for (int idx = 0; idx < count && idx < 8; idx++) {
+        const u8 place = data->mChannelPlace[idx];
+        if (place == CHANNEL_KEPT) {
             continue;
         }
 
@@ -63,14 +71,14 @@ void StdSoundInfo::applyStream(SoundID soundID, StreamSound* pStream) const {
             continue;
         }
 
-        switch (ctrl) {
-        case 1:
+        switch (place) {
+        case CHANNEL_CENTRE:
             child->mMove.mParams.mPan = 0.5f;
             break;
-        case 2:
+        case CHANNEL_LEFT:
             child->mMove.mParams.mPan = 0.0f;
             break;
-        case 3:
+        case CHANNEL_RIGHT:
             child->mMove.mParams.mPan = 1.0f;
             break;
         }

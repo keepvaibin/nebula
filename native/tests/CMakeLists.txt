@@ -66,5 +66,8 @@ native_test(native_load_slice_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/load_slic
 # The scene query's ray: the direction through a screen point and the sphere it meets first (P-294, header only).
 native_test(native_scene_point_ray_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/scene_point_ray_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/math/src/nebula_math.c")
+# A note's sends as typed records against the mix words they were (P-221), and the filter values as floats (P-222).
+native_test(native_sound_send_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/sound_send_tests.cpp" "${game_src}/Sound/IIRCutoff.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/math/src/nebula_math.c")
 # The benchmark run screen's part names (header only).
 native_test(native_run_parts_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/run_parts_tests.cpp")

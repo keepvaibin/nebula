@@ -2,12 +2,13 @@
 #include "Game/Sound/SoundEngine.hpp"
 #include "Game/System/NebulaArena.hpp"
 
-// Line, restart, has config; filter (FIR before the sends), send A's bus and volume, send B's, delay in subframes, FIR.
-const EffectLineCommand AudEffector::cFxLine[4] = {
-    {0, true, true, 1, 0, 0x7000, 1, 0x0000, 64, {0, 0x1000, 0, 0, 0, 0, 0x3FFF, 0}},
-    {1, true, true, 1, 0, 0x0000, 1, 0x7000, 64, {0, 0x1000, 0, 0, 0, 0, 0x3FFF, 0}},
-    {2, true, true, 1, 0, 0x7000, 1, 0x0000, 64, {0, 0x1000, 0, 0, 0, 0, 0x3FFF, 0}},
-    {3, true, true, 1, 0, 0x0000, 1, 0x7000, 64, {0, 0x1000, 0, 0, 0, 0, 0x3FFF, 0}},
+// Filter 1 (FIR before the sends), a delay of 64 subframes, send A to the left and send B to the right (0.875 on the one,
+// 0 on the other), FIR weights 0.125 seven samples back and 16383 / 32768 two back. Each line starts over when set.
+const EffectLineSettings AudEffector::cFxLine[4] = {
+    {1, 64, NEBULA_AUDIO_BUS_LEFT, NEBULA_AUDIO_BUS_RIGHT, 0.875f, 0.0f, {0.0f, 0.125f, 0.0f, 0.0f, 0.0f, 0.0f, 0x3FFFp-15f, 0.0f}},
+    {1, 64, NEBULA_AUDIO_BUS_LEFT, NEBULA_AUDIO_BUS_RIGHT, 0.0f, 0.875f, {0.0f, 0.125f, 0.0f, 0.0f, 0.0f, 0.0f, 0x3FFFp-15f, 0.0f}},
+    {1, 64, NEBULA_AUDIO_BUS_LEFT, NEBULA_AUDIO_BUS_RIGHT, 0.875f, 0.0f, {0.0f, 0.125f, 0.0f, 0.0f, 0.0f, 0.0f, 0x3FFFp-15f, 0.0f}},
+    {1, 64, NEBULA_AUDIO_BUS_LEFT, NEBULA_AUDIO_BUS_RIGHT, 0.0f, 0.875f, {0.0f, 0.125f, 0.0f, 0.0f, 0.0f, 0.0f, 0x3FFFp-15f, 0.0f}},
 };
 
 AudEffector::AudEffector() : mFxSend(), mCutoff(0x7F), mSpecialFx() {
@@ -16,7 +17,7 @@ AudEffector::AudEffector() : mFxSend(), mCutoff(0x7F), mSpecialFx() {
 void AudEffector::initFxLine() {
     SoundRing& rRing = SoundEngine::get()->ring();
     for (u32 i = 0; i < 4; i++) {
-        rRing.next(SOUND_EFFECT_LINE, nullptr).payload< EffectLineCommand >() = cFxLine[i];
+        rRing.next(SOUND_EFFECT_LINE, nullptr).payload< EffectLineCommand >() = {static_cast< u8 >(i), true, &cFxLine[i]};
         rRing.send();
     }
 }

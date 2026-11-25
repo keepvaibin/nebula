@@ -2,7 +2,7 @@
 
 #include <nebula_types.h>
 
-struct EffectLineCommand;
+struct EffectLineSettings;
 
 class AudEffector {
 public:
@@ -15,7 +15,7 @@ public:
     void initParams();
 
     // The four effect lines: echo to the sends, as the game sets them up once.
-    static const EffectLineCommand cFxLine[4];
+    static const EffectLineSettings cFxLine[4];
 
     f32 mFxSend;
     s32 mCutoff;

@@ -2,6 +2,7 @@
 
 #include "Game/Sound/SoundData.hpp"
 #include "Game/Sound/SoundParams.hpp"
+#include "Game/Sound/SoundSend.hpp"
 #include <nebula_game_api.h>
 
 // The audio thread's notes and the host mixer's voices they play on. Nothing here is touched by the game thread.
@@ -99,16 +100,13 @@ struct NoteHolder {
 struct SoundNote {
     enum Status : s32 { STATUS_STOP, STATUS_PLAY, STATUS_RELEASE };
     enum Kind : u32 { KIND_WAVE = 0, KIND_OSC = 2 };
-    // mFormat's low three bits: the wave's format on the disc (the store's samples are all PCM16). Below FORMAT_SAMPLED_NUM
-    // the wave plays; FORMAT_PCM16 marks music.
-    enum Format : u8 { FORMAT_PCM16 = 3, FORMAT_SAMPLED_NUM = 4, FORMAT_MASK = 7 };
 
     void free() {
         mOwner = OWNER_NONE;
         mOwnerData = nullptr;
     }
-    bool isDolbyMode() const {
-        return mMixConfig[0] == 0xffff;
+    bool isPannerMode() const {
+        return mSends[0].mPanner != 0;
     }
 
     s32 mStatus = STATUS_STOP;
@@ -120,7 +118,8 @@ struct SoundNote {
     Oscillator mOsc[2];
     Lfo mVibrato;
     Lfo mTremolo;
-    u16 mMixConfig[6] = {0x150, 0x210, 0x352, 0x412, 0, 0};
+    SoundSend mSends[6] = {SoundSends::cDefault[0], SoundSends::cDefault[1], SoundSends::cDefault[2],
+                           SoundSends::cDefault[3], SoundSends::cDefault[4], SoundSends::cDefault[5]};
     u16 mPriority = 0x13f;
     NoteParams mParams;
     SoundParams mSound;
@@ -132,8 +131,10 @@ struct SoundNote {
     u32 mKeySweepCount = 0;
     u32 mSkipSamples = 0;
     u32 mKind = KIND_WAVE;
-    // The wave: its settings, its first byte and its file's end, and its group's active flag (0: the note ends).
-    u8 mFormat = 0;
+    // The wave: whether it plays, the volume setting it follows until a sound names it (NEBULA_SOUND_*), its settings,
+    // its first byte and its file's end, and its group's active flag (0: the note ends).
+    bool mPlayable = true;
+    u8 mCategory = NEBULA_SOUND_EFFECT;
     u8 mBaseKey = 60;
     u32 mLoop = 0;
     u32 mLoopStart = 0;
@@ -210,26 +211,25 @@ private:
     u32 mUsed = 0;
 };
 
-// A voice's filters as a track sets them.
+// A voice's filters as a track sets them: the FIR's taps (0 off, 8 when a program set its weights) and weights, the IIR
+// on or off and its four coefficients.
 namespace VoiceFilter {
-    inline void setMode(NebulaVoice* pVoice, u16 mode) {
-        const u8 iirOn = mode & 0x20;
-        u8 taps = mode & 0x1f;
-        if (taps > (iirOn ? 0x14 : 0x18)) {
-            taps = iirOn ? 0x14 : 0x18;
+    // The weight that passes a sample through, as the DSP held it (32767 / 32768).
+    const f32 cPass = 0x7FFFp-15f;
+
+    inline void set(NebulaVoice* pVoice, u8 firTaps, const f32* pFir, bool iirOn, const f32* pIir) {
+        if (iirOn) {
+            for (int i = 0; i < 4; i++) {
+                pVoice->iir[i] = pIir[i];
+            }
         }
-        pVoice->fir_taps = taps;
-        pVoice->iir_on = iirOn != 0;
-    }
-    inline void setIIR(NebulaVoice* pVoice, const s16* pCoefficients) {
-        for (int i = 0; i < 4; i++) {
-            pVoice->iir[i] = pCoefficients[i] / 32768.0f;
+        if (firTaps != 0) {
+            for (int i = 0; i < 8; i++) {
+                pVoice->fir[i] = pFir[i];
+            }
         }
-    }
-    inline void setFIR8(NebulaVoice* pVoice, const s16* pCoefficients) {
-        for (int i = 0; i < 8; i++) {
-            pVoice->fir[i] = pCoefficients[i] / 32768.0f;
-        }
+        pVoice->fir_taps = firTaps;
+        pVoice->iir_on = iirOn;
     }
 }  // namespace VoiceFilter
 

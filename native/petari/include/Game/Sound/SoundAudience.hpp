@@ -63,8 +63,8 @@ public:
     bool mFarCamera;
 
 private:
-    u32 calcDeltaPriority_(f32 dist, bool excludeFar, s32 distVolBit) const;
-    f32 calcVolume_(f32 dist, s32 distVolBit) const;
+    u32 calcDeltaPriority_(f32 dist, bool excludeFar, f32 farScale) const;
+    f32 calcVolume_(f32 dist, f32 farScale) const;
     f32 calcDolby_(const Vec3f& rPos) const;
     f32 calcPan_(f32 dist, const Vec3f& rPos) const;
     f32 calcPitch(SoundDopplerChannel* pChannel, const SoundAudible* pAudible, const SoundListener& rListener) const;

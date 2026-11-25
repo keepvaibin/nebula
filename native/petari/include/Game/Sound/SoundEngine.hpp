@@ -124,18 +124,23 @@ enum SoundCommandKind : u16 {
     SOUND_COMMANDS
 };
 
+// An effect line's settings (NebulaEffectLine's): its filter's place, its delay, its two sends' buses (NEBULA_AUDIO_BUS_*)
+// and gains, its FIR's weights.
+struct EffectLineSettings {
+    u16 mFilter;
+    u16 mSubframes;
+    u16 mBusA;
+    u16 mBusB;
+    f32 mVolumeA;
+    f32 mVolumeB;
+    f32 mFir[8];
+};
+
 struct EffectLineCommand {
     u8 mLine;
     bool mRestart;
-    bool mHasConfig;
-    // An effect line's settings as the game's effect settings write them.
-    u8 mFilter;
-    u16 mBusA;
-    s16 mVolumeA;
-    u16 mBusB;
-    s16 mVolumeB;
-    u32 mSubframes;
-    s16 mFir[8];
+    // Settings that live as long as the game (null: the line off).
+    const EffectLineSettings* mSettings;
 };
 
 struct ResetCommand {
