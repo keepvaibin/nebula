@@ -4,7 +4,7 @@ Written 2026-11-24 18:13. If this time is more than three hours old, the work ha
 
 Steps landed: 25 of 145 (17%).
 
-Now: G2.3.2-G2.3.7 written; next: lander for G2.3.2 on
+Now: in work: lander landing G2.3.2 to G2.3.7
 
 In work now:
 - G2.3.2 Landing 3b: Vulkan and Android present at the asked time (agent 1)
