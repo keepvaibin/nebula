@@ -1455,11 +1455,15 @@ void RendererVk::release_surface() noexcept {
     destroy_swapchain();
     vkDestroySurfaceKHR(context.instance(), surface_, nullptr);
     surface_ = VK_NULL_HANDLE;
+    host_window::surface_overdue.store(false, std::memory_order_release);  // nothing of this surface is presented now
     std::fprintf(stderr, "[vulkan] window surface released\n");
 }
 
 bool RendererVk::restore_surface() {
     vk::Context& context = vk::Context::get();
+    // A surface let go after this renderer had let its own go (the platform's 2 s ran out as the last present ended) is
+    // not the one made here.
+    host_window::surface_overdue.store(false, std::memory_order_release);
     const VkSurfaceKHR surface = host_window::create_vulkan_surface(context.instance(), window_);
     if (surface == VK_NULL_HANDLE) {
         return false;
@@ -1474,6 +1478,19 @@ bool RendererVk::restore_surface() {
     surface_ = surface;
     swapchain_dirty_ = true;
     std::fprintf(stderr, "[vulkan] window surface restored\n");
+    return true;
+}
+
+bool RendererVk::surface_let_go() {
+    if (!host_window::surface_overdue.exchange(false, std::memory_order_acq_rel)) {
+        return false;
+    }
+    // The swap chain's images belong to a window that may be gone: no present, acquire or wait touches them again. The
+    // device is made again (as for a lost device), and with it the swap chain and the surface once the window is back.
+    std::fprintf(stderr, "[vulkan] the surface was let go under a frame: nothing is presented, the device is made again\n");
+    swapchain_dirty_ = true;
+    surface_lost_ = true;
+    lose_device();
     return true;
 }
 
@@ -2326,6 +2343,11 @@ void RendererVk::present_swapchain_image() {
     } else {
         present_timing_.slots.reset();
     }
+    // The last moment before the present (P-281): a surface the platform let go while this frame held it is never
+    // presented into; the frame's image stays unpresented, as the device it belongs to is made again.
+    if (surface_let_go()) {
+        return;
+    }
     const std::int64_t present_cpu = vk::thread_cpu_ns();
     if (swapchain_fsr_) {
         vk::TemporalImage hudless{};
@@ -3115,7 +3137,7 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
     vk::Context& context = vk::Context::get();
     Frame& frame = *frame_;
     surface_lock_ = std::unique_lock<std::timed_mutex>(host_window::surface_use);
-    if (swapchain_dirty_ || swapchain_.handle == VK_NULL_HANDLE ||
+    if (surface_let_go() || swapchain_dirty_ || swapchain_.handle == VK_NULL_HANDLE ||
         host_window::surface_withdrawn.load(std::memory_order_acquire)) {
         surface_lock_ = {};
         return false;  // remade at the next frame boundary

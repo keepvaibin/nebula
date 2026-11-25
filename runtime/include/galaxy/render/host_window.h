@@ -57,6 +57,10 @@ extern std::atomic<std::uint64_t> pending_resize_extent;
 // recreates both.
 extern std::atomic<bool> surface_withdrawn;
 extern std::timed_mutex surface_use;
+// The platform stopped waiting for surface_use (Android: 2 s after surface_withdrawn) and let the surface go while the
+// renderer held it (P-281). The renderer presents nothing more into it and runs the device-lost path; it clears this when
+// it lets its own surface go, so a surface made after that never sees it.
+extern std::atomic<bool> surface_overdue;
 
 // Saves changed settings; false (kept dirty for a retry) when a file could not be written.
 bool flush_native_settings_if_dirty();

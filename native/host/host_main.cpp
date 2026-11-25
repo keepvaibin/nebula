@@ -6793,7 +6793,8 @@ int main(int argc, char** argv) {
 #endif
     while (Clock::now() < end && !gTourDone.load(std::memory_order_relaxed)) {
 #if defined(NEBULA_HOST_RENDERER)
-        // The window's messages, on the thread that created it. Every 8 ms at most: a controller's state is at most that
+        // The window's messages, on the thread that created it. An event or a request left by another thread ends the
+        // wait at once (P-281); with none, 8 ms at most: what only a pump reads (sensors, pads SDL polls) is at most that
         // old when the game reads it once a frame, and a phone's main thread wakes 125 times a second, not 250.
 #if defined(NEBULA_HOST_SDL)
         galaxy::sdl::pump_events(8);

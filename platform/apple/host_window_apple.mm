@@ -1252,6 +1252,7 @@ std::atomic<bool> quit_request{false};
 std::atomic<std::uint64_t> pending_resize_extent{0u};
 std::atomic<bool> surface_withdrawn{false};
 std::timed_mutex surface_use;
+std::atomic<bool> surface_overdue{false};  // never set on Apple
 
 namespace {
 

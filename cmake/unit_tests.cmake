@@ -29,6 +29,8 @@ set(render_src "${galaxy_rt}/render")
 
 # The unit tests' wait for another thread (galaxy/test_wait.h): the event itself, a deadline that only reports (N-1073).
 galaxy_test(galaxy_test_wait_tests SOURCES ${rt}/test_wait_tests.cpp)
+# The SDL host's waits (galaxy/host_wait.h, P-281): the event pump's block a wake ends, the display clock's sleep.
+galaxy_test(galaxy_host_wait_tests SOURCES ${rt}/host_wait_tests.cpp)
 # The process's output: every line whole, whichever threads write.
 galaxy_test(galaxy_frame_due_tests SOURCES ${rt}/frame_due_tests.cpp)
 galaxy_test(galaxy_start_watch_tests SOURCES ${rt}/start_watch_tests.cpp)

@@ -3,6 +3,7 @@
 
 #include "sdl_host.h"
 #include "galaxy/display_timeline.h"
+#include "galaxy/host_wait.h"
 #include "galaxy/render/present_clock.h"
 #include "galaxy/vsync_grid.h"
 
@@ -30,6 +31,27 @@
 #endif
 
 namespace galaxy::sdl {
+
+#if defined(__linux__)  // Android too
+namespace {
+
+// Sleeps to `target_ns` (CLOCK_MONOTONIC): again only when a signal broke the sleep off. Any other error (P-281) is said
+// once and the frame goes to the host's clock rather than the thread spinning.
+std::atomic<bool> g_sleep_failed_said{false};
+bool sleep_to(std::int64_t target_ns) noexcept {
+    const timespec wake{static_cast<time_t>(target_ns / 1000000000), static_cast<long>(target_ns % 1000000000)};
+    int error = 0;
+    if (galaxy::sleep_through_interruptions([&] { return error = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &wake, nullptr); })) {
+        return true;
+    }
+    if (!g_sleep_failed_said.exchange(true, std::memory_order_relaxed)) {
+        std::fprintf(stderr, "[pacing] the display clock's sleep failed (error %d): the host's clock paces the frames\n", error);
+    }
+    return false;
+}
+
+}  // namespace
+#endif
 
 #if defined(__ANDROID__)
 
@@ -171,8 +193,9 @@ bool wait_display_frame(std::int64_t period_ns, std::int64_t& last_ns, bool in_b
                      static_cast<double>(dropped) / 1e6);
     }
     // A slot already past (the clock catching up, P-274) returns at once.
-    const timespec wake{static_cast<time_t>(target / 1000000000), static_cast<long>(target % 1000000000)};
-    while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &wake, nullptr) != 0) {
+    if (!sleep_to(target)) {
+        g_frame_slot_ns.store(0, std::memory_order_relaxed);
+        return false;
     }
     last_ns = target;
     g_frame_period_ns.store(frame_period, std::memory_order_relaxed);
@@ -267,9 +290,10 @@ bool wait_display_frame(std::int64_t period_ns, std::int64_t& last_ns, bool in_b
                      "[pacing] the game's steps were %.0f ms behind the display's vsync: those steps are dropped\n",
                      static_cast<double>(dropped) / 1e6);
     }
-    // A slot already past (the clock catching up, P-274) returns at once. Only an interruption sleeps again.
-    const timespec wake{static_cast<time_t>(target / 1000000000), static_cast<long>(target % 1000000000)};
-    while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &wake, nullptr) == EINTR) {
+    // A slot already past (the clock catching up, P-274) returns at once.
+    if (!sleep_to(target)) {
+        g_frame_slot_ns.store(0, std::memory_order_relaxed);
+        return false;
     }
     last_ns = target;
     g_frame_period_ns.store(frame_period, std::memory_order_relaxed);
