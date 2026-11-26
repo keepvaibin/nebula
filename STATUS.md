@@ -4,7 +4,7 @@ Written 2026-11-26 09:32. If this time is more than three hours old, the work ha
 
 Steps landed: 35 of 155 (23%).
 
-Now: G10.1 written; in work: lander landing G10.1; G10.2 blocked (trace processor, tablet runs): asked the planner
+Now: in work: fixer for G10.1 (two harness tests, pace/pc classification)
 
 In work now: Nothing started.
 
