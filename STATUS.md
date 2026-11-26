@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-26 08:36. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-26 08:37. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 35 of 155 (23%).
 
@@ -118,6 +118,7 @@ Nothing waits for the owner.
 ## Blocked
 
 - G6.7 The surround law (P-193): hard: build/windows + github Linux sanitizers: galaxy_speaker_law_tests aborts with an AddressSanitizer heap-buffer-overflow on the GitHub Linux ASAN/UBSAN job (run 45652159093); the Windows gate stopped on it (report: D:/NebulaWork/plan/native/hard/G6.7.md)
+- G10.2 FrameTimeline attribution and the baseline report: nothing written; the branch is G10.1's tip. Two facts stand against the card as written: (1) the Perfetto trace processor is not vendored in D:/NebulaWork/tools (only dxc, presentmon, sccache) and no Python perfetto module is installed: vendoring it is a download from outside, which needs the owner's or planner's yes; (2) the card's checked-in recorded trace, the first trace that decides row 1's method, and the stored baseline (3 runs of 5 min at 60 and 120 Hz) all come from tablet runs, which WRITER.md point 4 forbids a writer (never run the tablet), so they cannot be made in the step nor owed without leaving pace/tablet with no baseline. Left: all of the card. Needs: the trace processor placed in D:/NebulaWork/tools, and either the tablet allowed to the writer for G10.2 or the planner's split (the code and P-334/P-335 in the step; the trace, the method choice and the baseline by a measuring run)
 
 ## Tool mends
 
