@@ -6,7 +6,8 @@ Steps landed: 35 of 155 (23%).
 
 Now: AD plan change landed (main 60479dc43); in work: writer for package G10 from G10.1
 
-In work now: Nothing started.
+In work now:
+- G10.1 Pacing in the gate: the PC's match run on every landing, the tablet's at 60 and 120 Hz (agent 1)
 
 ## Packages
 
