@@ -226,6 +226,8 @@ public:
         std::uint64_t places = 0u, place_failures = 0u, windows = 0u, window_failures = 0u;
         std::uint64_t uploads = 0u, upload_bytes = 0u;                  // upload_written: buffers brought up to date, bytes
         std::uint64_t upload_ticks = 0u, bind_ticks = 0u, present_ticks = 0u;  // QueryPerformanceCounter ticks spent
+        std::uint64_t lock_ticks = 0u, watch_ticks = 0u, wait_ticks = 0u;       // in upload_written: the lock, GetWriteWatch; in wait()
+        std::uint64_t buffers_watched = 0u, bytes_watched = 0u;                  // buffers whose pages GetWriteWatch read, their bytes
     };
     Diagnostics diag;
 

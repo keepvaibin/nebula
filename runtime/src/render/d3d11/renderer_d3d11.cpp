@@ -1060,7 +1060,9 @@ void RendererD3D11::flush_draws() {
             std::cout << "[draws] flush " << flushes << ": " << drawn << " draws (" << total << " in all), places " << d.places << " (failed "
                       << d.place_failures << "), windows " << d.windows << " (failed " << d.window_failures << "), uploads " << d.uploads
                       << " (" << d.upload_bytes / 1024u << " KB); ms in uploads " << ms(d.upload_ticks) << ", binds " << ms(d.bind_ticks)
-                      << ", present " << ms(d.present_ticks) << '\n';
+                      << ", present " << ms(d.present_ticks) << "; upload_written: lock " << ms(d.lock_ticks) << ", GetWriteWatch "
+                      << ms(d.watch_ticks) << " over " << d.buffers_watched << " buffers (" << d.bytes_watched / (1024u * 1024u)
+                      << " MB); fence waits " << ms(d.wait_ticks) << '\n';
         }
         if (drawn != 0u) {
             ++flushes;

@@ -361,6 +361,7 @@ std::uint64_t Context::completed_value() noexcept {
 }
 
 bool Context::wait(std::uint64_t value) {
+    const TickSpan span(diag.wait_ticks);
     if (value > submitted_) {
         value = submitted_;
     }
@@ -573,7 +574,11 @@ Buffer::~Buffer() {
 
 void Context::upload_written() {
     const TickSpan span(diag.upload_ticks);
-    std::lock_guard guard(buffers_mutex_);
+    std::unique_lock<std::mutex> guard(buffers_mutex_, std::defer_lock);
+    {
+        const TickSpan locking(diag.lock_ticks);
+        guard.lock();
+    }
     std::vector<void*>& pages = written_pages_;
     static const bool full_upload = GetEnvironmentVariableA("NEBULA_D3D11_FULL_UPLOAD", nullptr, 0u) != 0u;
     if (pages.size() < 4096u) {
@@ -614,7 +619,17 @@ void Context::upload_written() {
         // The runs of consecutive written pages (byte ranges of the buffer).
         upload_runs_.clear();
         std::uint64_t total = 0u;
-        while (GetWriteWatch(WRITE_WATCH_FLAG_RESET, buffer->shadow, buffer->size, pages.data(), &count, &page_bytes) == 0u) {
+        ++diag.buffers_watched;
+        diag.bytes_watched += buffer->size;
+        while (true) {
+            std::uint32_t watched;
+            {
+                const TickSpan watching(diag.watch_ticks);
+                watched = GetWriteWatch(WRITE_WATCH_FLAG_RESET, buffer->shadow, buffer->size, pages.data(), &count, &page_bytes);
+            }
+            if (watched != 0u) {
+                break;
+            }
             std::size_t i = 0;
             while (i < count) {
                 const auto* first = static_cast<const std::byte*>(pages[i]);
