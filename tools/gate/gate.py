@@ -1859,8 +1859,9 @@ def measure_pc(g):
 
 # The pace checks (G10.1; tools/gate/pace.py, whose help holds the rules; the planner's brief AD). pace/pc: every landing that builds the
 # game (scope.py, the group `build`), the test match cut to about 30 s of play on Direct3D 12 and on Vulkan, in real time with the window
-# shown (the pace tests say "visible"), under the measurement lock, after the PC's lanes and before measure/step/pc; a renderer with a FAIL
-# row is played once more and the second run decides. pace/tablet: an extra check by name (docs/plan/native/step-checks.tsv), the tablet's
+# shown (the pace tests say "visible"), under the measurement lock, after the PC's lanes and before measure/step/pc; each run waits for a
+# quiet machine (no other game copy, as a long run's soak beside the landing), then plays; a FAIL on a machine that stayed busy is the
+# machine's (env). A renderer with a FAIL row is played once more and the second run decides. pace/tablet: an extra check by name (docs/plan/native/step-checks.tsv), the tablet's
 # suite at 60 and 120 Hz under the tablet's lock and the measurement lock, recorded until G10.2 stores tests/pace/tablet-base.json.
 # `--pace-fault` plays both with the planted stutter (--diagnostics pace-fault): the checks must then fail, their own proof.
 PACE = HERE / "pace.py"
@@ -1872,6 +1873,7 @@ PACE_TABLET_BASE = TREE / "tests" / "pace" / "tablet-base.json"
 PACE_RENDERERS = ("d3d12", "vulkan")
 PACE_HISTORY = "pace-history.tsv"    # in the gate's work folder: main's readings (pace.py keep, after a move)
 PACE_LOCK_WAIT = 20.0                # minutes to wait for the measurement lock
+PACE_QUIET_MINUTES = 10.0            # minutes a PC run waits for a quiet machine (then it plays; a FAIL then is the machine's: env)
 # Time limits, in minutes: a run of the PC's suite is about a minute (the boot, 30 s of play, its start and end), and each renderer may
 # be played twice; the tablet's two tests of 80 s of play with the boot, the install and the removal. The waits for the locks come on top.
 PACE_PC_MINUTES = 12
@@ -1891,17 +1893,18 @@ def pace_reading(work, code, renderers):
         return False, "the run was stopped", None, "tool"
     try:
         runs = json.loads((pathlib.Path(work) / "pace.json").read_text(encoding="utf-8"))
-        harness = json.loads((pathlib.Path(work) / "pace-run.json").read_text(encoding="utf-8")).get("harness_exit", {})
+        said = json.loads((pathlib.Path(work) / "pace-run.json").read_text(encoding="utf-8"))
+        harness, busy = said.get("harness_exit", {}), said.get("not_quiet", {})
     except (OSError, ValueError, AttributeError) as error:
         if code == pace_tool.LOCK_HELD:
             return False, "the measurement lock stayed held %g minutes" % PACE_LOCK_WAIT, None, "env"
         return False, "no readable pace.json (exit %d): %s: %s" % (code, type(error).__name__, kinds.first_line(error)), None, "tool"
-    parts, kind = [], "fail"
+    parts, kinds_seen = [], []
     for renderer in renderers:
         mine = [r for r in runs if r.get("renderer") == renderer]
         if not mine:
             exit_code = harness.get(renderer)
-            kind = "env" if exit_code == ENV_EXIT else "tool"
+            kinds_seen.append("env" if exit_code == ENV_EXIT else "tool")
             parts.append("%s: no run (the harness's exit %s)" % (renderer, exit_code))
             continue
         for r in mine:
@@ -1909,10 +1912,17 @@ def pace_reading(work, code, renderers):
             bad = ["%s %s" % (m, v) for m, v, _, verdict in rows if verdict == "FAIL"]
             loads = ["loads %s (%s)" % (v, verdict) for m, v, _, verdict in rows if m == "loads"]
             again = " (played again)" if (pathlib.Path(work) / pace_tool.FIRST / renderer).is_dir() else ""
-            parts.append("%s: %s%s" % (r.get("run_key", renderer), ("FAIL " + "; ".join(bad)) if bad else "pass", again) +
-                         (", " + loads[0] if loads and not bad else ""))
-    passed = code == 0 and kind == "fail" and all(not p.split(": ", 1)[1].startswith(("FAIL", "no run")) for p in parts)
-    return passed, "; ".join(parts) or "no run", None, kind
+            text = "%s: %s%s" % (r.get("run_key", renderer), ("FAIL " + "; ".join(bad)) if bad else "pass", again)
+            if bad and renderer in busy:
+                # A run that failed on a machine that was not quiet: the machine's to answer, not the change's.
+                kinds_seen.append("env")
+                text += " (the machine was not quiet: %s)" % busy[renderer]
+            elif bad:
+                kinds_seen.append("fail")
+            parts.append(text + (", " + loads[0] if loads and not bad else ""))
+    # A failure of the change's comes first; then the tool's; then the machine's.
+    kind = next((k for k in ("fail", "tool", "env") if k in kinds_seen), "fail")
+    return code == 0 and not kinds_seen, "; ".join(parts) or "no run", None, kind
 
 
 def pace_step(g):
@@ -1921,8 +1931,8 @@ def pace_step(g):
         cmd = [sys.executable, "-X", "utf8", "-I", str(PACE), "run", "--bin", str(g.bin), "--work", str(work),
                "--suite", str(PACE_PC_SUITE), "--renderers", ",".join(PACE_RENDERERS), "--again",
                "--history", str(pathlib.Path(g.args.work) / PACE_HISTORY), "--lock-wait", "%g" % PACE_LOCK_WAIT,
-               "--paks", g.paks_text()] + pace_fault_args(g)
-        code = run(cmd, log, timeout=int(60 * (PACE_PC_MINUTES + PACE_LOCK_WAIT)))
+               "--quiet-minutes", "%g" % PACE_QUIET_MINUTES, "--paks", g.paks_text()] + pace_fault_args(g)
+        code = run(cmd, log, timeout=int(60 * (PACE_PC_MINUTES + PACE_LOCK_WAIT + 4 * PACE_QUIET_MINUTES)))
         g.pace_work.append((PACE_PC_CHECK, work))
         return pace_reading(work, code, PACE_RENDERERS)
     return fn

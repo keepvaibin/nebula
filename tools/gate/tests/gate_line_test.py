@@ -1321,9 +1321,9 @@ class PaceReading(unittest.TestCase):
     """G10.1: what the gate reads of a run of pace.py (pace_reading): every renderer asked has a run with rows; a FAIL row, a missing run,
     the time limit and an unreadable folder each fail with their kind; a run played again is said."""
 
-    def write(self, work, runs, harness):
+    def write(self, work, runs, harness, busy=None):
         (work / "pace.json").write_text(json.dumps(runs), encoding="utf-8")
-        (work / "pace-run.json").write_text(json.dumps({"harness_exit": harness}), encoding="utf-8")
+        (work / "pace-run.json").write_text(json.dumps({"harness_exit": harness, "not_quiet": busy or {}}), encoding="utf-8")
 
     @staticmethod
     def run_of(renderer, *rows):
@@ -1344,6 +1344,14 @@ class PaceReading(unittest.TestCase):
             passed, detail, _, kind = gate.pace_reading(work, 1, gate.PACE_RENDERERS)
             self.assertEqual((passed, kind), (False, "fail"))
             self.assertIn("pace-match-30/vulkan: FAIL even pictures 4 missed (0 the system's) (played again)", detail)
+            self.write(work, [self.run_of("d3d12", good), self.run_of("vulkan", bad)], {"d3d12": 0, "vulkan": 1}, {"vulkan": "nebula.exe"})
+            passed, detail, _, kind = gate.pace_reading(work, 1, gate.PACE_RENDERERS)
+            self.assertEqual((passed, kind), (False, "env"), "a FAIL on a machine that was not quiet: the machine's")
+            self.assertIn("(the machine was not quiet: nebula.exe)", detail)
+            self.write(work, [self.run_of("d3d12", bad), self.run_of("vulkan", bad)], {"d3d12": 1, "vulkan": 1}, {"vulkan": "nebula.exe"})
+            self.assertEqual(gate.pace_reading(work, 1, gate.PACE_RENDERERS)[3], "fail", "a FAIL on a quiet machine stays the change's")
+            self.write(work, [self.run_of("d3d12", good), self.run_of("vulkan", good)], {"d3d12": 0, "vulkan": 0}, {"vulkan": "nebula.exe"})
+            self.assertTrue(gate.pace_reading(work, 0, gate.PACE_RENDERERS)[0], "a pass on a busy machine is a pass")
             self.write(work, [self.run_of("d3d12", good)], {"d3d12": 0, "vulkan": gate.ENV_EXIT})
             passed, detail, _, kind = gate.pace_reading(work, 1, gate.PACE_RENDERERS)
             self.assertEqual((passed, kind), (False, "env"), detail)
