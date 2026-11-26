@@ -69,6 +69,12 @@ def main():
         write_run(work, "unreported", [zero, line(), line(displayed=600, missed=0), line(displayed=600)],
                   ["GALAXY_MAX_FPS=120"])
         write_run(work, "empty", [zero, line()], ["GALAXY_MAX_FPS=120"])
+        # R-009: a boot window before frame 0 with 36 pictures of 1200 (a lead held high) fails from the start; the
+        # boot's usual few short of the rate pass; 144 on 120 Hz asks 120.
+        write_run(work, "held", [line(pictures=36, displayed=36), zero, line(), line(), line()],
+                  ["GALAXY_MAX_FPS=120", "GALAXY_VSYNC_INTERVAL=1"])
+        write_run(work, "boot", [line(pictures=1140, displayed=1140, missed=30), zero, line(), line(), line()],
+                  ["GALAXY_MAX_FPS=144", "GALAXY_VSYNC_INTERVAL=1"])
         code = pace.digest(work)
         v = verdicts(work)
         check(code == 1, "a FAIL among the runs: exit 1")
@@ -80,6 +86,10 @@ def main():
         check(v["long"]["long step"] == "FAIL", "a 19 ms step fails")
         check(v["unreported"]["even pictures"].startswith("not measured"), "half the pictures reported: not judged")
         check(v["empty"] == {"all": "FAIL"}, "a run with no measured window fails")
+        shown = "pictures shown, from the start"
+        check(v["held"][shown] == "FAIL", "36 pictures in a boot window fail from the start")
+        check(v["held"]["even pictures"] == "pass", "the measured windows alone would have passed it")
+        check(v["boot"][shown] == "pass" and v["good"][shown] == "pass", "95% of the rate in the boot window passes")
 
     if failures:
         print("pace_test.py: FAILED:\n  " + "\n  ".join(failures))

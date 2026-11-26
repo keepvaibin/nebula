@@ -9,12 +9,15 @@
 
 The game writes a [pace] line every ten seconds of steps (runtime/include/galaxy/pacing_recorder.h). A run's measured
 windows are those written after the harness's "frame 0" line (the test in its stage) except the first after it, which
-may have begun before. Each measure of 4.3 gets its value, its target and pass, FAIL, or not measured (and why).
+may have begun before. Each measure of 4.3 gets its value, its target and pass, FAIL, or not measured (and why). One row
+reads every window from the start, the boot's loads included: each shows at least nine tenths of the pictures its rate
+asks for (a lead held high or a stalled schedule shows fewer: R-009, 36 pictures in ten seconds hid before frame 0).
 Exit status: 0 when nothing failed and every run gave windows, 1 otherwise.
 """
 import argparse
 import datetime
 import json
+import math
 import os
 import pathlib
 import re
@@ -28,10 +31,12 @@ PACE = re.compile(r"\[pace\] (.*)$")
 FRAME_ZERO = re.compile(r"harness: frame 0 is game frame")
 # Display reports must cover this share of a run's pictures before its display measures are judged.
 COVERAGE = 0.99
+# Every window from the start shows at least this share of the pictures its rate asks for.
+SHOWN = 0.9
 
 
-def windows_of(log_text):
-    """The run's measured [pace] windows, each a dict of its numbers."""
+def windows_of(log_text, from_start=False):
+    """The run's measured [pace] windows, each a dict of its numbers; with from_start every window, the boot's too."""
     after = False
     seen_after = 0
     out = []
@@ -40,13 +45,44 @@ def windows_of(log_text):
             after, seen_after = True, 0
             continue
         m = PACE.search(line)
-        if not m or not after:
+        if not m or not (after or from_start):
             continue
         seen_after += 1
-        if seen_after == 1:
+        if seen_after == 1 and not from_start:
             continue  # may have begun before frame 0
         out.append({k: float(v) for k, v in re.findall(r"([a-z_0-9]+)=([-0-9.]+)", m.group(1))})
     return out
+
+
+def pictures_asked(window, test):
+    """The pictures a window's rate asks for with VSync on: the refresh, or the test's rate on whole refreshes
+    (144 on 240 Hz: every second refresh, 120); None where nothing fixes it (VSync off, an unlimited rate)."""
+    if setting(test, "GALAXY_VSYNC_INTERVAL", "1") == "0" or window.get("refresh_ms", 0.0) <= 0:
+        return None
+    refresh = 1000.0 / window["refresh_ms"]
+    try:
+        rate = float(setting(test, "GALAXY_MAX_FPS", "0"))
+    except ValueError:
+        return None
+    if rate <= 0 or rate >= refresh * 0.99:
+        rate = refresh
+    else:
+        rate = refresh / math.ceil(refresh / rate - 0.01)  # 239.97 Hz over 120: 2
+    return rate * window.get("seconds", 0.0)
+
+
+def shown_from_start(windows, test):
+    """The pictures-shown row: every window from the start against what its rate asks for."""
+    asked = [(w, pictures_asked(w, test)) for w in windows]
+    asked = [(w, a) for w, a in asked if a]
+    if not asked:
+        return None
+    shares = [w.get("pictures", 0.0) / a for w, a in asked]
+    worst = min(range(len(shares)), key=lambda i: shares[i])
+    missed = sum(w.get("missed", 0.0) for w in windows)
+    return ("pictures shown, from the start", "fewest %.0f%% (window %d of %d, %d pictures); %d missed in all" % (
+        100 * shares[worst], worst + 1, len(windows), asked[worst][0].get("pictures", 0.0), missed),
+        "every window %d%% of its rate" % (100 * SHOWN), "pass" if shares[worst] >= SHOWN else "FAIL")
 
 
 def combine(windows):
@@ -79,7 +115,8 @@ def combine(windows):
 
 
 def setting(test, key, default=""):
-    for a in test.get("settings", []):
+    # A run folder's test.json holds the runner's record, the test under "test"; a test file holds it at the top.
+    for a in test.get("settings", test.get("test", {}).get("settings", [])):
         k, _, v = a.partition("=")
         if k == key:
             return v
@@ -134,6 +171,9 @@ def judge(run):
             rows.append(("tablet at 60 Hz", "%d missed, %d doubled, delay p99 %.2f ms" % (c["missed"], c["doubled"], delay),
                          "every picture at its time; two refreshes from step to display", ("pass" if ok else "FAIL")
                          if covered else uncovered))
+    shown = shown_from_start(run.get("all_windows", []), test)
+    if shown is not None:
+        rows.append(shown)
     if c["generated"] > 0:
         rows.append(("in-between picture's render work", "%.3f ms average, %.3f p99" % (
             c["generated_render_avg_us"] / 1000.0, c["generated_render_p99_us"] / 1000.0),
@@ -149,8 +189,9 @@ def digest(work):
         test_file = folder / "test.json"
         test = json.loads(test_file.read_text(encoding="utf-8")) if test_file.is_file() else {}
         device = (folder / "exit-info.txt").is_file() or (folder / "diagnostics.txt").is_file()
+        text = log.read_text(encoding="utf-8", errors="replace")
         run = {"run": str(folder.relative_to(work)), "test": test, "renderer": folder.name, "device": device,
-               "figures": combine(windows_of(log.read_text(encoding="utf-8", errors="replace")))}
+               "figures": combine(windows_of(text)), "all_windows": windows_of(text, from_start=True)}
         run["rows"] = judge(run)
         runs.append(run)
     failed = not runs
@@ -159,7 +200,7 @@ def digest(work):
         for measure, value, target, verdict in run["rows"]:
             print("  %-34s %-46s %-50s %s" % (measure, value, target, verdict))
             failed |= verdict == "FAIL"
-    (work / "pace.json").write_text(json.dumps([{k: v for k, v in r.items() if k != "test"} for r in runs], indent=1),
+    (work / "pace.json").write_text(json.dumps([{k: v for k, v in r.items() if k not in ("test", "all_windows")} for r in runs], indent=1),
                                     encoding="utf-8")
     return 1 if failed else 0
 
