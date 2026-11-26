@@ -7,7 +7,8 @@
       each PC run (tools/measure/quiet.py: no compiler, build tool or other copy of the game), and a machine still busy after
       that wait plays nothing more: WORK/pace-run.json names what kept it busy, as measure.py leaves a run that was not quiet unmeasured
       (pacing read beside another game is not the change's). Runs the suite through the harness (tools/lumacore/luma_test.py:
-      real time, a visible window, no sound, a run lock of its own in WORK) on each renderer, or on an Android device,
+      real time, a visible window, no sound, a run lock of its own in WORK; a list such as gate.json as harness_calls says)
+      on each renderer, or on an Android device,
       then digests the runs. With --apk and --pak the device's run installs the test app with the pak inside the device's
       lock and removes it after, as measure.py's tablet run does. --diagnostics: the game's --diagnostics for every run
       (`pace-fault`: the render thread sleeps 20 ms once every 2 s, the planted stutter the checks must refuse). --again: a
@@ -312,7 +313,8 @@ def digest(work, history_path=None):
     runs = read_runs(work, read_history(history_path))
     failed = not runs
     for run in runs:
-        print("%s (%s)" % (run["run"], ", ".join(run["test"].get("settings", [])) or "default settings"))
+        settings = run["test"].get("settings", run["test"].get("test", {}).get("settings", []))
+        print("%s (%s)" % (run["run"], ", ".join(settings) or "default settings"))
         for measure, value, target, verdict in run["rows"]:
             print("  %-34s %-46s %-50s %s" % (measure, value, target, verdict))
             failed |= verdict == "FAIL"
@@ -368,19 +370,63 @@ def take_lock(path, who, wait_minutes=0.0):
                                      encoding="utf-8")
 
 
-def harness_lock(work, renderer, again=False):
+def harness_calls(suite):
+    """The harness runs that play --suite, each [target, --test NAME ...]. luma_test.py reads a list of tests only from a file
+    named suite.json (its tests the folders beside it) and a test from its folder. So a test folder and a suite.json go as they
+    are; another list (harness 1 and its tests, beside them: gate.json, tablet.json, short.json) is one run of the suite.json
+    beside it, with --test for each of its tests that suite lists (one start, one install on a device), then one run of each
+    other test's own folder, in the list's order. A list that cannot be read, or a test whose test.json is not there, stops
+    pace.py before it takes the measurement lock."""
+    path = pathlib.Path(suite)
+    if path.is_dir() or path.name == "suite.json":
+        return [[str(path)]]
+    try:
+        listed = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise SystemExit("pace.py: --suite %s is not a test folder, a suite.json or a list of tests: %s" % (path, error))
+    tests = listed.get("tests") if isinstance(listed, dict) else None
+    if (not isinstance(listed, dict) or listed.get("harness") != 1 or not isinstance(tests, list) or not tests
+            or not all(isinstance(t, str) and t for t in tests)):
+        raise SystemExit("pace.py: --suite %s: a list of tests is {\"harness\": 1, \"tests\": [names]}" % path)
+    missing = [t for t in tests if not (path.parent / t / "test.json").is_file()]
+    if missing:
+        raise SystemExit("pace.py: --suite %s: no test.json for %s beside it" % (path, ", ".join(missing)))
+    whole = path.parent / "suite.json"
+    try:
+        known = json.loads(whole.read_text(encoding="utf-8")).get("tests", []) if whole.is_file() else []
+    except (OSError, ValueError, AttributeError):
+        known = []
+    listed_there = [t for t in tests if t in known]
+    calls = [[str(whole)] + [w for t in listed_there for w in ("--test", t)]] if listed_there else []
+    return calls + [[str(path.parent / t)] for t in tests if t not in listed_there]
+
+
+def harness_lock(work, renderer, again=False, call=0):
     """The run lock the harness is given for a run (luma_test.py refuses a run without one): beside the renderer's folder, which
-    --again moves to WORK/first, and one of its own for the run played again (measure.py's harness-<run>[-again].lock)."""
-    return pathlib.Path(work) / ("harness-%s%s.lock" % (renderer, "-again" if again else ""))
+    --again moves to WORK/first, one of its own for each harness run of the suite (call) and for the run played again
+    (measure.py's harness-<run>[-again].lock)."""
+    return pathlib.Path(work) / ("harness-%s%s%s.lock" % (renderer, "-%d" % (call + 1) if call else "", "-again" if again else ""))
+
+
+def harness_command(args, renderer, work, call, index=0, again=False):
+    """The command of one harness run (harness_calls' `call`) on a renderer, into work/<renderer>."""
+    return ([sys.executable, "-X", "utf8", "-I", str(TREE / "tools/lumacore/luma_test.py"), "run", call[0]] + call[1:] +
+            ["--bin", args.bin, "--work", str(pathlib.Path(work) / renderer), "--who", "pace", "--renderer", renderer,
+             "--lock", str(harness_lock(work, renderer, again, index))] +
+            (["--diagnostics", args.diagnostics] if args.diagnostics else []))
 
 
 def play(args, renderer, work, again=False):
-    """One harness run of the suite on a renderer (or the device), into work/<renderer>: the harness's exit code."""
-    command = [sys.executable, "-X", "utf8", "-I", str(TREE / "tools/lumacore/luma_test.py"), "run", args.suite,
-               "--bin", args.bin, "--work", str(work / renderer), "--who", "pace", "--renderer", renderer,
-               "--lock", str(harness_lock(work, renderer, again))]
-    if args.diagnostics:
-        command += ["--diagnostics", args.diagnostics]
+    """The harness runs of the suite on a renderer (or the device), into work/<renderer>: 0, or the first harness exit that
+    was not 0."""
+    code = 0
+    for index, call in enumerate(harness_calls(args.suite)):
+        one = play_one(args, harness_command(args, renderer, work, call, index, again))
+        code = code or one
+    return code
+
+
+def play_one(args, command):
     env = dict(os.environ)
     if args.paks:
         env["LUMA_TEST_PAKS"] = args.paks
@@ -396,12 +442,13 @@ def play(args, renderer, work, again=False):
             return 3
         return code
     if args.device:
-        command += ["--device", args.device] + (["--device-lock", args.device_lock] if args.device_lock else [])
+        command = command + ["--device", args.device] + (["--device-lock", args.device_lock] if args.device_lock else [])
     return subprocess.run(command, env=env, check=False).returncode
 
 
 def run(args):
     work = pathlib.Path(args.work)
+    harness_calls(args.suite)  # a suite the harness cannot read stops here, before the lock and before any wait
     work.mkdir(parents=True, exist_ok=True)
     take_lock(args.lock, "pace.py %s" % work, args.lock_wait)
     codes, busy = {}, {}
@@ -447,14 +494,15 @@ def machine_quiet(minutes):
     return quiet.wait_quiet(minutes=minutes, say=lambda text: print(text.replace("measure.py", "pace.py"), flush=True))
 
 
-def main():
+def parser():
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = p.add_subparsers(dest="command", required=True)
     r = sub.add_parser("run")
     r.add_argument("--bin", required=True)
     r.add_argument("--work", required=True)
     r.add_argument("--renderers", default="d3d12,vulkan,d3d11")
-    r.add_argument("--suite", default=str(TREE / "tests/pace/suite.json"))
+    r.add_argument("--suite", default=str(TREE / "tests/pace/suite.json"),
+                   help="a test folder, a suite.json, or another list of tests beside them (tests/pace/gate.json): harness_calls")
     r.add_argument("--device", default="")
     r.add_argument("--device-lock", default="")
     r.add_argument("--device-wait", type=float, default=20.0, help="minutes to wait for a held device lock (with --apk)")
@@ -476,6 +524,11 @@ def main():
     k.add_argument("work")
     k.add_argument("--history", required=True)
     k.add_argument("--commit", required=True)
+    return p
+
+
+def main():
+    p = parser()
     args = p.parse_args()
     if args.command == "run":
         if args.apk and not (args.device and args.pak):

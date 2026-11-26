@@ -165,11 +165,31 @@ def main():
     check(cut["steps"][-1] == {"at": 1800, "end": True} and cut["steps"][:-1] == [s for s in match["steps"] if s["at"] < 1800],
           "match-30 is the match's steps up to 30 s after frame 0")
 
+    # The harness reads a list of tests only from a file named suite.json: pace.py turns another list into runs it reads (the landing
+    # of 11-26 09:51 gave it tests/pace/gate.json, read as a test folder). A list that cannot be played stops pace.py at once.
+    pace_dir = tree / "tests" / "pace"
+    check(pace.harness_calls(str(pace_dir / "gate.json")) == [[str(pace_dir / "match-30")]], "gate.json: match-30 from its own folder")
+    check(pace.harness_calls(str(pace_dir / "tablet.json")) == [[str(pace_dir / "suite.json"), "--test", "rate-60", "--test", "rate-120"]],
+          "tablet.json: one run of suite.json with --test for its two tests")
+    check(pace.harness_calls(str(pace_dir / "short.json")) == [[str(pace_dir / "suite.json"), "--test", "rate-120"]], "short.json")
+    check(pace.harness_calls(str(pace_dir / "suite.json")) == [[str(pace_dir / "suite.json")]], "suite.json as it is")
+    check(pace.harness_calls(str(pace_dir / "match")) == [[str(pace_dir / "match")]], "a test folder as it is")
+    with tempfile.TemporaryDirectory() as tmp:
+        bad = pathlib.Path(tmp)
+        (bad / "list.json").write_text(json.dumps({"harness": 1, "tests": ["nowhere"]}), encoding="utf-8")
+        (bad / "odd.json").write_text(json.dumps({"tests": "match"}), encoding="utf-8")
+        for name, what in (("list.json", "no test.json"), ("odd.json", "a list of tests is"), ("gone.json", "is not a test folder")):
+            try:
+                pace.harness_calls(str(bad / name))
+                check(False, "%s: refused" % name)
+            except SystemExit as said:
+                check(what in str(said), "%s: %s" % (name, said))
+
     # pace.py run: the harness gets a run lock of its own for each run (it refuses a run without one: "give --lock or
     # LUMA_TEST_LOCK"), the run played again another. A machine still busy after the quiet wait plays nothing more: the
     # renderers are named in pace-run.json, the exit is NOT_QUIET (the machine's), and a FAIL that was played stays a FAIL.
     def run_args(work, **k):
-        a = dict(bin="B", work=str(work), suite="S", renderers="d3d12,vulkan", device="", apk="", diagnostics="", paks="",
+        a = dict(bin="B", work=str(work), suite=str(tree / "tests/pace/gate.json"), renderers="d3d12,vulkan", device="", apk="", diagnostics="", paks="",
                  lock=str(work.parent / "measure.lock"), lock_wait=0.0, quiet_minutes=None, history="", again=False)
         a.update(k)
         return types.SimpleNamespace(**a)

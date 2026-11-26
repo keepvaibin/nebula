@@ -57,11 +57,13 @@ import io
 import json
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
 import time
+import types
 import unittest
 import unittest.mock
 
@@ -1367,6 +1369,122 @@ class PaceReading(unittest.TestCase):
         sys.path.insert(0, str(pathlib.Path(gate.TREE) / "tools" / "measure"))
         import quiet
         self.assertEqual(gate.PACE_QUIET_MINUTES, quiet.WAIT_MINUTES, "pace/pc waits for a quiet machine as long as the speed measure")
+
+
+class PaceCommand(unittest.TestCase):
+    """G10.1: the exact commands gate.py runs for pace/pc and pace/tablet, parsed by pace.py's own parser and run by pace.py's own run,
+    with a fake harness in place of luma_test.py that takes each run's options only from luma_test.py's `run` options and reads its
+    target by luma_test.py's own rule (a list only from a file named suite.json, --test of its tests) and its own test reader; no game
+    plays. So a suite, an option, a lock, a renderer or a result file the two tools do not agree on is refused here in seconds (the
+    landing of 11-26 09:51 played nothing: tests/pace/gate.json was read as a test folder)."""
+
+    HARNESS = pathlib.Path(gate.TREE) / "tools" / "lumacore" / "luma_test.py"
+
+    @classmethod
+    def harness_options(cls):
+        text = cls.HARNESS.read_text(encoding="utf-8")
+        block = text[text.index('run = sub.add_parser("run")'):text.index('sub.add_parser("refs")')]
+        return set(re.findall(r'run\.add_argument\("(--[a-z-]+)"', block))
+
+    def fake_harness(self, seen):
+        sys.path.insert(0, str(self.HARNESS.parent))
+        import luma_test
+        options = self.harness_options()
+
+        def run(command, env=None, check=False):
+            self.assertEqual(command[:6], [sys.executable, "-X", "utf8", "-I", str(self.HARNESS), "run"])
+            target, words, said = pathlib.Path(command[6]).resolve(), command[7:], {}
+            self.assertEqual(len(words) % 2, 0, words)
+            for name, value in zip(words[::2], words[1::2]):
+                self.assertIn(name, options, "an option luma_test.py run does not have")
+                said.setdefault(name, []).append(value)
+            for name in ("--bin", "--work", "--lock", "--renderer"):
+                self.assertIn(name, said, "the harness's run needs %s" % name)
+            # luma_test.py run_tests: a list of tests is read only from a file named suite.json; anything else is one test's folder.
+            if target.is_file() and target.name == "suite.json":
+                names = json.loads(target.read_text(encoding="utf-8"))["tests"]
+                self.assertTrue(set(said.get("--test", [])) <= set(names), "--test names the suite does not list")
+                folders = [target.parent / t for t in names if not said.get("--test") or t in said["--test"]]
+            else:
+                folders = [target]
+            tests = [luma_test.read_test(folder) for folder in folders]     # the harness's own reader: HarnessError as in the landing
+            lock = pathlib.Path(said["--lock"][0])
+            self.assertFalse(lock.exists(), "a held run lock: the harness would refuse the run")
+            renderer = said["--renderer"][0]
+            seen.append((renderer, lock.name, target.name, [t["name"] for t in tests]))
+            for test in tests:
+                folder = pathlib.Path(said["--work"][0]) / "runs" / "pace" / test["name"] / renderer
+                folder.mkdir(parents=True)
+                zero = "extension: harness: frame 0 is game frame 900"
+                (folder / "run.log").write_text("\n".join([zero] + [
+                    "[pace] seconds=9.983333 steps=600 steps_per_second=60.0000 pictures=1198 displayed=1198 generated=0 refresh_ms=8.333 "
+                    "on_time=1198 missed=0 doubled=0 missed_system=0 jumps=0 jump_max_us=100.0 animation_within_1ms=1.0 animation_p99_us=80.0 "
+                    "delay_avg_us=8000.0 delay_p99_us=10000.0 render_avg_us=3000.0 render_p99_us=4000.0 step_work_avg_us=3000.0 "
+                    "step_work_p99_us=4000.0 step_work_max_us=5000.0"] * 3) + "\n", encoding="utf-8")
+                (folder / "test.json").write_text(json.dumps({"test": test["raw"]}), encoding="utf-8")
+            return types.SimpleNamespace(returncode=0)
+        return run
+
+    def test_pace_pc_command_runs_through_pace_py(self):
+        pace = gate.pace_tool
+        seen, looks = [], []
+        saved = (pace.subprocess, pace.machine_quiet)
+        with tempfile.TemporaryDirectory() as tmp:
+            t = pathlib.Path(tmp)
+            g = types.SimpleNamespace(bin=t / "bins", work=t / "run", args=types.SimpleNamespace(work=str(t), pace_fault=False),
+                                      paks_text=lambda: "RMGJ01=a.pak;RMGP01=b.pak")
+            work = t / "run" / "pace-pc"
+            cmd = gate.pace_pc_command(g, work)
+            self.assertEqual(cmd[:5], [sys.executable, "-X", "utf8", "-I", str(gate.PACE)])
+            args = pace.parser().parse_args(cmd[5:])
+            self.assertEqual((args.command, args.renderers, args.again, args.quiet_minutes, args.history),
+                             ("run", "d3d12,vulkan", True, gate.PACE_QUIET_MINUTES, str(t / gate.PACE_HISTORY)))
+            args.lock = str(t / "measure.lock")      # the gate leaves pace.py its own measurement lock; the test takes one of its own
+            try:
+                pace.subprocess = types.SimpleNamespace(run=self.fake_harness(seen))
+                pace.machine_quiet = lambda minutes: looks.append(minutes) or (True, "")
+                code = pace.run(args)
+            finally:
+                pace.subprocess, pace.machine_quiet = saved
+            self.assertEqual(code, 0, (work / "pace.json").read_text(encoding="utf-8") if (work / "pace.json").is_file() else "no pace.json")
+            self.assertEqual(seen, [("d3d12", "harness-d3d12.lock", "match-30", ["pace-match-30"]),
+                                    ("vulkan", "harness-vulkan.lock", "match-30", ["pace-match-30"])],
+                             "the match cut to 30 s, once on each renderer, each with its own run lock")
+            self.assertEqual(looks, [gate.PACE_QUIET_MINUTES] * 2, "each renderer waits for a quiet machine")
+            self.assertFalse((t / "measure.lock").exists(), "the measurement lock is given back")
+            passed, detail, _, kind = gate.pace_reading(work, code, gate.PACE_RENDERERS)
+            self.assertTrue(passed, detail)
+            self.assertIn("pace-match-30/d3d12: pass", detail)
+            self.assertIn("pace-match-30/vulkan: pass", detail)
+
+    def test_pace_tablet_command_runs_through_pace_py(self):
+        pace = gate.pace_tool
+        seen, calls = [], []
+        fake_measure = types.SimpleNamespace(on_tablet=lambda tablet, command, env: calls.append(tablet) or (
+            harness(command).returncode, None))
+        saved_module = sys.modules.get("measure")
+        with tempfile.TemporaryDirectory() as tmp:
+            t = pathlib.Path(tmp)
+            g = types.SimpleNamespace(android_bin=t / "android", work=t / "run", pak="game.pak", paks_text=lambda: "",
+                                      args=types.SimpleNamespace(work=str(t), pace_fault=True, tablet="T", tablet_lock=str(t / "tablet.lock"),
+                                                                 tablet_wait=20.0, pak=""))
+            work = t / "run" / "pace-tablet"
+            args = pace.parser().parse_args(gate.pace_tablet_command(g, work, t / "test.apk")[5:])
+            args.lock = str(t / "measure.lock")
+            harness = self.fake_harness(seen)
+            try:
+                sys.modules["measure"] = fake_measure
+                code = pace.run(args)
+            finally:
+                if saved_module is None:
+                    sys.modules.pop("measure", None)
+                else:
+                    sys.modules["measure"] = saved_module
+            self.assertEqual(code, 0, (work / "pace.json").read_text(encoding="utf-8") if (work / "pace.json").is_file() else "no pace.json")
+            self.assertEqual(seen, [("vulkan", "harness-vulkan.lock", "suite.json", ["pace-rate-60", "pace-rate-120"])],
+                             "the tablet's two tests in one harness run of the suite (one install)")
+            self.assertEqual([(c.device, c.apk) for c in calls], [("T", str(t / "test.apk"))])
+            self.assertEqual(args.diagnostics, "pace-fault")
 
 
 def main():
