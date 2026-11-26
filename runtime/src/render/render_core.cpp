@@ -2202,10 +2202,12 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         if (chunk.present_swap_chain) {
             schedule_.note_step(chunk.present_asked_qpc, game_wait_qpc_.load(std::memory_order_relaxed));
         }
-        // The step's work ends at its list's hand-over, where its sequence starts (I-004): the render thread's take can
-        // come a refresh later, after its wait for the display, and that wait is not the step's.
-        g_step_work.record(chunk.list_step_qpc,
-                           chunk.list_asked_qpc != 0 ? chunk.list_asked_qpc : galaxy::qpc_now());
+        // With in-between pictures the step's work ends at its list's hand-over, where its sequence starts (I-004): the
+        // render thread's take can come a refresh later, after its wait for the display, and that wait is not the
+        // step's. Without them the step's own picture is presented from the take, so its refresh is missed by the take.
+        g_step_work.record(chunk.list_step_qpc, schedule_.configured() != 0u && chunk.list_asked_qpc != 0
+                                                    ? chunk.list_asked_qpc
+                                                    : galaxy::qpc_now());
         advance_interp_sequence(false);
         return;
     }
