@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-26 02:07. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-26 04:24. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 35 of 155 (23%).
 
-Now: in work: R-009 fixer short job (main-vs-candidate tables, render target kept in play)
+Now: R-009 short job done, three rows worse than main; waiting for the planner
 
 In work now: Nothing started.
 
