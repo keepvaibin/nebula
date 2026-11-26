@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-25 20:15. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-25 20:16. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 35 of 155 (23%).
 
-Now: R-009 round 1 done, rows unmet; waiting for the planner (case 4)
+Now: in work: R-009 fixer, round 2 (ring buffer off the render thread, load-window misses, Vulkan present timing)
 
 In work now: Nothing started.
 
