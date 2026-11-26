@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-26 11:19. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-26 11:29. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 35 of 155 (23%).
 
-Now: in work: G10.1 fixer again (gate passes --suite as a file, pace.py reads a folder)
+Now: in work: lander landing G10.1 (third landing, suite fix)
 
 In work now:
 - G10.1 Pacing in the gate: the PC's match run on every landing, the tablet's at 60 and 120 Hz (agent 1)
