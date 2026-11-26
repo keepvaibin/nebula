@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-25 15:07. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-25 16:19. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 35 of 155 (23%).
 
-Now: in work: R-008 fixer measures main vs candidate pace tables (planner's landing condition)
+Now: in work: lander landing repair R-008 (24b0ce83f)
 
 In work now: Nothing started.
 
