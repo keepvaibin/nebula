@@ -6,7 +6,8 @@ Steps landed: 36 of 156 (23%).
 
 Now: M-008 closed; in work: lander landing G10.2 again (rebased on the mend)
 
-In work now: Nothing started.
+In work now:
+- G10.2 FrameTimeline attribution and the baseline report (agent 1)
 
 ## Packages
 
@@ -121,7 +122,6 @@ Nothing waits for the owner.
 ## Blocked
 
 - G6.7 The surround law (P-193): hard: build/windows + github Linux sanitizers: galaxy_speaker_law_tests aborts with an AddressSanitizer heap-buffer-overflow on the GitHub Linux ASAN/UBSAN job (run 45652159093); the Windows gate stopped on it (report: D:/NebulaWork/plan/native/hard/G6.7.md)
-- G10.2 FrameTimeline attribution and the baseline report: hard: pace/pc, pace-match-30 loads row: d3d12 45 missed/162 jumps vs main's last 44/162; vulkan 24 missed/44 jumps vs main's last 11/46; the only failure of 49 checks (report: D:/NebulaWork/plan/native/hard/G10.2.md)
 
 ## Tool mends
 
@@ -136,7 +136,7 @@ Nothing waits for the owner.
 | M-007 | closed | - | the section-at-a-time roles: a whole section ahead, wait, hand-off sheets, hard reports, the live page | 0 | 80 | 9ed09cfec |
 | M-008 | closed | - | pace/pc loads row refuses on fewer than 3 of main's readings | 0 | 56 | af48ff4ac |
 
-## Decisions (140)
+## Decisions (141)
 
 - 2026-11-23 S0.2.1: LoadSlice: 32 items a frame; an item is a phase of GameScene::initAfterScenarioChosen, the player, one placement made whole, one piece of FileSelector::initStep, or one Star Bit of the reserve (because the card asks for a fixed count of work and names no count; the count is a constant in one place, no player sees which frame of the load an item falls in, and the load worker (G3.7) replaces the slices)
 - 2026-11-23 S0.2.1: Drawing's random stream (MR::getDrawRandom) is seeded with the same seed as the game's stream, in setRandomSeedFromStageName and setFixedRandomSeed (because a fixed seed keeps the cosmetic numbers the same in every run of a replay and needs no new setting; the draw stream runs through the same sequence as the game's but is advanced only by drawing, so neither changes the other)
@@ -268,6 +268,7 @@ Nothing waits for the owner.
 - 2026-11-26 G10.1: the loads row of pace/pc judges the load windows (before frame 0 and the first after it) against the most of main's last 5 readings of the same run, kept in the gate's pace-history.tsv by pace.py keep after each move; no reading yet: recorded (because the card asks for a count no worse than main's until G10.5; load misses vary from run to run (15 in one boot window of main's match run), so one reading of main against one of the branch would refuse by chance, and running main's build in every landing doubles the check's time)
 - 2026-11-26 G10.1: pace/pc plays a renderer once more when its run has a FAIL row, and the second run decides; the first stays in the run folder and the detail says it was played again (because the gate's own rule for a test that fails (played again alone, a pass is a flake); a real-time run shares the PC with the system, and the planted fault (a sleep every 2 s) fails both runs)
 - 2026-11-26 G10.1: pace/pc rides with the group build (scope.py) and runs after the PC's lanes, before measure/step/pc; jumps across a seam do not count: a picture drawn under a closed wipe (g_screen_covered), the first of a new swap chain, the first at another refresh period (because every landing that builds the game must run it, with the machine alone for a real-time measure; brief AD bar 2 excepts loads, scene changes and mode changes; camera cuts are not told to the host until G2.7 and count as jumps until then)
+- 2026-11-26 M-008: the loads row of pace/pc records and refuses nothing while fewer than 3 readings of main exist (LOAD_FLOOR 3); from 3 it refuses a count above the most of the last 5, misses and jumps separately (because G10.2's landing was refused on one reading of main (Vulkan 11 missed against 24; the same code gave 11 and then 24): a count that varies from run to run is no baseline)
 - 2026-11-26 G10.2: P-335 is fixed twice: the Vulkan renderer passes the display clock's period before the driver's refresh cycle, and the recorder replaces a reported refresh more than 5% longer than the median gap of 16 or more displayed pictures (because the run log shows vkGetRefreshCycleDurationGOOGLE at 33.33 ms on a 120 Hz panel; the renderer fix is the cause, the recorder check keeps any other wrong report from doubling every picture, and it keeps a correct shorter report)
 - 2026-11-26 G10.2: the stored baseline keeps, per rate, the worst late, three-refresh and unnamed share of its runs, and a run is refused only when it is worse than that (because three runs at a rate differ by chance; judging against the worst of them refuses a real regression without failing a run that is as good as one already accepted)
 - 2026-11-26 G10.2: with a stored baseline only the row against it refuses pace/tablet; a baseline read by another method or start, or a run with no frame-timeline report, is a tool fault (not measured), and without a stored file the rows record and refuse nothing (because the card keeps G10.1's rule that nothing is refused before G10.2m stores the baseline, and a mismatch of method is the tool's fault, not the game's)
@@ -279,7 +280,7 @@ Nothing waits for the owner.
 - 2026-11-26 G10.2: the third planted fault is the diagnostic pace-depth, which returns one more slot from PresentSlots::place than the depth kept (because the card asks for a deliberately raised depth at present time; the slots and depth kept stay the ones without the fault, so only the present's target moves)
 - 2026-11-26 G10.2: a miss lands in one cause row by a fixed precedence: ModeChange in progress, App Deadline Missed, SurfaceFlinger CPU Deadline Missed, SurfaceFlinger GPU Deadline Missed, Display HAL, Prediction Error, Dropped Frame, then Unknown; Buffer Stuffing is counted beside them and is no miss (because the card asks every miss in exactly one row and a frame can carry several jank flags; a mode change explains its whole frame, a frame late by itself is the game's whatever else was late (so no game miss hides behind a platform one), then the platform's from the compositor down to the display)
 
-## Checks changed during the run (82)
+## Checks changed during the run (83)
 
 - 2026-11-22 S0.1.3 tools/verify/console_census.py: the open group gx_sections counts the four section names GXMT, GXTG, GXTM and GXWP with a ceiling of 31, and the closed group fifo excludes only those four whole words (allowed by docs/engine/FRAME-MODEL.md section 2.9)
 - 2026-11-22 U-unattended tools/gate/main_push_guard.py: the guard also refuses a push of a branch named plant/... (allowed by docs/plan/native/TOOL-MEND-PLANTS.md, how a plant is kept from ever landing)
@@ -362,6 +363,7 @@ Nothing waits for the owner.
 - 2026-11-26 G10.1 tools/gate/tests/gate_levels_test.py: the final level is asked to hold every check of main and long except the speed measure, pictures/tablet and now pace/pc; a new case asks pace/pc in the main level and in no other (allowed by docs/plan/native/05-NATIVE-LANE-G.md, G10.1 item 1 (pace/pc joins every landing that builds the game))
 - 2026-11-26 G10.2m plan tools/gate/tests/plan_test.py: the real plan is read as 156 steps in orders 1 to 156 and 156 card headings, not 155 (the test names, the counts, the docstring) (allowed by the planner's decision of 11-26 (G10.2 split: the new measuring step G10.2m); docs/plan/native/02-NATIVE-OVERVIEW.md, the order checked against steps.tsv)
 - 2026-11-26 G10.2m plan tools/gate/tests/plan_cards_test.py: the real cards read are those of places 12 to 156, not 12 to 155 (LAST_STEP, the function cards_12_to_156, the count test now 145 cards) (allowed by the planner's decision of 11-26 (G10.2 split: the new measuring step G10.2m); docs/plan/native/02-NATIVE-OVERVIEW.md, the order checked against steps.tsv)
+- 2026-11-26 M-008 tools/gate/tests/pace_test.py: the existing loads case (one reading of main, 8 load misses against 5: FAIL) now sets pace.LOAD_FLOOR to 1 for its own block and restores it after; the lines of the case are otherwise as before, and a new block asks the floor of 3 readings with the real figures of G10.2's landing (allowed by docs/plan/native/05-NATIVE-LANE-G.md, G10.1 item 5 (until G10.5 the loads are refused only when worse than main's) and the planner's order of 11-25 (brief AD, 'Where they go'): a single reading of a count that varies from run to run is not main's count)
 - 2026-11-26 G10.2 tools/measure/tests/second_part_test.py: the comment above section 7 now says an Android build before G10.2 wrote no game-frame and no step-wait events (one comment line reworded, no check line changed) (allowed by docs/plan/native/05-NATIVE-LANE-G.md, G10.2 (P-334, item 5))
 
 ## Tool faults
