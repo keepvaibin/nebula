@@ -486,6 +486,48 @@ int main() {
         ok &= expect(jumps == (covered ? 0.0 : 2.0), covered ? "under a closed wipe: no jump" : "5 ms behind in play: two jumps");
         galaxy::pacing::reset_for_test(nullptr);
     }
+    // P-335: a renderer whose report of the refresh is not the display's (Android's loader answered 33.333 ms on a 120 Hz
+    // panel). The [pace] line's refresh is the display's, from the gaps of the pictures shown: 8.333 ms at 120 Hz (an
+    // in-between picture after each step's) and 16.667 at 60; a picture shown a refresh after the one before is on time, not
+    // doubled. The report taken as it came gave refresh_ms=33.333 and every picture doubled.
+    for (const int hz : {120, 60}) {
+        static std::vector<std::string> lines;
+        lines.clear();
+        galaxy::pacing::reset_for_test([](const std::string& text) { lines.push_back(text); });
+        const std::int64_t f = galaxy::qpc_frequency();
+        const std::int64_t base = galaxy::qpc_now();
+        const int per_step = hz / 60;
+        const auto refresh = [&](int k) { return base + static_cast<std::int64_t>(std::llround(k * static_cast<double>(f) / hz)); };
+        std::uint64_t id = 0;
+        for (int i = 0; i <= 601; ++i) {
+            galaxy::pacing::step(refresh(i * per_step));
+            for (int j = 0; j < per_step; ++j) {
+                const int k = i * per_step + j;
+                galaxy::pacing::describe(refresh(k + 2), refresh(k + 1), refresh(i * per_step), j != 0);
+                galaxy::pacing::presented(++id);
+                galaxy::pacing::displayed(id, refresh(k + 2), f / 30);  // the driver's 33.333 ms
+            }
+        }
+        const std::string l = lines.empty() ? std::string{} : lines.front();
+        const auto value = [&l](const char* key) {
+            const std::string k = std::string(" ") + key + "=";
+            const std::size_t at = l.find(k);
+            return at == std::string::npos ? std::nan("") : std::strtod(l.c_str() + at + k.size(), nullptr);
+        };
+        ok &= expect(close_to(value("refresh_ms"), 1000.0 / hz, 0.001),
+                     hz == 120 ? "a wrong report at 120 Hz: refresh_ms=8.333" : "a wrong report at 60 Hz: refresh_ms=16.667");
+        ok &= expect(value("doubled") == 0 && value("missed") == 0 && value("on_time") + 1 >= value("displayed") &&
+                         value("displayed") >= 590.0 * per_step,
+                     hz == 120 ? "120 Hz: every picture on time, none doubled" : "60 Hz: every picture on time, none doubled");
+        galaxy::pacing::reset_for_test(nullptr);
+    }
+    // A report that fits the pictures stays: 8.333 ms with a picture every second refresh (60 pictures on 120 Hz) is the
+    // display's, though the median gap is 16.667 ms.
+    {
+        galaxy::pacing::Window w = sixty(601, 2, -1);
+        const galaxy::pacing::Summary s = w.summarize(kRefresh120, kHz);
+        ok &= expect(close_to(s.refresh_ms, 1000.0 / 120, 0.001), "a report shorter than the gaps is kept");
+    }
 
     std::printf("%s\n", ok ? "pacing: every case holds" : "pacing: FAILED");
     return ok ? 0 : 1;

@@ -3,6 +3,7 @@
   pace.py run --bin BIN --work WORK [--renderers d3d12,vulkan,d3d11] [--suite tests/pace/suite.json]
               [--device SERIAL [--device-lock PATH] [--apk APK --pak PAK]] [--lock D:/NebulaWork/plan/measure.lock]
               [--lock-wait MINUTES] [--quiet-minutes MINUTES] [--paks ...] [--diagnostics NAMES] [--history FILE] [--again]
+              [--method auto|frametimeline|latency] [--start step|vsync] [--trace-processor PATH] [--baseline FILE]
       Takes the measurement lock (waiting --lock-wait minutes for it); with --quiet-minutes, waits for a quiet machine before
       each PC run (tools/measure/quiet.py: no compiler, build tool or other copy of the game), and a machine still busy after
       that wait plays nothing more: WORK/pace-run.json names what kept it busy, as measure.py leaves a run that was not quiet unmeasured
@@ -13,8 +14,14 @@
       lock and removes it after, as measure.py's tablet run does. --diagnostics: the game's --diagnostics for every run
       (`pace-fault`: the render thread sleeps 20 ms once every 2 s, the planted stutter the checks must refuse). --again: a
       renderer whose run has a FAIL row is played once more and the second run decides (the first stays in WORK/first).
-  pace.py digest WORK [--history FILE]
-      Reads every run under WORK (not WORK/first), writes WORK/pace.json and prints the table.
+      A device run also writes the game's timeline (--diagnostics timeline: its step moments) and takes the platform's records
+      of the frames (tools/gate/frametimeline.py: Perfetto's FrameTimeline trace, SurfaceFlinger's --latency history).
+  pace.py digest WORK [--history FILE] [--method ...] [--start ...] [--trace-processor PATH] [--baseline FILE]
+      Reads every run under WORK (not WORK/first), writes WORK/pace.json and prints the table. A device run's capture is read
+      to its frametimeline.json (--method, --start: frametimeline.py; the trace by --trace-processor or NEBULA_TRACE_PROCESSOR)
+      and gives its rows: refreshes from a frame's start to its scan-out, the misses by cause (a miss of no named cause, Unknown,
+      fails above 0.05% of the frames), the game's own split of its late presents beside them, the GPU's composition; with
+      --baseline (whose method and start then hold) the run against the stored figures of its rate.
   pace.py keep WORK --history FILE --commit SHA
       Adds each run's figures of WORK/pace.json to FILE, the readings of main that the load row is judged against (the
       gate keeps them after main moved).
@@ -40,9 +47,10 @@ The gate's two checks (tools/gate/gate.py):
   pace/pc      every landing that builds the game: tests/pace/gate.json (the test match cut to about 30 s of play) on
                Direct3D 12 and Vulkan, --again, the loads judged against the gate's pace-history.tsv; a FAIL row refuses.
   pace/tablet  an extra check by name (docs/plan/native/step-checks.tsv): tests/pace/tablet.json (rate-60, rate-120) on the
-               tablet, under the tablet's lock and the measurement lock. Until tests/pace/tablet-base.json is stored (G10.2,
-               the baseline report), it records its rows and refuses nothing. From then on it refuses a landing whose late
-               share, three-refresh share or unnamed share (G10.2's rows) is worse than the stored baseline's.
+               tablet, under the tablet's lock and the measurement lock. Until tests/pace/tablet-base.json is stored (G10.2m,
+               from frametimeline.py baseline), it records its rows and refuses nothing. From then on it refuses a landing
+               whose late share, three-refresh share or unnamed share (the frame timeline's rows) is above the most a run of
+               the baseline had at that rate (the row "against the stored baseline").
 """
 import argparse
 import datetime
@@ -57,9 +65,15 @@ import sys
 import time
 
 TREE = pathlib.Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import frametimeline  # noqa: E402
+
 STEP_MS = 1000.0 / 60.0
 PACE = re.compile(r"\[pace\] (.*)$")
 FRAME_ZERO = re.compile(r"harness: frame 0 is game frame")
+# The Vulkan renderer's own report of its presents (renderer_vk.cpp report_present_timing): late split by whether the picture
+# reached the compositor after its time (available late) or was ready and shown later than asked (delayed late).
+PRESENT_TIMING = re.compile(r"\[present-timing\] (\d+) frames: .*? (\d+) late, .*?late\(available/delayed\)=(\d+)/(\d+)")
 # Display reports must cover this share of a run's pictures before its display measures are judged.
 COVERAGE = 0.99
 # Every window from the start shows at least this share of the pictures its rate asks for.
@@ -77,6 +91,8 @@ FIRST = "first"
 LOCK_HELD = 3
 # The exit status when a renderer was not played because the machine stayed busy (the machine's too).
 NOT_QUIET = 3
+# A device run's row against a stored baseline (frametimeline.judge): the one pace/tablet refuses by once a baseline is stored.
+BASELINE_ROW = "against the stored baseline"
 
 
 def windows_of(log_text, from_start=False):
@@ -196,7 +212,72 @@ def load_row(run, history):
             "pass" if ok else "FAIL")
 
 
-def judge(run, history=None):
+def present_timing_of(log_text):
+    """The game's own split of its late presents (row 3 of the frame timeline): (frames, late, available late, delayed late) over
+    the [present-timing] windows after frame 0, the first after it left out as for the [pace] windows; None where there is none."""
+    after, seen, sums = False, 0, None
+    for line in log_text.splitlines():
+        if FRAME_ZERO.search(line):
+            after, seen = True, 0
+            continue
+        m = PRESENT_TIMING.search(line)
+        if not m or not after:
+            continue
+        seen += 1
+        if seen == 1:
+            continue
+        values = [int(v) for v in m.groups()]
+        sums = values if sums is None else [a + b for a, b in zip(sums, values)]
+    return tuple(sums) if sums else None
+
+
+def share_text(n, frames):
+    return "%d (%.3f%%)" % (n, 100.0 * n / frames) if frames else "%d" % n
+
+
+def frametimeline_rows(run, base=None, base_name=""):
+    """A device run's rows from the platform's records (frametimeline.py): refreshes from a frame's start to its scan-out, the
+    misses by cause (Unknown judged), the game's own split beside them, the GPU's composition; with a stored baseline, the run
+    against it."""
+    report = run.get("frametimeline")
+    if report is None:
+        return [("frame timeline", "-", "the platform's records of the frames", "not measured: the run has no capture")]
+    rows = []
+    frames, judged = report["frames"], report["refresh_frames"]
+    how = "%s, start %s" % (report["method"], report["start"])
+    if judged:
+        rows.append(("frame start to scan-out", "%s of %d (%s)" % (", ".join("%s: %.2f%%" % (b, 100.0 * report["refreshes"][b] / judged)
+                                                                          for b in frametimeline.BINS), judged, how),
+                     "refreshes, recorded", "recorded"))
+    else:
+        rows.append(("frame start to scan-out", "-", "refreshes, recorded",
+                     "not measured: %s" % ("; ".join(n for n in report["notes"] if "row 1" in n) or "no frame with a start")))
+    if not frames:
+        rows.append(("misses by cause", "-", "every miss named", "not measured: %s" % ("; ".join(report["notes"]) or "no frames")))
+    else:
+        for cause in frametimeline.CAUSES:
+            n = report["causes"][cause]
+            if cause == "Unknown":
+                rows.append(("miss: Unknown", share_text(n, frames), "at most %.2f%% of %d frames" % (
+                    100 * frametimeline.UNKNOWN_SHARE, frames), "FAIL" if frametimeline.unknown_fails(report) else "pass"))
+            else:
+                rows.append(("miss: %s" % cause, share_text(n, frames), "named (%s)" % how, "recorded"))
+        rows.append(("buffer stuffing", share_text(report["buffer_stuffing"], frames), "counted, not a miss", "recorded"))
+    game = run.get("present_timing")
+    if game is not None:
+        rows.append(("misses by the game's lines", "%d late of %d: %d available late, %d delayed late" % (game[1], game[0], game[2], game[3]),
+                     "beside the causes", "recorded"))
+    if report["gpu_frames"]:
+        rows.append(("composed by the GPU", "%s; latched unsignaled %s" % (
+            share_text(report["gpu_composition"], report["gpu_frames"]),
+            "-" if report["latched_unsignaled"] is None else "%d" % report["latched_unsignaled"]), "recorded", "recorded"))
+    if base is not None:
+        verdict, text = frametimeline.judge(report, base)
+        rows.append((BASELINE_ROW, text or "-", "no share above the most of a run in %s" % base_name, verdict))
+    return rows
+
+
+def judge(run, history=None, base=None, base_name=""):
     """The rows for one run: (measure, value, target, verdict)."""
     c, test, on_device = run["figures"], run["test"], run["device"]
     rows = []
@@ -262,6 +343,8 @@ def judge(run, history=None):
         rows.append(("in-between picture's render work", "%.3f ms average, %.3f p99" % (
             c["generated_render_avg_us"] / 1000.0, c["generated_render_p99_us"] / 1000.0),
             "does not grow with the objects drawn", "compared across stages"))
+    if on_device:
+        rows += frametimeline_rows(run, base, base_name)
     return rows
 
 
@@ -284,8 +367,21 @@ def read_history(path):
     return out
 
 
-def read_runs(work, history=None):
-    """Every run under WORK (not WORK/first), each with its figures and rows."""
+def reading_of(method="auto", start="step", processor="", baseline=""):
+    """How the device runs' frame timelines are read (frametimeline.read) and judged: a stored baseline (pace/tablet's
+    tests/pace/tablet-base.json) names its method and start, which then hold whatever was asked."""
+    base = None
+    if baseline:
+        base = json.loads(pathlib.Path(baseline).read_text(encoding="utf-8"))
+        method, start = base["method"], base["start"]
+    return {"method": method, "start": start, "processor": processor, "base": base,
+            "base_name": pathlib.Path(baseline).name if baseline else ""}
+
+
+def read_runs(work, history=None, reading=None):
+    """Every run under WORK (not WORK/first), each with its figures and rows; a device run's capture is read to its
+    frametimeline.json (`reading`, reading_of's)."""
+    reading = reading or reading_of()
     work = pathlib.Path(work)
     runs = []
     for log in sorted(work.rglob("run.log")):
@@ -302,7 +398,12 @@ def read_runs(work, history=None):
                "load_windows": every[:len(every) - len(measured)]}
         missed, jumps = load_figures(run["load_windows"])
         run["loads"] = {"windows": len(run["load_windows"]), "missed": missed, "jumps": jumps}
-        run["rows"] = judge(run, history)
+        if device:
+            figures = run["figures"] or {}
+            run["frametimeline"] = frametimeline.read(folder, reading["method"], reading["start"], reading["processor"],
+                                                      figures.get("refresh_ms") or None)
+            run["present_timing"] = present_timing_of(text)
+        run["rows"] = judge(run, history, reading["base"], reading["base_name"])
         runs.append(run)
     return runs
 
@@ -311,9 +412,9 @@ def failed_rows(run):
     return [r for r in run["rows"] if r[3] == "FAIL"]
 
 
-def digest(work, history_path=None):
+def digest(work, history_path=None, reading=None):
     work = pathlib.Path(work)
-    runs = read_runs(work, read_history(history_path))
+    runs = read_runs(work, read_history(history_path), reading)
     failed = not runs
     for run in runs:
         settings = run["test"].get("settings", run["test"].get("test", {}).get("settings", []))
@@ -323,7 +424,7 @@ def digest(work, history_path=None):
             failed |= verdict == "FAIL"
     first = work / FIRST
     if first.is_dir():
-        for run in read_runs(first, read_history(history_path)):
+        for run in read_runs(first, read_history(history_path), reading):
             bad = failed_rows(run)
             if bad:
                 print("played again: the first run %s failed: %s" % (run["run"], "; ".join("%s %s" % (r[0], r[1]) for r in bad)))
@@ -413,10 +514,13 @@ def harness_lock(work, renderer, again=False, call=0):
 
 def harness_command(args, renderer, work, call, index=0, again=False):
     """The command of one harness run (harness_calls' `call`) on a renderer, into work/<renderer>."""
+    diagnostics = [d for d in (args.diagnostics or "").split(",") if d]
+    if args.device and "timeline" not in diagnostics:
+        diagnostics.append("timeline")  # a device run's step moments, the frame timeline's frame starts (frametimeline.py)
     return ([sys.executable, "-X", "utf8", "-I", str(TREE / "tools/lumacore/luma_test.py"), "run", call[0]] + call[1:] +
             ["--bin", args.bin, "--work", str(pathlib.Path(work) / renderer), "--who", "pace", "--renderer", renderer,
              "--lock", str(harness_lock(work, renderer, again, index))] +
-            (["--diagnostics", args.diagnostics] if args.diagnostics else []))
+            (["--diagnostics", ",".join(diagnostics)] if diagnostics else []))
 
 
 def play(args, renderer, work, again=False):
@@ -433,6 +537,8 @@ def play_one(args, command):
     env = dict(os.environ)
     if args.paks:
         env["LUMA_TEST_PAKS"] = args.paks
+    if args.device:
+        env[frametimeline.CAPTURE_ENV] = "1"  # the harness takes the platform's records of the frames (frametimeline.Capture)
     if args.device and args.apk:
         # The test app installed with the pak inside the device's lock and removed after (measure.py's tablet run).
         sys.path.insert(0, str(TREE / "tools" / "measure"))
@@ -453,6 +559,8 @@ def run(args):
     work = pathlib.Path(args.work)
     harness_calls(args.suite)  # a suite the harness cannot read stops here, before the lock and before any wait
     work.mkdir(parents=True, exist_ok=True)
+    reading = reading_of(getattr(args, "method", "auto"), getattr(args, "start", "step"), getattr(args, "trace_processor", ""),
+                         getattr(args, "baseline", ""))  # a baseline that cannot be read stops pace.py before the lock
     take_lock(args.lock, "pace.py %s" % work, args.lock_wait)
     codes, busy = {}, {}
     history = read_history(args.history)
@@ -473,7 +581,7 @@ def run(args):
         renderers = ["vulkan"] if args.device else args.renderers.split(",")
         for renderer in renderers:
             codes[renderer] = play_quiet(renderer)
-            if args.again and codes[renderer] is not None and any(failed_rows(r) for r in read_runs(work / renderer, history)):
+            if args.again and codes[renderer] is not None and any(failed_rows(r) for r in read_runs(work / renderer, history, reading)):
                 (work / FIRST).mkdir(exist_ok=True)
                 shutil.rmtree(work / FIRST / renderer, ignore_errors=True)
                 shutil.move(str(work / renderer), str(work / FIRST / renderer))
@@ -482,10 +590,10 @@ def run(args):
     finally:
         shutil.rmtree(args.lock, ignore_errors=True)
         (work / "pace-run.json").write_text(json.dumps({"harness_exit": codes, "not_quiet": busy}, indent=1), encoding="utf-8")
-    code = digest(work, args.history)
+    code = digest(work, args.history, reading)
     for renderer, why in busy.items():
         print("%s: not played, the machine was not quiet: %s" % (renderer, why))
-    if busy and not any(failed_rows(r) for r in read_runs(work, history)):
+    if busy and not any(failed_rows(r) for r in read_runs(work, history, reading)):
         return NOT_QUIET
     return code
 
@@ -523,6 +631,16 @@ def parser():
     d = sub.add_parser("digest")
     d.add_argument("work")
     d.add_argument("--history", default="")
+    for q in (r, d):
+        # A device run's frame timeline (frametimeline.py): how it is read, and the stored baseline it is judged against.
+        q.add_argument("--method", choices=frametimeline.METHODS, default="auto",
+                       help="the frame timeline's source: auto (the decision rule), frametimeline or latency")
+        q.add_argument("--start", choices=frametimeline.STARTS, default="step",
+                       help="a frame's start: the game's step moment or the Choreographer vsync of the frame")
+        q.add_argument("--trace-processor", default=os.environ.get(frametimeline.PROCESSOR_ENV, ""),
+                       help="Perfetto's trace_processor_shell (else %s); none: the trace is not read" % frametimeline.PROCESSOR_ENV)
+        q.add_argument("--baseline", default="", help="a stored baseline (tests/pace/tablet-base.json): its method and start hold, "
+                                                      "and each device run is judged against it")
     k = sub.add_parser("keep")
     k.add_argument("work")
     k.add_argument("--history", required=True)
@@ -539,7 +657,7 @@ def main():
         sys.exit(run(args))
     if args.command == "keep":
         sys.exit(keep(args.work, args.history, args.commit))
-    sys.exit(digest(args.work, args.history))
+    sys.exit(digest(args.work, args.history, reading_of(args.method, args.start, args.trace_processor, args.baseline)))
 
 
 if __name__ == "__main__":

@@ -98,7 +98,9 @@ public:
     void set_cpu_ns(std::int64_t cpu_ns) { cpu_ns_ = cpu_ns; }
     // The frame threads' work processor time over the window (empty: not known). Cleared with the window.
     void set_thread_work(std::vector<ThreadWorkNs> threads) { threads_ = std::move(threads); }
-    // refresh_qpc: the display's refresh period in ticks (0: unknown, then no refresh counts). frequency: ticks a second.
+    // refresh_qpc: the display's refresh period in ticks as the renderer reported it (0: unknown, then no refresh counts); a
+    // report longer by more than a twentieth than the median gap between two pictures shown one after the other is not the
+    // display's, and that median is the window's refresh (P-335). frequency: ticks a second.
     [[nodiscard]] Summary summarize(std::int64_t refresh_qpc, std::int64_t frequency) const;
     // Empties the window and forgets the one before.
     void clear();

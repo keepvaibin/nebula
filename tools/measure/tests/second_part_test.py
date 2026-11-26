@@ -594,7 +594,7 @@ with contextlib.redirect_stdout(io.StringIO()):
     check(m.main(["anchor", "--commit", "aaaaaaaaa", "--history", str(odd)]) == 2, "a commit with no trusted line is refused")
 
 # ================= 7. The tablet's gap figures =================
-# The Android game writes no game-frame and no step-wait events; the render thread's content-time events (a = the list's game
+# An Android build before G10.2 (P-334) wrote no game-frame and no step-wait events; the render thread's content-time events (a = the list's game
 # frame) mark the stage's first frame instead. Frame 10 is the first picture shown with a list of frame 10 or later.
 records = [(50, m.PRESENT_END, 0, 0), (60, m.PRESENT_END, 1, 0), (900, m.PRESENT_END, 2, 0),  # before frame 10: left out
            (95, m.CONTENT_TIME, 9, 0)]
@@ -633,6 +633,33 @@ check(abs(f["step_ms"] - 1.2) < 1e-9 and abs(f["step_p99_ms"] - 22.0) < 1e-9 and
 # A [pace] window without those fields (an older game): no step figures, nothing invented.
 (tablet / "run.log").write_text("harness: frame 0 is game frame 10\n" + PACE % (0, 1000, "") * 2, encoding="utf-8")
 check("step_ms" not in m.figures(tablet) and "step_p99_ms" not in m.figures(tablet), "no fields, no step figures")
+
+# ================= 8. The tablet's timeline with the step loop's events (P-334) =================
+# From G10.2 the SDL hosts' step loop records GameFrame, StepWaitBegin and StepWaitEnd as the Windows host does. A step's work
+# runs from its wait's end to the next wait's start: 200 steps 16 ms apart (a longer one's next 4 ms after its work), 196 of
+# them 2 ms, three 10 ms and one 40 ms. By hand: the median is 2.0 ms, the 99th percentile (nearest rank of 200 sorted, index
+# int(0.99 * 199 + 0.5) = 197) is 10.0 ms, the longest 40.0. The [pace] windows of the same run say 2.4 ms and 32.0 ms (their
+# averages' and their percentiles' medians): the figure taken from averages, which the timeline's now replaces.
+records, t = [], 100
+for i in range(200):
+    records.append((t, m.WAIT_END, 0, 0))
+    records.append((t, m.GAME_FRAME, 10 + i, 0))
+    work = 40 if i == 120 else 10 if i in (30, 60, 90) else 2
+    records.append((t + work, m.WAIT_BEGIN, t + 16, 0))
+    records.append((t + work + 1, m.PRESENT_END, i, 0))
+    t += max(16, work + 4)  # the next step after this one's wait
+steps_tablet = pathlib.Path(tempfile.mkdtemp()) / "vulkan"
+steps_tablet.mkdir()
+timeline(steps_tablet / "timeline.bin", sorted(records))
+(steps_tablet / "run.log").write_text("harness: frame 0 is game frame 10\n" + "".join(
+    PACE % (0, 1000, " step_work_avg_us=%.1f step_work_p99_us=%.1f" % pair)
+    for pair in ((2000.0, 10000.0), (2400.0, 32000.0), (2400.0, 32000.0), (2600.0, 40000.0))), encoding="utf-8")
+f = m.figures(steps_tablet)
+check(abs(f.get("step_ms", 0) - 2.0) < 1e-9 and abs(f.get("step_p99_ms", 0) - 10.0) < 1e-9 and
+      abs(f.get("step_max_ms", 0) - 40.0) < 1e-9 and f.get("steps_over_18") == 1,
+      "the tablet's step events: the true median 2.0 ms and 99th percentile 10.0 ms, not the windows' 2.4 and 32.0: %s" % f)
+check(not (abs(f.get("step_ms", 0) - 2.4) < 1e-9 or abs(f.get("step_p99_ms", 0) - 32.0) < 1e-9),
+      "the step figures are not the ones taken from the windows' averages: %s" % f)
 
 if failures:
     print("second_part_test.py: FAILED:\n  " + "\n  ".join(failures))

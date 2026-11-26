@@ -1,0 +1,24 @@
+Display Frame
+    Jank Type : None
+Display Frame
+    Jank Type : None
+Display Frame
+    Jank Type : None
+Display Frame
+    Jank Type : None
+Display Frame
+    Jank Type : None
+Display Frame
+    Jank Type : ModeChange in progress
+Display Frame
+    Jank Type : ModeChange in progress
+Display Frame
+    Jank Type : None
+Display Frame
+    Jank Type : None
+Display Frame
+    Jank Type : None
+Display Frame
+    Jank Type : None
+Display Frame
+    Jank Type : None

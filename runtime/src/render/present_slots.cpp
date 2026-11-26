@@ -3,6 +3,7 @@
 #include "galaxy/render/present_slots.h"
 
 #include "galaxy/game_step.h"
+#include "galaxy/launch_args.h"
 
 #include <algorithm>
 
@@ -61,6 +62,12 @@ std::int64_t PresentSlots::place(const PresentClock& clock) noexcept {
         depth_used_ = depth;
     }
     last_slot_ = slot;
+    // --diagnostics pace-depth: each picture asks one unit (a vsync; a present period for a game frame) later than the depth
+    // gives, a queue held one refresh deeper, the planted fault the frame timeline's refreshes row must show (G10.2). The
+    // slots and the depth the clock keeps are the ones without it, so the rule is not moved by its own fault.
+    if (::galaxy::diagnosing(::galaxy::kDiagnosePaceDepth)) {
+        return slot + unit;
+    }
     return slot;
 }
 

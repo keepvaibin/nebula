@@ -1,0 +1,24 @@
+Display Frame
+    Jank Type : None
+Display Frame
+    Jank Type : None
+Display Frame
+    Jank Type : SurfaceFlinger CPU Deadline Missed
+Display Frame
+    Jank Type : None
+Display Frame
+    Jank Type : None
+Display Frame
+    Jank Type : None
+Display Frame
+    Jank Type : None
+Display Frame
+    Jank Type : None
+Display Frame
+    Jank Type : None
+Display Frame
+    Jank Type : Display HAL
+Display Frame
+    Jank Type : None
+Display Frame
+    Jank Type : None

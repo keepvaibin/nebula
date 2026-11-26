@@ -3,6 +3,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
+#include <vector>
 
 namespace galaxy::pacing {
 
@@ -21,6 +23,29 @@ double average(const std::vector<double>& values) {
     double sum = 0.0;
     for (const double v : values) sum += v;
     return sum / static_cast<double>(values.size());
+}
+
+// The gaps between two pictures shown one after the other the check of a reported refresh needs before it judges it.
+constexpr std::size_t kLeastGaps = 16;
+
+// The window's refresh period: the renderer's report, unless the pictures shown contradict it. A display that keeps its refresh
+// shows no two pictures less than a refresh apart, so a report longer by more than a twentieth than the median gap between two
+// pictures shown one after the other (gaps under 1 ms, two pictures at one refresh, left out) is not the display's, and that
+// median is (P-335: the tablet's reports said 33.333 ms while its pictures came 8.3 ms apart).
+std::int64_t checked_refresh(const std::vector<Picture>& pictures, std::int64_t reported, std::int64_t frequency) {
+    if (reported <= 0) return reported;
+    std::vector<std::int64_t> gaps;
+    const std::int64_t least = frequency / 1000;
+    std::int64_t last = 0;
+    for (const Picture& p : pictures) {
+        if (p.displayed_qpc <= 0) continue;
+        if (last != 0 && p.displayed_qpc - last >= least) gaps.push_back(p.displayed_qpc - last);
+        last = p.displayed_qpc;
+    }
+    if (gaps.size() < kLeastGaps) return reported;
+    std::nth_element(gaps.begin(), gaps.begin() + static_cast<std::ptrdiff_t>(gaps.size() / 2), gaps.end());
+    const std::int64_t median = gaps[gaps.size() / 2];
+    return median * 20 < reported * 19 ? median : reported;
 }
 
 }  // namespace
@@ -57,8 +82,9 @@ void Window::next() {
     threads_.clear();
 }
 
-Summary Window::summarize(std::int64_t refresh_qpc, std::int64_t frequency) const {
+Summary Window::summarize(std::int64_t reported_refresh_qpc, std::int64_t frequency) const {
     Summary s;
+    const std::int64_t refresh_qpc = checked_refresh(pictures_, reported_refresh_qpc, frequency);
     const double us_per_tick = 1e6 / static_cast<double>(frequency);
     s.steps = steps_.size();
     if (steps_.size() >= 2) {

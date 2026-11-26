@@ -76,9 +76,10 @@ pictures_per_step and every cpu_<name>_ms of a frame thread other than game and 
                   renderer that records no GPU times in the timeline gives `not measured` (written -, never 0), compared
                   with nothing
   memory_mb       the most memory the process held (the harness's process.memory facts)
-On the tablet the timeline has no game-frame and no step-wait events (the Android game does not write them): the stage's
-first frame is found by the render thread's content-time events, and the step figures are the [pace] lines' (step_ms the
-median of the windows' average step work, step_p99_ms the median of their 99th percentile).
+The Android game writes the game-frame and step-wait events as the Windows game does (from G10.2, P-334), so the tablet's step
+figures are the timeline's too. A timeline of an older Android build has none: there the stage's first frame is found by the
+render thread's content-time events, and the step figures are the [pace] lines' (step_ms the median of the windows' average step
+work, step_p99_ms the median of their 99th percentile).
 Every figure is better lower (band.py FIGURES names the bad side of each); each is compared on its own, with the band's
 floor (band.py FLOORS). A history line written before cpu_ms existed has that cell empty (never 0); it is no baseline for it.
 
@@ -202,8 +203,8 @@ def timeline_figures(path, first_frame, span_steps=None):
     timeline that does not reach it gives no figures."""
     freq, records = load_timeline(path)
     ms = 1000.0 / freq
-    # The stage's first frame in the timeline: the game's frame marker. The game writes it on Windows only (host_main.cpp);
-    # on Android the timeline has none, and the first picture of an interpolation sequence of that frame or a later one
+    # The stage's first frame in the timeline: the game's frame marker (host_main.cpp, every platform from G10.2); a timeline of
+    # an older Android build has none, and the first picture of an interpolation sequence of that frame or a later one
     # (the render thread writes it on every platform) marks the moment, a few milliseconds late at most.
     marker = GAME_FRAME if any(e == GAME_FRAME for _q, e, _a, _b in records) else CONTENT_TIME
     start = next((q for q, e, a, _b in records if e == marker and a >= first_frame), None)
@@ -274,8 +275,9 @@ def figures(run_folder, span_steps=None):
         # Without a timeline (a device that wrote none): the [pace] lines' own step and render figures.
         f["step_max_ms"] = max(w.get("step_work_max_us", 0.0) for w in windows) / 1000.0
         f["render_ms"] = statistics.median(w.get("render_avg_us", 0.0) for w in windows) / 1000.0
-        # The Android game writes no step-wait events (host_main.cpp: Windows only), so there the step figures are the
-        # windows' own: the median of the ten-second windows' average step work and of their 99th percentile.
+        # A run whose timeline has no step-wait events (an Android build before G10.2, P-334): the step figures are the windows'
+        # own, the median of the ten-second windows' average step work and of their 99th percentile. The timeline's, read below,
+        # take their place where it has them.
         for name, field in (("step_ms", "step_work_avg_us"), ("step_p99_ms", "step_work_p99_us")):
             if all(field in w for w in windows):
                 f[name] = statistics.median(w[field] for w in windows) / 1000.0

@@ -48,6 +48,9 @@ enum Diagnostic : unsigned {
                                         // path beside FRAME-MODEL 2.16 landing 5, for its before measure)
     kDiagnosePaceFault = 1u << 23u,  // pace-fault: the render thread sleeps 20 ms once every 2 s (a planted stutter: the
                                      // pace checks' own proof that they refuse it, tools/gate/pace.py; not a setting)
+    kDiagnosePaceDepth = 1u << 24u,  // pace-depth: every picture asks to be shown one refresh later than the depth gives (a
+                                     // planted deeper queue: the frame timeline's refreshes row must show it,
+                                     // tools/gate/frametimeline.py; not a setting)
 };
 
 // The names --diagnostics takes, each one item or a set. "1" is the launcher's recording.
@@ -82,6 +85,7 @@ inline constexpr DiagnosticName kDiagnosticNames[] = {
     {"slot-spin", kDiagnoseSlotSpin},
     {"old-governors", kDiagnoseOldGovernors},
     {"pace-fault", kDiagnosePaceFault},
+    {"pace-depth", kDiagnosePaceDepth},
     {"frames", kDiagnoseFrames},
     {"gpu", kDiagnoseGpuPasses},
     {"threads", kDiagnoseThreadCpu | kDiagnoseProfile},

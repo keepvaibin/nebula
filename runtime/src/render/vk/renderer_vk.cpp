@@ -2680,7 +2680,10 @@ void RendererVk::report_present_timing() {
     for (std::uint32_t i = 0; i < count; ++i) {
         const auto actual = static_cast<std::int64_t>(past[i].actualPresentTime);
         if (!swapchain_.timed) {  // present timing's reports, where it is there, are the recorder's
-            galaxy::pacing::displayed(past[i].presentID, actual, timing.refresh_ns != 0 ? timing.refresh_ns : timing.vsync_ns);
+            // The display clock's refresh (the vsync the presents are placed on, read again at a mode change) before the
+            // driver's cycle duration, which is read once a swap chain and is not the panel's: Android's loader gave 33.33 ms
+            // on a 120 Hz panel (P-335; "driver refresh" in the [present-timing] line).
+            galaxy::pacing::displayed(past[i].presentID, actual, timing.vsync_ns != 0 ? timing.vsync_ns : timing.refresh_ns);
         }
         const auto at = past[i].presentID % timing.requested.size();
         const bool identified = timing.requested_id[at] == past[i].presentID;
