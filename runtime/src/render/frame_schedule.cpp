@@ -373,18 +373,24 @@ void FrameSchedule::begin_waiting(std::int64_t now) {
             slot_due_ != 0 && std::llabs(slot_due_ - display_lead_ - now) <= slot_period_ ? slot_due_ : now + display_lead_;
         slot_due_ = vblank + std::llround(static_cast<double>(due - vblank) / static_cast<double>(vblank_period)) *
                                  vblank_period;
-        // A locked reference moves to the first slot at or after it: a vblank where every vblank is a slot, else one of
-        // the slots' vblanks (120 pictures a second on a 240 Hz display: every second one, the step four), whose next
-        // reference is then the same slots on (the step keeps the vblanks' cadence).
+        // A locked reference moves to the first vblank at or after it, and where a slot is several vblanks (120 pictures
+        // a second on a 240 Hz display: every second one, the step four) the slot clock moves to the reference's
+        // vblanks: one picture shows a refresh longer. A step can move by a refresh against the slots' vblanks (the game's
+        // clock kept on a display a little off 240 Hz, a stall such as a scene load): its reference keeps its place
+        // against the step, and every picture its moment (R-009: a reference held to the slots' vblanks moved every
+        // picture by a refresh at each such step).
         if (locked_to_vblanks) {
-            sequence_.frame_qpc = first_tick_from(slot_due_, slot_period_, arrival);
+            sequence_.frame_qpc = first_tick_from(vblank, vblank_period, arrival);
+            const std::int64_t refreshes =
+                std::llround(static_cast<double>(sequence_.frame_qpc - slot_due_) / static_cast<double>(vblank_period));
+            slot_due_ += (refreshes % slot_vblanks + slot_vblanks) % slot_vblanks * vblank_period;
         }
     }
-    // The locked reference the next sequence keeps its place by (start).
+    // The locked reference the next sequence keeps its place by (start), counted in vblanks.
     const bool keeps = locked_to_vblanks && sequence_.step_qpc != 0;
     locked_reference_ = keeps ? sequence_.frame_qpc : 0;
     locked_step_ = keeps ? sequence_.step_qpc : 0;
-    locked_period_ = keeps ? slot_period_ : 0;
+    locked_period_ = keeps ? vblank_period : 0;
     if (on_vblanks) {
         // The slot clock is set above, with the reference.
     } else if (unbounded_) {
@@ -441,17 +447,27 @@ std::int64_t FrameSchedule::display_lead_for(std::int64_t now, std::int64_t vbla
         return 0;
     }
     // At the least the time from a present made now to the refresh that shows it, in whole refreshes (the display's own
-    // hold, learnt from presents the queue did not hold: DisplayModel::displayed); a refresh more at first (the
-    // picture's own work), down where the presents leave room (present_slots.h); four game steps at most. Where a swap
-    // chain's queue paces the presents, at most the queue's depth above the least: a picture started earlier would find
-    // the queue full, its render thread blocked past the next picture's start. A lead that came down and went up again
-    // moves every picture's moment by a refresh twice (R-008: on Direct3D at 240 Hz the least alone left pictures late
-    // and the lead went up and down every few seconds).
+    // hold, learnt from presents the queue did not hold: DisplayModel::displayed); up a refresh or two for a second with
+    // pictures late, down where the presents leave room (present_slots.h); four game steps at most. Where a swap chain's
+    // queue paces the presents, the least at first: a picture started then and presented as soon as it is ready reaches
+    // its refresh with the queue empty before it, and each refresh above it adds to every picture's delay. At most the
+    // queue's depth above the least: a picture started earlier would find the queue full, its render thread blocked past
+    // the next picture's start. Elsewhere a refresh above the least at first (the picture's own work, with no queue to
+    // pace it). Each step of the lead moves every picture's moment by a refresh, so it steps only for late pictures and
+    // for room (R-009: a step up every few seconds was the refresh period read a tick shorter, PresentDepth::depth). The
+    // queue's lead above the least is the pictures' own; the least is the display's hold, followed down as well as up
+    // (a compositor that holds pictures a refresh more for a while, as around a scene load, leaves no lead above it).
     const std::int64_t unit = to_ns(vblank_period);
     const std::int64_t least = to_ns(shown - now);
     const auto queue = static_cast<std::int64_t>(display_.present_queue());
-    const std::int64_t most = queue != 0 ? (least + unit - 1) / unit * unit + queue * unit : 4 * kGameStepNs;
-    const std::int64_t depth = display_depth_.depth(least + unit, least, std::min<std::int64_t>(most, 4 * kGameStepNs), unit);
+    const std::int64_t least_units = (least + unit - 1) / unit;
+    if (queue != 0 && display_least_units_ > least_units) {
+        display_depth_.lower((display_least_units_ - least_units) * unit);
+    }
+    display_least_units_ = least_units;
+    const std::int64_t most = queue != 0 ? least_units * unit + queue * unit : 4 * kGameStepNs;
+    const std::int64_t depth = display_depth_.depth(queue != 0 ? least : least + unit, least,
+                                                    std::min<std::int64_t>(most, 4 * kGameStepNs), unit);
     return (depth + unit / 2) / unit * vblank_period;
 }
 

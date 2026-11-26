@@ -318,6 +318,80 @@ void test_game_clock() {
     std::printf("  239.966 Hz: %.4f steps a second, %d steps of other lengths\n", rate, others);
     expect(std::abs(rate - 60.0) <= 60.0 * 0.0001 && spacing && others >= 1 && others <= 8,
            "a display a little off 240 Hz: 60 steps a second, a refresh more or less now and then");
+
+    // R-009: the step's work rising and falling (its start moving towards its place) never takes the step a refresh
+    // back and forth: at 239.99 Hz, the pace measures' monitor, a step of another length at most once in 20 s.
+    const std::int64_t near = std::llround(1e9 / 239.99);
+    const DisplayRefresh pc{0, near};
+    FramePhase moving;
+    std::int64_t at = 5'000'000;
+    std::uint32_t seed = 20261125u;
+    int last_other = -100'000;
+    int closest = 100'000;
+    int moved = 0;
+    for (int i = 0; i < 4 * kSteps; ++i) {
+        seed = seed * 1'664'525u + 1'013'904'223u;
+        // Work of 1 to 2 ms, a spike to 4.5 ms in one step of 64.
+        const std::int64_t work = (seed >> 26) == 0u ? 4'500'000 : 1'000'000 + static_cast<std::int64_t>(seed >> 12) % 1'000'000;
+        const std::int64_t next = moving.next_start(at, work, kFrame, pc, true);
+        if (i >= 600 && std::llabs(next - at - 4 * near) > near / 2) {
+            ++moved;
+            closest = std::min(closest, i - last_other);
+            last_other = i;
+        }
+        at = next;
+    }
+    std::printf("  239.99 Hz, the work moving: %d steps of other lengths, the closest %d steps apart\n", moved, closest);
+    expect(closest >= 1200, "the work moving: no step a refresh back and forth");
+}
+
+// In-between pictures off at 240 Hz, work of 1.0 to 1.4 ms and a step of 2.4 ms in every 97 (R-009): once the long one
+// is known, every present lands at least a millisecond before its refresh, and the step's place against the refreshes
+// (which is when its picture shows after it) stays within a quarter of a millisecond.
+void test_held_budget() {
+    const DisplayRefresh display{0, 1'000'000'000 / 240};
+    FramePhase phase;
+    std::int64_t at = 3'210'000;
+    std::uint32_t seed = 20261125u;
+    std::vector<std::int64_t> places;
+    std::int64_t closest = INT64_MAX;
+    for (int i = 0; i < 7200; ++i) {
+        seed = seed * 1'664'525u + 1'013'904'223u;
+        const std::int64_t work = i % 97 == 0 ? 2'400'000 : 1'000'000 + static_cast<std::int64_t>(seed >> 12) % 400'000;
+        const std::int64_t next = phase.next_start(at, work, kFrame, display, false);
+        if (i >= 200) {
+            closest = std::min(closest, to_refresh(at + work, display));
+            places.push_back(to_refresh(at, display));
+        }
+        at = next;
+    }
+    std::vector<std::int64_t> sorted = places;
+    std::sort(sorted.begin(), sorted.end());
+    const std::int64_t median = sorted[sorted.size() / 2];
+    int off = 0;
+    for (const std::int64_t place : places) off += std::llabs(place - median) > 250'000 ? 1 : 0;
+    std::printf("  240 Hz, in-between pictures off: closest present %.2f ms before its refresh, %d of %zu steps off "
+                "their place\n", static_cast<double>(closest) / 1e6, off, places.size());
+    expect(closest >= 1'000'000, "in-between pictures off: every present a millisecond before its refresh");
+    expect(off == 0, "in-between pictures off: the step keeps its place against the refreshes");
+
+    // Then a stage's transition: four steps of 3.8 ms within two seconds, within the budget (a step past it starts
+    // plain pacing, which keeps the place anyway). The steps after each keep their place within a millisecond of where
+    // they were: such steps are not held for the next 5 to 10 seconds.
+    int moved = 0;
+    for (int i = 0; i < 1200; ++i) {
+        seed = seed * 1'664'525u + 1'013'904'223u;
+        const bool burst = i >= 100 && i < 220 && i % 30 == 10;
+        const std::int64_t work = burst                  ? 3'800'000
+                                  : (7200 + i) % 97 == 0 ? 2'400'000
+                                                         : 1'000'000 + static_cast<std::int64_t>(seed >> 12) % 400'000;
+        const std::int64_t next = phase.next_start(at, work, kFrame, display, false);
+        const bool after_burst = i >= 100 && !burst && (i - 10) % 30 > 3;
+        if (after_burst && std::llabs(to_refresh(at, display) - median) > 1'000'000) ++moved;
+        at = next;
+    }
+    std::printf("  240 Hz, in-between pictures off, four steps of 3.8 ms: %d steps after them moved over 1 ms\n", moved);
+    expect(moved == 0, "in-between pictures off: a stage's few long steps leave the step's place");
 }
 
 }  // namespace
@@ -333,6 +407,7 @@ int main() {
     test_step_work();
     test_every_rate();
     test_game_clock();
+    test_held_budget();
     if (g_failures != 0) {
         std::cerr << g_failures << " check(s) failed\n";
         return 1;

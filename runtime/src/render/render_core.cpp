@@ -2257,9 +2257,16 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             renderer_.set_debug_capture_paths(snapshot_path);
         }
         {
-            const std::int64_t asked = chunk.present_asked_qpc != 0 ? chunk.present_asked_qpc : galaxy::qpc_now();
-            galaxy::pacing::describe(asked, content_moment_qpc(chunk.step_moment_qpc, 1.0, asked), chunk.step_moment_qpc,
-                                     false);
+            // A frame's end that presents (no present asked: in-between pictures off) shows its list's step: the moment
+            // it was meant for is that step's, as the pacing record defines it (galaxy/pacing.h). The present's own
+            // moment moves with each step's work, so two steps a step apart counted as asked 3 refreshes apart when one
+            // took 2 ms longer, and a picture shown 4 after as a refresh missed (R-009); and the step's delay went
+            // unmeasured.
+            const std::int64_t step = chunk.step_moment_qpc != 0 ? chunk.step_moment_qpc : chunk.list_step_qpc;
+            const std::int64_t asked = chunk.present_asked_qpc != 0 ? chunk.present_asked_qpc
+                                       : step != 0                  ? step
+                                                                    : galaxy::qpc_now();
+            galaxy::pacing::describe(asked, content_moment_qpc(step, 1.0, asked), step, false);
         }
         renderer_.present(selected_display, !snapshot_path.empty());
         if (!snapshot_path.empty()) {

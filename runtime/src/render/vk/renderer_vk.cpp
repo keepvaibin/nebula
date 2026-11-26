@@ -1832,8 +1832,9 @@ void RendererVk::shutdown() {
 }
 
 void RendererVk::grow_rings() {
-    // A ring whose frames took over half their budget (or spilled) grows; one whose last 30 seconds (and 600 frames) stayed
-    // under a quarter of it gives half of its memory back on a frame without the scene (UploadRing::kQuietNs). Only that
+    // A ring whose frames took over their budget (or spilled) grows, over half of it on a frame without the scene
+    // (UploadRing::wants_growth); one whose last 30 seconds (and 600 frames) stayed under a quarter of it gives half of
+    // its memory back on such a frame (UploadRing::kQuietNs). Only that
     // ring is made again. --diagnostics ring-stress: all made again (at the size each wants) every kRingStressFrames frames.
     const UploadRingSlot rings[] = {{&vertex_ring_, "vertex", kRingSegments, true},
                                     {&index_ring_, "index", kFramesInFlight, true},

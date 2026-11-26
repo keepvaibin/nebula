@@ -382,6 +382,22 @@ int main() {
             passed &= expect(fits.cpu != nullptr && ring.cursor() == fits.offset + 256u, "try_allocate places what fits as allocate does");
         }
         ring.reset();
+        {
+            // R-009: a frame over half the budget but within it grows the ring only at a frame without the 3D scene
+            // (making it again mid-play held a picture past its refresh); one over the budget grows it at once.
+            UploadRing room;
+            const std::size_t budget = UploadRing::budget(initial, 2u);
+            passed &= expect(room.initialize(device.Get(), "preflight-room", budget, 2u, initial), "upload ring setup for room");
+            room.require_frame_bytes(budget * 3u / 4u);
+            room.set_shrink_moment(false);
+            passed &= expect(!room.wants_growth(), "a frame over half the budget: no growth during the scene");
+            room.set_shrink_moment(true);
+            passed &= expect(room.wants_growth(), "a frame over half the budget: growth at a frame without the scene");
+            room.set_shrink_moment(false);
+            room.require_frame_bytes(budget + 1u);
+            passed &= expect(room.wants_growth(), "a frame over the budget: growth at once");
+            room.reset();
+        }
     }
     if (passed) { std::cout << "Sampler tests passed\n"; }
     return passed ? 0 : 1;

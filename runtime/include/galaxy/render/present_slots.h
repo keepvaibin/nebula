@@ -73,6 +73,9 @@ public:
     // whole units) at the least.
     void observe(std::int64_t requested, std::int64_t earliest, std::int64_t actual, std::int64_t margin,
                  std::int64_t step, std::int64_t half_vsync) noexcept;
+    // The depth lower by `by` (the next depth() keeps it at its least at the least): a least that fell takes the depth
+    // above it down with it.
+    void lower(std::int64_t by) noexcept { depth_ns_ -= by; }
     // The most a late present missed its slot by since the last call.
     [[nodiscard]] std::int64_t take_late_max() noexcept {
         const std::int64_t most = late_max_;
