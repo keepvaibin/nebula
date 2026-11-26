@@ -1050,9 +1050,12 @@ void RendererD3D11::flush_draws() {
     }
     {
         // The first flushes, then every 300th: draws issued, and the constant bindings that fell back to an empty slot.
-        static std::uint64_t flushes = 0u, total = 0u;
+        static std::uint64_t flushes = 0u, total = 0u, big = 0u;
         total += drawn;
-        if (drawn != 0u && (flushes < 12u || flushes % 300u == 0u)) {
+        // Also the first 60 flushes of 20 draws or more: how many draws a scene's passes hold.
+        const bool big_flush = drawn >= 20u && big < 60u;
+        big += big_flush ? 1u : 0u;
+        if (drawn != 0u && (flushes < 12u || flushes % 300u == 0u || big_flush)) {
             const d3d11::Context::Diagnostics& d = device.diag;
             LARGE_INTEGER frequency;
             QueryPerformanceFrequency(&frequency);
