@@ -289,24 +289,43 @@ void check_held_moves() {
             depth.observe(t, t + late, t + late, late != 0 ? 0 : 50'000'000, vsync, vsync / 2);
         }
     };
-    depth.allow(false, true);
+    // In play (frame_schedule observe_shown): nothing moves; under a closed wipe: down, and up by what play kept, one step.
+    const auto play = [&] { depth.allow(false, false, true); };
+    const auto wipe = [&] { depth.allow(true, true, false); };
+    play();
     run(9'000'000'000, 0);
     const std::int64_t held = now_depth();
-    depth.allow(true, true);
+    wipe();
     run(1'500'000'000, 0);
     const std::int64_t lowered = now_depth();
-    depth.allow(true, false);
     run(3'000'000'000, vsync);
     const std::int64_t covered = now_depth();
-    depth.allow(true, true);
-    run(2'000'000'000, vsync);
+    play();
+    run(3'000'000'000, vsync);
+    const std::int64_t in_play = now_depth();
+    const bool kept = depth.raise_pending();
+    wipe();
     const std::int64_t raised = now_depth();
-    if (held != start || lowered >= start || covered != lowered || raised <= lowered) {
-        std::printf("FAIL: held moves: start %lld, calm held %lld, then allowed %lld, late under a wipe %lld, late in "
-                    "play %lld (refreshes x1e6)\n",
+    if (held != start || lowered >= start || covered != lowered || in_play != lowered || !kept ||
+        raised != lowered + vsync || depth.raise_pending()) {
+        std::printf("FAIL: held moves: start %lld, calm in play %lld, then under a wipe %lld, late under it %lld, late in "
+                    "play %lld (kept %d), at the next wipe %lld (refreshes x1e6)\n",
                     static_cast<long long>(start * 1'000'000 / vsync), static_cast<long long>(held * 1'000'000 / vsync),
                     static_cast<long long>(lowered * 1'000'000 / vsync), static_cast<long long>(covered * 1'000'000 / vsync),
+                    static_cast<long long>(in_play * 1'000'000 / vsync), kept ? 1 : 0,
                     static_cast<long long>(raised * 1'000'000 / vsync));
+        ++failures;
+    }
+    // Not told (a test, a game that never tells): late windows take it up at once, one refresh a window.
+    PresentDepth untold;
+    const std::int64_t first = untold.depth(2 * vsync, vsync, 8 * vsync, vsync);
+    for (std::int64_t u = t; u < t + 3'500'000'000; u += vsync) {
+        untold.observe(u, u + 2 * vsync, u + 2 * vsync, 0, vsync, vsync / 2);
+    }
+    const std::int64_t stepped = untold.depth(2 * vsync, vsync, 8 * vsync, vsync);
+    if (stepped != first + 3 * vsync) {
+        std::printf("FAIL: not told, 3 late windows: %lld -> %lld refreshes (one a window wanted)\n",
+                    static_cast<long long>(first / vsync), static_cast<long long>(stepped / vsync));
         ++failures;
     }
 }

@@ -563,6 +563,7 @@ private:
     void drop_picture(Picture& picture, TextureStore& textures);
     std::unordered_map<std::uint64_t, TargetSlot> target_slots_;
     TargetSweep target_sweep_;  // begin_frame's sweep: at a load's wipe, never in play (idle_clock.h)
+    std::uint64_t spare_target_serial_ = 0u;  // spare slots' keys (kSpareTargetSlot, idle_clock.h)
     void retire_target_slot(TargetSlot& slot);
     void sweep_target_slots();
     std::uint64_t target_key_ = 0;

@@ -899,6 +899,85 @@ void test_display_model() {
     }
 }
 
+// R-009's runaway: at the boot's load every present Vulkan reported for a second was shown 15 refreshes after its call,
+// that second's least became the display's hold, and the lead went to 15 and 16 refreshes and stayed 25 s. The model
+// leaves a stall's presents out (DisplayModel kStallHeld); the lead is never above the queue's depth and two refreshes;
+// in play it does not move; under a wipe it rises a refresh a second at most (brief AD).
+void test_lead_bounds() {
+    const std::vector<std::int64_t> steady{kFrequency / 500};
+    const std::int64_t walk = kFrequency / 2000;
+    char what[200];
+    // The model: a second of presents on time, then two of presents each shown 15 refreshes after its call and late for
+    // its slot, then one on time: the hold stays 0.
+    {
+        DisplayModel model(kFrequency);
+        const std::int64_t p = kFrequency / 240;
+        std::uint64_t id = 0;
+        std::int64_t call = p / 2;
+        for (int i = 0; i < 240 * 3 + 1; ++i, call += p) {
+            const bool stalled = i >= 240 && i < 720;
+            const std::int64_t first = (call / p + 1) * p;
+            model.presented(++id, first, call, call);
+            model.displayed(id, first + (stalled ? 15 * p : 0), p);
+        }
+        std::snprintf(what, sizeof what, "a stall's presents held 15 refreshes: the display's hold read %lld (0 wanted)",
+                      static_cast<long long>(model.held()));
+        check(model.held() == 0, what);
+    }
+    // The bound: pictures late every second for 20 s, nothing told (late windows raise the lead at once): with a queue 1
+    // deep at most 3 refreshes, with none (the display's most hold, 2, for it) at most 4.
+    for (const unsigned queue : {1u, 0u}) {
+        SimDisplay display = display_at(240.0, true);
+        display.queue = queue;
+        SimSwapChain chain{display};
+        chain.work_most = 3 * display.period;
+        display.model = &chain.model;
+        FrameSchedule schedule(display, kFrequency);
+        schedule.configure(interpolated_frames_per_game_frame(240.0), 0);
+        const Run r = run(schedule, 1200, kFrequency, steady, walk, true, nullptr, kStep, &display, nullptr, &chain);
+        const std::int64_t top = (queue != 0u ? queue : 2u) + 2u;
+        std::snprintf(what, sizeof what, "the lead's bound, queue %u, pictures late: at most %.2f refreshes (%lld allowed)",
+                      queue, static_cast<double>(r.lead_most) / static_cast<double>(display.period),
+                      static_cast<long long>(top));
+        check(r.lead_most > 0 && r.lead_most <= top * display.period, what);
+    }
+    // In play, the compositor holding a refresh more: the lead stays; under a wipe it rises one refresh, no faster than
+    // a refresh a second, and stays at most the queue's depth and two.
+    {
+        SimDisplay display = display_at(240.0, true);
+        display.queue = 1u;
+        SimSwapChain chain{display};
+        display.model = &chain.model;
+        FrameSchedule schedule(display, kFrequency);
+        schedule.configure(interpolated_frames_per_game_frame(240.0), 0);
+        g_screen_covered.store(0, std::memory_order_relaxed);
+        std::int64_t first = kFrequency;
+        const auto phase = [&](int frames) {
+            const Run r = run(schedule, frames, first, steady, walk, true, nullptr, kStep, &display, nullptr, &chain);
+            first += static_cast<std::int64_t>(std::llround(frames * kStep));
+            return r;
+        };
+        (void)phase(600);
+        const std::int64_t before = schedule.display_lead();
+        chain.held = 1;
+        const Run play = phase(600);
+        const bool still = std::all_of(play.leads.begin(), play.leads.end(), [&](std::int64_t l) { return l == before; });
+        g_screen_covered.store(1, std::memory_order_relaxed);
+        const Run half = phase(30);  // half a second under the wipe
+        const Run wipe = phase(240);
+        g_screen_covered.store(-1, std::memory_order_relaxed);
+        std::snprintf(what, sizeof what,
+                      "in play the lead stays (%lld ticks, every picture %d), under the wipe it rises a refresh "
+                      "(half a second %.2f, after 4 s %.2f refreshes; at most 3)",
+                      static_cast<long long>(before), still ? 1 : 0,
+                      static_cast<double>(half.lead_most) / static_cast<double>(display.period),
+                      static_cast<double>(schedule.display_lead()) / static_cast<double>(display.period));
+        check(before == display.period && still && half.lead_most <= 2 * display.period &&
+                  schedule.display_lead() == 2 * display.period && wipe.lead_most <= 3 * display.period,
+              what);
+    }
+}
+
 // The Vulkan and Android answers (G2.3.2): a swap chain that takes each present's time (present timing) holds a picture
 // to the refresh it asks for, with no wait or hold of the renderer's. At every sample rate, the display holding 0 (the
 // PC), 1 and 2 refreshes (Android's compositor), each picture is shown at its slot, which is the refresh its t was drawn
@@ -1823,6 +1902,7 @@ int main() {
     test_variable_clock();
     test_variable_refresh();
     test_display_model();
+    test_lead_bounds();
     test_display_model_asked();
     test_display_model_answers();
     test_display_queue();

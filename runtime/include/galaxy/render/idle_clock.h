@@ -2,6 +2,8 @@
 
 #include <atomic>
 #include <cstdint>
+#include <utility>
+#include <vector>
 
 namespace galaxy::render {
 
@@ -84,5 +86,47 @@ private:
     bool covered_ = false;
     bool told_ = false;
 };
+
+// A target slot whose texture the game freed (free_target, at a scene's end) waits as a spare under a key with this bit,
+// for the next key whose pass asks the same size (begin_target_pass): the scene after takes the set made for the one
+// before, where a new id would be made on the render thread at the hand-back (R-009: create_scene_set, 1.35 to 1.76 ms
+// about 1.8 s after each wipe). Spares go as other slots do (TargetSweep). The game's keys never set it (draw_walker:
+// a target id and the in-between bit, 1 << 40).
+inline constexpr std::uint64_t kSpareTargetSlot = std::uint64_t{1} << 63u;
+
+// The slots of `slots` (a map of key to slot with a `used` stamp) whose keys `freed(key)` names become spares, each
+// under its own key (`serial` counts them), stamped now.
+template <class Slots, class Freed>
+void spare_target_slots(Slots& slots, Freed&& freed, std::uint64_t& serial) {
+    std::vector<typename Slots::mapped_type> spares;
+    for (auto it = slots.begin(); it != slots.end();) {
+        if ((it->first & kSpareTargetSlot) == 0u && freed(it->first)) {
+            spares.push_back(std::move(it->second));
+            it = slots.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    for (auto& spare : spares) {
+        spare.used = idle_clock();
+        slots.emplace(kSpareTargetSlot | ++serial, std::move(spare));
+    }
+}
+
+// A key with no slot yet takes a spare of the same size, `map_of(slot)` its size (none: it is made as before).
+template <class Slots, class Map, class MapOf>
+void take_spare_target_slot(Slots& slots, std::uint64_t key, const Map& map, MapOf&& map_of) {
+    if ((key & kSpareTargetSlot) != 0u || slots.find(key) != slots.end()) {
+        return;
+    }
+    for (auto it = slots.begin(); it != slots.end(); ++it) {
+        if ((it->first & kSpareTargetSlot) != 0u && map_of(it->second) == map) {
+            auto slot = std::move(it->second);
+            slots.erase(it);
+            slots.emplace(key, std::move(slot));
+            return;
+        }
+    }
+}
 
 }  // namespace galaxy::render

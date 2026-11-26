@@ -67,12 +67,12 @@ std::int64_t PresentSlots::place(const PresentClock& clock) noexcept {
 void PresentDepth::observe(std::int64_t requested, std::int64_t earliest, std::int64_t actual, std::int64_t margin,
                            std::int64_t step, std::int64_t half_vsync) noexcept {
     step = std::max<std::int64_t>(step, 1);
+    step_ns_ = step;
     if (actual > requested + half_vsync && earliest > requested + half_vsync) {
         const std::int64_t missed = earliest - requested;
         late_max_ = std::max(late_max_, missed);
         if (missed <= 2 * kGameStepNs) {
             ++window_late_;
-            window_miss_ = std::max(window_miss_, missed);
         }
     } else if (actual <= requested + half_vsync) {
         calm_margin_ = std::min(calm_margin_, margin);
@@ -87,17 +87,14 @@ void PresentDepth::observe(std::int64_t requested, std::int64_t earliest, std::i
     if (window_ns < kWindowNs) {
         return;
     }
-    if (window_late_ >= 2u && !raise_allowed_) {
-        calm_ns_ = 0;  // not calm, and no step up: the window is left out
-        calm_margin_ = INT64_MAX;
-    } else if (window_late_ >= 2u) {
-        depth_ns_ += std::clamp<std::int64_t>((window_miss_ + step - 1) / step, 1, 2) * step;
-        if (since_step_down_ns_ >= 0 && since_step_down_ns_ < kStepDownHeldNs) {
-            calm_needed_ns_ = std::min(calm_needed_ns_ * 2, kCalmMostNs);
-        }
-        since_step_down_ns_ = -1;
+    if (window_late_ >= 2u && (!late_counts_ || !raise_allowed_)) {
+        // Not calm, and no step up now: under a closed wipe the window is left out; in play one step waits for the next
+        // load (allow).
+        raise_pending_ = raise_pending_ || late_counts_;
         calm_ns_ = 0;
         calm_margin_ = INT64_MAX;
+    } else if (window_late_ >= 2u) {
+        step_up();
     } else if (window_late_ == 0u) {
         calm_ns_ += window_ns;
         if (calm_ns_ >= calm_needed_ns_ && lower_allowed_) {
@@ -122,7 +119,16 @@ void PresentDepth::observe(std::int64_t requested, std::int64_t earliest, std::i
     }
     window_start_ = actual;
     window_late_ = 0u;
-    window_miss_ = 0;
+}
+
+void PresentDepth::step_up() noexcept {
+    depth_ns_ += step_ns_;
+    if (since_step_down_ns_ >= 0 && since_step_down_ns_ < kStepDownHeldNs) {
+        calm_needed_ns_ = std::min(calm_needed_ns_ * 2, kCalmMostNs);
+    }
+    since_step_down_ns_ = -1;
+    calm_ns_ = 0;
+    calm_margin_ = INT64_MAX;
 }
 
 }  // namespace galaxy::render

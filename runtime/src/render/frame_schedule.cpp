@@ -100,7 +100,11 @@ void DisplayModel::displayed(std::uint64_t id, std::int64_t shown, std::int64_t 
     const bool own = (!present->asked || late ||
                       present->slot <= first_after(present->call) + std::max<std::int64_t>(held_, 0) * period) &&
                      (!queued || late || held_ < 0 || held < held_);
-    if (own) {
+    // A present held more than kStallHeld refreshes was held by a stall (its GPU work late behind a load, the system), not
+    // by the display: no compositor holds a picture that long. R-009: at the boot's load every present Vulkan reported
+    // for a second was shown 15 refreshes after its call; that second's least became the display's hold and the lead
+    // went to 15 and 16 refreshes. Like the depth's own windows (PresentDepth::observe), a stall says nothing of the pace.
+    if (own && held <= kStallHeld) {
         window_held_ = window_held_ < 0 ? held : std::min(window_held_, held);
         if (held_ < 0 || window_start_ == 0) {
             held_ = held;
@@ -474,27 +478,40 @@ std::int64_t FrameSchedule::display_lead_for(std::int64_t now, std::int64_t vbla
     // for late pictures in play, at once; not for a load's under the wipe, which pass with it (observe_shown). R-009: a
     // step up at the boot's loads held the lead a refresh up for 100 s of play (match delay 19.0 -> 23.2 ms), then it
     // came down in play.
-    const bool may_lower = g_screen_covered.load(std::memory_order_relaxed) != 0;
-    std::int64_t least_units = (least + unit - 1) / unit;
-    if (queue != 0 && display_least_units_ > least_units) {
-        if (may_lower) {
-            display_depth_.lower((display_least_units_ - least_units) * unit);
-        } else {
+    // The least, too, moves only then: in play it is held where it was, up as well as down, and where it may move it rises
+    // a refresh a second at most. R-009: at the boot's load (in play by the game's signal) one second of Vulkan's present
+    // reports, every one held by the load's stall, read as a display holding pictures 15 refreshes; the least took the
+    // lead to 15 and 16 refreshes at once and the hold kept it there 25 s, to the first wipe (67 ms of delay, and the
+    // schedule's in-between pictures stopped with it). On every renderer the lead is never above the queue's depth and two
+    // refreshes (brief AD); with no queue (presents that ask their refresh, Android's compositor holding up to 2) the
+    // display's most hold stands for it.
+    const bool may_move = g_screen_covered.load(std::memory_order_relaxed) != 0;
+    const std::int64_t top = (queue != 0 ? queue : DisplayModel::kStallHeld) + 2;
+    std::int64_t least_units = std::min((least + unit - 1) / unit, top);
+    if (display_least_units_ != 0) {
+        if (!may_move) {
             least_units = display_least_units_;
+        } else if (least_units > display_least_units_) {
+            const bool due = now - display_least_rose_ >= frequency_;
+            least_units = display_least_units_ + (due ? 1 : 0);
+            display_least_rose_ = due ? now : display_least_rose_;
+        } else if (queue != 0 && least_units < display_least_units_) {
+            display_depth_.lower((display_least_units_ - least_units) * unit);
         }
     }
     display_least_units_ = least_units;
-    const std::int64_t most = queue != 0 ? least_units * unit + queue * unit : 4 * kGameStepNs;
-    const std::int64_t depth = display_depth_.depth(queue != 0 ? least : least + unit, least,
-                                                    std::min<std::int64_t>(most, 4 * kGameStepNs), unit);
-    return (depth + unit / 2) / unit * vblank_period;
+    const std::int64_t least_ns = least_units * unit;
+    const std::int64_t most = std::min(queue != 0 ? least_ns + queue * unit : 4 * kGameStepNs, top * unit);
+    const std::int64_t depth = display_depth_.depth(queue != 0 ? least_ns : least_ns + unit, least_ns, most, unit);
+    return std::min((depth + unit / 2) / unit, top) * vblank_period;
 }
 
 void FrameSchedule::observe_shown() {
-    // A calm stretch takes the depth down only under a closed wipe (or where the game does not tell); late pictures take
-    // it up only in play (display_lead_for).
+    // The depth moves only under a closed wipe (or where the game does not tell): a calm stretch takes it down there, and
+    // late pictures in play keep one step up for it; a load's own late pictures under the wipe count for nothing
+    // (display_lead_for).
     const int covered = g_screen_covered.load(std::memory_order_relaxed);
-    display_depth_.allow(covered != 0, covered != 1);
+    display_depth_.allow(covered != 0, covered != 0, covered != 1);
     ShownPicture picture;
     if (display_.last_shown(picture) && display_lead_ != 0 && picture.period > 0 && picture.slot >= display_from_) {
         const std::int64_t period = to_ns(picture.period);

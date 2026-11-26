@@ -839,6 +839,7 @@ private:
     bool publish_frame_pass(const FramePassRequest& params, gpu::TextureRef texture, TextureStore& textures);
     std::unordered_map<std::uint64_t, TargetSlot> target_slots_;
     TargetSweep target_sweep_;  // begin_frame's sweep: at a load's wipe, never in play (idle_clock.h)
+    std::uint64_t spare_target_serial_ = 0u;  // spare slots' keys (kSpareTargetSlot, idle_clock.h)
     std::vector<VkDescriptorSet> target_free_sources_;  // dropped slots' colour inputs, free to reuse
     // A slot's targets go to the open frame's retired list; its colour input waits for the fence (retired_target_sources_).
     void retire_target_slot(TargetSlot& slot);

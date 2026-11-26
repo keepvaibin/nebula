@@ -454,8 +454,9 @@ bool RendererD3D11::begin_target_pass(std::uint64_t key, std::uint32_t width, st
     if (target_pass_active_ || width == 0u || height == 0u) {
         return false;
     }
-    TargetSlot& slot = target_slots_[key];
     const FrameMap map(width, height);
+    take_spare_target_slot(target_slots_, key, map, [](const TargetSlot& spare) { return spare.map; });
+    TargetSlot& slot = target_slots_[key];
     if (!slot.set.color || !(slot.map == map)) {
         if (slot.set.color || slot.set.depth) {
             destroy_scene_set(slot.set);
@@ -605,14 +606,10 @@ void RendererD3D11::free_target(std::uint32_t id, TextureStore& textures) {
             ++it;
         }
     }
-    for (auto it = target_slots_.begin(); it != target_slots_.end();) {
-        if (static_cast<std::uint32_t>(it->first) == id && !(target_pass_active_ && it->first == target_key_)) {
-            retire_target_slot(it->second);
-            it = target_slots_.erase(it);
-        } else {
-            ++it;
-        }
-    }
+    // The texture's target slot waits as a spare for the next scene's target of its size (kSpareTargetSlot, idle_clock.h).
+    spare_target_slots(target_slots_, [&](std::uint64_t key) {
+        return static_cast<std::uint32_t>(key) == id && !(target_pass_active_ && key == target_key_);
+    }, spare_target_serial_);
 }
 
 // A texture the GPU may still read: released once the frame that can name it is past.
