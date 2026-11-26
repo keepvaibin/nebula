@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-26 14:37. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-26 14:38. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 36 of 156 (23%).
 
-Now: G10.2 written; in work: lander landing G10.2
+Now: G10.2 hard: pace/pc loads row judged by one noisy reading; G10.1's fixer resumed on pace.py
 
 In work now: Nothing started.
 
