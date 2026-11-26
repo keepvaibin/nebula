@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-25 16:48. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-25 16:49. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 35 of 155 (23%).
 
@@ -55,11 +55,12 @@ In work now: Nothing started.
 
 ## Repairs
 
-1 open of kind fail, 8 in all.
+1 open of kind fail, 9 in all.
 
 | Id | State | Kind | Check | Renderer | Traced to | Seen |
 | --- | --- | --- | --- | --- | --- | --- |
 | R-006 | open | fail | soak | - | not traced | 1 |
+| R-009 | open | worse | measure/step/pc | - | commit ecd17a731 | 1 |
 | R-005 | landed | fail | soak | - | not traced | 1 |
 | R-007 | landed | worse | measure/step/pc | - | step G2.3.1 commit d7682d740 | 1 |
 | R-008 | landed | worse | measure/step/pc | - | commit a360c2e0a | 1 |
