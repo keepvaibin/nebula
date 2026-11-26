@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-26 09:32. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-26 09:46. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 35 of 155 (23%).
 
-Now: in work: fixer for G10.1 (two harness tests, pace/pc classification)
+Now: in work: lander landing G10.1 again (after the fixer)
 
 In work now:
 - G10.1 Pacing in the gate: the PC's match run on every landing, the tablet's at 60 and 120 Hz (agent 1)
@@ -265,7 +265,7 @@ Nothing waits for the owner.
 - 2026-11-26 G10.1: pace/pc plays a renderer once more when its run has a FAIL row, and the second run decides; the first stays in the run folder and the detail says it was played again (because the gate's own rule for a test that fails (played again alone, a pass is a flake); a real-time run shares the PC with the system, and the planted fault (a sleep every 2 s) fails both runs)
 - 2026-11-26 G10.1: pace/pc rides with the group build (scope.py) and runs after the PC's lanes, before measure/step/pc; jumps across a seam do not count: a picture drawn under a closed wipe (g_screen_covered), the first of a new swap chain, the first at another refresh period (because every landing that builds the game must run it, with the machine alone for a real-time measure; brief AD bar 2 excepts loads, scene changes and mode changes; camera cuts are not told to the host until G2.7 and count as jumps until then)
 
-## Checks changed during the run (78)
+## Checks changed during the run (79)
 
 - 2026-11-22 S0.1.3 tools/verify/console_census.py: the open group gx_sections counts the four section names GXMT, GXTG, GXTM and GXWP with a ceiling of 31, and the closed group fifo excludes only those four whole words (allowed by docs/engine/FRAME-MODEL.md section 2.9)
 - 2026-11-22 U-unattended tools/gate/main_push_guard.py: the guard also refuses a push of a branch named plant/... (allowed by docs/plan/native/TOOL-MEND-PLANTS.md, how a plant is kept from ever landing)
@@ -345,6 +345,7 @@ Nothing waits for the owner.
 - 2026-11-26 G10.1 tools/gate/tests/pace_test.py: the case good no longer asks every row to pass: its loads row is recorded (no reading of main's), and the test's lines carry missed_system, jumps and jump_max_us (allowed by docs/plan/native/05-NATIVE-LANE-G.md, G10.1 items 1 and 5)
 - 2026-11-26 G10.1 tools/gate/tests/gate_line_test.py: the Where test leaves pace/pc out of the PC's lanes and asks it between tour/tablet-pc and the pair; the sorted list of ALSO_PARTS has pace/tablet (allowed by docs/plan/native/05-NATIVE-LANE-G.md, G10.1 items 1 and 2)
 - 2026-11-26 G10.1 tools/gate/tests/plan_rerun_test.py: the set of the step tool's extra checks (ALSO_CHECKS) has pace/tablet (allowed by docs/plan/native/05-NATIVE-LANE-G.md, G10.1 item 2)
+- 2026-11-26 G10.1 tools/gate/tests/gate_levels_test.py: the final level is asked to hold every check of main and long except the speed measure, pictures/tablet and now pace/pc; a new case asks pace/pc in the main level and in no other (allowed by docs/plan/native/05-NATIVE-LANE-G.md, G10.1 item 1 (pace/pc joins every landing that builds the game))
 
 ## Tool faults
 
