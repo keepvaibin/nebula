@@ -1,11 +1,12 @@
 """pace_test.py: tools/gate/pace.py on run logs whose verdicts are known: the windows it uses, how it combines them,
 each 4.3 verdict and each bar of brief AD (the game's misses, the jumps, the loads against main's readings), pass and FAIL;
-the history it keeps; and the gate's suite tests/pace/gate.json (G10.1)."""
+the history it keeps; the gate's suite tests/pace/gate.json (G10.1); and run's harness locks and quiet wait (a fake harness)."""
 import json
 import pathlib
 import re
 import sys
 import tempfile
+import types
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 import pace  # noqa: E402
@@ -163,6 +164,65 @@ def main():
           "match-30 is the match: shown, real time, its settings and stage")
     check(cut["steps"][-1] == {"at": 1800, "end": True} and cut["steps"][:-1] == [s for s in match["steps"] if s["at"] < 1800],
           "match-30 is the match's steps up to 30 s after frame 0")
+
+    # pace.py run: the harness gets a run lock of its own for each run (it refuses a run without one: "give --lock or
+    # LUMA_TEST_LOCK"), the run played again another. A machine still busy after the quiet wait plays nothing more: the
+    # renderers are named in pace-run.json, the exit is NOT_QUIET (the machine's), and a FAIL that was played stays a FAIL.
+    def run_args(work, **k):
+        a = dict(bin="B", work=str(work), suite="S", renderers="d3d12,vulkan", device="", apk="", diagnostics="", paks="",
+                 lock=str(work.parent / "measure.lock"), lock_wait=0.0, quiet_minutes=None, history="", again=False)
+        a.update(k)
+        return types.SimpleNamespace(**a)
+
+    def fake_harness(commands, failing=()):
+        def run(command, env=None, check=False):
+            commands.append(command)
+            folder = pathlib.Path(command[command.index("--work") + 1])
+            bad = folder.name in failing and not any(c[command.index("--work") + 1] == str(folder) for c in commands[:-1])
+            run_folder = folder / "match-30" / folder.name
+            run_folder.mkdir(parents=True)
+            (run_folder / "run.log").write_text("\n".join(["extension: harness: frame 0 is game frame 900", line(),
+                                                           line(jumps=3 if bad else 0), line()]) + "\n", encoding="utf-8")
+            (run_folder / "test.json").write_text(json.dumps({"settings": ["GALAXY_MAX_FPS=0", "GALAXY_VSYNC_INTERVAL=1"]}),
+                                                  encoding="utf-8")
+            return types.SimpleNamespace(returncode=0)
+        return types.SimpleNamespace(run=run)
+
+    saved = (pace.subprocess, pace.machine_quiet)
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            work = pathlib.Path(tmp) / "w"
+            commands = []
+            pace.subprocess = fake_harness(commands, failing=("vulkan",))
+            code = pace.run(run_args(work, again=True))
+            locks = [c[c.index("--lock") + 1] if "--lock" in c else None for c in commands]
+            check(code == 0 and len(commands) == 3, "d3d12 once, vulkan twice (a FAIL, played again): exit %d, %d runs" % (code, len(commands)))
+            check(locks == [str(work / "harness-d3d12.lock"), str(work / "harness-vulkan.lock"), str(work / "harness-vulkan-again.lock")],
+                  "each run has its own harness lock in WORK: %s" % locks)
+            check(not pathlib.Path(tmp, "measure.lock").exists(), "the measurement lock is given back")
+
+            looks = []
+            pace.machine_quiet = lambda minutes: looks.append(minutes) or (False, "still busy after 30 minutes: Nebula.exe (pid 9)")
+            busy_work, commands = pathlib.Path(tmp) / "busy", []
+            pace.subprocess = fake_harness(commands)
+            code = pace.run(run_args(busy_work, quiet_minutes=30.0, again=True))
+            said = json.loads((busy_work / "pace-run.json").read_text(encoding="utf-8"))
+            check(code == pace.NOT_QUIET and commands == [] and looks == [30.0],
+                  "a busy machine: nothing played, one wait, exit NOT_QUIET (exit %d, %d runs, waits %s)" % (code, len(commands), looks))
+            check(sorted(said["not_quiet"]) == ["d3d12", "vulkan"] and said["harness_exit"] == {"d3d12": None, "vulkan": None},
+                  "pace-run.json names both renderers as not played: %s" % said)
+
+            answers = iter([(True, ""), (False, "still busy after 30 minutes: Nebula.exe (pid 9)")])
+            pace.machine_quiet = lambda minutes: next(answers)
+            fail_work, commands = pathlib.Path(tmp) / "fail", []
+            pace.subprocess = fake_harness(commands, failing=("d3d12",))
+            code = pace.run(run_args(fail_work, quiet_minutes=30.0))
+            said = json.loads((fail_work / "pace-run.json").read_text(encoding="utf-8"))
+            check(code == 1 and len(commands) == 1 and list(said["not_quiet"]) == ["vulkan"],
+                  "d3d12 played on a quiet machine with a FAIL, vulkan not played: exit 1 (exit %d, %d runs, %s)" % (
+                      code, len(commands), said))
+    finally:
+        pace.subprocess, pace.machine_quiet = saved
 
     if failures:
         print("pace_test.py: FAILED:\n  " + "\n  ".join(failures))

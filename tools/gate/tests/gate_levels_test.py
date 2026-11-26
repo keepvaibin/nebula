@@ -180,7 +180,11 @@ def main():
         # The landing's speed measure (package B8) is a check of the main level alone: the long run has no speed part.
         step = {"measure/step/pc", "measure/step/tablet"}
         check(step <= m and not step & (q | lg | f), "the speed measure's two checks are the main level's alone: %s" % sorted(step & (q | lg | f)))
-        check((m | lg) - step <= f | {"pictures/tablet"} and "measure/full" in f, "final has main's and long's: %s" % sorted((m | lg) - f))
+        # The landing's pace check (G10.1) is the main level's alone too: it is judged against main's readings kept after a move, and the
+        # long run's and the final check's soak plays beside them (a machine that is never quiet).
+        pace = {"pace/pc"}
+        check(pace <= m and not pace & (q | lg | f), "the pace check is the main level's alone: %s" % sorted(pace & (q | lg | f)))
+        check((m | lg) - step - pace <= f | {"pictures/tablet"} and "measure/full" in f, "final has main's and long's: %s" % sorted((m | lg) - f))
         chosen = gate.select(main_needs, ["replays/vulkan"])
         check(chosen == {"replays/vulkan", "tour/vulkan", "tour/d3d12", "build/windows", "data/RMGE01"}, "--only and its needs: %s" % sorted(chosen))
         chosen = gate.select(main_needs, ["replays/tablet"])

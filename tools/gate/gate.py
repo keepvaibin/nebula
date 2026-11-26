@@ -1860,8 +1860,10 @@ def measure_pc(g):
 # The pace checks (G10.1; tools/gate/pace.py, whose help holds the rules; the planner's brief AD). pace/pc: every landing that builds the
 # game (scope.py, the group `build`), the test match cut to about 30 s of play on Direct3D 12 and on Vulkan, in real time with the window
 # shown (the pace tests say "visible"), under the measurement lock, after the PC's lanes and before measure/step/pc; each run waits for a
-# quiet machine (no other game copy, as a long run's soak beside the landing), then plays; a FAIL on a machine that stayed busy is the
-# machine's (env). A renderer with a FAIL row is played once more and the second run decides. pace/tablet: an extra check by name (docs/plan/native/step-checks.tsv), the tablet's
+# quiet machine (no other game copy, as a long run's soak beside the landing) as long as the speed measure waits for one; a machine still
+# busy then plays nothing more, and the check ends env (not judged: the landing runs again on a fit machine, one ENV line in
+# tool-faults.tsv, as a measure that was not trusted), never a pacing finding. A renderer with a FAIL row is played once more and the
+# second run decides. pace/tablet: an extra check by name (docs/plan/native/step-checks.tsv), the tablet's
 # suite at 60 and 120 Hz under the tablet's lock and the measurement lock, recorded until G10.2 stores tests/pace/tablet-base.json.
 # `--pace-fault` plays both with the planted stutter (--diagnostics pace-fault): the checks must then fail, their own proof.
 PACE = HERE / "pace.py"
@@ -1873,7 +1875,7 @@ PACE_TABLET_BASE = TREE / "tests" / "pace" / "tablet-base.json"
 PACE_RENDERERS = ("d3d12", "vulkan")
 PACE_HISTORY = "pace-history.tsv"    # in the gate's work folder: main's readings (pace.py keep, after a move)
 PACE_LOCK_WAIT = 20.0                # minutes to wait for the measurement lock
-PACE_QUIET_MINUTES = 10.0            # minutes a PC run waits for a quiet machine (then it plays; a FAIL then is the machine's: env)
+PACE_QUIET_MINUTES = 30.0            # minutes a PC run waits for a quiet machine: the speed measure's wait (tools/measure/quiet.py WAIT_MINUTES)
 # Time limits, in minutes: a run of the PC's suite is about a minute (the boot, 30 s of play, its start and end), and each renderer may
 # be played twice; the tablet's two tests of 80 s of play with the boot, the install and the removal. The waits for the locks come on top.
 PACE_PC_MINUTES = 12
@@ -1902,6 +1904,11 @@ def pace_reading(work, code, renderers):
     parts, kinds_seen = [], []
     for renderer in renderers:
         mine = [r for r in runs if r.get("renderer") == renderer]
+        if not mine and renderer in busy:
+            # Not played: the machine stayed busy (pace.py's quiet wait ran out). The machine's to answer, not the change's.
+            kinds_seen.append("env")
+            parts.append("%s: not played, the machine was not quiet: %s" % (renderer, busy[renderer]))
+            continue
         if not mine:
             exit_code = harness.get(renderer)
             kinds_seen.append("env" if exit_code == ENV_EXIT else "tool")
@@ -1913,11 +1920,7 @@ def pace_reading(work, code, renderers):
             loads = ["loads %s (%s)" % (v, verdict) for m, v, _, verdict in rows if m == "loads"]
             again = " (played again)" if (pathlib.Path(work) / pace_tool.FIRST / renderer).is_dir() else ""
             text = "%s: %s%s" % (r.get("run_key", renderer), ("FAIL " + "; ".join(bad)) if bad else "pass", again)
-            if bad and renderer in busy:
-                # A run that failed on a machine that was not quiet: the machine's to answer, not the change's.
-                kinds_seen.append("env")
-                text += " (the machine was not quiet: %s)" % busy[renderer]
-            elif bad:
+            if bad:
                 kinds_seen.append("fail")
             parts.append(text + (", " + loads[0] if loads and not bad else ""))
     # A failure of the change's comes first; then the tool's; then the machine's.
@@ -1934,7 +1937,10 @@ def pace_step(g):
                "--quiet-minutes", "%g" % PACE_QUIET_MINUTES, "--paks", g.paks_text()] + pace_fault_args(g)
         code = run(cmd, log, timeout=int(60 * (PACE_PC_MINUTES + PACE_LOCK_WAIT + 4 * PACE_QUIET_MINUTES)))
         g.pace_work.append((PACE_PC_CHECK, work))
-        return pace_reading(work, code, PACE_RENDERERS)
+        reading = pace_reading(work, code, PACE_RENDERERS)
+        if reading[3] == "env":
+            measure_fault(g, PACE_PC_CHECK, "ENV", "the pace check was not judged: " + reading[1])
+        return reading
     return fn
 
 
@@ -3252,7 +3258,8 @@ def tablet_after(g, stops):
 
 # The checks of a run that start the game (on this computer or the tablet), and those that never do: a run whose checks are all of
 # the second kind (documents, tools, builds) asks nothing of the machine. A test pins that every check of every level is in one.
-GAME_CHECKS = ("start/", "engine/", "tour", "mods", "soak", "coverage", "android/", "tablet/", "measure/", "speed/", "validate/", "stress/")
+GAME_CHECKS = ("start/", "engine/", "tour", "mods", "soak", "coverage", "android/", "tablet/", "measure/", "speed/", "validate/", "stress/",
+               "pace/")
 NO_GAME_CHECKS = ("repo/", "build/", "data/", "unit/", "rust", "lumalink", "import/", "harness/", "description/", "pictures/",
                   "replays/", "github", "part/", "lane/", "gate/")
 # The locks a held gate, long run or measure keeps: a game process that one of them may own is never ended as a leftover.
