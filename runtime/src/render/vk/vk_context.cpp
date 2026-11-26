@@ -2142,7 +2142,7 @@ bool device_removed(Device*) noexcept {
     return false;
 }
 
-UploadMemory create_upload_memory(Device*, std::size_t bytes, const char* name, UploadPlace place) {
+UploadMemory create_upload_memory(Device*, std::size_t bytes, const char* name, UploadPlace place, UploadUse) {
     vk::Context& context = vk::Context::get();
     if (!context.ready() || bytes == 0u) {
         return {};

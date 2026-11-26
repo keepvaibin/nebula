@@ -26,6 +26,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -175,8 +176,10 @@ public:
                                                           DXGI_FORMAT format, std::uint32_t bind, const char* name,
                                                           std::uint32_t samples = 1u,
                                                           const D3D11_SUBRESOURCE_DATA* initial = nullptr);
-    // Upload memory of `size` bytes (zeroed), with its address range. Null when the memory cannot be had.
-    [[nodiscard]] std::shared_ptr<Buffer> create_buffer(std::uint64_t size, const char* name);
+    // Upload memory of `size` bytes (zeroed), with its address range. Null when the memory cannot be had. `use`: its video
+    // memory copy for that use made now (Buffer::bound), before upload_written sees the buffer: any thread may call it.
+    [[nodiscard]] std::shared_ptr<Buffer> create_buffer(std::uint64_t size, const char* name,
+                                                        std::optional<BufferUse> use = std::nullopt);
     // Every upload buffer's bytes written since the last call reach the GPU (render thread, before draws that read them).
     void upload_written();
 

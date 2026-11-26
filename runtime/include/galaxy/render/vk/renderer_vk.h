@@ -414,15 +414,16 @@ public:
     // True once when the presentation times lower the depth by one picture fewer: the next slot is skipped
     // (PresentSlots::take_skip).
     [[nodiscard]] bool take_present_skip() noexcept { return present_timing_.slots.take_skip(); }
-    // The display model (frame_schedule.h DisplayModel), fed by present timing's results where a present asks its time
-    // (G2.3.2); no answer elsewhere: the schedule's slots are then the moments the pictures start.
+    // The display model (frame_schedule.h DisplayModel), fed by present timing's results wherever the swap chain reports
+    // them (G2.3.2, R-009); no answer elsewhere: the schedule's slots are then the moments the pictures start.
     [[nodiscard]] bool display_time(std::int64_t present, std::int64_t& shown) const noexcept {
         return display_model_.display_time(present, shown);
     }
     [[nodiscard]] bool take_shown(ShownPicture& picture) noexcept { return display_model_.take_shown(picture); }
-    // No queue bounds the display lead here (frame_schedule.h present_queue): the lead moves only on pictures shown that
-    // asked their time.
-    [[nodiscard]] unsigned present_queue() const noexcept { return 0u; }
+    // The presents' FIFO queue bounds the display lead (frame_schedule.h present_queue) where present timing reports the
+    // presents shown but takes no present's time: one present ahead of the one shown at most (each waits for the last,
+    // present_swapchain_image). 0 where presents ask their time: the lead moves only on those shown.
+    [[nodiscard]] unsigned present_queue() const noexcept;
     [[nodiscard]] bool queue_time(std::int64_t present, std::int64_t& shown) const noexcept {
         return display_model_.queue_time(present, shown);
     }
