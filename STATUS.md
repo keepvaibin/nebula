@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-26 04:25. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-26 06:52. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 35 of 155 (23%).
 
-Now: in work: R-009 fixer last round (Vulkan boot-load lead runaway, guard, target reuse)
+Now: R-009 last round done; two Vulkan rows worse than last round's table; waiting for the planner
 
 In work now: Nothing started.
 
@@ -127,7 +127,7 @@ Nothing waits for the owner.
 | M-006 | closed | - | the step tier and section check; a passing tool fault played once more; a waiter left not judged runs itself | 0 | 95 | 2911f6429 |
 | M-007 | closed | - | the section-at-a-time roles: a whole section ahead, wait, hand-off sheets, hard reports, the live page | 0 | 80 | 9ed09cfec |
 
-## Decisions (124)
+## Decisions (125)
 
 - 2026-11-23 S0.2.1: LoadSlice: 32 items a frame; an item is a phase of GameScene::initAfterScenarioChosen, the player, one placement made whole, one piece of FileSelector::initStep, or one Star Bit of the reserve (because the card asks for a fixed count of work and names no count; the count is a constant in one place, no player sees which frame of the load an item falls in, and the load worker (G3.7) replaces the slices)
 - 2026-11-23 S0.2.1: Drawing's random stream (MR::getDrawRandom) is seeded with the same seed as the game's stream, in setRandomSeedFromStageName and setFixedRandomSeed (because a fixed seed keeps the cosmetic numbers the same in every run of a replay and needs no new setting; the draw stream runs through the same sequence as the game's but is advanced only by drawing, so neither changes the other)
@@ -253,6 +253,7 @@ Nothing waits for the owner.
 - 2026-11-25 R-007: Where the queue holds no picture before it, a start before its slot waits on the render thread's own wait for its start (slot_due) until a present reaches the slot; nothing waits between a picture's work and its Present (because with no hold a picture presented to an empty queue shows at the first refresh it reaches, and one picture shown early keeps every later one early (the unit test showed it at 360 to 500 Hz); a wait before the work never runs into the next picture's start, as the hold before Present did)
 - 2026-11-25 R-007: Vulkan answers present_queue 0 and keeps its lead rule unchanged (because its lead moves only on presents that asked their time; the brief and the fault are Direct3D's, and Vulkan's pacing at 240 Hz measured good)
 - 2026-11-25 R-009: Vulkan feeds the display model from VK_EXT_present_timing's reported times (first pixel out) of every timed present, and where presents cannot ask an absolute time the FIFO queue is paced as Direct3D's flip model: present_queue 1, each present waits (VK_KHR_present_wait2) for the last one shown; presents at an absolute time are used where the surface offers them, and with neither present timing nor display timing the model stays empty and the slots are the moments the pictures start (lead 0, the FIFO queue alone; on this PC that was the 23.2 ms match delay) (because probe (vulkaninfo, NVIDIA RTX 5090, driver 610.88, Windows 11): VK_EXT_present_timing rev 3, VK_KHR_present_id/id2, VK_KHR_present_wait/wait2; surface: presentTimingSupported=true, presentAtAbsoluteTimeSupported=false, presentAtRelativeTimeSupported=true, presentStageQueries=QUEUE_OPERATIONS_END/IMAGE_FIRST_PIXEL_OUT; at-relative-time counts from the previous present's display, which a present queued ahead does not know, so the reported times are the best this driver gives; measured: match delay p99 23.2 -> 19.0 ms, rate-120 14.8 ms, 0 missed)
+- 2026-11-26 R-009: Accepted as they are, not fixed in R-009: rate-60's missed refreshes on Direct3D 11 and Direct3D 12 (candidate 6/6/6 and 8/7/6 against main 5/4/4 and 2/11/2 at 3 runs) and Vulkan's animation dips (match 99.98%, rate-120 97.83% within 1 ms) (because the planner's decision 11-26 under brief AD: the rate-60 misses are the scene-load steps (end, start, ready 3.3-6.1 ms against a lead of about 5 ms), which AD 'Where they go' carries to G10.5's depth rule and G3.7, and main is as noisy; the animation dips sit where the lead steps down under the covered wipe, and AD bar 2 does not count jumps across a load or a scene change)
 
 ## Checks changed during the run (74)
 
