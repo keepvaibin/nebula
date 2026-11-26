@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-26 13:42. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-26 13:47. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 36 of 156 (23%).
 
-Now: G10.1 landed, plan split landed (main b51dc1571); in work: writer for G10.2 (code)
+Now: G10.2 written; in work: lander landing G10.2
 
 In work now:
 - G10.2 FrameTimeline attribution and the baseline report (agent 1)
@@ -111,7 +111,7 @@ In work now:
 - G10.1 Pacing in the gate: the PC's match run on every landing, the tablet's at 60 and 120 Hz: proof 3: pace/tablet on R52WA0FXE5J at 120 and 60 Hz with --pace-fault shows the sleep in the rows, and the clean build's rows are kept as the check's first reading (the tablet: a writer may not run it) (agent 1, 2026-11-26 08:36)
 - G10.1 Pacing in the gate: the PC's match run on every landing, the tablet's at 60 and 120 Hz: proof 5: the game step's and the walk's time, PC and tablet, before and after: never slower (the switch costs one comparison when off; measures a writer may not run) (agent 1, 2026-11-26 08:36)
 - G10.2 FrameTimeline attribution and the baseline report: the tablet: one pace/tablet run at 60 and one at 120 Hz with the capture on (pace.py run, device renderer); check that perfetto starts as the shell user and the trace comes back, which of power/cpu_frequency, power/gpu_frequency and sched/sched_switch the shell user may enable (perfetto's log in the run folder), and whether the game's layer has app rows in actual_frame_timeline_slice (if none, the latency method is used and the note is written) (agent 1, 2026-11-26 13:42)
-- G10.2 FrameTimeline attribution and the baseline report: trace_processor_shell v59.1 (D:/NebulaWork/tools/perfetto): run frametimeline.py read on that trace and check that the -q CSV output has a header line and the column names the QUERIES use (actual_frame_timeline_slice: ts, dur, layer_name, jank_type, present_type, gpu_composition, on_time_finish; expected_frame_timeline_slice; clock_snapshot), since the test uses a fake program (agent 1, 2026-11-26 13:42)
+- G10.2 FrameTimeline attribution and the baseline report: trace_processor_shell v59.1 (D:/NebulaWork/tools/perfetto): run frametimeline.py read on that trace and check that the -q CSV output has a header line and the column names the QUERIES use (actual_frame_timeline_slice: ts, dur, layer_name, jank_type, present_type, gpu_composition, surface_frame_token, display_frame_token; expected_frame_timeline_slice the same tokens; clock_snapshot: snapshot_id, clock_id, clock_value), since the test uses a fake program (agent 1, 2026-11-26 13:42)
 - G10.2 FrameTimeline attribution and the baseline report: the three planted faults on the tablet, each refused against the right run: --diagnose pace-fault (App Deadline Missed or available late, not SurfaceFlinger), a 120 to 60 Hz mode change during a run (ModeChange in progress), --diagnose pace-depth (three refreshes in row 1) (agent 1, 2026-11-26 13:42)
 - G10.2 FrameTimeline attribution and the baseline report: P-335 and P-334 on the tablet in a measured run: the [pace] lines' refresh_ms 8.333 at 120 Hz and 16.667 at 60 Hz with doubled near 0, and the speed measure's tablet step_ms and step_p99_ms read from the GameFrame, StepWaitBegin and StepWaitEnd events (timeline events present in the run's timeline file) (agent 1, 2026-11-26 13:42)
 
