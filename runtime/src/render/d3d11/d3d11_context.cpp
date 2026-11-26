@@ -260,6 +260,14 @@ bool Context::initialize(const std::string& chosen_gpu, bool debug_layer) {
         shutdown();
         return false;
     }
+    // The diagnostic switches in this process's environment, said so that a switch left set is not mistaken for the renderer.
+    for (const char* name : {"NEBULA_D3D11_FULL_UPLOAD", "NEBULA_D3D11_NO_GAME_BLOOM"}) {
+        if (GetEnvironmentVariableA(name, nullptr, 0u) != 0u) {
+            std::cout << "[gpu] WARNING: diagnostic switch " << name << " is set"
+                      << (std::strcmp(name, "NEBULA_D3D11_FULL_UPLOAD") == 0 ? " (whole-buffer uploads: slow)" : " (the game's glow is skipped)")
+                      << '\n';
+        }
+    }
     std::cout << "[gpu] Direct3D 11 on " << device_name_ << ", feature level " << level_name(caps_.level)
               << (fence_ != nullptr ? ", fence" : ", event queries") << ", 11_0 (constants copied into slot buffers)\n";
     return true;
