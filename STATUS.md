@@ -1,8 +1,8 @@
 # Nebula native plan: status
 
-Written 2026-11-26 13:07. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-26 13:40. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
-Steps landed: 36 of 156 (23%).
+Steps landed: 36 of 155 (23%).
 
 Now: G10.1 landed, plan split landed (main b51dc1571); in work: writer for G10.2 (code)
 
@@ -20,7 +20,7 @@ In work now:
 | R2 | 5 | 5 |
 | G2 | 12 | 16 |
 | G6 | 1 | 8 |
-| G10 | 1 | 11 |
+| G10 | 1 | 10 |
 | G1 | 0 | 5 |
 | R3 | 0 | 13 |
 | R4 | 0 | 10 |
@@ -60,7 +60,7 @@ In work now:
 
 | Id | State | Kind | Check | Renderer | Traced to | Seen |
 | --- | --- | --- | --- | --- | --- | --- |
-| R-006 | open | fail | soak | - | not traced | 1 |
+| R-006 | open | fail | soak | - | not traced | 2 |
 | R-005 | landed | fail | soak | - | not traced | 1 |
 | R-007 | landed | worse | measure/step/pc | - | step G2.3.1 commit d7682d740 | 1 |
 | R-008 | landed | worse | measure/step/pc | - | commit a360c2e0a | 1 |
@@ -131,7 +131,7 @@ Nothing waits for the owner.
 | M-006 | closed | - | the step tier and section check; a passing tool fault played once more; a waiter left not judged runs itself | 0 | 95 | 2911f6429 |
 | M-007 | closed | - | the section-at-a-time roles: a whole section ahead, wait, hand-off sheets, hard reports, the live page | 0 | 80 | 9ed09cfec |
 
-## Decisions (130)
+## Decisions (126)
 
 - 2026-11-23 S0.2.1: LoadSlice: 32 items a frame; an item is a phase of GameScene::initAfterScenarioChosen, the player, one placement made whole, one piece of FileSelector::initStep, or one Star Bit of the reserve (because the card asks for a fixed count of work and names no count; the count is a constant in one place, no player sees which frame of the load an item falls in, and the load worker (G3.7) replaces the slices)
 - 2026-11-23 S0.2.1: Drawing's random stream (MR::getDrawRandom) is seeded with the same seed as the game's stream, in setRandomSeedFromStageName and setFixedRandomSeed (because a fixed seed keeps the cosmetic numbers the same in every run of a replay and needs no new setting; the draw stream runs through the same sequence as the game's but is advanced only by drawing, so neither changes the other)
@@ -259,12 +259,8 @@ Nothing waits for the owner.
 - 2026-11-25 R-009: Vulkan feeds the display model from VK_EXT_present_timing's reported times (first pixel out) of every timed present, and where presents cannot ask an absolute time the FIFO queue is paced as Direct3D's flip model: present_queue 1, each present waits (VK_KHR_present_wait2) for the last one shown; presents at an absolute time are used where the surface offers them, and with neither present timing nor display timing the model stays empty and the slots are the moments the pictures start (lead 0, the FIFO queue alone; on this PC that was the 23.2 ms match delay) (because probe (vulkaninfo, NVIDIA RTX 5090, driver 610.88, Windows 11): VK_EXT_present_timing rev 3, VK_KHR_present_id/id2, VK_KHR_present_wait/wait2; surface: presentTimingSupported=true, presentAtAbsoluteTimeSupported=false, presentAtRelativeTimeSupported=true, presentStageQueries=QUEUE_OPERATIONS_END/IMAGE_FIRST_PIXEL_OUT; at-relative-time counts from the previous present's display, which a present queued ahead does not know, so the reported times are the best this driver gives; measured: match delay p99 23.2 -> 19.0 ms, rate-120 14.8 ms, 0 missed)
 - 2026-11-26 R-009: Accepted as they are, not fixed in R-009: rate-60's missed refreshes on Direct3D 11 and Direct3D 12 (candidate 6/6/6 and 8/7/6 against main 5/4/4 and 2/11/2 at 3 runs) and Vulkan's animation dips (match 99.98%, rate-120 97.83% within 1 ms) (because the planner's decision 11-26 under brief AD: the rate-60 misses are the scene-load steps (end, start, ready 3.3-6.1 ms against a lead of about 5 ms), which AD 'Where they go' carries to G10.5's depth rule and G3.7, and main is as noisy; the animation dips sit where the lead steps down under the covered wipe, and AD bar 2 does not count jumps across a load or a scene change)
 - 2026-11-26 R-009: Against main ecd17a731 no row is worse; the Vulkan boot-load lead runaway (1->15->16 refreshes) is gone with its guard. Vulkan match delay and animation and rate-120 animation are slightly worse than the fixer's previous round because the boot load (title to galaxy) is not marked as a load for the lead: Vulkan holds a lead of 2 until the first wipe (about 4 ms more delay) and steps down under the covered wipe. Neither is visible (AD bars 2 and 4). G10.5 marks the boot load as a load. (because the planner's decision 11-26 under brief AD: land R-009 as it is; the two slightly worse Vulkan figures are not visible (AD bars 2 and 4))
-- 2026-11-26 G10.1: a missed refresh is the system's when its present call had returned at least half a refresh before the refresh it was due at (the one before's display moment + the refreshes asked); the call time is the recorder's presented() moment (because the card files a miss called before its refresh as the system's; a call just before the refresh misses any compositor's latch and is the game's lateness, so half a refresh keeps a late call the game's; the call cannot tell a GPU that finished late, which G10.2's FrameTimeline names on Android)
-- 2026-11-26 G10.1: the loads row of pace/pc judges the load windows (before frame 0 and the first after it) against the most of main's last 5 readings of the same run, kept in the gate's pace-history.tsv by pace.py keep after each move; no reading yet: recorded (because the card asks for a count no worse than main's until G10.5; load misses vary from run to run (15 in one boot window of main's match run), so one reading of main against one of the branch would refuse by chance, and running main's build in every landing doubles the check's time)
-- 2026-11-26 G10.1: pace/pc plays a renderer once more when its run has a FAIL row, and the second run decides; the first stays in the run folder and the detail says it was played again (because the gate's own rule for a test that fails (played again alone, a pass is a flake); a real-time run shares the PC with the system, and the planted fault (a sleep every 2 s) fails both runs)
-- 2026-11-26 G10.1: pace/pc rides with the group build (scope.py) and runs after the PC's lanes, before measure/step/pc; jumps across a seam do not count: a picture drawn under a closed wipe (g_screen_covered), the first of a new swap chain, the first at another refresh period (because every landing that builds the game must run it, with the machine alone for a real-time measure; brief AD bar 2 excepts loads, scene changes and mode changes; camera cuts are not told to the host until G2.7 and count as jumps until then)
 
-## Checks changed during the run (81)
+## Checks changed during the run (74)
 
 - 2026-11-22 S0.1.3 tools/verify/console_census.py: the open group gx_sections counts the four section names GXMT, GXTG, GXTM and GXWP with a ceiling of 31, and the closed group fifo excludes only those four whole words (allowed by docs/engine/FRAME-MODEL.md section 2.9)
 - 2026-11-22 U-unattended tools/gate/main_push_guard.py: the guard also refuses a push of a branch named plant/... (allowed by docs/plan/native/TOOL-MEND-PLANTS.md, how a plant is kept from ever landing)
@@ -340,13 +336,6 @@ Nothing waits for the owner.
 - 2026-11-24 G2.3 split tools/gate/tests/plan_test.py: the real plan is read as 145 steps in orders 1 to 145 and 145 card headings, not 138 (three tests and the docstring) (allowed by the planner's split of G2.3 on 11-24, after its writer blocked it (PLAN blocked G2.3: nine pieces and proofs a writer may not run); docs/plan/native/02-NATIVE-OVERVIEW.md, the order checked against steps.tsv)
 - 2026-11-25 G10 plan tools/gate/tests/plan_test.py: the real plan is read as 155 steps in orders 1 to 155 and 155 card headings, not 145 (two test names, four counts, the docstring) (allowed by the planner's order of 11-25 (Android pacing perfected, brief AB, the owner: "I will not accept 3 instead of two and just 99.8%"); docs/plan/native/02-NATIVE-OVERVIEW.md, the order checked against steps.tsv)
 - 2026-11-25 G10 plan tools/gate/tests/plan_cards_test.py: the real cards read are those of places 12 to 155, not 12 to 145 (LAST_STEP, the function cards_12_to_155, the count test now 144 cards) (allowed by the planner's order of 11-25 (Android pacing perfected, brief AB, the owner: "I will not accept 3 instead of two and just 99.8%"); docs/plan/native/02-NATIVE-OVERVIEW.md, the order checked against steps.tsv)
-- 2026-11-26 G10.1 tools/gate/scope.tsv: a comment on the pace check: the group build holds pace/pc and the tablet's pace/tablet is an extra check by name; no row changed (allowed by docs/plan/native/05-NATIVE-LANE-G.md, G10.1 item 4)
-- 2026-11-26 G10.1 tools/gate/tests/pace_test.py: the case good no longer asks every row to pass: its loads row is recorded (no reading of main's), and the test's lines carry missed_system, jumps and jump_max_us (allowed by docs/plan/native/05-NATIVE-LANE-G.md, G10.1 items 1 and 5)
-- 2026-11-26 G10.1 tools/gate/tests/gate_line_test.py: the Where test leaves pace/pc out of the PC's lanes and asks it between tour/tablet-pc and the pair; the sorted list of ALSO_PARTS has pace/tablet (allowed by docs/plan/native/05-NATIVE-LANE-G.md, G10.1 items 1 and 2)
-- 2026-11-26 G10.1 tools/gate/tests/plan_rerun_test.py: the set of the step tool's extra checks (ALSO_CHECKS) has pace/tablet (allowed by docs/plan/native/05-NATIVE-LANE-G.md, G10.1 item 2)
-- 2026-11-26 G10.1 tools/gate/tests/gate_levels_test.py: the final level is asked to hold every check of main and long except the speed measure, pictures/tablet and now pace/pc; a new case asks pace/pc in the main level and in no other (allowed by docs/plan/native/05-NATIVE-LANE-G.md, G10.1 item 1 (pace/pc joins every landing that builds the game))
-- 2026-11-26 G10.2m plan tools/gate/tests/plan_test.py: the real plan is read as 156 steps in orders 1 to 156 and 156 card headings, not 155 (the test names, the counts, the docstring) (allowed by the planner's decision of 11-26 (G10.2 split: the new measuring step G10.2m); docs/plan/native/02-NATIVE-OVERVIEW.md, the order checked against steps.tsv)
-- 2026-11-26 G10.2m plan tools/gate/tests/plan_cards_test.py: the real cards read are those of places 12 to 156, not 12 to 155 (LAST_STEP, the function cards_12_to_156, the count test now 145 cards) (allowed by the planner's decision of 11-26 (G10.2 split: the new measuring step G10.2m); docs/plan/native/02-NATIVE-OVERVIEW.md, the order checked against steps.tsv)
 
 ## Tool faults
 
