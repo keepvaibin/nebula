@@ -882,7 +882,8 @@ bool g_selected_adapter_valid = false;
 
 // The upload rings' first buffers. A segmentation gives each frame an equal share and keeps one more share as
 // spill, so a frame may take twice its budget; a ring whose frames take over half of it grows at the next frame
-// boundary. The most a frame took over the 102-stop tour (mem_f2): vertex 2.2 MB, index 1.2, constant 1.4, matrix 0.7.
+// boundary without the scene (at once past the budget).
+// The most a frame took over the 102-stop tour (mem_f2): vertex 2.2 MB, index 1.2, constant 1.4, matrix 0.7.
 // A frame's segment of the descriptor ring: its tables are the renderer's own passes' (a few hundred descriptors at most, by
 // design, not by content: draws read the texture region). It starts at this size and doubles if a frame ever fills it
 // (DescriptorRing::grow_frames); frame_high_water() reports use.
@@ -3760,7 +3761,8 @@ void RendererD3D12::begin_frame() {
             frame_gpu_.reset_generated_ema();
             std::cerr << "[interp] temporal upscaling of generated frames tried again\n";
         }
-        // A ring whose frames took over half their budget (or spilled) grows before the next frame; one whose last 30 seconds
+        // A ring whose frames took over their budget (or spilled) grows before the next frame, over half of it before a
+        // frame without the scene (UploadRing::wants_growth); one whose last 30 seconds
         // (and 600 frames) stayed under a quarter of it gives half of its memory back on a frame without the scene
         // (UploadRing::kQuietNs). Only that ring is made again. --diagnostics ring-stress makes them all again (at the size
         // each wants) every kRingStressFrames frames.

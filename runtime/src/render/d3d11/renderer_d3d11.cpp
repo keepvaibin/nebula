@@ -432,8 +432,9 @@ void RendererD3D11::shutdown() {
 }
 
 void RendererD3D11::grow_rings() {
-    // A ring whose frames took over half their budget (or spilled) grows; one whose last 30 seconds (and 600 frames)
-    // stayed under a quarter of it gives half of its memory back on a frame without the scene (UploadRing::kQuietNs).
+    // A ring whose frames took over their budget (or spilled) grows, over half of it on a frame without the scene
+    // (UploadRing::wants_growth); one whose last 30 seconds (and 600 frames) stayed under a quarter of it gives half of
+    // its memory back on such a frame (UploadRing::kQuietNs).
     // Only that ring is made again; --diagnostics ring-stress makes them all again every kRingStressFrames frames.
     const UploadRingSlot rings[] = {{&vertex_ring_, "vertex", kFramesInFlight, true},
                                     {&index_ring_, "index", kFramesInFlight, true},

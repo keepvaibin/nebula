@@ -91,8 +91,16 @@ public:
     [[nodiscard]] static std::size_t budget(std::size_t capacity, unsigned segments) {
         return capacity / (segments + 1u) & ~std::size_t{0xFFFFu};
     }
-    // A frame took over half the budget (or spilled): grow at the next frame boundary, to grown_capacity().
-    [[nodiscard]] bool wants_growth() const { return mapped_ != nullptr && std::max(high_water_, requested_) > bytes_per_frame_ / 2u; }
+    // Grow at the next frame boundary, to grown_capacity(): at once for a frame over the budget (or one that spilled), and
+    // for one over half of it at a frame without the 3D scene (set_shrink_moment), as a shrink waits. Making a ring again
+    // makes a new buffer, a few milliseconds of the render thread's at 8 MB: mid-play that held a picture past its refresh
+    // (R-009: the constant ring's 4 to 8 MB, asked for by a frame that used 382 KB of its 1344, a refresh missed on every
+    // renderer). The budget's other half and the spill behind the segments hold the frames until then; a frame's bytes
+    // are asked for (require_frame_bytes) before it begins, so one past the budget grows the ring before it.
+    [[nodiscard]] bool wants_growth() const {
+        const std::size_t needed = std::max(high_water_, requested_);
+        return mapped_ != nullptr && (needed > bytes_per_frame_ || (shrink_moment_ && needed > bytes_per_frame_ / 2u));
+    }
     // The capacity whose budget for `segments` is twice the high-water mark: the current one when it suffices, 0
     // when the host address space cannot represent the allocation.
     [[nodiscard]] std::size_t grown_capacity(unsigned segments) const {
@@ -118,7 +126,8 @@ public:
     static constexpr unsigned kQuietFrames = 600u;
     static constexpr std::uint64_t kQuietNs = 30'000'000'000ull;
     [[nodiscard]] bool wants_shrink() const { return mapped_ != nullptr && shrink_ready_ && shrink_moment_ && !wants_growth(); }
-    // Whether the frame about to begin may shrink the ring (it draws no 3D scene). Set before each frame boundary.
+    // Whether the frame about to begin may shrink the ring, or grow it for room (it draws no 3D scene). Set before each
+    // frame boundary.
     void set_shrink_moment(bool moment) noexcept { shrink_moment_ = moment; }
     // A new size is wanted at the next frame boundary (remake_upload_rings).
     [[nodiscard]] bool wants_new_size() const { return wants_growth() || wants_shrink(); }

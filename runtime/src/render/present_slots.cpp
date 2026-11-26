@@ -17,7 +17,12 @@ std::int64_t PresentDepth::depth(std::int64_t initial, std::int64_t least, std::
     }
     least = (least + unit - 1) / unit * unit;
     depth_ns_ = std::clamp(depth_ns_, least, std::max(least, most));
-    const std::int64_t depth = (depth_ns_ + unit - 1) / unit * unit;
+    // The depth held is a whole number of the units of an earlier call, and the unit is a refresh period read again at
+    // each call, a few ticks apart from one call to the next (Direct3D's compositor gives 41667 and 41668 ticks at 240
+    // Hz): within a 32nd of a unit above a whole number it is that number. Rounded up it rose a unit each time the period
+    // read a tick shorter, with no picture late (R-009: the Direct3D lead went up a refresh every few seconds).
+    const std::int64_t whole = depth_ns_ / unit;
+    const std::int64_t depth = std::max(least, (whole + (depth_ns_ - whole * unit > unit / 32 ? 1 : 0)) * unit);
     depth_ns_ = depth;
     least_ns_ = least;
     return depth;

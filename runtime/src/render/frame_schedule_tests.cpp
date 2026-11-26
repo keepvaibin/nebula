@@ -24,6 +24,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <limits>
 #include <random>
 #include <utility>
@@ -56,6 +57,11 @@ struct SimDisplay final : ScheduleDisplay {
     double cap = 0.0;
     std::int64_t vblank0 = 12'345;
     std::int64_t period = kFrequency / 120;
+    // The period as the platform reads it: a tick short every second read, from the latest vblank before `now` (DWM's
+    // timing: 41667 and 41668 ticks at 240 Hz, R-009). `now`: the render loop's clock (run).
+    bool period_read_short = false;
+    mutable unsigned period_reads = 0u;
+    std::int64_t now = 0;
     double gpu_ms = 0.0;
     bool temporal = false;
     bool bench = false;
@@ -97,6 +103,10 @@ struct SimDisplay final : ScheduleDisplay {
         if (!timed) return false;
         vblank = vblank0;
         grid = period;
+        if (period_read_short) {
+            vblank = vblank0 + std::max<std::int64_t>(0, now - vblank0) / period * period;
+            grid -= (period_reads++ & 1u) != 0u ? 1 : 0;
+        }
         return true;
     }
     bool variable_refresh(double& held) const override {
@@ -191,6 +201,7 @@ struct Run {
     std::vector<std::int64_t> displayed;   // with a swap chain: the refresh that showed each picture of `shown`
     std::vector<bool> hitched;             // with a swap chain: the picture's own work was a hitch (SimSwapChain::work)
     std::int64_t lead_most = 0;            // the largest display lead a picture was drawn with
+    std::vector<std::int64_t> leads;       // the display lead each picture of `shown` was drawn with
     std::uint64_t superseded = 0;
 };
 
@@ -270,6 +281,7 @@ Run run(FrameSchedule& schedule, int frames, std::int64_t first_step, const std:
         const ScheduleSequence& s = schedule.sequence();
         result.shown.push_back({picture, s.step_qpc, s.frame_qpc, s.lead, s.generated, playing});
         result.lead_most = std::max(result.lead_most, schedule.display_lead());
+        result.leads.push_back(schedule.display_lead());
         if (picture.kind == SchedulePicture::Kind::Generated) {
             const std::int64_t spent = chain != nullptr ? chain->work(cost) : cost;
             schedule.generated_drawn(static_cast<std::uint64_t>(spent), true);
@@ -286,12 +298,14 @@ Run run(FrameSchedule& schedule, int frames, std::int64_t first_step, const std:
     };
     const auto begin = [&] {
         if (schedule.supersede()) ++result.superseded;
+        if (display != nullptr) display->now = now;
         schedule.begin_waiting(now);
         playing = waiting;
         waiting = -1;
         result.references.push_back(schedule.sequence().frame_qpc);
     };
     const auto draw = [&] {
+        if (display != nullptr) display->now = now;
         SchedulePicture picture = schedule.next(now, false);
         if (picture.kind == SchedulePicture::Kind::Begin) {
             begin();
@@ -327,6 +341,7 @@ Run run(FrameSchedule& schedule, int frames, std::int64_t first_step, const std:
         serve(arrived);
         now = std::max(now, arrived);
         if (schedule.waiting()) begin();
+        if (display != nullptr) display->now = now;
         schedule.start(now, arrived, with_step ? step : 0, false);
         if (schedule.waiting()) {
             waiting = k;
@@ -761,12 +776,13 @@ void test_variable_refresh() {
 // G2.3.1 proof 1: the display model, Direct3D's (SimSwapChain: frame latency 1, the frame statistics read after each
 // present). At every sample rate of the head that has in-between pictures, with the compositor holding pictures 0 and
 // 1 refreshes, steady lateness: once the lead has settled, each picture is shown at the refresh it was drawn for (its
-// slot, whose t it shows), every slot a vblank, one picture a refresh, none early, no frame twice. The lead comes down
-// to the least the display allows (held + 1 refreshes) where a picture's margin leaves a refresh and 2 ms to spare
-// (refreshes of 2.5 ms and longer, with a walk of 0.5 ms; nothing holds a picture before its Present since R-007), and
-// is never more than a refresh above it. A compositor that
-// starts holding a refresh more raises the lead from what was shown, and the pictures reach their slots again. A
-// variable refresh (the pacer's clock) and a display with no answers keep lead 0: today's slots.
+// slot, whose t it shows), every slot a vblank, one picture a refresh, none early, no frame twice. The lead is the least
+// the display allows (held + 1 refreshes) at every rate, and the same for every picture once settled: the queue paces
+// the presents, and a picture ready in time reaches its refresh with the queue empty before it (R-009; R-008 started a
+// refresh above it, from a lead that went up and down). The same at 240 Hz with the refresh period read a tick short
+// every second time, as DWM reads it (R-009: rounded up, that raised the lead a refresh with nothing late). A
+// compositor that starts holding a refresh more raises the lead from what was shown, and the pictures reach their slots
+// again. A variable refresh (the pacer's clock) and a display with no answers keep lead 0: today's slots.
 void test_display_model() {
     const std::vector<std::int64_t> steady{kFrequency / 500};
     const std::int64_t walk = kFrequency / 2000;
@@ -797,10 +813,9 @@ void test_display_model() {
             const Evenness e = evenness(r, from, display.period, &display);
             const std::int64_t lead = schedule.display_lead();
             const std::int64_t least = (held + 1) * display.period;
-            const bool lead_ok = display.period >= kFrequency * 26 / 10'000 ? lead == least
-                                 : display.period <= kFrequency * 24 / 10'000
-                                     ? lead == least + display.period
-                                     : lead == least || lead == least + display.period;
+            const bool lead_ok =
+                lead == least && std::all_of(r.leads.begin() + static_cast<std::ptrdiff_t>(from), r.leads.end(),
+                                             [&](std::int64_t l) { return l == least; });
             const bool ok = off == 0u && e.early == 0u && e.frames_once && e.rising && e.on_grid && lead_ok;
             if (!ok && bad++ < 10u) {
                 std::printf("  %.2f Hz held %lld: off their slots %zu of %zu, early %zu, frames once %d, rising %d, "
@@ -814,6 +829,33 @@ void test_display_model() {
     char what[160];
     std::snprintf(what, sizeof what, "the display model at every sample rate, held 0 and 1: %u of %zu runs wrong", bad, runs);
     check(runs > 500u && bad == 0u, what);
+
+    // 240 Hz for 30 s, the refresh period read a tick short every second time: the lead stays the least for every
+    // picture (a tick off at most, the period it is counted in), and every picture reaches its slot.
+    {
+        SimDisplay display = display_at(240.0, true);
+        display.period_read_short = true;
+        SimSwapChain chain{display};
+        display.model = &chain.model;
+        display.queue = 1u;
+        FrameSchedule schedule(display, kFrequency);
+        schedule.configure(interpolated_frames_per_game_frame(240.0), 0);
+        const Run r = run(schedule, 1800, kFrequency, steady, walk, true, nullptr, kStep, &display, nullptr, &chain);
+        const std::size_t from = r.shown.size() / 6;
+        std::size_t stepped = 0;
+        std::size_t off = 0;  // a slot is a vblank as read, a tick or two from the one that shows it
+        for (std::size_t i = from; i < r.leads.size(); ++i) {
+            stepped += std::llabs(r.leads[i] - display.period) > 1 ? 1u : 0u;
+            off += !r.shown[i].picture.flush && std::llabs(r.displayed[i] - r.shown[i].picture.slot) > display.period / 8
+                       ? 1u
+                       : 0u;
+        }
+        std::snprintf(what, sizeof what,
+                      "240 Hz, the period read a tick short: %zu of %zu pictures with a lead off the least, %zu off "
+                      "their slots",
+                      stepped, r.leads.size() - from, off);
+        check(r.leads.size() > 6000u && stepped == 0u && off == 0u, what);
+    }
 
     // 240 Hz: the compositor starts holding a refresh more after 15 s.
     {

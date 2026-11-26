@@ -358,6 +358,7 @@ private:
     PresentDepth display_depth_{};
     std::int64_t display_delay_qpc_ = 0;
     std::int64_t display_from_ = 0;  // the first slot drawn with the lead since it came in (observe_shown)
+    std::int64_t display_least_units_ = 0;  // the lead's least at its last reading, in refreshes (display_lead_for)
     // A swap chain's queue paces the presents (present_queue, with a lead): its depth and the refresh period; 0: none.
     unsigned display_queue_ = 0;
     std::int64_t display_refresh_ = 0;
