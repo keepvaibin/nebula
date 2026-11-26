@@ -44,7 +44,7 @@ order	step	package	title	package_needs	card_file	state	commit
 43	G10.7	G10	Image count and queue bound, where G10.2 shows buffer stuffing	S0.2	05-NATIVE-LANE-G.md	open	
 44	G10.8	G10	The frame-rate vote at 60 Hz	S0.2	05-NATIVE-LANE-G.md	open	
 45	G10.9	G10	Game Mode, sustained performance, and the weak-device heat tests	S0.2	05-NATIVE-LANE-G.md	open	
-46	G10.10	G10	The acceptance matrix	S0.2	05-NATIVE-LANE-G.md	open	
+46	G10.10	G10	Pacing invisible on every device	S0.2	05-NATIVE-LANE-G.md	open	
 47	G1.1	G1	The record: the device's own motion, a pointer in the picture's terms, one fixed space for speed	S0.2	05-NATIVE-LANE-G.md	open	
 48	G1.2	G1	Connection, language, rumble and battery, behaviour by input	S0.2	05-NATIVE-LANE-G.md	open	
 49	G1.3	G1	Sticks: one radial dead zone, the Nunchuk's centre	S0.2	05-NATIVE-LANE-G.md	open	
