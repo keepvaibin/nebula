@@ -30,7 +30,7 @@ value, its target and pass, FAIL, recorded, or not measured (and why). The bars 
     1 ms, except across a seam (a closed wipe, a new swap chain, another refresh period: pacing.h Picture::seam).
   - "loads": the game's missed refreshes and the jumps of the load windows. While LOADS is "main" (until G10.5 lands) a
     run is refused only when either count is above the most of main's last LOAD_READINGS readings of the same run in
-    --history (no reading yet: recorded, refused nothing); with LOADS "none" (from G10.5 on) any miss or jump is refused.
+    --history (fewer than LOAD_FLOOR = 3 readings yet: recorded, refused nothing); with LOADS "none" (from G10.5 on) any miss or jump is refused.
 One row reads every window from the start, the boot's loads included: each shows at least nine tenths of the pictures its
 rate asks for (a lead held high or a stalled schedule shows fewer: R-009, 36 pictures in ten seconds hid before frame 0).
 Exit status: 0 when nothing failed and every run gave windows, 1 otherwise; 3 when the measurement lock stayed held, or
@@ -67,6 +67,9 @@ SHOWN = 0.9
 # The load windows' rule: "main" (refused only above main's readings) until G10.5 lands; "none" (any miss or jump) from it on.
 LOADS = "main"
 LOAD_READINGS = 5
+# The fewest readings of main the loads row is judged against: a load window's count varies from run to run (Vulkan's was 11 and
+# then 24 on the same code), so one or two readings are no baseline. Below it the row records and refuses nothing.
+LOAD_FLOOR = 3
 HISTORY_COLUMNS = ("time", "commit", "run", "load_missed", "load_jumps", "load_windows", "missed", "missed_system", "jumps")
 # A first run kept beside the one that decides (--again): WORK/first/<renderer>; digest leaves it out.
 FIRST = "first"
@@ -184,8 +187,8 @@ def load_row(run, history):
         ok = missed == 0 and jumps == 0
         return ("loads", value, "no missed refresh, no jump", "pass" if ok else "FAIL")
     readings = history.get(run["run_key"], [])[-LOAD_READINGS:]
-    if not readings:
-        return ("loads", value, "no reading of main's yet: recorded", "recorded")
+    if len(readings) < LOAD_FLOOR:
+        return ("loads", value, "%d of main's readings, %d needed to judge: recorded" % (len(readings), LOAD_FLOOR), "recorded")
     most_missed = max(r["load_missed"] for r in readings)
     most_jumps = max(r["load_jumps"] for r in readings)
     ok = missed <= most_missed and (jumps is None or jumps <= most_jumps)
