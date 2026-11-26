@@ -109,6 +109,7 @@ In work now:
 - G2.5 Landing 5: one arbiter, the clock held, the heat input: Proof 8: the game step's time and the walk's on the PC and the tablet, before (--diagnostics old-governors) and after: never slower (measure/step/pc, measure/step/tablet) (agent 1, 2026-11-25 02:28)
 - G10.1 Pacing in the gate: the PC's match run on every landing, the tablet's at 60 and 120 Hz: proofs 1 and 2: a landing of main's build shows pace/pc on Direct3D 12 and Vulkan, its added minutes measured; gate.py --main --only pace/pc --pace-fault is refused and the same build without the switch passes (real-time PC runs a writer may not run) (agent 1, 2026-11-26 08:36)
 - G10.1 Pacing in the gate: the PC's match run on every landing, the tablet's at 60 and 120 Hz: proof 3: pace/tablet on R52WA0FXE5J at 120 and 60 Hz with --pace-fault shows the sleep in the rows, and the clean build's rows are kept as the check's first reading (the tablet: a writer may not run it) (agent 1, 2026-11-26 08:36)
+- G10.1 Pacing in the gate: the PC's match run on every landing, the tablet's at 60 and 120 Hz: proof 5: the game step's and the walk's time, PC and tablet, before and after: never slower (the switch costs one comparison when off; measures a writer may not run) (agent 1, 2026-11-26 08:36)
 
 ## Waiting for the owner
 
