@@ -60,7 +60,7 @@ In work now: Nothing started.
 | Id | State | Kind | Check | Renderer | Traced to | Seen |
 | --- | --- | --- | --- | --- | --- | --- |
 | R-006 | open | fail | soak | - | not traced | 1 |
-| R-009 | open | worse | measure/step/pc | - | commit ecd17a731 | 1 |
+| R-009 | started | worse | measure/step/pc | - | commit ecd17a731 | 1 |
 | R-005 | landed | fail | soak | - | not traced | 1 |
 | R-007 | landed | worse | measure/step/pc | - | step G2.3.1 commit d7682d740 | 1 |
 | R-008 | landed | worse | measure/step/pc | - | commit a360c2e0a | 1 |
