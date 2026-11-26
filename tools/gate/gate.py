@@ -1928,13 +1928,27 @@ def pace_reading(work, code, renderers):
     return code == 0 and not kinds_seen, "; ".join(parts) or "no run", None, kind
 
 
+def pace_pc_command(g, work):
+    """The command pace/pc runs (pace_step; gate_line_test feeds it through pace.py's own parser and suite reading)."""
+    return [sys.executable, "-X", "utf8", "-I", str(PACE), "run", "--bin", str(g.bin), "--work", str(work),
+            "--suite", str(PACE_PC_SUITE), "--renderers", ",".join(PACE_RENDERERS), "--again",
+            "--history", str(pathlib.Path(g.args.work) / PACE_HISTORY), "--lock-wait", "%g" % PACE_LOCK_WAIT,
+            "--quiet-minutes", "%g" % PACE_QUIET_MINUTES, "--paks", g.paks_text()] + pace_fault_args(g)
+
+
+def pace_tablet_command(g, work, apk):
+    """The command pace/tablet runs (pace_tablet_part; gate_line_test reads it as pace_pc_command)."""
+    return [sys.executable, "-X", "utf8", "-I", str(PACE), "run", "--bin", str(g.android_bin), "--work", str(work),
+            "--suite", str(PACE_TABLET_SUITE), "--device", g.args.tablet, "--device-lock", g.args.tablet_lock,
+            "--device-wait", "%g" % g.args.tablet_wait, "--apk", str(apk), "--pak", g.pak or g.args.pak,
+            "--history", str(pathlib.Path(g.args.work) / PACE_HISTORY), "--lock-wait", "%g" % PACE_LOCK_WAIT,
+            "--paks", g.paks_text()] + pace_fault_args(g)
+
+
 def pace_step(g):
     def fn(log):
         work = g.work / "pace-pc"
-        cmd = [sys.executable, "-X", "utf8", "-I", str(PACE), "run", "--bin", str(g.bin), "--work", str(work),
-               "--suite", str(PACE_PC_SUITE), "--renderers", ",".join(PACE_RENDERERS), "--again",
-               "--history", str(pathlib.Path(g.args.work) / PACE_HISTORY), "--lock-wait", "%g" % PACE_LOCK_WAIT,
-               "--quiet-minutes", "%g" % PACE_QUIET_MINUTES, "--paks", g.paks_text()] + pace_fault_args(g)
+        cmd = pace_pc_command(g, work)
         code = run(cmd, log, timeout=int(60 * (PACE_PC_MINUTES + PACE_LOCK_WAIT + 4 * PACE_QUIET_MINUTES)))
         g.pace_work.append((PACE_PC_CHECK, work))
         reading = pace_reading(work, code, PACE_RENDERERS)
@@ -1974,11 +1988,7 @@ def pace_tablet_part(g):
         apk = test_apk(g.args)
         if not apk.is_file():
             return False, "the test app %s is not there" % apk, None, "tool"
-        cmd = [sys.executable, "-X", "utf8", "-I", str(PACE), "run", "--bin", str(g.android_bin), "--work", str(work),
-               "--suite", str(PACE_TABLET_SUITE), "--device", g.args.tablet, "--device-lock", g.args.tablet_lock,
-               "--device-wait", "%g" % g.args.tablet_wait, "--apk", str(apk), "--pak", g.pak or g.args.pak,
-               "--history", str(pathlib.Path(g.args.work) / PACE_HISTORY), "--lock-wait", "%g" % PACE_LOCK_WAIT,
-               "--paks", g.paks_text()] + pace_fault_args(g)
+        cmd = pace_tablet_command(g, work, apk)
         code = run(cmd, log, timeout=int(60 * (PACE_TABLET_MINUTES + PACE_LOCK_WAIT + g.args.tablet_wait)))
         g.pace_work.append((PACE_TABLET_CHECK, work))
         passed, detail, tests, kind = pace_reading(work, code, ("vulkan",))
