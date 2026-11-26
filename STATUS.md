@@ -4,7 +4,7 @@ Written 2026-11-25 16:49. If this time is more than three hours old, the work ha
 
 Steps landed: 35 of 155 (23%).
 
-Now: in work: lander landing repair R-008 (24b0ce83f)
+Now: R-008 landed (main ecd17a731); in work: fresh Opus fixer for R-009 (the remaining D3D pace rows)
 
 In work now: Nothing started.
 
