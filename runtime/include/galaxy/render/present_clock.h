@@ -50,6 +50,10 @@ private:
 inline StepWork g_step_work;
 // In-between pictures on (RenderCore, per list): the game's step keeps exactly 60 (galaxy/step_lock.h).
 inline std::atomic<bool> g_in_between_on{false};
+// A closed wipe covers the screen (the game's NEBULA_CONTEXT_SCREEN_COVERED, each step): 1 covered, 0 in play, -1 not
+// told (a test, a game that never tells). The display lead steps down only while covered or not told: in play a step
+// down moves every picture's moment at once, where the eye follows motion (brief AD).
+inline std::atomic<int> g_screen_covered{-1};
 // The display varies its refresh with the presents (render/variable_refresh.h: the system's answer, else the presents'
 // proof): any frame rate shows evenly, and the game's step is never locked to the display (galaxy/step_lock.h).
 inline std::atomic<bool> g_variable_refresh{false};

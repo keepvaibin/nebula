@@ -3104,6 +3104,9 @@ void svc_game_context(void*, uint32_t what, int32_t value) {
         }
     } else if (what == NEBULA_CONTEXT_SCREEN_COVERED) {
         follow_star_pointer_mode(gModeHold.covered(value != 0));
+#if defined(NEBULA_HOST_RENDERER)
+        galaxy::render::g_screen_covered.store(value != 0 ? 1 : 0, std::memory_order_relaxed);
+#endif
     } else if (what == NEBULA_CONTEXT_TILT_SECTION) {
         if (gTiltSection.exchange(static_cast<uint32_t>(value), std::memory_order_relaxed) != static_cast<uint32_t>(value)) {
             std::snprintf(text, sizeof(text), "tilt section %d", static_cast<int>(value));

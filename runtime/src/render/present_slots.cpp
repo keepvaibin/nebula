@@ -87,7 +87,10 @@ void PresentDepth::observe(std::int64_t requested, std::int64_t earliest, std::i
     if (window_ns < kWindowNs) {
         return;
     }
-    if (window_late_ >= 2u) {
+    if (window_late_ >= 2u && !raise_allowed_) {
+        calm_ns_ = 0;  // not calm, and no step up: the window is left out
+        calm_margin_ = INT64_MAX;
+    } else if (window_late_ >= 2u) {
         depth_ns_ += std::clamp<std::int64_t>((window_miss_ + step - 1) / step, 1, 2) * step;
         if (since_step_down_ns_ >= 0 && since_step_down_ns_ < kStepDownHeldNs) {
             calm_needed_ns_ = std::min(calm_needed_ns_ * 2, kCalmMostNs);
@@ -97,7 +100,7 @@ void PresentDepth::observe(std::int64_t requested, std::int64_t earliest, std::i
         calm_margin_ = INT64_MAX;
     } else if (window_late_ == 0u) {
         calm_ns_ += window_ns;
-        if (calm_ns_ >= calm_needed_ns_) {
+        if (calm_ns_ >= calm_needed_ns_ && lower_allowed_) {
             // What the margin leaves room for (2 ms kept), in whole periods, a game step at most (a period at the
             // least): the same time at every rate, so a 360 Hz display settles as soon as a 60 Hz one.
             const std::int64_t most = std::max(step, kGameStepNs / step * step);

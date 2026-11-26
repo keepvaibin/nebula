@@ -76,6 +76,13 @@ public:
     // The depth lower by `by` (the next depth() keeps it at its least at the least): a least that fell takes the depth
     // above it down with it.
     void lower(std::int64_t by) noexcept { depth_ns_ -= by; }
+    // Whether a calm stretch may take the depth down now, and late presents take it up (both by default). A stretch that
+    // has become calm while held keeps counting and takes the depth down at the first observe() allowed again; late
+    // presents while raising is held count for nothing (a load under a closed wipe: its hitches pass with it).
+    void allow(bool lower, bool raise) noexcept {
+        lower_allowed_ = lower;
+        raise_allowed_ = raise;
+    }
     // The most a late present missed its slot by since the last call.
     [[nodiscard]] std::int64_t take_late_max() noexcept {
         const std::int64_t most = late_max_;
@@ -99,6 +106,8 @@ private:
     std::int64_t since_step_down_ns_ = -1;  // -1: no step down since the last step up
     std::int64_t calm_margin_ = INT64_MAX;
     std::int64_t late_max_ = 0;
+    bool lower_allowed_ = true;
+    bool raise_allowed_ = true;
 };
 
 class PresentSlots {
