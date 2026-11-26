@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-26 07:56. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-26 08:07. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 35 of 155 (23%).
 
-Now: R-009 landed (main aa544956e); in work: small plan landing (AD bars into the G10 cards)
+Now: AD plan change landed (main 60479dc43); in work: writer for package G10 from G10.1
 
 In work now: Nothing started.
 
