@@ -38,6 +38,18 @@ void Window::add_picture(const Picture& picture) {
 }
 
 void Window::clear() {
+    next();
+    has_before_ = false;
+}
+
+void Window::next() {
+    for (auto p = pictures_.rbegin(); p != pictures_.rend(); ++p) {
+        if (p->displayed_qpc > 0) {
+            before_ = *p;
+            has_before_ = true;
+            break;
+        }
+    }
     steps_.clear();
     step_work_us_.clear();
     pictures_.clear();
@@ -62,6 +74,7 @@ Summary Window::summarize(std::int64_t refresh_qpc, std::int64_t frequency) cons
     std::vector<double> render;
     std::vector<double> generated_render;
     const Picture* last = nullptr;
+    const Picture* shown_before = has_before_ ? &before_ : nullptr;  // the picture shown before, for the jumps
     for (const Picture& p : pictures_) {
         (p.generated ? generated_render : render).push_back(static_cast<double>(p.render_ns) / 1000.0);
         if (p.generated) ++s.generated;
@@ -71,7 +84,15 @@ Summary Window::summarize(std::int64_t refresh_qpc, std::int64_t frequency) cons
         }
         if (p.displayed_qpc == 0) continue;
         ++s.displayed;
-        offsets.push_back(static_cast<double>(p.displayed_qpc - p.content_qpc) * us_per_tick);
+        const double offset = static_cast<double>(p.displayed_qpc - p.content_qpc) * us_per_tick;
+        offsets.push_back(offset);
+        if (shown_before != nullptr && !p.seam && !shown_before->seam) {
+            const double change =
+                std::abs(offset - static_cast<double>(shown_before->displayed_qpc - shown_before->content_qpc) * us_per_tick);
+            s.jump_max_us = std::max(s.jump_max_us, change);
+            if (change > 1000.0) ++s.jumps;
+        }
+        shown_before = &p;
         if (!p.generated && p.step_qpc != 0) delays.push_back(static_cast<double>(p.displayed_qpc - p.step_qpc) * us_per_tick);
         if (last != nullptr && refresh_qpc > 0) {
             const double period = static_cast<double>(refresh_qpc);
@@ -81,6 +102,11 @@ Summary Window::summarize(std::int64_t refresh_qpc, std::int64_t frequency) cons
                 ++s.doubled_pictures;
             } else if (shown > asked) {
                 s.missed_refreshes += static_cast<std::uint64_t>(shown - asked);
+                // Due at the one before's display moment + the refreshes asked; called in time by half a refresh: the system's.
+                const double due = static_cast<double>(last->displayed_qpc) + static_cast<double>(asked) * period;
+                if (p.called_qpc != 0 && static_cast<double>(p.called_qpc) + period / 2.0 <= due) {
+                    s.missed_system += static_cast<std::uint64_t>(shown - asked);
+                }
             } else if (shown == asked) {
                 ++s.on_time;
             }

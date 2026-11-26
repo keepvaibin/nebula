@@ -888,6 +888,21 @@ std::int64_t content_moment_qpc(std::int64_t step_qpc, double t, std::int64_t as
     return step_qpc != 0 ? step_qpc + static_cast<std::int64_t>(std::llround(t * period)) : asked_qpc;
 }
 
+// The planted pacing fault (--diagnostics pace-fault, for the pace checks' own proof, tools/gate/pace.py): the render thread
+// sleeps 20 ms once every 2 s, from 2 s after its first loop. Render thread only.
+std::int64_t g_pace_fault_due_qpc = 0;
+
+void plant_pace_fault() {
+    const std::int64_t now = galaxy::qpc_now();
+    if (g_pace_fault_due_qpc != 0 && now < g_pace_fault_due_qpc) {
+        return;
+    }
+    if (g_pace_fault_due_qpc != 0) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    g_pace_fault_due_qpc = galaxy::qpc_now() + 2 * galaxy::qpc_frequency();
+}
+
 }  // namespace
 
 void RenderCore::advance_interp_sequence(bool flush) {
@@ -1407,6 +1422,9 @@ void RenderCore::render_loop() {
         }
         if (pictures_finish_asked_.load(std::memory_order_acquire)) {
             finish_pictures_here();
+        }
+        if (::galaxy::diagnosing(::galaxy::kDiagnosePaceFault)) {
+            plant_pace_fault();
         }
         // Out of sight (minimised: the host stopped the game; covered: the game goes on and its frames are drawn but not presented,
         // RendererD3D12::present_to_swap_chain): no picture of its own is presented, no generated frame is made, and nothing

@@ -1,0 +1,151 @@
+{
+  "harness": 1,
+  "name": "pace-match-30",
+  "about": "The test match cut to about 30 s of play after the harness frame 0, for the gate check pace/pc (tools/gate/pace.py): pacing in real time at the display rate (in-between pictures above 60 Hz), VSync on, Mario walking round the compass and jumping in the Honeyhive.",
+  "time": "real",
+  "visible": true,
+  "settings": [
+    "GALAXY_MAX_FPS=0",
+    "GALAXY_VSYNC_INTERVAL=1"
+  ],
+  "stage": {
+    "name": "HoneyBeeKingdomGalaxy",
+    "scenario": 1
+  },
+  "limit_seconds": 240,
+  "steps": [
+    {
+      "at": 60,
+      "stick": [
+        0.9,
+        0
+      ],
+      "frames": 150
+    },
+    {
+      "at": 210,
+      "stick": [
+        0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 260,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 360,
+      "stick": [
+        0,
+        0.9
+      ],
+      "frames": 150
+    },
+    {
+      "at": 510,
+      "stick": [
+        -0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 660,
+      "stick": [
+        -0.9,
+        0
+      ],
+      "frames": 150
+    },
+    {
+      "at": 660,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 810,
+      "stick": [
+        -0.6,
+        -0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 960,
+      "stick": [
+        0,
+        -0.9
+      ],
+      "frames": 150
+    },
+    {
+      "at": 1060,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 1110,
+      "stick": [
+        0.6,
+        -0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 1260,
+      "stick": [
+        0.9,
+        0
+      ],
+      "frames": 150
+    },
+    {
+      "at": 1410,
+      "stick": [
+        0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 1460,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 1560,
+      "stick": [
+        0,
+        0.9
+      ],
+      "frames": 150
+    },
+    {
+      "at": 1710,
+      "stick": [
+        -0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 1800,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "log": "\\[pace\\] seconds="
+    }
+  ]
+}

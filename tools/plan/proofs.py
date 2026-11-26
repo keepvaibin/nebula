@@ -185,6 +185,7 @@ CHECK_WORDS = (
     ("replays/software", re.compile(r"software (?:graphics )?device", re.I)),
     ("replays/rates", re.compile(r"time rate", re.I)),
     ("speed/anchor", re.compile(r"`speed/anchor`", re.I)),   # the package's last step asks for it by rule (plan_names_test), not by a phrase
+    ("pace/tablet", re.compile(r"`pace/tablet`", re.I)),
 )
 
 

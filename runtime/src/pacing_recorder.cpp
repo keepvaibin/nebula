@@ -3,8 +3,10 @@
 
 #include "galaxy/pacing.h"
 #include "galaxy/platform_time.h"
+#include "galaxy/render/present_clock.h"
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <deque>
 #include <mutex>
@@ -128,7 +130,7 @@ void step(std::int64_t moment_qpc) noexcept {
             const std::size_t work_count = r.read_work(work_to);
             r.window.set_thread_work(r.work_over(work_to, work_count, cpu_to));
             text = line(r.window.summarize(r.period_qpc, frequency));
-            r.window.clear();
+            r.window.next();
             r.cpu_from = cpu_to;
             std::memcpy(r.work_from, work_to, sizeof(work_to));
             r.work_from_count = work_count;
@@ -171,6 +173,8 @@ void describe(std::int64_t asked_qpc, std::int64_t content_qpc, std::int64_t ste
     r.next.content_qpc = content_qpc;
     r.next.step_qpc = step_qpc;
     r.next.generated = generated;
+    // Drawn under a closed wipe (a load, a scene change): a seam, its change of offset no jump (pacing.h).
+    r.next.seam = galaxy::render::g_screen_covered.load(std::memory_order_relaxed) == 1;
     r.described = true;
 }
 
@@ -181,15 +185,18 @@ void presented(std::uint64_t id) noexcept {
     r.next.render_ns = r.walk_ns;
     const std::int64_t now = galaxy::qpc_now();
     const std::lock_guard<std::mutex> lock(r.mutex);
+    Waiting w;
+    w.picture = r.next;
+    w.picture.called_qpc = now;
     if (id != 0 && id <= r.last_id) {
-        // A new swap chain counts its presents from the start again: nothing more comes for the old ones.
+        // A new swap chain counts its presents from the start again: nothing more comes for the old ones. Its first
+        // picture is a seam (a mode change).
         r.newest_reported = ~std::uint64_t{0};
         r.settle(now);
         r.newest_reported = 0;
+        w.picture.seam = true;
     }
     if (id != 0) r.last_id = id;
-    Waiting w;
-    w.picture = r.next;
     w.id = id;
     w.presented_qpc = now;
     // No report will come for an id of 0: it leaves with the next settle.
@@ -205,9 +212,12 @@ void drop_description() noexcept {
 void displayed(std::uint64_t id, std::int64_t moment_qpc, std::int64_t period_qpc) noexcept {
     Recorder& r = recorder();
     const std::lock_guard<std::mutex> lock(r.mutex);
+    // Another refresh period than the last report's (by more than 1%): the display's mode changed, a seam.
+    const bool other_mode = period_qpc > 0 && r.period_qpc > 0 && std::abs(period_qpc - r.period_qpc) * 100 > r.period_qpc;
     if (period_qpc > 0) r.period_qpc = period_qpc;
     if (Waiting* w = r.find(id); w != nullptr && !w->reported) {
         w->picture.displayed_qpc = moment_qpc;
+        w->picture.seam = w->picture.seam || other_mode;
         w->reported = true;
     }
     if (id > r.newest_reported) r.newest_reported = id;
@@ -229,13 +239,15 @@ std::string line(const Summary& s) {
     char text[832];
     int used = std::snprintf(text, sizeof(text),
                   "[pace] seconds=%.6f steps=%llu steps_per_second=%.4f pictures=%llu displayed=%llu generated=%llu "
-                  "refresh_ms=%.3f on_time=%llu missed=%llu doubled=%llu animation_within_1ms=%.4f animation_p99_us=%.1f "
+                  "refresh_ms=%.3f on_time=%llu missed=%llu doubled=%llu missed_system=%llu jumps=%llu jump_max_us=%.1f "
+                  "animation_within_1ms=%.4f animation_p99_us=%.1f "
                   "delay_avg_us=%.1f delay_p99_us=%.1f render_avg_us=%.1f render_p99_us=%.1f generated_render_avg_us=%.1f "
                   "generated_render_p99_us=%.1f step_work_avg_us=%.1f step_work_p99_us=%.1f step_work_max_us=%.1f",
                   s.seconds, static_cast<unsigned long long>(s.steps), s.steps_per_second,
                   static_cast<unsigned long long>(s.pictures), static_cast<unsigned long long>(s.displayed),
                   static_cast<unsigned long long>(s.generated), s.refresh_ms, static_cast<unsigned long long>(s.on_time),
                   static_cast<unsigned long long>(s.missed_refreshes), static_cast<unsigned long long>(s.doubled_pictures),
+                  static_cast<unsigned long long>(s.missed_system), static_cast<unsigned long long>(s.jumps), s.jump_max_us,
                   s.animation_within_1ms, s.animation_p99_us, s.delay_avg_us, s.delay_p99_us, s.render_avg_us,
                   s.render_p99_us, s.generated_render_avg_us, s.generated_render_p99_us, s.step_work_avg_us,
                   s.step_work_p99_us, s.step_work_max_us);

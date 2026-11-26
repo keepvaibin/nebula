@@ -37,7 +37,10 @@ starts the game for a test goes through here.
          After the move the long run starts if none started in the last 20 hours. No speed measure starts at a move: a landing that
          plays the game has measured itself: measure/step/pc is the pair of the landing's build against the kept base (tools/gate/speedbase.py,
          section 10.2; the candidate becomes the base after a move that judged it), measure/step/tablet the single measure (its trusted
-         lines are kept in the history after the move); the nightly run measures too.
+         lines are kept in the history after the move); the nightly run measures too. A landing that builds the game judges its pacing:
+         pace/pc (tools/gate/pace.py, G10.1) plays the match cut to 30 s on Direct3D 12 and Vulkan after the PC's lanes and before
+         measure/step/pc; its load figures are kept in pace-history.tsv after the move, the readings the next landings are judged against.
+         --pace-fault plays it (and pace/tablet) with the planted stutter: it must fail.
 --long   level 3, on main's newest commit, under the long lock, at below-normal priority: the tablet's 102 stops
          against the PC's, a sanitizer build's tour, the soak, every disc on every renderer. Its parts are pieces of at most seven
          minutes that give way to landings (tools/gate/long_parts.py); no speed part. At its end: tools/gate/long_results.py.
@@ -54,7 +57,7 @@ land BRANCH [BRANCH ...] | land --queue: the landing queue (tools/gate/landing.p
 --scope GROUPS|auto|full: with --main (--move too), only the checks of these groups; what `land` runs on the batch's tip.
 --also NAMES: with --scope, and with `land` (a step's proof that asks for more): more checks, by name (comma-separated): the
          nightly's parts in ALSO_PARTS (stress, sanitizer/tour, soak, soak/long, replays/software, replays/rates, speed/anchor: the pair against
-         the anchor), or any check of the main level.
+         the anchor; pace/tablet: the tablet's pace suite at 60 and 120 Hz), or any check of the main level.
          They run after the checks the groups need have passed (a failed landing runs none), before measure/step/pc, one after
          another, as the nightly run runs them (every stop of a tour), so a landing with --also runs its groups' checks at that
          depth too. `stress` asked so counts a stress result as a fail. A name of the table whose part is not on main yet is refused
@@ -135,6 +138,7 @@ import lockholder  # noqa: E402
 import long_parts  # noqa: E402
 import machine  # noqa: E402
 import noprompt  # noqa: E402
+import pace as pace_tool  # noqa: E402
 import pictures as picture_tool  # noqa: E402
 import replays_rates  # noqa: E402
 import replays_software  # noqa: E402
@@ -391,6 +395,7 @@ class Gate:
         self.layer_seen = {}          # the validate lane: {renderer: the layer error ids its first runs showed}
         self.measure_pending = []     # the landing's measures' pending files (measure.py --pending): kept when main moves
         self.measure_faulted = set()  # the checks that already left a line in tool-faults.tsv in this run
+        self.pace_work = []           # (check, work folder) of the landing's pace checks: kept when main moves (keep_pace)
         self.speed = {}               # the speed checks' outcome for the move (judged, owed, rebase), by check name
         self.tablet_screen = None     # the tablet's screen size (width, height) as the tablet's lane read it at its start, or None
         self.tablet_screen_read = threading.Event()   # set once the tablet's lane has read (or failed to read) it
@@ -1829,12 +1834,14 @@ def lanes_without(lanes, taken):
 
 def pc_tail(g, stops):
     """The PC's last checks, in this order and one at a time: tour/tablet-pc (when the tablet's screen size is known: else tablet_after plays it
-    once the tablet's tour has reported it), then measure/step/pc, unless a check of the PC's lanes has not passed or a part was asked for by name
-    (`--also`: the pair then stays last, as it always was)."""
+    once the tablet's tour has reported it), then pace/pc, then measure/step/pc, unless a check of the PC's lanes has not passed (the pair also
+    when a part was asked for by name: with `--also` it stays last, as it always was)."""
     def tail():
         g.tablet_screen_read.wait()
         if g.tablet_screen is not None and not g.dry:
             tablet_pc_tour(g, stops, g.tablet_screen)
+        if getattr(g, "android_built", True) and not any(r.get("pending") for r in g.results):
+            pace_pc(g)
         if not getattr(g.args, "also", "") and getattr(g, "android_built", True) and not any(r.get("pending") for r in g.results):
             measure_pc(g)
     return tail
@@ -1848,6 +1855,143 @@ def measure_pc(g):
     if g.dry or landing_failed(g) or any(r["check"] == MEASURE_PC_CHECK for r in g.results):
         return
     g.check(MEASURE_PC_CHECK, pair_step(g, MEASURE_PC_CHECK, speedbase.BASE, "measure-pc", pair_renderers(g)), DATA)
+
+
+# The pace checks (G10.1; tools/gate/pace.py, whose help holds the rules; the planner's brief AD). pace/pc: every landing that builds the
+# game (scope.py, the group `build`), the test match cut to about 30 s of play on Direct3D 12 and on Vulkan, in real time with the window
+# shown (the pace tests say "visible"), under the measurement lock, after the PC's lanes and before measure/step/pc; a renderer with a FAIL
+# row is played once more and the second run decides. pace/tablet: an extra check by name (docs/plan/native/step-checks.tsv), the tablet's
+# suite at 60 and 120 Hz under the tablet's lock and the measurement lock, recorded until G10.2 stores tests/pace/tablet-base.json.
+# `--pace-fault` plays both with the planted stutter (--diagnostics pace-fault): the checks must then fail, their own proof.
+PACE = HERE / "pace.py"
+PACE_PC_CHECK = "pace/pc"
+PACE_TABLET_CHECK = "pace/tablet"
+PACE_PC_SUITE = TREE / "tests" / "pace" / "gate.json"
+PACE_TABLET_SUITE = TREE / "tests" / "pace" / "tablet.json"
+PACE_TABLET_BASE = TREE / "tests" / "pace" / "tablet-base.json"
+PACE_RENDERERS = ("d3d12", "vulkan")
+PACE_HISTORY = "pace-history.tsv"    # in the gate's work folder: main's readings (pace.py keep, after a move)
+PACE_LOCK_WAIT = 20.0                # minutes to wait for the measurement lock
+# Time limits, in minutes: a run of the PC's suite is about a minute (the boot, 30 s of play, its start and end), and each renderer may
+# be played twice; the tablet's two tests of 80 s of play with the boot, the install and the removal. The waits for the locks come on top.
+PACE_PC_MINUTES = 12
+PACE_TABLET_MINUTES = 15
+
+
+def pace_fault_args(g):
+    return ["--diagnostics", "pace-fault"] if getattr(g.args, "pace_fault", False) else []
+
+
+def pace_reading(work, code, renderers):
+    """What a run of pace.py says: (passed, detail, None, kind). Every renderer asked must have a run with rows; the detail names each
+    run's verdict, its FAIL rows, its loads row, and a first run that failed and was played again."""
+    if code == 124:
+        return False, "its time limit", None, "tool"
+    if code == 125:
+        return False, "the run was stopped", None, "tool"
+    try:
+        runs = json.loads((pathlib.Path(work) / "pace.json").read_text(encoding="utf-8"))
+        harness = json.loads((pathlib.Path(work) / "pace-run.json").read_text(encoding="utf-8")).get("harness_exit", {})
+    except (OSError, ValueError, AttributeError) as error:
+        if code == pace_tool.LOCK_HELD:
+            return False, "the measurement lock stayed held %g minutes" % PACE_LOCK_WAIT, None, "env"
+        return False, "no readable pace.json (exit %d): %s: %s" % (code, type(error).__name__, kinds.first_line(error)), None, "tool"
+    parts, kind = [], "fail"
+    for renderer in renderers:
+        mine = [r for r in runs if r.get("renderer") == renderer]
+        if not mine:
+            exit_code = harness.get(renderer)
+            kind = "env" if exit_code == ENV_EXIT else "tool"
+            parts.append("%s: no run (the harness's exit %s)" % (renderer, exit_code))
+            continue
+        for r in mine:
+            rows = r.get("rows", [])
+            bad = ["%s %s" % (m, v) for m, v, _, verdict in rows if verdict == "FAIL"]
+            loads = ["loads %s (%s)" % (v, verdict) for m, v, _, verdict in rows if m == "loads"]
+            again = " (played again)" if (pathlib.Path(work) / pace_tool.FIRST / renderer).is_dir() else ""
+            parts.append("%s: %s%s" % (r.get("run_key", renderer), ("FAIL " + "; ".join(bad)) if bad else "pass", again) +
+                         (", " + loads[0] if loads and not bad else ""))
+    passed = code == 0 and kind == "fail" and all(not p.split(": ", 1)[1].startswith(("FAIL", "no run")) for p in parts)
+    return passed, "; ".join(parts) or "no run", None, kind
+
+
+def pace_step(g):
+    def fn(log):
+        work = g.work / "pace-pc"
+        cmd = [sys.executable, "-X", "utf8", "-I", str(PACE), "run", "--bin", str(g.bin), "--work", str(work),
+               "--suite", str(PACE_PC_SUITE), "--renderers", ",".join(PACE_RENDERERS), "--again",
+               "--history", str(pathlib.Path(g.args.work) / PACE_HISTORY), "--lock-wait", "%g" % PACE_LOCK_WAIT,
+               "--paks", g.paks_text()] + pace_fault_args(g)
+        code = run(cmd, log, timeout=int(60 * (PACE_PC_MINUTES + PACE_LOCK_WAIT)))
+        g.pace_work.append((PACE_PC_CHECK, work))
+        return pace_reading(work, code, PACE_RENDERERS)
+    return fn
+
+
+def pace_pc(g):
+    """pace/pc, after the PC's lanes with the machine alone and before measure/step/pc. A landing that has failed already does not run it."""
+    if g.level not in MEASURE_LEVELS or not g.wanted(PACE_PC_CHECK, DATA):
+        return
+    if g.dry or landing_failed(g) or any(r["check"] == PACE_PC_CHECK for r in g.results):
+        return
+    g.check(PACE_PC_CHECK, pace_step(g), DATA)
+
+
+def pace_tablet_part(g):
+    """`--also pace/tablet`: the tablet's pace suite. No tablet named, or one that does not answer adb: owed."""
+    needs = ("build/android",) + DATA
+    if not g.wanted(PACE_TABLET_CHECK, needs) or g.dry:
+        return
+    if not g.android_built:
+        g.missing(PACE_TABLET_CHECK, "the landing built no Android test app", needs)
+        return
+    if not g.args.tablet:
+        g.owe(PACE_TABLET_CHECK, "no tablet is named (--tablet): the tablet's pace check is owed", needs)
+        return
+    machine.ensure_adb_server(android_module().Device("").adb_path)
+    if not android_module().Device(g.args.tablet).answers():
+        g.owe(PACE_TABLET_CHECK, "%s does not answer adb: the tablet's pace check is owed" % g.args.tablet, needs)
+        return
+
+    def fn(log):
+        work = g.work / "pace-tablet"
+        apk = test_apk(g.args)
+        if not apk.is_file():
+            return False, "the test app %s is not there" % apk, None, "tool"
+        cmd = [sys.executable, "-X", "utf8", "-I", str(PACE), "run", "--bin", str(g.android_bin), "--work", str(work),
+               "--suite", str(PACE_TABLET_SUITE), "--device", g.args.tablet, "--device-lock", g.args.tablet_lock,
+               "--device-wait", "%g" % g.args.tablet_wait, "--apk", str(apk), "--pak", g.pak or g.args.pak,
+               "--history", str(pathlib.Path(g.args.work) / PACE_HISTORY), "--lock-wait", "%g" % PACE_LOCK_WAIT,
+               "--paks", g.paks_text()] + pace_fault_args(g)
+        code = run(cmd, log, timeout=int(60 * (PACE_TABLET_MINUTES + PACE_LOCK_WAIT + g.args.tablet_wait)))
+        g.pace_work.append((PACE_TABLET_CHECK, work))
+        passed, detail, tests, kind = pace_reading(work, code, ("vulkan",))
+        if PACE_TABLET_BASE.is_file() or kind != "fail":
+            return passed, detail, tests, kind
+        # No baseline yet (G10.2 stores it): the rows are recorded and refuse nothing.
+        return True, "recorded, no baseline yet: " + detail
+    g.check(PACE_TABLET_CHECK, fn, needs)
+
+
+def keep_pace(g, landed, args):
+    """After main moved: each pace check of the landing that passed keeps its readings in the gate's pace-history.tsv (pace.py keep), the
+    readings later landings' load rows are judged against. A keep that fails changes nothing about the landing: one printed line and one
+    line in tool-faults.tsv."""
+    passed = {r["check"] for r in g.results if r["passed"] and r["state"] == "pass"}
+    for check, work in g.pace_work:
+        if check not in passed or not (pathlib.Path(work) / "pace.json").is_file():
+            continue
+        try:
+            done = subprocess.run([sys.executable, "-X", "utf8", "-I", str(PACE), "keep", str(work), "--history",
+                                   str(pathlib.Path(args.work) / PACE_HISTORY), "--commit", landed],
+                                  capture_output=True, text=True, timeout=120)
+            code, said = done.returncode, kinds.first_line((done.stdout or "") + (done.stderr or ""))
+        except (OSError, subprocess.TimeoutExpired) as error:
+            code, said = 2, "%s: %s" % (type(error).__name__, error)
+        print("gate.py: " + said, flush=True)
+        if code != 0:
+            g.measure_faulted.discard("pace/keep")
+            measure_fault(g, "pace/keep", "TOOL", "the pace readings were not kept (exit %d): %s" % (code, said))
 
 
 def tablet_gap_lines(live):
@@ -4299,6 +4443,7 @@ ALSO_PARTS = {
     "replays/software": AlsoPart(lambda g: replays_software_part(g), ("replays/software",)),
     "replays/rates": AlsoPart(lambda g: replays_rates_part(g), ("replays/rates",)),
     "speed/anchor": AlsoPart(lambda g: anchor_part(g), ("speed/anchor",)),
+    "pace/tablet": AlsoPart(lambda g: pace_tablet_part(g), ("pace/tablet",)),
 }
 # Two lengths of one soak: they share a work folder and a log, so a landing asks for one.
 ALSO_ONE_OF = ("soak", "soak/long")
@@ -4416,6 +4561,7 @@ def run_checks(args, known=None, planned=None, selected=None, dry=False):
     picture_part(g)
     replay_part(g, renderers)
     if level in MEASURE_LEVELS:
+        pace_pc(g)
         also_parts(g)
         # Last, with the machine alone (the landing holds the gate lock, measure.py takes measure.lock): a landing that has failed
         # already does not measure.
@@ -4589,6 +4735,8 @@ def parser(land=False):
     p.add_argument("--covers", default="", help="what the run answers for (commits, packages), for the board")
     p.add_argument("--soak-minutes", type=int, default=int(os.environ.get("NEBULA_GATE_SOAK_MINUTES", "120")),
                    help="the long run: the soak's minutes on each renderer")
+    p.add_argument("--pace-fault", action="store_true",
+                   help="pace/pc and pace/tablet play with the planted stutter (--diagnostics pace-fault): they must fail (their proof)")
     p.add_argument("--serial", action="store_true",
                    help="run the parts one after another, not side by side (the proof of section 7)")
     p.add_argument("--without-quick", action="store_true",
@@ -4928,6 +5076,7 @@ def run_main(argv, left):
                 except OSError as e:
                     print("gate.py: the move was not written to history.tsv (%s: %s)" % (type(e).__name__, e), file=sys.stderr)
                 keep_measures(g, args)
+                keep_pace(g, landed, args)
                 rebase_tablet_after_gap(g, args)
                 keep_speed(g, landed, args)
                 summary = "passed, %s, main moved to %s" % (

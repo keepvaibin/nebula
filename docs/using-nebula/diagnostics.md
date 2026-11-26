@@ -25,6 +25,7 @@ Files go to the `diagnostics` folder in Nebula's data folder, named with the pro
 | `heaps` | Everything `memory` records, plus the process heaps by block size. |
 | `memory` | What the renderer holds every 600 frames: rings, texture tables and a `[vram] breakdown` line. |
 | `old-governors` | A test of pacing: the number of frames between the game's frames and the dynamic resolution budget are chosen the way they were before one controller chose both. It is the old way beside the new, for a before and after measure. |
+| `pace-fault` | A test of the pace checks, not a setting: the render thread sleeps 20 ms once every 2 seconds, a stutter the pace checks (`tools/gate/pace.py`) must refuse. Records nothing. |
 | `pipelines` | The pipelines the run created, written at exit to `pipelines-PROCESS-ID.bin`. `tools/dev/site_pipelines.py` reads it. |
 | `pointer-latency` | The time from the pointer selecting something to the picture that shows it. |
 | `present-stats` | Presented frames, new frames, and GPU and CPU times, each second. |

@@ -30,6 +30,8 @@
 # no picture. A file no row names makes the run full, which takes them too.
 # `measure_pc` and `measure_tablet` (the speed measure of the play route) are on no row: scope.py adds them to every plan that holds
 # an engine or a tour group (`measure_pc`), and, with the Android build in it, `measure_tablet`. The other levels do not get them.
+# `build` holds the pace check pace/pc (G10.1, tools/gate/pace.py): every landing that builds the game plays the match cut to 30 s on
+# Direct3D 12 and Vulkan in real time after the PC's lanes, and a FAIL row refuses it. The tablet's pace/tablet is an extra check by name.
 #
 # The mod suites (tests/mods, 546 tests on three renderers) and LumaLink's own check (380 tests) are in no group while the
 # mods line below says off. The owner set all mod work aside until the native rewrite is done (11-20). `short` adds the
