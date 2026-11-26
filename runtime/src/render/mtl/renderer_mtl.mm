@@ -670,9 +670,8 @@ void RendererMtl::begin_frame() {
     frame.retired_objects.clear();
     frame.tables_used = 0u;
     trim_idle_effect_targets();
-    // Once a second of the game (target slots age on idle_clock).
-    if (idle_clock() - target_swept_step_ >= kTargetSweepSteps) {
-        target_swept_step_ = idle_clock();
+    // As a load's wipe covers the screen, never in play (TargetSweep).
+    if (target_sweep_.due(g_screen_covered.load(std::memory_order_relaxed))) {
         sweep_target_slots();
     }
     // What this slot gave up goes first: its fence has passed, and the reset may retire the sampler array to it.

@@ -813,7 +813,7 @@ private:
     FrameMap alt_scene_map_{};
     FrameMap alt_scene_extent_{};  // its allocated size (alt_scene_map_: the part drawn), traded with frame_extent_
     // The open target pass's set (begin_target_pass) while the scene target holds it, and each key's set between passes
-    // ( its colour shared with its picture), dropped after kIdleSteps game steps (idle_clock.h) unused. A picture is sampled
+    // ( its colour shared with its picture), dropped at a load once unused (TargetSweep, idle_clock.h). A picture is sampled
     // through its own view slot (TextureStore::allocate_view) reading the pass's channels.
     struct TargetSlot {
         SceneSet set;
@@ -838,13 +838,11 @@ private:
                          std::uint8_t channels, TextureStore& textures);
     bool publish_frame_pass(const FramePassRequest& params, gpu::TextureRef texture, TextureStore& textures);
     std::unordered_map<std::uint64_t, TargetSlot> target_slots_;
-    static constexpr std::uint64_t kTargetSweepSteps = 60u;  // begin_frame's sweep: once a second of the game
-    std::uint64_t target_swept_step_ = 0u;                    // idle_clock() at the last sweep
+    TargetSweep target_sweep_;  // begin_frame's sweep: at a load's wipe, never in play (idle_clock.h)
     std::vector<VkDescriptorSet> target_free_sources_;  // dropped slots' colour inputs, free to reuse
     // A slot's targets go to the open frame's retired list; its colour input waits for the fence (retired_target_sources_).
     void retire_target_slot(TargetSlot& slot);
-    // Slots no pass has used for kIdleSteps game steps give their targets back; also from begin_frame, so that a scene without
-    // target passes does not keep the last scene's.
+    // From begin_frame when target_sweep_ is due: the slots it lets go give their targets back.
     void sweep_target_slots();
     std::uint64_t target_key_ = 0;
     SceneSet target_scene_;

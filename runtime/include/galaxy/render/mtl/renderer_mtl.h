@@ -562,8 +562,7 @@ private:
     bool publish_frame_pass(const FramePassRequest& params, gpu::TextureRef texture, TextureStore& textures);
     void drop_picture(Picture& picture, TextureStore& textures);
     std::unordered_map<std::uint64_t, TargetSlot> target_slots_;
-    static constexpr std::uint64_t kTargetSweepSteps = 60u;  // begin_frame's sweep: once a second of the game
-    std::uint64_t target_swept_step_ = 0u;                    // idle_clock() at the last sweep
+    TargetSweep target_sweep_;  // begin_frame's sweep: at a load's wipe, never in play (idle_clock.h)
     void retire_target_slot(TargetSlot& slot);
     void sweep_target_slots();
     std::uint64_t target_key_ = 0;

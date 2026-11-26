@@ -3968,9 +3968,8 @@ void RendererD3D12::begin_frame() {
     game_bloom_.trim_idle(frame_index_, kFramesInFlight);
     ambient_occlusion_.trim_idle(frame_index_, kFramesInFlight);
     trim_idle_effect_targets();
-    // Once a second of the game (target slots age on idle_clock).
-    if (idle_clock() - target_swept_step_ >= kTargetSweepSteps) {
-        target_swept_step_ = idle_clock();
+    // As a load's wipe covers the screen, never in play (TargetSweep).
+    if (target_sweep_.due(g_screen_covered.load(std::memory_order_relaxed))) {
         sweep_target_slots();
     }
 
@@ -5537,8 +5536,6 @@ void RendererD3D12::end_target_pass(std::uint8_t channels, TextureStore& texture
     TargetSlot& slot = target_slots_[target_key_];
     std::swap(slot.set, target_scene_);
     (void)publish_picture(target_key_, slot.width, slot.height, slot.set.color, channels, textures);
-    // Keys unused for kIdleSteps game steps give back their render resources (their pictures stay).
-    sweep_target_slots();
 }
 
 void RendererD3D12::retire_target_slot(TargetSlot& slot) {
@@ -5555,12 +5552,13 @@ void RendererD3D12::retire_target_slot(TargetSlot& slot) {
     release_conv_table(slot.set.conv_ring);
 }
 
+// The keys target_sweep_ lets go give back their render resources (their pictures stay).
 void RendererD3D12::sweep_target_slots() {
     if (target_slots_.empty()) {
         return;
     }
     for (auto it = target_slots_.begin(); it != target_slots_.end();) {
-        if (idle_since(it->second.used) && !(target_pass_active_ && it->first == target_key_)) {
+        if (target_sweep_.goes(it->second.used) && !(target_pass_active_ && it->first == target_key_)) {
             retire_target_slot(it->second);
             it = target_slots_.erase(it);
         } else {

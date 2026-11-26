@@ -550,8 +550,7 @@ private:
     FrameMap alt_scene_extent_{};  // its allocated size (alt_scene_map_: the part drawn), traded with frame_extent_
     std::unordered_map<std::uint64_t, Picture> pictures_;
     std::unordered_map<std::uint64_t, TargetSlot> target_slots_;
-    static constexpr std::uint64_t kTargetSweepSteps = 60u;  // begin_frame's sweep: once a second of the game
-    std::uint64_t target_swept_step_ = 0u;                    // idle_clock() at the last sweep
+    TargetSweep target_sweep_;  // begin_frame's sweep: at a load's wipe, never in play (idle_clock.h)
     void retire_target_slot(TargetSlot& slot);
     void sweep_target_slots();
     std::uint64_t target_key_ = 0;
