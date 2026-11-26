@@ -41,4 +41,48 @@ inline void advance_idle_clock(std::uint64_t step) noexcept {
     g_steps.store(g_steps.load(std::memory_order_relaxed) + moved, std::memory_order_relaxed);
 }
 
+// When a renderer's target slots (a target pass's set per key) are handed back. None goes in play: a slot freed there is
+// made again on the render thread when its key's pass next comes, 1.4 to 1.8 ms of it, a missed refresh at 240 Hz
+// (R-009: at the hand-back after a load). They go as a wipe covers the screen for a load (`covered` 1, the
+// g_screen_covered reading), a slot no pass has used for kIdleSteps game steps nor since the wipe before it (a whole
+// scene went by without it), its targets released on the worker (release_worker.h). A host that does not tell (-1)
+// sweeps once a second of the game, any slot unused for kIdleSteps.
+class TargetSweep {
+public:
+    static constexpr std::uint64_t kUntoldSteps = 60u;  // not told: once a second of the game
+
+    // Render thread, once a frame: whether the slots are swept now.
+    [[nodiscard]] bool due(int covered) noexcept {
+        const std::uint64_t now = idle_clock();
+        const bool was_covered = covered_;
+        covered_ = covered == 1;
+        told_ = covered >= 0;
+        if (!told_) {
+            if (now - swept_ < kUntoldSteps) {
+                return false;
+            }
+            swept_ = now;
+            return true;
+        }
+        if (!covered_ || was_covered) {
+            return false;
+        }
+        wipe_before_ = wipe_;
+        wipe_ = now;
+        return true;
+    }
+
+    // Whether a slot last used at `used` (an idle_clock() reading) goes in the sweep due() called for.
+    [[nodiscard]] bool goes(std::uint64_t used) const noexcept {
+        return idle_since(used) && (!told_ || used < wipe_before_);
+    }
+
+private:
+    std::uint64_t swept_ = 0u;        // not told: idle_clock() at the last sweep
+    std::uint64_t wipe_ = 0u;         // idle_clock() as the latest wipe covered the screen
+    std::uint64_t wipe_before_ = 0u;  // as the one before it did (0: none yet, nothing goes)
+    bool covered_ = false;
+    bool told_ = false;
+};
+
 }  // namespace galaxy::render

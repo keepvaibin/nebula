@@ -756,8 +756,6 @@ void RendererMtl::end_target_pass(std::uint8_t channels, TextureStore& textures)
     slot.map = target_scene_map_;
     target_scene_map_ = target_scene_extent_ = FrameMap{};
     (void)publish_picture(target_key_, slot.width, slot.height, slot.set.color, channels, textures);
-    // Keys unused for kIdleSteps game steps give back their render resources (their pictures stay).
-    sweep_target_slots();
     bind_scene();
 }
 
@@ -765,12 +763,13 @@ void RendererMtl::retire_target_slot(TargetSlot& slot) {
     destroy_scene_set(slot.set);
 }
 
+// The keys target_sweep_ lets go give back their render resources (their pictures stay).
 void RendererMtl::sweep_target_slots() {
     if (target_slots_.empty()) {
         return;
     }
     for (auto it = target_slots_.begin(); it != target_slots_.end();) {
-        if (idle_since(it->second.used) && !(target_pass_active_ && it->first == target_key_)) {
+        if (target_sweep_.goes(it->second.used) && !(target_pass_active_ && it->first == target_key_)) {
             retire_target_slot(it->second);
             it = target_slots_.erase(it);
         } else {

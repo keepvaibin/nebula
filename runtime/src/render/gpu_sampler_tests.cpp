@@ -6,9 +6,12 @@
 #include "render/core/present_gate.h"
 #include "render/core/sampler_renewal.h"
 #include "galaxy/render/release_worker.h"
+#include "galaxy/render/idle_clock.h"
 #include <atomic>
 #include <chrono>
+#include <initializer_list>
 #include <iostream>
+#include <iterator>
 #include <stdexcept>
 #include <thread>
 #include <unordered_map>
@@ -447,6 +450,49 @@ int main() {
         passed &= expect(older.empty() && newer.empty() && order == std::vector<int>{1, 2, 3} &&
                              where != std::thread::id{} && where != std::this_thread::get_id(),
                          "released on the worker, in order, all done at release_wait");
+    }
+    {
+        // A target slot goes only as a load's wipe covers the screen (TargetSweep, idle_clock.h), when no pass has used
+        // it for kIdleSteps nor since the wipe before; in play none goes, however long it sits. Not told: once a second.
+        std::uint64_t step = 1000u;
+        std::unordered_map<int, std::uint64_t> slots;  // key -> idle_clock() when its pass last ran
+        TargetSweep sweep;
+        unsigned sweeps = 0u;
+        const auto frames = [&](int covered, unsigned count, std::initializer_list<int> used) {
+            for (unsigned i = 0u; i < count; ++i) {
+                advance_idle_clock(++step);
+                for (const int key : used) {
+                    slots[key] = idle_clock();
+                }
+                if (sweep.due(covered)) {
+                    ++sweeps;
+                    for (auto it = slots.begin(); it != slots.end();) {
+                        it = sweep.goes(it->second) ? slots.erase(it) : std::next(it);
+                    }
+                }
+            }
+        };
+        frames(0, 700u, {1, 2});
+        frames(0, 1300u, {1});  // key 2 unused for 1300 steps of play
+        passed &= expect(sweeps == 0u && slots.size() == 2u, "no target slot goes in play");
+        frames(1, 100u, {});
+        passed &= expect(sweeps == 1u && slots.size() == 2u,
+                         "the first wipe sweeps once and keeps the slots its scene had (no wipe before it)");
+        frames(0, 10u, {1, 3});
+        frames(0, 990u, {1});  // key 3 used only at the scene's start, key 2 not at all
+        passed &= expect(sweeps == 1u && slots.size() == 3u, "still none in play");
+        frames(1, 50u, {});
+        passed &= expect(sweeps == 2u && slots.size() == 2u && slots.count(2) == 0u && slots.count(3) == 1u,
+                         "the next wipe frees the slot a whole scene went without, keeps the scene's own");
+        TargetSweep untold;
+        const bool swept_at_once = untold.due(-1);
+        const bool swept_twice = untold.due(-1);
+        for (unsigned i = 0u; i < TargetSweep::kUntoldSteps; ++i) {
+            advance_idle_clock(++step);
+        }
+        passed &= expect(swept_at_once && !swept_twice && untold.due(-1) && untold.goes(idle_clock() - kIdleSteps - 1u) &&
+                             !untold.goes(idle_clock() - 10u),
+                         "not told: a sweep a second of the game, any slot unused for kIdleSteps");
     }
     if (passed) { std::cout << "Sampler tests passed\n"; }
     return passed ? 0 : 1;
