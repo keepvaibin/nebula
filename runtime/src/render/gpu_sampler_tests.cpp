@@ -5,12 +5,15 @@
 #include "render/core/pipelines.h"
 #include "render/core/present_gate.h"
 #include "render/core/sampler_renewal.h"
+#include "galaxy/render/release_worker.h"
 #include <atomic>
 #include <chrono>
 #include <iostream>
 #include <stdexcept>
 #include <thread>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace {
 bool expect(bool value, const char* reason) {
@@ -413,6 +416,37 @@ int main() {
                              "a frame that would fit neither its segment nor the spill: the ring grows at once");
             room.reset();
         }
+    }
+    {
+        // What a frame's fence has passed goes to the release worker (release_worker.h): released in the order handed
+        // over, off the render thread, the lists left empty, all of it done when release_wait returns.
+        struct Released {
+            std::vector<int>* order;
+            std::thread::id* where;
+            int id;
+            Released(std::vector<int>* o, std::thread::id* w, int i) : order(o), where(w), id(i) {}
+            Released(Released&& other) noexcept : order(std::exchange(other.order, nullptr)), where(other.where), id(other.id) {}
+            Released& operator=(Released&&) = delete;
+            ~Released() {
+                if (order != nullptr) {
+                    order->push_back(id);
+                    *where = std::this_thread::get_id();
+                }
+            }
+        };
+        std::vector<int> order;
+        std::thread::id where{};
+        std::vector<Released> older;
+        older.emplace_back(&order, &where, 1);
+        older.emplace_back(&order, &where, 2);
+        std::vector<Released> newer;
+        newer.emplace_back(&order, &where, 3);
+        release_all_later(older);
+        release_all_later(newer);
+        release_wait();
+        passed &= expect(older.empty() && newer.empty() && order == std::vector<int>{1, 2, 3} &&
+                             where != std::thread::id{} && where != std::this_thread::get_id(),
+                         "released on the worker, in order, all done at release_wait");
     }
     if (passed) { std::cout << "Sampler tests passed\n"; }
     return passed ? 0 : 1;

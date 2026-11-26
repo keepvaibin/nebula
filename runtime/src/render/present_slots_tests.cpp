@@ -276,9 +276,45 @@ void check_windows_by_time() {
     }
 }
 
+// The lead stays still in play (brief AD): with lowering held a calm stretch leaves the depth and takes it down at the
+// first window allowed again; with raising held (a load under a closed wipe) late presents leave it.
+void check_held_moves() {
+    const std::int64_t vsync = 4'166'667;  // 240 Hz
+    PresentDepth depth;
+    const auto now_depth = [&] { return depth.depth(3 * vsync, vsync, 8 * vsync, vsync); };
+    const std::int64_t start = now_depth();
+    std::int64_t t = 1'000'000'000;
+    const auto run = [&](std::int64_t ns, std::int64_t late) {
+        for (const std::int64_t end = t + ns; t < end; t += vsync) {
+            depth.observe(t, t + late, t + late, late != 0 ? 0 : 50'000'000, vsync, vsync / 2);
+        }
+    };
+    depth.allow(false, true);
+    run(9'000'000'000, 0);
+    const std::int64_t held = now_depth();
+    depth.allow(true, true);
+    run(1'500'000'000, 0);
+    const std::int64_t lowered = now_depth();
+    depth.allow(true, false);
+    run(3'000'000'000, vsync);
+    const std::int64_t covered = now_depth();
+    depth.allow(true, true);
+    run(2'000'000'000, vsync);
+    const std::int64_t raised = now_depth();
+    if (held != start || lowered >= start || covered != lowered || raised <= lowered) {
+        std::printf("FAIL: held moves: start %lld, calm held %lld, then allowed %lld, late under a wipe %lld, late in "
+                    "play %lld (refreshes x1e6)\n",
+                    static_cast<long long>(start * 1'000'000 / vsync), static_cast<long long>(held * 1'000'000 / vsync),
+                    static_cast<long long>(lowered * 1'000'000 / vsync), static_cast<long long>(covered * 1'000'000 / vsync),
+                    static_cast<long long>(raised * 1'000'000 / vsync));
+        ++failures;
+    }
+}
+
 int main() {
     check_swap_queues();
     check_windows_by_time();
+    check_held_moves();
     // Refresh rates that are and are not multiples of 60, fractional ones, and pictures one and two vsyncs apart.
     const double rates[] = {59.94, 60.0, 72.0, 75.0, 90.0, 100.0, 119.88, 120.0, 143.98, 144.0, 165.0, 170.0, 180.0,
                             185.0, 200.0, 240.0, 360.0};

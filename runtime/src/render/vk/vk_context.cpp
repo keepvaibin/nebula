@@ -4,6 +4,7 @@
 #include "galaxy/benchmark.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/render/render_config.h"
+#include "galaxy/render/release_worker.h"
 #include "galaxy/render/renderer_choice.h"
 #include "galaxy/runtime_settings.h"
 
@@ -275,7 +276,7 @@ Texture::~Texture() {
         if (image_handle != VK_NULL_HANDLE) {
             vmaDestroyImage(allocator, image_handle, allocation_handle);
         }
-    });
+    }, true);
 }
 
 Buffer::~Buffer() {
@@ -291,7 +292,7 @@ Buffer::~Buffer() {
     context.defer([=] {
         owner->release_address(address_base);
         vmaDestroyBuffer(allocator, buffer_handle, allocation_handle);
-    });
+    }, true);
 }
 
 Context& Context::get() noexcept {
@@ -1417,6 +1418,7 @@ void Context::shutdown() noexcept {
 #if defined(_WIN32)
     streamline_vk::shutdown();
 #endif
+    release_wait();  // what collect() gave the release worker, before the allocator and the device go
     {
         std::lock_guard<std::mutex> lock(deferred_mutex_);
         for (Deferred& deferred : deferred_) {
@@ -1813,11 +1815,11 @@ std::uint64_t Context::submit_frame(std::span<const VkCommandBuffer> commands, V
     return value;
 }
 
-void Context::defer(std::function<void()> destroy) {
+void Context::defer(std::function<void()> destroy, bool on_worker) {
     // Commands recorded into the open frame may name the object: it waits for that frame's submission (a peek or
     // one-time submission in between carries none of them).
     std::lock_guard<std::mutex> lock(deferred_mutex_);
-    deferred_.push_back({0u, std::move(destroy), transfer_submitted_.load(std::memory_order_acquire)});
+    deferred_.push_back({0u, std::move(destroy), transfer_submitted_.load(std::memory_order_acquire), on_worker});
 }
 
 void Context::collect() {
@@ -1833,8 +1835,20 @@ void Context::collect() {
         due.assign(std::make_move_iterator(split), std::make_move_iterator(deferred_.end()));
         deferred_.erase(split, deferred_.end());
     }
+    // Images and buffers with their memory on the release worker: freeing an allocation takes 1 to 2 ms of driver and
+    // kernel (R-009, an upload ring's old buffer).
+    std::vector<std::function<void()>> released;
     for (Deferred& deferred : due) {
-        deferred.destroy();
+        if (deferred.on_worker) {
+            released.push_back(std::move(deferred.destroy));
+        } else {
+            deferred.destroy();
+        }
+    }
+    if (!released.empty()) {
+        release_later([released = std::move(released)] {
+            for (const std::function<void()>& destroy : released) destroy();
+        });
     }
 }
 

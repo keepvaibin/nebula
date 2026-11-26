@@ -16,6 +16,7 @@
 #include "galaxy/platform_time.h"
 #include "galaxy/render/host_window_win32.h"
 #include "galaxy/render/program_table.h"
+#include "galaxy/render/release_worker.h"
 #include "galaxy/render/texture_store.h"
 
 #include "sm50/utility_shaders_dxbc.h"
@@ -363,6 +364,7 @@ RendererD3D11::Kept RendererD3D11::take_apart_lost_device() {
 }
 
 void RendererD3D11::shutdown() {
+    release_wait();  // what the worker still holds goes before the context
     memory_.release();
     set_mod_post_compiler(nullptr, false);
     d3d11::Context& context = d3d11::Context::get();
@@ -550,8 +552,9 @@ void RendererD3D11::begin_frame() {
         }
     }
     frame.pass_mark_count = 0u;
-    frame.retired.clear();
-    frame.retired_buffers.clear();
+    // Released on the worker (release_worker.h): a GPU allocation's release takes 1 to 2 ms of driver and kernel.
+    release_all_later(frame.retired);
+    release_all_later(frame.retired_buffers);
     frame.tables_used = 0u;
     // Once a second of the game (target slots age on idle_clock).
     if (idle_clock() - target_swept_step_ >= kTargetSweepSteps) {

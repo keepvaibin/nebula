@@ -248,8 +248,10 @@ public:
     bool wait(std::uint64_t value, std::uint64_t timeout_ns = UINT64_MAX);
     // Runs `destroy` once the GPU has passed the next frame submission (submit_frame), which carries any commands
     // being recorded now; other submissions in between carry none of them (one submitting thread: the
-    // render thread).
-    void defer(std::function<void()> destroy);
+    // render thread). `on_worker`: it only destroys objects of its own (an image or a buffer with its memory and views)
+    // and runs on the release worker (release_worker.h), off the render thread; others (a descriptor set freed to a pool
+    // the render thread allocates from) run in collect().
+    void defer(std::function<void()> destroy, bool on_worker = false);
     // Runs the deferred destructions the GPU has passed.
     void collect();
 
@@ -305,6 +307,7 @@ private:
         std::uint64_t value;
         std::function<void()> destroy;
         std::uint64_t transfer = 0;  // the transfer queue's value at the call: it may still copy into what is released
+        bool on_worker = false;
     };
     VkInstance instance_ = VK_NULL_HANDLE;
     VkDebugUtilsMessengerEXT messenger_ = VK_NULL_HANDLE;

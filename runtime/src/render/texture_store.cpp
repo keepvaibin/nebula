@@ -9,6 +9,7 @@
 #include "galaxy/render/block4_astc.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/idle_clock.h"
+#include "galaxy/render/release_worker.h"
 #include "nebula_cooked_texture.h"
 #include "nebula_game_api.h"
 
@@ -700,14 +701,21 @@ void TextureStore::begin_frame(unsigned frame_slot, unsigned frames_in_flight) {
     {
         // The renderer has waited for this slot's fence: what it retired and read is idle.
         const galaxy::bench::RenderSpan span(galaxy::bench::RenderPart::TextureFree);
+        std::vector<gpu::TextureRef> idle;
         for (Retired& retired : retired_[frame_slot]) {
             evicting_bytes_ -= std::min(evicting_bytes_, retired.evicted_bytes);
             if (retired.view != ~0u) {
                 backend_.release_view(retired.view);
                 free_srv_indices_.push_back(retired.view);
             }
+            idle.push_back(std::move(retired.texture));
         }
         retired_[frame_slot].clear();
+#if !defined(__APPLE__)
+        // The textures themselves on the worker (release_worker.h): a stage's change frees many, at 1 to 2 ms of driver
+        // and kernel work for a few. Metal releases its own here, where its autorelease pool is.
+        release_all_later(idle);
+#endif
     }
     frame_slot_ = frame_slot;
     for (ChunkRef& chunk : kept_[frame_slot]) {

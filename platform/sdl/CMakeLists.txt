@@ -128,6 +128,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/ui/settings_save_model.cpp
     ${rt}/render/renderer_common.cpp
     ${rt}/render/gpu_upload_ring.cpp
+    ${rt}/render/release_worker.cpp
     ${rt}/render/texture_store.cpp
     ${rt}/render/texture_pack.cpp
     ${rt}/render/texture_pack_codecs.cpp

@@ -25,6 +25,7 @@
 #include "galaxy/render/device_memory.h"
 #include "galaxy/render/streamline_bridge.h"
 #include "galaxy/render/xess_library.h"
+#include "galaxy/render/release_worker.h"
 #include "galaxy/render/texture_store.h"
 #include "galaxy/runtime_settings.h"
 #include "galaxy/scope_exit.h"
@@ -3107,6 +3108,7 @@ RendererD3D12::Kept RendererD3D12::take_apart_lost_device() {
 }
 
 void RendererD3D12::shutdown() {
+    release_wait();  // what the worker still holds goes before the device
     frame_gpu_.reset_scene_ema();
     frame_scene_drawn_.fill(false);
     if (fsr_swap_chain_ && swap_chain_) {
@@ -3948,14 +3950,21 @@ void RendererD3D12::begin_frame() {
     constant_ring_.begin_frame(frame_slot_);
     srv_ring_.begin_frame(frame_slot_);
     {
+        // Released on the worker (release_worker.h): a GPU allocation's release takes 1 to 2 ms of driver and kernel.
         const std::uint64_t completed = completed_fence_value();
-        std::erase_if(retired_heaps_, [&](const RetiredHeap& retired) { return retired.fence <= completed; });
+        const auto idle = std::stable_partition(retired_heaps_.begin(), retired_heaps_.end(),
+                                                [&](const RetiredHeap& retired) { return retired.fence > completed; });
+        if (idle != retired_heaps_.end()) {
+            std::vector<RetiredHeap> done(std::make_move_iterator(idle), std::make_move_iterator(retired_heaps_.end()));
+            retired_heaps_.erase(idle, retired_heaps_.end());
+            release_all_later(done);
+        }
     }
     // What this slot gave up goes first: its fence has passed, and the reset may retire the sampler heap to it.
     retire_ring_.release(frame_slot_);
     reset_sampler_frame();
     bound_rt_aux_ = 0u;
-    retired_targets_[frame_slot_].clear();
+    release_all_later(retired_targets_[frame_slot_]);
     game_bloom_.trim_idle(frame_index_, kFramesInFlight);
     ambient_occlusion_.trim_idle(frame_index_, kFramesInFlight);
     trim_idle_effect_targets();
