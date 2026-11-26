@@ -3,9 +3,11 @@
   pace.py run --bin BIN --work WORK [--renderers d3d12,vulkan,d3d11] [--suite tests/pace/suite.json]
               [--device SERIAL [--device-lock PATH] [--apk APK --pak PAK]] [--lock D:/NebulaWork/plan/measure.lock]
               [--lock-wait MINUTES] [--quiet-minutes MINUTES] [--paks ...] [--diagnostics NAMES] [--history FILE] [--again]
-      Takes the measurement lock (waiting --lock-wait minutes for it), waits for a quiet machine before each PC run (up to
-      --quiet-minutes; then it plays anyway and WORK/pace-run.json names what still ran), runs the suite through the harness
-      (tools/lumacore/luma_test.py: real time, a visible window, no sound) on each renderer, or on an Android device,
+      Takes the measurement lock (waiting --lock-wait minutes for it); with --quiet-minutes, waits for a quiet machine before
+      each PC run (tools/measure/quiet.py: no compiler, build tool or other copy of the game), and a machine still busy after
+      that wait plays nothing more: WORK/pace-run.json names what kept it busy, as measure.py leaves a run that was not quiet unmeasured
+      (pacing read beside another game is not the change's). Runs the suite through the harness (tools/lumacore/luma_test.py:
+      real time, a visible window, no sound, a run lock of its own in WORK) on each renderer, or on an Android device,
       then digests the runs. With --apk and --pak the device's run installs the test app with the pak inside the device's
       lock and removes it after, as measure.py's tablet run does. --diagnostics: the game's --diagnostics for every run
       (`pace-fault`: the render thread sleeps 20 ms once every 2 s, the planted stutter the checks must refuse). --again: a
@@ -30,7 +32,8 @@ value, its target and pass, FAIL, recorded, or not measured (and why). The bars 
     --history (no reading yet: recorded, refused nothing); with LOADS "none" (from G10.5 on) any miss or jump is refused.
 One row reads every window from the start, the boot's loads included: each shows at least nine tenths of the pictures its
 rate asks for (a lead held high or a stalled schedule shows fewer: R-009, 36 pictures in ten seconds hid before frame 0).
-Exit status: 0 when nothing failed and every run gave windows, 1 otherwise; 3 when the measurement lock stayed held.
+Exit status: 0 when nothing failed and every run gave windows, 1 otherwise; 3 when the measurement lock stayed held, or
+when a renderer was not played because the machine stayed busy and no run that was played failed.
 
 The gate's two checks (tools/gate/gate.py):
   pace/pc      every landing that builds the game: tests/pace/gate.json (the test match cut to about 30 s of play) on
@@ -68,6 +71,8 @@ HISTORY_COLUMNS = ("time", "commit", "run", "load_missed", "load_jumps", "load_w
 FIRST = "first"
 # The exit status when the measurement lock stayed held (the machine's, not the change's: the gate's kind env).
 LOCK_HELD = 3
+# The exit status when a renderer was not played because the machine stayed busy (the machine's too).
+NOT_QUIET = 3
 
 
 def windows_of(log_text, from_start=False):
@@ -363,10 +368,17 @@ def take_lock(path, who, wait_minutes=0.0):
                                      encoding="utf-8")
 
 
-def play(args, renderer, work):
+def harness_lock(work, renderer, again=False):
+    """The run lock the harness is given for a run (luma_test.py refuses a run without one): beside the renderer's folder, which
+    --again moves to WORK/first, and one of its own for the run played again (measure.py's harness-<run>[-again].lock)."""
+    return pathlib.Path(work) / ("harness-%s%s.lock" % (renderer, "-again" if again else ""))
+
+
+def play(args, renderer, work, again=False):
     """One harness run of the suite on a renderer (or the device), into work/<renderer>: the harness's exit code."""
     command = [sys.executable, "-X", "utf8", "-I", str(TREE / "tools/lumacore/luma_test.py"), "run", args.suite,
-               "--bin", args.bin, "--work", str(work / renderer), "--who", "pace", "--renderer", renderer]
+               "--bin", args.bin, "--work", str(work / renderer), "--who", "pace", "--renderer", renderer,
+               "--lock", str(harness_lock(work, renderer, again))]
     if args.diagnostics:
         command += ["--diagnostics", args.diagnostics]
     env = dict(os.environ)
@@ -395,29 +407,37 @@ def run(args):
     codes, busy = {}, {}
     history = read_history(args.history)
 
-    def play_quiet(renderer):
-        # A PC run waits for a quiet machine (tools/measure/quiet.py: no compiler, build tool or other copy of the game), up to
-        # --quiet-minutes, then plays anyway; what was still running is kept with the run (a FAIL then is the machine's to answer).
-        if not args.device:
-            quiet_now, why = machine_quiet(args.quiet_minutes)
+    def play_quiet(renderer, again=False):
+        # With --quiet-minutes a PC run first waits for a quiet machine (tools/measure/quiet.py: no compiler, build tool or other copy
+        # of the game). A machine still busy after the wait plays nothing more (pacing beside another game is not the change's: a
+        # run measure.py finds not quiet is not measured either); the run's code is None and pace-run.json names what kept it busy. Once
+        # one wait has run out, the renderers after it do not wait again.
+        if not args.device and args.quiet_minutes is not None:
+            quiet_now, why = (False, next(iter(busy.values()))) if busy else machine_quiet(args.quiet_minutes)
             if not quiet_now:
                 busy[renderer] = why
-        return play(args, renderer, work)
+                print("pace.py: %s not played: the machine was not quiet: %s" % (renderer, why), flush=True)
+                return None
+        return play(args, renderer, work, again)
     try:
         renderers = ["vulkan"] if args.device else args.renderers.split(",")
         for renderer in renderers:
             codes[renderer] = play_quiet(renderer)
-            if args.again and any(failed_rows(r) for r in read_runs(work / renderer, history)):
+            if args.again and codes[renderer] is not None and any(failed_rows(r) for r in read_runs(work / renderer, history)):
                 (work / FIRST).mkdir(exist_ok=True)
                 shutil.rmtree(work / FIRST / renderer, ignore_errors=True)
                 shutil.move(str(work / renderer), str(work / FIRST / renderer))
                 print("pace.py: %s had a FAIL row: played once more" % renderer, flush=True)
-                busy.pop(renderer, None)
-                codes[renderer] = play_quiet(renderer)
+                codes[renderer] = play_quiet(renderer, again=True)
     finally:
         shutil.rmtree(args.lock, ignore_errors=True)
         (work / "pace-run.json").write_text(json.dumps({"harness_exit": codes, "not_quiet": busy}, indent=1), encoding="utf-8")
-    return digest(work, args.history)
+    code = digest(work, args.history)
+    for renderer, why in busy.items():
+        print("%s: not played, the machine was not quiet: %s" % (renderer, why))
+    if busy and not any(failed_rows(r) for r in read_runs(work, history)):
+        return NOT_QUIET
+    return code
 
 
 def machine_quiet(minutes):
@@ -442,8 +462,9 @@ def main():
     r.add_argument("--pak", default="")
     r.add_argument("--lock", default="D:/NebulaWork/plan/measure.lock")
     r.add_argument("--lock-wait", type=float, default=0.0, help="minutes to wait for a held measurement lock")
-    r.add_argument("--quiet-minutes", type=float, default=0.0,
-                   help="a PC run's wait for a quiet machine (no compiler or other game copy); then it plays anyway, said in pace-run.json")
+    r.add_argument("--quiet-minutes", type=float, default=None,
+                   help="a PC run's wait for a quiet machine (no compiler, build tool or other game copy); still busy after it, the run "
+                        "is not played (pace-run.json says what kept it busy). Not given: no wait, every run plays")
     r.add_argument("--paks", default=os.environ.get("LUMA_TEST_PAKS", ""))
     r.add_argument("--diagnostics", default="", help="the game's --diagnostics for every run (pace-fault: the planted stutter)")
     r.add_argument("--history", default="", help="main's readings the load row is judged against (pace.py keep writes them)")

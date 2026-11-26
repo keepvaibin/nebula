@@ -1344,14 +1344,15 @@ class PaceReading(unittest.TestCase):
             passed, detail, _, kind = gate.pace_reading(work, 1, gate.PACE_RENDERERS)
             self.assertEqual((passed, kind), (False, "fail"))
             self.assertIn("pace-match-30/vulkan: FAIL even pictures 4 missed (0 the system's) (played again)", detail)
-            self.write(work, [self.run_of("d3d12", good), self.run_of("vulkan", bad)], {"d3d12": 0, "vulkan": 1}, {"vulkan": "nebula.exe"})
-            passed, detail, _, kind = gate.pace_reading(work, 1, gate.PACE_RENDERERS)
-            self.assertEqual((passed, kind), (False, "env"), "a FAIL on a machine that was not quiet: the machine's")
-            self.assertIn("(the machine was not quiet: nebula.exe)", detail)
-            self.write(work, [self.run_of("d3d12", bad), self.run_of("vulkan", bad)], {"d3d12": 1, "vulkan": 1}, {"vulkan": "nebula.exe"})
-            self.assertEqual(gate.pace_reading(work, 1, gate.PACE_RENDERERS)[3], "fail", "a FAIL on a quiet machine stays the change's")
-            self.write(work, [self.run_of("d3d12", good), self.run_of("vulkan", good)], {"d3d12": 0, "vulkan": 0}, {"vulkan": "nebula.exe"})
-            self.assertTrue(gate.pace_reading(work, 0, gate.PACE_RENDERERS)[0], "a pass on a busy machine is a pass")
+            # A renderer pace.py did not play because the machine stayed busy: env (not judged), never a pass and never a finding.
+            self.write(work, [self.run_of("d3d12", good)], {"d3d12": 0, "vulkan": None}, {"vulkan": "nebula.exe (pid 7)"})
+            passed, detail, _, kind = gate.pace_reading(work, gate.pace_tool.NOT_QUIET, gate.PACE_RENDERERS)
+            self.assertEqual((passed, kind), (False, "env"), "not played on a busy machine: the machine's")
+            self.assertIn("vulkan: not played, the machine was not quiet: nebula.exe (pid 7)", detail)
+            self.write(work, [], {"d3d12": None, "vulkan": None}, {"d3d12": "nebula.exe (pid 7)", "vulkan": "nebula.exe (pid 7)"})
+            self.assertEqual(gate.pace_reading(work, gate.pace_tool.NOT_QUIET, gate.PACE_RENDERERS)[::3], (False, "env"), "neither played")
+            self.write(work, [self.run_of("d3d12", bad)], {"d3d12": 1, "vulkan": None}, {"vulkan": "nebula.exe (pid 7)"})
+            self.assertEqual(gate.pace_reading(work, 1, gate.PACE_RENDERERS)[3], "fail", "a FAIL played on a quiet machine stays the change's")
             self.write(work, [self.run_of("d3d12", good)], {"d3d12": 0, "vulkan": gate.ENV_EXIT})
             passed, detail, _, kind = gate.pace_reading(work, 1, gate.PACE_RENDERERS)
             self.assertEqual((passed, kind), (False, "env"), detail)
@@ -1361,6 +1362,11 @@ class PaceReading(unittest.TestCase):
             (work / "pace.json").unlink()
             self.assertEqual(gate.pace_reading(work, 1, gate.PACE_RENDERERS)[3], "tool", "no pace.json")
             self.assertEqual(gate.pace_reading(work, gate.pace_tool.LOCK_HELD, gate.PACE_RENDERERS)[3], "env", "the measurement lock held")
+
+    def test_the_quiet_wait_is_the_measures(self):
+        sys.path.insert(0, str(pathlib.Path(gate.TREE) / "tools" / "measure"))
+        import quiet
+        self.assertEqual(gate.PACE_QUIET_MINUTES, quiet.WAIT_MINUTES, "pace/pc waits for a quiet machine as long as the speed measure")
 
 
 def main():
