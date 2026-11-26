@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-25 20:16. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-26 02:06. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 35 of 155 (23%).
 
-Now: in work: R-009 fixer, round 2 (ring buffer off the render thread, load-window misses, Vulkan present timing)
+Now: R-009 round 2 done, bars unmet; waiting for the planner (case 4)
 
 In work now: Nothing started.
 
@@ -127,7 +127,7 @@ Nothing waits for the owner.
 | M-006 | closed | - | the step tier and section check; a passing tool fault played once more; a waiter left not judged runs itself | 0 | 95 | 2911f6429 |
 | M-007 | closed | - | the section-at-a-time roles: a whole section ahead, wait, hand-off sheets, hard reports, the live page | 0 | 80 | 9ed09cfec |
 
-## Decisions (123)
+## Decisions (124)
 
 - 2026-11-23 S0.2.1: LoadSlice: 32 items a frame; an item is a phase of GameScene::initAfterScenarioChosen, the player, one placement made whole, one piece of FileSelector::initStep, or one Star Bit of the reserve (because the card asks for a fixed count of work and names no count; the count is a constant in one place, no player sees which frame of the load an item falls in, and the load worker (G3.7) replaces the slices)
 - 2026-11-23 S0.2.1: Drawing's random stream (MR::getDrawRandom) is seeded with the same seed as the game's stream, in setRandomSeedFromStageName and setFixedRandomSeed (because a fixed seed keeps the cosmetic numbers the same in every run of a replay and needs no new setting; the draw stream runs through the same sequence as the game's but is advanced only by drawing, so neither changes the other)
@@ -252,6 +252,7 @@ Nothing waits for the owner.
 - 2026-11-25 R-007: The refresh the picture before is due at is the display model's prediction from that present's call (DisplayModel::queue_time), not the schedule's slot (because a late picture is shown after its slot; only the model knows when it was presented, so the next picture after a hitch is drawn for the refresh the queue really gives it)
 - 2026-11-25 R-007: Where the queue holds no picture before it, a start before its slot waits on the render thread's own wait for its start (slot_due) until a present reaches the slot; nothing waits between a picture's work and its Present (because with no hold a picture presented to an empty queue shows at the first refresh it reaches, and one picture shown early keeps every later one early (the unit test showed it at 360 to 500 Hz); a wait before the work never runs into the next picture's start, as the hold before Present did)
 - 2026-11-25 R-007: Vulkan answers present_queue 0 and keeps its lead rule unchanged (because its lead moves only on presents that asked their time; the brief and the fault are Direct3D's, and Vulkan's pacing at 240 Hz measured good)
+- 2026-11-25 R-009: Vulkan feeds the display model from VK_EXT_present_timing's reported times (first pixel out) of every timed present, and where presents cannot ask an absolute time the FIFO queue is paced as Direct3D's flip model: present_queue 1, each present waits (VK_KHR_present_wait2) for the last one shown; presents at an absolute time are used where the surface offers them, and with neither present timing nor display timing the model stays empty and the slots are the moments the pictures start (lead 0, the FIFO queue alone; on this PC that was the 23.2 ms match delay) (because probe (vulkaninfo, NVIDIA RTX 5090, driver 610.88, Windows 11): VK_EXT_present_timing rev 3, VK_KHR_present_id/id2, VK_KHR_present_wait/wait2; surface: presentTimingSupported=true, presentAtAbsoluteTimeSupported=false, presentAtRelativeTimeSupported=true, presentStageQueries=QUEUE_OPERATIONS_END/IMAGE_FIRST_PIXEL_OUT; at-relative-time counts from the previous present's display, which a present queued ahead does not know, so the reported times are the best this driver gives; measured: match delay p99 23.2 -> 19.0 ms, rate-120 14.8 ms, 0 missed)
 
 ## Checks changed during the run (74)
 
