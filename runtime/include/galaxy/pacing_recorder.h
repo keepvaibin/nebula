@@ -7,7 +7,8 @@
 // the measures of galaxy::pacing::Summary (pacing.h):
 //
 //   [pace] seconds=9.983333 steps=600 steps_per_second=60.0000 pictures=1201 displayed=1199 generated=600
-//          refresh_ms=8.333 on_time=1197 missed=0 doubled=0 animation_within_1ms=1.0000 animation_p99_us=85.0
+//          refresh_ms=8.333 on_time=1197 missed=0 doubled=0 missed_system=0 jumps=0 jump_max_us=120.0
+//          animation_within_1ms=1.0000 animation_p99_us=85.0
 //          delay_avg_us=24310.2 delay_p99_us=25120.0 render_avg_us=2950.1 render_p99_us=3400.0
 //          generated_render_avg_us=480.2 generated_render_p99_us=610.0 step_work_avg_us=3100.0
 //          step_work_p99_us=4200.0 step_work_max_us=5100.0 cpu_us_per_step=3350.5 cpu_work_us_per_step=2500.0
@@ -27,7 +28,10 @@
 //   renderer        presented(id) right after its present call, with its own id for the present (0: no report will
 //                   come); displayed(id, moment, period) when it learns the moment that present reached the display
 //                   (any thread), or not_shown(id) when it learns it never did
-// A present the core did not describe (a black picture, the settings overlay's idle presents) is not recorded.
+// A present the core did not describe (a black picture, the settings overlay's idle presents) is not recorded. The moment
+// of presented() is the present's call time (Picture::called_qpc: a missed refresh whose call came in time is the system's);
+// a picture described while a closed wipe covers the screen (render/present_clock.h g_screen_covered), the first present
+// of a new swap chain and the first shown at another refresh period are seams, across which no jump counts.
 
 #include <cstddef>
 #include <cstdint>

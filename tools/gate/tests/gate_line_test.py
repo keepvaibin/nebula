@@ -862,7 +862,7 @@ class Where(unittest.TestCase):
         self.assertEqual(len(pc), 1, w.runs())
         start = pc[0]["start"]
         pcs = [(n, b, e) for n, b, e in w.times
-               if n not in self.TABLETS and n != "tour/tablet-pc" and not n.startswith(("replays/", "pictures/"))]
+               if n not in self.TABLETS and n not in ("tour/tablet-pc", gate.PACE_PC_CHECK) and not n.startswith(("replays/", "pictures/"))]
         self.assertGreaterEqual(start, max(e for n, b, e in pcs), "after every check of the PC's own lanes: %s" % pcs)
         self.assertGreaterEqual(start, w.span("build/android")[1], "never beside a build")
         self.assertLess(start, w.span("tablet/prepare")[1], "while the tablet's lane is still going")
@@ -870,9 +870,13 @@ class Where(unittest.TestCase):
         self.assertIsNotNone(pc_tour, [n for n, b, e in w.times])
         self.assertGreaterEqual(pc_tour[0], max(e for n, b, e in pcs), "tour/tablet-pc after the PC's lanes too")
         self.assertLessEqual(pc_tour[1], start, "one at a time: tour/tablet-pc, then the pair")
+        pace = w.span(gate.PACE_PC_CHECK)
+        self.assertIsNotNone(pace, "pace/pc runs in every landing that builds the game")
+        self.assertTrue(pc_tour[1] <= pace[0] and pace[1] <= start, "one at a time: tour/tablet-pc, pace/pc, then the pair")
         self.assertEqual(w.row(g, PC)["state"], "pass")
         order = [r["check"] for r in g.results]
-        self.assertLess(order.index("tour/tablet-pc"), order.index(PC))
+        self.assertLess(order.index("tour/tablet-pc"), order.index(gate.PACE_PC_CHECK))
+        self.assertLess(order.index(gate.PACE_PC_CHECK), order.index(PC))
         self.assertLess(order.index(PC), order.index("tablet/prepare"), "the rows: the PC's, its tail, the tablet's")
 
     def test_the_pair_does_not_wait_for_the_self_tests(self):
@@ -1180,8 +1184,19 @@ class Also(unittest.TestCase):
             g, w = self.run_also([name])
             self.assertIsNotNone(w.row(g, check), "%s: %s" % (name, [r["check"] for r in g.results]))
             self.assertEqual(w.row(g, check)["state"], "pass", name)
-        self.assertEqual(sorted(gate.ALSO_PARTS), ["replays/rates", "replays/software", "sanitizer/tour", "soak", "soak/long", "speed/anchor", "stress"])
+        self.assertEqual(sorted(gate.ALSO_PARTS), ["pace/tablet", "replays/rates", "replays/software", "sanitizer/tour", "soak", "soak/long",
+                                                   "speed/anchor", "stress"])
         self.assertTrue(all(part.run is not None for part in gate.ALSO_PARTS.values()), "every name of the table is built")
+
+    def test_pace_tablet_needs_the_android_build_and_the_tablet(self):
+        # G10.1: the tablet's pace suite, asked for by name; it runs where the landing built the test app and the tablet answers.
+        g, w = self.run_also(["pace/tablet"], paths=WITH_TABLET)
+        self.assertEqual(w.row(g, gate.PACE_TABLET_CHECK)["state"], "pass")
+        g, w = self.run_also(["pace/tablet"], setup=lambda w: setattr(w, "answers", False), paths=WITH_TABLET)
+        self.assertEqual(w.row(g, gate.PACE_TABLET_CHECK)["state"], "owed", "the tablet does not answer: owed")
+        g, w = self.run_also(["pace/tablet"])
+        self.assertEqual((w.row(g, "build/android")["state"], w.row(g, gate.PACE_TABLET_CHECK)["state"]), ("pass", "pass"),
+                         "a landing of documents asked for pace/tablet builds the test app it needs")
 
     def test_the_soaks_ask_for_their_lengths(self):
         g, w = self.run_also(["soak"])
@@ -1300,6 +1315,44 @@ class Also(unittest.TestCase):
             L = world.landing()
             L.land(["feat/a"], also="soak,stress")
             self.assertTrue(any("and, asked for by name: soak,stress" in l for l in L.out), L.out)
+
+
+class PaceReading(unittest.TestCase):
+    """G10.1: what the gate reads of a run of pace.py (pace_reading): every renderer asked has a run with rows; a FAIL row, a missing run,
+    the time limit and an unreadable folder each fail with their kind; a run played again is said."""
+
+    def write(self, work, runs, harness):
+        (work / "pace.json").write_text(json.dumps(runs), encoding="utf-8")
+        (work / "pace-run.json").write_text(json.dumps({"harness_exit": harness}), encoding="utf-8")
+
+    @staticmethod
+    def run_of(renderer, *rows):
+        return {"renderer": renderer, "run_key": "pace-match-30/%s" % renderer, "rows": [list(r) for r in rows]}
+
+    def test_the_readings(self):
+        good = ("jumps", "0, largest change 0.20 ms", "no change over 1 ms", "pass")
+        loads = ("loads", "3 missed, 1 jumps in 2 windows", "recorded", "recorded")
+        bad = ("even pictures", "4 missed (0 the system's)", "no missed refresh", "FAIL")
+        with tempfile.TemporaryDirectory() as tmp:
+            work = pathlib.Path(tmp)
+            self.write(work, [self.run_of("d3d12", good, loads), self.run_of("vulkan", good)], {"d3d12": 0, "vulkan": 0})
+            passed, detail, _, kind = gate.pace_reading(work, 0, gate.PACE_RENDERERS)
+            self.assertTrue(passed, detail)
+            self.assertIn("pace-match-30/d3d12: pass, loads 3 missed, 1 jumps in 2 windows (recorded)", detail)
+            self.write(work, [self.run_of("d3d12", good), self.run_of("vulkan", bad)], {"d3d12": 0, "vulkan": 1})
+            (work / "first" / "vulkan").mkdir(parents=True)
+            passed, detail, _, kind = gate.pace_reading(work, 1, gate.PACE_RENDERERS)
+            self.assertEqual((passed, kind), (False, "fail"))
+            self.assertIn("pace-match-30/vulkan: FAIL even pictures 4 missed (0 the system's) (played again)", detail)
+            self.write(work, [self.run_of("d3d12", good)], {"d3d12": 0, "vulkan": gate.ENV_EXIT})
+            passed, detail, _, kind = gate.pace_reading(work, 1, gate.PACE_RENDERERS)
+            self.assertEqual((passed, kind), (False, "env"), detail)
+            self.write(work, [self.run_of("d3d12", good)], {"d3d12": 0, "vulkan": 2})
+            self.assertEqual(gate.pace_reading(work, 1, gate.PACE_RENDERERS)[3], "tool", "no run, no machine's reason: the tool's")
+            self.assertEqual(gate.pace_reading(work, 124, gate.PACE_RENDERERS)[:2], (False, "its time limit"))
+            (work / "pace.json").unlink()
+            self.assertEqual(gate.pace_reading(work, 1, gate.PACE_RENDERERS)[3], "tool", "no pace.json")
+            self.assertEqual(gate.pace_reading(work, gate.pace_tool.LOCK_HELD, gate.PACE_RENDERERS)[3], "env", "the measurement lock held")
 
 
 def main():

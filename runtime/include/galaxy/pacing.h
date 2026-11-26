@@ -21,7 +21,11 @@ struct Picture {
     std::int64_t step_qpc = 0;       // the moment the step it shows began (the delay's start)
     std::int64_t displayed_qpc = 0;  // the moment it reached the display; 0 when the renderer cannot tell, -1 never
     std::int64_t render_ns = 0;      // the render thread's time on it
+    std::int64_t called_qpc = 0;     // when its present call had returned (the recorder's presented()); 0 unknown
     bool generated = false;          // an in-between picture (interpolated or generated)
+    // Shown across a load, a scene change or a mode change: drawn while a closed wipe covered the screen, the first present
+    // of a new swap chain, or the first shown at another refresh period. Its change of animation offset is no jump.
+    bool seam = false;
 };
 
 // One frame thread's processor time spent working in a window, in nanoseconds (perf_hint.h: from its mark of work to its mark of
@@ -48,6 +52,15 @@ struct Summary {
     std::uint64_t missed_refreshes = 0;
     std::uint64_t doubled_pictures = 0;
     std::uint64_t on_time = 0;           // displayed pictures exactly the asked number of refreshes after the one before
+    // Of missed_refreshes, those of pictures whose present call had returned at least half a refresh before the refresh
+    // they were due at (the one before's display moment + the refreshes asked): the call was in time, so the refresh was
+    // missed by the system (its compositor, another program), as far as the call's time can tell. The rest are the game's.
+    std::uint64_t missed_system = 0;
+    // Jumps (brief AD bar 2): two pictures shown one after the other whose (display moment - content moment) differ by more
+    // than 1 ms, neither of them a seam (Picture::seam). The first displayed picture of a window is compared with the last
+    // of the window before (Window::next). jump_max_us: the largest such change, seams left out, in microseconds.
+    std::uint64_t jumps = 0;
+    double jump_max_us = 0.0;
     // Delay from the start of the step a picture shows to its display moment, in microseconds.
     double delay_avg_us = 0.0;
     double delay_p99_us = 0.0;
@@ -87,7 +100,11 @@ public:
     void set_thread_work(std::vector<ThreadWorkNs> threads) { threads_ = std::move(threads); }
     // refresh_qpc: the display's refresh period in ticks (0: unknown, then no refresh counts). frequency: ticks a second.
     [[nodiscard]] Summary summarize(std::int64_t refresh_qpc, std::int64_t frequency) const;
+    // Empties the window and forgets the one before.
     void clear();
+    // Empties the window for the next one; its last displayed picture stays, the one the next window's first is compared
+    // with for a jump.
+    void next();
     [[nodiscard]] std::size_t steps() const noexcept { return steps_.size(); }
     [[nodiscard]] std::size_t pictures() const noexcept { return pictures_.size(); }
 
@@ -97,6 +114,8 @@ private:
     std::vector<Picture> pictures_;
     std::int64_t cpu_ns_ = -1;
     std::vector<ThreadWorkNs> threads_;
+    Picture before_;             // the last displayed picture of the window before (next)
+    bool has_before_ = false;
 };
 
 }  // namespace galaxy::pacing

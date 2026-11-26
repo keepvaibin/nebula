@@ -46,6 +46,8 @@ enum Diagnostic : unsigned {
     kDiagnoseOldGovernors = 1u << 22u,  // old-governors: the GPU governor picks the in-between pictures and dynamic
                                         // resolution budgets the present rate, as before the picture arbiter (the old
                                         // path beside FRAME-MODEL 2.16 landing 5, for its before measure)
+    kDiagnosePaceFault = 1u << 23u,  // pace-fault: the render thread sleeps 20 ms once every 2 s (a planted stutter: the
+                                     // pace checks' own proof that they refuse it, tools/gate/pace.py; not a setting)
 };
 
 // The names --diagnostics takes, each one item or a set. "1" is the launcher's recording.
@@ -79,6 +81,7 @@ inline constexpr DiagnosticName kDiagnosticNames[] = {
     {"constants-watch", kDiagnoseConstantsWatch},
     {"slot-spin", kDiagnoseSlotSpin},
     {"old-governors", kDiagnoseOldGovernors},
+    {"pace-fault", kDiagnosePaceFault},
     {"frames", kDiagnoseFrames},
     {"gpu", kDiagnoseGpuPasses},
     {"threads", kDiagnoseThreadCpu | kDiagnoseProfile},

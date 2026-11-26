@@ -4,6 +4,7 @@
 #include "galaxy/pacing.h"
 #include "galaxy/pacing_recorder.h"
 #include "galaxy/platform_time.h"
+#include "galaxy/render/present_clock.h"
 
 #include <cmath>
 #include <cstdio>
@@ -134,6 +135,84 @@ int main() {
         w.add_picture(p);
         const galaxy::pacing::Summary s = w.summarize(kRefresh60, kHz);
         ok &= expect(s.pictures == 11 && s.displayed == 10 && s.doubled_pictures == 1, "never shown: doubled");
+    }
+
+    // Jumps (brief AD bar 2): the picture a refresh late changes (display - content) by a refresh, and the one after it
+    // changes it back: two jumps of 16.7 ms. Even pictures: none.
+    {
+        const galaxy::pacing::Summary even = sixty(601, 2, -1).summarize(kRefresh60, kHz);
+        ok &= expect(even.jumps == 0 && even.jump_max_us < 1.0, "even pictures: no jump");
+        const galaxy::pacing::Summary s = sixty(601, 2, 300).summarize(kRefresh60, kHz);
+        ok &= expect(s.jumps == 2 && close_to(s.jump_max_us, 1e6 / 60, 1.0), "a late picture: two jumps of a refresh");
+        ok &= expect(s.missed_system == 0, "a call time not known: the miss is the game's");
+    }
+    // A change of 0.9 ms is no jump; one of 1.1 ms is.
+    {
+        for (const int off : {9'000, 11'000}) {  // 0.9 and 1.1 ms at 10 MHz
+            galaxy::pacing::Window w = sixty(100, 2, -1);
+            galaxy::pacing::Picture p;
+            p.content_qpc = at(1'000'000.0 + 100 * kStep) - off;
+            p.asked_qpc = at(1'000'000.0 + 102 * kStep);
+            p.displayed_qpc = p.asked_qpc;
+            w.add_picture(p);
+            const galaxy::pacing::Summary s = w.summarize(kRefresh60, kHz);
+            ok &= expect(s.jumps == (off > 10'000 ? 1u : 0u) && close_to(s.jump_max_us, off / 10.0, 0.5),
+                         off > 10'000 ? "a change of 1.1 ms: one jump" : "a change of 0.9 ms: no jump");
+        }
+    }
+    // A seam (a closed wipe, a new swap chain, another refresh period): its change is no jump.
+    {
+        galaxy::pacing::Window w;
+        for (int i = 0; i < 20; ++i) {
+            galaxy::pacing::Picture p;
+            p.content_qpc = at(i * kStep) - (i >= 10 ? 50'000 : 0);  // 5 ms more from picture 10 on
+            p.asked_qpc = at(i * kStep + 2 * kStep);
+            p.displayed_qpc = p.asked_qpc;
+            p.seam = i == 10;
+            w.add_picture(p);
+        }
+        const galaxy::pacing::Summary s = w.summarize(kRefresh60, kHz);
+        ok &= expect(s.jumps == 0 && s.jump_max_us < 1.0, "a change at a seam: no jump");
+    }
+    // The next window's first picture is compared with the window before's last shown one (Window::next); clear() forgets it.
+    {
+        for (const bool forget : {false, true}) {
+            galaxy::pacing::Window w = sixty(10, 2, -1);
+            (void)w.summarize(kRefresh60, kHz);
+            if (forget) {
+                w.clear();
+            } else {
+                w.next();
+            }
+            galaxy::pacing::Picture p;
+            p.content_qpc = at(1'000'000.0 + 10 * kStep) - 30'000;  // 3 ms behind
+            p.asked_qpc = at(1'000'000.0 + 12 * kStep);
+            p.displayed_qpc = p.asked_qpc;
+            w.add_picture(p);
+            const galaxy::pacing::Summary s = w.summarize(kRefresh60, kHz);
+            ok &= expect(s.jumps == (forget ? 0u : 1u), forget ? "clear(): nothing before to compare" : "a jump across two windows");
+        }
+    }
+    // A missed refresh whose present call came half a refresh or more before the refresh it was due at is the system's; a
+    // call later than that is the game's.
+    {
+        for (const double early : {1.0, 0.25}) {  // refreshes before it was due
+            galaxy::pacing::Window called;
+            for (int i = 0; i < 601; ++i) {
+                const double step = 1'000'000.0 + i * kStep;
+                called.add_step(at(step));
+                galaxy::pacing::Picture p;
+                p.step_qpc = at(step);
+                p.content_qpc = at(step);
+                p.asked_qpc = at(step + 2 * kStep);
+                p.displayed_qpc = at(step + (2 + (i == 300 ? 1 : 0)) * kStep);
+                p.called_qpc = at(step + (2 - early) * kStep);
+                called.add_picture(p);
+            }
+            const galaxy::pacing::Summary s = called.summarize(kRefresh60, kHz);
+            ok &= expect(s.missed_refreshes == 1 && s.missed_system == (early >= 0.5 ? 1u : 0u),
+                         early >= 0.5 ? "called a refresh early and missed: the system's" : "called a quarter refresh early: the game's");
+        }
     }
 
     // Ticks as nanoseconds past the 9.2 seconds where ticks times 10^9 leaves 64 bits (the recorder's step and walk
@@ -369,6 +448,7 @@ int main() {
             ok &= expect(pictures >= 595 && pictures == displayed, "every settled picture displayed");
             ok &= expect(missed == 0 && on_time + 1 == displayed, "every one a refresh after the one before");
             ok &= expect(within == 1.0, "no animation error");
+            ok &= expect(value("jumps") == 0 && value("missed_system") == 0, "no jump, no miss of the system's, in the line");
             ok &= expect(close_to(delay, 2e6 / 60, 2.0), "delay: two steps");
             ok &= expect(!std::isnan(value("step_work_max_us")), "the step's work in the line");
             // The processor time of the whole process: in the line when the machine gives it (a positive time per step: the
@@ -380,6 +460,30 @@ int main() {
         // A new swap chain (ids from 1 again) closes the old ones still waiting as unknown.
         galaxy::pacing::describe(1, 1, 1, false);
         galaxy::pacing::presented(1);
+        galaxy::pacing::reset_for_test(nullptr);
+    }
+    // The recorder's seams: ten pictures showing a moment 5 ms behind make two jumps (in and out of them); described while a
+    // closed wipe covers the screen (g_screen_covered), none.
+    for (const bool covered : {false, true}) {
+        static std::vector<std::string> lines;
+        lines.clear();
+        galaxy::pacing::reset_for_test([](const std::string& text) { lines.push_back(text); });
+        const std::int64_t f = galaxy::qpc_frequency();
+        const std::int64_t base = galaxy::qpc_now();
+        const auto moment = [&](int i) { return base + static_cast<std::int64_t>(std::llround(i * static_cast<double>(f) / 60.0)); };
+        for (int i = 0; i <= 601; ++i) {
+            galaxy::pacing::step(moment(i));
+            const bool behind = i >= 300 && i < 310;
+            galaxy::render::g_screen_covered.store(covered && behind ? 1 : 0);
+            galaxy::pacing::describe(moment(i + 2), moment(i + 1) - (behind ? f / 200 : 0), moment(i), false);
+            galaxy::pacing::presented(static_cast<std::uint64_t>(i + 1));
+            if (i >= 2) galaxy::pacing::displayed(static_cast<std::uint64_t>(i - 1), moment(i), f / 60);
+        }
+        galaxy::render::g_screen_covered.store(-1);
+        const std::string l = lines.empty() ? std::string{} : lines.front();
+        const std::size_t at = l.find(" jumps=");
+        const double jumps = at == std::string::npos ? -1.0 : std::strtod(l.c_str() + at + 7, nullptr);
+        ok &= expect(jumps == (covered ? 0.0 : 2.0), covered ? "under a closed wipe: no jump" : "5 ms behind in play: two jumps");
         galaxy::pacing::reset_for_test(nullptr);
     }
 

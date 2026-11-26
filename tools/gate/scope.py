@@ -28,8 +28,9 @@ GROUPS = {
              ["repo/*"]),
     "tools": ("the self-tests of the test tools and of the game's description tools",
               ["harness/self", "description/self"]),
-    "build": ("the Windows build",
-              ["build/windows"]),
+    # pace/pc (G10.1): every landing that builds the game judges its pacing, the match cut to 30 s on Direct3D 12 and Vulkan.
+    "build": ("the Windows build, and its pacing on Direct3D 12 and Vulkan (pace/pc)",
+              ["build/windows", "pace/pc"]),
     "unit": ("the unit tests of the engine and of the game",
              ["unit/windows", "unit/game"]),
     "start": ("a start of each of the three renderers",
