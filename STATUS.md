@@ -4,7 +4,7 @@ Written 2026-11-26 15:36. If this time is more than three hours old, the work ha
 
 Steps landed: 36 of 156 (23%).
 
-Now: in work: mender for M-008 (pace/pc loads row needs 3 readings of main)
+Now: M-008 closed; in work: lander landing G10.2 again (rebased on the mend)
 
 In work now: Nothing started.
 
