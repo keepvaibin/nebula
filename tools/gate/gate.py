@@ -1864,7 +1864,9 @@ def measure_pc(g):
 # busy then plays nothing more, and the check ends env (not judged: the landing runs again on a fit machine, one ENV line in
 # tool-faults.tsv, as a measure that was not trusted), never a pacing finding. A renderer with a FAIL row is played once more and the
 # second run decides. pace/tablet: an extra check by name (docs/plan/native/step-checks.tsv), the tablet's
-# suite at 60 and 120 Hz under the tablet's lock and the measurement lock, recorded until G10.2 stores tests/pace/tablet-base.json.
+# suite at 60 and 120 Hz under the tablet's lock and the measurement lock, with the platform's records of the frames
+# (tools/gate/frametimeline.py, read by the trace processor the coordinator placed, PACE_TRACE_PROCESSOR); recorded until G10.2m
+# stores tests/pace/tablet-base.json, then refused only by the row against it (pace.BASELINE_ROW).
 # `--pace-fault` plays both with the planted stutter (--diagnostics pace-fault): the checks must then fail, their own proof.
 PACE = HERE / "pace.py"
 PACE_PC_CHECK = "pace/pc"
@@ -1872,6 +1874,9 @@ PACE_TABLET_CHECK = "pace/tablet"
 PACE_PC_SUITE = TREE / "tests" / "pace" / "gate.json"
 PACE_TABLET_SUITE = TREE / "tests" / "pace" / "tablet.json"
 PACE_TABLET_BASE = TREE / "tests" / "pace" / "tablet-base.json"
+# Perfetto's trace processor for pace/tablet's traces: the environment's NEBULA_TRACE_PROCESSOR, else where the coordinator placed it.
+PACE_TRACE_PROCESSOR = os.environ.get("NEBULA_TRACE_PROCESSOR",
+                                      "D:/NebulaWork/tools/perfetto/windows-amd64/trace_processor_shell.exe")
 PACE_RENDERERS = ("d3d12", "vulkan")
 PACE_HISTORY = "pace-history.tsv"    # in the gate's work folder: main's readings (pace.py keep, after a move)
 PACE_LOCK_WAIT = 20.0                # minutes to wait for the measurement lock
@@ -1886,9 +1891,10 @@ def pace_fault_args(g):
     return ["--diagnostics", "pace-fault"] if getattr(g.args, "pace_fault", False) else []
 
 
-def pace_reading(work, code, renderers):
+def pace_reading(work, code, renderers, refusing=None):
     """What a run of pace.py says: (passed, detail, None, kind). Every renderer asked must have a run with rows; the detail names each
-    run's verdict, its FAIL rows, its loads row, and a first run that failed and was played again."""
+    run's verdict, its FAIL rows, its loads row, and a first run that failed and was played again. `refusing`: the measures whose FAIL
+    refuses (pace/tablet against its baseline); the other FAIL rows are named and refuse nothing. None: every FAIL row refuses."""
     if code == 124:
         return False, "its time limit", None, "tool"
     if code == 125:
@@ -1916,16 +1922,21 @@ def pace_reading(work, code, renderers):
             continue
         for r in mine:
             rows = r.get("rows", [])
-            bad = ["%s %s" % (m, v) for m, v, _, verdict in rows if verdict == "FAIL"]
+            bad = ["%s %s" % (m, v) for m, v, _, verdict in rows if verdict == "FAIL" and (refusing is None or m in refusing)]
+            named = ["%s %s" % (m, v) for m, v, _, verdict in rows if verdict == "FAIL" and refusing is not None and m not in refusing]
             loads = ["loads %s (%s)" % (v, verdict) for m, v, _, verdict in rows if m == "loads"]
             again = " (played again)" if (pathlib.Path(work) / pace_tool.FIRST / renderer).is_dir() else ""
             text = "%s: %s%s" % (r.get("run_key", renderer), ("FAIL " + "; ".join(bad)) if bad else "pass", again)
             if bad:
                 kinds_seen.append("fail")
+            if named:
+                text += " (recorded, not refused: %s)" % "; ".join(named)
             parts.append(text + (", " + loads[0] if loads and not bad else ""))
     # A failure of the change's comes first; then the tool's; then the machine's.
     kind = next((k for k in ("fail", "tool", "env") if k in kinds_seen), "fail")
-    return code == 0 and not kinds_seen, "; ".join(parts) or "no run", None, kind
+    # pace.py's exit 1 says a FAIL row; with `refusing`, one of the rows that refuse nothing may be all it was.
+    exited = code == 0 or (refusing is not None and code == 1 and bool(runs))
+    return exited and not kinds_seen, "; ".join(parts) or "no run", None, kind
 
 
 def pace_pc_command(g, work):
@@ -1942,7 +1953,8 @@ def pace_tablet_command(g, work, apk):
             "--suite", str(PACE_TABLET_SUITE), "--device", g.args.tablet, "--device-lock", g.args.tablet_lock,
             "--device-wait", "%g" % g.args.tablet_wait, "--apk", str(apk), "--pak", g.pak or g.args.pak,
             "--history", str(pathlib.Path(g.args.work) / PACE_HISTORY), "--lock-wait", "%g" % PACE_LOCK_WAIT,
-            "--paks", g.paks_text()] + pace_fault_args(g)
+            "--paks", g.paks_text(), "--trace-processor", PACE_TRACE_PROCESSOR] + (
+            ["--baseline", str(PACE_TABLET_BASE)] if PACE_TABLET_BASE.is_file() else []) + pace_fault_args(g)
 
 
 def pace_step(g):
@@ -1989,14 +2001,32 @@ def pace_tablet_part(g):
         if not apk.is_file():
             return False, "the test app %s is not there" % apk, None, "tool"
         cmd = pace_tablet_command(g, work, apk)
+        stored = "--baseline" in cmd
         code = run(cmd, log, timeout=int(60 * (PACE_TABLET_MINUTES + PACE_LOCK_WAIT + g.args.tablet_wait)))
         g.pace_work.append((PACE_TABLET_CHECK, work))
-        passed, detail, tests, kind = pace_reading(work, code, ("vulkan",))
-        if PACE_TABLET_BASE.is_file() or kind != "fail":
-            return passed, detail, tests, kind
-        # No baseline yet (G10.2 stores it): the rows are recorded and refuse nothing.
-        return True, "recorded, no baseline yet: " + detail
+        return pace_tablet_reading(work, code, stored)
     g.check(PACE_TABLET_CHECK, fn, needs)
+
+
+def pace_tablet_reading(work, code, stored):
+    """pace/tablet's verdict from its run of pace.py. With a stored baseline only the row against it refuses, and a run that row could
+    not judge (another method, no frames: "not measured") is the tool's. Without one (until G10.2m stores it) the rows are recorded and
+    refuse nothing."""
+    if stored:
+        passed, detail, tests, kind = pace_reading(work, code, ("vulkan",), refusing=(pace_tool.BASELINE_ROW,))
+        try:
+            runs = json.loads((pathlib.Path(work) / "pace.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            runs = []
+        unjudged = ["%s: %s" % (r.get("run_key"), verdict) for r in runs for m, _v, _t, verdict in r.get("rows", [])
+                    if m == pace_tool.BASELINE_ROW and verdict.startswith("not measured")]
+        if passed and unjudged:
+            return False, "the baseline could not judge: " + "; ".join(unjudged), None, "tool"
+        return passed, detail, tests, kind
+    passed, detail, tests, kind = pace_reading(work, code, ("vulkan",))
+    if kind != "fail":
+        return passed, detail, tests, kind
+    return True, "recorded, no baseline yet: " + detail
 
 
 def keep_pace(g, landed, args):

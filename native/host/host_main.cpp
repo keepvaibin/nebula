@@ -1261,6 +1261,11 @@ void svc_frame_wait(void*) {
             log_line("host:", text);
         }
 #if defined(NEBULA_HOST_SDL)
+        // The step clock's wait in the timeline, as on Windows (P-334: the measures take a step's work from its end to the
+        // next wait's start). a: the step's due time on the host's clock; the display's vsync is known only when the wait returns.
+#if defined(NEBULA_HOST_RENDERER)
+        galaxy::timeline::record(galaxy::timeline::Event::StepWaitBegin, static_cast<std::uint64_t>(galaxy::qpc_from_ns(kept.ns)), 0u);
+#endif
         const bool vsync = galaxy::sdl::wait_display_frame(period.count(), vsync_ns,
                                                            galaxy::render::g_in_between_on.load(std::memory_order_relaxed));
         if (vsync) {
@@ -1269,6 +1274,9 @@ void svc_frame_wait(void*) {
             due_qpc = galaxy::qpc_from_ns(kept.ns);
             galaxy::PreciseWait::for_this_thread().until(due_qpc);
         }
+#if defined(NEBULA_HOST_RENDERER)
+        galaxy::timeline::record(galaxy::timeline::Event::StepWaitEnd, 0u, 0u);
+#endif
 #else
         due_qpc = galaxy::qpc_from_ns(kept.ns);
 #if defined(_WIN32) && defined(NEBULA_HOST_RENDERER)
@@ -3321,9 +3329,8 @@ void svc_frame_begun(void*, int black, uint32_t frame) {
     if (::galaxy::diagnosing(::galaxy::kDiagnoseFrameTimes)) std::fprintf(stderr, "[latency] frame=%u qpc=%lld\n", frame, static_cast<long long>(galaxy::qpc_now()));
 #endif
 #if defined(NEBULA_HOST_RENDERER)
-#if defined(_WIN32)
+    // Every platform's timeline: the measures find a stage's first frame and its steps by it (P-334: the SDL hosts wrote none).
     galaxy::timeline::record(galaxy::timeline::Event::GameFrame, frame, 0u);
-#endif
     if (frame >= kBootFrames) {
         end_boot_fast("start's frames run out");
     }

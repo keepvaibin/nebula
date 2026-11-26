@@ -46,9 +46,11 @@ int main() {
     for (const DiagnosticName& entry : kDiagnosticNames) {
         every |= entry.what;
     }
-    ok &= expect(every == (kDiagnosePaceFault << 1u) - 1u, "every diagnostic has a name");
+    ok &= expect(every == (kDiagnosePaceDepth << 1u) - 1u, "every diagnostic has a name");
     ok &= expect(parses("old-governors", kDiagnoseOldGovernors), "the old governors have their name");
     ok &= expect(parses("pace-fault", kDiagnosePaceFault), "the planted pacing fault has its name");
+    ok &= expect(parses("pace-depth", kDiagnosePaceDepth), "the planted deeper queue has its name");
+    ok &= expect(parses("pace-fault,pace-depth", kDiagnosePaceFault | kDiagnosePaceDepth), "both planted faults at once");
     ok &= expect(refuses("pace", "pace"), "a prefix of pace-fault is not a name");
     ok &= expect(parses("constants-watch", kDiagnoseConstantsWatch), "the constants watch has its name");
     ok &= expect(parses("slot-spin", kDiagnoseSlotSpin), "the slot spin has its name");

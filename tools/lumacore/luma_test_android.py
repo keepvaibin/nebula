@@ -35,7 +35,9 @@ folder, writes the plan and judges the files that come back; this module only mo
      PROGRESS_POLL_SECONDS (luma_test.Progress): a process that took no step for luma_test.HANG_SECONDS is stopped as hung
      (verdict hung, kind fail); a limit that passes in a pause waits for steps or for the hang; one that passes with the
      game stepping is judged by the game's speed (not-reached, kind fail, at 80% of full speed or more; else too-slow, kind
-     env, which the gate runs again alone);
+     env, which the gate runs again alone). With LUMA_TEST_FRAMETIMELINE=1 (tools/gate/pace.py's device runs) the platform's
+     records of the frames are taken from the harness's frame 0 to the end (tools/gate/frametimeline.py Capture): Perfetto's
+     FrameTimeline trace and SurfaceFlinger's --latency history into the run's folder, a capture that fails no verdict;
   3. how the process ended comes from Android's own record (ApplicationExitInfo), which Android writes a little after
      the process is gone: it is waited for until the record is there, at most EXIT_RECORD_SECONDS; a record that never
      comes is the verdict no-exit-record (kind tool), never a verdict on the game;
@@ -100,6 +102,17 @@ class Device:
     def shell(self, command, timeout=600):
         r = self.adb("shell", command, timeout=timeout)
         return r.returncode, r.stdout.decode("utf-8", "replace")
+
+    def shell_input(self, command, text, timeout=600):
+        """A shell command with `text` on its standard input (Perfetto's config, frametimeline.py Capture)."""
+        r = subprocess.run([self.adb_path, "-s", self.serial, "shell", command], input=text.encode("utf-8"), capture_output=True,
+                           env=self.env, timeout=timeout)
+        return r.returncode, r.stdout.decode("utf-8", "replace")
+
+    def log_find(self, pid, text):
+        """Whether the game process `pid` wrote a line holding `text` to the device's log, under any of the game's tags."""
+        r = self.adb("logcat", "-d", "-v", "raw", "--pid=%s" % pid, "-e", re.escape(text), "-s", *LOG_TAGS, timeout=60)
+        return r.returncode == 0 and text in r.stdout.decode("utf-8", "replace")
 
     def run_as(self, command, timeout=600):
         return self.shell("run-as %s sh -c '%s'" % (PACKAGE, command.replace("'", "'\\''")), timeout=timeout)
@@ -367,6 +380,19 @@ def run_one(lt, device, test, args, run_folder, previous, clock=time.time, sleep
         raise
 
 
+def frame_timeline_capture(device, run_folder, limit, clock):
+    """With LUMA_TEST_FRAMETIMELINE=1 (tools/gate/pace.py sets it for a device run): the run's FrameTimeline capture
+    (tools/gate/frametimeline.py Capture: Perfetto's trace and SurfaceFlinger's records into the run's folder, from the
+    harness's frame 0 to the run's end), else None."""
+    if os.environ.get("LUMA_TEST_FRAMETIMELINE") != "1":
+        return None
+    gate = str(pathlib.Path(__file__).resolve().parents[1] / "gate")
+    if gate not in sys.path:
+        sys.path.insert(0, gate)
+    import frametimeline
+    return frametimeline.Capture(device, run_folder, PACKAGE, limit, clock)
+
+
 def run_on_device(lt, device, test, args, run_folder, previous, clock=time.time, sleep=time.sleep):
     for m in test["mods"]:
         if m["install"] == "import":
@@ -444,6 +470,7 @@ def run_on_device(lt, device, test, args, run_folder, previous, clock=time.time,
     # Hung when no step came for lt.HANG_SECONDS while the process lived; a limit that passes in a pause waits for steps to
     # come again or for the hang; one that passes with the game stepping, or with no step ever, ends the game (limit_hit).
     progress = lt.Progress(None, clock)
+    capture = frame_timeline_capture(device, run_folder, limit, clock)
     looked, hung, no_record, limit_hit = None, None, False, False
     deadline = began + limit
     while True:
@@ -462,7 +489,10 @@ def run_on_device(lt, device, test, args, run_folder, previous, clock=time.time,
             game_pid = now_pid
             if looked is None or past or clock() - looked >= PROGRESS_POLL_SECONDS:
                 looked = clock()
-                progress.feed_lines(device.log_tail(now_pid).split("\n"))
+                tail = device.log_tail(now_pid)
+                progress.feed_lines(tail.split("\n"))
+                if capture is not None:
+                    capture.poll(now_pid, tail)
                 quiet = progress.quiet()
                 if quiet is not None and quiet >= lt.HANG_SECONDS:
                     # No step for that long, the process alive: hung. The game writes no dump on Android.
@@ -471,6 +501,8 @@ def run_on_device(lt, device, test, args, run_folder, previous, clock=time.time,
                 if past and not (quiet is not None and quiet > lt.STALL_SECONDS):
                     limit_hit = True
                     break
+            elif capture is not None:
+                capture.tick()  # --latency every second at 120 Hz, between the 2 s looks
         elif game_pid:
             found, ended = device.exit_record(game_pid, clock, sleep)
             (run_folder / "exit-info.txt").write_text(device.exit_seen, encoding="utf-8")
@@ -496,6 +528,8 @@ def run_on_device(lt, device, test, args, run_folder, previous, clock=time.time,
             progress.new_process()
             looked = None
         sleep(0.5)
+    if capture is not None:
+        capture.finish(sleep)  # the trace ends with the play, before the game is stopped
     if not gone:
         if hung is None and not limit_hit and game_pid:
             progress.feed_lines(device.log_tail(game_pid).split("\n"))  # how the game stood
