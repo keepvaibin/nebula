@@ -2985,16 +2985,12 @@ void RendererD3D12::free_target(std::uint32_t id, TextureStore& textures) {
             ++it;
         }
     }
-    // A target pass's set for this texture: ids are not used again, so no pass draws into it after this (a target slot used to
-    // stay until a later target pass swept it, and a scene with none kept the last scene's, at the frame's scale).
-    for (auto it = target_slots_.begin(); it != target_slots_.end();) {
-        if (static_cast<std::uint32_t>(it->first) == id && !(target_pass_active_ && it->first == target_key_)) {
-            retire_target_slot(it->second);
-            it = target_slots_.erase(it);
-        } else {
-            ++it;
-        }
-    }
+    // A target pass's set for this texture: ids are not used again, so no pass draws into it under this key after this. It
+    // waits as a spare for the next scene's target of its size (kSpareTargetSlot, idle_clock.h); the sweep frees it after
+    // a scene without one.
+    spare_target_slots(target_slots_, [&](std::uint64_t key) {
+        return static_cast<std::uint32_t>(key) == id && !(target_pass_active_ && key == target_key_);
+    }, spare_target_serial_);
 }
 
 std::uint64_t RendererD3D12::allocation_bytes(ID3D12Resource* resource) const {
@@ -5492,8 +5488,9 @@ bool RendererD3D12::begin_target_pass(std::uint64_t key, std::uint32_t width, st
     if (target_pass_active_ || width == 0u || height == 0u) {
         return false;
     }
-    TargetSlot& slot = target_slots_[key];
     const FrameMap map(width, height);
+    take_spare_target_slot(target_slots_, key, map, [](const TargetSlot& spare) { return spare.set.map; });
+    TargetSlot& slot = target_slots_[key];
     // The test hook NEBULA_EXT_REMAKE_TARGETS makes it again at the same size, as a size change does (P-028).
     const bool kept = slot.set.color && slot.set.map == map &&
                       (galaxy::extensions::flags() & NEBULA_EXT_REMAKE_TARGETS) == 0u;

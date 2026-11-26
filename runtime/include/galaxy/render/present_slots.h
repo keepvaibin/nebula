@@ -67,8 +67,7 @@ public:
     // (earliestPresentTime), when it was (actualPresentTime), how long before the compositor latched it it was ready
     // (presentMargin), and its present period. Sets the depth by windows of a second of presents (by their shown times,
     // so the same at every rate): a window with two or more not ready by their slot (shown later than asked, by less
-    // than two frame periods: a longer wait is a stall, not the device's pace) adds the present periods they missed by,
-    // two at most. A calm stretch (5 s, doubling up to 80 s after a step down that did not hold 10 s) whose presents
+    // than two frame periods: a longer wait is a stall, not the device's pace) adds one present period (allow). A calm stretch (5 s, doubling up to 80 s after a step down that did not hold 10 s) whose presents
     // were all ready a period and 2 ms before the compositor latched them takes a period off, down to the least (in
     // whole units) at the least.
     void observe(std::int64_t requested, std::int64_t earliest, std::int64_t actual, std::int64_t margin,
@@ -76,13 +75,22 @@ public:
     // The depth lower by `by` (the next depth() keeps it at its least at the least): a least that fell takes the depth
     // above it down with it.
     void lower(std::int64_t by) noexcept { depth_ns_ -= by; }
-    // Whether a calm stretch may take the depth down now, and late presents take it up (both by default). A stretch that
-    // has become calm while held keeps counting and takes the depth down at the first observe() allowed again; late
-    // presents while raising is held count for nothing (a load under a closed wipe: its hitches pass with it).
-    void allow(bool lower, bool raise) noexcept {
+    // Whether a calm stretch may take the depth down now (`lower`), and the depth may rise now (`raise`); whether late
+    // presents count (`late_counts`). All three by default. A stretch that has become calm while lowering is held keeps
+    // counting and takes the depth down at the first observe() allowed again. Late windows while rising is held keep one
+    // step up for the moment it is allowed again (in play: the next load, brief AD); with `late_counts` false they count
+    // for nothing (a load under a closed wipe: its hitches pass with it). The depth rises one unit at a time.
+    void allow(bool lower, bool raise, bool late_counts = true) noexcept {
         lower_allowed_ = lower;
         raise_allowed_ = raise;
+        late_counts_ = late_counts;
+        if (raise && raise_pending_ && step_ns_ > 0) {
+            raise_pending_ = false;
+            step_up();
+        }
     }
+    // A step up waits for the next moment rising is allowed.
+    [[nodiscard]] bool raise_pending() const noexcept { return raise_pending_; }
     // The most a late present missed its slot by since the last call.
     [[nodiscard]] std::int64_t take_late_max() noexcept {
         const std::int64_t most = late_max_;
@@ -100,7 +108,6 @@ private:
     static constexpr std::int64_t kStepDownHeldNs = 10'000'000'000;
     std::int64_t window_start_ = 0;  // the first shown time of the window (0: none yet)
     unsigned window_late_ = 0;
-    std::int64_t window_miss_ = 0;  // the most a late present in the window missed its slot by
     std::int64_t calm_ns_ = 0;
     std::int64_t calm_needed_ns_ = kCalmFirstNs;
     std::int64_t since_step_down_ns_ = -1;  // -1: no step down since the last step up
@@ -108,6 +115,11 @@ private:
     std::int64_t late_max_ = 0;
     bool lower_allowed_ = true;
     bool raise_allowed_ = true;
+    bool late_counts_ = true;
+    bool raise_pending_ = false;
+    std::int64_t step_ns_ = 0;  // the unit of the latest observe()
+    // One unit up: a calm stretch starts again, and one that held under 10 s doubles the next one's length.
+    void step_up() noexcept;
 };
 
 class PresentSlots {

@@ -64,6 +64,9 @@ class DisplayModel {
 public:
     // `frequency`: the clock's ticks a second.
     explicit DisplayModel(std::int64_t frequency) noexcept : frequency_(frequency) {}
+    // The most refreshes a display holds a picture past the first after its present (Android's compositor: 2); a present
+    // held longer was held by a stall (displayed).
+    static constexpr std::int64_t kStallHeld = 2;
     // A present of the platform's increasing `id`: drawn for `slot` (0: a picture with no slot, not reported back),
     // ready at `ready`, its call at `call`; `asked`: the present asked the display for the refresh `slot`. An id not
     // above the last starts the model again (a new swap chain).
@@ -359,6 +362,7 @@ private:
     std::int64_t display_delay_qpc_ = 0;
     std::int64_t display_from_ = 0;  // the first slot drawn with the lead since it came in (observe_shown)
     std::int64_t display_least_units_ = 0;  // the lead's least at its last reading, in refreshes (display_lead_for)
+    std::int64_t display_least_rose_ = 0;   // when the least last rose a refresh (it rises one a second at most)
     // A swap chain's queue paces the presents (present_queue, with a lead): its depth and the refresh period; 0: none.
     unsigned display_queue_ = 0;
     std::int64_t display_refresh_ = 0;
