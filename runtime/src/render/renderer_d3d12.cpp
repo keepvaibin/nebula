@@ -3761,11 +3761,10 @@ void RendererD3D12::begin_frame() {
             frame_gpu_.reset_generated_ema();
             std::cerr << "[interp] temporal upscaling of generated frames tried again\n";
         }
-        // A ring whose frames took over their budget (or spilled) grows before the next frame, over half of it before a
-        // frame without the scene (UploadRing::wants_growth); one whose last 30 seconds
+        // A ring whose frames took over half their budget grows (UploadRing::wants_growth); one whose last 30 seconds
         // (and 600 frames) stayed under a quarter of it gives half of its memory back on a frame without the scene
-        // (UploadRing::kQuietNs). Only that ring is made again. --diagnostics ring-stress makes them all again (at the size
-        // each wants) every kRingStressFrames frames.
+        // (UploadRing::kQuietNs). Its new buffer is made on a worker and taken at a later boundary. Only that ring is made
+        // again. --diagnostics ring-stress makes them all again (at the size each wants) every kRingStressFrames frames.
         // No wait for the GPU: a ring is made again as a new buffer, and the old one and its chunks go to the newest frame in
         // flight's retired list, released after that frame's fence, which is past every earlier frame's.
         const UploadRingSlot rings[] = {{&vertex_ring_, "vertex", kRingSegments, true},

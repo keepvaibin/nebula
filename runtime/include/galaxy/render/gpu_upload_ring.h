@@ -10,6 +10,7 @@
 #include <limits>
 #include <cstddef>
 #include <cstdint>
+#include <future>
 #include <span>
 #include <vector>
 
@@ -91,16 +92,38 @@ public:
     [[nodiscard]] static std::size_t budget(std::size_t capacity, unsigned segments) {
         return capacity / (segments + 1u) & ~std::size_t{0xFFFFu};
     }
-    // Grow at the next frame boundary, to grown_capacity(): at once for a frame over the budget (or one that spilled), and
-    // for one over half of it at a frame without the 3D scene (set_shrink_moment), as a shrink waits. Making a ring again
-    // makes a new buffer, a few milliseconds of the render thread's at 8 MB: mid-play that held a picture past its refresh
-    // (R-009: the constant ring's 4 to 8 MB, asked for by a frame that used 382 KB of its 1344, a refresh missed on every
-    // renderer). The budget's other half and the spill behind the segments hold the frames until then; a frame's bytes
-    // are asked for (require_frame_bytes) before it begins, so one past the budget grows the ring before it.
+    // Grow to grown_capacity() for a frame over half the budget (its bytes asked for before it begins, require_frame_bytes,
+    // or taken). The new buffer is made on a worker (make_in_background) while this one serves, and taken at a frame
+    // boundary (take_made): made on the render thread, a buffer of 8 MB took 4 to 6 ms, and the picture of that frame
+    // missed its refresh (R-009: the constant ring's 4 to 8 MB at a stage's fade, on every renderer). Made at once only
+    // for a frame whose bytes would fit neither its segment nor the spill left (must_grow_now).
     [[nodiscard]] bool wants_growth() const {
         const std::size_t needed = std::max(high_water_, requested_);
-        return mapped_ != nullptr && (needed > bytes_per_frame_ || (shrink_moment_ && needed > bytes_per_frame_ / 2u));
+        return mapped_ != nullptr && needed > bytes_per_frame_ / 2u;
     }
+    // The next frame's bytes may not fit its segment and the spill left: the ring is made again before it.
+    [[nodiscard]] bool must_grow_now() const {
+        const std::size_t needed = std::max(high_water_, requested_);
+        return mapped_ != nullptr && needed > bytes_per_frame_ + (capacity_ - std::min(capacity_, spill_cursor_));
+    }
+    // A buffer of `capacity` bytes for this ring made on a worker thread (gpu::create_upload_memory, `use`); take_made
+    // takes it. The ring is not made again while one is made.
+    void make_in_background(gpu::Device* device, std::size_t capacity, gpu::UploadUse use);
+    [[nodiscard]] bool making() const noexcept { return making_.valid(); }
+    [[nodiscard]] std::size_t making_capacity() const noexcept { return making_capacity_; }
+    // The worker's buffer, when it is made (at once with `wait`): the old buffer and chunks go to `old` and the ring is
+    // made on the new one, its budget for `segments`. Empty: none was ready; `failed` set: none could be made.
+    [[nodiscard]] bool take_made(unsigned segments, bool chunks, bool wait, std::vector<gpu::BufferRef>& old, bool& failed);
+    // The worker's buffer waited for and dropped (never used by the GPU).
+    void drop_made() noexcept {
+        if (making_.valid()) {
+            making_.wait();
+            making_ = {};
+        }
+        making_capacity_ = 0u;
+    }
+    // The most bytes asked of one frame before it began (require_frame_bytes), since initialize.
+    [[nodiscard]] std::size_t requested() const noexcept { return requested_; }
     // The capacity whose budget for `segments` is twice the high-water mark: the current one when it suffices, 0
     // when the host address space cannot represent the allocation.
     [[nodiscard]] std::size_t grown_capacity(unsigned segments) const {
@@ -126,11 +149,10 @@ public:
     static constexpr unsigned kQuietFrames = 600u;
     static constexpr std::uint64_t kQuietNs = 30'000'000'000ull;
     [[nodiscard]] bool wants_shrink() const { return mapped_ != nullptr && shrink_ready_ && shrink_moment_ && !wants_growth(); }
-    // Whether the frame about to begin may shrink the ring, or grow it for room (it draws no 3D scene). Set before each
-    // frame boundary.
+    // Whether the frame about to begin may shrink the ring (it draws no 3D scene). Set before each frame boundary.
     void set_shrink_moment(bool moment) noexcept { shrink_moment_ = moment; }
-    // A new size is wanted at the next frame boundary (remake_upload_rings).
-    [[nodiscard]] bool wants_new_size() const { return wants_growth() || wants_shrink(); }
+    // A new size is wanted, or a buffer for one is being made, at the next frame boundary (remake_upload_rings).
+    [[nodiscard]] bool wants_new_size() const { return making() || wants_growth() || wants_shrink(); }
     [[nodiscard]] std::size_t shrunk_capacity(unsigned segments) const {
         std::size_t capacity = capacity_;
         while (capacity / 2u >= floor_capacity_ && budget(capacity / 2u, segments) >= shrink_peak_ * 2u &&
@@ -161,6 +183,9 @@ public:
 
 private:
     [[nodiscard]] std::size_t spill_base() const { return bytes_per_frame_ * frames_in_flight_; }
+    // The ring on `memory` (`total` bytes), as initialize makes it.
+    void adopt(gpu::UploadMemory memory, gpu::Device* device, const char* name, std::size_t bytes_per_frame,
+               unsigned frames_in_flight, std::size_t total, bool chunks);
 
     struct Chunk {
         gpu::UploadMemory memory;
@@ -211,6 +236,9 @@ private:
     std::uint64_t resource_identity_ = 0;
     std::vector<std::uint64_t> slot_generations_;
     std::size_t peak_bytes_per_frame_ = 0;
+    // The buffer a worker makes (make_in_background) and its bytes; reset waits for it and drops it.
+    std::future<gpu::UploadMemory> making_;
+    std::size_t making_capacity_ = 0;
 };
 
 // A mapped upload buffer that lives until it is released (RenderCore's resident decoded vertices).
@@ -222,6 +250,7 @@ struct UploadRingSlot {
     const char* name = "";
     unsigned segments = 0;
     bool chunks = false;
+    gpu::UploadUse use = gpu::UploadUse::Any;  // what the GPU reads it as (gpu::create_upload_memory)
 };
 
 // What the frame starting at `frame_index` makes again (the four renderers' one choice): no ring when none wants a new
@@ -231,11 +260,12 @@ enum class RingRemake : std::uint8_t { None, Wanted, All };
 [[nodiscard]] RingRemake upload_rings_due(std::span<const UploadRingSlot> rings, std::uint64_t frame_index,
                                           bool failed) noexcept;
 
-// At a frame boundary, with no wait for the GPU: each ring that wants a new size (UploadRing::wants_new_size) made again
-// at it, the others untouched; every ring under `all` (--diagnostics ring-stress). The old buffers and chunks go to `old`
-// for the caller to release once the frames that read them are done. A growth that cannot be made keeps the size the ring
-// had and sets `failed` (the caller stops asking). Returns whether any ring was made again; throws when one cannot be
-// made even at its old size.
+// At a frame boundary, with no wait for the GPU: each ring that wants a new size (UploadRing::wants_new_size) has its new
+// buffer made by a worker, and is made again on it at the first boundary after it is made; at once where its next frame
+// would not fit (UploadRing::must_grow_now), and every ring under `all` (--diagnostics ring-stress). The others are
+// untouched. The old buffers and chunks go to `old` for the caller to release once the frames that read them are done. A
+// growth that cannot be made keeps the size the ring had and sets `failed` (the caller stops asking). Returns whether
+// any ring was made again; throws when one cannot be made even at its old size.
 bool remake_upload_rings(gpu::Device* device, std::span<const UploadRingSlot> rings, bool all, bool& failed,
                          std::vector<gpu::BufferRef>& old);
 

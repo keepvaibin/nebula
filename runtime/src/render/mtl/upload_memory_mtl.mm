@@ -6,7 +6,7 @@
 
 namespace galaxy::render::gpu {
 
-UploadMemory create_upload_memory(Device*, std::size_t bytes, const char* name, UploadPlace) {
+UploadMemory create_upload_memory(Device*, std::size_t bytes, const char* name, UploadPlace, UploadUse) {
     mtl::Context& context = mtl::Context::get();
     if (!context.ready() || bytes == 0u) {
         return {};

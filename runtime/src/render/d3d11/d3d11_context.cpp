@@ -449,7 +449,7 @@ std::shared_ptr<Texture> Context::create_texture(std::uint32_t width, std::uint3
     return texture;
 }
 
-std::shared_ptr<Buffer> Context::create_buffer(std::uint64_t size, const char*) {
+std::shared_ptr<Buffer> Context::create_buffer(std::uint64_t size, const char*, std::optional<BufferUse> use) {
     if (device_ == nullptr || size == 0u) {
         return {};
     }
@@ -462,6 +462,10 @@ std::shared_ptr<Buffer> Context::create_buffer(std::uint64_t size, const char*) 
     }
     buffer->address = register_address(buffer.get());
     if (buffer->address == 0u) {
+        return {};
+    }
+    // Its copy made from the zeroed system copy, by this thread alone: upload_written reads `gpu` once it is listed.
+    if (use && buffer->bound(*use) == nullptr) {
         return {};
     }
     std::lock_guard guard(buffers_mutex_);
@@ -764,9 +768,13 @@ TextureRef create_render_texture(Device*, std::uint32_t width, std::uint32_t hei
                                                 D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET, "render texture");
 }
 
-UploadMemory create_upload_memory(Device*, std::size_t bytes, const char* name, UploadPlace) {
+UploadMemory create_upload_memory(Device*, std::size_t bytes, const char* name, UploadPlace, UploadUse use) {
     UploadMemory memory;
-    std::shared_ptr<d3d11::Buffer> buffer = d3d11::Context::get().create_buffer(bytes, name);
+    std::shared_ptr<d3d11::Buffer> buffer = d3d11::Context::get().create_buffer(
+        bytes, name, use == UploadUse::Geometry    ? std::optional{d3d11::BufferUse::Geometry}
+                     : use == UploadUse::Constants ? std::optional{d3d11::BufferUse::Constants}
+                     : use == UploadUse::Rows      ? std::optional{d3d11::BufferUse::Rows}
+                                                   : std::nullopt);
     if (buffer == nullptr) {
         return memory;
     }

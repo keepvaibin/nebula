@@ -28,6 +28,7 @@ std::atomic<std::uint64_t> g_upload_ring_identity{1};
 void UploadRing::reset() noexcept {
     const gpu::UploadPlace place = place_;
     const std::size_t floor_capacity = floor_capacity_;
+    // A buffer a worker still makes is waited for and dropped (never used by the GPU) as the future goes.
     *this = UploadRing{};
     place_ = place;
     floor_capacity_ = floor_capacity;
@@ -60,6 +61,12 @@ bool UploadRing::initialize(
     if (!memory) {
         return false;
     }
+    adopt(std::move(memory), device, name, bytes_per_frame, frames_in_flight, total, chunks);
+    return true;
+}
+
+void UploadRing::adopt(gpu::UploadMemory memory, gpu::Device* device, const char* name, std::size_t bytes_per_frame,
+                       unsigned frames_in_flight, std::size_t total, bool chunks) {
     std::vector<std::uint64_t> generations(frames_in_flight, 0u);
     const gpu::Address gpu_base = memory.gpu;
     // GPU address ranges, so a DRED page-fault address can be attributed.
@@ -98,6 +105,36 @@ bool UploadRing::initialize(
     frame_ready_ = false;
     segment_allocation_pending_ = true;
     peak_bytes_per_frame_ = 0u;
+}
+
+void UploadRing::make_in_background(gpu::Device* device, std::size_t capacity, gpu::UploadUse use) {
+    if (making_.valid() || device == nullptr || capacity == 0u) {
+        return;
+    }
+    making_capacity_ = capacity;
+    making_ = std::async(std::launch::async, [device, capacity, name = name_, place = place_, use] {
+        return gpu::create_upload_memory(device, capacity, name, place, use);
+    });
+}
+
+bool UploadRing::take_made(unsigned segments, bool chunks, bool wait, std::vector<gpu::BufferRef>& old, bool& failed) {
+    if (!making_.valid() || (!wait && making_.wait_for(std::chrono::seconds(0)) != std::future_status::ready)) {
+        return false;
+    }
+    gpu::UploadMemory memory = making_.get();
+    const std::size_t capacity = making_capacity_;
+    making_capacity_ = 0u;
+    if (!memory) {
+        if (capacity > capacity_) {
+            failed = true;  // out of upload memory: the size it has, and no further growth
+            std::cerr << "[gpu-rings] grow " << name_ << " failed\n";
+        }
+        return false;
+    }
+    gpu::Device* const device = device_;
+    const char* const name = name_;
+    release_into(old);
+    adopt(std::move(memory), device, name, UploadRing::budget(capacity, segments), segments, capacity, chunks);
     return true;
 }
 
@@ -295,6 +332,17 @@ bool remake_upload_rings(gpu::Device* device, std::span<const UploadRingSlot> ri
     bool made = false;
     for (const UploadRingSlot& slot : rings) {
         UploadRing& ring = *slot.ring;
+        if (!all && ring.making()) {
+            // The worker's buffer once made; waited for only by a frame that would not fit, and dropped when it is no larger
+            // (a shrink that more bytes overtook): the ring then grows at once below.
+            const bool now = ring.must_grow_now();
+            if (now && ring.making_capacity() <= ring.capacity()) {
+                ring.drop_made();
+            } else {
+                made |= ring.take_made(slot.segments, slot.chunks, now, old, failed);
+                continue;
+            }
+        }
         if (!all && !ring.wants_new_size()) {
             continue;
         }
@@ -305,10 +353,19 @@ bool remake_upload_rings(gpu::Device* device, std::span<const UploadRingSlot> ri
             failed = true;
             capacity = had;
         }
+        if (!all && capacity == had) {
+            continue;
+        }
+        const bool background = !all && !ring.must_grow_now();
         if (capacity != had) {
             std::cerr << "[gpu-rings] " << (capacity > had ? "grow " : "shrink ") << slot.name
-                      << " frame-high-water-kb=" << (ring.high_water() >> 10u) << " budget-kb=" << (ring.bytes_per_frame() >> 10u)
-                      << " mb=" << (had >> 20u) << "->" << (capacity >> 20u) << '\n';
+                      << " frame-high-water-kb=" << (ring.high_water() >> 10u) << " asked-kb=" << (ring.requested() >> 10u)
+                      << " budget-kb=" << (ring.bytes_per_frame() >> 10u) << " mb=" << (had >> 20u) << "->" << (capacity >> 20u)
+                      << (background ? " (made by a worker)" : " (made now)") << '\n';
+        }
+        if (background) {
+            ring.make_in_background(device, capacity, slot.use);
+            continue;
         }
         ring.release_into(old);
         made = true;
@@ -351,7 +408,7 @@ bool gpu_upload_heaps(Device* device) {
 
 }  // namespace
 
-UploadMemory create_upload_memory(Device* device, std::size_t bytes, const char* name, UploadPlace place) {
+UploadMemory create_upload_memory(Device* device, std::size_t bytes, const char* name, UploadPlace place, UploadUse) {
     UploadMemory out;
     if (device == nullptr || bytes == 0u) {
         return out;

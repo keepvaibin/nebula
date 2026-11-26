@@ -1193,6 +1193,8 @@ bool RendererVk::create_swapchain() {
                      offered.c_str(), relaxed ? "present as FIFO_RELAXED" : "wait for the next refresh",
                      waits ? (swapchain_.ask_time
                                   ? "present wait (the last frame must show before the next is queued, on the interpolation's slot clock the one before it; 100 ms at most), none for a picture that asks its time"
+                              : swapchain_.timed
+                                  ? "present wait (the last frame must show before the next is queued; 100 ms at most), the queue paced by the display model"
                                   : "present wait (the last frame must show before the next is queued, on the interpolation's slot clock the one before it; 100 ms at most)")
                            : "the frame fences");
     }
@@ -1832,10 +1834,10 @@ void RendererVk::shutdown() {
 }
 
 void RendererVk::grow_rings() {
-    // A ring whose frames took over their budget (or spilled) grows, over half of it on a frame without the scene
-    // (UploadRing::wants_growth); one whose last 30 seconds (and 600 frames) stayed under a quarter of it gives half of
-    // its memory back on such a frame (UploadRing::kQuietNs). Only that
-    // ring is made again. --diagnostics ring-stress: all made again (at the size each wants) every kRingStressFrames frames.
+    // A ring whose frames took over half their budget grows (UploadRing::wants_growth); one whose last 30 seconds (and 600
+    // frames) stayed under a quarter of it gives half of its memory back on a frame without the scene (UploadRing::kQuietNs).
+    // Its new buffer is made on a worker and taken at a later boundary. Only that ring is made again.
+    // --diagnostics ring-stress: all made again (at the size each wants) every kRingStressFrames frames.
     const UploadRingSlot rings[] = {{&vertex_ring_, "vertex", kRingSegments, true},
                                     {&index_ring_, "index", kFramesInFlight, true},
                                     {&constant_ring_, "constant", kFramesInFlight, true},
@@ -2171,6 +2173,13 @@ bool RendererVk::present_timing_open() const noexcept {
     return swapchain_.timed && window_shown_ && !frame_generation_running() && swapchain_.timing_outstanding < 31u;
 }
 
+unsigned RendererVk::present_queue() const noexcept {
+    const vk::Context& context = vk::Context::get();
+    const bool waits = (context.present_wait() || swapchain_.ids2) && swapchain_.mode == VK_PRESENT_MODE_FIFO_KHR &&
+                       !swapchain_fsr_ && !frame_generation_running();
+    return present_timing_open() && !swapchain_.ask_time && waits ? 1u : 0u;
+}
+
 bool RendererVk::display_timing_open() const noexcept {
     return vk::Context::get().display_timing() && presents_timed(swap_queue()) && !swapchain_.ask_time;
 }
@@ -2236,7 +2245,11 @@ void RendererVk::present_swapchain_image() {
     // frame generation (whose presents are the library's), the frame fences bound the queue.
     // A picture that asks its time (present timing at an absolute time, G2.3.2) waits for none: the display holds it to
     // the refresh it was drawn for, and the schedule starts it its display lead before that refresh, which a wait for
-    // the present before the last would push later.
+    // the present before the last would push later. Where present timing reports the presents shown but takes no time,
+    // the display model paces them by the queue (present_queue): every picture waits for the last, one present in
+    // flight, as Direct3D's frame latency object of one (R-009: with no model a picture queued behind another stayed so,
+    // every picture of 240 a second a refresh later, 23.2 ms; with the model and a wait for the one before the last,
+    // half of the 120 a second's in-between pictures were left out).
     const bool ids = (context.present_wait() || swapchain_.ids2) && swapchain_.mode == VK_PRESENT_MODE_FIFO_KHR &&
                      !swapchain_fsr_ && !frame_generation_running();
     // The picture's moment (set_present_moment), for this present only.
@@ -2250,7 +2263,7 @@ void RendererVk::present_swapchain_image() {
     const bool timed_present = present_timing_open();
     // Its time asked: the refresh it was drawn for (RenderCore's slot on the display model's answers).
     const bool asked = timed_present && swapchain_.ask_time && moment != 0;
-    const std::uint64_t wait_id = moment != 0 ? present_id_before_last_ : last_present_id_;
+    const std::uint64_t wait_id = moment != 0 && present_queue() == 0u ? present_id_before_last_ : last_present_id_;
     if (ids && wait_id != 0u && !asked) {
         const std::int64_t wait_start = galaxy::qpc_now();
         const VkResult waited = wait_for_present(wait_id, 100'000'000ull);
@@ -2409,11 +2422,14 @@ void RendererVk::present_swapchain_image() {
         const galaxy::bench::RenderSpan span(galaxy::bench::RenderPart::Present);
         result = swapchain_calls_.present(context.queue(), &info);
     }
-    // The display model: each timed present of a swap chain that asks times, with the refresh it asked for (0: none),
-    // when it was ready (before any wait) and its call; its result comes back through report_present_times.
-    // --diagnostics timeline records the refresh asked (DisplayModel events), as on Direct3D.
-    if (swapchain_.ask_time && timed_present && (result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR)) {
-        display_model_.presented(this_present_id, asked ? moment : 0, present_start, present_call, asked);
+    // The display model: each timed present, with the refresh it was drawn for (0: none), when it was ready (before any
+    // wait) and its call, and whether it asked the display for that refresh; its result comes back through
+    // report_present_times. A swap chain that reports when presents were shown but takes no present's time (present
+    // timing without presents at an absolute time) is paced by its FIFO queue, as Direct3D's flip model: the model learns
+    // the display's hold from the times it reports (R-009). --diagnostics timeline records the refresh asked
+    // (DisplayModel events), as on Direct3D.
+    if (timed_present && (result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR)) {
+        display_model_.presented(this_present_id, moment, present_start, present_call, asked);
         if (asked && timeline_present) {
             galaxy::timeline::record_at(galaxy::timeline::Event::DisplayModel, static_cast<std::uint64_t>(moment),
                                         this_present_id, static_cast<std::uint64_t>(present_start));
@@ -2637,9 +2653,7 @@ void RendererVk::report_present_times() {
             galaxy::pacing::displayed(r.presentId, shown, swapchain_.refresh_qpc);
             host_window::note_present_shown(shown, true);  // Linux's display clock (I-005)
             refresh_answer_.shown(r.presentId, shown);     // the presents' proof (G2.3.5 point 7)
-            if (swapchain_.ask_time) {
-                display_model_.displayed(r.presentId, shown, swapchain_.refresh_qpc);  // 0 under a variable refresh
-            }
+            display_model_.displayed(r.presentId, shown, swapchain_.refresh_qpc);  // 0 under a variable refresh
         }
     }
 }

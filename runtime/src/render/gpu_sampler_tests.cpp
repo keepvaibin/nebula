@@ -383,19 +383,34 @@ int main() {
         }
         ring.reset();
         {
-            // R-009: a frame over half the budget but within it grows the ring only at a frame without the 3D scene
-            // (making it again mid-play held a picture past its refresh); one over the budget grows it at once.
+            // R-009: a frame over half the budget that still fits grows the ring on a worker, the old buffer serving until
+            // the new one is taken at a boundary (made on the render thread it held a picture past its refresh); one that
+            // would fit neither its segment nor the spill grows it at once.
             UploadRing room;
             const std::size_t budget = UploadRing::budget(initial, 2u);
             passed &= expect(room.initialize(device.Get(), "preflight-room", budget, 2u, initial), "upload ring setup for room");
+            const UploadRingSlot slots[] = {{&room, "preflight-room", 2u, true}};
+            std::vector<gpu::BufferRef> old;
+            bool failed = false;
             room.require_frame_bytes(budget * 3u / 4u);
-            room.set_shrink_moment(false);
-            passed &= expect(!room.wants_growth(), "a frame over half the budget: no growth during the scene");
-            room.set_shrink_moment(true);
-            passed &= expect(room.wants_growth(), "a frame over half the budget: growth at a frame without the scene");
-            room.set_shrink_moment(false);
-            room.require_frame_bytes(budget + 1u);
-            passed &= expect(room.wants_growth(), "a frame over the budget: growth at once");
+            passed &= expect(room.wants_growth() && !room.must_grow_now(), "a frame over half the budget: growth, not at once");
+            passed &= expect(!remake_upload_rings(device.Get(), slots, false, failed, old) && room.making() &&
+                                 room.capacity() == initial && old.empty(),
+                             "a frame over half the budget: the new buffer is made on a worker, the old one serves");
+            bool taken = false;
+            for (int i = 0; i < 2000 && !taken; ++i) {
+                taken = remake_upload_rings(device.Get(), slots, false, failed, old);
+                if (!taken) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                }
+            }
+            passed &= expect(taken && !room.making() && room.capacity() > initial && old.size() == 1u && !failed,
+                             "the worker's buffer is taken at a later boundary, the old one retired");
+            const std::size_t grown_budget = room.bytes_per_frame();
+            room.require_frame_bytes(room.capacity() - grown_budget * 2u + grown_budget + 1u);
+            passed &= expect(room.must_grow_now() && remake_upload_rings(device.Get(), slots, false, failed, old) &&
+                                 !room.making() && old.size() == 2u,
+                             "a frame that would fit neither its segment nor the spill: the ring grows at once");
             room.reset();
         }
     }

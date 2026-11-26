@@ -318,9 +318,14 @@ struct UploadMemory {
     explicit operator bool() const noexcept { return cpu != nullptr; }
 };
 
-// `bytes` of upload memory, mapped for its lifetime; empty when it cannot be created.
+// What the GPU reads upload memory as, where an API makes a buffer for each (Direct3D 11's video memory copies,
+// d3d11_context.h BufferUse): made with the memory, so its first draw makes none. Any: made at the first draw.
+enum class UploadUse : std::uint8_t { Any, Geometry, Constants, Rows };
+
+// `bytes` of upload memory, mapped for its lifetime; empty when it cannot be created. Any thread may call it (an upload
+// ring's new buffer is made on a worker, UploadRing::wants_new_size).
 [[nodiscard]] UploadMemory create_upload_memory(Device* device, std::size_t bytes, const char* name,
-                                                UploadPlace place = UploadPlace::Host);
+                                                UploadPlace place = UploadPlace::Host, UploadUse use = UploadUse::Any);
 // The device reports itself lost, where the API can say so without a failed call.
 [[nodiscard]] bool device_removed(Device* device) noexcept;
 

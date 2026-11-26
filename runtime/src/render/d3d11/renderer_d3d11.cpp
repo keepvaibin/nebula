@@ -432,14 +432,14 @@ void RendererD3D11::shutdown() {
 }
 
 void RendererD3D11::grow_rings() {
-    // A ring whose frames took over their budget (or spilled) grows, over half of it on a frame without the scene
-    // (UploadRing::wants_growth); one whose last 30 seconds (and 600 frames) stayed under a quarter of it gives half of
-    // its memory back on such a frame (UploadRing::kQuietNs).
+    // A ring whose frames took over half their budget grows (UploadRing::wants_growth); one whose last 30 seconds (and 600
+    // frames) stayed under a quarter of it gives half of its memory back on a frame without the scene (UploadRing::kQuietNs).
+    // Its new buffer, and the video memory copy its draws read, are made on a worker and taken at a later boundary.
     // Only that ring is made again; --diagnostics ring-stress makes them all again every kRingStressFrames frames.
-    const UploadRingSlot rings[] = {{&vertex_ring_, "vertex", kFramesInFlight, true},
-                                    {&index_ring_, "index", kFramesInFlight, true},
-                                    {&constant_ring_, "constant", kFramesInFlight, true},
-                                    {&matrix_ring_, "matrix", kFramesInFlight, false}};
+    const UploadRingSlot rings[] = {{&vertex_ring_, "vertex", kFramesInFlight, true, gpu::UploadUse::Geometry},
+                                    {&index_ring_, "index", kFramesInFlight, true, gpu::UploadUse::Geometry},
+                                    {&constant_ring_, "constant", kFramesInFlight, true, gpu::UploadUse::Constants},
+                                    {&matrix_ring_, "matrix", kFramesInFlight, false, gpu::UploadUse::Rows}};
     const RingRemake due = upload_rings_due(rings, frame_index_, ring_growth_failed_);
     if (due == RingRemake::None) {
         return;
