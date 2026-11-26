@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-26 14:38. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-26 14:39. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 36 of 156 (23%).
 
@@ -134,6 +134,7 @@ Nothing waits for the owner.
 | M-005 | closed | R-004 | Coverage measured a program that could not open the game data: its build folder held objects of another tree | 0 | 0 | f9b350784185c77e18d4822f7b13cd8b1381a33e |
 | M-006 | closed | - | the step tier and section check; a passing tool fault played once more; a waiter left not judged runs itself | 0 | 95 | 2911f6429 |
 | M-007 | closed | - | the section-at-a-time roles: a whole section ahead, wait, hand-off sheets, hard reports, the live page | 0 | 80 | 9ed09cfec |
+| M-008 | open | - | pace/pc loads row refuses on fewer than 3 of main's readings | 0 | 0 | - |
 
 ## Decisions (140)
 
