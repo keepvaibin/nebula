@@ -1,12 +1,13 @@
 # Nebula native plan: status
 
-Written 2026-11-27 07:30. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-27 07:31. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 40 of 157 (25%).
 
 Now: G10.4 landed (main 03c3155f7); in work: measuring helper for G10.4m (tablet runs, classification, A/B)
 
-In work now: Nothing started.
+In work now:
+- G10.4m G10.3's tablet proofs, how the late share is classified, the baseline rows, the hint's target by A/B (agent 1)
 
 ## Packages
 
