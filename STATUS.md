@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-26 20:57. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-26 20:59. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 37 of 156 (24%).
 
-Now: M-010 closed (main f93613da6); in work: G10.2m helper reruns the tablet runs, baseline and planted faults
+Now: G10.2m measured; in work: lander landing G10.2m
 
 In work now:
 - G10.2m The first FrameTimeline trace, row 1's method, the stored baseline (agent 1)
