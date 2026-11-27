@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-26 19:15. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-26 19:16. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 37 of 156 (24%).
 
@@ -136,6 +136,7 @@ Nothing waits for the owner.
 | M-007 | closed | - | the section-at-a-time roles: a whole section ahead, wait, hand-off sheets, hard reports, the live page | 0 | 80 | 9ed09cfec |
 | M-008 | closed | - | pace/pc loads row refuses on fewer than 3 of main's readings | 0 | 56 | af48ff4ac |
 | M-009 | closed | - | pace/pc refuses on the median figure and on a lead change in play: report only, per brief AD | 0 | 59 | 053875b4c146469f74c4441fc9ca10b65961cb29 |
+| M-010 | open | G10.2m | frametimeline.py: wrong layer name on Android 16 and a trace pulled half-written | 0 | 0 | - |
 
 ## Decisions (145)
 
