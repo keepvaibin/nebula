@@ -79,11 +79,11 @@ The earlier order put four things in places that would have forced work to be do
    orders 23 to 34 and G6.2 and G6.7 at 35 and 36 of `steps.tsv`. His reason: the tablet's uneven 120 Hz is what he
    meets when he plays. R1 and R2 stand before G2.1 because a pipeline made inside a draw and a sampler table that
    starts again would be counted by the pacing measures as late moments; G1 stands after them because only G2.6
-   needs it (G1.1). The rest of G6 keeps its place and waits for the two (G6.1 at 133, G6.3 to G6.6 at 134 to 137,
-   G6.8 at 138). It does not go into a second beta: the owner (11-22): "just beta 1 so far", no second beta is
+   needs it (G1.1). The rest of G6 keeps its place and waits for the two (G6.1 at 134, G6.3 to G6.6 at 135 to 138,
+   G6.8 at 139). It does not go into a second beta: the owner (11-22): "just beta 1 so far", no second beta is
    planned.
 6. **Android pacing perfected (G10) stands directly after the surround steps, before G1.** The owner (11-25: "I will not accept 3 instead of two and just 99.8%") wants
-   the tablet's pacing perfected now, on weak devices too, ahead of other writing. G10 (eleven steps, places 37 to 47) needs only G2.5, which has landed: it is its own
+   the tablet's pacing perfected now, on weak devices too, ahead of other writing. G10 (twelve steps, places 37 to 48) needs only G2.5, which has landed: it is its own
    package because G2's file order would make it wait for G2.6 to G2.9, and G2.8 needs 55 renderer steps. Its first step puts the pacing measures into the gate and its
    second makes the platform's own account of every late picture the measure, so each later step is judged by named causes, not by the game's own figure.
 
@@ -238,13 +238,13 @@ N-1084, P-034, P-042, P-078, P-163, P-274, P-311 to P-318, P-019, P-281, P-363, 
 - For a player: even frame pacing at every refresh rate, less delay between a step and its picture, one governor
   that lowers resolution before it drops pictures, a pointer that moves at the display's rate.
 - Design: FRAME-MODEL 2.16, nine landings. Landings 1 to 5 (the tablet's pacing, orders 23 to 34; landing 3 is eight steps since 11-24) stand directly
-  after R1 and R2, before G1 and the surround steps; landings 6 and 7 stand at 53 and 54, after G1 (G10, places 37 to 47, is the Android pacing package that stands between G6.7 and G1). Landing 8 comes
+  after R1 and R2, before G1 and the surround steps; landings 6 and 7 stand at 54 and 55, after G1 (G10, places 37 to 48, is the Android pacing package that stands between G6.7 and G1). Landing 8 comes
   with R5 and R7 landing 2. Landing 9 (the default stays 60, the owner 11-22; the settings show only where they act)
   is the last, after the measures hold.
 
 **G10 Android pacing perfected.** Rows: P-334, P-335 (the tablet's timeline events and its refresh reading; both closed at G10.2).
-- Eleven steps at places 37 to 47, after G6.7 and before G1: the pacing measures in the gate (G10.1), FrameTimeline and SurfaceFlinger
-  attribution with a baseline report (G10.2), the first trace, row 1's method and the stored baseline, measured on the tablet (G10.2m), what the platform offers, logged (G10.3), the performance hint's target by A/B (G10.4),
+- Twelve steps at places 37 to 48, after G6.7 and before G1: the pacing measures in the gate (G10.1), FrameTimeline and SurfaceFlinger
+  attribution with a baseline report (G10.2), the first trace, row 1's method and the stored baseline, measured on the tablet (G10.2m), what the platform offers, logged (G10.3), the performance hint's target by A/B (G10.4), G10.3's tablet proofs, the classification of the late share, the baseline rows and the A/B itself, measured on the tablet (G10.4m),
   the depth rule from ready time (G10.5), an arbiter that acts before a miss (G10.6), image count and queue bound where buffer stuffing
   shows (G10.7), the frame-rate vote at 60 Hz (G10.8), Game Mode and sustained performance (G10.9) and the acceptance matrix (G10.10).
 - For a player: two refreshes from step to screen at 60 Hz in every frame, no late picture the game causes at 120 or 60 Hz, detail lowered
@@ -307,16 +307,16 @@ onto the result. (not used: one agent does every step)
 | File | Lane R | Lane G | Who goes first |
 | --- | --- | --- | --- |
 | The four renderers' frame and present code | R1, R2.1, R2.2, R7 | G2 landings 1 to 5 | R1 and R2 (orders 14 to 22), then G2 landings 1 to 5 (23 to 34), then R7 |
-| `render_core.cpp` | R1.2, R3, R7 | S0.2, G2, G10 | S0.2, then R1.2 (15), then G2 (23 to 34), G10 (37 to 47: the fault switch in G10.1 and the arbiter in G10.6), G2.6 and G2.7 (53, 54), then R3, R7 |
+| `render_core.cpp` | R1.2, R3, R7 | S0.2, G2, G10 | S0.2, then R1.2 (15), then G2 (23 to 34), G10 (37 to 48: the fault switch in G10.1 and the arbiter in G10.6), G2.6 and G2.7 (54, 55), then R3, R7 |
 | `Model.cpp` | R1, R5 | G3 landing 4 | R5 |
-| `FrameList.cpp`, `nebula_frame_list.h` | R3.2, R4, R4v.1, R5.1, R6.1, R7.1 | G2 landings 6 and 7, G3 landing 6 | G2.6 and G2.7 (53, 54) first; different parts; whoever lands second moves |
-| `host_main.cpp` | R7 landing 7 | G2 landings 1 and 3, G6.7, G10.2 (the step loop's timeline events) and G10.4 (the hint's calls), G1.1 and G1.4, G3 landing 7 | G, in the order of `steps.tsv` (23, 25 to 32, 36, 38, 41, 48, 51, 101), then R7.7 (118) |
-| `host_window_sdl.cpp`, `GameActivity.java` | none | G2.3.6 (event pump, surface hand-over), G2.3.7 (the vote and the fall-back that read the step rate: moved from G2.9 on 11-23), G10.3, G10.8 and G10.9 (what the activity reports, the frame-rate vote, Game Mode), G1.1 and G1.4 | G2.3.6 and G2.3.7 (30, 31), then G10.3, G10.8 and G10.9 (40, 45, 46), then G1 (48, 51) |
+| `FrameList.cpp`, `nebula_frame_list.h` | R3.2, R4, R4v.1, R5.1, R6.1, R7.1 | G2 landings 6 and 7, G3 landing 6 | G2.6 and G2.7 (54, 55) first; different parts; whoever lands second moves |
+| `host_main.cpp` | R7 landing 7 | G2 landings 1 and 3, G6.7, G10.2 (the step loop's timeline events) and G10.4 (the hint's calls), G1.1 and G1.4, G3 landing 7 | G, in the order of `steps.tsv` (23, 25 to 32, 36, 38, 41, 49, 52, 102), then R7.7 (119) |
+| `host_window_sdl.cpp`, `GameActivity.java` | none | G2.3.6 (event pump, surface hand-over), G2.3.7 (the vote and the fall-back that read the step rate: moved from G2.9 on 11-23), G10.3, G10.8 and G10.9 (what the activity reports, the frame-rate vote, Game Mode), G1.1 and G1.4 | G2.3.6 and G2.3.7 (30, 31), then G10.3, G10.8 and G10.9 (40, 46, 47), then G1 (49, 52) |
 | The clipping files (`ClippingJudge`, `ClippingActorHolder`) | none | G3 landing 2, G5 | G3 |
 | `LensFlare.cpp`, the probe code in the renderers | none after S0.2 | S0.2 | S0.2, before R touches the renderers |
-| `native_settings.cpp`, `runtime_settings.*`, `settings_table.tsv`, `NebulaText.tsv`, `NebulaSettingsMenu.cpp`, `settings_graphics_page.cpp` | none | G2.3.3, G2.3.5 and G2.5 (texts for a Linux mark and a missed target; their cards name `settings_display_page.cpp`, `settings_graphics_page.cpp`, `settings_table.tsv` and `NebulaText.tsv`, and the 14 cells), G6.7 (the Speakers row), G1.2 (the language list), G7.3, G9.5, G2.9 (P-364's text) | G2.3.3, G2.3.5 and G2.5 (orders 27, 29, 34), then G6.7 (36), then G1.2 (49); G7.3, G9.5 and G2.9 read their rows as they stand |
+| `native_settings.cpp`, `runtime_settings.*`, `settings_table.tsv`, `NebulaText.tsv`, `NebulaSettingsMenu.cpp`, `settings_graphics_page.cpp` | none | G2.3.3, G2.3.5 and G2.5 (texts for a Linux mark and a missed target; their cards name `settings_display_page.cpp`, `settings_graphics_page.cpp`, `settings_table.tsv` and `NebulaText.tsv`, and the 14 cells), G6.7 (the Speakers row), G1.2 (the language list), G7.3, G9.5, G2.9 (P-364's text) | G2.3.3, G2.3.5 and G2.5 (orders 27, 29, 34), then G6.7 (36), then G1.2 (50); G7.3, G9.5 and G2.9 read their rows as they stand |
 
-Checked against `steps.tsv` on 11-23 (the order of the tablet's pacing before the surround steps): G2 landings 1 to 5 stand at 23 to 34, before R7 (112 to 119); `render_core.cpp` goes S0.2 (6 to 11), R1.2 (15), G2 (23 to 34, 53, 54), then R3 and R7; G1.1 (48) stands before G2.6 (53); no need of any step is placed after the step itself (`plan.py` read all 138), and places 37 to 138 were the same as before until 11-25. On 11-24 G2.3 became eight steps (G2.3.1 to G2.3.7, then G2.3, places 25 to 32), so every place from 26 on moved up by 7 and the plan had 145 steps. On 11-25 package G10 (ten steps) was placed at 37 to 46, directly after G6.7, so every place from 37 on moved up by 10 and the plan had 155 steps. On 11-26 G10.2 was split and the step G10.2m (the first FrameTimeline trace, row 1's method, the stored baseline; a measuring step that needs the tablet and the Perfetto trace processor) was placed at 39, directly after G10.2, so every place from 39 on moved up by one and the plan has 156 steps; G10 stands at 37 to 47 and needs only G2.5 (landed), G10.4 and every later G10 step need G10.2m, and no step waits for a later one (`plan.py` reads all 156).
+Checked against `steps.tsv` on 11-23 (the order of the tablet's pacing before the surround steps): G2 landings 1 to 5 stand at 23 to 34, before R7 (113 to 120); `render_core.cpp` goes S0.2 (6 to 11), R1.2 (15), G2 (23 to 34, 54, 55), then R3 and R7; G1.1 (49) stands before G2.6 (54); no need of any step is placed after the step itself (`plan.py` read all 138), and places 37 to 138 were the same as before until 11-25. On 11-24 G2.3 became eight steps (G2.3.1 to G2.3.7, then G2.3, places 25 to 32), so every place from 26 on moved up by 7 and the plan had 145 steps. On 11-25 package G10 (ten steps) was placed at 37 to 46, directly after G6.7, so every place from 37 on moved up by 10 and the plan had 155 steps. On 11-26 G10.2 was split and the step G10.2m (the first FrameTimeline trace, row 1's method, the stored baseline; a measuring step that needs the tablet and the Perfetto trace processor) was placed at 39, directly after G10.2, so every place from 39 on moved up by one and the plan had 156 steps. On 11-27 G10.4 was split and the step G10.4m (G10.3's tablet proofs, how the late share is classified, the baseline rows and the hint's target by A/B; a measuring step that needs the tablet) was placed at 42, directly after G10.4, so every place from 42 on moved up by one and the plan has 157 steps; G10 stands at 37 to 48 and needs only G2.5 (landed), G10.4 and every later G10 step need G10.2m, G10.5 and every later G10 step need G10.4m, and no step waits for a later one (`plan.py` reads all 157).
 
 ## 6. Decisions settled here, so the design has no open ends
 
