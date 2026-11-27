@@ -1,13 +1,12 @@
 # Nebula native plan: status
 
-Written 2026-11-26 20:59. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-26 21:03. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
-Steps landed: 37 of 156 (24%).
+Steps landed: 38 of 156 (24%).
 
 Now: G10.2m measured; in work: lander landing G10.2m
 
-In work now:
-- G10.2m The first FrameTimeline trace, row 1's method, the stored baseline (agent 1)
+In work now: Nothing started.
 
 ## Packages
 
@@ -20,7 +19,7 @@ In work now:
 | R2 | 5 | 5 |
 | G2 | 12 | 16 |
 | G6 | 1 | 8 |
-| G10 | 2 | 11 |
+| G10 | 3 | 11 |
 | G1 | 0 | 5 |
 | R3 | 0 | 13 |
 | R4 | 0 | 10 |
@@ -43,6 +42,7 @@ In work now:
 
 | When | Step | Title | Code commit | Main commit |
 | --- | --- | --- | --- | --- |
+| 2026-11-26 21:03 | G10.2m | The first FrameTimeline trace, row 1's method, the stored baseline | 91282cc48 | c28f8b737 |
 | 2026-11-26 17:37 | G10.2 | FrameTimeline attribution and the baseline report | d6f15dcd1 | d8d2c6ec8 |
 | 2026-11-26 12:19 | G10.1 | Pacing in the gate: the PC's match run on every landing, the tablet's at 60 and 120 Hz | e687fdc7a | 7ca0d4e54 |
 | 2026-11-26 07:56 | R-009 |  | e8371d2a7 | aa544956e |
@@ -52,7 +52,6 @@ In work now:
 | 2026-11-25 05:30 | G2.5 | Landing 5: one arbiter, the clock held, the heat input | 54e37d4fe | 45ba38cea |
 | 2026-11-25 04:44 | G2.4 | Landing 4: no closing spin where a display time is asked | fdc86be24 | e563ab61c |
 | 2026-11-25 03:05 | G2.3 | Landing 3h: the picture interval published; P-313's restart hitch | 3c62eee29 | cd1564ab9 |
-| 2026-11-25 01:41 | G2.3.7 | Landing 3g: the Android fall-back and the surface vote read the step rate | ee6eeda4d | e957eb636 |
 
 ## Repairs
 
