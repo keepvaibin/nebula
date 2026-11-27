@@ -47,6 +47,7 @@ sys.stdout.write((trace.parent / name).read_text(encoding="utf-8"))
 
 failures = []
 results = []
+REFUSES_SHIPPED = getattr(pace, "BASELINE_REFUSES", True)  # what pace.py ships with; the test sets it for its own blocks and puts it back
 
 
 def check(ok, what):
@@ -423,6 +424,9 @@ def main():
         reports = [json.loads((plain / "runs/pace/pace-rate-60/vulkan" / ft.REPORT).read_text(encoding="utf-8"))] * 3
         stored.write_text(json.dumps(ft.baseline(reports)), encoding="utf-8")
         reading = pace.reading_of(baseline=str(stored))
+        # The switch of M-011: the row against the stored baseline refuses only when pace.BASELINE_REFUSES is set (G10.4m sets it); this
+        # first block judges with it set, the block after it with the shipped value.
+        pace.BASELINE_REFUSES = True
         for name, case, want in (("same", "right", True), ("late", "sleep", False), ("mode change", "mode", False),
                                  ("deep", "depth", False), ("unnamed", "unknown", False)):
             work = device_work("stored-" + name, case)
@@ -436,6 +440,19 @@ def main():
         said = json.loads((unnamed / "pace.json").read_text(encoding="utf-8"))[0]["rows"]
         check(any(m == "miss: Unknown" and v == "FAIL" for m, _x, _t, v in said) and any(m == pace.BASELINE_ROW and v == "FAIL" for m, _x, _t, v in said),
               "the unknown case: its Unknown row FAIL and the baseline row FAIL")
+        pace.BASELINE_REFUSES = REFUSES_SHIPPED
+        # As shipped (M-011, brief AD): the late, three-refresh and unnamed shares against the stored most are a report. The runs that the
+        # block above refused are recorded: the row says "recorded" and names the shares above the most, pace/tablet passes them.
+        check(REFUSES_SHIPPED is False, "the shares against the stored baseline are a report as shipped")
+        for name, case, above in (("same", "right", False), ("late", "sleep", True), ("mode change", "mode", True),
+                                  ("deep", "depth", True), ("unnamed", "unknown", True)):
+            work = device_work("report-" + name, case)
+            code = pace.digest(work, None, reading)
+            passed, detail, _t, kind = gate.pace_tablet_reading(work, code, stored=True)
+            row = {m: (v, verdict) for m, v, _x, verdict in json.loads((work / "pace.json").read_text(encoding="utf-8"))[0]["rows"]}[pace.BASELINE_ROW]
+            check(passed and row[1] == "recorded" and ("above the stored most" in row[0]) == above,
+                  "pace/tablet with a stored baseline, report only, %s: %s (%s, %s; row %s)" % (name, "pass" if passed else "refused", kind, detail, row))
+            results.append("pace/tablet against the stored baseline as a report, %s: %s" % (name, row[0]))
         # A run the baseline could not judge (another method) is the tool's, never a pass.
         other = dict(json.loads(stored.read_text(encoding="utf-8")), method="frametimeline")
         stored.write_text(json.dumps(other), encoding="utf-8")

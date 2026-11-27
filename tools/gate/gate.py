@@ -1868,6 +1868,9 @@ def measure_pc(g):
 # (tools/gate/frametimeline.py, read by the trace processor the coordinator placed, PACE_TRACE_PROCESSOR); recorded until G10.2m
 # stores tests/pace/tablet-base.json, then refused only by the row against it (pace.BASELINE_ROW).
 # `--pace-fault` plays both with the planted stutter (--diagnostics pace-fault): the checks must then fail, their own proof.
+# Until the step that classifies the shares (G10.4m) sets pace.BASELINE_REFUSES, the row against the stored baseline is a report (M-011): with
+# a stored file pace/tablet refuses only what pace_tablet_reading names below (a baseline that cannot judge a run is the tool's), and
+# `--pace-fault` is then refused by pace/pc alone: pace/tablet's rows show the stutter (jumps, late share) and refuse nothing for it.
 PACE = HERE / "pace.py"
 PACE_PC_CHECK = "pace/pc"
 PACE_TABLET_CHECK = "pace/tablet"
