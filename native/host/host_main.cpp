@@ -149,6 +149,7 @@ inline void perf_hint_busy(bool) noexcept {}
 inline int64_t perf_hint_frame_done() noexcept { return 0; }
 inline std::size_t perf_hint_last_work(ThreadWork*, std::size_t) noexcept { return 0; }
 inline bool perf_hint_on_battery() noexcept { return false; }
+inline void perf_hint_workload_spike(const char*) noexcept {}
 }  // namespace galaxy::host
 #endif
 #if defined(NEBULA_HOST_SDL)
@@ -2288,6 +2289,9 @@ void submit_frame(bool present, bool black, bool list_shows = false) {
 void svc_game_stage(void*, const char* name) {
     if (name != nullptr && gSceneStage != name) {
         gSceneStage = name;
+        // Another stage is loaded (the name comes with each 3D scene, so only a change is one): its first cycles are not
+        // the hint session's measure of the work (Android, API 36).
+        galaxy::host::perf_hint_workload_spike("stage load");
     }
 }
 
@@ -2350,6 +2354,7 @@ void svc_presence(void*, const uint16_t* galaxy, const uint16_t* star, int32_t p
     if (power_stars >= 0) {  // GameScene::start (the file select reports -1)
         galaxy::bench::scene_started();
         galaxy::calibration_scene::scene_started();
+        galaxy::host::perf_hint_workload_spike("scene start");  // the hint session's spike (Android, API 36)
     }
     // The HDR calibration's reference stage is not the player's: neither play nor what Discord shows.
     if (galaxy::calibration_scene::live()) return;
@@ -5990,8 +5995,8 @@ void read_launch_args(int argc, char** argv) {
         } else if (key == "--diagnostics") {
             std::string_view unknown;
             unsigned what = 0u;
-            if (!galaxy::diagnostics_from_text(argv[i + 1], what, unknown)) {
-                die("--diagnostics: no diagnostic is named %.*s (docs/using-nebula/diagnostics.md)", static_cast<int>(unknown.size()), unknown.data());
+            if (!galaxy::diagnostics_from_text(argv[i + 1], what, args.hint_share, unknown)) {
+                die("--diagnostics: %.*s is not a diagnostic's name or a value it takes (docs/using-nebula/diagnostics.md)", static_cast<int>(unknown.size()), unknown.data());
             }
             args.diagnostics |= what;
         }
