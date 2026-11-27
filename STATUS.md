@@ -375,12 +375,13 @@ Nothing waits for the owner.
 
 ## Tool faults
 
-10 tool faults recorded.
+11 tool faults recorded.
 
 The last 20:
 
 | When | Step | Test | What happened | What the agent could not do |
 | --- | --- | --- | --- | --- |
+| 2026-11-26 19:15 | - | (by hand) | tools/gate/frametimeline.py Capture.finish (G10.2): the wait for Perfetto to end uses 'kill -0 PID' as the shell user, which returns 1 at once while the process still lives (the trace file was 32 MB at 0.26 s after SIGTERM and 67.8 MB at 0.66 s; logcat: 'Wrote 68556531 bytes' 0.4 s after the pull and 0.3 s after 'rm -f'), so the pull takes a half-written file: two real 80 s runs pulled 1.4 MB and 274 KB with every ftrace event (sched_switch, cpu_frequency, atrace slices) and the stats missing, though the trace on the device was 68 MB. A wait on '[ -d /proc/PID ]' (ls -d /proc/PID: exists until the process ends) or on the file's size standing still would hold. A 100 s probe that happened to be slow enough pulled the whole 68 MB. | - |
 | 2026-11-26 19:15 | - | (by hand) | tools/gate/frametimeline.py pick_layer (G10.2): on the tablet (Android 16, SM-X810) dumpsys SurfaceFlinger --list prints each layer as 'RequestedLayerState{d4c3c SurfaceView[dev.nebula.galaxy.test/dev.nebula.galaxy.GameActivity]@0(BLAST)#158145 parentId=158144}'; pick_layer returns that whole line, and --latency of it answers only the refresh period (no frames), so sf-latency.txt holds none, capture.json layer is the whole line, and every row 1 and 2 of the latency method reads 'no --latency frames of the game's layer'. The name --latency takes (128 lines tried on the tablet) is the text between 'RequestedLayerState{' and ' parentId=', i.e. 'd4c3c SurfaceView[...]@0(BLAST)#158145'. frametimeline_test's listing fixture is the old format, so the test passed. | - |
 | 2026-11-26 11:15 | G10.1 | pace/pc | d3d12: no run (the harness's exit 1); vulkan: no run (the harness's exit 1) | - |
 | 2026-11-26 10:32 | G10.1 | pace/pc | d3d12: no run (the harness's exit 1); vulkan: no run (the harness's exit 1) | - |
