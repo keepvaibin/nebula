@@ -6,7 +6,8 @@ Steps landed: 39 of 157 (25%).
 
 Now: G10.4 plan split landed (main e5c331ff6); in work: writer for G10.4 (code only)
 
-In work now: Nothing started.
+In work now:
+- G10.4 The performance hint's target, by A/B (agent 1)
 
 ## Packages
 
@@ -126,7 +127,6 @@ Nothing waits for the owner.
 ## Blocked
 
 - G6.7 The surround law (P-193): hard: build/windows + github Linux sanitizers: galaxy_speaker_law_tests aborts with an AddressSanitizer heap-buffer-overflow on the GitHub Linux ASAN/UBSAN job (run 45652159093); the Windows gate stopped on it (report: D:/NebulaWork/plan/native/hard/G6.7.md)
-- G10.4 The performance hint's target, by A/B: nothing written. The card's choice needs measuring runs on the tablet that a writer may not make, and three inputs only the planner can settle. (1) Runs: the power bound first (PLAN decide, from the baseline runs' spread). Then 4 target shares (100, 90, 80, 67 per cent of the slot), each 3 runs of 5 minutes at 60 and at 120 Hz through pace/tablet: 24 runs, about 2 hours of tablet time. Then the graphics-pipeline variant if G10.3's tablet run reports it supported, and the two planted variants (20 per cent; one report a game step). Only then can the losers be deleted, as the card asks. (2) The power figure: G10.2m#3 found that power/gpu_frequency writes no events on this tablet, so the bound's 'mean GPU clock' cannot come from the trace, and G10.2m stored no battery drop. The planner names the measure: batterystats discharge over the run, or a sysfs GPU clock read. (3) The acceptance at 120 Hz: the stored baseline's late share spreads 8.7 to 14.6 per cent between clean runs (G10.2m#4, #5), and 'miss: Unknown' already FAILs on the clean build. 'No worse than the baseline' cannot tell variants apart by less than that spread; the rule needs the planner's figure (for example the mean of 3 runs against the baseline's mean). (4) The graphics-pipeline variant waits for G10.3's answer on the tablet (hint-features). Suggested split, as G10.2 was: G10.4 the code (the share as a diagnostics value defaulting to 100; one report per target cycle; every frame thread in the session through setThreads; notifyWorkloadSpike at a stage load and a scene start; never setPreferPowerEfficiency), and G10.4m the A/B by a measuring helper that writes the bound and the chosen share and deletes the losing variants.
 
 ## Tool mends
 
