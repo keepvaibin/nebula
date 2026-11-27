@@ -214,6 +214,9 @@ def main():
             "twice": [zero, plain, up, down, smeared, plain],
             "twiceup": [zero, plain, up, "[display-lead] 2->3 refreshes at qpc 3", smeared, plain],
             "down": [zero, plain, down, smeared, plain],
+            "downup": [zero, plain, down, up, smeared, plain],
+            "twodown": [zero, plain, down, "[display-lead] 3->2 refreshes at qpc 3", smeared, plain],
+            "realdown": [zero, plain, "[display-lead] 2->1 refreshes at qpc 11247074565219", smeared, plain],
             "boot": [up, plain, zero, plain, plain, plain],
             "load": [zero, plain, wipe, destroyed, up, down, ready, plain, plain],
             "afterload": [zero, plain, wipe, destroyed, ready, up, smeared, plain],
@@ -227,7 +230,11 @@ def main():
         check(v["up"].get(lead) == "lead moved", "one step up in play: filed 'lead moved', refused nothing: %s" % v["up"].get(lead))
         check(v["twice"].get(lead) == "FAIL", "a step up and a step down in play: FAIL")
         check(v["twiceup"].get(lead) == "FAIL", "two steps up in play: FAIL")
-        check(v["down"].get(lead) == "FAIL", "one step down in play: FAIL")
+        # M-012: until G10.5 (no covered flag on the line yet) ONE lead change in a run, up or down, is filed "lead moved"; two fail.
+        check(v["down"].get(lead) == "lead moved", "one step down in play: filed 'lead moved', refused nothing: %s" % v["down"].get(lead))
+        check(v["realdown"].get(lead) == "lead moved", "the real Vulkan line of 20261126-233516 (2->1): filed 'lead moved': %s" % v["realdown"].get(lead))
+        check(v["downup"].get(lead) == "FAIL", "a step down and a step up in play: FAIL")
+        check(v["twodown"].get(lead) == "FAIL", "two steps down in play: FAIL")
         check(v["boot"].get(lead) == "pass", "a lead line before frame 0 (the boot) is not play's")
         check(v["load"].get(lead) == "pass", "lead changes between the wipe closing and the scene ready are a load's")
         check(v["afterload"].get(lead) == "lead moved", "a step after the scene ready is play's")
