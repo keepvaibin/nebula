@@ -55,9 +55,13 @@ The gate's two checks (tools/gate/gate.py):
                Direct3D 12 and Vulkan, --again, the loads judged against the gate's pace-history.tsv; a FAIL row refuses.
   pace/tablet  an extra check by name (docs/plan/native/step-checks.tsv): tests/pace/tablet.json (rate-60, rate-120) on the
                tablet, under the tablet's lock and the measurement lock. Until tests/pace/tablet-base.json is stored (G10.2m,
-               from frametimeline.py baseline), it records its rows and refuses nothing. From then on it refuses a landing
-               whose late share, three-refresh share or unnamed share (the frame timeline's rows) is above the most a run of
-               the baseline had at that rate (the row "against the stored baseline").
+               from frametimeline.py baseline), it records its rows and refuses nothing. With it stored, the late share,
+               three-refresh share and unnamed share (the frame timeline's rows) of a run are set against the most a run of
+               the baseline had at that rate (the row "against the stored baseline"); the row is a report (BASELINE_REFUSES
+               False, M-011): the most of three runs is no bound for a fourth, the late share at 120 Hz varies from 8.7% to
+               14.6% between clean runs (brief AD: the share figures are a report, the bars refuse). A baseline that cannot
+               judge a run (another method, no frames) is still the tool's fault. The step that classifies the shares (G10.4m)
+               sets BASELINE_REFUSES, or replaces the row.
 """
 import argparse
 import datetime
@@ -105,8 +109,11 @@ FIRST = "first"
 LOCK_HELD = 3
 # The exit status when a renderer was not played because the machine stayed busy (the machine's too).
 NOT_QUIET = 3
-# A device run's row against a stored baseline (frametimeline.judge): the one pace/tablet refuses by once a baseline is stored.
+# A device run's row against a stored baseline (frametimeline.judge). A share above the stored most is a FAIL of this row only when
+# BASELINE_REFUSES is set (pace/tablet refuses by it); until the step that classifies the shares (G10.4m) it is a report: "recorded",
+# the shares above the most named (M-011; brief AD: the shares are a report, bars 1 and 2 refuse; the planner's order of 11-26).
 BASELINE_ROW = "against the stored baseline"
+BASELINE_REFUSES = False
 
 
 def windows_of(log_text, from_start=False):
@@ -338,7 +345,12 @@ def frametimeline_rows(run, base=None, base_name=""):
             "-" if report["latched_unsignaled"] is None else "%d" % report["latched_unsignaled"]), "recorded", "recorded"))
     if base is not None:
         verdict, text = frametimeline.judge(report, base)
-        rows.append((BASELINE_ROW, text or "-", "no share above the most of a run in %s" % base_name, verdict))
+        target = "no share above the most of a run in %s" % base_name
+        if verdict in ("pass", "FAIL") and not BASELINE_REFUSES:
+            target = "report only: the shares against the most of a run in %s" % base_name
+            text += "; above the stored most" if verdict == "FAIL" else ""
+            verdict = "recorded"
+        rows.append((BASELINE_ROW, text or "-", target, verdict))
     return rows
 
 
