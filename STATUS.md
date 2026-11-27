@@ -4,7 +4,7 @@ Written 2026-11-27 00:21. If this time is more than three hours old, the work ha
 
 Steps landed: 38 of 156 (24%).
 
-Now: M-011 closed (main f18e39975); in work: lander landing G10.3 again (rebase on the mend)
+Now: G10.3 hard: pace/pc Vulkan lead step down under a wipe (M-009 gap); asked the planner
 
 In work now: Nothing started.
 
