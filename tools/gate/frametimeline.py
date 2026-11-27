@@ -17,10 +17,11 @@ of trace_config on stdin through Device.shell_input) with the FrameTimeline sour
 buffer of its own and an ftrace part (power/cpu_frequency, power/gpu_frequency, sched/sched_switch; atrace gfx and view for the
 test app). While the game runs, `dumpsys SurfaceFlinger --latency <layer>` (128 frames each) every second at 120 Hz, every 2 s at
 60 (the game's [display] refresh-hz line), appended to sf-latency.txt. At the end: the last --latency read, `dumpsys
-SurfaceFlinger --frametimeline -jank` (sf-jank.txt), Perfetto stopped (SIGTERM ends its trace) and its trace pulled into the run
-folder (frametimeline.pftrace). capture.json says what was done and what failed; a capture that fails is never a verdict on the
+SurfaceFlinger --frametimeline -jank` (sf-jank.txt), Perfetto stopped (SIGTERM ends its trace), the wait until its process has
+ended and the trace's size has stood still (wait_written), the trace pulled into the run folder (frametimeline.pftrace) and its
+size checked against the device's. capture.json says what was done and what failed; a capture that fails is never a verdict on the
 game. The shell user may not be allowed every ftrace event: Perfetto leaves out what it may not read, and G10.2m's first trace
-on the tablet says which.
+on the tablet says which. The layer's name (pick_layer) is the bare name of the listing's line in any Android 12 to 16 format.
 
 THE READING (read, `frametimeline.py read RUN_FOLDER`). The trace processor (Perfetto's trace_processor_shell; its path from
 --trace-processor or from the environment's NEBULA_TRACE_PROCESSOR) runs the QUERIES in run_processor, the one function that
@@ -89,6 +90,8 @@ SHARES = ("late_share", "three_refresh_share", "unnamed_share")
 WALK_BEGIN, STEP_WAIT_END = 29, 32
 FRAME_ZERO = re.compile(r"harness: frame 0 is game frame (\d+)")
 REFRESH_HZ = re.compile(r"\[display\] refresh-hz=(\d+)")
+SETTLE_SECONDS = 60                  # how long the capture waits for Perfetto to write its trace out after SIGTERM
+SETTLED = 3                          # reads of the trace's size, half a second apart, that must agree
 NEVER = 1 << 62                      # --latency's "pending" (INT64_MAX) and anything past it
 BOOTTIME, MONOTONIC = 6, 3           # Perfetto's builtin clock ids (clock_snapshot)
 FORMAT = 1
@@ -506,10 +509,23 @@ def trace_config(duration_ms, apps):
             '    atrace_categories: "gfx" atrace_categories: "view" %s } } }\n' % (duration_ms, atrace_apps))
 
 
+LAYER_LINE = re.compile(r"RequestedLayerState\{(.*?)(?: parentId=.*)?\}?\s*$")
+
+
+def layer_name(line):
+    """A layer listing line's layer name: Android 12 to 15 list the bare name ("SurfaceView[...](BLAST)#7"); Android 16 lists
+    `RequestedLayerState{<name>#<id> parentId=...}`, whose name is the text between the brace and " parentId=" (the name
+    `--latency` and the trace take)."""
+    line = line.strip()
+    found = LAYER_LINE.fullmatch(line)
+    return found.group(1).strip() if found else line
+
+
 def pick_layer(listing, package):
     """The game's layer in `dumpsys SurfaceFlinger --list`: a SurfaceView of the package, the BLAST one first, never its
-    "Background for" layer; "" when there is none."""
-    names = [l.strip() for l in listing.splitlines() if package in l and "SurfaceView" in l and not l.strip().startswith("Background")]
+    "Background for" layer; "" when there is none. Its bare name, whatever the listing's format (layer_name)."""
+    names = [layer_name(l) for l in listing.splitlines()]
+    names = [n for n in names if package in n and "SurfaceView" in n and not n.startswith("Background")]
     names.sort(key=lambda n: "(BLAST)" not in n)
     return names[0] if names else ""
 
@@ -577,6 +593,31 @@ class Capture:
         self.said["latency_reads"] = self.reads
         self.next_read = self.clock() + self.interval
 
+    def remote_size(self):
+        """The trace's size on the device in bytes, None when it cannot be read."""
+        code, out = self.device.shell("stat -c %%s %s" % TRACE_REMOTE, timeout=30)
+        return int(out.strip()) if code == 0 and out.strip().isdigit() else None
+
+    def perfetto_alive(self):
+        """Whether Perfetto's process still lives. `kill -0` as the shell user answered 1 for a process that was still writing
+        (G10.2m, Android 16), so the process is looked for in /proc, where a living process has its directory."""
+        code, _out = self.device.shell("[ -d /proc/%s ]" % self.pid, timeout=30)
+        return code == 0
+
+    def wait_written(self, sleep=time.sleep):
+        """Waits, after SIGTERM, until Perfetto has written its trace out: its process has ended and the trace's size has stood
+        still for SETTLED reads (half a second apart), at most SETTLE_SECONDS. The process alone is no proof (the shell user may
+        not see it), the size alone is none (a write can pause): both. True when settled."""
+        last, same = None, 0
+        for _ in range(SETTLE_SECONDS * 2):
+            size = self.remote_size()
+            same = same + 1 if size is not None and size == last else 0
+            last = size
+            if same >= SETTLED and not self.perfetto_alive():
+                return True
+            sleep(0.5)
+        return False
+
     def finish(self, sleep=time.sleep):
         try:
             if self.started:
@@ -586,14 +627,16 @@ class Capture:
                 (self.folder / "sf-jank.txt").write_text(jank, encoding="utf-8")
                 if self.pid:
                     self.device.shell("kill -TERM %s" % self.pid, timeout=30)
-                    for _ in range(60):  # Perfetto writes its trace out, then ends
-                        code, _out = self.device.shell("kill -0 %s" % self.pid, timeout=30)
-                        if code != 0:
-                            break
-                        sleep(0.5)
+                    settled = self.wait_written(sleep)
+                    if not settled:
+                        self._error("trace", "Perfetto was still writing the trace after %d s" % SETTLE_SECONDS)
                     pulled = self.device.adb("pull", TRACE_REMOTE, str(self.folder / TRACE_FILE), timeout=600)
                     self.said["trace"] = "pulled" if pulled.returncode == 0 and (self.folder / TRACE_FILE).is_file() else (
                         "not pulled: %s" % pulled.stderr.decode("utf-8", "replace").strip()[:200])
+                    remote = self.remote_size()
+                    local = (self.folder / TRACE_FILE).stat().st_size if (self.folder / TRACE_FILE).is_file() else None
+                    if self.said["trace"] == "pulled" and remote is not None and local != remote:
+                        self._error("trace", "pulled %s bytes of %d on the device" % (local, remote))
                     self.device.shell("rm -f %s" % TRACE_REMOTE, timeout=30)
             else:
                 self.said["started"] = False

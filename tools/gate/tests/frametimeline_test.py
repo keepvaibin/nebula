@@ -209,6 +209,31 @@ def main():
                    "SurfaceView[dev.nebula.galaxy.test/dev.nebula.galaxy.GameActivity](BLAST)#7\nStatusBar#9\n")
         check(ft.pick_layer(listing, "dev.nebula.galaxy.test") == "SurfaceView[dev.nebula.galaxy.test/dev.nebula.galaxy.GameActivity](BLAST)#7",
               "the game's BLAST SurfaceView layer, never its background")
+        # Android 16 lists `RequestedLayerState{<name>#<id> parentId=...}`: the bare name, as the older listings give it.
+        game = "SurfaceView[dev.nebula.galaxy.test/dev.nebula.galaxy.GameActivity](BLAST)#7"
+        listing16 = ("RequestedLayerState{Background for SurfaceView[dev.nebula.galaxy.test/dev.nebula.galaxy.GameActivity]#5 parentId=3 "
+                     "relativeParentId=none isRelativeOf=false z=-1}\n"
+                     "RequestedLayerState{SurfaceView[dev.nebula.galaxy.test/dev.nebula.galaxy.GameActivity]#6 parentId=3 z=-2}\n"
+                     "RequestedLayerState{%s parentId=3 relativeParentId=none z=-2}\n"
+                     "RequestedLayerState{StatusBar#9 parentId=1 z=0}\n" % game)
+        check(ft.pick_layer(listing16, "dev.nebula.galaxy.test") == game,
+              "an Android 16 listing: the bare BLAST layer name, no wrapper: %r" % ft.pick_layer(listing16, "dev.nebula.galaxy.test"))
+        check(ft.pick_layer("RequestedLayerState{%s}\n" % game, "dev.nebula.galaxy.test") == game, "a wrapped line with no parentId: the name")
+        check(ft.pick_layer(listing16.splitlines()[0] + "\n" + listing16.splitlines()[3], "dev.nebula.galaxy.test") == "",
+              "an Android 16 listing with only the Background layer and others: no layer found, not a wrong name")
+        check(ft.pick_layer("RequestedLayerState{SurfaceView[com.other/x](BLAST)#7 parentId=3 z=0}\n", "dev.nebula.galaxy.test") == "",
+              "an Android 16 layer of another package: no layer found")
+        check(ft.pick_layer(listing, "dev.nebula.galaxy.test") == ft.pick_layer(listing16, "dev.nebula.galaxy.test"),
+              "the old and the new listing format give the same name")
+        # The tablet's own listing (Android 16, G10.2m): a hash before the name, "@0", parentId and the rest of the line cut off.
+        real = ("RequestedLayerState{Background for d4c3c SurfaceView[dev.nebula.galaxy.test/dev.nebula.galaxy.GameActivity]@0#158352 "
+                "parentId=158350 relativeParentId=158346 z=-2147483648}\n"
+                "RequestedLayerState{d4c3c SurfaceView[dev.nebula.galaxy.test/dev.nebula.galaxy.GameActivity]@0(BLAST)#158351 "
+                "parentId=158350}\n"
+                "RequestedLayerState{d4c3c SurfaceView[dev.nebula.galaxy.test/dev.nebula.galaxy.GameActivity]@0#158350 "
+                "parentId=158349 relativeParentId=158346 z=-2}\n")
+        check(ft.pick_layer(real, "dev.nebula.galaxy.test") == "d4c3c SurfaceView[dev.nebula.galaxy.test/dev.nebula.galaxy.GameActivity]@0(BLAST)#158351",
+              "the tablet's own listing: the name --latency answers for: %r" % ft.pick_layer(real, "dev.nebula.galaxy.test"))
         config = ft.trace_config(90000, ["dev.nebula.galaxy.test"])
         check('name: "android.surfaceflinger.frametimeline" target_buffer: 0' in config and 'ftrace_events: "sched/sched_switch"' in config
               and 'atrace_apps: "dev.nebula.galaxy.test"' in config and "duration_ms: 90000" in config, "the trace's config")
@@ -227,6 +252,10 @@ def main():
                     return 0, "%d\n1\t2\t3\n" % P
                 if command.startswith("kill -0"):
                     return 1, ""
+                if command.startswith("[ -d /proc/"):
+                    return 1, ""
+                if command.startswith("stat -c %s"):
+                    return 0, "5\n"
                 return 0, ""
 
             def shell_input(self, command, text, timeout=600):
@@ -270,6 +299,57 @@ def main():
         never = ft.Capture(Device(), off, "dev.nebula.galaxy.test", 420)
         never.finish()
         check(json.loads((off / "capture.json").read_text(encoding="utf-8"))["started"] is False, "a run with no frame 0: not started")
+
+        # Perfetto still writing when the shell user's `kill -0` says it is gone (G10.2m, Android 16): the trace grows for 6 reads and
+        # its process lives for 9; the trace is pulled whole, never before the process has ended and the size has stood still.
+        class Slow(Device):
+            GROWS, LIVES, WHOLE = 6, 9, 6000
+
+            def __init__(self, lives=None):
+                super().__init__()
+                self.looks, self.lives, self.pulled = 0, lives if lives is not None else self.LIVES, None
+
+            def size(self):
+                return self.WHOLE * min(self.looks, self.GROWS) // self.GROWS
+
+            def shell(self, command, timeout=600):
+                if command.startswith("stat -c %s"):
+                    self.calls.append(command)
+                    self.looks += 1
+                    return 0, "%d\n" % self.size()
+                if command.startswith("[ -d /proc/"):
+                    self.calls.append(command)
+                    return (0 if self.looks < self.lives else 1), ""
+                return super().shell(command, timeout)
+
+            def adb(self, *args, timeout=600, stdin=None):
+                self.pulled = self.size()
+                self.calls.append(" ".join(args))
+                pathlib.Path(args[2]).write_bytes(b"x" * self.pulled)
+                return type("R", (), {"returncode": 0, "stderr": b""})()
+
+        def finished(device, name):
+            folder = root / name
+            folder.mkdir()
+            cap = ft.Capture(device, folder, "dev.nebula.galaxy.test", 420, clock=lambda: 1.0)
+            cap.started, cap.pid = True, "4242"
+            cap.finish(sleep=lambda s: None)
+            return json.loads((folder / "capture.json").read_text(encoding="utf-8"))
+        slow = Slow()
+        said = finished(slow, "cap-slow")
+        check(slow.pulled == Slow.WHOLE and said["trace"] == "pulled" and not said["errors"] and slow.looks >= Slow.LIVES,
+              "perfetto outliving the first check: the trace pulled whole (%s of %d bytes), after %d looks: %s" % (
+                  slow.pulled, Slow.WHOLE, slow.looks, said))
+        stuck = Slow(lives=10 ** 6)
+        said = finished(stuck, "cap-stuck")
+        check(any("still writing" in e for e in said["errors"]) and stuck.looks == ft.SETTLE_SECONDS * 2 + 1,
+              "perfetto that never ends: the wait is bounded (%d looks) and the capture says so: %s" % (stuck.looks, said["errors"]))
+        short = Slow()
+        short.adb = lambda *args, **kw: (pathlib.Path(args[2]).write_bytes(b"x" * 5),
+                                         type("R", (), {"returncode": 0, "stderr": b""})())[1]
+        said = finished(short, "cap-short")
+        check(any("pulled" in e and "bytes of" in e for e in said["errors"]),
+              "a pulled file of another size than the device's: an error in capture.json: %s" % said["errors"])
 
         # The baseline from synthetic frametimeline.json of three runs at each rate, stored and read back.
         def synthetic(rate, frames, late, three, unknown):
