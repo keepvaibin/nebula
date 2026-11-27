@@ -144,6 +144,7 @@ Nothing waits for the owner.
 | M-009 | closed | - | pace/pc refuses on the median figure and on a lead change in play: report only, per brief AD | 0 | 59 | 053875b4c146469f74c4441fc9ca10b65961cb29 |
 | M-010 | closed | G10.2m | frametimeline.py: wrong layer name on Android 16 and a trace pulled half-written | 0 | 45 | f93613da6 |
 | M-011 | closed | - | pace/tablet baseline rows refuse on the stored baseline's own spread at 120 Hz: report only until G10.4m classifies them | 0 | 75 | f18e39975 |
+| M-012 | open | - | pace/pc: one lead change per run, up or down, is 'lead moved' until G10.5 (no covered flag on the [display-lead] line yet) | 0 | 0 | - |
 
 ## Decisions (153)
 
