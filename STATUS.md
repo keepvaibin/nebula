@@ -4,7 +4,7 @@ Written 2026-11-27 07:30. If this time is more than three hours old, the work ha
 
 Steps landed: 40 of 157 (25%).
 
-Now: M-013 closed (main 94deca863); in work: lander landing G10.4 again (rebase on the mend)
+Now: G10.4 landed (main 03c3155f7); in work: measuring helper for G10.4m (tablet runs, classification, A/B)
 
 In work now: Nothing started.
 
