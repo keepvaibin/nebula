@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-26 16:23. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-26 16:41. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 36 of 156 (23%).
 
-Now: in work: fixer for G10.2 (pace/pc match-30 D3D12 animation 88-90%: regression or main's own play?)
+Now: G10.2: pace/pc D3D12 failure is main's own lead change, flaky; landing G10.2 again, planner told
 
 In work now:
 - G10.2 FrameTimeline attribution and the baseline report (agent 1)
