@@ -37,7 +37,8 @@ value, its target and pass, FAIL, recorded, or not measured (and why). The bars 
     1 ms, except across a seam (a closed wipe, a new swap chain, another refresh period: pacing.h Picture::seam).
   - the display lead in play (brief AD: a lead change in play is itself a jump; read from the game's `[display-lead] a->b refreshes`
     lines after frame 0, those between the wipe closing and the scene ready being a load's): until G10.5 lands (LOADS "main") one
-    step up in a run is filed "lead moved" and refuses nothing, a second step or any step down fails; from G10.5 on a step up is
+    lead change in a run, up or down, is filed "lead moved" and refuses nothing (the line has no covered flag yet, so a step down
+    under a closed wipe cannot be told from one in play), two or more fail; from G10.5 on a step up is
     filed only where its [pace] window shows LEAD_MISSES missed refreshes of the game's, every other change in play fails.
   - "animation error" (within 1 ms of the run's median) is a report only since brief AD, and so is the in-between delay's p99
     in a run whose lead moved in play (two leads in one figure: the lead row judges). With the lead still the delay is judged
@@ -166,13 +167,14 @@ def leads_of(log_text):
 
 def lead_row(leads):
     """The row of the display lead in play (brief AD: a lead change in play is itself a visible jump; one step up to stop repeated
-    misses counts as one event and is reported). Until G10.5 lands (LOADS "main") one step up in a run is filed "lead moved" and
-    refused nothing; a second step or any step down in play fails. From G10.5 on (LOADS "none") a step up is filed only where its
+    misses counts as one event and is reported). Until G10.5 lands (LOADS "main") ONE lead change in play per run, up or down, is
+    filed "lead moved" and refused nothing; two or more fail. This is a stopgap: the game's [display-lead] line has no covered
+    flag yet (the lead may step down under a closed loading wipe), and G10.5 adds it and removes this rule. From G10.5 on (LOADS "none") a step up is filed only where its
     window shows LEAD_MISSES of the game's missed refreshes, and every other change in play fails. Changes inside a load are counted
     beside and judged by the loads row's own rule."""
     play = [l for l in leads if not l["load"]]
     at_load = len(leads) - len(play)
-    target = ("no change in play; one step up reported" if LOADS == "main"
+    target = ("no change in play; one change reported" if LOADS == "main"
               else "no change in play; one step up after %d misses reported" % LEAD_MISSES)
     if not play:
         return ("display lead in play", "no change%s" % (", %d at loads" % at_load if at_load else ""), target, "pass")
@@ -180,9 +182,11 @@ def lead_row(leads):
     downs = [l for l in play if l["after"] < l["before"]]
     text = ", ".join("%d->%d refreshes" % (l["before"], l["after"]) for l in play)
     value = "%s in play%s" % (text, ", %d at loads" % at_load if at_load else "")
-    ok = not downs and len(ups) == 1
-    if ok and LOADS != "main":
-        ok = ups[0]["misses"] is not None and ups[0]["misses"] >= LEAD_MISSES
+    if LOADS == "main":
+        # Stopgap, ends with G10.5 (the covered flag on the [display-lead] line): one change in a run, either way, is a report.
+        ok = len(play) == 1
+    else:
+        ok = not downs and len(ups) == 1 and ups[0]["misses"] is not None and ups[0]["misses"] >= LEAD_MISSES
     return ("display lead in play", value, target, "lead moved" if ok else "FAIL")
 
 
