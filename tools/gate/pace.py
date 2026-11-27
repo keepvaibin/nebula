@@ -45,9 +45,10 @@ value, its target and pass, FAIL, recorded, or not measured (and why). The bars 
   - "animation error" (within 1 ms of the run's median) is a report only since brief AD, and so is the in-between delay's p99
     in a run whose lead moved in play (two leads in one figure: the lead row judges). With the lead still the delay is judged
     against its bound as before.
-  - "loads": the game's missed refreshes and the jumps of the load windows. While LOADS is "main" (until G10.5 lands) a
-    run is refused only when either count is above the most of main's last LOAD_READINGS readings of the same run in
-    --history (fewer than LOAD_FLOOR = 3 readings yet: recorded, refused nothing); with LOADS "none" (from G10.5 on) any miss or jump is refused.
+  - "loads": the game's missed refreshes and the jumps of the load windows. While LOADS is "main" (until G10.5 lands) the row is a report
+    ("recorded", with the figures) and refuses only a gross break: a count above LOAD_GROSS (2) times the most of the readings of its
+    renderer since G10.1 landed (--history, and LOAD_SEEN's, the first plays and refused landings the history does not keep; misses and
+    jumps separately; no reading of the renderer: recorded, refused nothing); with LOADS "none" (from G10.5 on) any miss or jump is refused.
 One row reads every window from the start, the boot's loads included: each shows at least nine tenths of the pictures its
 rate asks for (a lead held high or a stalled schedule shows fewer: R-009, 36 pictures in ten seconds hid before frame 0).
 Exit status: 0 when nothing failed and every run gave windows, 1 otherwise; 3 when the measurement lock stayed held, or
@@ -55,7 +56,7 @@ when a renderer was not played because the machine stayed busy and no run that w
 
 The gate's two checks (tools/gate/gate.py):
   pace/pc      every landing that builds the game: tests/pace/gate.json (the test match cut to about 30 s of play) on
-               Direct3D 12 and Vulkan, --again, the loads judged against the gate's pace-history.tsv; a FAIL row refuses.
+               Direct3D 12 and Vulkan, --again, the loads a report that refuses a gross break against the gate's pace-history.tsv; a FAIL row refuses.
   pace/tablet  an extra check by name (docs/plan/native/step-checks.tsv): tests/pace/tablet.json (rate-60, rate-120) on the
                tablet, under the tablet's lock and the measurement lock. Until tests/pace/tablet-base.json is stored (G10.2m,
                from frametimeline.py baseline), it records its rows and refuses nothing. With it stored, the late share,
@@ -103,10 +104,13 @@ COVERAGE = 0.99
 SHOWN = 0.9
 # The load windows' rule: "main" (refused only above main's readings) until G10.5 lands; "none" (any miss or jump) from it on.
 LOADS = "main"
-LOAD_READINGS = 5
-# The fewest readings of main the loads row is judged against: a load window's count varies from run to run (Vulkan's was 11 and
-# then 24 on the same code), so one or two readings are no baseline. Below it the row records and refuses nothing.
-LOAD_FLOOR = 3
+# Until G10.5 lands (LOADS "main") the loads row is a report: it refuses only a gross break, a count above LOAD_GROSS times the most
+# of the readings of its renderer since G10.1 landed (M-013, the planner's order of 11-27: the scene-load stalls are R-009's, assigned
+# to G10.5, and a count that varied 6 to 27 on identical code is no baseline for a refusal by comparison). The readings are those of
+# --history (the deciding runs of the landings that moved main) and LOAD_SEEN, the most seen in first plays and landings that were
+# refused, which the history does not keep: renderer -> (missed, jumps). G10.5 removes LOAD_SEEN, LOAD_GROSS and the guard with LOADS "main".
+LOAD_GROSS = 2
+LOAD_SEEN = {"vulkan": (27, 46), "d3d12": (47, 172)}
 HISTORY_COLUMNS = ("time", "commit", "run", "load_missed", "load_jumps", "load_windows", "missed", "missed_system", "jumps")
 # A first run kept beside the one that decides (--again): WORK/first/<renderer>; digest leaves it out.
 FIRST = "first"
@@ -281,7 +285,7 @@ def load_figures(windows):
 
 
 def load_row(run, history):
-    """The loads row: the load windows' game misses and jumps, against main's readings (LOADS)."""
+    """The loads row: the load windows' game misses and jumps; with LOADS "main" a report that refuses a gross break (LOAD_GROSS)."""
     loads = run.get("load_windows", [])
     if not loads:
         return None
@@ -290,14 +294,30 @@ def load_row(run, history):
     if LOADS == "none":
         ok = missed == 0 and jumps == 0
         return ("loads", value, "no missed refresh, no jump", "pass" if ok else "FAIL")
-    readings = history.get(run["run_key"], [])[-LOAD_READINGS:]
-    if len(readings) < LOAD_FLOOR:
-        return ("loads", value, "%d of main's readings, %d needed to judge: recorded" % (len(readings), LOAD_FLOOR), "recorded")
-    most_missed = max(r["load_missed"] for r in readings)
-    most_jumps = max(r["load_jumps"] for r in readings)
-    ok = missed <= most_missed and (jumps is None or jumps <= most_jumps)
-    return ("loads", value, "at most main's most of its last %d (%d missed, %d jumps)" % (len(readings), most_missed, most_jumps),
-            "pass" if ok else "FAIL")
+    most_missed, most_jumps = load_most(history, run["renderer"])
+    if most_missed is None:
+        return ("loads", value, "no readings of main yet: recorded", "recorded")
+    limit_missed = LOAD_GROSS * most_missed
+    limit_jumps = None if most_jumps is None else LOAD_GROSS * most_jumps
+    ok = missed <= limit_missed and (jumps is None or limit_jumps is None or jumps <= limit_jumps)
+    target = "a report until G10.5; refused above %d missed" % limit_missed
+    if limit_jumps is not None:
+        target += ", %d jumps" % limit_jumps
+    target += " (%d times the most of the readings since G10.1)" % LOAD_GROSS
+    return ("loads", value, target, "recorded" if ok else "FAIL")
+
+
+def load_most(history, renderer):
+    """The most missed refreshes and the most jumps of the load windows seen on a renderer since G10.1 landed: the readings of every
+    run of that renderer in HISTORY and LOAD_SEEN's; (None, None) where there is none."""
+    seen = LOAD_SEEN.get(renderer)
+    missed = [seen[0]] if seen else []
+    jumps = [seen[1]] if seen else []
+    for key, readings in history.items():
+        if key.rsplit("/", 1)[-1] == renderer:
+            missed += [r["load_missed"] for r in readings]
+            jumps += [r["load_jumps"] for r in readings]
+    return (max(missed) if missed else None, max(jumps) if jumps else None)
 
 
 def present_timing_of(log_text):
