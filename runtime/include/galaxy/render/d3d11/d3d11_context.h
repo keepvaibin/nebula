@@ -141,6 +141,13 @@ struct DeviceCaps {
     unsigned max_samples = 1u;          // the most samples a pixel the scene's formats take (MSAA)
     std::uint64_t dedicated_bytes = 0u;
     std::uint32_t vendor = 0u;
+    // The optional Direct3D 11.1 constants path (NEBULA_D3D11_PATH: auto, 11_0, 11_1). On only where the device gives
+    // ID3D11Device1 / ID3D11DeviceContext1 and reports ConstantBufferOffsetting; the draws' constants are then bound at an
+    // offset (*SetConstantBuffers1) instead of being copied into a buffer of the slot's own.
+    bool offsetting = false;
+    bool partial_update = false;        // ConstantBufferPartialUpdate: UpdateSubresource1 into part of a constant buffer
+    bool no_overwrite_constants = false;  // MapNoOverwriteOnDynamicConstantBuffer
+    const char* path = "11_0";          // the constants path in use: "11_0" (copies) or "11_1" (offset binds)
 };
 
 class Context {
@@ -224,6 +231,7 @@ public:
     // back to an empty slot because a buffer or its Map was missing.
     struct Diagnostics {
         std::uint64_t places = 0u, place_failures = 0u, windows = 0u, window_failures = 0u;
+        std::uint64_t offset_binds = 0u;                                // bindings made at an offset (the 11.1 path)
         std::uint64_t uploads = 0u, upload_bytes = 0u;                  // upload_written: buffers brought up to date, bytes
         std::uint64_t upload_ticks = 0u, bind_ticks = 0u, present_ticks = 0u;  // QueryPerformanceCounter ticks spent
         std::uint64_t lock_ticks = 0u, watch_ticks = 0u, wait_ticks = 0u;       // in upload_written: the lock, GetWriteWatch; in wait()
@@ -298,6 +306,9 @@ private:
     ComPtr<IDXGIAdapter1> adapter_;
     ComPtr<ID3D11Device> device_;
     ComPtr<ID3D11DeviceContext> immediate_;
+    ComPtr<ID3D11Device1> device1_;           // only with caps_.offsetting (the 11.1 constants path)
+    ComPtr<ID3D11DeviceContext1> immediate1_;  // as device1_
+    ComPtr<ID3D11Buffer> gpu_ring_;           // the arena's mirror in video memory, bound at offsets (caps_.offsetting only)
     ComPtr<ID3D11Fence> fence_;  // null: event queries
     ComPtr<ID3D11InfoQueue> info_queue_;  // the debug layer's, null without it
     HANDLE fence_event_ = nullptr;
