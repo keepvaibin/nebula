@@ -1,0 +1,47 @@
+{
+ "format": 1,
+ "method": "latency",
+ "asked_method": "latency",
+ "start": "step",
+ "layer": null,
+ "refresh_ms": 16.6667,
+ "app_rows": 0,
+ "frames": 3937,
+ "refreshes": {
+  "1 or less": 0,
+  "2": 585,
+  "3": 3352,
+  "4 or more": 0
+ },
+ "refresh_frames": 3937,
+ "causes": {
+  "App Deadline Missed": 0,
+  "SurfaceFlinger CPU Deadline Missed": 0,
+  "SurfaceFlinger GPU Deadline Missed": 0,
+  "Display HAL": 0,
+  "Prediction Error": 0,
+  "ModeChange in progress": 0,
+  "Dropped Frame": 0,
+  "Unknown": 0
+ },
+ "misses": 0,
+ "buffer_stuffing": 0,
+ "gpu_composition": null,
+ "gpu_frames": 0,
+ "latched_unsignaled": null,
+ "sf_jank_dump": {
+  "None": 8,
+  "Unknown jank": 10,
+  "Display HAL, Unknown jank": 5,
+  "Display HAL": 3,
+  "App Deadline Missed": 2,
+  "Display HAL, App Deadline Missed": 1,
+  "SurfaceFlinger Stuffing": 127,
+  "App Deadline Missed, SurfaceFlinger Stuffing": 1,
+  "Buffer Stuffing": 4
+ },
+ "notes": [],
+ "late_share": 0.0,
+ "three_refresh_share": 0.8514097028194056,
+ "unnamed_share": 0.0
+}

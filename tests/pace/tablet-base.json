@@ -1,0 +1,76 @@
+{
+ "format": 1,
+ "method": "latency",
+ "start": "step",
+ "made": "2026-11-26",
+ "rates": {
+  "120": {
+   "runs": 3,
+   "frames": 81332,
+   "refresh_frames": 81332,
+   "refreshes": {
+    "1 or less": 6,
+    "2": 418,
+    "3": 11770,
+    "4 or more": 69138
+   },
+   "causes": {
+    "App Deadline Missed": 1,
+    "SurfaceFlinger CPU Deadline Missed": 0,
+    "SurfaceFlinger GPU Deadline Missed": 0,
+    "Display HAL": 0,
+    "Prediction Error": 0,
+    "ModeChange in progress": 0,
+    "Dropped Frame": 0,
+    "Unknown": 9866
+   },
+   "misses": 9867,
+   "buffer_stuffing": 0,
+   "gpu_composition": 0,
+   "gpu_frames": 0,
+   "latched_unsignaled": null,
+   "most": {
+    "late_share": 0.1459639857703451,
+    "three_refresh_share": 0.9984230021637878,
+    "unnamed_share": 0.1459639857703451
+   },
+   "late_share": 0.12131756258299316,
+   "three_refresh_share": 0.994786799783603,
+   "unnamed_share": 0.12130526729946392
+  },
+  "60": {
+   "runs": 3,
+   "frames": 45436,
+   "refresh_frames": 45436,
+   "refreshes": {
+    "1 or less": 0,
+    "2": 4370,
+    "3": 40084,
+    "4 or more": 982
+   },
+   "causes": {
+    "App Deadline Missed": 0,
+    "SurfaceFlinger CPU Deadline Missed": 0,
+    "SurfaceFlinger GPU Deadline Missed": 0,
+    "Display HAL": 0,
+    "Prediction Error": 0,
+    "ModeChange in progress": 0,
+    "Dropped Frame": 0,
+    "Unknown": 15
+   },
+   "misses": 15,
+   "buffer_stuffing": 0,
+   "gpu_composition": 0,
+   "gpu_frames": 0,
+   "latched_unsignaled": null,
+   "most": {
+    "late_share": 0.000994299350391091,
+    "three_refresh_share": 0.934571466071663,
+    "unnamed_share": 0.000994299350391091
+   },
+   "late_share": 0.00033013469495554184,
+   "three_refresh_share": 0.9038207588696188,
+   "unnamed_share": 0.00033013469495554184
+  }
+ }
+}
