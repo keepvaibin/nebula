@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-26 18:37. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-26 18:38. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 37 of 156 (24%).
 
-Now: G10.2 landed (main d8d2c6ec8); in work: mender for M-009 (pace/pc: median figure report only, lead moved)
+Now: M-009 closed (main 053875b4c); in work: measuring helper for G10.2m (first FrameTimeline trace, row 1's method, baseline)
 
 In work now: Nothing started.
 
