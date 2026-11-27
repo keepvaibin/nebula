@@ -6,8 +6,7 @@ Steps landed: 39 of 157 (25%).
 
 Now: G10.4 written; in work: lander landing G10.4
 
-In work now:
-- G10.4 The performance hint's target, by A/B (agent 1)
+In work now: Nothing started.
 
 ## Packages
 
@@ -128,6 +127,7 @@ Nothing waits for the owner.
 ## Blocked
 
 - G6.7 The surround law (P-193): hard: build/windows + github Linux sanitizers: galaxy_speaker_law_tests aborts with an AddressSanitizer heap-buffer-overflow on the GitHub Linux ASAN/UBSAN job (run 45652159093); the Windows gate stopped on it (report: D:/NebulaWork/plan/native/hard/G6.7.md)
+- G10.4 The performance hint's target, by A/B: hard: pace/pc pace-match-30/vulkan: loads row FAIL (13 missed, 41 jumps vs main's last 3) twice in a row; every other check passes; G10.4 changes only Android hint code (report: D:/NebulaWork/plan/native/hard/G10.4.md)
 
 ## Tool mends
 
