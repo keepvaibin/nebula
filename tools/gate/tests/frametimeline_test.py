@@ -398,14 +398,22 @@ def main():
                   "target interval; actual-hz 60.00, interval-max 33.33 ms, duplicate-times 0; late(available/delayed)=1/1 margin 5.00 "
                   "ms (driver refresh 33.33, display 16.67 ms); pipeline 33.33 ms (a late frame missed its slot by 16.67 at most)")
 
-        def device_work(name, case):
+        # The game's report of what the platform offers (G10.3), as the tablet writes it at 60 Hz.
+        offers = ["[platform] hint-features: not supported (the system has no APerformanceHint_isFeatureSupported, API 36)",
+                  "[platform] frame-timeline: 60.0 Hz: expected present less frame time 2.00 refreshes (2.00 to 2.00 over 32 "
+                  "callbacks; preferred timeline 1 of 3)",
+                  "[platform] game-mode: standard; sustained performance: not supported",
+                  "[platform] thermal-thresholds: not supported (the call answered 38 with 0 thresholds)",
+                  "[platform] vulkan-images: surface minimum 4, maximum 64; asked 5, made 5 (PRESENT_MODE_FIFO)"]
+
+        def device_work(name, case, platform=offers):
             work = root / name
             folder = work / "runs" / "pace" / "pace-rate-60" / "vulkan"
             folder.parent.mkdir(parents=True)
             shutil.copytree(FIXTURES / case, folder)
             write_timeline(folder / "timeline.bin", STEPS)
-            (folder / "run.log").write_text("\n".join([line, "extension: harness: frame 0 is game frame 900", line, timing, line,
-                                                       timing, line, timing]) + "\n", encoding="utf-8")
+            (folder / "run.log").write_text("\n".join(platform + [line, "extension: harness: frame 0 is game frame 900", line, timing,
+                                                                  line, timing, line, timing]) + "\n", encoding="utf-8")
             (folder / "exit-info.txt").write_text("exit 0\n", encoding="utf-8")
             (folder / "test.json").write_text(json.dumps({"test": {"settings": ["GALAXY_MAX_FPS=60", "GALAXY_VSYNC_INTERVAL=1"]}}),
                                               encoding="utf-8")
@@ -435,6 +443,15 @@ def main():
             check(passed == want and (want or kind == "fail"),
                   "pace/tablet with a stored baseline, %s: %s (%s, %s)" % (name, "pass" if passed else "refused", kind, detail))
             results.append("pace/tablet against the stored baseline, %s: %s" % (name, detail))
+        # G10.3's planted fault: the same right run with a line of what the platform offers missing is refused (kind fail) by the row
+        # of what the platform offers, the baseline row passing.
+        work = device_work("stored-noplatform", "right", [o for o in offers if "vulkan-images" not in o])
+        code = pace.digest(work, None, reading)
+        passed, detail, _t, kind = gate.pace_tablet_reading(work, code, stored=True)
+        said = {m: v for m, _x, _t, v in json.loads((work / "pace.json").read_text(encoding="utf-8"))[0]["rows"]}
+        check(not passed and kind == "fail" and said.get(pace.PLATFORM_ROW) == "FAIL" and said.get(pace.BASELINE_ROW) == "pass",
+              "pace/tablet with a line of the platform's offer missing: refused (%s, %s)" % (kind, detail))
+        results.append("pace/tablet, the platform's vulkan-images line missing: %s" % detail)
         # Misses that are FAIL rows of their own (the Unknown row) refuse nothing once a baseline is stored: only the row against it.
         unnamed = root / "stored-unnamed"
         said = json.loads((unnamed / "pace.json").read_text(encoding="utf-8"))[0]["rows"]

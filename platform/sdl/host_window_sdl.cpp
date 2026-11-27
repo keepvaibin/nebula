@@ -2024,6 +2024,29 @@ extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeDisp
     }
 }
 
+// What the platform offers (G10.3), from the activity at start and on each display change, logged: the game mode
+// (GameManager.getGameMode: 0 unsupported, 1 standard, 2 performance, 3 battery, 4 custom; -1 without a GameManager) and
+// whether the device holds sustained-performance clocks (PowerManager; power_known false without one). The game does not act on it.
+extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativePlatformOffers(JNIEnv*, jclass, jint game_mode,
+                                                                                          jboolean power_known,
+                                                                                          jboolean sustained) {
+    static constexpr const char* kModes[] = {"unsupported (the app declares no game mode)", "standard", "performance",
+                                             "battery", "custom"};
+    char other[48];
+    const char* mode = other;
+    if (game_mode >= 0 && game_mode < static_cast<jint>(std::size(kModes))) {
+        mode = kModes[game_mode];
+    } else if (game_mode < 0) {
+        mode = "not known (no GameManager)";
+    } else {
+        std::snprintf(other, sizeof other, "mode %d", static_cast<int>(game_mode));
+    }
+    std::fprintf(stderr, "[platform] game-mode: %s; sustained performance: %s\n", mode,
+                 power_known != JNI_TRUE ? "not known (no PowerManager)"
+                 : sustained == JNI_TRUE  ? "supported"
+                                          : "not supported");
+}
+
 // The display's touch slop in window pixels (ViewConfiguration.getScaledTouchSlop).
 extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeTouchSlop(JNIEnv*, jclass, jfloat px) {
     galaxy::sdl::g_touch_slop_px.store(px > 0.0f ? px : 0.0f, std::memory_order_relaxed);

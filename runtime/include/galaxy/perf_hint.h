@@ -103,5 +103,11 @@ std::size_t perf_hint_work_cpu(galaxy::ThreadCpuSample* out, std::size_t capacit
 // AThermal_getThermalHeadroom forecast a second on, read once a second off the frame threads (1 is where the device
 // throttles); 0 where it is not known (before the first read, Android before 11, every other platform). Any thread.
 [[nodiscard]] double thermal_headroom() noexcept;
+// What the platform offers the frame's pacing, logged (G10.3): `[platform] hint-features:` (APerformanceHint_isFeatureSupported
+// for each feature the NDK lists), `[platform] hint-calls:` (which of the newer hint and thermal calls the system has) and
+// `[platform] thermal-thresholds:` (AThermal_getThermalHeadroomThresholds), each with its value or "not supported (<why>)",
+// written by the heat reader's thread within a second, never by a frame thread. Asked at start and on each display change
+// (display_clock.cpp); changes nothing the game does. Any thread; a no-op where there are no hints (every platform but Android).
+void perf_hint_report_platform() noexcept;
 
 }  // namespace galaxy::host

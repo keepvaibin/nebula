@@ -21,7 +21,9 @@
       to its frametimeline.json (--method, --start: frametimeline.py; the trace by --trace-processor or NEBULA_TRACE_PROCESSOR)
       and gives its rows: refreshes from a frame's start to its scan-out, the misses by cause (a miss of no named cause, Unknown,
       fails above 0.05% of the frames), the game's own split of its late presents beside them, the GPU's composition; with
-      --baseline (whose method and start then hold) the run against the stored figures of its rate.
+      --baseline (whose method and start then hold) the run against the stored figures of its rate. Each run's header prints the
+      game's [platform] lines (what the platform offers the pacing, G10.3); a device run missing one of PLATFORM_KINDS fails the
+      row "what the platform offers".
   pace.py keep WORK --history FILE --commit SHA
       Adds each run's figures of WORK/pace.json to FILE, the readings of main that the load row is judged against (the
       gate keeps them after main moved).
@@ -63,6 +65,8 @@ The gate's two checks (tools/gate/gate.py):
                14.6% between clean runs (brief AD: the share figures are a report, the bars refuse). A baseline that cannot
                judge a run (another method, no frames) is still the tool's fault. The step that classifies the shares (G10.4m)
                sets BASELINE_REFUSES, or replaces the row.
+               G10.3 adds a second row, "what the platform offers": a device run whose log lacks a line of what the platform
+               offers (PLATFORM_KINDS) is refused by it, which pace/tablet refuses by.
 """
 import argparse
 import datetime
@@ -115,6 +119,14 @@ NOT_QUIET = 3
 # the shares above the most named (M-011; brief AD: the shares are a report, bars 1 and 2 refuse; the planner's order of 11-26).
 BASELINE_ROW = "against the stored baseline"
 BASELINE_REFUSES = False
+# What the platform offers the pacing (G10.3): the game's `[platform] <kind>: <value>` lines (perf_hint.cpp, display_clock.cpp,
+# host_window_sdl.cpp, renderer_vk.cpp), printed in each run's header. A device run must hold one line of each PLATFORM_KINDS with a
+# value ("not supported (<why>)" is one), the frame timeline's at the run's own rate; one missing is a FAIL of PLATFORM_ROW, which
+# pace/tablet refuses by beside the baseline row. Other kinds (hint-calls) are printed and not required.
+PLATFORM = re.compile(r"\[platform\] ([a-z-]+): ?(.*?)\s*$")
+PLATFORM_KINDS = ("hint-features", "frame-timeline", "game-mode", "thermal-thresholds", "vulkan-images")
+PLATFORM_ROW = "what the platform offers"
+PLATFORM_RATE = re.compile(r"([0-9.]+) Hz:")
 
 
 def windows_of(log_text, from_start=False):
@@ -307,6 +319,36 @@ def present_timing_of(log_text):
     return tuple(sums) if sums else None
 
 
+def platform_lines_of(log_text):
+    """The game's [platform] lines in the order written, each (kind, value), a line written again with the same value once."""
+    out = []
+    for line in log_text.splitlines():
+        m = PLATFORM.search(line)
+        if m and (m.group(1), m.group(2)) not in out:
+            out.append((m.group(1), m.group(2)))
+    return out
+
+
+def platform_row(lines, refresh_ms):
+    """PLATFORM_ROW of a device run: a line of each PLATFORM_KINDS with a value; "not supported" counts only with its reason, and a
+    frame timeline's figure only at the run's own rate (within 1.5 Hz of its refresh)."""
+    hz = 1000.0 / refresh_ms if refresh_ms else 0.0
+    have = set()
+    for kind, value in lines:
+        if not value or (value.startswith("not supported") and "(" not in value):
+            continue
+        if kind == "frame-timeline" and not value.startswith("not supported"):
+            m = PLATFORM_RATE.match(value)
+            if not m or not hz or abs(float(m.group(1)) - hz) > 1.5:
+                continue
+        have.add(kind)
+    missing = [k for k in PLATFORM_KINDS if k not in have]
+    value = "%d of %d%s" % (len(PLATFORM_KINDS) - len(missing), len(PLATFORM_KINDS),
+                            "; missing: " + ", ".join(missing) if missing else "")
+    return (PLATFORM_ROW, value, "a line of each kind with its value (the frame timeline's at %.0f Hz)" % hz,
+            "FAIL" if missing else "pass")
+
+
 def share_text(n, frames):
     return "%d (%.3f%%)" % (n, 100.0 * n / frames) if frames else "%d" % n
 
@@ -431,6 +473,7 @@ def judge(run, history=None, base=None, base_name=""):
             c["generated_render_avg_us"] / 1000.0, c["generated_render_p99_us"] / 1000.0),
             "does not grow with the objects drawn", "compared across stages"))
     if on_device:
+        rows.append(platform_row(run.get("platform", []), refresh))
         rows += frametimeline_rows(run, base, base_name)
     return rows
 
@@ -482,7 +525,7 @@ def read_runs(work, history=None, reading=None):
         measured, every = windows_of(text), windows_of(text, from_start=True)
         run = {"run": str(folder.relative_to(work)), "run_key": "%s/%s" % (folder.parent.name, folder.name), "test": test,
                "renderer": folder.name, "device": device, "figures": combine(measured), "all_windows": every,
-               "leads": leads_of(text),
+               "leads": leads_of(text), "platform": platform_lines_of(text),
                "load_windows": every[:len(every) - len(measured)]}
         missed, jumps = load_figures(run["load_windows"])
         run["loads"] = {"windows": len(run["load_windows"]), "missed": missed, "jumps": jumps}
@@ -507,6 +550,8 @@ def digest(work, history_path=None, reading=None):
     for run in runs:
         settings = run["test"].get("settings", run["test"].get("test", {}).get("settings", []))
         print("%s (%s)" % (run["run"], ", ".join(settings) or "default settings"))
+        for kind, value in run.get("platform", []):
+            print("  platform %s: %s" % (kind, value))
         for measure, value, target, verdict in run["rows"]:
             print("  %-34s %-46s %-50s %s" % (measure, value, target, verdict))
             failed |= verdict == "FAIL"

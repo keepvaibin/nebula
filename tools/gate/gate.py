@@ -1866,7 +1866,8 @@ def measure_pc(g):
 # second run decides. pace/tablet: an extra check by name (docs/plan/native/step-checks.tsv), the tablet's
 # suite at 60 and 120 Hz under the tablet's lock and the measurement lock, with the platform's records of the frames
 # (tools/gate/frametimeline.py, read by the trace processor the coordinator placed, PACE_TRACE_PROCESSOR); recorded until G10.2m
-# stores tests/pace/tablet-base.json, then refused only by the row against it (pace.BASELINE_ROW).
+# stores tests/pace/tablet-base.json, then refused only by the row against it (pace.BASELINE_ROW) and by the row of what the
+# platform offers (pace.PLATFORM_ROW, G10.3: a line of the game's report of the platform missing).
 # `--pace-fault` plays both with the planted stutter (--diagnostics pace-fault): the checks must then fail, their own proof.
 # Until the step that classifies the shares (G10.4m) sets pace.BASELINE_REFUSES, the row against the stored baseline is a report (M-011): with
 # a stored file pace/tablet refuses only what pace_tablet_reading names below (a baseline that cannot judge a run is the tool's), and
@@ -2012,11 +2013,12 @@ def pace_tablet_part(g):
 
 
 def pace_tablet_reading(work, code, stored):
-    """pace/tablet's verdict from its run of pace.py. With a stored baseline only the row against it refuses, and a run that row could
-    not judge (another method, no frames: "not measured") is the tool's. Without one (until G10.2m stores it) the rows are recorded and
-    refuse nothing."""
+    """pace/tablet's verdict from its run of pace.py. With a stored baseline only the row against it and the row of what the platform
+    offers (G10.3) refuse, and a run the baseline row could not judge (another method, no frames: "not measured") is the tool's.
+    Without one (until G10.2m stores it) the rows are recorded and refuse nothing."""
     if stored:
-        passed, detail, tests, kind = pace_reading(work, code, ("vulkan",), refusing=(pace_tool.BASELINE_ROW,))
+        passed, detail, tests, kind = pace_reading(work, code, ("vulkan",),
+                                                   refusing=(pace_tool.BASELINE_ROW, pace_tool.PLATFORM_ROW))
         try:
             runs = json.loads((pathlib.Path(work) / "pace.json").read_text(encoding="utf-8"))
         except (OSError, ValueError):
