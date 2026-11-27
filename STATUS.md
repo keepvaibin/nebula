@@ -1,12 +1,13 @@
 # Nebula native plan: status
 
-Written 2026-11-26 16:22. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-26 16:23. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 36 of 156 (23%).
 
 Now: in work: fixer for G10.2 (pace/pc match-30 D3D12 animation 88-90%: regression or main's own play?)
 
-In work now: Nothing started.
+In work now:
+- G10.2 FrameTimeline attribution and the baseline report (agent 1)
 
 ## Packages
 
@@ -121,7 +122,6 @@ Nothing waits for the owner.
 ## Blocked
 
 - G6.7 The surround law (P-193): hard: build/windows + github Linux sanitizers: galaxy_speaker_law_tests aborts with an AddressSanitizer heap-buffer-overflow on the GitHub Linux ASAN/UBSAN job (run 45652159093); the Windows gate stopped on it (report: D:/NebulaWork/plan/native/hard/G6.7.md)
-- G10.2 FrameTimeline attribution and the baseline report: hard: pace/pc, pace-match-30 on d3d12: animation error 89.94% within 1 ms (needs 99) and delay p99 23.40 ms (limit 22.52), twice in a row (first play 88.55%/23.22 ms); Vulkan passes at 100%; the loads row is no longer the failure (recorded); the only failure of 49 checks (report: D:/NebulaWork/plan/native/hard/G10.2.md)
 
 ## Tool mends
 
