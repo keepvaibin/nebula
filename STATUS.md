@@ -4,7 +4,7 @@ Written 2026-11-27 04:19. If this time is more than three hours old, the work ha
 
 Steps landed: 39 of 157 (25%).
 
-Now: G10.4 hard: pace/pc Vulkan loads row noise; asked the planner
+Now: in work: mender for M-013 (loads row report only, gross-break guard); then G10.4 again
 
 In work now: Nothing started.
 
