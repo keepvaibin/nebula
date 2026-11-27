@@ -4,7 +4,7 @@ Written 2026-11-27 05:17. If this time is more than three hours old, the work ha
 
 Steps landed: 39 of 157 (25%).
 
-Now: in work: mender for M-013 (loads row report only, gross-break guard); then G10.4 again
+Now: M-013 closed (main 94deca863); in work: lander landing G10.4 again (rebase on the mend)
 
 In work now: Nothing started.
 
