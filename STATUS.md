@@ -4,7 +4,7 @@ Written 2026-11-26 19:16. If this time is more than three hours old, the work ha
 
 Steps landed: 37 of 156 (24%).
 
-Now: M-009 closed (main 053875b4c); in work: measuring helper for G10.2m (first FrameTimeline trace, row 1's method, baseline)
+Now: in work: mender for M-010 (frametimeline.py: layer name, half-written trace); G10.2m reruns after
 
 In work now:
 - G10.2m The first FrameTimeline trace, row 1's method, the stored baseline (agent 1)
