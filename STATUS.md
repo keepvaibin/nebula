@@ -1,13 +1,12 @@
 # Nebula native plan: status
 
-Written 2026-11-27 06:24. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-27 07:30. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
-Steps landed: 39 of 157 (25%).
+Steps landed: 40 of 157 (25%).
 
 Now: M-013 closed (main 94deca863); in work: lander landing G10.4 again (rebase on the mend)
 
-In work now:
-- G10.4 The performance hint's target, by A/B (agent 1)
+In work now: Nothing started.
 
 ## Packages
 
@@ -20,7 +19,7 @@ In work now:
 | R2 | 5 | 5 |
 | G2 | 12 | 16 |
 | G6 | 1 | 8 |
-| G10 | 4 | 12 |
+| G10 | 5 | 12 |
 | G1 | 0 | 5 |
 | R3 | 0 | 13 |
 | R4 | 0 | 10 |
@@ -43,6 +42,7 @@ In work now:
 
 | When | Step | Title | Code commit | Main commit |
 | --- | --- | --- | --- | --- |
+| 2026-11-27 07:30 | G10.4 | The performance hint's target, by A/B | c08a9b8cd | 03c3155f7 |
 | 2026-11-27 02:05 | G10.3 | What the platform and the device offer, logged | 4a5719722 | efb4869f6 |
 | 2026-11-26 21:03 | G10.2m | The first FrameTimeline trace, row 1's method, the stored baseline | 91282cc48 | c28f8b737 |
 | 2026-11-26 17:37 | G10.2 | FrameTimeline attribution and the baseline report | d6f15dcd1 | d8d2c6ec8 |
@@ -52,7 +52,6 @@ In work now:
 | 2026-11-25 10:57 | R-007 |  | 2f44ff877 | a360c2e0a |
 | 2026-11-25 08:14 | G6.2 | Sends and sound settings as typed records (P-221, P-222) | c8820d8be | 22070d096 |
 | 2026-11-25 05:30 | G2.5 | Landing 5: one arbiter, the clock held, the heat input | 54e37d4fe | 45ba38cea |
-| 2026-11-25 04:44 | G2.4 | Landing 4: no closing spin where a display time is asked | fdc86be24 | e563ab61c |
 
 ## Repairs
 
