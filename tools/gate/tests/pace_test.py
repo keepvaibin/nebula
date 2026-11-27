@@ -127,8 +127,9 @@ def main():
         check(len(jumped) == 1 and any("4.20 ms" in value for m, value, _, _ in jumped[0]["rows"] if m == "jumps"),
               "the largest change in ms")
 
-    # The loads (the windows before play): judged against the most of main's last readings of the same run; kept by pace.py keep;
-    # with LOADS "none" (from G10.5 on) any miss or jump fails. A first run kept beside the deciding one (--again) is not read.
+    # The loads (the windows before play): a report with LOADS "main" (M-013), refused only above twice the most of the readings of
+    # the renderer; kept by pace.py keep; with LOADS "none" (from G10.5 on) any miss or jump fails. A first run kept beside the
+    # deciding one (--again) is not read.
     with tempfile.TemporaryDirectory() as tmp:
         root = pathlib.Path(tmp)
         zero = "extension: harness: frame 0 is game frame 900"
@@ -143,15 +144,13 @@ def main():
         check(kept == {"pace-match-30/d3d12": [{"commit": "012345678", "load_missed": 5.0, "load_jumps": 2.0}]},
               "the history holds main's load figures by run: %r" % kept)
         same, worse = root / "same", root / "worse"
-        floor = pace.LOAD_FLOOR
-        pace.LOAD_FLOOR = 1  # this block tests the comparison with one reading; the floor itself is the next block's
         write_run(same, "pace-match-30", boot, settings)
         write_run(worse, "pace-match-30", [line(missed=7, jumps=2), zero, line(missed=1), line(), line()], settings)
         write_run(worse / pace.FIRST, "pace-match-30", [zero, line(), line(jumps=9), line()], settings)
         pace.digest(same, str(history))
         pace.digest(worse, str(history))
-        check(verdicts(same)["pace-match-30"]["loads"] == "pass", "as many load misses and jumps as main: pass")
-        check(verdicts(worse)["pace-match-30"]["loads"] == "FAIL", "8 load misses against main's 5: FAIL")
+        check(verdicts(same)["pace-match-30"]["loads"] == "recorded", "as many load misses and jumps as main: recorded")
+        check(verdicts(worse)["pace-match-30"]["loads"] == "recorded", "8 load misses against main's 5: recorded, a report")
         check(len(json.loads((worse / "pace.json").read_text(encoding="utf-8"))) == 1, "the first run (WORK/first) is not read")
         saved = pace.LOADS
         try:
@@ -160,44 +159,61 @@ def main():
             check(verdicts(same)["pace-match-30"]["loads"] == "FAIL", "LOADS none: any load miss fails")
         finally:
             pace.LOADS = saved
-            pace.LOAD_FLOOR = floor
 
-    # The floor of the loads row (M-008): fewer than three readings of main are no baseline, a count that varies from run to run is
-    # recorded and refused nothing; from three, only a count above the most of the last five is refused. The real figures of G10.2's
-    # landing: Vulkan's load windows gave 11 missed, 44 jumps on main and 24, 44 on the branch; Direct3D 12's 44, 162 and 45, 162.
+    # The loads row is a report until G10.5 (M-013, the planner's order of 11-27): it prints "recorded" and refuses only a gross break,
+    # a count above twice the most of the renderer's readings since G10.1 landed, misses and jumps separately. The real figures:
+    # Vulkan's load windows gave 6, 11, 24, 27 missed on identical code (G10.3 6, G10.1 11, G10.2 24, G10.4 27), Direct3D 12's 44 to 47.
     with tempfile.TemporaryDirectory() as tmp:
         root = pathlib.Path(tmp)
         zero = "extension: harness: frame 0 is game frame 900"
         settings = ["GALAXY_MAX_FPS=0", "GALAXY_VSYNC_INTERVAL=1"]
         history = root / "pace-history.tsv"
-        check(pace.LOAD_FLOOR == 3 and pace.LOAD_READINGS == 5, "the floor is 3 readings, the window the last 5")
+        check(pace.LOAD_GROSS == 2, "the gross break is twice the most")
 
         def keep_history(run, readings):
             rows = ["\t".join(pace.HISTORY_COLUMNS)] + ["\t".join(["2026-11-26 12:19:08", "7ca0d4e54", run, str(m), str(j), "2", "0", "0", "0"])
                                                       for m, j in readings]
             history.write_text("\n".join(rows) + "\n", encoding="utf-8")
 
-        def loads_of(n, missed, jumps, readings):
-            keep_history("pace-match-30/d3d12", readings)
+        def loads_of(n, missed, jumps, readings, renderer="d3d12", seen=False):
+            keep_history("pace-match-30/" + renderer, readings)
             work = root / ("run%d" % n)
-            write_run(work, "pace-match-30", [line(missed=missed, jumps=jumps), zero, line(), line(), line()], settings)
-            check(pace.digest(work, str(history)) == (1 if any(v == "FAIL" for v in verdicts(work)["pace-match-30"].values()) else 0),
+            folder = work / "pace-match-30" / renderer
+            folder.mkdir(parents=True)
+            (folder / "run.log").write_text("\n".join([line(missed=missed, jumps=jumps), zero, line(), line(), line()]) + "\n", encoding="utf-8")
+            (folder / "test.json").write_text(json.dumps({"name": "pace-match-30", "settings": settings}), encoding="utf-8")
+            saved = dict(pace.LOAD_SEEN)
+            try:
+                if not seen:
+                    pace.LOAD_SEEN.clear()
+                code = pace.digest(work, str(history))
+            finally:
+                pace.LOAD_SEEN.clear()
+                pace.LOAD_SEEN.update(saved)
+            check(code == (1 if any(v == "FAIL" for v in verdicts(work)["pace-match-30"].values()) else 0),
                   "digest's exit status follows the FAIL rows")
             return verdicts(work)["pace-match-30"]["loads"]
 
-        check(loads_of(1, 24, 44, [(11, 46)]) == "recorded", "Vulkan's 24 missed against one reading of 11: recorded, not refused")
-        check(loads_of(2, 24, 44, [(11, 46), (11, 46)]) == "recorded", "two readings are still no baseline")
-        check(loads_of(3, 24, 44, []) == "recorded", "no reading: recorded")
-        check(loads_of(4, 24, 44, [(11, 46), (24, 44), (11, 46)]) == "pass", "three readings with one of 24: 24 passes")
-        check(loads_of(5, 25, 44, [(11, 46), (24, 44), (11, 46)]) == "FAIL", "three readings, 25 missed above the most (24): FAIL")
-        check(loads_of(6, 24, 47, [(11, 46), (24, 44), (11, 46)]) == "FAIL", "three readings, 47 jumps above the most (46): FAIL")
-        check(loads_of(7, 24, 44, [(11, 46), (11, 46), (11, 46)]) == "FAIL", "three readings of 11, 24 missed: FAIL")
-        check(loads_of(8, 24, 44, [(30, 90), (11, 46), (11, 46), (11, 46), (11, 46), (11, 46)]) == "FAIL",
-              "only the last 5 readings count: the sixth from the end (30, 90) is out")
-        check(loads_of(9, 162, 162, [(44, 162), (45, 162), (44, 162)]) == "FAIL", "Direct3D 12: 162 missed above the most (45): FAIL")
-        check(loads_of(10, 45, 162, [(44, 162)]) == "recorded", "Direct3D 12's 45 missed against one reading of 44: recorded")
-        check(loads_of(11, 45, 162, [(44, 162), (44, 162), (44, 162)]) == "FAIL", "Direct3D 12: 45 against three readings of 44: FAIL")
-        check(loads_of(12, 45, 162, [(44, 162), (45, 162), (44, 162)]) == "pass", "Direct3D 12: 45 against readings with a 45: pass")
+        vk = [(6, 46), (11, 46), (24, 44), (27, 44)]
+        check(loads_of(1, 54, 44, vk, "vulkan") == "recorded", "Vulkan, readings 6, 11, 24, 27: 54 missed (twice the most) is recorded")
+        check(loads_of(2, 55, 44, vk, "vulkan") == "FAIL", "Vulkan: 55 missed, above twice the most: FAIL")
+        check(loads_of(3, 22, 44, [(11, 46)], "vulkan") == "recorded" and loads_of(19, 23, 44, [(11, 46)], "vulkan") == "FAIL",
+              "one reading of 11: 22 missed is recorded, 23 FAIL")
+        check(loads_of(4, 27, 92, vk, "vulkan") == "recorded", "Vulkan: 92 jumps (twice the most, 46) is recorded")
+        check(loads_of(5, 27, 93, vk, "vulkan") == "FAIL", "Vulkan: 93 jumps, above twice the most: FAIL")
+        dx = [(44, 162), (46, 169), (47, 159)]
+        check(loads_of(6, 94, 162, dx) == "recorded", "Direct3D 12, readings 44, 46, 47: 94 missed is recorded")
+        check(loads_of(7, 95, 162, dx) == "FAIL", "Direct3D 12: 95 missed: FAIL")
+        check(loads_of(8, 45, 338, dx) == "recorded" and loads_of(9, 45, 339, dx) == "FAIL", "Direct3D 12: 338 jumps recorded, 339 FAIL")
+        check(loads_of(10, 5000, 5000, [], "d3d12") == "recorded", "no readings of the renderer: recorded, never refused")
+        check(loads_of(11, 5000, 5000, [(3, 10)], "metal") == "FAIL", "a renderer's own readings count: 3 missed, 10 jumps: 5000 FAIL")
+        check(loads_of(12, 30, 20, [(3, 10)], "metal") == "FAIL" and loads_of(13, 6, 20, [(3, 10)], "metal") == "recorded",
+              "metal: 30 missed above 6 fails, 6 missed and 20 jumps (twice the most) is recorded")
+        check(loads_of(14, 54, 44, [(6, 46)], "vulkan", seen=True) == "recorded" and loads_of(15, 55, 44, [(6, 46)], "vulkan", seen=True) == "FAIL",
+              "the most seen before the history (LOAD_SEEN: Vulkan 27) counts when the history holds less")
+        check(pace.LOAD_SEEN == {"vulkan": (27, 46), "d3d12": (47, 172)}, "LOAD_SEEN holds the most seen since G10.1: %r" % pace.LOAD_SEEN)
+        check(loads_of(16, 94, 344, [(44, 162)], seen=True) == "recorded" and loads_of(17, 95, 344, [(44, 162)], seen=True) == "FAIL"
+              and loads_of(18, 94, 345, [(44, 162)], seen=True) == "FAIL", "Direct3D 12 with the seen most (47 missed, 172 jumps): 94 and 344 pass, above FAIL")
 
     # The display lead in play (M-009, brief AD): a change of the lead in play is itself a jump. The real logs of G10.2's landing
     # (gate run 20261126-153832): Direct3D 12 stepped the lead 1->2 in the first play and 2->1 in the second, 88.55% and 89.94% of
