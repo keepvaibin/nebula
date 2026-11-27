@@ -4,7 +4,7 @@ Written 2026-11-26 21:03. If this time is more than three hours old, the work ha
 
 Steps landed: 38 of 156 (24%).
 
-Now: G10.2m measured; in work: lander landing G10.2m
+Now: G10.2m landed (main c28f8b737); in work: writer for G10 from G10.3
 
 In work now: Nothing started.
 
