@@ -4,7 +4,7 @@ Written 2026-11-27 01:11. If this time is more than three hours old, the work ha
 
 Steps landed: 38 of 156 (24%).
 
-Now: in work: mender for M-012 (pace/pc: one lead change per run is reported); then G10.3 again
+Now: M-012 closed (main 105ba5de0); in work: lander landing G10.3 again (rebase on the mend)
 
 In work now: Nothing started.
 
