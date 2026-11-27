@@ -4,7 +4,7 @@ Written 2026-11-26 16:22. If this time is more than three hours old, the work ha
 
 Steps landed: 36 of 156 (23%).
 
-Now: M-008 closed; in work: lander landing G10.2 again (rebased on the mend)
+Now: in work: fixer for G10.2 (pace/pc match-30 D3D12 animation 88-90%: regression or main's own play?)
 
 In work now: Nothing started.
 
