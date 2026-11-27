@@ -145,6 +145,7 @@ Nothing waits for the owner.
 | M-010 | closed | G10.2m | frametimeline.py: wrong layer name on Android 16 and a trace pulled half-written | 0 | 45 | f93613da6 |
 | M-011 | closed | - | pace/tablet baseline rows refuse on the stored baseline's own spread at 120 Hz: report only until G10.4m classifies them | 0 | 75 | f18e39975 |
 | M-012 | closed | - | pace/pc: one lead change per run, up or down, is 'lead moved' until G10.5 (no covered flag on the [display-lead] line yet) | 0 | 49 | 105ba5de0 |
+| M-013 | open | - | pace/pc and pace/tablet loads row: report only until G10.5, with a gross-break guard | 0 | 0 | - |
 
 ## Decisions (159)
 
