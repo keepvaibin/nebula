@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-27 00:21. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-27 00:22. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 38 of 156 (24%).
 
-Now: G10.3 hard: pace/pc Vulkan lead step down under a wipe (M-009 gap); asked the planner
+Now: in work: mender for M-012 (pace/pc: one lead change per run is reported); then G10.3 again
 
 In work now: Nothing started.
 
