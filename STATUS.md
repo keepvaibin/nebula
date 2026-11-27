@@ -4,7 +4,7 @@ Written 2026-11-26 17:38. If this time is more than three hours old, the work ha
 
 Steps landed: 37 of 156 (24%).
 
-Now: G10.2: pace/pc D3D12 failure is main's own lead change, flaky; landing G10.2 again, planner told
+Now: G10.2 landed (main d8d2c6ec8); in work: mender for M-009 (pace/pc: median figure report only, lead moved)
 
 In work now: Nothing started.
 
