@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-26 18:38. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-26 19:15. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 37 of 156 (24%).
 
@@ -137,7 +137,7 @@ Nothing waits for the owner.
 | M-008 | closed | - | pace/pc loads row refuses on fewer than 3 of main's readings | 0 | 56 | af48ff4ac |
 | M-009 | closed | - | pace/pc refuses on the median figure and on a lead change in play: report only, per brief AD | 0 | 59 | 053875b4c146469f74c4441fc9ca10b65961cb29 |
 
-## Decisions (142)
+## Decisions (145)
 
 - 2026-11-23 S0.2.1: LoadSlice: 32 items a frame; an item is a phase of GameScene::initAfterScenarioChosen, the player, one placement made whole, one piece of FileSelector::initStep, or one Star Bit of the reserve (because the card asks for a fixed count of work and names no count; the count is a constant in one place, no player sees which frame of the load an item falls in, and the load worker (G3.7) replaces the slices)
 - 2026-11-23 S0.2.1: Drawing's random stream (MR::getDrawRandom) is seeded with the same seed as the game's stream, in setRandomSeedFromStageName and setFixedRandomSeed (because a fixed seed keeps the cosmetic numbers the same in every run of a replay and needs no new setting; the draw stream runs through the same sequence as the game's but is advanced only by drawing, so neither changes the other)
@@ -281,6 +281,9 @@ Nothing waits for the owner.
 - 2026-11-26 G10.2: the third planted fault is the diagnostic pace-depth, which returns one more slot from PresentSlots::place than the depth kept (because the card asks for a deliberately raised depth at present time; the slots and depth kept stay the ones without the fault, so only the present's target moves)
 - 2026-11-26 G10.2: a miss lands in one cause row by a fixed precedence: ModeChange in progress, App Deadline Missed, SurfaceFlinger CPU Deadline Missed, SurfaceFlinger GPU Deadline Missed, Display HAL, Prediction Error, Dropped Frame, then Unknown; Buffer Stuffing is counted beside them and is no miss (because the card asks every miss in exactly one row and a frame can carry several jank flags; a mode change explains its whole frame, a frame late by itself is the game's whatever else was late (so no game miss hides behind a platform one), then the platform's from the compositor down to the display)
 - 2026-11-26 M-009 (G10.1's pace check): pace/pc refuses on bar 1, on bar 2 (the jump count) and on the display lead in play; the animation figure within 1 ms of the median is a report; the in-between delay's p99 is a report in a run whose lead moved in play and is judged against its bound as before when the lead stayed still; one step up of the lead in a run is filed 'lead moved' until G10.5, a second step or any step down fails; from G10.5 a step up needs two missed refreshes in its window (because brief AD makes a lead change in play a visible jump and the median figure a report; the fixer's A/B of G10.2's first landing showed every refused play was a lead change; the PC's delay has no stored reading of main to judge against, so the bound stands and the lead row judges steadiness (bar 4))
+- 2026-11-26 G10.2m: the trace tool is Perfetto's trace_processor_shell v59.1-1e9c61e98 at D:/NebulaWork/tools/perfetto/windows-amd64/trace_processor_shell.exe (exe sha256 3acc5aca1c764541033a82ba3bb0a47524b5c3c0aa194eea8d9a7b0cdb346bdc, from the zip with sha256 f7ce9e3f43cb2c0c0525e79861054aa1a50a800bb88023b990d767247c80ac88); it reads the tablet's traces (Perfetto v51.2 on the device) and no download was made (because the exe's sha256 was computed on 11-26 before use and equals the one the coordinator gave; the tablet's own traced is v51.2 and the processor reads its traces without a column or version fault)
+- 2026-11-26 G10.2m: row 1's method is latency (SurfaceFlinger's --latency history of the game's layer, with the display-frame jank types from the trace), and the frame's start is the game's step moment (--start step): the game's SurfaceView layer has no FrameTimeline app rows (because three real traces of rate-120 and rate-60 on R52WA0FXE5J (Android 16, SM-X810): actual_frame_timeline_slice held 8885 rows of SurfaceFlinger's display frames (layer_name null) and only 18 to 26 rows of other layers (StatusBar, the activity's own TX layer, 3), and 0 rows of the game's SurfaceView(BLAST) layer; so the frametimeline method has nothing to read and the Choreographer vsync start (a frametimeline-only start) is not available)
+- 2026-11-26 G10.2m: the shell user can enable power/cpu_frequency, sched/sched_switch and the atrace categories gfx and view with the app names of the test app on the tablet; power/gpu_frequency is accepted and writes no event (a Qualcomm tablet: 0 events in 100 s of play, 0 in four short probes), so the gpu clock is not in a trace (because probes of 4 s to 100 s with the game on the title screen: sched_switch about 43,000 and cpu_frequency about 2,800 events in 4 s, gfx and view slices 61,000, counters 15,000, gpu_frequency 0; the tracefs of the device lists power/gpu_frequency, power/gpu_work_period and gpu_mem/gpu_mem_total)
 
 ## Checks changed during the run (85)
 
@@ -372,12 +375,13 @@ Nothing waits for the owner.
 
 ## Tool faults
 
-9 tool faults recorded.
+10 tool faults recorded.
 
 The last 20:
 
 | When | Step | Test | What happened | What the agent could not do |
 | --- | --- | --- | --- | --- |
+| 2026-11-26 19:15 | - | (by hand) | tools/gate/frametimeline.py pick_layer (G10.2): on the tablet (Android 16, SM-X810) dumpsys SurfaceFlinger --list prints each layer as 'RequestedLayerState{d4c3c SurfaceView[dev.nebula.galaxy.test/dev.nebula.galaxy.GameActivity]@0(BLAST)#158145 parentId=158144}'; pick_layer returns that whole line, and --latency of it answers only the refresh period (no frames), so sf-latency.txt holds none, capture.json layer is the whole line, and every row 1 and 2 of the latency method reads 'no --latency frames of the game's layer'. The name --latency takes (128 lines tried on the tablet) is the text between 'RequestedLayerState{' and ' parentId=', i.e. 'd4c3c SurfaceView[...]@0(BLAST)#158145'. frametimeline_test's listing fixture is the old format, so the test passed. | - |
 | 2026-11-26 11:15 | G10.1 | pace/pc | d3d12: no run (the harness's exit 1); vulkan: no run (the harness's exit 1) | - |
 | 2026-11-26 10:32 | G10.1 | pace/pc | d3d12: no run (the harness's exit 1); vulkan: no run (the harness's exit 1) | - |
 | 2026-11-25 12:43 | R-008 | gate.py | could not be started: [Errno 22] Invalid argument | - |
