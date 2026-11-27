@@ -35,6 +35,13 @@ value, its target and pass, FAIL, recorded, or not measured (and why). The bars 
     system's (pacing.h Summary::missed_system): reported beside, not refused.
   - bar 2, "jumps": no two pictures shown one after the other whose (display moment - content moment) differ by more than
     1 ms, except across a seam (a closed wipe, a new swap chain, another refresh period: pacing.h Picture::seam).
+  - the display lead in play (brief AD: a lead change in play is itself a jump; read from the game's `[display-lead] a->b refreshes`
+    lines after frame 0, those between the wipe closing and the scene ready being a load's): until G10.5 lands (LOADS "main") one
+    step up in a run is filed "lead moved" and refuses nothing, a second step or any step down fails; from G10.5 on a step up is
+    filed only where its [pace] window shows LEAD_MISSES missed refreshes of the game's, every other change in play fails.
+  - "animation error" (within 1 ms of the run's median) is a report only since brief AD, and so is the in-between delay's p99
+    in a run whose lead moved in play (two leads in one figure: the lead row judges). With the lead still the delay is judged
+    against its bound as before.
   - "loads": the game's missed refreshes and the jumps of the load windows. While LOADS is "main" (until G10.5 lands) a
     run is refused only when either count is above the most of main's last LOAD_READINGS readings of the same run in
     --history (fewer than LOAD_FLOOR = 3 readings yet: recorded, refused nothing); with LOADS "none" (from G10.5 on) any miss or jump is refused.
@@ -74,6 +81,13 @@ FRAME_ZERO = re.compile(r"harness: frame 0 is game frame")
 # The Vulkan renderer's own report of its presents (renderer_vk.cpp report_present_timing): late split by whether the picture
 # reached the compositor after its time (available late) or was ready and shown later than asked (delayed late).
 PRESENT_TIMING = re.compile(r"\[present-timing\] (\d+) frames: .*? (\d+) late, .*?late\(available/delayed\)=(\d+)/(\d+)")
+# The display model's report of a change of its lead (runtime/src/render/frame_schedule.cpp begin_waiting): the lead in refreshes.
+LEAD = re.compile(r"\[display-lead\] (-?\d+)->(-?\d+) refreshes")
+# A load's lines: the wipe closes, the old scene is destroyed, the new one is ready. A lead change between them is a load's, not play's.
+LOAD_OPENS = re.compile(r"held under the wipe|game: scene: \[(destroy|initialize) Scene")
+LOAD_ENDS = re.compile(r"game: scene: \[scene ready\]")
+# From G10.5 on a step up of the lead in play is allowed only where the window it fell in shows this many of the game's missed refreshes.
+LEAD_MISSES = 2
 # Display reports must cover this share of a run's pictures before its display measures are judged.
 COVERAGE = 0.99
 # Every window from the start shows at least this share of the pictures its rate asks for.
@@ -112,6 +126,57 @@ def windows_of(log_text, from_start=False):
             continue  # may have begun before frame 0
         out.append({k: float(v) for k, v in re.findall(r"([a-z_0-9]+)=([-0-9.]+)", m.group(1))})
     return out
+
+
+def leads_of(log_text):
+    """The lead changes the game told after the harness's frame 0, each {before, after (refreshes), load (between the wipe closing and
+    the scene ready), misses (the game's missed refreshes in the [pace] window the line fell in, None with no window after it)}."""
+    after, loading, out, waiting = False, False, [], []
+    for line in log_text.splitlines():
+        if FRAME_ZERO.search(line):
+            after, loading, out, waiting = True, False, [], []
+            continue
+        if not after:
+            continue
+        if LOAD_OPENS.search(line):
+            loading = True
+        elif LOAD_ENDS.search(line):
+            loading = False
+        m = LEAD.search(line)
+        if m:
+            lead = {"before": int(m.group(1)), "after": int(m.group(2)), "load": loading, "misses": None}
+            out.append(lead)
+            waiting.append(lead)
+            continue
+        m = PACE.search(line)
+        if m:
+            figures = {k: float(v) for k, v in re.findall(r"([a-z_0-9]+)=([-0-9.]+)", m.group(1))}
+            for lead in waiting:
+                lead["misses"] = figures.get("missed", 0.0) - figures.get("missed_system", 0.0)
+            waiting = []
+    return out
+
+
+def lead_row(leads):
+    """The row of the display lead in play (brief AD: a lead change in play is itself a visible jump; one step up to stop repeated
+    misses counts as one event and is reported). Until G10.5 lands (LOADS "main") one step up in a run is filed "lead moved" and
+    refused nothing; a second step or any step down in play fails. From G10.5 on (LOADS "none") a step up is filed only where its
+    window shows LEAD_MISSES of the game's missed refreshes, and every other change in play fails. Changes inside a load are counted
+    beside and judged by the loads row's own rule."""
+    play = [l for l in leads if not l["load"]]
+    at_load = len(leads) - len(play)
+    target = ("no change in play; one step up reported" if LOADS == "main"
+              else "no change in play; one step up after %d misses reported" % LEAD_MISSES)
+    if not play:
+        return ("display lead in play", "no change%s" % (", %d at loads" % at_load if at_load else ""), target, "pass")
+    ups = [l for l in play if l["after"] > l["before"]]
+    downs = [l for l in play if l["after"] < l["before"]]
+    text = ", ".join("%d->%d refreshes" % (l["before"], l["after"]) for l in play)
+    value = "%s in play%s" % (text, ", %d at loads" % at_load if at_load else "")
+    ok = not downs and len(ups) == 1
+    if ok and LOADS != "main":
+        ok = ups[0]["misses"] is not None and ups[0]["misses"] >= LEAD_MISSES
+    return ("display lead in play", value, target, "lead moved" if ok else "FAIL")
 
 
 def pictures_asked(window, test):
@@ -303,10 +368,12 @@ def judge(run, history=None, base=None, base_name=""):
         rows.append(("jumps", "%d, largest change %.2f ms" % (c["jumps"], c["jump_max_us"] / 1000.0),
                      "no change over 1 ms between two pictures shown", ("pass" if c["jumps"] == 0 else "FAIL") if covered
                      else uncovered))
+    leads = run.get("leads", [])
+    rows.append(lead_row(leads))
+    # The old figure (within 1 ms of the run's median) is a report only since brief AD: the jumps and the lead judge what it did.
     rows.append(("animation error", "%.2f%% within 1 ms (p99 %.0f us)" % (100 * c["animation_within_1ms"],
                                                                        c["animation_p99_us"]),
-                 "99 of 100 within 1 ms", ("pass" if c["animation_within_1ms"] >= 0.99 else "FAIL") if covered
-                 else uncovered))
+                 "report only (the jumps and the lead judge)", "recorded" if covered else uncovered))
     work = c["step_work_p99_us"] / 1000.0
     delay = c["delay_p99_us"] / 1000.0
     if c["generated"] > 0:
@@ -315,9 +382,13 @@ def judge(run, history=None, base=None, base_name=""):
     else:
         bound = work + refresh
         target = "the step's work + one refresh (%.2f ms)" % bound
+    moved = any(not l["load"] for l in leads)
+    if moved:
+        # A run whose lead moved in play has two leads in its delay: steady delay is the lead row's to judge (brief AD bar 4).
+        target += ", reported: the lead moved in play, the lead row judges"
     rows.append(("delay, in-between pictures %s" % ("on" if c["generated"] > 0 else "off"),
                  "p99 %.2f ms (average %.2f)" % (delay, c["delay_avg_us"] / 1000.0), target,
-                 ("pass" if delay <= bound else "FAIL") if covered and refresh > 0 else uncovered))
+                 (("recorded" if moved else "pass" if delay <= bound else "FAIL") if covered and refresh > 0 else uncovered)))
     if not on_device:
         longest = c["step_work_max_us"] / 1000.0
         rows.append(("long step", "longest %.2f ms (p99 %.2f)" % (longest, work), "none over 18 ms",
@@ -395,6 +466,7 @@ def read_runs(work, history=None, reading=None):
         measured, every = windows_of(text), windows_of(text, from_start=True)
         run = {"run": str(folder.relative_to(work)), "run_key": "%s/%s" % (folder.parent.name, folder.name), "test": test,
                "renderer": folder.name, "device": device, "figures": combine(measured), "all_windows": every,
+               "leads": leads_of(text),
                "load_windows": every[:len(every) - len(measured)]}
         missed, jumps = load_figures(run["load_windows"])
         run["loads"] = {"windows": len(run["load_windows"]), "missed": missed, "jumps": jumps}

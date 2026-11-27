@@ -86,11 +86,13 @@ def main():
         code = pace.digest(work)
         v = verdicts(work)
         check(code == 1, "a FAIL among the runs: exit 1")
-        check(all(x == "pass" for k, x in v["good"].items() if not k.startswith("in-between") and k != "loads"),
+        check(all(x == "pass" for k, x in v["good"].items() if not k.startswith("in-between") and k not in ("loads", "animation error")),
               "good: every row passes")
+        check(v["good"]["animation error"] == "recorded", "good: the animation error is a report")
         check(v["good"]["loads"] == "recorded", "no reading of main's: the loads are recorded, not judged")
         check(v["missed"]["even pictures"] == "FAIL", "a missed refresh fails even pictures")
-        check(v["smeared"]["animation error"] == "FAIL", "97% within 1 ms fails")
+        check(v["smeared"]["animation error"] == "recorded" and v["smeared"]["jumps"] == "pass",
+              "97% within 1 ms is reported (brief AD: the old figure refuses nothing); the jumps judge")
         check(v["slow"]["delay, in-between pictures on"] == "FAIL", "30 ms over a 29 ms bound fails")
         check(v["good"]["delay, in-between pictures on"] == "pass", "25 ms within 29 ms passes")
         check(v["long"]["long step"] == "FAIL", "a 19 ms step fails")
@@ -193,6 +195,72 @@ def main():
         check(loads_of(10, 45, 162, [(44, 162)]) == "recorded", "Direct3D 12's 45 missed against one reading of 44: recorded")
         check(loads_of(11, 45, 162, [(44, 162), (44, 162), (44, 162)]) == "FAIL", "Direct3D 12: 45 against three readings of 44: FAIL")
         check(loads_of(12, 45, 162, [(44, 162), (45, 162), (44, 162)]) == "pass", "Direct3D 12: 45 against readings with a 45: pass")
+
+    # The display lead in play (M-009, brief AD): a change of the lead in play is itself a jump. The real logs of G10.2's landing
+    # (gate run 20261126-153832): Direct3D 12 stepped the lead 1->2 in the first play and 2->1 in the second, 88.55% and 89.94% of
+    # the animation within 1 ms, delay p99 23.22 and 23.40 ms against 22.52. The old figure no longer refuses; the lead does.
+    with tempfile.TemporaryDirectory() as tmp:
+        work = pathlib.Path(tmp)
+        zero = "extension: harness: frame 0 is game frame 900"
+        settings = ["GALAXY_MAX_FPS=0", "GALAXY_VSYNC_INTERVAL=1"]
+        up, down = "[display-lead] 1->2 refreshes at qpc 1", "[display-lead] 2->1 refreshes at qpc 2"
+        smeared = line(within=0.8855, delay=23220.0, generated=1800, refresh=4.167)
+        plain = line(generated=1800, refresh=4.167, delay=20000.0)
+        wipe, destroyed, ready = ("context: star pointer mode -1 held under the wipe", "game: scene: [destroy Scene: Game]",
+                                  "game: scene: [scene ready]")
+        cases = {
+            "still": [zero, plain, plain, plain],
+            "up": [zero, plain, up, smeared, plain],
+            "twice": [zero, plain, up, down, smeared, plain],
+            "twiceup": [zero, plain, up, "[display-lead] 2->3 refreshes at qpc 3", smeared, plain],
+            "down": [zero, plain, down, smeared, plain],
+            "boot": [up, plain, zero, plain, plain, plain],
+            "load": [zero, plain, wipe, destroyed, up, down, ready, plain, plain],
+            "afterload": [zero, plain, wipe, destroyed, ready, up, smeared, plain],
+        }
+        for name, lines in cases.items():
+            write_run(work, name, lines, settings)
+        pace.digest(work)
+        v = verdicts(work)
+        lead = "display lead in play"
+        check(v["still"].get(lead) == "pass", "no lead line: pass")
+        check(v["up"].get(lead) == "lead moved", "one step up in play: filed 'lead moved', refused nothing: %s" % v["up"].get(lead))
+        check(v["twice"].get(lead) == "FAIL", "a step up and a step down in play: FAIL")
+        check(v["twiceup"].get(lead) == "FAIL", "two steps up in play: FAIL")
+        check(v["down"].get(lead) == "FAIL", "one step down in play: FAIL")
+        check(v["boot"].get(lead) == "pass", "a lead line before frame 0 (the boot) is not play's")
+        check(v["load"].get(lead) == "pass", "lead changes between the wipe closing and the scene ready are a load's")
+        check(v["afterload"].get(lead) == "lead moved", "a step after the scene ready is play's")
+        for name in ("up", "twice", "down"):
+            check(v[name]["animation error"] == "recorded" and v[name]["delay, in-between pictures on"] == "recorded",
+                  "%s: the animation figure and the delay are reports when the lead moved in play" % name)
+        check(v["still"]["delay, in-between pictures on"] == "pass", "no lead change: the delay is judged as before")
+        # What stays refused: a delay over its bound with the lead still, a missed refresh, a jump, beside a moved lead.
+        write_run(work, "slow-still", [zero, plain, line(delay=40000.0, generated=1800, refresh=4.167), plain], settings)
+        write_run(work, "up-missed", [zero, plain, up, line(missed=1, on_time=1197, generated=1800, refresh=4.167), plain], settings)
+        write_run(work, "up-jumped", [zero, plain, up, line(jumps=2, jump_max=3000.0, generated=1800, refresh=4.167), plain], settings)
+        pace.digest(work)
+        v = verdicts(work)
+        check(v["slow-still"]["delay, in-between pictures on"] == "FAIL", "a delay over its bound with the lead still: FAIL")
+        check(v["up-missed"]["even pictures"] == "FAIL" and v["up-missed"].get(lead) == "lead moved", "bar 1 still refuses beside a moved lead")
+        check(v["up-jumped"]["jumps"] == "FAIL", "bar 2 still refuses beside a moved lead")
+        runs = json.loads((work / "pace.json").read_text(encoding="utf-8"))
+        got = {r["run_key"]: r.get("leads") for r in runs}
+        check(got["up/d3d12"] == [{"before": 1, "after": 2, "load": False, "misses": 0.0}], "the lead and its window's misses are kept: %r" % got["up/d3d12"])
+        check(got["load/d3d12"] == [{"before": 1, "after": 2, "load": True, "misses": 0.0}, {"before": 2, "after": 1, "load": True, "misses": 0.0}],
+              "leads in a load are kept, marked: %r" % got["load/d3d12"])
+        # From G10.5 on (LOADS "none") a step up counts only after repeated misses in its window; every other change fails.
+        saved = pace.LOADS
+        try:
+            pace.LOADS = "none"
+            write_run(work, "none-missed", [zero, plain, up, line(missed=2, on_time=1198, generated=1800, refresh=4.167), plain], settings)
+            pace.digest(work)
+            v = verdicts(work)
+            check(v["up"].get(lead) == "FAIL", "LOADS none: a step up with no misses fails")
+            check(v["none-missed"].get(lead) == "lead moved", "LOADS none: a step up in a window of two missed refreshes is reported")
+            check(v["twice"].get(lead) == "FAIL" and v["down"].get(lead) == "FAIL" and v["still"].get(lead) == "pass", "LOADS none: steps down and a second step fail")
+        finally:
+            pace.LOADS = saved
 
     # The gate's suite: one test, the match cut to 30 s of play, shown, at the display's rate with VSync on.
     tree = pathlib.Path(__file__).resolve().parents[3]
