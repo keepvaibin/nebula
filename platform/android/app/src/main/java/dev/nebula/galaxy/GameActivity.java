@@ -88,6 +88,7 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
     static native void nativePanelRate(float hz);
     static native float nativeStepRate();
     static native void nativeDisplayVaries(int sdk, boolean hasArrSupport);
+    static native void nativePlatformOffers(int gameMode, boolean powerKnown, boolean sustainedSupported);
     static native void nativeTouchSlop(float px);
     static native float nativeWantedFrameRate();
     static native void nativePadSensorDevice(int id, String name, String descriptor, int vendor, int product, boolean gyro, boolean accel);
@@ -218,6 +219,17 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
             final int sdk = android.os.Build.VERSION.SDK_INT;
             nativeDisplayVaries(sdk, sdk >= 36 && display.hasArrSupport());
         }
+        reportPlatformOffers();
+    }
+
+    // What the platform offers the game, for its log (G10.3), at start and on each display change: the game mode the player
+    // or the system set (GameManager.getGameMode, API 31; -1 without a GameManager) and whether the device can hold
+    // sustained-performance clocks (PowerManager.isSustainedPerformanceModeSupported). Nothing is changed by it.
+    private void reportPlatformOffers() {
+        final android.app.GameManager games = getSystemService(android.app.GameManager.class);
+        final android.os.PowerManager power = getSystemService(android.os.PowerManager.class);
+        nativePlatformOffers(games != null ? games.getGameMode() : -1, power != null,
+            power != null && power.isSustainedPerformanceModeSupported());
     }
 
     private final DisplayManager.DisplayListener displayListener = new DisplayManager.DisplayListener() {

@@ -1,6 +1,9 @@
 """pace_test.py: tools/gate/pace.py on run logs whose verdicts are known: the windows it uses, how it combines them,
 each 4.3 verdict and each bar of brief AD (the game's misses, the jumps, the loads against main's readings), pass and FAIL;
+the [platform] lines of what the platform offers (G10.3: the header, and a device run's row when one is missing);
 the history it keeps; the gate's suite tests/pace/gate.json (G10.1); and run's harness locks and quiet wait (a fake harness)."""
+import contextlib
+import io
 import json
 import pathlib
 import re
@@ -268,6 +271,58 @@ def main():
             check(v["twice"].get(lead) == "FAIL" and v["down"].get(lead) == "FAIL" and v["still"].get(lead) == "pass", "LOADS none: steps down and a second step fail")
         finally:
             pace.LOADS = saved
+
+    # What the platform offers (G10.3): a device run prints the game's [platform] lines in its header and holds one line of each kind
+    # with a value, the frame timeline's at the run's own rate; a line missing, a "not supported" with no reason, or a frame timeline
+    # of another rate only is a FAIL of the row. A PC run has no such row.
+    offers = ["[platform] hint-features: not supported (the system has no APerformanceHint_isFeatureSupported, API 36)",
+              "[platform] hint-calls: present: APerformanceHint_setThreads; absent: APerformanceHint_isFeatureSupported",
+              "[platform] frame-timeline: 120.0 Hz: expected present less frame time 2.00 refreshes (2.00 to 2.00 over 32 callbacks; "
+              "preferred timeline 1 of 3)",
+              "[platform] game-mode: standard; sustained performance: not supported",
+              "[platform] thermal-thresholds: light=0.700 moderate=0.850 severe=1.000",
+              "[platform] vulkan-images: surface minimum 4, maximum 64; asked 5, made 5 (PRESENT_MODE_FIFO)"]
+    with tempfile.TemporaryDirectory() as tmp:
+        work = pathlib.Path(tmp)
+        zero = "extension: harness: frame 0 is game frame 900"
+        settings = ["GALAXY_MAX_FPS=120", "GALAXY_VSYNC_INTERVAL=1"]
+
+        def device_run(name, lines):
+            write_run(work, name, lines + [zero, line(), line(), line()], settings)
+            (work / name / "d3d12" / "exit-info.txt").write_text("exit 0\n", encoding="utf-8")
+
+        device_run("all", offers + offers[2:3])  # a line written again is printed once
+        device_run("nothermal", [o for o in offers if "thermal-thresholds" not in o])
+        device_run("noreason", offers[1:] + ["[platform] hint-features: not supported"])
+        device_run("otherrate", [o.replace("120.0 Hz", "60.0 Hz") for o in offers])
+        device_run("unsupported", [o for o in offers if "frame-timeline" not in o] +
+                   ["[platform] frame-timeline: not supported (the system has no AChoreographer_postVsyncCallback with its frame "
+                    "timelines, API 33)"])
+        write_run(work, "pc", offers + [zero, line(), line(), line()], settings)
+        printed = io.StringIO()
+        with contextlib.redirect_stdout(printed):
+            pace.digest(work)
+        blocks = {}
+        for text in printed.getvalue().splitlines():
+            if not text.startswith("  "):
+                blocks[text.split("\\")[0].split("/")[0]] = current = []
+            else:
+                current.append(text)
+        v = verdicts(work)
+        row = pace.PLATFORM_ROW
+        check(v["all"].get(row) == "pass", "every line, the frame timeline at 120 Hz: pass (%s)" % v["all"].get(row))
+        check(v["nothermal"].get(row) == "FAIL", "the thermal thresholds' line missing: FAIL")
+        check(v["noreason"].get(row) == "FAIL", "'not supported' with no reason is no value: FAIL")
+        check(v["otherrate"].get(row) == "FAIL", "a frame timeline at 60 Hz only, in a run at 120 Hz: FAIL")
+        check(v["unsupported"].get(row) == "pass", "a frame timeline not supported, with its reason: pass")
+        check(row not in v["pc"], "a PC run has no row of what the platform offers")
+        runs = {r["run_key"]: r for r in json.loads((work / "pace.json").read_text(encoding="utf-8"))}
+        missing = [value for m, value, _, _ in runs["nothermal/d3d12"]["rows"] if m == row]
+        check(missing == ["4 of 5; missing: thermal-thresholds"], "the row names the missing kind: %s" % missing)
+        header = [p for p in blocks.get("all", []) if p.startswith("  platform ")]
+        check(header == ["  platform " + o[len("[platform] "):] for o in offers],
+              "the header prints the run's lines in their order, a line written again once: %s" % header)
+        check(len([p for p in blocks.get("pc", []) if p.startswith("  platform ")]) == len(offers), "a PC run's header prints its lines too")
 
     # The gate's suite: one test, the match cut to 30 s of play, shown, at the display's rate with VSync on.
     tree = pathlib.Path(__file__).resolve().parents[3]

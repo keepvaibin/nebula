@@ -1172,6 +1172,14 @@ bool RendererVk::create_swapchain() {
                  : context.display_timing() ? "display timing"
                  : swapchain_.ids2          ? ("none (present timing's clocks " + time_domains + " not usable)").c_str()
                                             : "none");
+    // The loader's own counts for the surface beside what was asked and made (G10.3): its minimum is the floor of the queue a
+    // present can wait in. A maximum of 0 is the surface's "no limit".
+    std::fprintf(stderr, "[platform] vulkan-images: surface minimum %u, maximum %u; asked %u, made %u (%s)\n",
+                 caps.minImageCount, caps.maxImageCount, images, count,
+                 mode == VK_PRESENT_MODE_FIFO_KHR        ? "PRESENT_MODE_FIFO"
+                 : mode == VK_PRESENT_MODE_MAILBOX_KHR   ? "PRESENT_MODE_MAILBOX"
+                 : mode == VK_PRESENT_MODE_IMMEDIATE_KHR ? "PRESENT_MODE_IMMEDIATE"
+                                                         : "another present mode");
     if (count != logged_swap_images_ || mode != logged_swap_mode_) {
         // Once, and again only when the count or the mode changes (VSync toggled).
         logged_swap_images_ = count;

@@ -4,6 +4,7 @@
 #include "sdl_host.h"
 #include "galaxy/display_timeline.h"
 #include "galaxy/host_wait.h"
+#include "galaxy/perf_hint.h"
 #include "galaxy/render/present_clock.h"
 #include "galaxy/vsync_grid.h"
 
@@ -89,6 +90,7 @@ struct TimelineApi {
     int64_t (*frame_time)(const AChoreographerFrameCallbackData*) = nullptr;
     size_t (*preferred)(const AChoreographerFrameCallbackData*) = nullptr;
     int64_t (*expected)(const AChoreographerFrameCallbackData*, size_t) = nullptr;
+    size_t (*length)(const AChoreographerFrameCallbackData*) = nullptr;  // the timelines offered; only the platform's log reads it
     bool load() {
         void* library = dlopen("libandroid.so", RTLD_NOW | RTLD_LOCAL);
         if (!library) return false;
@@ -96,6 +98,7 @@ struct TimelineApi {
         frame_time = reinterpret_cast<decltype(frame_time)>(dlsym(library, "AChoreographerFrameCallbackData_getFrameTimeNanos"));
         preferred = reinterpret_cast<decltype(preferred)>(dlsym(library, "AChoreographerFrameCallbackData_getPreferredFrameTimelineIndex"));
         expected = reinterpret_cast<decltype(expected)>(dlsym(library, "AChoreographerFrameCallbackData_getFrameTimelineExpectedPresentationTimeNanos"));
+        length = reinterpret_cast<decltype(length)>(dlsym(library, "AChoreographerFrameCallbackData_getFrameTimelinesLength"));
         // The loaded symbols remain valid throughout the process, like the looper thread itself.
         return post && frame_time && preferred && expected;
     }
@@ -105,6 +108,48 @@ void record_frame(std::int64_t frame_ns, std::int64_t expected) {
     std::lock_guard<std::mutex> lock(g_mutex);
     g_grid.note(frame_ns, g_display_period_ns.load(std::memory_order_relaxed));
     g_expected_presentation_ns = expected;
+}
+
+// The platform's own answer to how far ahead an app frame is shown (G10.3, AB research F2.2): the preferred timeline's expected
+// presentation less the frame time, in refreshes of the display period, over the first kLeadSamples callbacks at each period; one
+// `[platform] frame-timeline:` line a period. The looper thread's own; it changes nothing the frames do.
+constexpr int kLeadSamples = 32;
+struct LeadSamples {
+    std::int64_t period_ns = 0;
+    int count = 0;
+    std::int64_t gaps_ns[kLeadSamples] = {};
+};
+LeadSamples g_lead;
+
+void note_lead(std::int64_t frame_ns, std::int64_t expected_ns, size_t preferred, size_t timelines) {
+    std::int64_t period = g_display_period_ns.load(std::memory_order_relaxed);
+    if (period <= 0) {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        period = g_grid.interval_ns;
+    }
+    if (period <= 0 || expected_ns <= 0) {
+        return;
+    }
+    // Another display period (the grid's measured one and the stated one differ by a little: the same rate).
+    if (std::llabs(period - g_lead.period_ns) > period / 50) {
+        g_lead = LeadSamples{};
+        g_lead.period_ns = period;
+    }
+    if (g_lead.count >= kLeadSamples) {
+        return;
+    }
+    g_lead.gaps_ns[g_lead.count++] = expected_ns - frame_ns;
+    if (g_lead.count < kLeadSamples) {
+        return;
+    }
+    std::int64_t* const gaps = g_lead.gaps_ns;
+    std::sort(gaps, gaps + kLeadSamples);
+    const double refresh = static_cast<double>(period);
+    std::fprintf(stderr,
+                 "[platform] frame-timeline: %.1f Hz: expected present less frame time %.2f refreshes (%.2f to %.2f over %d "
+                 "callbacks; preferred timeline %zu of %zu)\n",
+                 1e9 / refresh, static_cast<double>(gaps[kLeadSamples / 2]) / refresh, static_cast<double>(gaps[0]) / refresh,
+                 static_cast<double>(gaps[kLeadSamples - 1]) / refresh, kLeadSamples, preferred + 1, timelines);
 }
 
 void on_frame(std::int64_t frame_ns, void* choreographer);
@@ -129,7 +174,11 @@ void on_frame(std::int64_t frame_ns, void* choreographer) {
 }
 
 void on_timeline(const AChoreographerFrameCallbackData* data, void* choreographer) {
-    record_frame(g_timeline.frame_time(data), g_timeline.expected(data, g_timeline.preferred(data)));
+    const size_t preferred = g_timeline.preferred(data);
+    const std::int64_t frame_ns = g_timeline.frame_time(data);
+    const std::int64_t expected = g_timeline.expected(data, preferred);
+    record_frame(frame_ns, expected);
+    note_lead(frame_ns, expected, preferred, g_timeline.length != nullptr ? g_timeline.length(data) : 0);
     post_next(static_cast<AChoreographer*>(choreographer));
 }
 
@@ -138,6 +187,7 @@ void on_timeline(const AChoreographerFrameCallbackData* data, void* choreographe
 void on_refresh_rate(std::int64_t vsync_period_ns, void*) {
     if (g_display_period_ns.exchange(vsync_period_ns, std::memory_order_relaxed) != vsync_period_ns) {
         galaxy::render::g_display_recheck.store(true, std::memory_order_release);
+        galaxy::host::perf_hint_report_platform();  // what the platform offers, said again at the new rate (G10.3)
     }
 }
 
@@ -152,7 +202,10 @@ void clock_thread() {
         std::fprintf(stderr, "[display] Android preferred presentation timeline enabled\n");
     } else {
         g_timeline.post = nullptr;
+        std::fprintf(stderr, "[platform] frame-timeline: not supported (the system has no AChoreographer_postVsyncCallback "
+                             "with its frame timelines, API 33)\n");
     }
+    galaxy::host::perf_hint_report_platform();  // what the platform offers, at start (G10.3)
     g_looper.store(ALooper_forThread(), std::memory_order_release);
     post_next(choreographer);
     AChoreographer_registerRefreshRateCallback(choreographer, on_refresh_rate, nullptr);

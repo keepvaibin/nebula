@@ -35,9 +35,13 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <condition_variable>
 #include <cstdio>
+#include <iterator>
+#include <string>
 #include <thread>
 #include <type_traits>
+#include <utility>
 #endif
 
 namespace galaxy::host {
@@ -395,46 +399,179 @@ namespace {
 
 // The device's thermal headroom (android/thermal.h, API 31), looked up at run time and read once a second on a thread
 // of its own: AThermal_getThermalHeadroom may take a binder call, which no frame thread waits for. The system answers
-// at most once a second; a refused read (NaN) keeps 0.
+// at most once a second; a refused read (NaN) keeps 0. The same thread writes the platform's offer (perf_hint_report_platform).
 std::atomic<double> g_headroom{0.0};
 std::once_flag g_thermal_started;
+// The reader's two jobs: the headroom, from the first thermal_headroom on (the arbiter's), and a report of the platform's offer
+// when one is asked. g_reader_wake wakes it at once for either.
+std::mutex g_reader_mutex;
+std::condition_variable g_reader_wake;
+bool g_headroom_wanted = false;
+bool g_platform_wanted = false;
+
+using Acquire = void* (*)();
+using Headroom = float (*)(void*, int);
+// android/thermal.h AThermalHeadroomThreshold (API 35), declared here: the header hides it below the app's minimum API.
+struct HeadroomThreshold {
+    float headroom;
+    int status;  // AThermalStatus
+};
+using Thresholds = int (*)(void*, const HeadroomThreshold**, std::size_t*);
+
+// The features of android/performance_hint.h APerformanceHintFeature (API 36), in the NDK's order, as the log names them.
+constexpr const char* kHintFeatures[] = {"sessions", "power-efficiency", "surface-binding", "graphics-pipeline", "auto-cpu",
+                                         "auto-gpu"};
+// The newer calls of the hint and the heat (their API levels: the NDK's __INTRODUCED_IN), looked for by name.
+constexpr const char* kNewerCalls[] = {
+    "APerformanceHint_setThreads",               "APerformanceHint_setPreferPowerEfficiency",
+    "APerformanceHint_reportActualWorkDuration2", "APerformanceHint_notifyWorkloadIncrease",
+    "APerformanceHint_notifyWorkloadSpike",       "APerformanceHint_notifyWorkloadReset",
+    "APerformanceHint_createSessionUsingConfig",  "ASessionCreationConfig_setGraphicsPipeline",
+    "ASessionCreationConfig_setUseAutoTiming",    "APerformanceHint_setNativeSurfaces",
+    "APerformanceHint_isFeatureSupported",        "AThermal_getThermalHeadroomThresholds"};
+// android/thermal.h AThermalStatus 0 to 6, as the log names them.
+constexpr const char* kThermalStatus[] = {"none", "light", "moderate", "severe", "critical", "emergency", "shutdown"};
+
+void report_hint_features(void* library) {
+    using Supported = bool (*)(std::int32_t);
+    const auto supported = reinterpret_cast<Supported>(dlsym(library, "APerformanceHint_isFeatureSupported"));
+    if (supported == nullptr) {
+        std::fprintf(stderr, "[platform] hint-features: not supported (the system has no APerformanceHint_isFeatureSupported, "
+                             "API 36)\n");
+    } else {
+        std::string line;
+        for (std::size_t i = 0; i < std::size(kHintFeatures); ++i) {
+            line += std::string(" ") + kHintFeatures[i] + (supported(static_cast<std::int32_t>(i)) ? "=yes" : "=no");
+        }
+        std::fprintf(stderr, "[platform] hint-features:%s\n", line.c_str());
+    }
+    std::string has;
+    std::string lacks;
+    for (const char* call : kNewerCalls) {
+        std::string& to = dlsym(library, call) != nullptr ? has : lacks;
+        to += to.empty() ? call : std::string(", ") + call;
+    }
+    std::fprintf(stderr, "[platform] hint-calls: present: %s; absent: %s\n", has.empty() ? "none" : has.c_str(),
+                 lacks.empty() ? "none" : lacks.c_str());
+}
+
+void report_thermal_thresholds(void* library, void* manager) {
+    const auto thresholds = reinterpret_cast<Thresholds>(dlsym(library, "AThermal_getThermalHeadroomThresholds"));
+    if (thresholds == nullptr) {
+        std::fprintf(stderr, "[platform] thermal-thresholds: not supported (the system has no "
+                             "AThermal_getThermalHeadroomThresholds, API 35)\n");
+        return;
+    }
+    if (manager == nullptr) {
+        std::fprintf(stderr, "[platform] thermal-thresholds: not supported (no thermal manager)\n");
+        return;
+    }
+    // The list is the manager's own, cached by it: not freed here.
+    const HeadroomThreshold* list = nullptr;
+    std::size_t size = 0;
+    const int error = thresholds(manager, &list, &size);
+    if (error != 0 || list == nullptr || size == 0) {
+        std::fprintf(stderr, "[platform] thermal-thresholds: not supported (the call answered %d with %zu thresholds)\n", error,
+                     list != nullptr ? size : std::size_t{0});
+        return;
+    }
+    std::string line;
+    char one[48];
+    for (std::size_t i = 0; i < size; ++i) {
+        const int status = list[i].status;
+        if (status >= 0 && static_cast<std::size_t>(status) < std::size(kThermalStatus)) {
+            std::snprintf(one, sizeof one, " %s=%.3f", kThermalStatus[status], static_cast<double>(list[i].headroom));
+        } else {
+            std::snprintf(one, sizeof one, " status-%d=%.3f", status, static_cast<double>(list[i].headroom));
+        }
+        line += one;
+    }
+    std::fprintf(stderr, "[platform] thermal-thresholds:%s\n", line.c_str());
+}
 
 void start_thermal_reader() {
     void* library = dlopen("libandroid.so", RTLD_NOW | RTLD_LOCAL);
     if (library == nullptr) {
+        std::fprintf(stderr, "[platform] hint-features: not supported (no libandroid.so)\n");
+        std::fprintf(stderr, "[platform] thermal-thresholds: not supported (no libandroid.so)\n");
         return;
     }
-    using Acquire = void* (*)();
-    using Headroom = float (*)(void*, int);
     const auto acquire = reinterpret_cast<Acquire>(dlsym(library, "AThermal_acquireManager"));
     const auto headroom = reinterpret_cast<Headroom>(dlsym(library, "AThermal_getThermalHeadroom"));
     if (acquire == nullptr || headroom == nullptr) {
         std::fprintf(stderr, "[thermal] no thermal headroom on this system\n");
-        return;
     }
-    void* const manager = acquire();
-    if (manager == nullptr) {
-        return;
-    }
-    std::thread([manager, headroom] {
+    void* const manager = acquire != nullptr ? acquire() : nullptr;
+    const Headroom read_headroom = manager != nullptr ? headroom : nullptr;
+    std::thread([library, manager, read_headroom] {
+        // The headroom's next read: at once when it is first wanted, then once a second, as before the offer shared the thread.
+        std::chrono::steady_clock::time_point next_read{};
         for (;;) {
-            // The forecast one second on: the arbiter acts before the device throttles.
-            const float read = headroom(manager, 1);
-            g_headroom.store(read == read && read >= 0.0f ? static_cast<double>(read) : 0.0, std::memory_order_relaxed);
-            std::this_thread::sleep_for(std::chrono::seconds(1));
+            bool platform = false;
+            bool heat = false;
+            {
+                std::unique_lock<std::mutex> lock(g_reader_mutex);
+                const auto due = [&next_read] {
+                    return g_platform_wanted || (g_headroom_wanted && std::chrono::steady_clock::now() >= next_read);
+                };
+                if (g_headroom_wanted) {
+                    g_reader_wake.wait_until(lock, next_read, due);
+                } else {
+                    g_reader_wake.wait(lock, due);
+                }
+                platform = std::exchange(g_platform_wanted, false);
+                heat = g_headroom_wanted && std::chrono::steady_clock::now() >= next_read;
+            }
+            if (platform) {
+                report_hint_features(library);
+                report_thermal_thresholds(library, manager);
+            }
+            if (heat) {
+                next_read = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+                if (read_headroom != nullptr) {
+                    // The forecast one second on: the arbiter acts before the device throttles.
+                    const float read = read_headroom(manager, 1);
+                    g_headroom.store(read == read && read >= 0.0f ? static_cast<double>(read) : 0.0,
+                                     std::memory_order_relaxed);
+                }
+            }
         }
     }).detach();
 }
 
-}  // namespace
-
-double thermal_headroom() noexcept {
+// The reader once, from whichever asks first; no thread for it leaves the headroom not known and the offer unsaid.
+void start_reader_once() noexcept {
     try {
         std::call_once(g_thermal_started, [] { start_thermal_reader(); });
     } catch (...) {
-        // No thread for the reader: the headroom stays not known.
+    }
+}
+
+// Asks the reader for a report of the offer (`platform`) or for the headroom, and wakes it.
+void want(bool platform) noexcept {
+    {
+        std::lock_guard<std::mutex> lock(g_reader_mutex);
+        (platform ? g_platform_wanted : g_headroom_wanted) = true;
+    }
+    g_reader_wake.notify_one();
+}
+
+// The arbiter has asked for the headroom once: later asks only read it (no lock on the frame's path).
+std::atomic<bool> g_headroom_asked{false};
+
+}  // namespace
+
+double thermal_headroom() noexcept {
+    if (!g_headroom_asked.load(std::memory_order_relaxed) && !g_headroom_asked.exchange(true, std::memory_order_relaxed)) {
+        want(false);
+        start_reader_once();
     }
     return g_headroom.load(std::memory_order_relaxed);
+}
+
+void perf_hint_report_platform() noexcept {
+    want(true);
+    start_reader_once();
 }
 #else
 // No platform here gives the app its thermal headroom to read (Windows, Linux, Apple; the benchmark's own heat measure
@@ -442,6 +579,9 @@ double thermal_headroom() noexcept {
 double thermal_headroom() noexcept {
     return 0.0;
 }
+
+// No hint or heat calls to report here.
+void perf_hint_report_platform() noexcept {}
 #endif
 
 }  // namespace galaxy::host
