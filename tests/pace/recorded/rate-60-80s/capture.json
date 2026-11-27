@@ -1,0 +1,8 @@
+{
+ "started": "20:40:48",
+ "layer": "d4c3c SurfaceView[dev.nebula.galaxy.test/dev.nebula.galaxy.GameActivity]@0(BLAST)#158593",
+ "perfetto": "pid 11059",
+ "latency_reads": 33,
+ "trace": "pulled",
+ "errors": []
+}
