@@ -36,7 +36,7 @@ order	step	package	title	package_needs	card_file	state	commit
 35	G6.2	G6	Sends and sound settings as typed records (P-221, P-222)	S0.1	05-NATIVE-LANE-G.md	landed	c8820d8be
 36	G6.7	G6	The surround law (P-193)	S0.1	05-NATIVE-LANE-G.md	open	
 37	G10.1	G10	Pacing in the gate: the PC's match run on every landing, the tablet's at 60 and 120 Hz	S0.2	05-NATIVE-LANE-G.md	landed	e687fdc7a
-38	G10.2	G10	FrameTimeline attribution and the baseline report	S0.2	05-NATIVE-LANE-G.md	open	
+38	G10.2	G10	FrameTimeline attribution and the baseline report	S0.2	05-NATIVE-LANE-G.md	landed	d6f15dcd1
 39	G10.2m	G10	The first FrameTimeline trace, row 1's method, the stored baseline	S0.2	05-NATIVE-LANE-G.md	open	
 40	G10.3	G10	What the platform and the device offer, logged	S0.2	05-NATIVE-LANE-G.md	open	
 41	G10.4	G10	The performance hint's target, by A/B	S0.2	05-NATIVE-LANE-G.md	open	
