@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-26 21:23. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-26 21:24. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 38 of 156 (24%).
 
-Now: G10.2m landed (main c28f8b737); in work: writer for G10 from G10.3
+Now: G10.3 written, G10.4 blocked (planner's decisions); in work: lander landing G10.3
 
 In work now:
 - G10.3 What the platform and the device offer, logged (agent 1)
