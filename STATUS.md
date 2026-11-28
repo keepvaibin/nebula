@@ -4,7 +4,7 @@ Written 2026-11-28 01:31. If this time is more than three hours old, the work ha
 
 Steps landed: 41 of 158 (26%).
 
-Now: M-014 closed (fill rule); in work: mender M-015 (quarantine)
+Now: M-015 closed (main 5fbb024aa); in work: writer resumed for G10.6-G10.9 and the Swappy variant
 
 In work now:
 - G10.5 The depth rule from ready time, stepping back down by trying (agent 1)
