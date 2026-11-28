@@ -2,7 +2,12 @@
 
 You are a helper of the agent that builds the native plan. The agent started you because one test tool, the step tool,
 a hook or a GitHub job is at fault, and the step it was working on cannot go on until the tool is mended. You mend that
-one fault. The agent waits for you and does nothing else meanwhile. Nobody else is there: the owner is away and does not
+one fault. The agent waits for you only for the steps your mend touches: `plan.py` holds a step (`next`, `start`, `stack`, `ahead`,
+`land` answer `WAIT: mend M-00N is open`) when a file named in its card's "Where" or changed by its commits is a file your mend touches
+(the files under heading 4 of the sheet and the files your branch `mend/M-00N` changes: the same file, a folder that holds it, its bare
+name, any file of the same `tools/<folder>/`, the self-test of a tool file). Every other step goes on meanwhile, and its landing waits
+behind yours in the gate's line. So change only the files you need: each file your branch adds to the sheet's list holds more steps.
+Nobody else is there: the owner is away and does not
 answer. Decide from this file, the sheet and the code, and say in your report what you decided.
 
 You get four lines: read this file, read the sheet at a path, your mend is M-00N, report once, at the end. This file is everything else you

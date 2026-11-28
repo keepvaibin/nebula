@@ -519,9 +519,17 @@ process you did not start, never remove a lock, never stop a landing or the long
 
 ### When a tool fails: the mend
 
-While a mend is open the step that met the fault waits, and you hand nothing in: `PLAN start` and `land` answer
-`WAIT: mend M-00N is open`, and the step is taken up again only when main holds the mend. You do not sit idle
-meanwhile: `PLAN ahead` writes the step after the one in work, on top of its branch, exactly as in 4.2 (read,
+While a mend is open the step that met the fault waits, and you hand nothing in that the mend touches. An open mend
+holds only the steps whose files it touches (the owner's order of 11-28): `PLAN next`, `start`, `stack`, `land` and
+`ahead` answer `WAIT: mend M-00N is open` for a step when a file named in its card's "Where", or one its commits change,
+is a file the mend touches (the sheet's list under "The files I believe are at fault" and, once the helper has committed,
+the files its branch `mend/M-00N` changes: the same file, a folder that holds it, its bare name, any file of the same
+`tools/<folder>/`, or the self-test of a tool file in a `tests` folder named after it). A step that touches none of them
+goes on as if no mend were open, and `next` says so in one line; its landing waits behind the mend's in the gate's line.
+A sheet that names no file, or is missing, holds every step, and so does a repair (its files are not known): write the
+sheet's list before the helper starts, and name a whole folder (`tools/gate/`) when every step of that area must wait
+(the pacing steps G10 for a mend in `tools/gate/`). `WAIT` names the file. A held step is taken up again only when main
+holds the mend. You do not sit idle meanwhile: `PLAN ahead` writes the step after the one in work, on top of its branch, exactly as in 4.2 (read,
 change, build, prove, audit, ledger, commit; no `start`, no `land`, no push). The exception is a step the mend
 touches: when the mend's sheet names a file that step's card names (its "Where"), or the helper's branch
 `mend/M-00N` changes one, `ahead` says so and refuses; then there is nothing to write, and you end the turn
@@ -571,7 +579,8 @@ a landing, or `PLAN tool "<what you ran, what it printed, what you needed>"` out
    step at most two mends for the same check (`--check <name>`).
 2. Fill the sheet's five headings (what I ran; what the tool said, with the run folder or the command's output;
    what it should have said and which document and section says so; the files I believe are at fault; what must
-   stay refused after the mend). Quote the lines of the documents.
+   stay refused after the mend). Quote the lines of the documents. The files heading is what the tool reads to
+   decide which steps wait (above): paths and folders, one per mention, never empty.
 3. Start ONE helper: the Agent tool, model `sonnet`, in the background, with these four lines: `Read <your work folder>/docs/plan/native/TOOL-MEND.md
    whole.` / `Read the fault sheet at D:/NebulaWork/plan/native/mends/M-00N.md.` / `Your mend is M-00N.` / `Report once, at your
    end: MENDED M-00N <main's commit> or NOT MENDED M-00N. Send no progress note before it.` (`mend open` prints them filled

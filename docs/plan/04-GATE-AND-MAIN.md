@@ -741,8 +741,11 @@ follows are `docs/plan/native/AGENT.md` (sections 3, 7, 9, 13, 14) and, for the 
 
 **The mend** (`tools/plan/plan.py`): `mend open [<step>] "<title>" [--last] [--check C]` writes the fault sheet
 `D:/NebulaWork/plan/native/mends/M-00N.md` and puts the step in work into the state "waits for M-00N" (still `started`, not
-blocked, outside the three-failures and four-hours rules); one mend is open at a time, and `next`, `start`, `ahead` and `land`
-answer `WAIT: mend M-00N is open`. `mend land M-00N` (the helper's, from its own folder on the branch `mend/M-00N`) runs the
+blocked, outside the three-failures and four-hours rules); one mend is open at a time, and `next`, `start`, `stack`, `ahead` and `land`
+answer `WAIT: mend M-00N is open` only for a step whose files the mend touches (a file in the card's Where line or in the step's commits
+that is a file of the mend: the sheet's `The files I believe are at fault` and the files of the branch `mend/M-00N`; paths, folders, a bare
+file name, the files of one `tools/<folder>/` and the self-test of a tool file; `mend_clash` in `plan.py`); every other step goes on and
+lands behind the mend. A sheet with no file, and a repair, hold every step (fail-closed). `mend land M-00N` (the helper's, from its own folder on the branch `mend/M-00N`) runs the
 references check, the code checks and the strictness check, then hands the branch to the gate with `--who "mend M-00N"`; its
 landing record is `landing-mend.tsv`, so it never meets the agent's own. `mend close M-00N <commit>` needs a commit on `origin/main`
 that touches `tools/`, `docs/` or `.github/`; the waiting step is in work again and every step blocked `tool: M-00N` is open

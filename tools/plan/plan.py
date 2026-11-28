@@ -90,8 +90,10 @@ tool     Writes a tool fault into BLOCKED.md under "tools" and into tool-faults.
 toolfault --last --could-not "TEXT": the sentence on what the agent's last tool fault stopped it from doing.
 mend     A tool at fault is mended by one helper while the agent waits (docs/plan/native/TOOL-MEND.md, AGENT.md section 9). `mend open
          [ID] "TITLE" [--last] [--check C]` writes the fault sheet (live folder, mends/M-00N.md) and puts the step in work into the
-         state `waits for M-00N` (still started, never blocked); one mend is open at a time, and while it is, `next`, `start` and `land`
-         answer `WAIT: mend M-00N is open`; `ahead` writes the step after the one in work on top of its branch (it refuses when the mend's
+         state `waits for M-00N` (still started, never blocked); one mend is open at a time, and while it is, `next`, `start`, `stack` and `land`
+         answer `WAIT: mend M-00N is open` for a step whose card's Where or commits touch a file of the mend (its sheet's list and its branch
+         mend/M-00N; the same file, a folder, a bare name, one tools/<folder>/, the self-test of a tool file) and for every step when the sheet
+         names no file; the other steps go on; `ahead` writes the step after the one in work on top of its branch (it refuses when the mend's
          sheet or its branch mend/M-00N names a file that step's card names, or when the mend waits for no step). The helper's prompt is
          four lines: the last asks for one report, at its end. `mend land M-00N` is the helper's: from its own folder on the branch mend/M-00N, the
          references check, the code checks and the strictness check, then the gate with `--who "mend M-00N"` (its landing record is
@@ -1894,6 +1896,71 @@ def touches(mend_path, card_path):
     return a == b or a.startswith(b + "/") or b.startswith(a + "/") or ("/" not in a and b.rsplit("/", 1)[-1] == a)
 
 
+def tool_area(path):
+    """`tools/<dir>` for a path inside one tool's folder (`tools/gate/pace.py`, `tools/gate/tests/x_test.py`, `tools/gate`), else ""."""
+    parts = path.strip("/").split("/")
+    return "/".join(parts[:2]) if len(parts) >= 2 and parts[0] == "tools" and not (len(parts) == 2 and "." in parts[1]) else ""
+
+
+def is_test_of(test_path, tool_path):
+    """Whether `test_path` is a self-test of the tool file `tool_path`: in a `tests` folder, named `<stem>_...` after it (`pace.py`: `pace_test.py`)."""
+    parts = test_path.strip("/").split("/")
+    stem = tool_path.strip("/").rsplit("/", 1)[-1].split(".")[0]
+    return "tests" in parts[:-1] and "." in tool_path.rsplit("/", 1)[-1] and parts[-1].startswith(stem + "_")
+
+
+def mend_clash(mine, theirs):
+    """The paths of the mend (`mine`) that meet a path of a step (`theirs`): the same file, a folder that holds the other, the mend's bare file
+    name, two paths in the same tool's folder (`tools/gate/`: its files and its tests), or the self-test of the mend's tool file. Paths and
+    prefixes only: which steps a mend is meant to stop is written on its sheet."""
+    out = set()
+    for m in mine:
+        for c in theirs:
+            area = tool_area(m)
+            if touches(m, c) or (area and area == tool_area(c)) or is_test_of(c, m):
+                out.add(m)
+    return sorted(out)
+
+
+def step_files(a, steps, ident, folder):
+    """(the paths its card's Where names, the files its branch changes against origin/main) of step `ident`; the second is None when the
+    branch is there and its changes could not be read."""
+    s = find(steps, ident)
+    named = card_paths(card_text(a.tree, s), a.tree) if s else []
+    branch = "refs/heads/" + item_branch(ident)
+    if not (folder.is_dir() and commit_of(folder, branch)):
+        return named, []
+    diff = git(folder, "diff", "--name-only", "origin/main...%s" % branch)
+    return named, (diff.stdout.split() if diff.returncode == 0 else None)
+
+
+def mend_empty_why(a, mend):
+    return "the mend names no file yet (the heading `The files I believe are at fault` of %s is empty), so it holds every step" % (
+        lv.sheet_path(live_dir(a.live), mend["id"]).as_posix())
+
+
+def mend_hold(a, mend, ident, steps=None):
+    """Why the open mend `mend` holds item `ident` (a step ID, or a repair): "" when it does not (owner's order of 11-28, mend M-016). A step is
+    held when a file named in its card's Where, or one its commits change, meets a file the mend touches (`mend_clash`). The mend's list
+    empty, a repair (its files are not known) and a step whose changed files cannot be read hold: the mend is fail-closed."""
+    folder = work_folder(a.work_root, agent_of(a))
+    mine = mend_files(a, mend, folder)
+    if not mine:
+        return mend_empty_why(a, mend)
+    if is_repair(ident):
+        return "%s is a repair: its files are not known, so a mend that is open holds it" % ident
+    steps = steps if steps is not None else read_steps(a.tree, a.live)
+    if find(steps, ident) is None:
+        return ""                                          # the command says there is no such step
+    named, changed = step_files(a, steps, ident, folder)
+    if changed is None:
+        return "the files that native/%s changes could not be read, so the mend holds it" % ident
+    clash = mend_clash(mine, named + changed)
+    if clash:
+        return "the mend touches %s, which step %s touches (its card's Where or its commits)" % (", ".join(clash[:6]), ident)
+    return ""
+
+
 def mend_ahead_refusal(a, steps, mend, rec):
     """Why `ahead` may not write while mend `mend` is open ("" when it may): the mend waits for no item, or it touches a file that the step to be
     written touches."""
@@ -1908,7 +1975,7 @@ def mend_ahead_refusal(a, steps, mend, rec):
         return ""
     mine = mend_files(a, mend, folder)
     theirs = card_paths(card_text(a.tree, nxt), a.tree)
-    clash = sorted({m for m in mine for c in theirs if touches(m, c)})
+    clash = mend_clash(mine, theirs)
     if clash:
         return ("The mend touches %s, which step %s touches (its card's Where): nothing is written for it until main holds the mend. "
                 "`python -X utf8 -I %s next` says what to do." % (", ".join(clash[:6]), nxt["step"], plan_path(a)))
@@ -2226,6 +2293,8 @@ def cmd_stack(a):
         say("STACK END: package %s is written up to %s. The next step, %s, is of package %s: it is written after the landings of "
             "package %s, the last of them its full check, have passed." % (first["package"], last, nxt["step"], nxt["package"],
                                                                            first["package"]))
+        return 1
+    if mend_blocks(a, nxt["step"]):                  # an open mend holds only the steps that touch its files
         return 1
     branch = "native/" + nxt["step"]
     if branch_exists(folder, "refs/heads/" + branch):
@@ -2545,10 +2614,22 @@ def cmd_next(a):
     fetch_main_landed(a)
     settle_github(a)
     waiting = lv.open_mend(live_dir(a.live))
-    if waiting:                                      # a helper mends a tool: nothing else is given until it has ended (AGENT.md section 9)
-        say_mend_wait(a, waiting)
+    if waiting and not mend_files(a, waiting, work_folder(a.work_root, agent_of(a))):
+        say_mend_wait(a, waiting, mend_empty_why(a, waiting))      # a helper mends a tool and its sheet names no file: nothing is given (AGENT.md section 9)
         return 0
     steps = read_steps(a.tree, a.live)
+
+    def held(ident):
+        """True, after saying why, when the open mend holds the item `next` would give; else (one line) says the item goes on."""
+        if waiting is None:
+            return False
+        why = mend_hold(a, waiting, ident, steps)
+        if why:
+            say_mend_wait(a, waiting, why)
+            return True
+        say("Mend %s is open: %s touches none of its files, so it goes on and lands after the mend (AGENT.md section 9)." % (waiting["id"], ident))
+        return False
+
     claims = lv.read_claims(live_dir(a.live))
     stale = stale_of(a.tree, claims)
     landed = sum(1 for s in steps if s["state"] == "landed")
@@ -2561,6 +2642,8 @@ def cmd_next(a):
     if work and agent == "1" and all(k == "step" for k, _ in work):
         repair = github_repair_open(a)
         if repair:                                   # a red job of GitHub on a landed commit comes before the step in work
+            if held(repair["id"]):
+                return 0
             print_repair(a, repair)
             say()
             for _, s in work:
@@ -2570,6 +2653,8 @@ def cmd_next(a):
             return 0
     if work:                                         # one thing at a time: it is shown again, nothing new is given
         first_kind, first = work[0]
+        if held(first["step"] if first_kind == "step" else first["id"]):
+            return 0
         if first_kind == "step":
             print_step(a, steps, first, working=True)
         else:
@@ -2581,12 +2666,16 @@ def cmd_next(a):
     if agent == "1":
         repair = lv.oldest_open_fail(lv.read_repairs(live_dir(a.live)))
         if repair:                                   # a fault found after a landing comes before any step
+            if held(repair["id"]):
+                return 0
             print_repair(a, repair)
             say_after(a, steps, None)
             return 0
     if agent == "1":
         kept = next((s for s in steps if is_kept(s)), None)
         if kept:                                     # its repair has landed (or been set aside): it goes on first
+            if held(kept["step"]):
+                return 0
             print_step(a, steps, kept, ["it is kept on its branch native/%s (%s); `start` puts the branch on top of main's newest "
                                         "commit and goes on with it" % (kept["step"], kept["reason"])])
             say_after(a, steps, kept)
@@ -2614,6 +2703,8 @@ def cmd_next(a):
                 say("  %s %s: %s" % (s["step"], s["state"], s["title"]))
         say("Land the started steps (plan.py land <id>) or take a blocked step up again (plan.py start <id>).")
         return 1
+    if held(choice.step["step"]):
+        return 0
     print_step(a, steps, choice.step, choice.notes, choice.blocked_before)
     say_after(a, steps, choice.step)
     return 0
@@ -2797,7 +2888,7 @@ def take_up_prepared(a, entry):
 
 
 def cmd_start(a):
-    if mend_blocks(a):
+    if mend_blocks(a, a.id):
         return 1
     fetch_main_landed(a)
     rec = landing_of(a)
@@ -3212,7 +3303,7 @@ def wait_for_process(pid, limit=1800.0):
 
 def cmd_land(a):
     """`land` with the pending GitHub results read at its start and again after its landing ended (settle_github)."""
-    if mend_blocks(a):
+    if mend_blocks(a, a.id):
         return 1
     settle_github(a)
     code = land_item(a)
@@ -3872,26 +3963,36 @@ def mend_prompt(a, mend_id):
             "Report once, at your end: `MENDED %s <main's commit>` or `NOT MENDED %s`. Send no progress note before it." % (mend_id, mend_id)]
 
 
-def mend_blocks(a):
-    """While a mend is open the agent starts no step and lands nothing (AGENT.md section 9): `start` and `land` answer WAIT, as `next` does.
-    The step after the one in work may be written meanwhile (`ahead`: cmd_ahead). True when a mend is open."""
+def mend_blocks(a, ident=None):
+    """While a mend is open the agent starts no step and lands nothing that the mend holds (AGENT.md section 9): `start`, `stack` and `land`
+    answer WAIT, as `next` does. A step whose card and commits touch none of the mend's files goes on (`mend_hold`). With no `ident` only the
+    fail-closed case is asked (the mend names no file): the caller asks again with the step once it knows it. The step after the one in
+    work may be written meanwhile (`ahead`: cmd_ahead). True when the item is held."""
     m = lv.open_mend(live_dir(a.live))
     if m is None:
         return False
+    if ident:
+        why = mend_hold(a, m, ident)
+    else:
+        why = "" if mend_files(a, m, work_folder(a.work_root, agent_of(a))) else mend_empty_why(a, m)
+    if not why:
+        return False
     say("WAIT: mend %s is open: %s" % (m["id"], m["title"]))
-    say("Nothing is started or landed while a mend is open: the step goes on only when main holds the mend. `python -X utf8 -I %s ahead` writes the "
-        "step after it meanwhile; `python -X utf8 -I %s next` says what to do now." % (plan_path(a), plan_path(a)))
+    say("Nothing is started or landed that the mend holds: the step goes on only when main holds the mend. %s. `python -X utf8 -I %s ahead` writes "
+        "the step after it meanwhile; `python -X utf8 -I %s next` says what to do now." % (why[0].upper() + why[1:], plan_path(a), plan_path(a)))
     return True
 
 
-def say_mend_wait(a, m):
-    """What `next` prints while a mend is open: nothing else."""
+def say_mend_wait(a, m, why=""):
+    """What `next` prints while a mend holds what it would give: nothing else."""
     sheet = lv.sheet_path(live_dir(a.live), m["id"])
     plan = plan_path(a)
     say("WAIT: mend %s is open: %s" % (m["id"], m["title"]))
-    say("Step in work: %s. Opened %s, %d minutes ago. Nothing is started or landed while a mend is open." % (
+    say("Step in work: %s. Opened %s, %d minutes ago. Nothing is started or landed that the mend holds." % (
         m["step"] if m["step"] != "-" else "none", lv.parse_stamp(m["opened"]).strftime("%H:%M") if lv.parse_stamp(m["opened"]) else m["opened"],
         minutes_since(m["opened"])))
+    if why:
+        say(why[0].upper() + why[1:] + ".")
     say()
     say("What to do (AGENT.md section 9):")
     say("1. The sheet is %s; its five headings are filled in." % sheet.as_posix())
