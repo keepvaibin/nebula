@@ -806,11 +806,15 @@ the row back to waiting and runs the whole batch again (the children ended with 
 **The four roles** (mend M-007, `docs/plan/native/AGENT.md` section 15): a coordinator on Sonnet starts one worker at a time:
 a writer on Opus that writes every step of a package before any lands (`plan.py stack`: each branch on the one before, a row in
 `stack-<agent>.tsv` of the live folder; `start` moves a stacked step's own commits onto main's tip once the one it stands on has
-landed; no step of the next package is written), a lander on Sonnet (`plan.py land` in the background and `plan.py wait <ID>`:
+landed; no step of the next package is written, with one exception, the fill rule: while the next step in plan order is a measuring
+step, whose card says "This is a measuring step", `stack` writes instead the next steps in plan order whose package needs are met, at most
+8 in one stack; the order inside a package is kept, a blocked step still holds what needs it, and a step of package G10 lands before a
+fill step: `start` of a fill step waits until the step it stands on has landed and no stacked G10 step has its needs landed, and
+`status` and `stack --list` list a G10 row first), a lander on Sonnet (`plan.py land` in the background and `plan.py wait <ID>`:
 one line when the landing ends, one call per 9 minutes at most), and a fixer on Opus for each failure the lander may not fix
 (`plan.py hard <ID> "<line>"`: the step blocked with the reason `hard: ...` and the report `hard/<ID>.md` in the live folder).
 Each step has a hand-off sheet (`plan.py handoff <ID>`, `handoff/<ID>.md` in the live folder, four headings); `land` refuses a
 step whose sheet is missing or has an empty heading. The published progress page fetches its data live from the `progress`
 branch on GitHub first (raw.githubusercontent.com, its address made from origin's by `live_data_url` in `tools/plan/plan.py`), which `plan.py`
 pushes with STATUS.md after each change, and falls back to the copy published beside it, saying which one it shows. Self-tests:
-`tools/gate/tests/plan_stack_test.py` and `tools/gate/tests/plan_page_test.py`.
+`tools/gate/tests/plan_stack_test.py`, `tools/gate/tests/plan_fill_test.py` and `tools/gate/tests/plan_page_test.py`.

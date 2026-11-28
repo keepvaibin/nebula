@@ -1193,7 +1193,7 @@ def status_text(tree, work_root=WORK_ROOT, at=None, live=None, agent="1", queue_
                 "- %s %s: branch native/%s, %s, on top of %s (base %s); plan.py start %s takes it up once %s has landed" % (
                     held["step"], held["title"], held["step"], commits_word(count), written["after"], written["base"][:9],
                     held["step"], written["after"])]
-    stacked = lv.read_stack(live_dir(live), agent)
+    stacked = landing_order(lv.read_stack(live_dir(live), agent), steps)
     if stacked:
         out += ["", "## Stack (%d)" % len(stacked), ""]
         out += ["- %s: branch native/%s on native/%s (base %s); plan.py start %s takes it up once %s has landed" % (
@@ -2087,14 +2087,68 @@ def stack_row(a, step_id, steps=None):
     return next((r for r in stack_rows(a, steps) if r["step"] == step_id), None)
 
 
+# The fill rule (mend M-014, docs/plan/native/AGENT.md section 8, owner's plan of 11-27 section B1). A measuring step (its card says
+# "This is a measuring step": a helper measures on the tablet once the step before it has landed) is not written by a writer. While
+# the next step in plan order is one, `stack` offers the next steps in plan order whose package needs are met (a fill step), at most
+# FILL_MAX of them in one stack. The order inside a package is kept (`need_ids`), a blocked step still holds what needs it, and a
+# step of a pacing package (PACING_PACKAGES) lands before a fill step that waits behind it.
+MEASURING_WORDS = re.compile(r"This is a measuring step")
+FILL_MAX = 8                  # fill steps (steps of a package other than the first step's) in one stack
+PACING_PACKAGES = ("G10",)
+
+
+def is_measuring(a, s):
+    """Whether the card of step `s` says it is a measuring step."""
+    return bool(MEASURING_WORDS.search(card_text(a.tree, s) or ""))
+
+
+def fill_after(a, steps):
+    """The fill step: the first step in plan order that is open, has its needs landed (`steps` has the written ones as landed),
+    is not a measuring step and is not held by a pair or another agent's claim; None when there is none. A measuring step stays
+    not landed, so it still holds every step that needs it."""
+    copy = [dict(x) for x in steps]
+    for x in copy:
+        if x["state"] == "open" and is_measuring(a, x):
+            x["state"] = "blocked"
+    claims = lv.read_claims(live_dir(a.live))
+    choice = choose_next(copy, claims, stale_of(a.tree, claims))
+    return choice.step if choice else None
+
+
+def landing_order(rows, steps):
+    """The stack rows in the order they land: the rows of a pacing package first (the gate is theirs first), each group in the
+    order written."""
+    def key(r):
+        s = find(steps, r["step"])
+        return 0 if s is not None and s["package"] in PACING_PACKAGES else 1
+    return sorted(rows, key=key)
+
+
+def stack_hold(a, s, steps):
+    """Why the stacked step `s` may not start now ("" when it may). A step that is not of a pacing package starts only when the
+    step it stands on has landed, and while no stacked step of a pacing package has its needs landed: that one has the gate first."""
+    row = stack_row(a, s["step"], steps)
+    if row is None or s["package"] in PACING_PACKAGES:
+        return ""
+    before = find(steps, row["after"])
+    if before is not None and before["state"] != "landed":
+        return "it stands on %s, which is not landed" % before["step"]
+    for r in stack_rows(a, steps):
+        other = find(steps, r["step"])
+        if other is not None and other["package"] in PACING_PACKAGES and not unmet(other, steps):
+            return "%s, a step of package %s, is written in the stack and has the gate first: start and land it before this one" % (
+                other["step"], other["package"])
+    return ""
+
+
 def say_stack(a, steps, rows):
     work = [r["step"] for k, r in in_work(a, steps) if k == "step"]
     if not rows:
         say("the stack is empty%s" % ("; in work: " + ", ".join(work) if work else ""))
         return
     folder = work_folder(a.work_root, agent_of(a))
-    say("the stack (start takes each up in this order once the one it stands on has landed):")
-    for r in rows:
+    say("the stack (start takes each up in this order once the one it stands on has landed; a pacing step goes first):")
+    for r in landing_order(rows, steps):
         n = git(folder, "rev-list", "--count", "%s..refs/heads/native/%s" % (r["base"], r["step"]))
         count = int(n.stdout.strip()) if n.returncode == 0 and n.stdout.strip().isdigit() else None
         say("  %s on native/%s (%s), %s of its own" % (r["step"], r["after"], r["base"][:9], commits_word(count)))
@@ -2156,7 +2210,19 @@ def cmd_stack(a):
     if nxt is None:
         say("STACK END: %s is the last step written: %s." % (last, ahead_why_none(marked, None)))
         return 1
-    if nxt["package"] != first["package"]:
+    filling = None
+    if is_measuring(a, nxt):
+        filling = nxt
+        used = sum(1 for i in chain[1:] if (find(steps, i) or {}).get("package") != first["package"])
+        if used >= FILL_MAX:
+            say("STACK END: the next step, %s, is a measuring step and %d fill steps are written already (the most in one stack): "
+                "they land first." % (nxt["step"], used))
+            return 1
+        nxt = fill_after(a, marked)
+        if nxt is None:
+            say("STACK END: the next step, %s, is a measuring step and no later step has its needs met." % filling["step"])
+            return 1
+    elif nxt["package"] != first["package"]:
         say("STACK END: package %s is written up to %s. The next step, %s, is of package %s: it is written after the landings of "
             "package %s, the last of them its full check, have passed." % (first["package"], last, nxt["step"], nxt["package"],
                                                                            first["package"]))
@@ -2173,6 +2239,10 @@ def cmd_stack(a):
     say("STACKED: %s  %s" % (nxt["step"], nxt["title"]))
     say("on %s, the tip of native/%s. Written after %s (in work): %s" % (tip[:9], last, first["step"],
                                                                          ", ".join(chain[1:] + [nxt["step"]])))
+    if filling is not None:
+        say("FILL: the next step in order, %s, is a measuring step (a helper measures it once the step before it has landed), so %s, "
+            "the first later step whose needs are met, is written now. It lands when the gate is free; a step of package %s lands "
+            "before it." % (filling["step"], nxt["step"], "/".join(PACING_PACKAGES)))
     print_step_body(a, nxt)
     say()
     say(commands_text(a, agent))
@@ -2393,6 +2463,9 @@ def say_after(a, steps, done):
     nxt = following(a, steps, done)
     if nxt is not None:
         say("after it: %s %s; read it with `plan.py card %s`" % (nxt["step"], nxt["title"], nxt["step"]))
+        if is_measuring(a, nxt):
+            say("%s is a measuring step: a writer does not write it, and `plan.py stack` offers the next later step whose needs are met "
+                "(the fill rule)." % nxt["step"])
 
 
 def print_step(a, steps, s, notes=(), blocked_before=(), working=False):
@@ -2753,6 +2826,10 @@ def cmd_start(a):
         say("plan.py: step %s needs first: %s" % (a.id, ", ".join("%s (%s)" % w for w in waiting)))
         return 1
     why = pair_conflict(s, steps)
+    if why:
+        say("plan.py: step %s waits: %s" % (a.id, why))
+        return 1
+    why = stack_hold(a, s, steps)
     if why:
         say("plan.py: step %s waits: %s" % (a.id, why))
         return 1
