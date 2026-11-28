@@ -1273,7 +1273,7 @@ void Context::verify_against_shadow(Buffer* buffer, BufferUse use, std::uint64_t
         return;
     }
     const auto* video = static_cast<const std::uint8_t*>(mapped.pData);
-    const std::uint8_t* system = buffer->shadow + offset;
+    const auto* system = reinterpret_cast<const std::uint8_t*>(buffer->shadow + offset);
     std::uint64_t first_difference = bytes;
     std::uint64_t different = 0u;
     for (std::uint64_t i = 0; i < bytes; ++i) {
