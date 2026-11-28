@@ -42,6 +42,24 @@ constexpr std::int64_t kCpuNs = 1'000'000;
 constexpr std::size_t kFeedbackLag = 3u;
 constexpr double kSeconds = 60.0;
 
+// What VK_GOOGLE_display_timing tells of a present as Android's loader works it out (swapchain.cpp TimingInfo::calculate):
+// the margin from the picture being ready to the compositor's latch of the refresh that showed it, and the earliest
+// refresh, moved back a refresh at a time (the refresh taken off the margin each time) while the margin is over a refresh
+// and that refresh is still after the latch.
+struct Told {
+    std::int64_t earliest, margin;
+};
+Told told(std::int64_t actual, std::int64_t ready, std::int64_t latch, std::int64_t vsync) {
+    const std::int64_t latched = actual - latch;
+    std::int64_t margin = latched - ready;
+    std::int64_t early = actual;
+    while (margin > vsync && early - vsync > latched) {
+        early -= vsync;
+        margin -= vsync;
+    }
+    return {early, margin};
+}
+
 struct Result {
     unsigned uneven = 0;          // after the first 5 s: pictures shown a different time after their moment than the
                                   // picture before, with the same depth
@@ -64,7 +82,7 @@ Result run(double hz, unsigned slot_vsyncs, Load load) {
     PresentSlots slots;
     Random random;
     struct Pending {
-        std::int64_t requested, earliest, actual, margin;
+        std::int64_t requested, earliest, actual, need;
     };
     std::deque<Pending> feedback;
     struct Shown {
@@ -81,7 +99,7 @@ Result run(double hz, unsigned slot_vsyncs, Load load) {
     for (std::int64_t moment = grid; moment < end; moment += step, ++i) {
         while (feedback.size() > kFeedbackLag) {
             const Pending& p = feedback.front();
-            slots.observe(p.requested, p.earliest, p.actual, p.margin, step, vsync / 2);
+            slots.observe(p.requested, p.earliest, p.actual, p.need, step, vsync / 2);
             feedback.pop_front();
         }
         PresentClock clock;
@@ -113,7 +131,8 @@ Result run(double hz, unsigned slot_vsyncs, Load load) {
         if (last_actual != 0) earliest = std::max(earliest, last_actual + vsync);
         const std::int64_t actual = std::max(earliest, vsync_at_or_after(slot - vsync / 2));
         last_actual = actual;
-        feedback.push_back({slot, earliest, actual, slot - (ready + kLatchNs)});
+        const Told t = told(actual, ready, kLatchNs, vsync);
+        feedback.push_back({slot, earliest, actual, PresentSlots::need_of(t.earliest, t.margin, clock.moment)});
         shown.push_back({actual - clock.moment, slots.depth_used(), hitch_left > 0u});
         result.depth_most = std::max(result.depth_most, slots.depth_used());
     }
@@ -149,12 +168,13 @@ void check_rate(double hz, unsigned slot_vsyncs) {
         if (load != Load::Spikes && r.changes_late != 0u) fail("the depth still changing after 30 s");
         if (r.depth_most > 4 * galaxy::kGameStepNs + vsync) fail("a depth over four frames");
         if (load == Load::Steady) {
-            // As low as the GPU's work allows: a calm stretch steps down while each picture is ready a present period
-            // and 2 ms before the latch.
+            // What the GPU's work asks (a game that does not tell its moments: the depth moves at every window): the
+            // least whole vsync at or above the time from the moment to the latch the picture was ready for, with the
+            // 1 ms guard, and never under the least.
             const std::int64_t least = (PresentSlots::kLeastDepthNs + vsync - 1) / vsync * vsync;
-            const std::int64_t ready = kCpuNs + std::llround(0.6 * static_cast<double>(step)) + kLatchNs;
-            const std::int64_t calm = (ready + step + 2'000'000 + vsync - 1) / vsync * vsync;
-            if (r.latency_last > std::max(least, calm)) fail("the depth not down to what the GPU's work allows");
+            const std::int64_t need = kCpuNs + std::llround(0.6 * static_cast<double>(step)) + kLatchNs;
+            const std::int64_t asked = (need + PresentDepth::kGuardNs + vsync - 1) / vsync * vsync;
+            if (r.latency_last != std::max(least, asked)) fail("the depth not what the GPU's work asks");
         }
     }
 }
@@ -228,8 +248,9 @@ void check_swap_queues() {
 
 }  // namespace
 
-// After a second of late presents, calm ones: the time until the depth comes down again is the same at every rate (it
-// was counted in presents: at 240 Hz a quarter of the time at 60).
+// After a second of late presents, calm ones, in a game that does not tell its moments (the depth moves at every window):
+// the time until the depth comes down again is the same at every rate (windows are seconds of shown times, not counts of
+// presents: at 240 Hz a count would be a quarter of the time at 60).
 std::int64_t ms_to_step_down(double hz) {
     const std::int64_t vsync = std::llround(1e9 / hz);
     const std::int64_t grid = 1'000'000'000;
@@ -249,10 +270,10 @@ std::int64_t ms_to_step_down(double hz) {
             moment += vsync;  // a picture fewer: the depth comes down a vsync
         }
         if (moment - grid < 1'500'000'000) {
-            // Late by a vsync (missed by less than two frame periods: the device's pace).
-            slots.observe(slot, slot + vsync, slot + vsync, 0, vsync, vsync / 2);
+            // Late by a vsync (missed by less than two frame periods: the device's pace): it needed a vsync more.
+            slots.observe(slot, slot + vsync, slot + vsync, depth + vsync, vsync, vsync / 2);
         } else {
-            slots.observe(slot, slot, slot, 50'000'000, vsync, vsync / 2);
+            slots.observe(slot, slot, slot, 5'000'000, vsync, vsync / 2);
             if (depth < raised) {
                 return (moment - grid) / 1'000'000;
             }
@@ -276,64 +297,212 @@ void check_windows_by_time() {
     }
 }
 
-// The lead stays still in play (brief AD): with lowering held a calm stretch leaves the depth and takes it down at the
-// first window allowed again; with raising held (a load under a closed wipe) late presents leave it.
-void check_held_moves() {
-    const std::int64_t vsync = 4'166'667;  // 240 Hz
-    PresentDepth depth;
-    const auto now_depth = [&] { return depth.depth(3 * vsync, vsync, 8 * vsync, vsync); };
-    const std::int64_t start = now_depth();
-    std::int64_t t = 1'000'000'000;
-    const auto run = [&](std::int64_t ns, std::int64_t late) {
-        for (const std::int64_t end = t + ns; t < end; t += vsync) {
-            depth.observe(t, t + late, t + late, late != 0 ? 0 : 50'000'000, vsync, vsync / 2);
-        }
+// The depth's moments (brief AD): in play it holds, whatever the needs, but for one step up after a window of late
+// presents, once a stretch of play; where it may move (a closed wipe, a scene loading) it goes to what the needs ask, down
+// as well as up; a load's worst is kept for the next four loads; a stall's need sizes nothing; a game that does not tell
+// moves at every window. Depths in refreshes of 240 Hz.
+void check_moments() {
+    const std::int64_t vsync = 4'166'667;
+    const auto refreshes = [vsync](std::int64_t ns) { return static_cast<long long>((ns + vsync / 2) / vsync); };
+    const auto fail = [&](const char* what, std::int64_t got, long long wanted) {
+        std::printf("FAIL: depth moments: %s: %lld refreshes, %lld wanted\n", what, refreshes(got), wanted);
+        ++failures;
     };
-    // In play (frame_schedule observe_shown): nothing moves; under a closed wipe: down, and up by what play kept, one step.
-    const auto play = [&] { depth.allow(false, false, true); };
-    const auto wipe = [&] { depth.allow(true, true, false); };
-    play();
-    run(9'000'000'000, 0);
-    const std::int64_t held = now_depth();
-    wipe();
-    run(1'500'000'000, 0);
-    const std::int64_t lowered = now_depth();
-    run(3'000'000'000, vsync);
-    const std::int64_t covered = now_depth();
-    play();
-    run(3'000'000'000, vsync);
-    const std::int64_t in_play = now_depth();
-    const bool kept = depth.raise_pending();
-    wipe();
-    const std::int64_t raised = now_depth();
-    if (held != start || lowered >= start || covered != lowered || in_play != lowered || !kept ||
-        raised != lowered + vsync || depth.raise_pending()) {
-        std::printf("FAIL: held moves: start %lld, calm in play %lld, then under a wipe %lld, late under it %lld, late in "
-                    "play %lld (kept %d), at the next wipe %lld (refreshes x1e6)\n",
-                    static_cast<long long>(start * 1'000'000 / vsync), static_cast<long long>(held * 1'000'000 / vsync),
-                    static_cast<long long>(lowered * 1'000'000 / vsync), static_cast<long long>(covered * 1'000'000 / vsync),
-                    static_cast<long long>(in_play * 1'000'000 / vsync), kept ? 1 : 0,
-                    static_cast<long long>(raised * 1'000'000 / vsync));
-        ++failures;
+    std::int64_t t = 1'000'000'000;
+    // Presents a vsync apart for `ns`, each needing `need` and shown `late` after its slot.
+    const auto run = [&](PresentDepth& depth, std::int64_t ns, std::int64_t need, std::int64_t late) {
+        for (const std::int64_t end = t + ns; t < end; t += vsync) {
+            (void)depth.depth(3 * vsync, vsync, 8 * vsync, vsync);
+            depth.observe(t, t + late, t + late, need, vsync, vsync / 2);
+        }
+        return depth.depth(3 * vsync, vsync, 8 * vsync, vsync);
+    };
+    PresentDepth depth;
+    depth.allow(false, false);  // play
+    if (const auto d = run(depth, 9'000'000'000, vsync, 0); refreshes(d) != 3) fail("calm play does not lower it", d, 3);
+    depth.allow(true, true);  // a closed wipe
+    // 4.17 ms and the 1 ms guard: two refreshes.
+    if (const auto d = run(depth, 1'500'000'000, vsync, 0); refreshes(d) != 2) fail("a wipe takes it to the needs", d, 2);
+    depth.allow(false, false);
+    // In play late by two refreshes (needing 3.5): one step up, and no more in the same stretch.
+    if (const auto d = run(depth, 3'000'000'000, 7 * vsync / 2, 2 * vsync); refreshes(d) != 3) fail("one step up in play", d, 3);
+    if (const unsigned steps = depth.take_steps_in_play(); steps != 1u) fail("one step up is one event", steps * vsync, 1);
+    depth.allow(true, true);
+    // The next wipe: the play's needs within the last 8 s (3.5 refreshes and the guard: 4).
+    if (const auto d = run(depth, 1'500'000'000, vsync, 0); refreshes(d) != 4) fail("the wipe after holds play's needs", d, 4);
+    depth.allow(false, false);
+
+    // A stall's need (more than two game steps above the depth) sizes nothing where the depth may move.
+    PresentDepth stalled;
+    stalled.allow(true, true);
+    run(stalled, 1'500'000'000, vsync, 0);
+    if (const auto d = run(stalled, 1'500'000'000, 3 * vsync + 3 * galaxy::kGameStepNs, 0); refreshes(d) != 2)
+        fail("a stall's need left out", d, 2);
+
+    // A load's worst is kept for the next four loads: a load needing 5 refreshes, then loads needing 1.
+    PresentDepth loads;
+    loads.allow(true, true);
+    if (const auto d = run(loads, 2'000'000'000, 5 * vsync, 0); refreshes(d) != 6) fail("a load's need", d, 6);
+    for (int load = 1; load <= 5; ++load) {
+        loads.allow(false, false);
+        run(loads, 9'000'000'000, vsync, 0);
+        loads.allow(true, true);
+        const std::int64_t d = run(loads, 1'500'000'000, vsync, 0);
+        if (refreshes(d) != (load <= 4 ? 6 : 2)) fail(load <= 4 ? "the load kept for four loads" : "the fifth load after it forgets it", d,
+                                                      load <= 4 ? 6 : 2);
     }
-    // Not told (a test, a game that never tells): late windows take it up at once, one refresh a window.
+
+    // Not told: at every window to the needs, at once.
     PresentDepth untold;
-    const std::int64_t first = untold.depth(2 * vsync, vsync, 8 * vsync, vsync);
-    for (std::int64_t u = t; u < t + 3'500'000'000; u += vsync) {
-        untold.observe(u, u + 2 * vsync, u + 2 * vsync, 0, vsync, vsync / 2);
+    if (const auto d = run(untold, 1'500'000'000, 7 * vsync / 2, 2 * vsync); refreshes(d) != 4) fail("not told: to the needs at once", d, 4);
+    if (const unsigned steps = untold.take_steps_in_play(); steps != 0u) fail("not told: no step in play", steps * vsync, 0);
+}
+
+// The need is the same however late a present was shown (a refresh or two after the earliest it could have been: the
+// depth plant, --diagnostics pace-depth, asks one later): Android tells the margin against the earliest refresh, and from
+// the refresh that showed it the need would be the depth asked.
+void check_need_of() {
+    const std::int64_t vsync = std::llround(1e9 / 60.0);
+    const std::int64_t latch = vsync + 2'000'000;
+    const std::int64_t moment = 1'000'000'000;
+    const std::int64_t ready = moment + 12'000'000;
+    const std::int64_t wanted = ready + latch - moment;
+    const std::int64_t earliest = moment + 2 * vsync;  // the first refresh latched after `ready`
+    for (std::int64_t later = 0; later <= 2; ++later) {
+        const Told t = told(earliest + later * vsync, ready, latch, vsync);
+        const std::int64_t need = PresentSlots::need_of(t.earliest, t.margin, moment);
+        const std::int64_t by_shown = PresentSlots::need_of(earliest + later * vsync, t.margin, moment);
+        if (need != wanted || (later > 0 && by_shown == wanted)) {
+            std::printf("FAIL: the need of a present shown %lld refreshes late: %.2f ms (by the shown refresh %.2f), %.2f wanted\n",
+                        static_cast<long long>(later), need / 1e6, by_shown / 1e6, wanted / 1e6);
+            ++failures;
+        }
     }
-    const std::int64_t stepped = untold.depth(2 * vsync, vsync, 8 * vsync, vsync);
-    if (stepped != first + 3 * vsync) {
-        std::printf("FAIL: not told, 3 late windows: %lld -> %lld refreshes (one a window wanted)\n",
-                    static_cast<long long>(first / vsync), static_cast<long long>(stepped / vsync));
+}
+
+// G10.5's proof 1 on a simulated display that latches a picture a refresh and 2 ms before the refresh it shows (the
+// compositor latches at the vsync before), pictures a vsync apart each ready a set time after its moment, the presentation
+// times back three presents later, and two pictures due at one refresh: the newer shown (the queue drops the older).
+struct Stage {
+    explicit Stage(double hz) : vsync(std::llround(1e9 / hz)), latch(vsync + 2'000'000) {}
+    std::int64_t vsync, latch;
+    std::int64_t grid = 1'000'000'000;
+    std::int64_t moment = 1'000'000'000;
+    PresentSlots slots;
+    struct Pending {
+        std::int64_t requested, earliest, actual, need;
+    };
+    std::deque<Pending> feedback;
+    unsigned late = 0;
+    unsigned steps = 0;
+    unsigned quiet_late = 0;
+    std::int64_t deep_ns = 0;
+    // `covered`: 1 a closed wipe or a scene loading, 0 play, -1 a game that does not tell (lead_covered).
+    void play(std::int64_t ns, std::int64_t ready_ns, int covered) {
+        for (const std::int64_t end = moment + ns; moment < end; moment += vsync) {
+            slots.allow(covered != 0, covered == 1);
+            while (feedback.size() > kFeedbackLag) {
+                const Pending& p = feedback.front();
+                slots.observe(p.requested, p.earliest, p.actual, p.need, vsync, vsync / 2);
+                feedback.pop_front();
+            }
+            steps += slots.take_steps_in_play();
+            quiet_late += slots.take_quiet_late();
+            deep_ns += slots.take_deep_ns();
+            PresentClock clock;
+            clock.by_moment = true;
+            clock.moment = moment;
+            clock.grid = grid;
+            clock.vsync = vsync;
+            clock.step = vsync;
+            const std::int64_t slot = slots.place(clock);
+            const std::int64_t reference = slots.reference();
+            if (slots.take_skip()) moment += vsync;
+            const std::int64_t ready = clock.moment + ready_ns;
+            const std::int64_t earliest = grid + (ready + latch - grid + vsync - 1) / vsync * vsync;
+            const std::int64_t actual = std::max(earliest, slot);
+            if (actual > slot + vsync / 2) ++late;
+            const Told t = told(actual, ready, latch, vsync);
+            feedback.push_back({slot, t.earliest, actual, PresentSlots::need_of(t.earliest, t.margin, reference)});
+        }
+    }
+    [[nodiscard]] long long refreshes() const { return (slots.depth_used() + vsync / 2) / vsync; }
+};
+
+void check_ready_time_proofs() {
+    constexpr std::int64_t s = 1'000'000'000;
+    const auto fail = [](const char* what, long long got, long long wanted) {
+        std::printf("FAIL: G10.5 proof 1: %s: %lld, %lld wanted\n", what, got, wanted);
         ++failures;
+    };
+    // (a) A ready time of 12 ms at 60 Hz: two refreshes (12 + 18.67 + the 1 ms guard). A burst of 30 ms in play steps it
+    // up once to three; play holds three; the next moment it may move, 10 s after the burst ended, takes it back to two.
+    // The margin rule before G10.5 held three for good here: Android's margin is under a refresh (its loader takes whole
+    // refreshes off it), never the refresh and 2 ms the rule stepped down at.
+    {
+        Stage st(60.0);
+        st.play(3 * s, 12'000'000, 1);  // the boot's load
+        if (st.refreshes() != 2) fail("(a) after the boot's load, refreshes", st.refreshes(), 2);
+        st.play(5 * s, 12'000'000, 0);
+        st.play(5 * s, 30'000'000, 0);
+        if (st.refreshes() != 3 || st.steps != 1u) fail("(a) the burst in play: refreshes (one step up)", st.refreshes() * 10 + st.steps, 31);
+        st.play(8 * s + s / 2, 12'000'000, 0);
+        if (st.refreshes() != 3) fail("(a) play after the burst holds, refreshes", st.refreshes(), 3);
+        st.play(s + s / 2, 12'000'000, 1);  // a scene change under a closed wipe
+        if (st.refreshes() != 2) fail("(a) the wipe 10 s after the burst: refreshes", st.refreshes(), 2);
+        const unsigned late = st.late;
+        st.play(5 * s, 12'000'000, 0);
+        if (st.late != late || st.steps != 1u) fail("(a) play after: late pictures", st.late - late, 0);
+        // A game that does not tell: the depth follows the needs and is back within 10 s too.
+        Stage untold(60.0);
+        untold.play(3 * s, 12'000'000, -1);
+        untold.play(5 * s, 30'000'000, -1);
+        if (untold.refreshes() != 3) fail("(a) not told, the burst: refreshes", untold.refreshes(), 3);
+        untold.play(10 * s, 12'000'000, -1);
+        if (untold.refreshes() != 2) fail("(a) not told, 10 s after the burst: refreshes", untold.refreshes(), 2);
+    }
+    // (b) A ready time of 20 ms at 60 Hz: three refreshes (20 + 18.67 + 1 = 39.67 ms), above two game steps: the fault
+    // state, held, every second of it counted (the [present-timing] line names it), no picture late.
+    {
+        Stage st(60.0);
+        st.play(3 * s, 20'000'000, 1);
+        const unsigned late = st.late;
+        st.play(10 * s, 20'000'000, 0);
+        if (st.refreshes() != 3) fail("(b) refreshes", st.refreshes(), 3);
+        if (st.deep_ns < 11 * s) fail("(b) seconds counted above two steps", st.deep_ns / s, 12);
+        if (st.late != late) fail("(b) late pictures at three refreshes", st.late - late, 0);
+    }
+    // (c) A mode change and a stage load do not deepen: late pictures in the 2 s after either neither step it up nor size
+    // the next moment's depth; they are counted. Past the 2 s late pictures step it up again.
+    {
+        Stage st(60.0);
+        st.play(3 * s, 12'000'000, 1);
+        st.play(3 * s, 12'000'000, 0);
+        for (const char* what : {"a mode change", "a stage load"}) {
+            st.slots.quiet(st.moment);
+            const unsigned counted = st.quiet_late;
+            st.play(s + s / 2, 30'000'000, 0);
+            st.play(3 * s, 12'000'000, 0);
+            if (st.refreshes() != 2 || st.steps != 0u || st.quiet_late == counted) {
+                std::printf("FAIL: G10.5 proof 1 (c): after %s: %lld refreshes, %u steps, %u late counted\n", what, st.refreshes(),
+                            st.steps, st.quiet_late - counted);
+                ++failures;
+            }
+        }
+        st.play(s + s / 2, 12'000'000, 1);
+        if (st.refreshes() != 2) fail("(c) the wipe after: refreshes", st.refreshes(), 2);
+        st.play(3 * s, 12'000'000, 0);
+        st.play(3 * s, 30'000'000, 0);
+        if (st.refreshes() != 3 || st.steps != 1u) fail("(c) a burst past the 2 s: refreshes (one step up)", st.refreshes() * 10 + st.steps, 31);
     }
 }
 
 int main() {
     check_swap_queues();
     check_windows_by_time();
-    check_held_moves();
+    check_moments();
+    check_need_of();
+    check_ready_time_proofs();
     // Refresh rates that are and are not multiples of 60, fractional ones, and pictures one and two vsyncs apart.
     const double rates[] = {59.94, 60.0, 72.0, 75.0, 90.0, 100.0, 119.88, 120.0, 143.98, 144.0, 165.0, 170.0, 180.0,
                             185.0, 200.0, 240.0, 360.0};

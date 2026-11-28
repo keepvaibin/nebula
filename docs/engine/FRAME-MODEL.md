@@ -1675,10 +1675,25 @@ at the picture's moment; every platform does the same or says on screen why not.
    - With answers, on the display's vblanks only (a clock of the pacer's own has no refresh to ask for), a slot is the
      refresh its picture is drawn for: its `t` is that refresh's, and the picture starts the display lead before it
      (`FrameSchedule::slot_due`). The lead follows the pictures shown by Android's rule, taken out of `PresentSlots` into
-     `PresentDepth` (present_slots.h) so both use the same code: two or more late in a second's window add the
-     refreshes missed, a calm stretch (5 s, doubling to 80 s after a step down that did not hold) whose pictures were
-     ready a refresh and 2 ms before their last moment takes a refresh off. Its least is the time from a present made
-     at once to the refresh that shows it (`display_time`), in whole refreshes; its first value a refresh more.
+     `PresentDepth` (present_slots.h) so both use the same code. Its least is the time from a present made at once to
+     the refresh that shows it (`display_time`), in whole refreshes; its first value a refresh more.
+     Replaced by G10.5 (11-27, brief AD: the depth is fixed in play): the margin rule (two late in a second add the
+     refreshes missed; a calm stretch of 5 s, doubling to 80 s, whose pictures were ready a refresh and 2 ms before their
+     last moment takes a refresh off) read the margin, which depends on the depth asked: on the tablet one burst held 60
+     Hz at three refreshes for good, and the depth plant (`--diagnostics pace-depth`) was taken back by the calm step.
+     Now each present tells its need, the depth it needed apart from the one it asked: on the PC the lead it was drawn
+     with less its margin (`DisplayModel`'s held refreshes and its work), on Android `earliestPresentTime` less
+     `presentMargin` less the picture's moment (`PresentSlots::need_of`: Android's loader counts the margin against the
+     earliest refresh). A second's window (by shown times) gives the need all its presents but one were within. The
+     target is the least whole refresh at or above the largest of the last 8 windows, the load in progress and the last
+     4 loads, plus 1 ms. The depth goes to it only while it may move (`lead_covered`, present_clock.h: a closed wipe or a
+     scene loading, the boot's title to galaxy load included, or a game that does not tell), at each window's end. In
+     play it holds, but for one step up after a window with two late pictures, once a stretch of play (counted, the
+     `[present-timing]` line's "steps in play"; the `[display-lead]` line says `covered=0`). The 2 s after a refresh-rate
+     change (Android's Choreographer callback, the PC's vblank period) or a stage load (`svc_game_stage`) count no late
+     picture and size nothing (`PresentDepth::quiet`). A need more than two game steps above the depth is a stall's and
+     sizes nothing. A depth above two game steps is the fault state, each second counted. Pause and camera cuts are not
+     yet moments: the game tells neither to the renderer (G2.7).
    - The references hold the lead (`display_delay_qpc`): it moves toward the lead by the step delay's bounds (2 % of a
      step a frame up, 1 % down), at once where none was held, so a sequence's first picture starts after its list came
      and the content keeps to the wall clock when the lead moves.

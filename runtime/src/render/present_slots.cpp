@@ -25,7 +25,7 @@ std::int64_t PresentDepth::depth(std::int64_t initial, std::int64_t least, std::
     const std::int64_t whole = depth_ns_ / unit;
     const std::int64_t depth = std::max(least, (whole + (depth_ns_ - whole * unit > unit / 32 ? 1 : 0)) * unit);
     depth_ns_ = depth;
-    least_ns_ = least;
+    unit_ = unit;
     return depth;
 }
 
@@ -48,6 +48,7 @@ std::int64_t PresentSlots::place(const PresentClock& clock) noexcept {
             skip_ = clock.moment + std::max<std::int64_t>(clock.step, unit) + depth < slot + unit;
         }
         depth_used_ = slot - clock.moment;
+        reference_ = clock.moment;
     } else {
         // The slot after the previous frame's (moved by a depth change), on the grid of the latest frame start; the
         // depth after that start when out of place: the first frame, after a stall, or frames ahead of it.
@@ -60,32 +61,45 @@ std::int64_t PresentSlots::place(const PresentClock& clock) noexcept {
             slot = clock.frame_start + (slot - clock.frame_start + step / 2) / step * step;
         }
         depth_used_ = depth;
+        reference_ = slot - depth;
     }
     last_slot_ = slot;
     // --diagnostics pace-depth: each picture asks one unit (a vsync; a present period for a game frame) later than the depth
     // gives, a queue held one refresh deeper, the planted fault the frame timeline's refreshes row must show (G10.2). The
-    // slots and the depth the clock keeps are the ones without it, so the rule is not moved by its own fault.
+    // slots, the depth the clock keeps and the reference are the ones without it, and the rule reads each present's need
+    // (PresentDepth::observe), which is the same at any depth asked: the rule is not moved by its own fault. (On G10.4m's
+    // tablet runs it did not deepen the queue: the margin rule before G10.5 read the planted unit as room to take off.)
     if (::galaxy::diagnosing(::galaxy::kDiagnosePaceDepth)) {
         return slot + unit;
     }
     return slot;
 }
 
-void PresentDepth::observe(std::int64_t requested, std::int64_t earliest, std::int64_t actual, std::int64_t margin,
+void PresentDepth::observe(std::int64_t requested, std::int64_t earliest, std::int64_t actual, std::int64_t need,
                            std::int64_t step, std::int64_t half_vsync) noexcept {
     step = std::max<std::int64_t>(step, 1);
     step_ns_ = step;
+    const bool quiet = quiet_at_ != 0 && actual >= quiet_at_ && actual - quiet_at_ < kQuietNs;
     if (actual > requested + half_vsync && earliest > requested + half_vsync) {
         const std::int64_t missed = earliest - requested;
         late_max_ = std::max(late_max_, missed);
-        if (missed <= 2 * kGameStepNs) {
+        if (quiet) {
+            ++quiet_late_;
+        } else if (missed <= 2 * kGameStepNs) {
             ++window_late_;
         }
-    } else if (actual <= requested + half_vsync) {
-        calm_margin_ = std::min(calm_margin_, margin);
+    }
+    if (!quiet && need > 0 && need - depth_ns_ <= 2 * kGameStepNs) {
+        if (need > need_top_) {
+            need_second_ = need_top_;
+            need_top_ = need;
+        } else if (need > need_second_) {
+            need_second_ = need;
+        }
+        ++window_needs_;
     }
     // Windows by the presents' shown times: a second of them at any rate. A gap of more than two windows (a stall, the
-    // app out of sight) counts as two: time with no presents is not calm.
+    // app out of sight) counts as two.
     if (window_start_ == 0 || actual < window_start_) {
         window_start_ = actual;
         return;
@@ -94,48 +108,66 @@ void PresentDepth::observe(std::int64_t requested, std::int64_t earliest, std::i
     if (window_ns < kWindowNs) {
         return;
     }
-    if (window_late_ >= 2u && (!late_counts_ || !raise_allowed_)) {
-        // Not calm, and no step up now: under a closed wipe the window is left out; in play one step waits for the next
-        // load (allow).
-        raise_pending_ = raise_pending_ || late_counts_;
-        calm_ns_ = 0;
-        calm_margin_ = INT64_MAX;
-    } else if (window_late_ >= 2u) {
-        step_up();
-    } else if (window_late_ == 0u) {
-        calm_ns_ += window_ns;
-        if (calm_ns_ >= calm_needed_ns_ && lower_allowed_) {
-            // What the margin leaves room for (2 ms kept), in whole periods, a game step at most (a period at the
-            // least): the same time at every rate, so a 360 Hz display settles as soon as a 60 Hz one.
-            const std::int64_t most = std::max(step, kGameStepNs / step * step);
-            const std::int64_t room = calm_margin_ == INT64_MAX ? 0 : (calm_margin_ - 2'000'000) / step * step;
-            const std::int64_t down = std::min({most, room, depth_ns_ - least_ns_});
-            if (down > 0) {
-                depth_ns_ -= down;
-                since_step_down_ns_ = 0;
-            }
-            calm_ns_ = 0;
-            calm_margin_ = INT64_MAX;
+    if (window_needs_ != 0u) {
+        const std::int64_t figure = window_needs_ >= 2u ? need_second_ : need_top_;
+        recent_[recent_next_] = figure;
+        recent_next_ = (recent_next_ + 1u) % recent_.size();
+        if (load_) {
+            load_now_ = std::max(load_now_, figure);
         }
-    } else {
-        calm_ns_ = 0;
-        calm_margin_ = INT64_MAX;
     }
-    if (since_step_down_ns_ >= 0) {
-        since_step_down_ns_ += window_ns;
+    if (move_) {
+        const std::int64_t wanted = target();
+        if (wanted > 0) {
+            depth_ns_ = wanted;
+        }
+        stepped_ = false;
+    } else if (window_late_ >= 2u && !stepped_) {
+        // In play: one step up to stop repeated misses, one reported event (brief AD); a later late window of the same
+        // stretch waits for the next moment the depth may move, whose target holds its needs.
+        depth_ns_ += unit_ > 0 ? unit_ : step;
+        stepped_ = true;
+        ++steps_in_play_;
+    }
+    if (depth_ns_ > 2 * kGameStepNs + step / 2) {
+        deep_ns_ += window_ns;
     }
     window_start_ = actual;
     window_late_ = 0u;
+    window_needs_ = 0u;
+    need_top_ = 0;
+    need_second_ = 0;
 }
 
-void PresentDepth::step_up() noexcept {
-    depth_ns_ += step_ns_;
-    if (since_step_down_ns_ >= 0 && since_step_down_ns_ < kStepDownHeldNs) {
-        calm_needed_ns_ = std::min(calm_needed_ns_ * 2, kCalmMostNs);
+std::int64_t PresentDepth::target() const noexcept {
+    std::int64_t worst = load_now_;
+    for (const std::int64_t figure : recent_) worst = std::max(worst, figure);
+    for (const std::int64_t figure : loads_) worst = std::max(worst, figure);
+    const std::int64_t unit = unit_ > 0 ? unit_ : step_ns_;
+    if (worst <= 0 || unit <= 0) {
+        return 0;
     }
-    since_step_down_ns_ = -1;
-    calm_ns_ = 0;
-    calm_margin_ = INT64_MAX;
+    return (worst + kGuardNs + unit - 1) / unit * unit;
+}
+
+void PresentDepth::lower(std::int64_t by) noexcept {
+    depth_ns_ -= by;
+    const auto down = [by](std::int64_t& figure) { figure = figure > by ? figure - by : 0; };
+    for (std::int64_t& figure : recent_) down(figure);
+    for (std::int64_t& figure : loads_) down(figure);
+    down(load_now_);
+}
+
+void PresentDepth::allow(bool move, bool load) noexcept {
+    if (load_ && !load && load_now_ > 0) {
+        loads_[loads_next_] = load_now_;
+        loads_next_ = (loads_next_ + 1u) % loads_.size();
+    }
+    if (load_ && !load) {
+        load_now_ = 0;
+    }
+    move_ = move;
+    load_ = load;
 }
 
 }  // namespace galaxy::render

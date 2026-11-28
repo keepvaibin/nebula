@@ -807,7 +807,9 @@ void test_display_model() {
             display.queue = 1u;
             FrameSchedule schedule(display, kFrequency);
             schedule.configure(generated, 0);
-            const Run r = run(schedule, 900, kFrequency, steady, walk, true, nullptr, kStep, &display, nullptr, &chain);
+            // 20 s: a game that does not tell its moments sizes the lead from the needs of the last 8 s (G10.5), so a
+            // first second's need above the least leaves it 9 s on; the last third is settled.
+            const Run r = run(schedule, 1200, kFrequency, steady, walk, true, nullptr, kStep, &display, nullptr, &chain);
             const std::size_t from = r.shown.size() * 2 / 3;
             const std::size_t off = on_slots(r, from);
             const Evenness e = evenness(r, from, display.period, &display);
@@ -902,7 +904,7 @@ void test_display_model() {
 // R-009's runaway: at the boot's load every present Vulkan reported for a second was shown 15 refreshes after its call,
 // that second's least became the display's hold, and the lead went to 15 and 16 refreshes and stayed 25 s. The model
 // leaves a stall's presents out (DisplayModel kStallHeld); the lead is never above the queue's depth and two refreshes;
-// in play it does not move; under a wipe it rises a refresh a second at most (brief AD).
+// in play it steps up once at most; under a wipe it rises a refresh a second at most (brief AD).
 void test_lead_bounds() {
     const std::vector<std::int64_t> steady{kFrequency / 500};
     const std::int64_t walk = kFrequency / 2000;
@@ -941,8 +943,9 @@ void test_lead_bounds() {
                       static_cast<long long>(top));
         check(r.lead_most > 0 && r.lead_most <= top * display.period, what);
     }
-    // In play, the compositor holding a refresh more: the lead stays; under a wipe it rises one refresh, no faster than
-    // a refresh a second, and stays at most the queue's depth and two.
+    // In play, the compositor holding a refresh more: the lead takes one step up at most, once (brief AD, G10.5: the
+    // step up to stop repeated misses); under a wipe it rises one refresh, no faster than a refresh a second, and stays
+    // at most the queue's depth and two.
     {
         SimDisplay display = display_at(240.0, true);
         display.queue = 1u;
@@ -961,13 +964,17 @@ void test_lead_bounds() {
         const std::int64_t before = schedule.display_lead();
         chain.held = 1;
         const Run play = phase(600);
-        const bool still = std::all_of(play.leads.begin(), play.leads.end(), [&](std::int64_t l) { return l == before; });
+        std::size_t changes = 0;
+        for (std::size_t i = 1; i < play.leads.size(); ++i) changes += play.leads[i] != play.leads[i - 1] ? 1u : 0u;
+        const bool still = changes <= 1u && std::all_of(play.leads.begin(), play.leads.end(), [&](std::int64_t l) {
+                               return l == before || l == before + display.period;
+                           });
         g_screen_covered.store(1, std::memory_order_relaxed);
         const Run half = phase(30);  // half a second under the wipe
         const Run wipe = phase(240);
         g_screen_covered.store(-1, std::memory_order_relaxed);
         std::snprintf(what, sizeof what,
-                      "in play the lead stays (%lld ticks, every picture %d), under the wipe it rises a refresh "
+                      "in play the lead steps up once at most (%lld ticks, every picture %d), under the wipe it rises a refresh "
                       "(half a second %.2f, after 4 s %.2f refreshes; at most 3)",
                       static_cast<long long>(before), still ? 1 : 0,
                       static_cast<double>(half.lead_most) / static_cast<double>(display.period),
@@ -1012,12 +1019,9 @@ void test_display_model_asked() {
             const Evenness e = evenness(r, from, display.period, &display);
             const std::int64_t lead = schedule.display_lead();
             const std::int64_t least = (held + 1) * display.period;
-            // A calm stretch steps the lead down while a picture is ready a refresh and 2 ms before its last moment: one
-            // refresh above the least does so where a refresh is 2.5 ms or more (the walk takes 0.5 ms).
-            const bool lead_ok = display.period >= kFrequency * 26 / 10'000 ? lead == least
-                                 : display.period <= kFrequency * 24 / 10'000
-                                     ? lead == least + display.period
-                                     : lead == least || lead == least + display.period;
+            // The lead is what the pictures needed (G10.5: the lead each was drawn with less its margin, apart from the
+            // lead asked), and here every picture reaches its slot at the least: the least at every rate.
+            const bool lead_ok = lead == least;
             const bool ok = off == 0u && e.early == 0u && e.frames_once && e.rising && e.on_grid && lead_ok &&
                             chain.model.held() == held;
             if (!ok && bad++ < 10u) {

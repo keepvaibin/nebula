@@ -183,9 +183,11 @@ void on_timeline(const AChoreographerFrameCallbackData* data, void* choreographe
 }
 
 // A mode switch (120 to 60 Hz) is a display change: the grid follows the new period and the variable-refresh answer is
-// asked again (G2.3.5 point 6).
+// asked again (G2.3.5 point 6), and the presents' depth leaves the switch's late pictures out (PresentDepth::quiet; qpc_now()
+// is CLOCK_MONOTONIC nanoseconds here).
 void on_refresh_rate(std::int64_t vsync_period_ns, void*) {
     if (g_display_period_ns.exchange(vsync_period_ns, std::memory_order_relaxed) != vsync_period_ns) {
+        galaxy::render::g_pacing_quiet_qpc.store(monotonic_ns(), std::memory_order_relaxed);
         galaxy::render::g_display_recheck.store(true, std::memory_order_release);
         galaxy::host::perf_hint_report_platform();  // what the platform offers, said again at the new rate (G10.3)
     }

@@ -1131,7 +1131,9 @@ private:
         std::array<std::int64_t, 64> requested_period{};
         std::array<std::int64_t, 64> requested{};  // each presentID's slot, by presentID % 64
         std::array<std::int64_t, 64> called{};     // when each was presented (CLOCK_MONOTONIC)
+        std::array<std::int64_t, 64> reference{};  // the moment each one's depth counts from (PresentSlots::reference)
         PresentSlots slots;
+        std::int64_t quiet_seen = 0;  // the latest g_pacing_quiet_qpc given to the depth
         galaxy::ClockInterval report{10'000};  // [present-timing] every ten seconds
         std::int64_t refresh_ns = 0;
         std::int64_t last_actual = 0;

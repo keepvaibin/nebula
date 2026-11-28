@@ -51,8 +51,8 @@ def with_new_row(verdict):
     """pace.judge as it is, and one more row of a name no one has listed."""
     real = pace.judge
 
-    def judge(run, history=None, base=None, base_name=""):
-        return real(run, history, base, base_name) + [(NEW_ROW, "a value", "a target", verdict)]
+    def judge(run, base=None, base_name=""):
+        return real(run, base, base_name) + [(NEW_ROW, "a value", "a target", verdict)]
     return judge
 
 

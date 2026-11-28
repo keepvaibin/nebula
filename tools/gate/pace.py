@@ -26,8 +26,9 @@
       game's [platform] lines (what the platform offers the pacing, G10.3); a device run missing one of PLATFORM_KINDS fails the
       row "what the platform offers".
   pace.py keep WORK --history FILE --commit SHA [--quarantine FILE]
-      Adds each run's figures of WORK/pace.json to FILE, the readings of main that the load row is judged against (the
-      gate keeps them after main moved). With --quarantine, the passes of the quarantined rows go to that counters file.
+      Adds each run's figures of WORK/pace.json to FILE, the readings of main (the gate keeps them after main moved): a
+      record of the loads and the play windows; since G10.5 they judge nothing. With --quarantine, the passes of the
+      quarantined rows go to that counters file.
 
 A row whose name tools/gate/quarantine-live.tsv does not list, and whose counters line has fewer than 5 passes, is quarantined
 (tools/gate/quarantine.py): it is shown with the verdict `quarantined: report only (n of 5 passes on main)` and refuses nothing,
@@ -42,18 +43,17 @@ value, its target and pass, FAIL, recorded, or not measured (and why). The bars 
     system's (pacing.h Summary::missed_system): reported beside, not refused.
   - bar 2, "jumps": no two pictures shown one after the other whose (display moment - content moment) differ by more than
     1 ms, except across a seam (a closed wipe, a new swap chain, another refresh period: pacing.h Picture::seam).
-  - the display lead in play (brief AD: a lead change in play is itself a jump; read from the game's `[display-lead] a->b refreshes`
-    lines after frame 0, those between the wipe closing and the scene ready being a load's): until G10.5 lands (LOADS "main") one
-    lead change in a run, up or down, is filed "lead moved" and refuses nothing (the line has no covered flag yet, so a step down
-    under a closed wipe cannot be told from one in play), two or more fail; from G10.5 on a step up is
-    filed only where its [pace] window shows LEAD_MISSES missed refreshes of the game's, every other change in play fails.
+  - the display lead in play (brief AD: a lead change in play is itself a jump; read from the game's `[display-lead] a->b refreshes
+    ... covered=0|1` lines after frame 0, G10.5): a change with covered=1 (a closed wipe or a scene loading) is a load's; in play
+    (covered=0) one step up is filed "lead moved" where its [pace] window shows LEAD_MISSES missed refreshes of the game's (the
+    one step up to stop repeated misses, one reported event), every other change in play fails. A line without the flag (a build
+    before G10.5) is a load's between the wipe closing and the scene ready, else play's.
   - "animation error" (within 1 ms of the run's median) is a report only since brief AD, and so is the in-between delay's p99
     in a run whose lead moved in play (two leads in one figure: the lead row judges). With the lead still the delay is judged
     against its bound as before.
-  - "loads": the game's missed refreshes and the jumps of the load windows. While LOADS is "main" (until G10.5 lands) the row is a report
-    ("recorded", with the figures) and refuses only a gross break: a count above LOAD_GROSS (2) times the most of the readings of its
-    renderer since G10.1 landed (--history, and LOAD_SEEN's, the first plays and refused landings the history does not keep; misses and
-    jumps separately; no reading of the renderer: recorded, refused nothing); with LOADS "none" (from G10.5 on) any miss or jump is refused.
+  - "loads": the game's missed refreshes and the jumps of the load windows: any miss or jump is refused (brief AD bar 1, the whole
+    run; G10.5's lead holds the worst ready time the scene transitions measure). --history is kept as main's record (keep) and
+    judges nothing.
 One row reads every window from the start, the boot's loads included: each shows at least nine tenths of the pictures its
 rate asks for (a lead held high or a stalled schedule shows fewer: R-009, 36 pictures in ten seconds hid before frame 0).
 Exit status: 0 when nothing failed and every run gave windows, 1 otherwise; 3 when the measurement lock stayed held, or
@@ -61,16 +61,17 @@ when a renderer was not played because the machine stayed busy and no run that w
 
 The gate's two checks (tools/gate/gate.py):
   pace/pc      every landing that builds the game: tests/pace/gate.json (the test match cut to about 30 s of play) on
-               Direct3D 12 and Vulkan, --again, the loads a report that refuses a gross break against the gate's pace-history.tsv; a FAIL row refuses.
+               Direct3D 12 and Vulkan, --again; a FAIL row refuses (the loads' too: any miss or jump).
   pace/tablet  an extra check by name (docs/plan/native/step-checks.tsv): tests/pace/tablet.json (rate-60, rate-120) on the
                tablet, under the tablet's lock and the measurement lock. Until tests/pace/tablet-base.json is stored (G10.2m,
                from frametimeline.py baseline), it records its rows and refuses nothing. With it stored, each row of the frame
                timeline's report (frametimeline.ROWS: the late, three-refresh and unnamed shares, the mean refreshes from a
                step to the screen, and the repeated, skipped and shifted pictures and jumps a minute that the present times
                show) is set against the bound of its rate, the median of the baseline's runs plus their range (the row "against
-               the stored baseline"). A row refuses only where BASELINE_REFUSES names it for the rate (G10.4m: at 120 Hz the mean
-               refreshes from a step to the screen); another row beyond its bound is said and refuses nothing, except that the
-               jumps a minute refuse a gross break, a figure above BASELINE_GROSS (twice the highest clean run on record), until G10.5. A baseline that cannot judge a run (another method, no frames) is still the tool's fault.
+               the stored baseline"). A row refuses only where BASELINE_REFUSES names it for the rate (G10.5: at both rates the mean
+               refreshes from a step to the screen, and the jumps a minute, held to BASELINE_HELD's 0, brief AD bar 2, whatever
+               the stored bound); another row beyond its bound is said and refuses nothing. A baseline that cannot judge a run
+               (another method, no frames) is still the tool's fault.
                G10.3 adds a second row, "what the platform offers": a device run whose log lacks a line of what the platform
                offers (PLATFORM_KINDS) is refused by it, which pace/tablet refuses by.
 """
@@ -97,26 +98,23 @@ FRAME_ZERO = re.compile(r"harness: frame 0 is game frame")
 # The Vulkan renderer's own report of its presents (renderer_vk.cpp report_present_timing): late split by whether the picture
 # reached the compositor after its time (available late) or was ready and shown later than asked (delayed late).
 PRESENT_TIMING = re.compile(r"\[present-timing\] (\d+) frames: .*? (\d+) late, .*?late\(available/delayed\)=(\d+)/(\d+)")
-# The display model's report of a change of its lead (runtime/src/render/frame_schedule.cpp begin_waiting): the lead in refreshes.
-LEAD = re.compile(r"\[display-lead\] (-?\d+)->(-?\d+) refreshes")
-# A load's lines: the wipe closes, the old scene is destroyed, the new one is ready. A lead change between them is a load's, not play's.
+# The display model's report of a change of its lead (runtime/src/render/frame_schedule.cpp begin_waiting): the lead in refreshes, and
+# (G10.5) whether the screen was covered: 1 while a closed wipe covers it or a scene loads, 0 in play.
+LEAD = re.compile(r"\[display-lead\] (-?\d+)->(-?\d+) refreshes(?: at qpc -?\d+)?(?: covered=([01]))?")
+# A load's lines: the wipe closes, the old scene is destroyed, the new one is ready. A lead change between them is a load's, not play's,
+# where the line has no covered flag (a build before G10.5).
 LOAD_OPENS = re.compile(r"held under the wipe|game: scene: \[(destroy|initialize) Scene")
 LOAD_ENDS = re.compile(r"game: scene: \[scene ready\]")
-# From G10.5 on a step up of the lead in play is allowed only where the window it fell in shows this many of the game's missed refreshes.
+# A step up of the lead in play is allowed only where the window it fell in shows this many of the game's missed refreshes.
 LEAD_MISSES = 2
+# The Vulkan renderer's report of its presents' depth (renderer_vk.cpp report_present_timing, G10.5): its steps up in play, the late
+# presents after a mode change or a stage load it left out, and the seconds at a depth above two game steps (a fault state).
+PRESENT_DEPTH = re.compile(r"\[present-timing\] .*?depth: steps in play (\d+), late after a mode change or stage load (\d+), "
+                           r"seconds above two steps ([0-9.]+)")
 # Display reports must cover this share of a run's pictures before its display measures are judged.
 COVERAGE = 0.99
 # Every window from the start shows at least this share of the pictures its rate asks for.
 SHOWN = 0.9
-# The load windows' rule: "main" (refused only above main's readings) until G10.5 lands; "none" (any miss or jump) from it on.
-LOADS = "main"
-# Until G10.5 lands (LOADS "main") the loads row is a report: it refuses only a gross break, a count above LOAD_GROSS times the most
-# of the readings of its renderer since G10.1 landed (M-013, the planner's order of 11-27: the scene-load stalls are R-009's, assigned
-# to G10.5, and a count that varied 6 to 27 on identical code is no baseline for a refusal by comparison). The readings are those of
-# --history (the deciding runs of the landings that moved main) and LOAD_SEEN, the most seen in first plays and landings that were
-# refused, which the history does not keep: renderer -> (missed, jumps). G10.5 removes LOAD_SEEN, LOAD_GROSS and the guard with LOADS "main".
-LOAD_GROSS = 2
-LOAD_SEEN = {"vulkan": (27, 46), "d3d12": (47, 172)}
 HISTORY_COLUMNS = ("time", "commit", "run", "load_missed", "load_jumps", "load_windows", "missed", "missed_system", "jumps")
 # A first run kept beside the one that decides (--again): WORK/first/<renderer>; digest leaves it out.
 FIRST = "first"
@@ -128,17 +126,15 @@ NOT_QUIET = 3
 # the baseline's runs plus their range) is a FAIL of this row only where BASELINE_REFUSES names it; any other is "recorded" with the rows
 # named (M-011 made the shares a report; G10.4m sets the rows that refuse, from the plant runs; brief AD: the bars refuse).
 BASELINE_ROW = "against the stored baseline"
-# Which rows of the baseline refuse, by the display's rate (G10.4m; frametimeline.ROWS: a row is its figure of the run's report). The
-# bound of a row is the median of the baseline's runs plus their range (max - min). A row refuses only where the planted 20 ms sleep
-# lay beyond its bound in every plant run and no clean run of the same build was beyond it (decisions G10.4m): at 120 Hz the mean
-# refreshes from a step to the screen (bar 1's depth); at 60 Hz none, because the clean runs spread wider than the sleep's effect there
-# (a hiccup of one run is as large). The other rows are a report: a figure beyond its bound said, nothing refused.
-# The jumps a minute are a report until G10.5 (the planner's order of 11-27 after the first landing of G10.4m: the clean tablet at 120 Hz
-# makes 60 to 142 jumps a minute and a late share of 17 to 21%, the fault G10.5 to G10.9 exist to remove, not a bound to tune around);
-# they refuse only a gross break, BASELINE_GROSS: a figure above twice the highest clean run on record at the rate (120 Hz: 2 x 142
-# = 284 a minute; 60 Hz: 2 x 28 = 56). G10.5 removes BASELINE_GROSS and the jumps refuse again by their bound.
-BASELINE_REFUSES = {"120": ("refreshes_mean",), "60": ()}
-BASELINE_GROSS = {"120": {"jumps_per_minute": 284.0}, "60": {"jumps_per_minute": 56.0}}
+# Which rows of the baseline refuse, by the display's rate (frametimeline.ROWS: a row is its figure of the run's report). The bound of
+# a row is the median of the baseline's runs plus their range (max - min), or BASELINE_HELD's. G10.4m made the mean refreshes from a
+# step to the screen refuse at 120 Hz (the planted 20 ms sleep beyond its bound in every plant run, no clean run beyond it). G10.5:
+# the lead held still in play takes the noise out of the clean runs, so at both rates the mean refreshes refuse (the depth plant,
+# --diagnostics pace-depth, asks every picture a refresh later) and the jumps a minute refuse any jump (brief AD bar 2: target 0;
+# the sleep makes jumps at both rates). The other rows are a report: a figure beyond its bound said, nothing refused.
+BASELINE_REFUSES = {"120": ("refreshes_mean", "jumps_per_minute"), "60": ("refreshes_mean", "jumps_per_minute")}
+# Rows held to a bound of their own, whatever the stored baseline's runs spread over: the jumps a minute at 0 (brief AD bar 2).
+BASELINE_HELD = {"jumps_per_minute": 0.0}
 SCREEN_ROW = "what the screen showed"
 # What the platform offers the pacing (G10.3): the game's `[platform] <kind>: <value>` lines (perf_hint.cpp, display_clock.cpp,
 # host_window_sdl.cpp, renderer_vk.cpp), printed in each run's header. A device run must hold one line of each PLATFORM_KINDS with a
@@ -170,8 +166,9 @@ def windows_of(log_text, from_start=False):
 
 
 def leads_of(log_text):
-    """The lead changes the game told after the harness's frame 0, each {before, after (refreshes), load (between the wipe closing and
-    the scene ready), misses (the game's missed refreshes in the [pace] window the line fell in, None with no window after it)}."""
+    """The lead changes the game told after the harness's frame 0, each {before, after (refreshes), load (the line's covered=1; on a line
+    without the flag, between the wipe closing and the scene ready), misses (the game's missed refreshes in the [pace] window the line
+    fell in, None with no window after it)}."""
     after, loading, out, waiting = False, False, [], []
     for line in log_text.splitlines():
         if FRAME_ZERO.search(line):
@@ -185,7 +182,8 @@ def leads_of(log_text):
             loading = False
         m = LEAD.search(line)
         if m:
-            lead = {"before": int(m.group(1)), "after": int(m.group(2)), "load": loading, "misses": None}
+            load = loading if m.group(3) is None else m.group(3) == "1"
+            lead = {"before": int(m.group(1)), "after": int(m.group(2)), "load": load, "misses": None}
             out.append(lead)
             waiting.append(lead)
             continue
@@ -200,26 +198,19 @@ def leads_of(log_text):
 
 def lead_row(leads):
     """The row of the display lead in play (brief AD: a lead change in play is itself a visible jump; one step up to stop repeated
-    misses counts as one event and is reported). Until G10.5 lands (LOADS "main") ONE lead change in play per run, up or down, is
-    filed "lead moved" and refused nothing; two or more fail. This is a stopgap: the game's [display-lead] line has no covered
-    flag yet (the lead may step down under a closed loading wipe), and G10.5 adds it and removes this rule. From G10.5 on (LOADS "none") a step up is filed only where its
-    window shows LEAD_MISSES of the game's missed refreshes, and every other change in play fails. Changes inside a load are counted
-    beside and judged by the loads row's own rule."""
+    misses counts as one event and is reported): a step up is filed "lead moved" only where its window shows LEAD_MISSES of the
+    game's missed refreshes, and every other change in play fails. Changes inside a load (covered=1) are counted beside and judged
+    by the loads row's own rule."""
     play = [l for l in leads if not l["load"]]
     at_load = len(leads) - len(play)
-    target = ("no change in play; one change reported" if LOADS == "main"
-              else "no change in play; one step up after %d misses reported" % LEAD_MISSES)
+    target = "no change in play; one step up after %d misses reported" % LEAD_MISSES
     if not play:
         return ("display lead in play", "no change%s" % (", %d at loads" % at_load if at_load else ""), target, "pass")
     ups = [l for l in play if l["after"] > l["before"]]
     downs = [l for l in play if l["after"] < l["before"]]
     text = ", ".join("%d->%d refreshes" % (l["before"], l["after"]) for l in play)
     value = "%s in play%s" % (text, ", %d at loads" % at_load if at_load else "")
-    if LOADS == "main":
-        # Stopgap, ends with G10.5 (the covered flag on the [display-lead] line): one change in a run, either way, is a report.
-        ok = len(play) == 1
-    else:
-        ok = not downs and len(ups) == 1 and ups[0]["misses"] is not None and ups[0]["misses"] >= LEAD_MISSES
+    ok = not downs and len(ups) == 1 and ups[0]["misses"] is not None and ups[0]["misses"] >= LEAD_MISSES
     return ("display lead in play", value, target, "lead moved" if ok else "FAIL")
 
 
@@ -301,40 +292,43 @@ def load_figures(windows):
     return missed, jumps
 
 
-def load_row(run, history):
-    """The loads row: the load windows' game misses and jumps; with LOADS "main" a report that refuses a gross break (LOAD_GROSS)."""
+def load_row(run):
+    """The loads row: the load windows' (the boot's, before frame 0) game misses and jumps; any of either fails (brief AD bar 1:
+    the whole run, loads included). Lines that carry no jumps fail too: the row cannot see what it must refuse."""
     loads = run.get("load_windows", [])
     if not loads:
         return None
     missed, jumps = load_figures(loads)
     value = "%d missed, %s jumps in %d windows" % (missed, "?" if jumps is None else "%d" % jumps, len(loads))
-    if LOADS == "none":
-        ok = missed == 0 and jumps == 0
-        return ("loads", value, "no missed refresh, no jump", "pass" if ok else "FAIL")
-    most_missed, most_jumps = load_most(history, run["renderer"])
-    if most_missed is None:
-        return ("loads", value, "no readings of main yet: recorded", "recorded")
-    limit_missed = LOAD_GROSS * most_missed
-    limit_jumps = None if most_jumps is None else LOAD_GROSS * most_jumps
-    ok = missed <= limit_missed and (jumps is None or limit_jumps is None or jumps <= limit_jumps)
-    target = "a report until G10.5; refused above %d missed" % limit_missed
-    if limit_jumps is not None:
-        target += ", %d jumps" % limit_jumps
-    target += " (%d times the most of the readings since G10.1)" % LOAD_GROSS
-    return ("loads", value, target, "recorded" if ok else "FAIL")
+    ok = missed == 0 and jumps == 0
+    return ("loads", value, "no missed refresh, no jump", "pass" if ok else "FAIL")
 
 
-def load_most(history, renderer):
-    """The most missed refreshes and the most jumps of the load windows seen on a renderer since G10.1 landed: the readings of every
-    run of that renderer in HISTORY and LOAD_SEEN's; (None, None) where there is none."""
-    seen = LOAD_SEEN.get(renderer)
-    missed = [seen[0]] if seen else []
-    jumps = [seen[1]] if seen else []
-    for key, readings in history.items():
-        if key.rsplit("/", 1)[-1] == renderer:
-            missed += [r["load_missed"] for r in readings]
-            jumps += [r["load_jumps"] for r in readings]
-    return (max(missed) if missed else None, max(jumps) if jumps else None)
+def depth_of(log_text):
+    """The Vulkan renderer's depth report (PRESENT_DEPTH) summed over the [present-timing] windows after frame 0: (steps up in play,
+    late presents left out after a mode change or a stage load, seconds above two game steps); None where no line carries it."""
+    after, sums = False, None
+    for line in log_text.splitlines():
+        if FRAME_ZERO.search(line):
+            after = True
+            continue
+        m = PRESENT_DEPTH.search(line)
+        if not m or not after:
+            continue
+        values = (int(m.group(1)), int(m.group(2)), float(m.group(3)))
+        sums = values if sums is None else tuple(a + b for a, b in zip(sums, values))
+    return sums
+
+
+def depth_row(depth):
+    """The depth row of a device run (G10.5): the renderer's own count of its steps up in play, the lates it left out after a mode
+    change or a stage load, and the seconds deeper than two game steps (the fault state brief AD names). Recorded: the lead row and
+    the screen's rows judge what a player sees."""
+    if depth is None:
+        return ("present depth", "-", "the renderer's steps, left-out lates and seconds above two steps",
+                "not measured: the [present-timing] lines carry no depth")
+    return ("present depth", "%d steps up in play, %d lates left out after a mode change or stage load, %.1f s above two steps" % depth,
+            "reported (one step up in play is one event)", "recorded")
 
 
 def present_timing_of(log_text):
@@ -432,13 +426,12 @@ def frametimeline_rows(run, base=None, base_name=""):
             share_text(report["gpu_composition"], report["gpu_frames"]),
             "-" if report["latched_unsignaled"] is None else "%d" % report["latched_unsignaled"]), "recorded", "recorded"))
     if base is not None:
-        verdict, text = frametimeline.judge(report, base)
-        target = "no row beyond its bound (the median of the runs in %s plus their range)" % base_name
+        verdict, text = frametimeline.judge(report, base, BASELINE_HELD)
+        target = "no row beyond its bound (the median of the runs in %s plus their range; jumps a minute 0)" % base_name
         if verdict == "FAIL":
-            beyond = frametimeline.rows_beyond(report, base)
+            beyond = frametimeline.rows_beyond(report, base, BASELINE_HELD)
             rate = frametimeline.rate_of(report)
             refusing = [row for row, _figure, _bound in beyond if row in BASELINE_REFUSES.get(rate, ())]
-            refusing += [row for row, figure, _bound in beyond if row not in refusing and figure > BASELINE_GROSS.get(rate, {}).get(row, float("inf"))]
             if refusing:
                 text += "; beyond the bound and refusing: " + ", ".join(refusing)
             else:
@@ -449,7 +442,7 @@ def frametimeline_rows(run, base=None, base_name=""):
     return rows
 
 
-def judge(run, history=None, base=None, base_name=""):
+def judge(run, base=None, base_name=""):
     """The rows for one run: (measure, value, target, verdict)."""
     c, test, on_device = run["figures"], run["test"], run["device"]
     rows = []
@@ -514,7 +507,7 @@ def judge(run, history=None, base=None, base_name=""):
     shown = shown_from_start(run.get("all_windows", []), test)
     if shown is not None:
         rows.append(shown)
-    loads = load_row(run, history or {})
+    loads = load_row(run)
     if loads is not None:
         rows.append(loads)
     if c["generated"] > 0:
@@ -523,6 +516,7 @@ def judge(run, history=None, base=None, base_name=""):
             "does not grow with the objects drawn", "compared across stages"))
     if on_device:
         rows.append(platform_row(run.get("platform", []), refresh))
+        rows.append(depth_row(run.get("depth")))
         rows += frametimeline_rows(run, base, base_name)
     return rows
 
@@ -559,7 +553,7 @@ def reading_of(method="auto", start="step", processor="", baseline="", counters=
             "quarantine": quarantine.Quarantine(counters, live_rows)}
 
 
-def read_runs(work, history=None, reading=None):
+def read_runs(work, reading=None):
     """Every run under WORK (not WORK/first), each with its figures and rows; a device run's capture is read to its
     frametimeline.json (`reading`, reading_of's)."""
     reading = reading or reading_of()
@@ -585,7 +579,8 @@ def read_runs(work, history=None, reading=None):
             run["frametimeline"] = frametimeline.read(folder, reading["method"], reading["start"], reading["processor"],
                                                       figures.get("refresh_ms") or None)
             run["present_timing"] = present_timing_of(text)
-        run["rows"] = judge(run, history, reading["base"], reading["base_name"])
+            run["depth"] = depth_of(text)
+        run["rows"] = judge(run, reading["base"], reading["base_name"])
         run["rows"], run["quarantine"] = quarantine.apply_rows(run["rows"], reading["quarantine"])
         runs.append(run)
     return runs
@@ -596,8 +591,11 @@ def failed_rows(run):
 
 
 def digest(work, history_path=None, reading=None):
+    """The rows of every run under WORK printed and written to WORK/pace.json; 1 when a row failed or no run was read. HISTORY_PATH
+    (main's readings, pace.py keep) judges nothing since G10.5 (the loads refuse any miss or jump); it is taken for the callers."""
+    del history_path
     work = pathlib.Path(work)
-    runs = read_runs(work, read_history(history_path), reading)
+    runs = read_runs(work, reading)
     failed = not runs
     for run in runs:
         settings = run["test"].get("settings", run["test"].get("test", {}).get("settings", []))
@@ -612,7 +610,7 @@ def digest(work, history_path=None, reading=None):
                 print("    quarantined row %s would have failed and refuses nothing" % measure)
     first = work / FIRST
     if first.is_dir():
-        for run in read_runs(first, read_history(history_path), reading):
+        for run in read_runs(first, reading):
             bad = failed_rows(run)
             if bad:
                 print("played again: the first run %s failed: %s" % (run["run"], "; ".join("%s %s" % (r[0], r[1]) for r in bad)))
@@ -755,7 +753,6 @@ def run(args):
                          getattr(args, "baseline", ""), getattr(args, "quarantine", ""), getattr(args, "live_row", ()))  # a baseline that cannot be read stops pace.py before the lock
     take_lock(args.lock, "pace.py %s" % work, args.lock_wait)
     codes, busy = {}, {}
-    history = read_history(args.history)
 
     def play_quiet(renderer, again=False):
         # With --quiet-minutes a PC run first waits for a quiet machine (tools/measure/quiet.py: no compiler, build tool or other copy
@@ -773,7 +770,7 @@ def run(args):
         renderers = ["vulkan"] if args.device else args.renderers.split(",")
         for renderer in renderers:
             codes[renderer] = play_quiet(renderer)
-            if args.again and codes[renderer] is not None and any(failed_rows(r) for r in read_runs(work / renderer, history, reading)):
+            if args.again and codes[renderer] is not None and any(failed_rows(r) for r in read_runs(work / renderer, reading)):
                 (work / FIRST).mkdir(exist_ok=True)
                 shutil.rmtree(work / FIRST / renderer, ignore_errors=True)
                 shutil.move(str(work / renderer), str(work / FIRST / renderer))
@@ -785,7 +782,7 @@ def run(args):
     code = digest(work, args.history, reading)
     for renderer, why in busy.items():
         print("%s: not played, the machine was not quiet: %s" % (renderer, why))
-    if busy and not any(failed_rows(r) for r in read_runs(work, history, reading)):
+    if busy and not any(failed_rows(r) for r in read_runs(work, reading)):
         return NOT_QUIET
     return code
 
@@ -818,7 +815,7 @@ def parser():
                         "is not played (pace-run.json says what kept it busy). Not given: no wait, every run plays")
     r.add_argument("--paks", default=os.environ.get("LUMA_TEST_PAKS", ""))
     r.add_argument("--diagnostics", default="", help="the game's --diagnostics for every run (pace-fault: the planted stutter)")
-    r.add_argument("--history", default="", help="main's readings the load row is judged against (pace.py keep writes them)")
+    r.add_argument("--history", default="", help="main's readings (pace.py keep writes them); judges nothing since G10.5")
     r.add_argument("--quarantine", default="", help="the counters file of the new rows (quarantine.py)")
     r.add_argument("--live-row", action="append", default=[], help="a row that is live in this run whatever its count (a plant run's)")
     r.add_argument("--again", action="store_true", help="a renderer with a FAIL row is played once more; the second decides")

@@ -2292,6 +2292,10 @@ void svc_game_stage(void*, const char* name) {
         // Another stage is loaded (the name comes with each 3D scene, so only a change is one): its first cycles are not
         // the hint session's measure of the work (Android, API 36).
         galaxy::host::perf_hint_workload_spike("stage load");
+#if defined(NEBULA_HOST_RENDERER)
+        // Nor are its first late pictures the pace the presents' depth is sized by (PresentDepth::quiet).
+        galaxy::render::g_pacing_quiet_qpc.store(galaxy::qpc_now(), std::memory_order_relaxed);
+#endif
     }
 }
 
@@ -3141,6 +3145,10 @@ void svc_game_context(void*, uint32_t what, int32_t value) {
 #if defined(NEBULA_HOST_RENDERER)
         galaxy::calibration_scene::note_play(value != 0);
         galaxy::bench::note_play(value != 0);
+#endif
+    } else if (what == NEBULA_CONTEXT_SCENE_LOADING) {
+#if defined(NEBULA_HOST_RENDERER)
+        galaxy::render::g_scene_loading.store(value != 0 ? 1 : 0, std::memory_order_relaxed);
 #endif
     }
 }

@@ -11,6 +11,8 @@
 // frame's on the game's frame grid (host_window::present_grid), a pipeline depth after the latest frame start. A
 // picture not ready by its slot is shown at the next vsync; the slots after it keep their places.
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 
 namespace galaxy::render {
@@ -57,69 +59,93 @@ struct PresentClock {
 // frame latency object's maximum) in refreshes above the least. A picture started earlier waits for the queue on the
 // render thread past the next picture's start, and nothing holds a picture to its refresh: a lateness is the picture's
 // own (FrameSchedule::display_lead_for).
+//
+// The rule (G10.5, brief AD: the depth is fixed in play and changes only where no motion is on screen to follow). Each
+// present tells the depth it needed: from its moment to the latest time the compositor would still have shown it at its
+// refresh (when it was ready, the compositor's latch and the display's hold), the same whatever depth it asked with, so
+// it says what a lower depth would have given (the margin a present had says only how far it was from the depth it
+// asked). A window's figure is the need all its presents but one were within (the second largest: a depth under it
+// would have left two late, which raises it). The depth the ready times ask for (target) is the least whole unit at or
+// above the largest figure of the last 8 windows (8 s: a burst in play leaves it 8 s after it ended, so a moment the depth
+// may move after that takes it back to what the ready times ask) and of the last four loads, with a 1 ms guard: the
+// worst ready time the scene transitions measure sizes it (brief AD; G3.7's load worker shrinks it by the same rule). It
+// moves to that target
+// only while moving is allowed (allow: a closed wipe, a scene loading, a game that does not tell), at each window's end,
+// down as well as up. In play it holds, but for one step up of a unit after a window with two or more presents not
+// ready by their slot, one reported event (steps_in_play); later late windows of the same stretch of play wait for the
+// next moment it may move, whose target holds their needs. A depth above two game steps (three refreshes at 60 Hz) is a
+// fault state, each second there counted (take_deep_ns), and its way back is the next moment it may move.
 class PresentDepth {
 public:
+    // The guard above the ready times (the card's "plus a 1 ms guard").
+    static constexpr std::int64_t kGuardNs = 1'000'000;
+    // How long after a mode change or a stage load (quiet) late presents count for nothing.
+    static constexpr std::int64_t kQuietNs = 2'000'000'000;
+
     // The depth in whole `unit`s, at least `least` and at most `most` (both rounded up to whole units): `initial` at the
     // first call, then what observe() left.
     [[nodiscard]] std::int64_t depth(std::int64_t initial, std::int64_t least, std::int64_t most,
                                      std::int64_t unit) noexcept;
     // A past presentation of a timed present: the slot it asked for, the earliest it could have been shown
-    // (earliestPresentTime), when it was (actualPresentTime), how long before the compositor latched it it was ready
-    // (presentMargin), and its present period. Sets the depth by windows of a second of presents (by their shown times,
-    // so the same at every rate): a window with two or more not ready by their slot (shown later than asked, by less
-    // than two frame periods: a longer wait is a stall, not the device's pace) adds one present period (allow). A calm stretch (5 s, doubling up to 80 s after a step down that did not hold 10 s) whose presents
-    // were all ready a period and 2 ms before the compositor latched them takes a period off, down to the least (in
-    // whole units) at the least.
-    void observe(std::int64_t requested, std::int64_t earliest, std::int64_t actual, std::int64_t margin,
+    // (earliestPresentTime), when it was (actualPresentTime), the depth it needed (above), and its present period. A
+    // present not ready by its slot (shown later than asked and not earlier possible, by less than two game steps: a
+    // longer wait is a stall, not the device's pace) is late; a need more than two game steps above the depth is a
+    // stall's and sizes nothing. Windows of a second of presents by their shown times, so the same at every rate.
+    void observe(std::int64_t requested, std::int64_t earliest, std::int64_t actual, std::int64_t need,
                  std::int64_t step, std::int64_t half_vsync) noexcept;
-    // The depth lower by `by` (the next depth() keeps it at its least at the least): a least that fell takes the depth
-    // above it down with it.
-    void lower(std::int64_t by) noexcept { depth_ns_ -= by; }
-    // Whether a calm stretch may take the depth down now (`lower`), and the depth may rise now (`raise`); whether late
-    // presents count (`late_counts`). All three by default. A stretch that has become calm while lowering is held keeps
-    // counting and takes the depth down at the first observe() allowed again. Late windows while rising is held keep one
-    // step up for the moment it is allowed again (in play: the next load, brief AD); with `late_counts` false they count
-    // for nothing (a load under a closed wipe: its hitches pass with it). The depth rises one unit at a time.
-    void allow(bool lower, bool raise, bool late_counts = true) noexcept {
-        lower_allowed_ = lower;
-        raise_allowed_ = raise;
-        late_counts_ = late_counts;
-        if (raise && raise_pending_ && step_ns_ > 0) {
-            raise_pending_ = false;
-            step_up();
-        }
-    }
-    // A step up waits for the next moment rising is allowed.
-    [[nodiscard]] bool raise_pending() const noexcept { return raise_pending_; }
+    // A mode change (a refresh-rate change) or a stage load at `at`: the presents shown in the kQuietNs after it neither
+    // count late for the step up nor size the target (they still count in quiet_late, and as misses where the renderer
+    // counts them).
+    void quiet(std::int64_t at) noexcept { quiet_at_ = at; }
+    // The depth lower by `by`, and every need it holds (the next depth() keeps it at its least at the least): a least
+    // that fell takes the depth above it down with it.
+    void lower(std::int64_t by) noexcept;
+    // Whether the depth may move to its target now (`move`), and whether a load is in progress (`load`: its windows' worst
+    // is kept as one of the last four loads when it ends). Both by default as a game that does not tell: moving, no load.
+    void allow(bool move, bool load) noexcept;
+    // The depth the ready times ask for (above); 0 before any present told its need.
+    [[nodiscard]] std::int64_t target() const noexcept;
+    // The steps up in play since the last call (each a reported event).
+    [[nodiscard]] unsigned take_steps_in_play() noexcept { return take(steps_in_play_); }
+    // The presents late within kQuietNs of a mode change or a stage load since the last call (named misses).
+    [[nodiscard]] unsigned take_quiet_late() noexcept { return take(quiet_late_); }
+    // The time spent at a depth above two game steps since the last call (a named miss each second).
+    [[nodiscard]] std::int64_t take_deep_ns() noexcept { return take(deep_ns_); }
     // The most a late present missed its slot by since the last call.
-    [[nodiscard]] std::int64_t take_late_max() noexcept {
-        const std::int64_t most = late_max_;
-        late_max_ = 0;
-        return most;
-    }
+    [[nodiscard]] std::int64_t take_late_max() noexcept { return take(late_max_); }
 
 private:
+    template <class T>
+    static T take(T& value) noexcept {
+        const T was = value;
+        value = T{};
+        return was;
+    }
+    static constexpr std::int64_t kWindowNs = 1'000'000'000;
+    static constexpr std::size_t kRecentWindows = 8;
+    static constexpr std::size_t kLoadsKept = 4;
     bool depth_set_ = false;       // depth_ns_ holds a depth (`initial` at the first call)
     std::int64_t depth_ns_ = 0;    // the depth wanted, in whole units (vsyncs or present periods)
-    std::int64_t least_ns_ = 0;    // the least, in whole units
-    static constexpr std::int64_t kWindowNs = 1'000'000'000;
-    static constexpr std::int64_t kCalmFirstNs = 5'000'000'000;
-    static constexpr std::int64_t kCalmMostNs = 80'000'000'000;
-    static constexpr std::int64_t kStepDownHeldNs = 10'000'000'000;
+    std::int64_t unit_ = 0;        // the unit of the latest depth()
+    std::int64_t step_ns_ = 0;     // the present period of the latest observe()
     std::int64_t window_start_ = 0;  // the first shown time of the window (0: none yet)
     unsigned window_late_ = 0;
-    std::int64_t calm_ns_ = 0;
-    std::int64_t calm_needed_ns_ = kCalmFirstNs;
-    std::int64_t since_step_down_ns_ = -1;  // -1: no step down since the last step up
-    std::int64_t calm_margin_ = INT64_MAX;
+    unsigned window_needs_ = 0;    // the needs the window holds, and its two largest
+    std::int64_t need_top_ = 0;
+    std::int64_t need_second_ = 0;
+    std::array<std::int64_t, kRecentWindows> recent_{};  // the last windows' figures (0: none)
+    std::size_t recent_next_ = 0;
+    std::int64_t load_now_ = 0;                          // the worst figure of the load in progress
+    std::array<std::int64_t, kLoadsKept> loads_{};       // the worst figure of each of the last loads
+    std::size_t loads_next_ = 0;
+    bool move_ = true;
+    bool load_ = false;
+    bool stepped_ = false;          // a step up in this stretch of play
+    std::int64_t quiet_at_ = 0;
+    unsigned steps_in_play_ = 0;
+    unsigned quiet_late_ = 0;
+    std::int64_t deep_ns_ = 0;
     std::int64_t late_max_ = 0;
-    bool lower_allowed_ = true;
-    bool raise_allowed_ = true;
-    bool late_counts_ = true;
-    bool raise_pending_ = false;
-    std::int64_t step_ns_ = 0;  // the unit of the latest observe()
-    // One unit up: a calm stretch starts again, and one that held under 10 s doubles the next one's length.
-    void step_up() noexcept;
 };
 
 class PresentSlots {
@@ -144,21 +170,42 @@ public:
         return skip;
     }
 
-    // A past presentation of a timed present (PresentDepth::observe): the depth, down to kLeastDepthNs at the least.
-    void observe(std::int64_t requested, std::int64_t earliest, std::int64_t actual, std::int64_t margin,
+    // A past presentation of a timed present (PresentDepth::observe): the depth, down to kLeastDepthNs at the least. The
+    // need of a present whose platform tells how early it was ready for its earliest refresh (presentMargin) is
+    // need_of(earliestPresentTime, margin, its reference()).
+    void observe(std::int64_t requested, std::int64_t earliest, std::int64_t actual, std::int64_t need,
                  std::int64_t step, std::int64_t half_vsync) noexcept {
-        depth_.observe(requested, earliest, actual, margin, step, half_vsync);
+        depth_.observe(requested, earliest, actual, need, step, half_vsync);
     }
+    // The depth a present needed: from its reference to the latest moment it could have been ready and still shown at
+    // `earliest`, the compositor's latch included. VK_GOOGLE_display_timing counts presentMargin against the earliest
+    // refresh it could have been shown at (Android's loader moves earliestPresentTime back a refresh at a time and takes
+    // the refresh off the margin each time), so the two together are the same however much later it was shown; with the
+    // shown refresh in place of the earliest a present on time with room would need the depth it asked.
+    [[nodiscard]] static constexpr std::int64_t need_of(std::int64_t earliest, std::int64_t margin,
+                                                        std::int64_t reference) noexcept {
+        return earliest - margin - reference;
+    }
+    // The depth's moments (PresentDepth::allow, quiet).
+    void allow(bool move, bool load) noexcept { depth_.allow(move, load); }
+    void quiet(std::int64_t at) noexcept { depth_.quiet(at); }
 
     // The time from the latest picture's moment (or frame start) to its slot.
     [[nodiscard]] std::int64_t depth_used() const noexcept { return depth_used_; }
-    // The most a late present missed its slot by since the last call.
+    // The moment the latest place() counted its depth from: the picture's moment, or for a game frame its slot less the
+    // depth (the pace-depth plant's later asking not included).
+    [[nodiscard]] std::int64_t reference() const noexcept { return reference_; }
+    // The depth's reports since the last call (PresentDepth).
     [[nodiscard]] std::int64_t take_late_max() noexcept { return depth_.take_late_max(); }
+    [[nodiscard]] unsigned take_steps_in_play() noexcept { return depth_.take_steps_in_play(); }
+    [[nodiscard]] unsigned take_quiet_late() noexcept { return depth_.take_quiet_late(); }
+    [[nodiscard]] std::int64_t take_deep_ns() noexcept { return depth_.take_deep_ns(); }
 
 private:
     PresentDepth depth_;  // two frame periods at the first present
     bool skip_ = false;
     std::int64_t depth_used_ = 0;  // see depth_used (0: no slot yet)
+    std::int64_t reference_ = 0;   // see reference
     std::int64_t last_slot_ = 0;
 };
 

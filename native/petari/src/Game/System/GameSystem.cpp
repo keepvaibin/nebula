@@ -359,6 +359,7 @@ void GameSystem::updateSceneController() {
     mObjHolder->updateAudioSystem();
 
     NebulaHost::gameContext(NEBULA_CONTEXT_SCREEN_COVERED, MR::isScreenCoveredByWipe() ? 1 : 0);
+    NebulaHost::gameContext(NEBULA_CONTEXT_SCENE_LOADING, mSceneController->isNerveNormal() ? 0 : 1);
 }
 
 void GameSystem::calcAnim() {

@@ -39,7 +39,7 @@ starts the game for a test goes through here.
          section 10.2; the candidate becomes the base after a move that judged it), measure/step/tablet the single measure (its trusted
          lines are kept in the history after the move); the nightly run measures too. A landing that builds the game judges its pacing:
          pace/pc (tools/gate/pace.py, G10.1) plays the match cut to 30 s on Direct3D 12 and Vulkan after the PC's lanes and before
-         measure/step/pc; its load figures are kept in pace-history.tsv after the move, the readings the next landings are judged against.
+         measure/step/pc; its load figures are kept in pace-history.tsv after the move, main's record (since G10.5 a load's miss or jump fails).
          --pace-fault plays it (and pace/tablet) with the planted stutter: it must fail.
 --long   level 3, on main's newest commit, under the long lock, at below-normal priority: the tablet's 102 stops
          against the PC's, a sanitizer build's tour, the soak, every disc on every renderer. Its parts are pieces of at most seven
@@ -1884,10 +1884,10 @@ def measure_pc(g):
 # stores tests/pace/tablet-base.json, then refused only by the row against it (pace.BASELINE_ROW) and by the row of what the
 # platform offers (pace.PLATFORM_ROW, G10.3: a line of the game's report of the platform missing).
 # `--pace-fault` plays both with the planted stutter (--diagnostics pace-fault): the checks must then fail, their own proof.
-# The row against the stored baseline refuses by rate and row (pace.BASELINE_REFUSES, G10.4m: at 120 Hz the rows the planted 20 ms sleep lay
-# beyond the bound of in every plant run, at 60 Hz none; the others are a report, M-011): with a stored file pace/tablet refuses what
-# pace_tablet_reading names below (a baseline that cannot judge a run is the tool's), and `--pace-fault` is refused by pace/pc, and by
-# pace/tablet at 120 Hz (the mean refreshes from a step to the screen; the jumps the present times show only as a gross break, above 284 a minute), not at 60 Hz.
+# The row against the stored baseline refuses by rate and row (pace.BASELINE_REFUSES, G10.5: at 120 and 60 Hz the mean refreshes from a
+# step to the screen and the jumps a minute, held to 0 by pace.BASELINE_HELD; the others are a report, M-011): with a stored file
+# pace/tablet refuses what pace_tablet_reading names below (a baseline that cannot judge a run is the tool's), and `--pace-fault` is
+# refused by pace/pc and by pace/tablet at both rates.
 # A row or a check that is new is report only until it has passed on main 5 times (tools/gate/quarantine.py, `--live-row`, section 18 of
 # docs/plan/04-GATE-AND-MAIN.md): the two pace checks hand pace.py the counters file and the rows a plant run makes live, and after a move
 # keep_pace and keep_quarantine write the passes.

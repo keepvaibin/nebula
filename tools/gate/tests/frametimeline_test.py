@@ -47,7 +47,6 @@ sys.stdout.write((trace.parent / name).read_text(encoding="utf-8"))
 
 failures = []
 results = []
-GROSS_SHIPPED = dict(getattr(pace, "BASELINE_GROSS", {}))
 REFUSES_SHIPPED = dict(getattr(pace, "BASELINE_REFUSES", {}))  # what pace.py ships with; the test sets it for its own blocks and puts it back
 
 
@@ -540,53 +539,52 @@ def main():
         check(any(m == "miss: Unknown" and v == "FAIL" for m, _x, _t, v in said) and any(m == pace.BASELINE_ROW and v == "FAIL" for m, _x, _t, v in said),
               "the unknown case: its Unknown row FAIL and the baseline row FAIL")
         pace.BASELINE_REFUSES = REFUSES_SHIPPED
-        # As shipped (G10.4m): at 120 Hz the mean refreshes and the jumps refuse, at 60 Hz no row does (the clean runs spread wider than
-        # the plant's effect there); a row beyond its bound at 60 Hz is said, as a report, and refuses nothing.
-        check(set(REFUSES_SHIPPED) == {"60", "120"} and all(row in ft.ROWS for rows in REFUSES_SHIPPED.values() for row in rows)
-              and REFUSES_SHIPPED["60"] == () and REFUSES_SHIPPED["120"] == ("refreshes_mean",)
-              and pace.BASELINE_GROSS == {"120": {"jumps_per_minute": 284.0}, "60": {"jumps_per_minute": 56.0}},
+        # As shipped (G10.5): at both rates the mean refreshes and the jumps a minute refuse, the jumps held to 0 (pace.BASELINE_HELD,
+        # brief AD bar 2) whatever the stored bound; G10.4m's gross break (BASELINE_GROSS) is gone. A row beyond its bound that is not
+        # shipped is said, as a report, and refuses nothing.
+        check(REFUSES_SHIPPED == {"60": ("refreshes_mean", "jumps_per_minute"), "120": ("refreshes_mean", "jumps_per_minute")}
+              and all(row in ft.ROWS for rows in REFUSES_SHIPPED.values() for row in rows)
+              and pace.BASELINE_HELD == {"jumps_per_minute": 0.0} and not hasattr(pace, "BASELINE_GROSS"),
               "the shipped rows are rows of the baseline, by rate: %s" % (REFUSES_SHIPPED,))
-        pace.BASELINE_GROSS = {}  # these 12-frame cases make thousands of jumps a minute: the gross guard has its own cases below
-        for name, case, says in (("same", "right", ""), ("late", "sleep", "a report: late_share"), ("mode change", "mode", "a report: late_share"),
-                                 ("deep", "depth", "a report: three_refresh_share"), ("unnamed", "unknown", "a report: late_share")):
+        both = ["refreshes_mean", "jumps_per_minute"]
+        for name, case, expect in (("same", "right", []), ("late", "sleep", ["jumps_per_minute"]), ("mode change", "mode", both),
+                                   ("deep", "depth", ["refreshes_mean"]), ("unnamed", "unknown", both)):
             work = device_work("report-" + name, case)
             code = pace.digest(work, None, reading)
             passed, detail, _t, kind = gate.pace_tablet_reading(work, code, stored=True)
+            read = json.loads((work / "runs/pace/pace-rate-60/vulkan" / ft.REPORT).read_text(encoding="utf-8"))
+            values = ft.row_values(read)
             row = {m: (v, verdict) for m, v, _x, verdict in json.loads((work / "pace.json").read_text(encoding="utf-8"))[0]["rows"]}[pace.BASELINE_ROW]
-            check(passed and says in row[0] and row[1] == ("pass" if name == "same" else "recorded"),
-                  "pace/tablet with a stored baseline, as shipped (60 Hz: a report), %s: %s (%s, %s; row %s)" % (name, "pass" if passed else "refused", kind, detail, row))
+            refusing = [r for r, _f, _b in ft.rows_beyond(read, json.loads(stored.read_text(encoding="utf-8")), pace.BASELINE_HELD)
+                        if r in REFUSES_SHIPPED["60"]]
+            want = not expect
+            check(refusing == expect and passed == want and (row[1] == "FAIL") == bool(refusing) and all(r in row[0] for r in refusing)
+                  and (refusing or name == "same" or "a report: " in row[0]),
+                  "pace/tablet with a stored baseline, as shipped at 60 Hz, %s (mean %.2f, jumps %s a minute): %s (%s, %s; row %s)" % (
+                      name, values.get("refreshes_mean") or 0.0, values.get("jumps_per_minute"), "pass" if passed else "refused", kind,
+                      detail, row))
             results.append("pace/tablet against the stored baseline as shipped at 60 Hz, %s: %s" % (name, row[0]))
-        # At 120 Hz the same case is refused where its rows are among the shipped ones: the same run as the 120 Hz's, a jump beyond the bound.
-        pace.BASELINE_REFUSES = {"60": (), "120": ("jumps_per_minute",)}
+        # The stored bound of a row still holds where nothing holds it: frametimeline.judge with no held bounds, the jumps against the
+        # baseline's own (the median 100 plus the range 20 at 120 Hz).
         hot = dict(json.loads((plain / "runs/pace/pace-rate-60/vulkan" / ft.REPORT).read_text(encoding="utf-8")), refresh_ms=8.3333)
         cold = ft.baseline([dict(hot, shown={"events_per_minute": 300.0, "jumps_per_minute": 90.0}),
                             dict(hot, shown={"events_per_minute": 330.0, "jumps_per_minute": 100.0}),
                             dict(hot, shown={"events_per_minute": 360.0, "jumps_per_minute": 110.0})])
         check(cold["rates"]["120"]["bounds"]["jumps_per_minute"] == 120.0, "the 120 Hz bound of the jumps: the median 100 plus the range 20")
-        rows = pace.frametimeline_rows({"frametimeline": dict(hot, shown={"pairs": 9, "repeated": 1, "skipped": 0, "shifted": 0,
-                                                                         "events_per_minute": 340.0, "jumps_per_minute": 190.0}),
-                                        "present_timing": None}, cold, "base.json")
-        said = {m: (v, verdict) for m, v, _t, verdict in rows}
-        check(said[pace.BASELINE_ROW][1] == "FAIL" and "refusing: jumps_per_minute" in said[pace.BASELINE_ROW][0],
-              "at 120 Hz a run with 190 jumps a minute against the bound 120 is refused by that row: %s" % (said[pace.BASELINE_ROW],))
-        rows = pace.frametimeline_rows({"frametimeline": dict(hot, shown={"pairs": 9, "repeated": 1, "skipped": 0, "shifted": 0,
-                                                                         "events_per_minute": 900.0, "jumps_per_minute": 110.0}),
-                                        "present_timing": None}, cold, "base.json")
-        said = {m: (v, verdict) for m, v, _t, verdict in rows}
-        check(said[pace.BASELINE_ROW][1] == "recorded" and "a report: events_per_minute" in said[pace.BASELINE_ROW][0],
-              "at 120 Hz the events beyond their bound are a report where the row is not shipped: %s" % (said[pace.BASELINE_ROW],))
-        # As shipped the jumps a minute are a report until G10.5 and refuse only a gross break (twice the highest clean run on record, 2 x 142):
-        # 190 a minute beyond the bound 120 is said; 300 refuses.
-        pace.BASELINE_REFUSES = REFUSES_SHIPPED
-        pace.BASELINE_GROSS = GROSS_SHIPPED
-        for jumps, want, says in ((190.0, "recorded", "a report: jumps_per_minute"), (300.0, "FAIL", "refusing: jumps_per_minute")):
-            rows = pace.frametimeline_rows({"frametimeline": dict(hot, shown={"pairs": 9, "repeated": 1, "skipped": 0, "shifted": 0,
-                                                                             "events_per_minute": 340.0, "jumps_per_minute": jumps}),
-                                            "present_timing": None}, cold, "base.json")
-            said = {m: (v, verdict) for m, v, _t, verdict in rows}
+
+        def hot_with(events, jumps):
+            return dict(hot, shown={"pairs": 9, "repeated": 1, "skipped": 0, "shifted": 0, "events_per_minute": events, "jumps_per_minute": jumps})
+        check(ft.judge(hot_with(340.0, 110.0), cold)[0] == "pass" and ft.judge(hot_with(340.0, 190.0), cold)[0] == "FAIL",
+              "no held bound: 110 jumps a minute within the stored 120 pass, 190 fail")
+        check(ft.judge(hot_with(340.0, 110.0), cold, pace.BASELINE_HELD)[0] == "FAIL", "held to 0: 110 jumps a minute fail")
+        # As shipped at 120 Hz: any jump refuses against the held 0 (the stored 120 does not count); the events beyond their bound and
+        # no jump are a report.
+        for jumps, events, want, says in ((190.0, 340.0, "FAIL", "refusing: jumps_per_minute"), (0.5, 340.0, "FAIL", "refusing: jumps_per_minute"),
+                                          (0.0, 900.0, "recorded", "a report: events_per_minute")):
+            said = {m: (v, verdict) for m, v, _t, verdict in pace.frametimeline_rows({"frametimeline": hot_with(events, jumps), "present_timing": None},
+                                                                                       cold, "base.json")}
             check(said[pace.BASELINE_ROW][1] == want and says in said[pace.BASELINE_ROW][0],
-                  "as shipped at 120 Hz, %s jumps a minute: %s: %s" % (jumps, want, said[pace.BASELINE_ROW]))
-        pace.BASELINE_GROSS = GROSS_SHIPPED
+                  "as shipped at 120 Hz, %s jumps and %s events a minute: %s: %s" % (jumps, events, want, said[pace.BASELINE_ROW]))
         # A run the baseline could not judge (another method) is the tool's, never a pass.
         other = dict(json.loads(stored.read_text(encoding="utf-8")), method="frametimeline")
         stored.write_text(json.dumps(other), encoding="utf-8")

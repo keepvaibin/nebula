@@ -2387,6 +2387,7 @@ void RendererVk::present_swapchain_image() {
         const auto at = present_time.presentID % timing.requested.size();
         timing.requested[at] = slot;
         timing.called[at] = now;
+        timing.reference[at] = timing.slots.reference();
         timing.requested_id[at] = present_time.presentID;
         timing.requested_period[at] = step;
         present_times.swapchainCount = 1;
@@ -2685,6 +2686,16 @@ void RendererVk::report_present_timing() {
         return;
     }
     const std::int64_t half_vsync = (timing.vsync_ns != 0 ? timing.vsync_ns : kGameStepNs / 2) / 2;
+    // The depth's moments (PresentDepth): it moves only while the screen is covered or a scene loads; a refresh-rate change
+    // or a stage load leaves the late pictures of the next 2 s out. qpc_now() is CLOCK_MONOTONIC nanoseconds off Windows,
+    // the presentation times' clock.
+    const int covered = lead_covered();
+    timing.slots.allow(covered != 0, covered == 1);
+    const std::int64_t quiet = g_pacing_quiet_qpc.load(std::memory_order_relaxed);
+    if (quiet != timing.quiet_seen) {
+        timing.quiet_seen = quiet;
+        timing.slots.quiet(galaxy::qpc_to_ns(quiet));
+    }
     for (std::uint32_t i = 0; i < count; ++i) {
         const auto actual = static_cast<std::int64_t>(past[i].actualPresentTime);
         if (!swapchain_.timed) {  // present timing's reports, where it is there, are the recorder's
@@ -2699,8 +2710,14 @@ void RendererVk::report_present_timing() {
         const auto expected = identified ? timing.requested_period[at] : kGameStepNs;
         timing.margin_sum += static_cast<std::int64_t>(past[i].presentMargin);
         if (identified && timing.called[at] != 0) {
-            timing.slots.observe(requested, static_cast<std::int64_t>(past[i].earliestPresentTime), actual,
-                                 static_cast<std::int64_t>(past[i].presentMargin), expected, half_vsync);
+            // The depth it needed: from its reference to the latest it could have been ready for its earliest refresh
+            // (presentMargin is counted against that refresh's latch), the compositor's latch included; the same whatever
+            // depth it asked with.
+            const std::int64_t need = PresentSlots::need_of(static_cast<std::int64_t>(past[i].earliestPresentTime),
+                                                            static_cast<std::int64_t>(past[i].presentMargin),
+                                                            timing.reference[at]);
+            timing.slots.observe(requested, static_cast<std::int64_t>(past[i].earliestPresentTime), actual, need,
+                                 expected, half_vsync);
         }
         if (requested == 0) {
             ++timing.unrequested;
@@ -2726,13 +2743,16 @@ void RendererVk::report_present_timing() {
             std::fprintf(stderr, "[present-timing] %u frames: %u shown at their requested slot, %u late, %u without one "
                          "(unmatched); %u at the target interval; actual-hz %.2f, interval-max %.2f ms, duplicate-times %u; "
                          "late(available/delayed)=%u/%u margin %.2f ms (driver refresh %.2f, display %.2f ms); "
-                         "pipeline %.2f ms (a late frame missed its slot by %.2f at most)\n",
+                         "pipeline %.2f ms (a late frame missed its slot by %.2f at most); depth: steps in play %u, "
+                         "late after a mode change or stage load %u, seconds above two steps %.1f\n",
                          timing.frames, timing.on_slot, timing.late, timing.unrequested, timing.even,
                          timing.interval_sum > 0 ? 1e9 * timing.intervals / double(timing.interval_sum) : 0.0,
                          double(timing.interval_max) / 1e6, timing.duplicates, timing.available_late, timing.delayed_late,
                          double(timing.margin_sum) / 1e6 / timing.frames,
                          double(timing.refresh_ns) / 1e6, double(timing.vsync_ns) / 1e6,
-                         double(timing.slots.depth_used()) / 1e6, double(timing.slots.take_late_max()) / 1e6);
+                         double(timing.slots.depth_used()) / 1e6, double(timing.slots.take_late_max()) / 1e6,
+                         timing.slots.take_steps_in_play(), timing.slots.take_quiet_late(),
+                         double(timing.slots.take_deep_ns()) / 1e9);
             timing.frames = timing.on_slot = timing.late = timing.unrequested = timing.even = 0u;
             timing.duplicates = timing.available_late = timing.delayed_late = timing.intervals = 0u;
             timing.interval_sum = timing.interval_max = timing.margin_sum = 0;

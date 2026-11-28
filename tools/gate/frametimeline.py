@@ -657,28 +657,32 @@ def baseline(reports, made=None):
     return {"format": FORMAT, "method": method, "start": start, "made": made or datetime.date.today().isoformat(), "rates": rates}
 
 
-def bound_for(stored, row):
-    """The bound of a row in a stored rate's figures: its `bounds` (format 2), else the largest share of one run (format 1)."""
+def bound_for(stored, row, held=None):
+    """The bound of a row: HELD's ({row: bound}, a bound the caller fixes whatever the runs spread over), else in a stored rate's
+    figures its `bounds` (format 2), else the largest share of one run (format 1)."""
+    if held and row in held:
+        return held[row]
     if row in stored.get("bounds", {}):
         return stored["bounds"][row]
     return stored.get("most", {}).get(row)
 
 
-def rows_beyond(report, base):
-    """The rows of a report that are beyond the stored bounds of its rate, [(row, figure, bound)]; [] when the baseline has no figure
-    for the rate or the report was read another way."""
+def rows_beyond(report, base, held=None):
+    """The rows of a report that are beyond the bounds of its rate (bound_for), [(row, figure, bound)]; [] when the baseline has no
+    figure for the rate or the report was read another way."""
     stored = base.get("rates", {}).get(rate_of(report))
     if stored is None or (report.get("method"), report.get("start")) != (base.get("method"), base.get("start")):
         return []
     values = row_values(report)
-    return [(row, values[row], bound_for(stored, row)) for row in ROWS
-            if values.get(row) is not None and bound_for(stored, row) is not None and values[row] > bound_for(stored, row) + 1e-12]
+    return [(row, values[row], bound_for(stored, row, held)) for row in ROWS
+            if values.get(row) is not None and bound_for(stored, row, held) is not None
+            and values[row] > bound_for(stored, row, held) + 1e-12]
 
 
-def judge(report, base):
+def judge(report, base, held=None):
     """(verdict, text) of a run's report against a stored baseline: FAIL when a row (ROWS) is beyond the bound of its rate (bound_for:
-    the median of the baseline's runs plus their range); recorded when the baseline has no figure for its rate; not measured when it
-    was read another way or has no frames. Which rows refuse is pace.py's (BASELINE_REFUSES)."""
+    HELD's, else the median of the baseline's runs plus their range); recorded when the baseline has no figure for its rate; not
+    measured when it was read another way or has no frames. Which rows refuse is pace.py's (BASELINE_REFUSES, BASELINE_HELD)."""
     key = rate_of(report)
     if (report.get("method"), report.get("start")) != (base.get("method"), base.get("start")):
         return "not measured: read by %s from %s, the baseline by %s from %s" % (
@@ -689,7 +693,7 @@ def judge(report, base):
     values = row_values(report)
     parts = []
     for row in ROWS:
-        bound = bound_for(stored, row)
+        bound = bound_for(stored, row, held)
         if bound is None:
             continue
         if values.get(row) is None:
@@ -701,7 +705,7 @@ def judge(report, base):
         else:
             parts.append("%s %.*f (bound %.*f)" % (row.replace("_", " "), 2 if row == "refreshes_mean" else 1, values[row],
                                                   2 if row == "refreshes_mean" else 1, bound))
-    worse = rows_beyond(report, base)
+    worse = rows_beyond(report, base, held)
     return ("FAIL" if worse else "pass"), "; ".join(parts)
 
 

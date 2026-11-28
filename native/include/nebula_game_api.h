@@ -1105,6 +1105,9 @@ enum {
     NEBULA_CONTEXT_SCENE_PLAY,            /* each frame: 1 while the scene shows play (its opening tour and Mario's arrival
                                              over, no movie), whatever is over it: the HDR calibration's reference stage is
                                              ready */
+    NEBULA_CONTEXT_SCENE_LOADING,         /* each frame: 1 while the scene controller loads a scene (from the old scene's end
+                                             to the new one's start, the title to galaxy load among them), 0 while a scene
+                                             plays: the host's display lead moves only then (render/present_clock.h) */
 };
 
 #define NEBULA_MOVIE_AUDIO_QUEUE_FRAMES 20

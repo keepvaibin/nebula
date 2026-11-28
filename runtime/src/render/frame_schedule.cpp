@@ -323,16 +323,24 @@ void FrameSchedule::begin_waiting(std::int64_t now) {
         fit_rate_to_vblanks();
     }
     // The display model's lead, on the vblanks only (a clock of the pacer's own has no refresh to ask for).
+    // Another refresh period is a mode change: its late pictures do not deepen the lead (PresentDepth::quiet).
+    if (on_vblanks && lead_period_ != 0 && std::llabs(vblank_period - lead_period_) > lead_period_ / 50) {
+        display_depth_.quiet(to_ns(now));
+    }
+    lead_period_ = on_vblanks ? vblank_period : lead_period_;
     observe_shown();
     const bool lead_was = display_lead_ != 0;
     const std::int64_t lead_before = display_lead_;
     display_lead_ = on_vblanks ? display_lead_for(now, vblank_period) : 0;
     if (lead_was && display_lead_ != 0 && vblank_period > 0) {
-        // Each change moves every picture's moment by whole refreshes: told, so a run shows where they fell.
+        // Each change moves every picture's moment by whole refreshes: told, so a run shows where they fell, and whether
+        // the screen was covered (a closed wipe or a scene loading: covered=1) or in play (covered=0, brief AD: only a step
+        // up to stop repeated misses).
         const long long before = std::llround(static_cast<double>(lead_before) / static_cast<double>(vblank_period));
         const long long after = std::llround(static_cast<double>(display_lead_) / static_cast<double>(vblank_period));
         if (before != after) {
-            std::cerr << "[display-lead] " << before << "->" << after << " refreshes at qpc " << now << '\n';
+            std::cerr << "[display-lead] " << before << "->" << after << " refreshes at qpc " << now
+                      << " covered=" << (lead_covered() != 0 ? 1 : 0) << '\n';
         }
     }
     display_queue_ = display_lead_ != 0 ? display_.present_queue() : 0u;
@@ -460,32 +468,33 @@ std::int64_t FrameSchedule::display_lead_for(std::int64_t now, std::int64_t vbla
         return 0;
     }
     // At the least the time from a present made now to the refresh that shows it, in whole refreshes (the display's own
-    // hold, learnt from presents the queue did not hold: DisplayModel::displayed); up a refresh or two for a second with
-    // pictures late, down where the presents leave room (present_slots.h); four game steps at most. Where a swap chain's
+    // hold, learnt from presents the queue did not hold: DisplayModel::displayed); above it what the pictures needed from
+    // their start (present_slots.h PresentDepth); four game steps at most. Where a swap chain's
     // queue paces the presents, the least at first: a picture started then and presented as soon as it is ready reaches
     // its refresh with the queue empty before it, and each refresh above it adds to every picture's delay. At most the
     // queue's depth above the least: a picture started earlier would find the queue full, its render thread blocked past
     // the next picture's start. Elsewhere a refresh above the least at first (the picture's own work, with no queue to
-    // pace it). Each step of the lead moves every picture's moment by a refresh, so it steps only for late pictures and
-    // for room (R-009: a step up every few seconds was the refresh period read a tick shorter, PresentDepth::depth). The
+    // pace it). Each step of the lead moves every picture's moment by a refresh, so it steps only where the pictures'
+    // needs ask (R-009: a step up every few seconds was the refresh period read a tick shorter, PresentDepth::depth). The
     // queue's lead above the least is the pictures' own; the least is the display's hold, followed down as well as up
     // (a compositor that holds pictures a refresh more for a while, as around a scene load, leaves no lead above it).
     const std::int64_t unit = to_ns(vblank_period);
     const std::int64_t least = to_ns(shown - now);
     const auto queue = static_cast<std::int64_t>(display_.present_queue());
-    // The lead stays still in play (brief AD): down only while a wipe covers the screen, or where the game does not tell
-    // (g_screen_covered); a least that fell in play is held, with the lead above it, until the screen is next covered. Up
-    // for late pictures in play, at once; not for a load's under the wipe, which pass with it (observe_shown). R-009: a
-    // step up at the boot's loads held the lead a refresh up for 100 s of play (match delay 19.0 -> 23.2 ms), then it
-    // came down in play.
+    // The lead stays still in play (brief AD): it moves to what the pictures' needs ask for only while a wipe covers the
+    // screen or a scene loads (the boot's title to galaxy load among them, which no wipe covers), or where the game does
+    // not tell (lead_covered); in play one step up to stop repeated misses, one reported event (PresentDepth). A least that
+    // fell in play is held, with the lead above it, until the screen is next covered. R-009: a step up at the boot's loads
+    // held the lead a refresh up for 100 s of play (match delay 19.0 -> 23.2 ms), then it came down in play; the boot's
+    // load is a load since G10.5.
     // The least, too, moves only then: in play it is held where it was, up as well as down, and where it may move it rises
-    // a refresh a second at most. R-009: at the boot's load (in play by the game's signal) one second of Vulkan's present
-    // reports, every one held by the load's stall, read as a display holding pictures 15 refreshes; the least took the
-    // lead to 15 and 16 refreshes at once and the hold kept it there 25 s, to the first wipe (67 ms of delay, and the
+    // a refresh a second at most. R-009: at the boot's load (in play by the game's signal then) one second of Vulkan's
+    // present reports, every one held by the load's stall, read as a display holding pictures 15 refreshes; the least took
+    // the lead to 15 and 16 refreshes at once and the hold kept it there 25 s, to the first wipe (67 ms of delay, and the
     // schedule's in-between pictures stopped with it). On every renderer the lead is never above the queue's depth and two
     // refreshes (brief AD); with no queue (presents that ask their refresh, Android's compositor holding up to 2) the
     // display's most hold stands for it.
-    const bool may_move = g_screen_covered.load(std::memory_order_relaxed) != 0;
+    const bool may_move = lead_covered() != 0;
     const std::int64_t top = (queue != 0 ? queue : DisplayModel::kStallHeld) + 2;
     std::int64_t least_units = std::min((least + unit - 1) / unit, top);
     if (display_least_units_ != 0) {
@@ -507,16 +516,27 @@ std::int64_t FrameSchedule::display_lead_for(std::int64_t now, std::int64_t vbla
 }
 
 void FrameSchedule::observe_shown() {
-    // The depth moves only under a closed wipe (or where the game does not tell): a calm stretch takes it down there, and
-    // late pictures in play keep one step up for it; a load's own late pictures under the wipe count for nothing
-    // (display_lead_for).
-    const int covered = g_screen_covered.load(std::memory_order_relaxed);
-    display_depth_.allow(covered != 0, covered != 0, covered != 1);
+    // The depth moves only while the screen is covered or a scene loads (or where the game does not tell), to what the
+    // pictures' needs ask for; a load's windows are kept as a load's (display_lead_for). A refresh-rate change or a stage
+    // load leaves the late pictures of the next 2 s out.
+    const int covered = lead_covered();
+    display_depth_.allow(covered != 0, covered == 1);
+    const std::int64_t quiet = g_pacing_quiet_qpc.load(std::memory_order_relaxed);
+    if (quiet != quiet_seen_) {
+        quiet_seen_ = quiet;
+        display_depth_.quiet(to_ns(quiet));
+    }
     ShownPicture picture;
     if (display_.last_shown(picture) && display_lead_ != 0 && picture.period > 0 && picture.slot >= display_from_) {
+        // The lead it was drawn with less its margin (ready that long before the last present that still reaches its
+        // slot): the lead it needed from its start, the display's hold included, whatever lead it had.
+        std::int64_t lead = display_lead_;
+        for (const DrawnLead& drawn : drawn_leads_) {
+            if (drawn.slot == picture.slot) lead = drawn.lead;
+        }
         const std::int64_t period = to_ns(picture.period);
         display_depth_.observe(to_ns(picture.slot), to_ns(picture.earliest), to_ns(picture.shown),
-                               to_ns(picture.margin), period, period / 2);
+                               to_ns(lead - picture.margin), period, period / 2);
     }
 }
 
@@ -1085,6 +1105,8 @@ SchedulePicture FrameSchedule::next(std::int64_t now, bool flush) {
         }
     }
     picture.slot = slot;
+    drawn_leads_[drawn_next_] = {slot, display_lead_};
+    drawn_next_ = (drawn_next_ + 1u) % drawn_leads_.size();
     picture.t = std::max(0.0, t);  // 0 or below only for a frame shown at once (flush, no generated pictures)
     picture.flush = flush;
     // Generated pictures until t reaches 1 (the frame itself) or the next game frame replaces the sequence: no count

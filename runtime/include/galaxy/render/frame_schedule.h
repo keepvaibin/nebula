@@ -19,10 +19,11 @@
 // The display model (G2.3.1, FM 2.16 target 3). Where the platform says when a picture presented now will be shown and
 // when the last one was (ScheduleDisplay::display_time, last_shown), a slot on the display's vblanks is the refresh the
 // picture is drawn for: its t is that refresh's, and the picture starts a display lead before it (slot_due). The lead
-// follows the pictures shown, as Android's presentation times do (present_slots.h PresentDepth): late ones raise it, a
-// calm stretch takes it down to the least the display allows (the time from a present to the refresh that shows it),
-// so a picture starts as late as it safely can. The sequences' references hold the lead (display_delay_qpc), moved by
-// the step delay's bounds, so the content keeps to the wall clock. A platform with no answers keeps lead 0: its slots
+// follows the pictures shown, as Android's presentation times do (present_slots.h PresentDepth): it is sized from the
+// time each picture needed from its start (the worst a window, of loads and play), never under the least the display
+// allows (the time from a present to the refresh that shows it), and moves only while a wipe covers the screen or a
+// scene loads, but for one step up in play to stop repeated misses. The sequences' references hold the lead
+// (display_delay_qpc), moved by the step delay's bounds, so the content keeps to the wall clock. A platform with no answers keeps lead 0: its slots
 // are the moments the pictures start, as before.
 // A swap chain whose presents ask no time (Direct3D's flip model, ScheduleDisplay::present_queue) is paced by its own
 // queue: each picture is presented as soon as it is ready and the frame latency object lets it go, and is shown at the
@@ -363,6 +364,16 @@ private:
     std::int64_t display_from_ = 0;  // the first slot drawn with the lead since it came in (observe_shown)
     std::int64_t display_least_units_ = 0;  // the lead's least at its last reading, in refreshes (display_lead_for)
     std::int64_t display_least_rose_ = 0;   // when the least last rose a refresh (it rises one a second at most)
+    // The display lead each recent picture was drawn with, by its slot: a picture shown tells the depth it needed from
+    // the lead it started with (observe_shown).
+    struct DrawnLead {
+        std::int64_t slot = 0;
+        std::int64_t lead = 0;
+    };
+    std::array<DrawnLead, 16> drawn_leads_{};
+    std::size_t drawn_next_ = 0;
+    std::int64_t quiet_seen_ = 0;    // the latest g_pacing_quiet_qpc given to the depth
+    std::int64_t lead_period_ = 0;   // the vblank period of the latest lead (another is a mode change: quiet)
     // A swap chain's queue paces the presents (present_queue, with a lead): its depth and the refresh period; 0: none.
     unsigned display_queue_ = 0;
     std::int64_t display_refresh_ = 0;

@@ -54,6 +54,23 @@ inline std::atomic<bool> g_in_between_on{false};
 // told (a test, a game that never tells). The display lead steps down only while covered or not told: in play a step
 // down moves every picture's moment at once, where the eye follows motion (brief AD).
 inline std::atomic<int> g_screen_covered{-1};
+// The game's scene controller loads a scene (the game's NEBULA_CONTEXT_SCENE_LOADING, each step): 1 from the old scene's
+// end to the new one's start, the boot's title to galaxy load among them (no wipe covers it), 0 while a scene plays, -1
+// not told.
+inline std::atomic<int> g_scene_loading{-1};
+// The display lead's and the presentation times' depth's moment to move (brief AD: only where no motion is on screen to
+// follow): 1 while a closed wipe covers the screen or a scene loads, 0 in play, -1 neither told (a test, a game that never
+// tells). The `[display-lead]` line carries it (covered=0/1).
+[[nodiscard]] inline int lead_covered() noexcept {
+    const int covered = g_screen_covered.load(std::memory_order_relaxed);
+    const int loading = g_scene_loading.load(std::memory_order_relaxed);
+    if (covered == 1 || loading == 1) return 1;
+    return covered < 0 && loading < 0 ? -1 : 0;
+}
+// The latest refresh-rate change (the Choreographer's callback, platform/sdl/display_clock.cpp) or stage load (the game's
+// stage name changed, native/host/host_main.cpp svc_game_stage), in qpc_now() ticks; 0 none. The depth leaves the late
+// pictures of the 2 s after it out of its rule (PresentDepth::quiet): a mode change and a stage load do not deepen it.
+inline std::atomic<std::int64_t> g_pacing_quiet_qpc{0};
 // The display varies its refresh with the presents (render/variable_refresh.h: the system's answer, else the presents'
 // proof): any frame rate shows evenly, and the game's step is never locked to the display (galaxy/step_lock.h).
 inline std::atomic<bool> g_variable_refresh{false};
