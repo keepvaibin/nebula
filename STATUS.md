@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-27 22:11. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-27 22:12. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 41 of 158 (26%).
 
@@ -126,6 +126,7 @@ In work now:
 - G10.5 The depth rule from ready time, stepping back down by trying: proof 5 through the real tool: recipe 10b, pace/pc clean on Direct3D 12 and Vulkan passes, the planted lead stepping in play refused (pace_test.py's cases done) (agent 1, 2026-11-27 22:11)
 - G10.5 The depth rule from ready time, stepping back down by trying: proof 6: 5 runs of 5 min at 120 Hz and 5 at 60 Hz of the clean build on the tablet make 0 jumps a minute in play; remake tests/pace/tablet-base.json from them if its figures change; the clean build passes pace/tablet at both rates (agent 1, 2026-11-27 22:11)
 - G10.5 The depth rule from ready time, stepping back down by trying: proof 7: recipe 11 at 120 and 60 Hz: pace-fault and pace-depth each refused by pace/tablet in at least 3 plant runs per plant and rate, the clean build passing at least 5 clean runs per rate in the same session; the depth plant's mean of asked less ready rises beyond the clean range (agent 1, 2026-11-27 22:11)
+- G10.5 The depth rule from ready time, stepping back down by trying: proof 8: every tablet run with a gap of 1 s or more between two actual present times is a stall: kept with its folder for G10.5m, played again, counted toward no proof, listed in the sheet (agent 1, 2026-11-27 22:12)
 
 ## Waiting for the owner
 
