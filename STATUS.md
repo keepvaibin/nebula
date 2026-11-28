@@ -135,6 +135,7 @@ In work now:
 - G10.6 The arbiter acts before a miss: ready-time percentile and thermal forecast: proof 5 (G10.5m and the PC speed run): the game step's and the walk's time before and after on the PC and the tablet, never slower; the A/B of arbiter-late decides whether its switch is deleted (Old path) (agent 1, 2026-11-28 03:33)
 - G10.7 Image count and queue bound, where G10.2 shows buffer stuffing: first (G10.5m, the PC can do it from the kept traces): Buffer Stuffing of the game's layer by the trace method (frametimeline.py --method frametimeline, FrameTimeline's app rows) for the kept G10.4m runs at 120 and 60 Hz; at 0 for both rates the three variants are deleted (Old path) and proofs 1 and 3 are not run (agent 1, 2026-11-28 03:45)
 - G10.7 Image count and queue bound, where G10.2 shows buffer stuffing: proof 1 (G10.5m): images-min and queue-two against the build without them, 3 runs of 5 minutes at 60 and at 120 Hz each: Buffer Stuffing (trace method) and the refreshes-from-step distribution; a variant is kept only if it lowers the depth or stuffing without raising lates (agent 1, 2026-11-28 03:45)
+- G10.7 Image count and queue bound, where G10.2 shows buffer stuffing: proof 3 (G10.5m): the planted queue-past run is refused by the rows (more lates) in the same session (agent 1, 2026-11-28 03:45)
 
 ## Waiting for the owner
 
