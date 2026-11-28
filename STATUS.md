@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-27 23:17. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-27 23:18. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 41 of 158 (26%).
 
-Now: G10.5 written; M-014 (fill rule) running; Swappy download waits for the owner's yes
+Now: M-014 closed (fill rule); in work: mender M-015 (quarantine)
 
 In work now:
 - G10.5 The depth rule from ready time, stepping back down by trying (agent 1)
