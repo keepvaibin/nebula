@@ -997,6 +997,15 @@ void RendererD3D11::flush_draws() {
             const auto* textures = reinterpret_cast<const d3d11::BoundTable*>(static_cast<std::uintptr_t>(op.a[0]));
             const auto* samplers = reinterpret_cast<const d3d11::BoundTable*>(static_cast<std::uintptr_t>(op.a[1]));
             if (textures != nullptr) {
+                if (mirrored_store_ != nullptr) {
+                    // What the draws really get: slots with a texture and slots with the null (black) one.
+                    void* const null_view = mirrored_store_->backend().null_view();
+                    d3d11::Context::Diagnostics& diagnostics = device.diag;
+                    ++diagnostics.tables_run;
+                    for (std::uint32_t i = 0; i < textures->count; ++i) {
+                        (textures->items[i] == null_view ? diagnostics.run_null : diagnostics.run_real) += 1u;
+                    }
+                }
                 ctx->PSSetShaderResources(0u, textures->count,
                                           reinterpret_cast<ID3D11ShaderResourceView* const*>(textures->items.data()));
             }
@@ -1066,7 +1075,7 @@ void RendererD3D11::flush_draws() {
                       << d.place_failures << "), windows " << d.windows << " (failed " << d.window_failures << "), uploads " << d.uploads
                       << " (" << d.upload_bytes / 1024u << " KB), textures made " << d.textures_made << " (filled " << d.textures_filled
                       << "), views written " << d.views_written << " released " << d.views_released << ", table slots " << d.table_slots
-                      << " (missed " << d.table_missed << "), constants path " << device.caps().path << " (offset binds " << d.offset_binds
+                      << " (missed " << d.table_missed << "), tables run " << d.tables_run << " (slots with a texture " << d.run_real << ", with the null texture " << d.run_null << "), constants path " << device.caps().path << " (offset binds " << d.offset_binds
                       << "); ms in uploads " << ms(d.upload_ticks) << ", binds " << ms(d.bind_ticks)
                       << ", present " << ms(d.present_ticks) << "; upload_written: lock " << ms(d.lock_ticks) << ", GetWriteWatch "
                       << ms(d.watch_ticks) << " over " << d.buffers_watched << " buffers (" << d.bytes_watched / (1024u * 1024u)
