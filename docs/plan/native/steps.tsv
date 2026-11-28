@@ -41,7 +41,7 @@ order	step	package	title	package_needs	card_file	state	commit
 40	G10.3	G10	What the platform and the device offer, logged	S0.2	05-NATIVE-LANE-G.md	landed	4a5719722
 41	G10.4	G10	The performance hint's target, by A/B	S0.2	05-NATIVE-LANE-G.md	landed	c08a9b8cd
 42	G10.4m	G10	G10.3's tablet proofs, how the late share is classified, the baseline rows, the hint's target by A/B	S0.2	05-NATIVE-LANE-G.md	landed	12ec266de
-43	G10.5	G10	The depth rule from ready time, stepping back down by trying	S0.2	05-NATIVE-LANE-G.md	open	
+43	G10.5	G10	The depth rule from ready time, stepping back down by trying	S0.2	05-NATIVE-LANE-G.md	landed	6ad6b3271
 44	G10.6	G10	The arbiter acts before a miss: ready-time percentile and thermal forecast	S0.2	05-NATIVE-LANE-G.md	open	
 45	G10.7	G10	Image count and queue bound, where G10.2 shows buffer stuffing	S0.2	05-NATIVE-LANE-G.md	open	
 46	G10.8	G10	The frame-rate vote at 60 Hz	S0.2	05-NATIVE-LANE-G.md	open	
