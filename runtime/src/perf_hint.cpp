@@ -34,7 +34,6 @@
 #if defined(__ANDROID__)
 #include "galaxy/launch_args.h"
 
-#include <android/native_window.h>
 #include <dlfcn.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -112,22 +111,11 @@ void HintSession::add_thread(std::int32_t tid) {
         stale_ = true;
         return;
     }
-    // A graphics-pipeline session over the system's count of such threads has no defined behaviour: made again, plain.
-    const bool over = pipeline_ && calls_.max_pipeline_threads != nullptr &&
-                      static_cast<int>(tids_.size()) > calls_.max_pipeline_threads(calls_.manager);
-    if (!over && calls_.set_threads != nullptr && calls_.set_threads(session_, tids_.data(), tids_.size()) == 0) {
+    if (calls_.set_threads != nullptr && calls_.set_threads(session_, tids_.data(), tids_.size()) == 0) {
         std::fprintf(stderr, "[perf] performance hint session: %zu threads\n", tids_.size());
         return;
     }
     stale_ = true;
-}
-
-void HintSession::set_surface(void* window) noexcept {
-    surface_ = window;
-    if (pipeline_ && session_ != nullptr && calls_.set_surfaces != nullptr) {
-        void* const windows[1] = {window};
-        (void)calls_.set_surfaces(session_, window != nullptr ? windows : nullptr, window != nullptr ? 1u : 0u, nullptr, 0u);
-    }
 }
 
 void HintSession::hold(std::int64_t cycle_ns) {
@@ -153,59 +141,13 @@ void HintSession::make() {
         calls_.close_session(session_);
         session_ = nullptr;
     }
-    pipeline_ = false;
     if (tids_.empty() || calls_.manager == nullptr || calls_.create_session == nullptr || calls_.report == nullptr ||
         calls_.close_session == nullptr || target_ns_ <= 0) {
         return;
     }
-    const char* plain_why = nullptr;  // why the graphics-pipeline session asked for is not made
-    int refused = 0;
-    if (options_.graphics_pipeline) {
-        if (calls_.create_from_config == nullptr || calls_.config_create == nullptr || calls_.config_release == nullptr ||
-            calls_.config_tids == nullptr || calls_.config_target == nullptr || calls_.config_graphics_pipeline == nullptr ||
-            calls_.config_surfaces == nullptr || calls_.set_surfaces == nullptr) {
-            plain_why = "the system has no creation config, API 36";
-        } else if (calls_.feature_supported != nullptr && !calls_.feature_supported(kHintFeatureGraphicsPipeline)) {
-            plain_why = "the system does not support it";
-        } else if (calls_.max_pipeline_threads != nullptr &&
-                   static_cast<int>(tids_.size()) > calls_.max_pipeline_threads(calls_.manager)) {
-            plain_why = "more frame threads than the system's graphics-pipeline threads";
-        } else if (void* const config = calls_.config_create(); config == nullptr) {
-            plain_why = "no creation config";
-        } else {
-            calls_.config_tids(config, tids_.data(), tids_.size());
-            calls_.config_target(config, target_ns_);
-            calls_.config_graphics_pipeline(config, true);
-            void* const windows[1] = {surface_};
-            calls_.config_surfaces(config, surface_ != nullptr ? windows : nullptr, surface_ != nullptr ? 1u : 0u, nullptr, 0u);
-            // The session out stays null where the system's call is the older form without it: a plain session then.
-            void* made = nullptr;
-            refused = calls_.create_from_config(calls_.manager, config, &made);
-            calls_.config_release(config);
-            if (refused == 0 && made != nullptr) {
-                session_ = made;
-                pipeline_ = true;
-            } else {
-                if (made != nullptr) {
-                    calls_.close_session(made);  // EBUSY still makes one, with no defined behaviour
-                }
-                plain_why = "the system refused it";
-            }
-        }
-        if (plain_why != nullptr && refused != 0) {
-            std::fprintf(stderr, "[perf] graphics-pipeline hint session not made (%s, answer %d): a plain session\n",
-                         plain_why, refused);
-        } else if (plain_why != nullptr) {
-            std::fprintf(stderr, "[perf] graphics-pipeline hint session not made (%s): a plain session\n", plain_why);
-        }
-    }
-    if (session_ == nullptr) {
-        session_ = calls_.create_session(calls_.manager, tids_.data(), tids_.size(), target_ns_);
-    }
-    std::fprintf(stderr, "[perf] performance hint session: %zu threads, target %.2f ms%s%s\n", tids_.size(),
-                 static_cast<double>(target_ns_) / 1e6, session_ != nullptr ? "" : " (not available)",
-                 pipeline_ ? (surface_ != nullptr ? ", graphics pipeline, surface bound" : ", graphics pipeline, no surface yet")
-                           : "");
+    session_ = calls_.create_session(calls_.manager, tids_.data(), tids_.size(), target_ns_);
+    std::fprintf(stderr, "[perf] performance hint session: %zu threads, target %.2f ms%s\n", tids_.size(),
+                 static_cast<double>(target_ns_) / 1e6, session_ != nullptr ? "" : " (not available)");
 }
 
 void HintSession::tell(std::int64_t now_ns, std::int64_t work_ns, std::int64_t gpu_ns) {
@@ -213,15 +155,14 @@ void HintSession::tell(std::int64_t now_ns, std::int64_t work_ns, std::int64_t g
         return;
     }
     // With the newest call the session is told a picture's GPU time beside the cycle's CPU time, so the hint holds the
-    // GPU's clock as well as the CPU's. A graphics-pipeline session's total is the pipeline's, from the start of the
-    // frame's work until its picture is drawn.
+    // GPU's clock as well as the CPU's.
     gpu_ns = std::max<std::int64_t>(gpu_ns, 0);
     if (calls_.report2 != nullptr && calls_.duration_create != nullptr && calls_.duration_release != nullptr &&
         calls_.duration_start != nullptr && calls_.duration_total != nullptr && calls_.duration_cpu != nullptr &&
         calls_.duration_gpu != nullptr) {
         if (void* const duration = calls_.duration_create(); duration != nullptr) {
             calls_.duration_start(duration, std::max<std::int64_t>(now_ns - work_ns, 1));
-            calls_.duration_total(duration, pipeline_ ? work_ns + gpu_ns : std::max(work_ns, gpu_ns));
+            calls_.duration_total(duration, std::max(work_ns, gpu_ns));
             calls_.duration_cpu(duration, work_ns);
             calls_.duration_gpu(duration, gpu_ns);
             const int refused = calls_.report2(session_, duration);
@@ -234,7 +175,7 @@ void HintSession::tell(std::int64_t now_ns, std::int64_t work_ns, std::int64_t g
     (void)calls_.report(session_, work_ns);
 }
 
-void HintSession::step_ends(std::int64_t now_ns, std::int64_t step_work_ns, std::int64_t cycle_work_ns,
+void HintSession::step_ends(std::int64_t now_ns, std::int64_t cycle_work_ns,
                             std::int64_t slot_ns, std::int64_t gpu_ns) {
     hold(hint_cycle_ns(frame_ns_, slot_ns));
     if (stale_) {
@@ -242,12 +183,6 @@ void HintSession::step_ends(std::int64_t now_ns, std::int64_t step_work_ns, std:
     }
     left_ = 0;
     if (cycle_ns_ <= 0) {
-        return;
-    }
-    if (options_.per_step) {
-        // As before G10.4 (its planted fault until G10.4m chooses): once per step, a picture's work the step's over the
-        // slots in it.
-        tell(now_ns, cycle_ns_ < frame_ns_ && frame_ns_ > 0 ? step_work_ns * cycle_ns_ / frame_ns_ : step_work_ns, gpu_ns);
         return;
     }
     tell(now_ns, cycle_work_ns, gpu_ns);
@@ -334,8 +269,6 @@ std::int64_t g_frame_ns = galaxy::kGameStepNs;
 // may mark until the process ends). Null where the system has no hint sessions.
 HintSession* g_hint = nullptr;
 bool g_hint_tried = false;
-// The window bound to the graphics-pipeline session, held (ANativeWindow_acquire) while the session may use it.
-ANativeWindow* g_surface = nullptr;
 
 HintCalls load_calls() {
     HintCalls calls;
@@ -362,16 +295,6 @@ HintCalls load_calls() {
     find(calls.duration_gpu, "AWorkDuration_setActualGpuDurationNanos");
     find(calls.report2, "APerformanceHint_reportActualWorkDuration2");
     find(calls.notify_spike, "APerformanceHint_notifyWorkloadSpike");
-    find(calls.feature_supported, "APerformanceHint_isFeatureSupported");
-    find(calls.max_pipeline_threads, "APerformanceHint_getMaxGraphicsPipelineThreadsCount");
-    find(calls.config_create, "ASessionCreationConfig_create");
-    find(calls.config_release, "ASessionCreationConfig_release");
-    find(calls.config_tids, "ASessionCreationConfig_setTids");
-    find(calls.config_target, "ASessionCreationConfig_setTargetWorkDurationNanos");
-    find(calls.config_graphics_pipeline, "ASessionCreationConfig_setGraphicsPipeline");
-    find(calls.config_surfaces, "ASessionCreationConfig_setNativeSurfaces");
-    find(calls.create_from_config, "APerformanceHint_createSessionUsingConfig");
-    find(calls.set_surfaces, "APerformanceHint_setNativeSurfaces");
     calls.manager = get_manager != nullptr ? get_manager() : nullptr;
     return calls;
 }
@@ -385,13 +308,10 @@ HintSession* hint() {
             calls.close_session != nullptr) {
             HintSession::Options options;
             options.share_percent = galaxy::launch_args().hint_share;
-            options.per_step = galaxy::diagnosing(galaxy::kDiagnoseHintPerStep);
-            options.graphics_pipeline = galaxy::diagnosing(galaxy::kDiagnoseHintPipeline);
             g_hint = new HintSession(calls, options, g_frame_ns);
             for (const FrameThread& thread : g_threads) {
                 g_hint->add_thread(thread.tid);
             }
-            g_hint->set_surface(g_surface);
         }
     }
     return g_hint;
@@ -501,7 +421,7 @@ std::int64_t perf_hint_frame_done() noexcept {
 #if defined(__ANDROID__)
     if (!g_threads.empty()) {
         if (HintSession* const session = hint(); session != nullptr) {
-            session->step_ends(wall, work, cycle_work, slot_ns(), picture_gpu_ns());
+            session->step_ends(wall, cycle_work, slot_ns(), picture_gpu_ns());
         }
     }
 #endif
@@ -528,29 +448,6 @@ void perf_hint_workload_spike(const char* what) noexcept {
 #endif
 }
 
-void perf_hint_set_surface(void* native_window) noexcept {
-#if defined(__ANDROID__)
-    auto* const window = static_cast<ANativeWindow*>(native_window);
-    std::lock_guard<std::mutex> lock(g_mutex);
-    if (window == g_surface) {
-        return;
-    }
-    // Held while the session may use it: the old one is let go only once the session has the new.
-    if (window != nullptr) {
-        ANativeWindow_acquire(window);
-    }
-    if (g_hint != nullptr) {
-        g_hint->set_surface(window);
-    }
-    if (g_surface != nullptr) {
-        ANativeWindow_release(g_surface);
-    }
-    g_surface = window;
-#else
-    (void)native_window;
-#endif
-}
-
 #else
 
 namespace {
@@ -572,8 +469,6 @@ std::size_t perf_hint_last_work(ThreadWork*, std::size_t) noexcept {
 }
 
 void perf_hint_workload_spike(const char*) noexcept {}
-
-void perf_hint_set_surface(void*) noexcept {}
 
 std::int64_t perf_hint_frame_done() noexcept {
     work_mark(true);

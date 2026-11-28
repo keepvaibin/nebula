@@ -2679,13 +2679,11 @@ VkSurfaceKHR create_vulkan_surface(VkInstance instance, NativeWindow window) {
         return VK_NULL_HANDLE;
     }
 #if defined(__ANDROID__)
-    // A new surface has no vote: it gets the setting's (sync_display_rate's rule). Its window is the one the
-    // graphics-pipeline hint session is bound to (perf_hint.h, --diagnostics hint-pipeline).
+    // A new surface has no vote: it gets the setting's (sync_display_rate's rule).
     if (auto* native = static_cast<ANativeWindow*>(SDL_GetPointerProperty(
             SDL_GetWindowProperties(static_cast<SDL_Window*>(window)), SDL_PROP_WINDOW_ANDROID_WINDOW_POINTER,
             nullptr))) {
         galaxy::sdl::vote_frame_rate(native, galaxy::render::get_render_config().max_fps);
-        galaxy::host::perf_hint_set_surface(native);
     }
 #endif
     return surface;

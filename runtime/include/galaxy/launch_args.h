@@ -51,10 +51,6 @@ enum Diagnostic : unsigned {
     kDiagnosePaceDepth = 1u << 24u,  // pace-depth: every picture asks to be shown one refresh later than the depth gives (a
                                      // planted deeper queue: the frame timeline's refreshes row must show it,
                                      // tools/gate/frametimeline.py; not a setting)
-    kDiagnoseHintPerStep = 1u << 25u,  // hint-per-step: Android's hint session is told once per game step, as before
-                                       // G10.4, not once per picture slot (G10.4m's planted fault; perf_hint.h HintSession)
-    kDiagnoseHintPipeline = 1u << 26u,  // hint-pipeline: Android's graphics-pipeline hint session with the window bound, where
-                                        // the system has it (G10.4m's A/B variant; perf_hint.h HintSession)
 };
 
 // The names --diagnostics takes, each one item or a set. "1" is the launcher's recording.
@@ -90,8 +86,6 @@ inline constexpr DiagnosticName kDiagnosticNames[] = {
     {"old-governors", kDiagnoseOldGovernors},
     {"pace-fault", kDiagnosePaceFault},
     {"pace-depth", kDiagnosePaceDepth},
-    {"hint-per-step", kDiagnoseHintPerStep},
-    {"hint-pipeline", kDiagnoseHintPipeline},
     {"frames", kDiagnoseFrames},
     {"gpu", kDiagnoseGpuPasses},
     {"threads", kDiagnoseThreadCpu | kDiagnoseProfile},
@@ -100,14 +94,14 @@ inline constexpr DiagnosticName kDiagnosticNames[] = {
     {"0", 0u},
 };
 
-// hint-share=N: Android's hint session's target as N per cent of its cycle (perf_hint.h hint_target_ns), a whole number
-// from 10 to 100 written without a leading zero; 100, the whole cycle, when it is not given (G10.4m's A/B tries 90, 80 and
-// 67 and plants 20).
-inline constexpr std::string_view kHintShareName = "hint-share=";
+// hint-share-N: Android's hint session's target as N per cent of its cycle (perf_hint.h hint_target_ns), a whole number
+// from 10 to 100 written without a leading zero; 100, the whole cycle, when it is not given (G10.4m's A/B of 100, 90, 80 and 67
+// kept 100).
+inline constexpr std::string_view kHintShareName = "hint-share-";
 inline constexpr unsigned kHintShareDefault = 100u;
 inline constexpr unsigned kHintShareLeast = 10u;
 
-// The share a `hint-share=` item gives (after the name); false when it is not a whole per cent from 10 to 100.
+// The share a `hint-share-` item gives (after the name); false when it is not a whole per cent from 10 to 100.
 [[nodiscard]] constexpr bool hint_share_from_text(std::string_view text, unsigned& share) noexcept {
     if (text.empty() || text.size() > 3u || text.front() == '0') {
         return false;
@@ -166,7 +160,7 @@ struct LaunchArgs {
     std::filesystem::path crash_dumps;  // --crash-dumps: crash dumps and reports; empty: <data>/crashes
     std::filesystem::path timeline;     // --timeline: the recorded timeline's file; empty: the diagnostics folder's
     unsigned diagnostics = 0u;          // --diagnostics: Diagnostic bits
-    unsigned hint_share = kHintShareDefault;  // --diagnostics hint-share=N: the hint target's share of its cycle, per cent
+    unsigned hint_share = kHintShareDefault;  // --diagnostics hint-share-N: the hint target's share of its cycle, per cent
     unsigned gpu_validation = 0u;       // --gpu-validation: 1 the graphics API's validation layer, 2 also Direct3D 12's GPU-based
     bool console_log = false;           // --console-log 1: the log stays on the console, not logs/latest.log
     // Started with its window hidden (Windows: STARTUPINFO's SW_HIDE, as a test starts it; elsewhere --hidden 1): no

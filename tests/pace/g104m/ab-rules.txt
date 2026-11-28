@@ -1,0 +1,28 @@
+== 120 Hz, A/B row events_per_minute
+b    runs 5 (good 5): row 350.3, 268.5, 447.4, 219.3, 328.8 | head_slope -0.005 (-0.007--0.002) forecast60 0.695 (0.686-0.704) cpu0 1668.420 (1603.240-1679.760) cpu3 1002.520 (983.950-1017.290) cpu7 899.400 (894.820-913.440) gpu 347.880 (346.210-348.600) 
+s90  runs 5 (good 5): row 315.4, 270.4, 302.5, 282.1, 342.5 | head_slope -0.005 (-0.008--0.003) forecast60 0.707 (0.682-0.711) cpu0 1639.630 (1627.320-1654.850) cpu3 1006.490 (988.130-1032.730) cpu7 900.580 (897.740-905.570) gpu 348.500 (347.090-352.290) 
+s80  runs 5 (good 5): row 254.6, 341.6, 240.9, 416.7, 276.0 | head_slope -0.006 (-0.009--0.004) forecast60 0.690 (0.684-0.716) cpu0 1642.980 (1618.010-1670.250) cpu3 1005.990 (994.950-1049.680) cpu7 900.980 (896.650-906.520) gpu 349.980 (347.630-350.870) 
+s67  runs 7 (good 5): row 331.8, 423.7, 288.7, 236.3, 185.0 | head_slope -0.007 (-0.008--0.002) forecast60 0.694 (0.693-0.720) cpu0 1677.170 (1601.280-1680.700) cpu3 1008.490 (997.530-1019.130) cpu7 900.450 (899.810-902.480) gpu 348.050 (347.270-352.740) 
+s20  runs 5 (good 5): row 450.4, 429.9, 292.9, 265.8, 536.6 | head_slope -0.006 (-0.007--0.003) forecast60 0.693 (0.638-0.717) cpu0 1669.680 (1610.510-1678.990) cpu3 1002.380 (992.230-1034.390) cpu7 900.850 (896.640-917.580) gpu 346.850 (345.650-348.440) 
+hps  runs 6 (good 6): row 544.5, 875.9, 383.3, 526.6, 395.9, 423.4 | head_slope -0.007 (-0.010--0.003) forecast60 0.710 (0.662-0.725) cpu0 1628.920 (1546.620-1646.830) cpu3 1001.170 (992.110-1009.980) cpu7 901.170 (899.020-908.880) gpu 348.055 (328.180-349.560) 
+baseline median 328.8 range 228.1
+  s90: gain 26.2 against the margin 228.1 -> no win; power rises: none
+  s80: gain 52.8 against the margin 228.1 -> no win; power rises: none
+  s67: gain 40.0 against the margin 238.7 -> no win; power rises: none
+  s20: gain -101.1 against the margin 270.9 -> no win; power rises: none
+  hps: gain -146.2 against the margin 492.6 -> no win; power rises: none
+chosen: the baseline stays
+== 60 Hz, A/B row events_per_minute
+b    runs 5 (good 5): row 4.1, 3.9, 3.4, 4.5, 4.1 | head_slope -0.012 (-0.016--0.011) forecast60 0.627 (0.607-0.630) cpu0 1216.820 (1160.980-1230.020) cpu3 884.190 (854.420-884.460) cpu7 896.090 (891.220-898.550) gpu 223.170 (222.780-223.630) 
+s90  runs 5 (good 5): row 4.3, 4.8, 7.2, 3.9, 19.6 | head_slope -0.013 (-0.018--0.012) forecast60 0.623 (0.607-0.640) cpu0 1209.800 (1163.040-1263.890) cpu3 894.680 (868.620-913.190) cpu7 899.140 (894.280-901.550) gpu 223.060 (222.830-227.360) 
+s80  runs 5 (good 5): row 5.0, 5.0, 5.0, 3.6, 4.3 | head_slope -0.012 (-0.016--0.011) forecast60 0.626 (0.617-0.645) cpu0 1214.670 (1168.660-1222.820) cpu3 878.930 (867.390-887.370) cpu7 895.910 (892.740-898.930) gpu 223.090 (222.950-223.100) 
+s67  runs 6 (good 5): row 4.5, 32.2, 4.5, 4.8, 3.2 | head_slope -0.012 (-0.012--0.011) forecast60 0.624 (0.613-0.633) cpu0 1205.940 (1177.540-1216.740) cpu3 880.570 (871.350-945.510) cpu7 895.580 (892.980-919.610) gpu 223.030 (222.850-240.460) 
+s20  runs 5 (good 5): row 4.1, 4.8, 5.7, 4.5, 4.7 | head_slope -0.014 (-0.017--0.011) forecast60 0.605 (0.570-0.651) cpu0 1222.920 (1188.490-1256.880) cpu3 880.620 (870.190-908.170) cpu7 896.360 (891.280-907.570) gpu 223.140 (222.830-229.270) 
+hps  runs 5 (good 5): row 16.4, 5.2, 5.4, 5.0, 5.0 | head_slope -0.016 (-0.018--0.011) forecast60 0.623 (0.587-0.640) cpu0 1210.600 (1150.550-1227.330) cpu3 881.890 (848.280-888.790) cpu7 896.350 (894.040-901.910) gpu 223.230 (223.070-227.510) 
+baseline median 4.1 range 1.2
+  s90: gain -0.7 against the margin 15.8 -> no win; power rises: none
+  s80: gain -0.9 against the margin 1.4 -> no win; power rises: none
+  s67: gain -0.4 against the margin 29.0 -> no win; power rises: none
+  s20: gain -0.6 against the margin 1.6 -> no win; power rises: none
+  hps: gain -1.1 against the margin 11.4 -> no win; power rises: none
+chosen: the baseline stays

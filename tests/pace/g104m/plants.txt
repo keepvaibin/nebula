@@ -1,0 +1,53 @@
+G10.4m: the plant runs against the baseline's bounds (a row's bound = the median of the five clean runs plus their range). Rows: late_share, three_refresh_share, unnamed_share, refreshes_mean (from the step to the screen), events_per_minute (repeated + skipped + shifted pictures), jumps_per_minute (shown minus asked changes over 1 ms).
+
+== 120 Hz: clean runs ab120_b_1..5; pace-fault (the 20 ms sleep every 2 s) pf120_1, pf120_2, pf120_2_bad (a second attempt of run 2); pace-depth pd120_1, pd120_2
+base     ab120_b_1      late_share=0.1387  three_refresh_share=0.9986  unnamed_share=0.1386  refreshes_mean=3.7994  events_per_minute=350.3030  jumps_per_minute=102.7310
+base     ab120_b_2      late_share=0.1172  three_refresh_share=0.9983  unnamed_share=0.1172  refreshes_mean=3.9147  events_per_minute=268.4860  jumps_per_minute=94.6690
+base     ab120_b_3      late_share=0.1312  three_refresh_share=0.9888  unnamed_share=0.1312  refreshes_mean=4.0275  events_per_minute=447.4000  jumps_per_minute=140.9200
+base     ab120_b_4      late_share=0.1488  three_refresh_share=0.9958  unnamed_share=0.1487  refreshes_mean=3.7553  events_per_minute=219.2810  jumps_per_minute=75.6040
+base     ab120_b_5      late_share=0.1042  three_refresh_share=0.9983  unnamed_share=0.1041  refreshes_mean=3.9452  events_per_minute=328.7920  jumps_per_minute=83.0990
+sleep    pf120_1        late_share=0.1321  three_refresh_share=0.9988  unnamed_share=0.1321  refreshes_mean=4.2735  events_per_minute=523.1660  jumps_per_minute=188.1210
+sleep    pf120_2        late_share=0.1743  three_refresh_share=0.9985  unnamed_share=0.1743  refreshes_mean=4.3514  events_per_minute=666.6100  jumps_per_minute=243.1060
+sleep    pf120_2_bad    late_share=0.1413  three_refresh_share=0.9986  unnamed_share=0.1413  refreshes_mean=4.6649  events_per_minute=1046.9830  jumps_per_minute=306.9560
+depth    pd120_1        late_share=0.1094  three_refresh_share=0.9992  unnamed_share=0.1094  refreshes_mean=4.0644  events_per_minute=317.8570  jumps_per_minute=101.6100
+depth    pd120_2        late_share=0.1085  three_refresh_share=0.9952  unnamed_share=0.1085  refreshes_mean=3.9598  events_per_minute=287.9480  jumps_per_minute=94.4430
+-- baseline bounds at 120 Hz (median + range):
+   late_share             median 0.1312 range 0.0446 bound 0.1758
+   three_refresh_share    median 0.9983 range 0.0098 bound 1.0080
+   unnamed_share          median 0.1312 range 0.0446 bound 0.1758
+   refreshes_mean         median 3.9147 range 0.2722 bound 4.1869
+   events_per_minute      median 328.7920 range 228.1190 bound 556.9110
+   jumps_per_minute       median 94.6690 range 65.3160 bound 159.9850
+-- sleep    runs beyond the bound, by row (of 3): {'late_share': 0, 'three_refresh_share': 0, 'unnamed_share': 0, 'refreshes_mean': 3, 'events_per_minute': 2, 'jumps_per_minute': 3}
+-- depth    runs beyond the bound, by row (of 2): {'late_share': 0, 'three_refresh_share': 0, 'unnamed_share': 0, 'refreshes_mean': 0, 'events_per_minute': 0, 'jumps_per_minute': 0}
+
+== 60 Hz: clean ab60_b_1..5; pace-fault pf60_1, pf60_2; pace-depth pd60_1, pd60_2
+base     ab60_b_1       late_share=0.0000  three_refresh_share=0.8099  unnamed_share=0.0000  refreshes_mean=2.8080  events_per_minute=4.0960  jumps_per_minute=0.0000
+base     ab60_b_2       late_share=0.0000  three_refresh_share=0.9171  unnamed_share=0.0000  refreshes_mean=2.9079  events_per_minute=3.8590  jumps_per_minute=0.0000
+base     ab60_b_3       late_share=0.0000  three_refresh_share=0.9273  unnamed_share=0.0000  refreshes_mean=2.9181  events_per_minute=3.3780  jumps_per_minute=0.0000
+base     ab60_b_4       late_share=0.0000  three_refresh_share=0.9327  unnamed_share=0.0000  refreshes_mean=2.9236  events_per_minute=4.5390  jumps_per_minute=0.0000
+base     ab60_b_5       late_share=0.0000  three_refresh_share=0.9403  unnamed_share=0.0000  refreshes_mean=2.9552  events_per_minute=4.1360  jumps_per_minute=0.0000
+sleep    pf60_1         late_share=0.0015  three_refresh_share=0.9477  unnamed_share=0.0015  refreshes_mean=3.0304  events_per_minute=25.4330  jumps_per_minute=6.2380
+sleep    pf60_2         late_share=0.0028  three_refresh_share=0.9467  unnamed_share=0.0028  refreshes_mean=3.0859  events_per_minute=20.2640  jumps_per_minute=0.4710
+depth    pd60_1         late_share=0.0000  three_refresh_share=0.7756  unnamed_share=0.0000  refreshes_mean=2.7875  events_per_minute=3.8240  jumps_per_minute=0.0000
+depth    pd60_2         late_share=0.0038  three_refresh_share=0.8830  unnamed_share=0.0038  refreshes_mean=2.9322  events_per_minute=16.0100  jumps_per_minute=10.9920
+-- baseline bounds at 60 Hz (median + range):
+   late_share             median 0.0000 range 0.0000 bound 0.0000
+   three_refresh_share    median 0.9273 range 0.1304 bound 1.0577
+   unnamed_share          median 0.0000 range 0.0000 bound 0.0000
+   refreshes_mean         median 2.9181 range 0.1472 bound 3.0653
+   events_per_minute      median 4.0960 range 1.1610 bound 5.2570
+   jumps_per_minute       median 0.0000 range 0.0000 bound 0.0000
+-- sleep    runs beyond the bound, by row (of 2): {'late_share': 2, 'three_refresh_share': 0, 'unnamed_share': 2, 'refreshes_mean': 1, 'events_per_minute': 2, 'jumps_per_minute': 2}
+-- depth    runs beyond the bound, by row (of 2): {'late_share': 1, 'three_refresh_share': 0, 'unnamed_share': 1, 'refreshes_mean': 0, 'events_per_minute': 1, 'jumps_per_minute': 1}
+
+== The false refusals: 15 clean-equivalent runs at each rate (hint-share-90, 80, 67 of the A/B: none moved a row) against the bounds of the five baseline runs
+120 Hz: rows beyond their bound: late_share 0, three_refresh_share 0, unnamed_share 0, refreshes_mean 0, events_per_minute 0, jumps_per_minute 0 (of 15)
+ 60 Hz: rows beyond their bound: late_share 4, three_refresh_share 0, unnamed_share 4, refreshes_mean 3, events_per_minute 3, jumps_per_minute 4 (of 15)
+All 20 clean-equivalent runs (the five baseline runs and these 15), the largest figure of a run, against the plant runs:
+ 60 Hz: late share 0.28% (pace-fault 0.15% and 0.28%); events a minute 32.2 (pace-fault 25.4 and 20.3); jumps a minute 27.6 (pace-fault 6.2 and 0.5); mean refreshes 3.24 (pace-fault 3.03 and 3.09)
+120 Hz: late share 17.1% (pace-fault 13.2%, 17.4%, 14.1%); mean refreshes 4.06 (pace-fault 4.27, 4.35, 4.66); events a minute 447 (pace-fault 523, 667, 1047); jumps a minute 141.8 (pace-fault 188, 243, 307)
+The game's own counts (the [pace] lines), per minute, the clean-equivalent runs' largest against the plant runs: 60 Hz jumps 26.3 (pace-fault 7.0 and 3.5), 120 Hz jumps 216 (pace-fault 193, 151, 178)
+So at 120 Hz the mean refreshes and the jumps (present times) lie beyond the bound in all three pace-fault runs and in none of the 15 clean-equivalent runs; at 60 Hz a hiccup
+of one clean run is as large as the sleep's effect, and no row refuses. pace-depth (--diagnostics pace-depth) moved no row in every run at either rate: the asked time minus the ready
+time is 1.63 and 1.77 refreshes at 60 Hz (clean 1.66 to 1.80) and 2.68 and 2.63 at 120 Hz (clean 2.48 to 2.66), so the plant does not deepen the queue on this build.

@@ -76,16 +76,12 @@ private:
 [[nodiscard]] constexpr std::int64_t hint_cycle_ns(std::int64_t frame_ns, std::int64_t slot_ns) noexcept {
     return slot_ns > 0 && slot_ns < frame_ns ? slot_ns : frame_ns;
 }
-// The session's target: `share_percent` of the cycle (--diagnostics hint-share=N, 10 to 100; 100, the whole cycle, until
-// G10.4m's A/B has chosen). The system steers the work toward the target, so a share under 100 keeps the clocks high
-// enough that the work ends that much before the slot does.
+// The session's target: `share_percent` of the cycle (--diagnostics hint-share-N, 10 to 100; 100, the whole cycle, is what G10.4m's
+// A/B on the tablet kept: no share beat it by more than the range of the runs). The system steers the work toward the target, so
+// a share under 100 would keep the clocks high enough that the work ends that much before the slot does.
 [[nodiscard]] constexpr std::int64_t hint_target_ns(std::int64_t cycle_ns, unsigned share_percent) noexcept {
     return cycle_ns * static_cast<std::int64_t>(share_percent) / 100;
 }
-// android/performance_hint.h APerformanceHintFeature APERF_HINT_GRAPHICS_PIPELINE (API 36), in the order perf_hint.cpp's
-// `[platform] hint-features` line names them (G10.3).
-inline constexpr std::int32_t kHintFeatureGraphicsPipeline = 3;
-
 // The calls of the platform's hint session (android/performance_hint.h), as the system has them: looked up by name on
 // Android (perf_hint.cpp), a test's own elsewhere. A null call is one the system lacks; a session is made only where
 // create_session, report and close_session are all there.
@@ -108,19 +104,6 @@ struct HintCalls {
     void (*duration_gpu)(void* duration, std::int64_t gpu_ns) = nullptr;
     int (*report2)(void* session, void* duration) = nullptr;
     int (*notify_spike)(void* session, bool cpu, bool gpu, const char* identifier) = nullptr;  // API 36
-    // The graphics-pipeline session (API 36): made from a creation config, with the native surface bound.
-    bool (*feature_supported)(std::int32_t feature) = nullptr;
-    int (*max_pipeline_threads)(void* manager) = nullptr;
-    void* (*config_create)() = nullptr;
-    void (*config_release)(void* config) = nullptr;
-    void (*config_tids)(void* config, const std::int32_t* tids, std::size_t size) = nullptr;
-    void (*config_target)(void* config, std::int64_t target_ns) = nullptr;
-    void (*config_graphics_pipeline)(void* config, bool enabled) = nullptr;
-    void (*config_surfaces)(void* config, void* const* windows, std::size_t windows_size, void* const* controls,
-                            std::size_t controls_size) = nullptr;
-    int (*create_from_config)(void* manager, void* config, void** session_out) = nullptr;
-    int (*set_surfaces)(void* session, void* const* windows, std::size_t windows_size, void* const* controls,
-                        std::size_t controls_size) = nullptr;
 };
 
 // The frame threads' hint session (G10.4, FRAME-MODEL 2.16): the threads it holds, its target, and when it is told a
@@ -131,9 +114,7 @@ struct HintCalls {
 class HintSession {
 public:
     struct Options {
-        unsigned share_percent = 100;    // the target's share of the cycle (--diagnostics hint-share=N)
-        bool per_step = false;           // one report per game step, as before G10.4 (--diagnostics hint-per-step)
-        bool graphics_pipeline = false;  // the graphics-pipeline session, its surface bound (--diagnostics hint-pipeline)
+        unsigned share_percent = 100;  // the target's share of the cycle (--diagnostics hint-share-N)
     };
     HintSession(const HintCalls& calls, Options options, std::int64_t frame_ns) noexcept;
     ~HintSession();
@@ -145,13 +126,10 @@ public:
     void add_thread(std::int32_t tid);
     // The frame's target (perf_hint_set_target): the cycle and the target follow it at the next step's end.
     void set_frame(std::int64_t frame_ns) noexcept { frame_ns_ = frame_ns; }
-    // The window the pictures go to (an ANativeWindow), bound to the graphics-pipeline session; null: none now. The
-    // caller keeps it alive while the session holds it.
-    void set_surface(void* window) noexcept;
-    // The step ends at now_ns (perf_hint_frame_done): step_work_ns is the busier thread's work over the step,
-    // cycle_work_ns over the cycle the step's end closes; slot_ns a picture's slot (0: none); gpu_ns a picture's GPU
+    // The step ends at now_ns (perf_hint_frame_done): cycle_work_ns is the busier thread's work over the cycle the step's end
+    // closes; slot_ns a picture's slot (0: none); gpu_ns a picture's GPU
     // time (0: not known).
-    void step_ends(std::int64_t now_ns, std::int64_t step_work_ns, std::int64_t cycle_work_ns, std::int64_t slot_ns,
+    void step_ends(std::int64_t now_ns, std::int64_t cycle_work_ns, std::int64_t slot_ns,
                    std::int64_t gpu_ns);
     // Whether a frame thread's mark at now_ns closes a cycle inside the step; then cycle_ends with that cycle's work.
     [[nodiscard]] bool cycle_due(std::int64_t now_ns) const noexcept { return left_ > 0 && now_ns >= due_ns_; }
@@ -162,7 +140,6 @@ public:
     [[nodiscard]] std::int64_t cycle_ns() const noexcept { return cycle_ns_; }
     [[nodiscard]] std::int64_t target_ns() const noexcept { return target_ns_; }
     [[nodiscard]] bool made() const noexcept { return session_ != nullptr; }
-    [[nodiscard]] bool pipeline() const noexcept { return pipeline_; }
 
 private:
     void hold(std::int64_t cycle_ns);
@@ -173,9 +150,7 @@ private:
     Options options_;
     std::vector<std::int32_t> tids_;
     void* session_ = nullptr;
-    void* surface_ = nullptr;
     bool stale_ = true;      // made again, with every thread and the target, before the next report
-    bool pipeline_ = false;  // the session made is the graphics-pipeline one
     std::int64_t frame_ns_;
     std::int64_t cycle_ns_ = 0;
     std::int64_t target_ns_ = 0;
@@ -202,9 +177,6 @@ std::int64_t perf_hint_frame_done() noexcept;
 // cycles do not count as the workload's measure (notifyWorkloadSpike, API 36). The game thread; a no-op where the system
 // lacks the call, and where there are no hints.
 void perf_hint_workload_spike(const char* what) noexcept;
-// The window the pictures go to (Android's ANativeWindow, from each new Vulkan surface; null: none), bound to the
-// graphics-pipeline session (--diagnostics hint-pipeline). Any thread; a no-op elsewhere.
-void perf_hint_set_surface(void* native_window) noexcept;
 // One frame thread's CPU time in the window the last perf_hint_frame_done closed.
 struct ThreadWork {
     const char* name;
