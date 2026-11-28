@@ -231,6 +231,7 @@ public:
     // back to an empty slot because a buffer or its Map was missing.
     struct Diagnostics {
         std::uint64_t places = 0u, place_failures = 0u, windows = 0u, window_failures = 0u;
+        std::uint64_t draws = 0u, flushes = 0u;                          // draws issued, flushes that held any
         std::uint64_t table_slots = 0u, table_missed = 0u;               // texture table slots built; those named but reading the null texture
         std::uint64_t views_written = 0u, views_released = 0u, textures_made = 0u, textures_filled = 0u;
         std::uint64_t offset_binds = 0u;                                // bindings made at an offset (the 11.1 path)

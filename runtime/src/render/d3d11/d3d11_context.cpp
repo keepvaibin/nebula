@@ -471,6 +471,13 @@ bool Context::initialize(const std::string& chosen_gpu, bool debug_layer) {
 }
 
 void Context::shutdown() noexcept {
+    if (device_ != nullptr) {
+        std::cout << "[draws] final: " << diag.draws << " draws in " << diag.flushes << " flushes, textures made " << diag.textures_made
+                  << " (filled " << diag.textures_filled << "), views written " << diag.views_written << " released " << diag.views_released
+                  << ", table slots " << diag.table_slots << " (missed " << diag.table_missed << "), places " << diag.places << " (failed "
+                  << diag.place_failures << "), windows " << diag.windows << " (failed " << diag.window_failures << "), uploads " << diag.uploads
+                  << " (" << diag.upload_bytes / 1024u << " KB)\n";
+    }
     if (immediate_ != nullptr) {
         immediate_->ClearState();
         immediate_->Flush();
