@@ -1,6 +1,6 @@
 """plan_test.py: tools/plan/plan.py, the step tool of the native plan (package T13).
 
-Two kinds of test. The plan's own files (docs/plan/native: 157 steps, their cards) are read as they are: every step has
+Two kinds of test. The plan's own files (docs/plan/native: 158 steps, their cards) are read as they are: every step has
 its card, every need names something, and ten and more real cards give the rows they must give. The commands run in a
 temporary git tree made here (a bare origin, a plan tree, work folders, a small ledger with CRLF line ends) with the
 landing step replaced by a fake: no game, no build, no network, not the real ledger, no gate run.
@@ -68,9 +68,9 @@ class RealPlanTest(unittest.TestCase):
     def setUpClass(cls):
         cls.steps = open_steps(TREE)
 
-    def test_the_plan_is_157_steps_in_one_order_with_every_step_open_at_the_start(self):
-        self.assertEqual(len(self.steps), 157)  # 138 until 11-24 (G2.3 became eight steps), 145 until 11-25 (package G10, ten steps), 155 until 11-26 (G10.2m), 156 until 11-27 (G10.4m)
-        self.assertEqual([int(s["order"]) for s in self.steps], list(range(1, 158)))
+    def test_the_plan_is_158_steps_in_one_order_with_every_step_open_at_the_start(self):
+        self.assertEqual(len(self.steps), 158)  # 138 until 11-24 (G2.3 became eight steps), 145 until 11-25 (package G10, ten steps), 155 until 11-26 (G10.2m), 156 until 11-27 (G10.4m), 157 until 11-27 (G10.5m)
+        self.assertEqual([int(s["order"]) for s in self.steps], list(range(1, 159)))
         self.assertEqual(self.steps[0]["step"], "S0.1.1")
         self.assertEqual({s["state"] for s in self.steps}, {"open"})
         self.assertEqual({s["commit"] for s in self.steps}, {""})
@@ -87,7 +87,7 @@ class RealPlanTest(unittest.TestCase):
             for line in (plan.native(TREE) / name).read_text(encoding="utf-8").splitlines():
                 if line.startswith("### ") and not line.startswith("### Rows of this package"):
                     headings += 1
-        self.assertEqual(headings, 157, "a card with no step, or a step with no card")
+        self.assertEqual(headings, 158, "a card with no step, or a step with no card")
 
     def test_every_need_names_steps_and_a_step_never_needs_a_later_one_of_a_different_package_unless_the_plan_says(self):
         ids = {s["step"] for s in self.steps}
@@ -1345,10 +1345,10 @@ class StatusTest(unittest.TestCase):
             self.assertIn("- none yet", text)
             self.assertIn("- A.1 First step", text)
 
-    def test_status_of_the_real_plan_says_157(self):
+    def test_status_of_the_real_plan_says_158(self):
         with at_the_start()[0], at_the_start()[1]:
             text = plan.status_text(TREE)
-        self.assertIn("Steps landed: 0 of 157.", text)
+        self.assertIn("Steps landed: 0 of 158.", text)
         self.assertIn("- S0.1.1 Land `rows/p022c` and `rows/p022d` as one batch", text)
 
 
