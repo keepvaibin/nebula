@@ -154,6 +154,7 @@ Nothing waits for the owner.
 | M-012 | closed | - | pace/pc: one lead change per run, up or down, is 'lead moved' until G10.5 (no covered flag on the [display-lead] line yet) | 0 | 49 | 105ba5de0 |
 | M-013 | closed | - | pace/pc and pace/tablet loads row: report only until G10.5, with a gross-break guard | 0 | 58 | 94deca863 |
 | M-014 | closed | - | plan.py fill rule: the writer may write later steps whose package needs are met while the next step in order waits on a device measurement or its own landing | 0 | 73 | 1fbef91c9 |
+| M-015 | open | - | gate: quarantine: a new refusing row or check is report only until it has passed on main 5 times | 0 | 0 | - |
 
 ## Decisions (172)
 
