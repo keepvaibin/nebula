@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-28 03:36. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-28 03:38. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 41 of 159 (26%).
 
@@ -8,6 +8,7 @@ Now: in work: small plan landing (G10.6 needs G10.5, G10.5m after G10.9, Swappy 
 
 In work now:
 - G10.5 The depth rule from ready time, stepping back down by trying (agent 1)
+- G7.1 Landing 1: `NMSG` version 2 beside version 1 (agent 2)
 
 ## Packages
 
@@ -140,7 +141,6 @@ Nothing waits for the owner.
 ## Blocked
 
 - G6.7 The surround law (P-193): hard: build/windows + github Linux sanitizers: galaxy_speaker_law_tests aborts with an AddressSanitizer heap-buffer-overflow on the GitHub Linux ASAN/UBSAN job (run 45652159093); the Windows gate stopped on it (report: D:/NebulaWork/plan/native/hard/G6.7.md)
-- G7.1 Landing 1: `NMSG` version 2 beside version 1: hard: push/ratchet: the native ratchet refuses it: env_read 0 -> 1 in crates/nebula-import/src/cook/message.rs (the test's std::env::var_os("NEBULA_WRITE_FIXTURE"), line 800); all other checks passed (report: D:/NebulaWork/plan/native/hard/G7.1.md)
 
 ## Tool mends
 
