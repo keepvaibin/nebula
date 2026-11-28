@@ -517,6 +517,11 @@ What P-202 and P-187 start from (read at 697535a86, 11-19; the form written befo
   tag processors on runs; (3) `NebulaUi`, `NebulaSettingsMenu`, `NebulaAchievementToast`, `StaffRoll`,
   `TitleSequenceProduct` and the mod surface on runs; (4) code points through the font (P-187); (5) version 1 and the
   in-text format deleted, the search above then giving only the 9 other hits.
+- Landing 1 as made (G7.1): version 2 is a runs part of the same file (the header's version and its offset; the layout
+  in `message.rs`'s head). A tag shorter than 6 bytes, odd or past the text, and a message with no 0, are refused by
+  the cook; a lone surrogate keeps its value; the strings cooked are a sound's name, the number font's text and a
+  ruby's reading (the string tag's is set while playing). Every cook writes the runs back in the in-text form and
+  compares them with the text (`runs_agree`); the game's reader (`MessageRunFile`) checks every index once at attach.
 - Proof: the text-layout test (every message's glyph sequence and pen positions, old path against new, every
   language and region) identical through landings 1 to 4; the gate's pictures; a fuzz test of malformed tags against
   the cook's parser; the search's count after landing 5.

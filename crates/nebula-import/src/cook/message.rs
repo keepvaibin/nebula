@@ -2,23 +2,50 @@
 //!
 //! Layout, little-endian:
 //! - header (48 bytes): "NMSG", then the counts and offsets of the messages, the text (16-bit units), the flow nodes
-//!   and the branches, and 2 reserved words;
+//!   and the branches, the version ([`VERSION`]), the offset of the runs, and a reserved word;
 //! - messages (12 bytes): the text's first unit, the camera set (u16), then bytes: _6, camera type, talk type, balloon
 //!   type, _A, _B;
-//! - text: UTF-16 units, each message ending in a 0. A 0x1A unit starts a tag: the next unit holds the tag's length in
-//!   bytes (from the 0x1A) and its group as two bytes, then the tag's id and parameters in units;
+//! - text (version 1, beside the runs until G7.5): UTF-16 units, each message ending in a 0. A 0x1A unit starts a tag:
+//!   the next unit holds the tag's length in bytes (from the 0x1A) and its group as two bytes, then the tag's id and
+//!   parameters in units;
 //! - nodes (16 bytes): type (1 message, 2 branch, 3 event), group (an event's kind), reserved (u16, 0), index (a message's
 //!   number, a branch's condition, an event's first branch), next (a message's next node, NONE at the end; a branch's
 //!   parameter; an event's value), next group (a message's group; a branch's first branch);
-//! - branches: node numbers, NONE for none.
+//! - branches: node numbers, NONE for none;
+//! - runs (version 2, 4-aligned, at the header's offset): each message parsed once ([`parse_runs`]). A header of 10
+//!   words, the counts and offsets (from the file's start) of the lists, the runs, the tag records, the code points and
+//!   the parameter units; then
+//!   - lists (16 bytes, one a message): its first run, its runs, its plain text's first code point and their count;
+//!   - runs (12 bytes): kind ([`RUN_TEXT`], [`RUN_TAG`]), first (a text run's first code point, a tag run's record),
+//!     count (a text run's code points; 1 for a tag);
+//!   - tag records (20 bytes): group (u8), 0 (u8), tag (u16), the first parameter unit and their count, the string's
+//!     first code point and their count;
+//!   - code points (u32): a message's plain text (its text runs one after another) and a 0, then each of its tags'
+//!     strings, each with a 0;
+//!   - parameter units (u16), as the game reads a tag's parameters.
 
 use anyhow::{bail, Context, Result};
+use std::collections::HashMap;
 
 pub const MAGIC: &[u8; 4] = b"NMSG";
+/// The file's version: 2, the runs beside the in-text form of version 1.
+pub const VERSION: u32 = 2;
 /// A node's reserved u16 (TalkNode::mReserved).
 const NODE_RESERVED: [u8; 2] = [0, 0];
 pub const NONE: u32 = u32::MAX;
 const HEADER: usize = 48;
+const RUNS_HEADER: usize = 40;
+/// A run's kind: code points of the text, or a tag record.
+pub const RUN_TEXT: u32 = 0;
+pub const RUN_TAG: u32 = 1;
+/// The unit that starts a tag in the version-1 text.
+const TAG: u16 = 0x1A;
+/// The groups (and the tag) whose tags name a string (CustomTagProcessor: exeSoundGroup, exeFontGroup,
+/// exeSystemGroupRuby).
+pub const GROUP_SOUND: u8 = 2;
+pub const GROUP_FONT: u8 = 10;
+pub const GROUP_SYSTEM: u8 = 255;
+pub const SYSTEM_RUBY: u16 = 2;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Message {
@@ -42,6 +69,132 @@ pub struct Nmsg {
     pub text: Vec<u16>,
     pub nodes: Vec<Node>,
     pub branches: Vec<u32>,
+}
+
+/// A message tag as a typed record: its group and tag, its parameter units, and the string it names (a sound's name,
+/// the number font's text, a ruby's reading; empty for the others).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct TagRecord {
+    pub group: u8,
+    pub tag: u16,
+    pub params: Vec<u16>,
+    pub string: Vec<u32>,
+}
+
+/// A piece of a message: code points of its text, or a tag.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Run {
+    Text(Vec<u32>),
+    Tag(TagRecord),
+}
+
+/// The code point at `at` and the units it takes: a surrogate pair is one, a lone surrogate keeps its value (the text
+/// as the disc has it).
+fn code_point(units: &[u16], at: usize) -> (u32, usize) {
+    let unit = units[at];
+    match (unit, units.get(at + 1)) {
+        (0xD800..=0xDBFF, Some(&low @ 0xDC00..=0xDFFF)) => {
+            (0x10000 + ((u32::from(unit) - 0xD800) << 10) + (u32::from(low) - 0xDC00), 2)
+        }
+        _ => (u32::from(unit), 1),
+    }
+}
+
+fn code_points(units: &[u16]) -> Vec<u32> {
+    let mut out = Vec::with_capacity(units.len());
+    let mut at = 0;
+    while at < units.len() {
+        let (code, used) = code_point(units, at);
+        out.push(code);
+        at += used;
+    }
+    out
+}
+
+/// The string a tag names, as the game reads it: a sound's name to its first 0 (exeSoundGroup), the number font's
+/// text (exeFontGroup), a ruby's reading after its first unit (exeSystemGroupRuby, which needs two units).
+fn tag_string(group: u8, tag: u16, params: &[u16]) -> Vec<u32> {
+    match (group, tag) {
+        (GROUP_SOUND, _) => code_points(&params[..params.iter().position(|u| *u == 0).unwrap_or(params.len())]),
+        (GROUP_FONT, _) => code_points(params),
+        (GROUP_SYSTEM, SYSTEM_RUBY) if params.len() >= 2 => code_points(&params[1..]),
+        _ => Vec::new(),
+    }
+}
+
+/// The message whose first unit of `text` is `start`, to its 0, parsed into runs. A tag is a 0x1A unit, a unit of its
+/// length in bytes from the 0x1A (even, at least 6) and its group, its tag and its parameters: one shorter, of an odd
+/// length or past the text is refused, and so is a message that reaches the text's end before its 0.
+pub fn parse_runs(text: &[u16], start: usize) -> Result<Vec<Run>> {
+    let mut runs = Vec::new();
+    let mut codes = Vec::new();
+    let mut at = start;
+    loop {
+        let Some(&unit) = text.get(at) else { bail!("the message at unit {start} reaches the text's end before its 0") };
+        if unit == 0 {
+            break;
+        }
+        if unit != TAG {
+            let (code, used) = code_point(text, at);
+            codes.push(code);
+            at += used;
+            continue;
+        }
+        let header = *text.get(at + 1).with_context(|| format!("a tag at unit {at}: its length past the text"))?;
+        let length = usize::from(header & 0xFF);
+        if length < 6 || length % 2 != 0 {
+            bail!("a tag at unit {at} of {length} bytes (a tag holds its id: 6 bytes or more, even)");
+        }
+        let end = at + length / 2;
+        if end > text.len() {
+            bail!("a tag at unit {at} of {length} bytes runs past the text's {} units", text.len());
+        }
+        if !codes.is_empty() {
+            runs.push(Run::Text(std::mem::take(&mut codes)));
+        }
+        let (group, tag, params) = ((header >> 8) as u8, text[at + 2], text[at + 3..end].to_vec());
+        let string = tag_string(group, tag, &params);
+        runs.push(Run::Tag(TagRecord { group, tag, params, string }));
+        at = end;
+    }
+    if !codes.is_empty() {
+        runs.push(Run::Text(codes));
+    }
+    Ok(runs)
+}
+
+/// Runs written back in the version-1 form, without the message's 0: the inverse of [`parse_runs`].
+pub fn runs_to_units(runs: &[Run]) -> Vec<u16> {
+    let mut out = Vec::new();
+    for run in runs {
+        match run {
+            Run::Text(codes) => {
+                for &code in codes {
+                    if code >= 0x10000 {
+                        let c = code - 0x10000;
+                        out.extend([0xD800 | (c >> 10) as u16, 0xDC00 | (c & 0x3FF) as u16]);
+                    } else {
+                        out.push(code as u16);
+                    }
+                }
+            }
+            Run::Tag(t) => {
+                out.extend([TAG, (6 + 2 * t.params.len() as u16) | (u16::from(t.group) << 8), t.tag]);
+                out.extend(&t.params);
+            }
+        }
+    }
+    out
+}
+
+/// The runs part's arrays, as written.
+#[derive(Default)]
+struct RunArrays {
+    lists: Vec<[u32; 4]>,
+    runs: Vec<[u32; 3]>,
+    tags: Vec<(u8, u16, [u32; 4])>,
+    codes: Vec<u32>,
+    params: Vec<u16>,
 }
 
 fn be16(bytes: &[u8], at: usize) -> Result<u16> {
@@ -169,12 +322,61 @@ impl Nmsg {
         Ok(nmsg)
     }
 
-    pub fn to_bytes(&self) -> Vec<u8> {
+    /// Each message's text parsed once into runs; messages that share their text share their list.
+    fn run_arrays(&self) -> Result<RunArrays> {
+        let mut out = RunArrays::default();
+        let mut parsed: HashMap<u32, [u32; 4]> = HashMap::new();
+        for (i, message) in self.messages.iter().enumerate() {
+            if let Some(list) = parsed.get(&message.text) {
+                out.lists.push(*list);
+                continue;
+            }
+            let runs = parse_runs(&self.text, message.text as usize).with_context(|| format!("message {i}"))?;
+            let (first_run, plain) = (out.runs.len() as u32, out.codes.len() as u32);
+            let mut tag = out.tags.len() as u32;
+            for run in &runs {
+                match run {
+                    Run::Text(codes) => {
+                        out.runs.push([RUN_TEXT, out.codes.len() as u32, codes.len() as u32]);
+                        out.codes.extend(codes);
+                    }
+                    Run::Tag(_) => {
+                        out.runs.push([RUN_TAG, tag, 1]);
+                        tag += 1;
+                    }
+                }
+            }
+            let list = [first_run, runs.len() as u32, plain, out.codes.len() as u32 - plain];
+            out.codes.push(0);
+            for run in &runs {
+                if let Run::Tag(t) = run {
+                    let record = [out.params.len() as u32, t.params.len() as u32, out.codes.len() as u32, t.string.len() as u32];
+                    out.params.extend(&t.params);
+                    out.codes.extend(&t.string);
+                    out.codes.push(0);
+                    out.tags.push((t.group, t.tag, record));
+                }
+            }
+            parsed.insert(message.text, list);
+            out.lists.push(list);
+        }
+        Ok(out)
+    }
+
+    /// The cooked file, version 1's arrays and the runs; the runs read back and agree with the text ([`runs_agree`]).
+    pub fn to_bytes(&self) -> Result<Vec<u8>> {
+        let runs = self.run_arrays()?;
         let messages_at = HEADER;
         let text_at = messages_at + 12 * self.messages.len();
         let nodes_at = (text_at + 2 * self.text.len() + 3) & !3;
         let branches_at = nodes_at + 16 * self.nodes.len();
-        let mut out = Vec::with_capacity(branches_at + 4 * self.branches.len());
+        let runs_at = branches_at + 4 * self.branches.len();
+        let lists_at = runs_at + RUNS_HEADER;
+        let run_at = lists_at + 16 * runs.lists.len();
+        let tags_at = run_at + 12 * runs.runs.len();
+        let codes_at = tags_at + 20 * runs.tags.len();
+        let params_at = codes_at + 4 * runs.codes.len();
+        let mut out = Vec::with_capacity(params_at + 2 * runs.params.len());
         out.extend_from_slice(MAGIC);
         for word in [
             self.messages.len(),
@@ -185,8 +387,8 @@ impl Nmsg {
             nodes_at,
             self.branches.len(),
             branches_at,
-            0,
-            0,
+            VERSION as usize,
+            runs_at,
         ] {
             out.extend_from_slice(&(word as u32).to_le_bytes());
         }
@@ -210,7 +412,38 @@ impl Nmsg {
         for b in &self.branches {
             out.extend_from_slice(&b.to_le_bytes());
         }
-        out
+        for word in [
+            runs.lists.len(),
+            lists_at,
+            runs.runs.len(),
+            run_at,
+            runs.tags.len(),
+            tags_at,
+            runs.codes.len(),
+            codes_at,
+            runs.params.len(),
+            params_at,
+        ] {
+            out.extend_from_slice(&(word as u32).to_le_bytes());
+        }
+        for word in runs.lists.iter().flatten().chain(runs.runs.iter().flatten()) {
+            out.extend_from_slice(&word.to_le_bytes());
+        }
+        for (group, tag, record) in &runs.tags {
+            out.extend_from_slice(&[*group, 0]);
+            out.extend_from_slice(&tag.to_le_bytes());
+            for word in record {
+                out.extend_from_slice(&word.to_le_bytes());
+            }
+        }
+        for code in &runs.codes {
+            out.extend_from_slice(&code.to_le_bytes());
+        }
+        for unit in &runs.params {
+            out.extend_from_slice(&unit.to_le_bytes());
+        }
+        runs_agree(self, &out)?;
+        Ok(out)
     }
 
     pub fn from_nmsg(bytes: &[u8]) -> Result<Nmsg> {
@@ -218,6 +451,9 @@ impl Nmsg {
             bail!("not a cooked message file");
         }
         let w = |i: usize| -> Result<usize> { Ok(le32(bytes, 4 * i)? as usize) };
+        if w(9)? != VERSION as usize {
+            bail!("a message file of version {} (this importer writes {VERSION})", w(9)?);
+        }
         let mut nmsg = Nmsg::default();
         for i in 0..w(1)? {
             let at = w(2)? + 12 * i;
@@ -245,9 +481,103 @@ impl Nmsg {
     }
 }
 
+/// A cooked file's runs, each message's read from the bytes as the game reads them: every index checked against its
+/// array, every text run inside its message's plain text, the plain text and each string followed by a 0.
+pub fn read_runs(bytes: &[u8]) -> Result<Vec<Vec<Run>>> {
+    let w = |at: usize, i: usize| -> Result<usize> { Ok(le32(bytes, at + 4 * i)? as usize) };
+    if !bytes.starts_with(MAGIC) || w(0, 9)? != VERSION as usize {
+        bail!("not a cooked message file of version {VERSION}");
+    }
+    let at = w(0, 10)?;
+    let (lists, runs, tags, codes, params) = ((w(at, 0)?, w(at, 1)?), (w(at, 2)?, w(at, 3)?), (w(at, 4)?, w(at, 5)?), (w(at, 6)?, w(at, 7)?), (w(at, 8)?, w(at, 9)?));
+    if lists.0 != w(0, 1)? {
+        bail!("{} run lists for {} messages", lists.0, w(0, 1)?);
+    }
+    let code = |i: usize| -> Result<u32> {
+        if i >= codes.0 {
+            bail!("code point {i} past the {}", codes.0);
+        }
+        le32(bytes, codes.1 + 4 * i)
+    };
+    let span = |first: usize, count: usize| -> Result<Vec<u32>> {
+        if code(first + count)? != 0 {
+            bail!("the code points {first} to {} end in no 0", first + count);
+        }
+        (first..first + count).map(code).collect()
+    };
+    let mut out = Vec::with_capacity(lists.0);
+    for m in 0..lists.0 {
+        let list = lists.1 + 16 * m;
+        let (first_run, run_num, plain, plain_num) = (w(list, 0)?, w(list, 1)?, w(list, 2)?, w(list, 3)?);
+        if first_run + run_num > runs.0 {
+            bail!("message {m}: runs {first_run} to {} past the {}", first_run + run_num, runs.0);
+        }
+        let mut message = Vec::with_capacity(run_num);
+        let mut text: Vec<u32> = Vec::new();
+        for r in first_run..first_run + run_num {
+            let (kind, first, count) = (w(runs.1 + 12 * r, 0)?, w(runs.1 + 12 * r, 1)?, w(runs.1 + 12 * r, 2)?);
+            match kind as u32 {
+                RUN_TEXT => {
+                    if first != plain + text.len() || count == 0 {
+                        bail!("message {m}: text run {r} at code point {first} of {count}, not next in its plain text");
+                    }
+                    let codes: Vec<u32> = (first..first + count).map(code).collect::<Result<_>>()?;
+                    text.extend(&codes);
+                    message.push(Run::Text(codes));
+                }
+                RUN_TAG => {
+                    if first >= tags.0 || count != 1 {
+                        bail!("message {m}: tag run {r} names record {first} of {}", tags.0);
+                    }
+                    let record = tags.1 + 20 * first;
+                    let (param, param_num, string, string_num) = (w(record, 1)?, w(record, 2)?, w(record, 3)?, w(record, 4)?);
+                    if param + param_num > params.0 {
+                        bail!("message {m}: tag record {first}'s parameters past the {}", params.0);
+                    }
+                    let units = (param..param + param_num).map(|i| le16(bytes, params.1 + 2 * i)).collect::<Result<_>>()?;
+                    message.push(Run::Tag(TagRecord {
+                        group: *bytes.get(record).context("past the end")?,
+                        tag: le16(bytes, record + 2)?,
+                        params: units,
+                        string: span(string, string_num)?,
+                    }));
+                }
+                _ => bail!("message {m}: run {r} of kind {kind}"),
+            }
+        }
+        if span(plain, plain_num)? != text {
+            bail!("message {m}: its plain text is not its text runs");
+        }
+        out.push(message);
+    }
+    Ok(out)
+}
+
+/// The runs of `cooked` against `nmsg`'s text: each message's runs, written back in the version-1 form, are its units
+/// to its 0, and each tag's string is the one the game reads from its parameters. Every cook proves it (the cook stops
+/// on a difference).
+pub fn runs_agree(nmsg: &Nmsg, cooked: &[u8]) -> Result<()> {
+    for (i, (message, runs)) in nmsg.messages.iter().zip(read_runs(cooked)?).enumerate() {
+        let mut units = runs_to_units(&runs);
+        units.push(0);
+        let start = message.text as usize;
+        if nmsg.text.get(start..start + units.len()) != Some(&units[..]) {
+            bail!("message {i}: its runs read other than its text");
+        }
+        for run in &runs {
+            if let Run::Tag(t) = run {
+                if t.string != tag_string(t.group, t.tag, &t.params) {
+                    bail!("message {i}: a tag of group {} holds another string than its parameters name", t.group);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 /// A message file cooked: a disc's BMG to NMSG.
 pub fn cook(bytes: &[u8]) -> Result<Vec<u8>> {
-    let out = Nmsg::from_disc(bytes)?.to_bytes();
+    let out = Nmsg::from_disc(bytes)?.to_bytes()?;
     #[cfg(feature = "proof-tools")]
     proof::reads_agree(bytes, &out)?;
     Ok(out)
@@ -266,7 +596,7 @@ pub mod proof {
 
     pub fn reads_agree(bytes: &[u8], cooked: &[u8]) -> Result<()> {
         let nmsg = Nmsg::from_nmsg(cooked)?;
-        if nmsg.to_bytes() != cooked {
+        if nmsg.to_bytes()? != cooked {
             bail!("NMSG reads back other than it was written");
         }
         let blocks = blocks(bytes)?;
@@ -390,5 +720,194 @@ mod tests {
         assert_eq!(nmsg.branches, [0, NONE]);
         let cooked = cook(&disc()).unwrap();
         assert_eq!(Nmsg::from_nmsg(&cooked).unwrap(), nmsg);
+        let tag = TagRecord { group: 1, tag: 0x0203, params: vec![], string: vec![] };
+        assert_eq!(read_runs(&cooked).unwrap(), [vec![Run::Text(vec![0x41])], vec![Run::Tag(tag)]]);
+    }
+
+    fn utf16(text: &str) -> Vec<u16> {
+        text.encode_utf16().collect()
+    }
+
+    fn codes(text: &str) -> Vec<u32> {
+        text.chars().map(u32::from).collect()
+    }
+
+    /// Text of every kind: characters, a surrogate pair, a lone surrogate, and the tags that name a string (a ruby, a
+    /// sound, the number font) and one that does not (a colour); a message that shares another's text, an empty one.
+    fn fixture() -> Nmsg {
+        let mut nmsg = Nmsg::default();
+        let message = |nmsg: &mut Nmsg, units: Vec<u16>| {
+            nmsg.messages.push(Message { text: nmsg.text.len() as u32, camera_set: 1, bytes: [0, 1, 2, 3, 4, 5] });
+            nmsg.text.extend(units);
+            nmsg.text.push(0);
+        };
+        let mut first = utf16("Hi");
+        first.extend([TAG, 0xFF0A, SYSTEM_RUBY, 0x0100, 0x3054]); // the ruby of one character, read "ご"
+        first.extend(utf16("語"));
+        first.extend([TAG, 0x0210, 0]);
+        first.extend(utf16("SE_A\0"));
+        first.extend(utf16("😀"));
+        first.push(0xD800);
+        first.extend([TAG, 0xFF08, 0, 0x0100]); // colour 1
+        first.extend(utf16("!"));
+        message(&mut nmsg, first);
+        nmsg.messages.push(nmsg.messages[0]);
+        message(&mut nmsg, vec![]);
+        let mut font = vec![TAG, 0x0A0A, 0];
+        font.extend(utf16("12"));
+        message(&mut nmsg, font);
+        nmsg.nodes.push(Node { kind: 1, group: 0, index: 0, next: NONE, next_group: 0 });
+        nmsg.branches.push(NONE);
+        nmsg
+    }
+
+    #[test]
+    fn each_message_is_parsed_once_into_runs_of_code_points_and_typed_tags() {
+        let nmsg = fixture();
+        let runs = read_runs(&nmsg.to_bytes().unwrap()).unwrap();
+        let tag = |group, tag, params: Vec<u16>, string: Vec<u32>| Run::Tag(TagRecord { group, tag, params, string });
+        let first = vec![
+            Run::Text(codes("Hi")),
+            tag(GROUP_SYSTEM, SYSTEM_RUBY, vec![0x0100, 0x3054], codes("ご")),
+            Run::Text(codes("語")),
+            tag(GROUP_SOUND, 0, utf16("SE_A\0"), codes("SE_A")),
+            Run::Text(vec![0x1F600, 0xD800]),
+            tag(GROUP_SYSTEM, 0, vec![0x0100], vec![]),
+            Run::Text(codes("!")),
+        ];
+        assert_eq!(runs, [first.clone(), first, vec![], vec![tag(GROUP_FONT, 0, utf16("12"), codes("12"))]]);
+        // The shared text is written once.
+        let bytes = nmsg.to_bytes().unwrap();
+        let runs_at = le32(&bytes, 40).unwrap() as usize;
+        assert_eq!(le32(&bytes, runs_at + 8).unwrap(), 7 + 1);
+        assert_eq!(le32(&bytes, runs_at + 16).unwrap(), 4);
+        let lists_at = le32(&bytes, runs_at + 4).unwrap() as usize;
+        assert_eq!(bytes[lists_at..lists_at + 16], bytes[lists_at + 16..lists_at + 32]);
+    }
+
+    /// The game's run reader (MessageHolder.hpp MessageRunFile) reads this file in native/tests/message_runs_tests.cpp:
+    /// the fixture's cooked bytes, as that test includes them. NEBULA_WRITE_FIXTURE=1 writes the file again.
+    #[test]
+    fn the_game_reads_the_runs_the_cook_writes() {
+        let bytes = fixture().to_bytes().unwrap();
+        let mut text = String::from("// The cook's NMSG of crates/nebula-import cook/message.rs tests::fixture (the test the_game_reads_the_runs_the_cook_writes\n// writes it, NEBULA_WRITE_FIXTURE=1).\n");
+        for line in bytes.chunks(16) {
+            let words: Vec<String> = line.iter().map(|b| format!("0x{b:02x},")).collect();
+            text.push_str(&words.join(" "));
+            text.push('\n');
+        }
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../native/tests/message_runs_fixture.inc");
+        if std::env::var_os("NEBULA_WRITE_FIXTURE").is_some() {
+            std::fs::write(&path, &text).unwrap();
+        }
+        let file = std::fs::read_to_string(&path).unwrap().replace('\r', "");
+        assert!(file == text, "{} is not the cook's: NEBULA_WRITE_FIXTURE=1 writes it", path.display());
+    }
+
+    /// The parse's rule, written plainly: a message is well formed when it reaches its 0 and each tag on the way is
+    /// even, holds its id and ends inside the text.
+    fn well_formed(text: &[u16], start: usize) -> bool {
+        let mut at = start;
+        while at < text.len() {
+            match text[at] {
+                0 => return true,
+                TAG => {
+                    let Some(header) = text.get(at + 1) else { return false };
+                    let length = usize::from(header & 0xFF);
+                    if length < 6 || length % 2 == 1 || at + length / 2 > text.len() {
+                        return false;
+                    }
+                    at += length / 2;
+                }
+                _ => at += 1,
+            }
+        }
+        false
+    }
+
+    #[test]
+    fn malformed_tags_are_refused_and_no_text_breaks_the_parse() {
+        for (text, why) in [
+            (vec![TAG], "past the text"),
+            (vec![TAG, 0x0105, 1, 0], "5 bytes"),
+            (vec![TAG, 0x0104, 0, 0], "4 bytes"),
+            (vec![TAG, 0x0102, 0], "2 bytes"),
+            (vec![TAG, 0x0100], "0 bytes"),
+            (vec![0x41, TAG, 0x010A, 1, 0], "runs past"),
+            (vec![0x41, 0x42], "before its 0"),
+            (vec![], "before its 0"),
+        ] {
+            let error = format!("{:#}", parse_runs(&text, 0).unwrap_err());
+            assert!(error.contains(why), "{text:x?}: {error}");
+        }
+        // Random texts heavy in tag starts, lengths and surrogates (a fixed seed): a text is parsed exactly when it is
+        // well formed, and its runs written back are its units to its 0; a file of such messages is written whole or
+        // refused, never half.
+        let mut seed = 0x2545_F491_4F6C_DD1Du64;
+        let mut next = |n: u64| {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed % n
+        };
+        let (mut parsed, mut refused) = (0, 0);
+        for _ in 0..200_000 {
+            let length = next(28) as usize;
+            let text: Vec<u16> = (0..length)
+                .map(|_| match next(9) {
+                    0 | 1 => TAG,
+                    2 => (next(24) as u16) | ((next(3) as u16) << 8),
+                    3 => 0,
+                    4 => 0xD800 + next(0x800) as u16,
+                    5 => 0xFF00 | next(0x100) as u16,
+                    _ => next(0x10000) as u16,
+                })
+                .collect();
+            let start = next(length as u64 + 1) as usize;
+            match parse_runs(&text, start) {
+                Ok(runs) => {
+                    assert!(well_formed(&text, start), "{text:x?} from {start}");
+                    let units = runs_to_units(&runs);
+                    assert_eq!(text.get(start..start + units.len()), Some(&units[..]), "{text:x?} from {start}");
+                    assert_eq!(text.get(start + units.len()), Some(&0));
+                    parsed += 1;
+                }
+                Err(_) => {
+                    assert!(!well_formed(&text, start), "{text:x?} from {start}");
+                    refused += 1;
+                }
+            }
+            let nmsg = Nmsg { messages: vec![Message { text: start as u32, ..Message::default() }], text: text.clone(), ..Nmsg::default() };
+            match nmsg.to_bytes() {
+                Ok(bytes) => assert_eq!(read_runs(&bytes).unwrap().len(), 1),
+                Err(_) => assert!(!well_formed(&text, start)),
+            }
+        }
+        // Both ways were taken often.
+        assert!(parsed > 10_000 && refused > 10_000, "{parsed} parsed, {refused} refused");
+    }
+
+    #[test]
+    fn a_file_of_another_version_is_refused() {
+        let mut bytes = fixture().to_bytes().unwrap();
+        bytes[36] = 1;
+        assert!(Nmsg::from_nmsg(&bytes).is_err());
+        assert!(read_runs(&bytes).is_err());
+    }
+
+    #[test]
+    fn runs_that_disagree_with_the_text_are_found() {
+        let nmsg = fixture();
+        let bytes = nmsg.to_bytes().unwrap();
+        let codes_at = le32(&bytes, le32(&bytes, 40).unwrap() as usize + 28).unwrap() as usize;
+        // The first code point, 'H', made 'J'.
+        let mut wrong = bytes.clone();
+        wrong[codes_at] = b'J';
+        assert!(runs_agree(&nmsg, &wrong).is_err());
+        // A run's code points past the array.
+        let mut past = bytes;
+        let run_at = le32(&past, le32(&past, 40).unwrap() as usize + 12).unwrap() as usize;
+        past[run_at + 8..run_at + 12].copy_from_slice(&u32::MAX.to_le_bytes());
+        assert!(read_runs(&past).is_err());
     }
 }

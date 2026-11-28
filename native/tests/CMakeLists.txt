@@ -69,5 +69,7 @@ native_test(native_scene_point_ray_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/scen
 # A note's sends as typed records against the mix words they were (P-221), and the filter values as floats (P-222).
 native_test(native_sound_send_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/sound_send_tests.cpp" "${game_src}/Sound/IIRCutoff.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/math/src/nebula_math.c")
+# A message file's runs (NMSG version 2, MessageHolder.hpp MessageRunFile, header only) on the file the cook writes (P-202).
+native_test(native_message_runs_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/message_runs_tests.cpp")
 # The benchmark run screen's part names (header only).
 native_test(native_run_parts_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/run_parts_tests.cpp")

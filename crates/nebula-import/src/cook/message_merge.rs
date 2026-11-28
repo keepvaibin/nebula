@@ -581,7 +581,7 @@ pub fn check_shape(json: &[u8], language: &str) -> Result<()> {
         row[id_at] = Cell::Text(id.into_bytes());
         ids.rows.push(row);
     }
-    merge(&game.to_bytes(), &ids.to_ntbl(), json, language).map(|_| ())
+    merge(&game.to_bytes()?, &ids.to_ntbl(), json, language).map(|_| ())
 }
 
 /// A language's messages with a mod's merge applied: (message.bmg, messageid.tbl).
@@ -660,7 +660,7 @@ pub fn merge(message_file: &[u8], id_table: &[u8], json: &[u8], language: &str) 
             walker.nmsg.nodes[node as usize].next = next;
         }
     }
-    Ok((nmsg.to_bytes(), ids.to_ntbl()))
+    Ok((nmsg.to_bytes()?, ids.to_ntbl()))
 }
 
 #[cfg(test)]

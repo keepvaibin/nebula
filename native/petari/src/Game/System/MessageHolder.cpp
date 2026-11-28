@@ -140,6 +140,10 @@ MessageData::MessageData(const char* pArchiveName)
     if (mFile->mMagic[0] != 'N' || mFile->mMagic[1] != 'M' || mFile->mMagic[2] != 'S' || mFile->mMagic[3] != 'G') {
         NEBULA_PANIC("%s: Message.bmg the importer did not cook", pArchiveName);
     }
+    if (!mRunFile.attach(msgData, pArchive->getResSize(msgData))) {
+        NEBULA_PANIC("%s: Message.bmg has no whole runs (NMSG version %u, this game reads %u)", pArchiveName,
+                     static_cast< unsigned >(mFile->mVersion), static_cast< unsigned >(cMessageFileVersion));
+    }
     mMessages = reinterpret_cast< const MessageRecord* >(msgData + mFile->mMessageOffset);
     mText = reinterpret_cast< const char16_t* >(msgData + mFile->mTextOffset);
     mNodes = reinterpret_cast< TalkNode* >(msgData + mFile->mNodeOffset);

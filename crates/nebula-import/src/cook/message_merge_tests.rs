@@ -10,7 +10,7 @@ pub(crate) fn game() -> (Vec<u8>, Vec<u8>) {
     }
     nmsg.nodes.push(Node { kind: 1, group: 0, index: 0, next: NONE, next_group: 0 });
     let table = TableIr::from_json(br#"{"columns":{"MessageId":"string","Index":"int"},"rows":[{"MessageId":"Game_A","Index":0},{"MessageId":"Game_B","Index":1}]}"#).unwrap();
-    (nmsg.to_bytes(), table.to_ntbl())
+    (nmsg.to_bytes().unwrap(), table.to_ntbl())
 }
 
 pub(crate) fn words(nmsg: &Nmsg, index: usize) -> String {
