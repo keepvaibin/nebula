@@ -39,6 +39,9 @@ landing, that is the lander's, not yours.
    `PLAN handoff <ID>` again must say `the sheet is complete`. Log line `written`.
 7. `PLAN stack`. `STACKED: <next>`: the folder is on `native/<next>`, on top of your step: go to point 2 with it.
    `STACK END`: the package is written; go to section 3.
+   When the next step in plan order is a measuring step (its card says "This is a measuring step"), `stack` prints `FILL:` and
+   makes the branch of the next later step whose needs are met, even of another package: write it as any step (points 2 to 6),
+   on top of the last one written. At most 8 such steps in one stack; each stays on its own branch.
 
 A step whose card cannot be done as written (a fact of the code stands against it, after you have checked): commit what is
 done, `PLAN blocked <ID> "<what is done, what is left, what stands in the way>"`, and go to section 3: the steps after it in

@@ -16,7 +16,9 @@ Keep your context small: read output with `tail`, `head` and `grep`, never a who
 `PLAN status`, the parts `## In work`, `## Written ahead` and `## Stack`:
 
 - a step in work (`native/<ID>`): land it (section 2);
-- else the step written ahead, else the first row of the stack: `PLAN start <ID>`. It moves the step's own commits onto
+- else the step written ahead, else the first row of the stack in the order `PLAN status` lists it (a step of package G10 first, then
+  the rest in the order written; `PLAN start` of a fill step, a step of another package written while a measuring step waited, says
+  `waits:` while a G10 step or the step it stands on has not landed): `PLAN start <ID>`. It moves the step's own commits onto
   main's tip and says `prepared ahead` or `from the stack`. When it says the commits `do not apply`, that is hard (section 4:
   `PLAN hard` takes a stacked step too; the report names the files of the conflict from the line `start` printed);
 - none of them: report `nothing to land` and end.

@@ -772,9 +772,19 @@ quick tour on the three PC renderers when a picture can change, `PLAN check` who
 sheet (`PLAN handoff <ID>`: `Changes`, `Pictures declared`, `Expected test effects`, `Hard if`; `PLAN land` refuses a
 step whose sheet is missing or has a heading with nothing under it). Then `PLAN stack` makes the next step's branch on
 its tip, until `STACK END`: the package's last step (the next package is written after this one's landings, the last of
-them its full check). The lander gives `PLAN land <ID>` in the background and waits with `PLAN wait <ID>` (one line when
+them its full check), or a measuring step as the next step in order (`STACK END` says so when no later step has its needs met;
+while one does, `stack` writes it as a fill step, the paragraph below). The lander gives `PLAN land <ID>` in the background and waits with `PLAN wait <ID>` (one line when
 the landing ends, one call per 9 minutes at most); after each landing `PLAN start <next>` moves the next stacked step's own
 commits onto main's tip. Section 4.2 (`ahead`) is not used by the roles.
+
+The fill rule (mend M-014, the owner's plan of 11-27, B1): a measuring step (its card says "This is a measuring step"; a helper
+measures it on the tablet once the step before it has landed) is not written by a writer. While it is the next step in plan order,
+`PLAN stack` writes instead the next step in plan order whose package needs are met (`FILL:` in its output), and again after each,
+up to 8 fill steps in one stack. The order inside a package is kept, a step whose need is not landed or not written is never
+offered, a blocked step still holds what needs it, and while the next step in order is a code step nothing is filled. Each fill
+step has its own branch on the last step written. The stack lands in the order written, with one rule: `PLAN start` of a fill step
+waits until the step it stands on has landed and while a stacked step of package G10 (a pacing step) has its needs landed, so the
+lander lands the G10 step first (`PLAN status` and `PLAN stack --list` list it first). A fill step lands when the gate is free.
 
 | Simple: the lander fixes it, at most 2 tries a step | Hard: `PLAN hard <ID> "<line>"`, a report of at most 30 lines, then the fixer |
 | --- | --- |
