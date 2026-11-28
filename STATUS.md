@@ -1,12 +1,13 @@
 # Nebula native plan: status
 
-Written 2026-11-27 21:25. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-27 21:26. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
-Steps landed: 41 of 157 (26%).
+Steps landed: 41 of 158 (26%).
 
 Now: G10.5 owed items landed (main 14f8bdc50, 158 steps); in work: writer for G10.5 (the lead's margin, covered flag, jumps to 0)
 
-In work now: Nothing started.
+In work now:
+- G10.5 The depth rule from ready time, stepping back down by trying (agent 1)
 
 ## Packages
 
@@ -19,7 +20,7 @@ In work now: Nothing started.
 | R2 | 5 | 5 |
 | G2 | 12 | 16 |
 | G6 | 1 | 8 |
-| G10 | 6 | 12 |
+| G10 | 6 | 13 |
 | G1 | 0 | 5 |
 | R3 | 0 | 13 |
 | R4 | 0 | 10 |
@@ -314,7 +315,7 @@ Nothing waits for the owner.
 - 2026-11-27 G10.4m: (a) G10.3's tablet proofs: at 60 and at 120 Hz the game's log holds the five required [platform] lines and pace.py's row 'what the platform offers' reads 5 of 5 (probe_def60, probe_def120, g103p_clean and every A/B run); a build with the vulkan-images line removed reads 4 of 5 and pace/tablet refuses it (the gate's own reading of the run: REFUSED, kind fail, at both rates), the clean build passes; the floor is 1.99 refreshes at 120 Hz and 0.99 at 60 Hz (the frame-timeline line; the preferred timeline 1 of 7 and 1 of 6) and the Vulkan surface's minImageCount 4, maximum 64 (asked 5, made 5, FIFO); cmd thermalservice override-status takes 0 to 6 ('Invalid status' for 7 and 9), dumpsys thermalservice then shows IsStatusOverride true and that status, reset gives it back, and the headroom (0.73 to 0.76) does not follow it; ro.build.version.sdk is 36 and all twelve newer calls are in the hint-calls line; the game step and the walk on the tablet (medians of 5-minute runs, ms): at 120 Hz before G10.3 2.691 and 2.714 (walk 0.893, 0.897), G10.3 2.719 (0.895), G10.4 with the share 100 over five runs 2.691 (0.890), the final build 2.721 (0.885); at 60 Hz before 2.789 and 2.782 (1.122, 1.088), G10.3 2.781 and 2.800 (1.117, 1.115), G10.4 2.715 (1.070), final 2.755 (1.076): not slower beyond the runs' own spread (0.02 to 0.04 ms) (because each command and its run folder under D:/NebulaWork/build/Nebula-native/g104m/runs is in the sheet; the before build is G10.2m's test app (main f93613da6), the G10.3 one the long run's test app of main 94deca863, the G10.4 and final ones built from this tree; a G10.3 run whose latency record was short (a PC build beside it) is not used for the clocks but its game timeline is)
 - 2026-11-27 G10.4m: the jumps a minute of the format-2 baseline (tests/pace/tablet-base.json, tools/gate/pace.py) are a report at 120 and at 60 Hz until G10.5: pace.BASELINE_REFUSES at 120 Hz is the mean refreshes alone, and the jumps refuse only a gross break, pace.BASELINE_GROSS, a figure above twice the highest clean run on record (120 Hz: 2 x 142 = 284 a minute; 60 Hz: 2 x 28 = 56); bar 1 (the mean refreshes, 120 Hz) keeps refusing by its bound; the stored file is unchanged (the rule is in pace.py); G10.5 removes BASELINE_GROSS and the jumps refuse again by their bound (because the first landing of G10.4m was refused by the jumps alone, 185.6 a minute against the bound 160.0, on a clean build: the clean tablet at 120 Hz makes 60 to 142 jumps a minute (21 runs) and now 186, with a late share of 17 to 21%, the fault G10.5 to G10.9 exist to remove, not a bound to tune around; the planner decided on 11-27 that no more baseline runs are made (ten runs of a noisy baseline would still be noise); the 20 ms sleep is still refused at 120 Hz by the mean refreshes (4.27, 4.35 and 4.66 against 4.19 in the plant runs))
 
-## Checks changed during the run (94)
+## Checks changed during the run (96)
 
 - 2026-11-22 S0.1.3 tools/verify/console_census.py: the open group gx_sections counts the four section names GXMT, GXTG, GXTM and GXWP with a ceiling of 31, and the closed group fifo excludes only those four whole words (allowed by docs/engine/FRAME-MODEL.md section 2.9)
 - 2026-11-22 U-unattended tools/gate/main_push_guard.py: the guard also refuses a push of a branch named plant/... (allowed by docs/plan/native/TOOL-MEND-PLANTS.md, how a plant is kept from ever landing)
@@ -410,6 +411,8 @@ Nothing waits for the owner.
 - 2026-11-27 M-013 tools/gate/tests/pace_test.py: the loads block (comment, the LOAD_FLOOR lines, the expectations 'as many as main: pass' and '8 load misses against main's 5: FAIL' now 'recorded') and the whole M-008 floor block (the loads_of cases that expected FAIL for a count above the most of main's last 5, the floor and window check) are replaced by cases of the gross-break guard: 54 missed recorded and 55 FAIL on Vulkan (readings 6, 11, 24, 27), 94 and 95 on Direct3D 12, jumps at twice the most, no reading: recorded; LOADS none still fails any miss (allowed by the planner's order of 11-27 (case 1) in the sheet of M-013; PLAN-2026-11-20/briefs/AD-invisible-pacing.md (the loads report))
 - 2026-11-27 M-013 tools/gate/pace.py: the row 'loads' while LOADS is 'main': a report ('recorded') that refuses only a count of load-window misses or jumps above LOAD_GROSS (2) times the most of the renderer's readings (pace-history.tsv and LOAD_SEEN); it refused a count above the most of main's last 5 readings, with LOAD_FLOOR 3 readings needed; LOAD_READINGS and LOAD_FLOOR are removed; with LOADS 'none' (from G10.5) any miss or jump is refused as before (allowed by the planner's order of 11-27 (case 1) in the sheet of M-013; PLAN-2026-11-20/briefs/AD-invisible-pacing.md (the loads report))
 - 2026-11-27 G10.4m tools/gate/tests/frametimeline_test.py: the cases of the baseline row: the switch (REFUSES_SHIPPED, now a dict by rate), the stored baseline's late share bound ('a worse late share: refused' now 'a late share at the median plus the range: pass' and one case beyond it: refused) and the block that judged with pace.BASELINE_REFUSES set to True and then False are replaced by cases of the rows by rate (every row refusing, then as shipped: 120 Hz mean refreshes and jumps refuse, 60 Hz none) and of the bound as the median plus the range (allowed by the card, docs/plan/native/05-NATIVE-LANE-G.md, step G10.4m (c) and (d))
+- 2026-11-27 G10.5m plan tools/gate/tests/plan_test.py: the real plan is read as 158 steps in orders 1 to 158 and 158 card headings, not 157 (the test names, the counts, the docstring) (allowed by the planner's decision of 11-27 (the tablet's display stall traced in a new measuring step after G10.5), docs/plan/native/05-NATIVE-LANE-G.md, G10.5m)
+- 2026-11-27 G10.5m plan tools/gate/tests/plan_cards_test.py: the real cards read are those of places 12 to 158, not 12 to 157 (LAST_STEP, the function cards_12_to_158, the count test now 147 cards) (allowed by the planner's decision of 11-27 (the tablet's display stall traced in a new measuring step after G10.5), docs/plan/native/05-NATIVE-LANE-G.md, G10.5m)
 
 ## Tool faults
 
