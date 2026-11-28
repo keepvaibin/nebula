@@ -11,7 +11,7 @@ namespace {
     const s32 cMaxStarBits = 9999;
     const bool cDodoryuShellOnly = false;
     const bool cBegomanFireProof = false;
-GameDataFunction::addPlayerLeft(99);
+//GameDataFunction::addPlayerLeft(99);
 };  // namespace
 
 namespace GameRules {
