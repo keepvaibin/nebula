@@ -1,8 +1,8 @@
 #include "Game/System/GameRules.hpp"
 
 namespace {
-    const s32 cPlayerHealth = 3;
-    const s32 cLifeUpHealth = 6;
+    const s32 cPlayerHealth = 88;
+    const s32 cLifeUpHealth = 99;
     const s32 cMaxCoins = 999;
     const s32 cMaxStarBits = 9999;
     const bool cDodoryuShellOnly = false;
