@@ -6,8 +6,7 @@ Steps landed: 40 of 157 (25%).
 
 Now: G10.4m measured; in work: lander landing G10.4m
 
-In work now:
-- G10.4m G10.3's tablet proofs, how the late share is classified, the baseline rows, the hint's target by A/B (agent 1)
+In work now: Nothing started.
 
 ## Packages
 
@@ -128,6 +127,7 @@ Nothing waits for the owner.
 ## Blocked
 
 - G6.7 The surround law (P-193): hard: build/windows + github Linux sanitizers: galaxy_speaker_law_tests aborts with an AddressSanitizer heap-buffer-overflow on the GitHub Linux ASAN/UBSAN job (run 45652159093); the Windows gate stopped on it (report: D:/NebulaWork/plan/native/hard/G6.7.md)
+- G10.4m G10.3's tablet proofs, how the late share is classified, the baseline rows, the hint's target by A/B: hard: pace/tablet: pace-rate-120/vulkan refused against the new stored baseline format 2: jumps per minute 185.6 beyond bound 160.0 (the sheet's own bound: clean runs of main spread 60 to 142) (report: D:/NebulaWork/plan/native/hard/G10.4m.md)
 
 ## Tool mends
 
