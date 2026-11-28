@@ -124,6 +124,7 @@ In work now:
 - G10.5 The depth rule from ready time, stepping back down by trying: proof 3: the tablet with the work raised to 20 ms for 5 s and back: the depth rises (one step in play) and falls at the next covered moment, in row 1; a rule that ignores the burst refused by the same run (agent 1, 2026-11-27 22:11)
 - G10.5 The depth rule from ready time, stepping back down by trying: proof 4: the game step's time and the walk's on the PC and the tablet before and after: never slower (the quick tour's pictures on d3d12, d3d11, vulkan: 24 of 24 the same, done) (agent 1, 2026-11-27 22:11)
 - G10.5 The depth rule from ready time, stepping back down by trying: proof 5 through the real tool: recipe 10b, pace/pc clean on Direct3D 12 and Vulkan passes, the planted lead stepping in play refused (pace_test.py's cases done) (agent 1, 2026-11-27 22:11)
+- G10.5 The depth rule from ready time, stepping back down by trying: proof 6: 5 runs of 5 min at 120 Hz and 5 at 60 Hz of the clean build on the tablet make 0 jumps a minute in play; remake tests/pace/tablet-base.json from them if its figures change; the clean build passes pace/tablet at both rates (agent 1, 2026-11-27 22:11)
 
 ## Waiting for the owner
 
@@ -150,7 +151,7 @@ Nothing waits for the owner.
 | M-011 | closed | - | pace/tablet baseline rows refuse on the stored baseline's own spread at 120 Hz: report only until G10.4m classifies them | 0 | 75 | f18e39975 |
 | M-012 | closed | - | pace/pc: one lead change per run, up or down, is 'lead moved' until G10.5 (no covered flag on the [display-lead] line yet) | 0 | 49 | 105ba5de0 |
 | M-013 | closed | - | pace/pc and pace/tablet loads row: report only until G10.5, with a gross-break guard | 0 | 58 | 94deca863 |
-| M-014 | open | - | plan.py fill rule: the writer may write later steps whose package needs are met while the next step in order waits on a device measurement or its own landing | 0 | 7 | - |
+| M-014 | open | - | plan.py fill rule: the writer may write later steps whose package needs are met while the next step in order waits on a device measurement or its own landing | 0 | 8 | - |
 
 ## Decisions (172)
 
