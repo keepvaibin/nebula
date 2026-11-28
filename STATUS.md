@@ -123,6 +123,7 @@ In work now:
 - G10.5 The depth rule from ready time, stepping back down by trying: proof 2: the tablet at 60 Hz, 3 runs of 5 min: no frame with three refreshes from step to screen after 10 s but inside a named mode change; at 120 Hz the depth asked does not stay above the floor after a burst (row 1, [present-timing] depth fields) (agent 1, 2026-11-27 22:11)
 - G10.5 The depth rule from ready time, stepping back down by trying: proof 3: the tablet with the work raised to 20 ms for 5 s and back: the depth rises (one step in play) and falls at the next covered moment, in row 1; a rule that ignores the burst refused by the same run (agent 1, 2026-11-27 22:11)
 - G10.5 The depth rule from ready time, stepping back down by trying: proof 4: the game step's time and the walk's on the PC and the tablet before and after: never slower (the quick tour's pictures on d3d12, d3d11, vulkan: 24 of 24 the same, done) (agent 1, 2026-11-27 22:11)
+- G10.5 The depth rule from ready time, stepping back down by trying: proof 5 through the real tool: recipe 10b, pace/pc clean on Direct3D 12 and Vulkan passes, the planted lead stepping in play refused (pace_test.py's cases done) (agent 1, 2026-11-27 22:11)
 
 ## Waiting for the owner
 
