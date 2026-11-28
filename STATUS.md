@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-28 03:58. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-28 03:59. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 41 of 159 (26%).
 
@@ -138,6 +138,7 @@ In work now:
 - G10.7 Image count and queue bound, where G10.2 shows buffer stuffing: proof 3 (G10.5m): the planted queue-past run is refused by the rows (more lates) in the same session (agent 1, 2026-11-28 03:45)
 - G10.7 Image count and queue bound, where G10.2 shows buffer stuffing: proof 4 (G10.5m and the PC speed run): the game step's and the walk's time before and after on the PC and the tablet, never slower (agent 1, 2026-11-28 03:45)
 - G10.8 The frame-rate vote at 60 Hz: proof 1 (G10.5m): vote-default and vote-always against the build without them, 3 runs of 5 minutes at 60 Hz on the 120 Hz tablet: no ModeChange in progress frame after the first 2 s, [display] refresh-hz at 60, first-window lates not more; the losing vote is deleted (Old path) (agent 1, 2026-11-28 03:58)
+- G10.8 The frame-rate vote at 60 Hz: proof 2 (G10.5m): on a panel with adaptive refresh (Display.hasArrSupport) the platform keeps 60; if none is at hand the sheet says no such panel is ours (agent 1, 2026-11-28 03:59)
 
 ## Waiting for the owner
 
