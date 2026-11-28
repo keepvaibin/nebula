@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-28 07:29. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-28 08:00. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 42 of 160 (26%).
 
@@ -171,7 +171,7 @@ Nothing waits for the owner.
 | M-013 | closed | - | pace/pc and pace/tablet loads row: report only until G10.5, with a gross-break guard | 0 | 58 | 94deca863 |
 | M-014 | closed | - | plan.py fill rule: the writer may write later steps whose package needs are met while the next step in order waits on a device measurement or its own landing | 0 | 73 | 1fbef91c9 |
 | M-015 | closed | - | gate: quarantine: a new refusing row or check is report only until it has passed on main 5 times | 0 | 133 | 5fbb024aa |
-| M-016 | open | - | plan.py: a tools-only mend blocks only the steps whose files it touches; the others go on (next, start, stack, land) | 0 | 84 | - |
+| M-016 | open | - | plan.py: a tools-only mend blocks only the steps whose files it touches; the others go on (next, start, stack, land) | 0 | 116 | - |
 
 ## Decisions (183)
 
@@ -476,12 +476,21 @@ Nothing waits for the owner.
 
 ## Tool faults
 
-17 tool faults recorded.
+26 tool faults recorded.
 
 The last 20:
 
 | When | Step | Test | What happened | What the agent could not do |
 | --- | --- | --- | --- | --- |
+| 2026-11-28 08:00 | G7.2 | vulkan | approved on NVIDIA GeForce RTX 5090 driver 610.88.0; these runs: NVIDIA GeForce RTX 5090 driver 610.88.0, unknown driver | - |
+| 2026-11-28 08:00 | G7.2 | d3d12 | approved on NVIDIA GeForce RTX 5090 driver 32.0.16.1088; these runs: NVIDIA GeForce RTX 5090 driver 32.0.16.1088, unknown driver | - |
+| 2026-11-28 08:00 | G7.2 | d3d11 | approved on NVIDIA GeForce RTX 5090 driver 32.0.16.1088; these runs: NVIDIA GeForce RTX 5090 driver 32.0.16.1088, unknown driver | - |
+| 2026-11-28 08:00 | G7.2 | text-layout-jp | not-run: needs disc RMGJ01: this run's game is RMGE01; give --pak-for RMGJ01=<its game.pak> | - |
+| 2026-11-28 08:00 | G7.2 | text-layout-pal | not-run: needs disc RMGP01: this run's game is RMGE01; give --pak-for RMGP01=<its game.pak> | - |
+| 2026-11-28 08:00 | G7.2 | text-layout-jp | not-run: needs disc RMGJ01: this run's game is RMGE01; give --pak-for RMGJ01=<its game.pak> | - |
+| 2026-11-28 08:00 | G7.2 | text-layout-pal | not-run: needs disc RMGP01: this run's game is RMGE01; give --pak-for RMGP01=<its game.pak> | - |
+| 2026-11-28 08:00 | G7.2 | text-layout-jp | not-run: needs disc RMGJ01: this run's game is RMGE01; give --pak-for RMGJ01=<its game.pak> | - |
+| 2026-11-28 08:00 | G7.2 | text-layout-pal | not-run: needs disc RMGP01: this run's game is RMGE01; give --pak-for RMGP01=<its game.pak> | - |
 | 2026-11-27 17:01 | - | (by hand) | G10.4m, 11-27: frametimeline.py's --latency reads (the capture's loop in tools/gate/frametimeline.py Capture, 128 frames each, every second at 120 Hz) lose pictures when the PC is busy: with an Android build running beside, 3 runs read 41% to 57% of the pictures the game counted (clean 87% to 97%), so the rows read gaps as seams and the figure of such a run is not the build's; G10.4m plays a run again when frames/displayed is under 0.85 at 120 Hz or 0.78 at 60 Hz (g104m_check.py) and does not change the loop | - |
 | 2026-11-27 17:01 | - | (by hand) | G10.4m, 11-27: --diagnostics pace-depth (present_slots.cpp PresentDepth::place) no longer deepens the tablet's queue: in 4 five-minute runs (pd120_1 and 2, pd60_1 and 2, D:/NebulaWork/build/Nebula-native/g104m/runs) the mean of the time a picture asks for minus when it was ready is 2.63 to 2.68 refreshes at 120 Hz (clean 2.48 to 2.66) and 1.63 to 1.77 at 60 Hz (clean 1.66 to 1.80), so no row of pace/tablet can see the plant; G10.2m's proof 4 (60 Hz three or more refreshes 97.2% against 93.5%) came from an 80 s run whose clean figure moves 81% to 94% between 5 minute runs; the plant's code is outside G10.4m's card and was not changed | - |
 | 2026-11-27 06:24 | G10.4 | pace/pc | d3d12: not played, the machine was not quiet: still busy after 30 minutes: NebulaD11.exe (pid 37240), NebulaD11.exe (pid 3700), Nebula.exe (pid 2876), Nebula.exe (pid 52412), NebulaVk.exe (pid 40128), NebulaVk.exe (pid 60984); vulkan: not p | - |
@@ -493,9 +502,3 @@ The last 20:
 | 2026-11-26 11:15 | G10.1 | pace/pc | d3d12: no run (the harness's exit 1); vulkan: no run (the harness's exit 1) | - |
 | 2026-11-26 10:32 | G10.1 | pace/pc | d3d12: no run (the harness's exit 1); vulkan: no run (the harness's exit 1) | - |
 | 2026-11-25 12:43 | R-008 | gate.py | could not be started: [Errno 22] Invalid argument | - |
-| 2026-11-24 23:26 | - | build/windows | game: 1 job(s) failed in the compiler cache, not in the compiler; built again (sccache: error: Only one usage of each socket address (protocol/network address/port) is normally permitted. (os error 10048)) | nothing: the build was run again by itself |
-| 2026-11-24 05:33 | nightly | tour/tablet | 101 of 102 pass; not: 013-CocoonExGalaxy-1 tool | - |
-| 2026-11-23 22:44 | - | measure/step/tablet | the measure could not run: the run failed, harness exit 1 | - |
-| 2026-11-23 20:39 | R1.1 | vulkan | approved on Adreno (TM) 740 driver 512.676.1; these runs: Adreno (TM) 740 driver 512.676.1, unknown driver | R1.2's landing waited 38 min behind test/ak-second-run and ended not judged; nothing tested |
-| 2026-11-23 20:39 | R1.1 | 010-CannonFleetGalaxy-1 | harness-error: the runner raised RuntimeError: run-as dev.nebula.galaxy.test gave no folder (is the test app installed, and debuggable?): | - |
-| 2026-11-22 14:33 | - | (by hand) | plan.py land S0.1.3 ended code 4 (not judged): gate.py's push check refused main's move because tools/verify/console_census.py's closed group fifo counts 31 (the card's section names GXMT, GXTG, GXTM, GXWP in native/include/nebula_model.h, runtime/src/render/core/model_sections_tests.cpp, crates/nebula-import/src/cook/model_write.rs); it is a certain refusal of the change, reported as not judged; plan.py toolfault --last then said: agent 1 has no tool fault recorded | - |
