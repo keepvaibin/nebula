@@ -1,7 +1,7 @@
 """plan_mend_scope_test.py: an open mend holds only the steps whose files it touches (mend M-016, the owner's order of 11-28; docs/plan/native/AGENT.md
 section 9), on the temporary git tree of plan_fixture.
 
-    python -X utf8 -I tools/gate/tests/plan_mend_scope_test.py
+    python -X utf8 -I tools/gate/tests/plan_mend_scope_test.py [--work FOLDER]
 
 No game, no build, no network; the landing is a fake; nothing of D:/NebulaWork/plan is touched. Each test was seen to fail with the thing it
 guards broken (named in a phrase after the test).
@@ -15,7 +15,8 @@ guards broken (named in a phrase after the test).
   the_helpers_branch_is_read   the files `mend/M-00N` changes were not counted (the sheet's list empty)
   both_agents                             the second agent's `start` or `next` was held by a mend that touches none of its files, or let through one that does
   a_repair_is_held                        a repair went on while a mend was open
-  the_mend_lands_first_and_closes_as_before   `mend close` or a second `mend open` changed
+  the_mend_closes_as_before_and_a_second_one_is_refused   `mend close` or a second `mend open` changed
+  the_gates_work_option_is_not_given_to_unittest   the gate's `--work FOLDER` reached unittest, which refused it (the first landing of this mend)
 """
 import pathlib
 import sys
@@ -304,5 +305,31 @@ class ScopeTest(Base):
         self.assertNotIn("Mend M-001 is open", text)
 
 
+def test_names(args):
+    """The test names asked for on the command line; the harness's own option --work FOLDER (the gate starts every self-test with it) is not one."""
+    out, skip = [], False
+    for a in args:
+        if skip:
+            skip = False
+        elif a == "--work":
+            skip = True
+        elif not a.startswith("--work="):
+            out.append(a)
+    return out
+
+
+class RunnerTest(unittest.TestCase):
+    def test_the_gates_work_option_is_not_given_to_unittest(self):
+        self.assertEqual(test_names(["--work", "D:/x", "ScopeTest"]), ["ScopeTest"])
+        self.assertEqual(test_names(["--work=D:/x"]), [])
+        self.assertEqual(test_names(["-k", "a"]), ["-k", "a"])
+
+
+def main():
+    result = unittest.main(argv=[sys.argv[0]] + test_names(sys.argv[1:]), exit=False, verbosity=1).result
+    print("plan_mend_scope_test: %s (%d tests)" % ("pass" if result.wasSuccessful() else "FAIL", result.testsRun))
+    return 0 if result.wasSuccessful() else 1
+
+
 if __name__ == "__main__":
-    unittest.main()
+    sys.exit(main())
