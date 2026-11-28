@@ -15,7 +15,7 @@ MarioMeter::MarioMeter(const char* pName) : NameObj(pName) {
 void MarioMeter::initLifeCount(s32 life) {
     if (life == 1) {
         mUseSuddenDeath = true;
-        mSuddenDeathMeter->initCount(life);
+        mSuddenDeathMeter->initCount(70);
         mHitPointMeter->kill();
     } else {
         mUseSuddenDeath = false;
