@@ -140,7 +140,7 @@ order	step	package	title	package_needs	card_file	state	commit
 139	G6.5	G6	Streams read ahead; a stream's end by the step clock (P-225, P-226)	S0.1	05-NATIVE-LANE-G.md	open	
 140	G6.6	G6	Movie sound rate and volume (P-271, P-219's movie half)	S0.1	05-NATIVE-LANE-G.md	open	
 141	G6.8	G6	The audio device (P-037, P-071, P-072, P-286)	S0.1	05-NATIVE-LANE-G.md	open	
-142	G7.1	G7	Landing 1: `NMSG` version 2 beside version 1	S0.1	05-NATIVE-LANE-G.md	open	
+142	G7.1	G7	Landing 1: `NMSG` version 2 beside version 1	S0.1	05-NATIVE-LANE-G.md	landed	75022c7a0
 143	G7.2	G7	Landing 2: the tag processors on runs (with P-201)	S0.1	05-NATIVE-LANE-G.md	open	
 144	G7.3	G7	Landing 3: the screens, the host and the mod surface on runs	S0.1	05-NATIVE-LANE-G.md	open	
 145	G7.4	G7	Landing 4: code points through the font (P-187)	S0.1	05-NATIVE-LANE-G.md	open	
