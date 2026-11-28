@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-27 22:03. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-27 22:04. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 41 of 158 (26%).
 
-Now: G10.5 owed items landed (main 14f8bdc50, 158 steps); in work: writer for G10.5 (the lead's margin, covered flag, jumps to 0)
+Now: in work: writer G10.5-G10.9 + Swappy; mender M-014 (fill rule) in parallel
 
 In work now:
 - G10.5 The depth rule from ready time, stepping back down by trying (agent 1)
