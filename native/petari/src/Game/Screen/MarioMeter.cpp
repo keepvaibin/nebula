@@ -15,17 +15,17 @@ MarioMeter::MarioMeter(const char* pName) : NameObj(pName) {
 void MarioMeter::initLifeCount(s32 life) {
     if (life == 1) {
         mUseSuddenDeath = true;
-        mSuddenDeathMeter->initCount(70);
+        mSuddenDeathMeter->initCount(life);
         mHitPointMeter->kill();
     } else {
         mUseSuddenDeath = false;
-        mHitPointMeter->initCount(99);
+        mHitPointMeter->initCount(life);
         mSuddenDeathMeter->kill();
     }
 }
 
 void MarioMeter::setLifeCount(s32 life) {
-    mUseSuddenDeath ? mSuddenDeathMeter->setCount(80) : mHitPointMeter->setCount(50);
+    mUseSuddenDeath ? mSuddenDeathMeter->setCount(life) : mHitPointMeter->setCount(life);
 }
 
 void MarioMeter::powerUp() {
