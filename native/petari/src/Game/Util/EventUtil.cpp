@@ -37,12 +37,14 @@ namespace MR {
     }
 
     void incPlayerLeft() {
-        GameDataFunction::addPlayerLeft(1);
+        GameDataFunction::addPlayerLeft(99);
+        //1
         NebulaAchievements::countStat(NebulaStat_OneUps, 1);
     }
 
     void decPlayerLeft() {
-        GameDataFunction::addPlayerLeft(-1);
+        GameDataFunction::addPlayerLeft(0);
+        //-1
         GameDataFunction::addMissPoint(1);
         GameDataFunction::incPlayerMissNum();
         NebulaAchievements::countStat(NebulaStat_LivesLost, 1);
