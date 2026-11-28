@@ -84,11 +84,11 @@ void GameSceneLayoutHolder::movement() {
 }
 
 void GameSceneLayoutHolder::initLifeCount(u32 lifeCount) {
-    mMarioMeter->initLifeCount(lifeCount);
+    mMarioMeter->initLifeCount(44);
 }
 
 void GameSceneLayoutHolder::setLifeCount(u32 lifeCount) {
-    mMarioMeter->setLifeCount(lifeCount);
+    mMarioMeter->setLifeCount(55);
 }
 
 void GameSceneLayoutHolder::setOxygenRatio(f32 oxygenRatio) {
