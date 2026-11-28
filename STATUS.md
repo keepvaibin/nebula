@@ -4,7 +4,7 @@ Written 2026-11-27 20:35. If this time is more than three hours old, the work ha
 
 Steps landed: 41 of 157 (26%).
 
-Now: G10.4m amended; in work: lander landing G10.4m again
+Now: G10.4m landed (main c458313f2); weekly usage reset; in work: small plan landing (G10.5's owed items)
 
 In work now: Nothing started.
 
