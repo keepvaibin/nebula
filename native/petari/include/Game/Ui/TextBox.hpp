@@ -36,6 +36,11 @@ namespace Ui {
         virtual u32 SetString(const char16_t*, u32, u32);
 
         const Rect GetTextDrawRect(TextWriterBase< char16_t >*) const;
+        // The writer as the box prints with it: its font, size, spaces, width limit (none for a number), draw flag and
+        // processor; then its colours. PlaceTextRect moves a text's measured rectangle to where the box draws it.
+        void SetupTextWriter(TextWriterBase< char16_t >* pWriter, bool isNumber) const;
+        void SetupTextColors(TextWriterBase< char16_t >* pWriter) const;
+        Rect PlaceTextRect(Rect rect) const;
         void SetTextColor(Color8, Color8);
         void SetFont(const Font*);
         u32 GetStringBufferLength() const;

@@ -3,11 +3,14 @@
 #include "Game/Ui/Rect.hpp"
 #include <NebulaGpu.h>
 #include <nebula_math.h>
+#include "Game/Util/TextRuns.hpp"
 
 namespace Ui {
     template < typename CharType >
     class TextWriterBase;
 
+    // `str`: the text of version 1 at the code or tag met. For a text in runs (the writer's *Runs functions) `str` is
+    // null and `runs` the text, `runPos` the place after the item met and `runEnd` the end of the print.
     template < typename CharType >
     struct PrintContext {
         TextWriterBase< CharType >* writer;
@@ -15,6 +18,9 @@ namespace Ui {
         f32 xOrigin;
         f32 yOrigin;
         u32 flags;
+        const TextRuns* runs;
+        TextRunPos runPos;
+        TextRunPos runEnd;
     };
 
     template < typename CharT >
@@ -41,6 +47,12 @@ namespace Ui {
         // The alpha of the next character printed, when this processor sets one (and counts the character); false: the
         // writer's own alpha.
         virtual bool NextCharAlpha(u8*) { return false; }
+        // A tag of a text in runs, as its typed record: the writer meets it where the text has it (context->runPos is the
+        // place after it). A processor that knows no tags skips it.
+        virtual Operation ProcessRunTag(const MessageTagRecord&, ContextType*) { return OPERATION_DEFAULT; }
+        virtual Operation CalcRectRunTag(Rect*, const MessageTagRecord&, ContextType*) { return OPERATION_DEFAULT; }
+        // A print starts over a text in runs (TextWriterBase::PrintRunsImpl).
+        virtual void BeginPrintRuns(const TextRuns*) {}
 
         void ProcessLinefeed(ContextType*);
         void ProcessTab(ContextType*);

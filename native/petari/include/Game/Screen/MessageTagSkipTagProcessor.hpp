@@ -44,3 +44,43 @@ public:
 
     const char16_t* mMessage;
 };
+
+namespace MR {
+    class Text16;
+}  // namespace MR
+
+// A tag as a group function reads it (CustomTagProcessor): a typed record of a text in runs, or a tag read in the text of
+// version 1 (that side goes with version 1, G7.5). A record is read only inside its parameters and string.
+class MessageTagView {
+public:
+    explicit MessageTagView(const MessageEditorMessageTag& rTag) : mInText(rTag), mRecord(nullptr), mText(nullptr) {
+    }
+    MessageTagView(const MessageTagRecord& rRecord, const TextRuns& rText)
+        : mInText(static_cast< const char16_t* >(nullptr)), mRecord(&rRecord), mText(&rText) {
+    }
+
+    bool isRuns() const {
+        return mRecord != nullptr;
+    }
+    // The tag read in the text of version 1 (only when !isRuns()).
+    const MessageEditorMessageTag& getInText() const {
+        return mInText;
+    }
+    s32 getGroup() const;
+    int getTag() const;
+    // The parameters as MessageEditorMessageTag reads them; a record's parameter past its units is 0.
+    u8 getParam8(int index) const;
+    u16 getParam16(int index) const;
+    // In bytes.
+    s32 getParamLength() const;
+    // The number tag's value: its first two parameter units as the game writes them (CustomTagProcessor::setArgNumber).
+    s32 getNumber() const;
+    // A record's string (a sound's name, the number font's text, a ruby's reading) as UTF-16 units (a code point past
+    // U+FFFF as its two surrogates) and a 0, in rDst; its units. A record without one: none.
+    u32 getString(MR::Text16& rDst) const;
+
+private:
+    MessageEditorMessageTag mInText;
+    const MessageTagRecord* mRecord;
+    const TextRuns* mText;
+};

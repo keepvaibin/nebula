@@ -7,6 +7,7 @@
 #include "Game/Util/DueRing.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
+#include "Game/Util/MessageTag.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Util/TextString.hpp"
 #include <nebula_utf8.h>
@@ -291,6 +292,41 @@ int main() {
         check(nebula_utf8::put_utf16(0x1F600u, pair) == 2u && pair[0] == 0xD83Du && pair[1] == 0xDE00u &&
                   nebula_utf8::put_utf16(0x41u, nullptr) == 1u,
               "a code as UTF-16 units");
+    }
+
+    {
+        // P-237: a number font tag in the room it is given (the text cut to what fits there and in the tag's byte length),
+        // and convertUTF16ToASCII with no room writes nothing.
+        const auto size = [](const char16_t* pTag) { return static_cast< u32 >(pTag[1] & 0xFF); };  // the header's first byte
+        char16_t tag[160];
+        for (char16_t& rUnit : tag) {
+            rUnit = 0xFFFF;
+        }
+        char16_t* pEnd = MR::addNumberFontTag(tag, 16, 1234);
+        check(pEnd == tag + 7 && *pEnd == 0 && tag[0] == cMessageTagEscape && size(tag) == 14 && tag[3] == u'1' && tag[6] == u'4' &&
+                  tag[8] == 0xFFFF,
+              "a number font tag with room to spare");
+        for (char16_t& rUnit : tag) {
+            rUnit = 0xFFFF;
+        }
+        pEnd = MR::addNumberFontTag(tag, 6, 1234);
+        check(pEnd == tag + 5 && *pEnd == 0 && size(tag) == 10 && tag[4] == u'2' && tag[6] == 0xFFFF, "a number font tag cut to its room");
+        for (char16_t& rUnit : tag) {
+            rUnit = 0xFFFF;
+        }
+        pEnd = MR::addNumberFontTag(tag, 3, 1234);
+        check(pEnd == tag && tag[0] == 0 && tag[1] == 0xFFFF, "a room too small for the tag gets only the terminator");
+        tag[0] = 0xFFFF;
+        pEnd = MR::addNumberFontTag(tag, 0, 1234);
+        check(pEnd == tag && tag[0] == 0xFFFF, "no room: nothing written");
+        pEnd = MR::addNumberFontTag(tag, 160, u"%0200d", 7);
+        check(pEnd == tag + 3 + 124 && *pEnd == 0 && size(tag) == 254 && tag[126] == u'0',
+              "a number font tag cut to what its byte length holds");
+
+        char ascii[2] = {'x', 'y'};
+        check(MR::convertUTF16ToASCII(ascii, u"ab", 0) == 0 && MR::convertUTF16ToASCII(ascii, u"ab", -1) == 0 && ascii[0] == 'x',
+              "convertUTF16ToASCII with no room writes nothing");
+        check(MR::convertUTF16ToASCII(ascii, u"ab", 2) == 1 && ascii[0] == 'a' && ascii[1] == 0, "convertUTF16ToASCII in its room");
     }
 
     if (sFailures != 0) {

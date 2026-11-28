@@ -22,6 +22,9 @@
     "save-files-again",
     "save-newer",
     "save-slow-exit",
-    "save-slow-exit-again"
+    "save-slow-exit-again",
+    "text-layout",
+    "text-layout-pal",
+    "text-layout-jp"
   ]
 }

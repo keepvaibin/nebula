@@ -112,14 +112,22 @@ fn code_points(units: &[u16]) -> Vec<u32> {
 }
 
 /// The string a tag names, as the game reads it: a sound's name to its first 0 (exeSoundGroup), the number font's
-/// text (exeFontGroup), a ruby's reading after its first unit (exeSystemGroupRuby, which needs two units).
+/// text (exeFontGroup), a ruby's reading (exeSystemGroupRuby, which needs two units).
 fn tag_string(group: u8, tag: u16, params: &[u16]) -> Vec<u32> {
     match (group, tag) {
         (GROUP_SOUND, _) => code_points(&params[..params.iter().position(|u| *u == 0).unwrap_or(params.len())]),
         (GROUP_FONT, _) => code_points(params),
-        (GROUP_SYSTEM, SYSTEM_RUBY) if params.len() >= 2 => code_points(&params[1..]),
+        (GROUP_SYSTEM, SYSTEM_RUBY) if params.len() >= 2 => code_points(&ruby_reading(params)),
         _ => Vec::new(),
     }
+}
+
+/// A ruby's reading: on the disc its parameters are a byte, the count of the base's characters, then the reading's
+/// units in big-endian order from the next byte (the console reads them at byte 1, its last byte a pad), so each of
+/// its units is the low byte of one parameter unit and the high byte of the next (the parameters are units of the
+/// disc's byte pairs).
+fn ruby_reading(params: &[u16]) -> Vec<u16> {
+    params.windows(2).map(|pair| (pair[0] & 0xFF) << 8 | pair[1] >> 8).collect()
 }
 
 /// The message whose first unit of `text` is `start`, to its 0, parsed into runs. A tag is a 0x1A unit, a unit of its
@@ -742,7 +750,7 @@ mod tests {
             nmsg.text.push(0);
         };
         let mut first = utf16("Hi");
-        first.extend([TAG, 0xFF0A, SYSTEM_RUBY, 0x0100, 0x3054]); // the ruby of one character, read "ご"
+        first.extend([TAG, 0xFF0A, SYSTEM_RUBY, 0x0130, 0x5400]); // the ruby of one character, read "ご" (bytes 01 30 54 00)
         first.extend(utf16("語"));
         first.extend([TAG, 0x0210, 0]);
         first.extend(utf16("SE_A\0"));
@@ -768,7 +776,7 @@ mod tests {
         let tag = |group, tag, params: Vec<u16>, string: Vec<u32>| Run::Tag(TagRecord { group, tag, params, string });
         let first = vec![
             Run::Text(codes("Hi")),
-            tag(GROUP_SYSTEM, SYSTEM_RUBY, vec![0x0100, 0x3054], codes("ご")),
+            tag(GROUP_SYSTEM, SYSTEM_RUBY, vec![0x0130, 0x5400], codes("ご")),
             Run::Text(codes("語")),
             tag(GROUP_SOUND, 0, utf16("SE_A\0"), codes("SE_A")),
             Run::Text(vec![0x1F600, 0xD800]),

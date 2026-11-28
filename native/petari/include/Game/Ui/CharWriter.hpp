@@ -7,6 +7,14 @@
 
 namespace Ui {
     class Font;
+    class CharWriter;
+
+    // Takes each glyph a silent writer meets, with its place (the text-layout test, TextLayoutCheck.cpp); in play none is
+    // set (CharWriter::sGlyphRecorder).
+    class GlyphRecorder {
+    public:
+        virtual void glyph(const CharWriter& rWriter, CharCode code, f32 x, f32 y) = 0;
+    };
 
     class CharWriter {
     public:
@@ -203,6 +211,7 @@ namespace Ui {
         }
 
         static LoadingTexture mLoadingTexture;
+        static GlyphRecorder* sGlyphRecorder;
 
         ColorMapping mColorMapping;
         VertexColor mVertexColor;

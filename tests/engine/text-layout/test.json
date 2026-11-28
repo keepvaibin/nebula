@@ -1,0 +1,37 @@
+{
+  "harness": 1,
+  "name": "text-layout",
+  "about": "Every message of every language of the US disc, page by page, lays out in the talk balloon's text box glyph for glyph the same from its runs (NMSG version 2) as from the text of version 1: each glyph's character, font, place, scale and colours, each page's rectangle and width (MR::checkTextLayout, Game/Screen/TextLayoutCheck.cpp; G7.2's proof 1).",
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "disc": "RMGE01",
+  "limit_seconds": 300,
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::checkTextLayout",
+      "signature": "u32()",
+      "args": [],
+      "fact": "text.differ"
+    },
+    {
+      "at": 90,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "text.differ",
+      "is": 0
+    },
+    {
+      "log": "text layout: 13 files, 7462 messages, [1-9][0-9]{3,} pages, [1-9][0-9]{5,} glyphs, 0 differ",
+      "times": 1
+    },
+    {
+      "no_log": "text layout: differs"
+    }
+  ]
+}

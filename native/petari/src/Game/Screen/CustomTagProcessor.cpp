@@ -152,7 +152,7 @@ namespace Ui {
             yCursorAdj = orgCursorY - GetCursorY();
         }
 
-        PrintContext< CharType > context = {this, str, xOrigin, yOrigin, 0};
+        PrintContext< CharType > context = {this, str, xOrigin, yOrigin, 0, nullptr, TextRunPos(), TextRunPos()};
         CharStrmReader reader = GetFont()->GetCharStrmReader();
         reader.Set(str);
 
@@ -326,7 +326,7 @@ CustomTagProcessor::Operation CustomTagProcessor::CalcRect(Ui::Rect* rect, u16 c
     Operation operation = OPERATION_DEFAULT;
     Impl::GroupFunctionInfo* info = Impl::findGroupFunctionInfo(tag.getGroup());
     if (info) {
-        operation = (this->*info->mFunction)(rect, tag, context);
+        operation = (this->*info->mFunction)(rect, MessageTagView(tag), context);
     }
 
     context->str += tag.getSkipLength();
@@ -356,11 +356,43 @@ CustomTagProcessor::Operation CustomTagProcessor::Process(u16 code, ContextType*
     Operation operation = OPERATION_DEFAULT;
     Impl::GroupFunctionInfo* info = Impl::findGroupFunctionInfo(tag.getGroup());
     if (info) {
-        operation = (this->*info->mFunction)(nullptr, tag, context);
+        operation = (this->*info->mFunction)(nullptr, MessageTagView(tag), context);
     }
 
     context->str += tag.getSkipLength();
     return operation;
+}
+
+CustomTagProcessor::Operation CustomTagProcessor::ProcessRunTag(const MessageTagRecord& rTag, ContextType* pContext) {
+    return runTag(nullptr, rTag, pContext);
+}
+
+CustomTagProcessor::Operation CustomTagProcessor::CalcRectRunTag(Ui::Rect* pRect, const MessageTagRecord& rTag, ContextType* pContext) {
+    return runTag(pRect, rTag, pContext);
+}
+
+// As Process and CalcRect: a tag of a group with no function is skipped; the place after the tag is the writer's.
+CustomTagProcessor::Operation CustomTagProcessor::runTag(Ui::Rect* pRect, const MessageTagRecord& rTag, ContextType* pContext) {
+    Impl::GroupFunctionInfo* info = Impl::findGroupFunctionInfo(rTag.mGroup);
+    if (info == nullptr) {
+        return OPERATION_DEFAULT;
+    }
+
+    if (!mNoCharSpace && !(pContext->flags & 1)) {
+        pContext->writer->MoveCursorX(pContext->writer->GetCharSpace());
+    }
+
+    return (this->*info->mFunction)(pRect, MessageTagView(rTag, *pContext->runs), pContext);
+}
+
+void CustomTagProcessor::calcRestRect(const Ui::TextWriterBase< char16_t >& rWriter, Ui::Rect* pRect, const MessageTagView& rTag,
+                                      ContextType* pContext) const {
+    if (rTag.isRuns()) {
+        rWriter.CalcRunsRect(pRect, *pContext->runs, pContext->runPos, MR::findRunsPageEnd(*pContext->runs, pContext->runPos));
+        return;
+    }
+    const char16_t* string = pContext->str + rTag.getInText().getSkipLength();
+    rWriter.CalcStringRect(pRect, string, MR::getStringLengthWithMessageTag(string));
 }
 
 void CustomTagProcessor::setArgNumber(s32 number, s32 index) {
@@ -461,7 +493,7 @@ bool CustomTagProcessor::writeString(Ui::Rect* rect, const char16_t* string, Con
     return true;
 }
 
-CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroup(Ui::Rect* rect, const MessageEditorMessageTag& tag, ContextType* context) {
+CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroup(Ui::Rect* rect, const MessageTagView& tag, ContextType* context) {
     switch (tag.getTag()) {
     case 0:
         return exeDisplayGroupWait(rect, tag.getParam16(0), context);
@@ -476,7 +508,7 @@ CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroup(Ui::Rect* rect
     return OPERATION_NO_CHAR_SPACE;
 }
 
-CustomTagProcessor::Operation CustomTagProcessor::exeSoundGroup(Ui::Rect* rect, const MessageEditorMessageTag& tag, ContextType* /*context*/) {
+CustomTagProcessor::Operation CustomTagProcessor::exeSoundGroup(Ui::Rect* rect, const MessageTagView& tag, ContextType* /*context*/) {
     // Played in the step's walk of the text alone (mIsSoundPass), where its character's fade has begun.
     if (rect || mIsText || !mIsSoundPass || !mAlphaCtrl.alpha()) {
         return OPERATION_NO_CHAR_SPACE;
@@ -491,8 +523,15 @@ CustomTagProcessor::Operation CustomTagProcessor::exeSoundGroup(Ui::Rect* rect, 
 
     if (mask != static_cast< u8 >(mPlayedSounds & mask)) {
         MR::FormattedName name;
-        const s32 length = static_cast< s32 >(tag.getParamLength()) / 2 + 1;
-        MR::convertUTF16ToASCII(name.room(length), tag.getParamPtr(0), length);
+        if (tag.isRuns()) {
+            // The record's string: the parameters to their first 0.
+            MR::Text16 string;
+            const s32 length = static_cast< s32 >(tag.getString(string)) + 1;
+            MR::convertUTF16ToASCII(name.room(length), string.c_str(), length);
+        } else {
+            const s32 length = static_cast< s32 >(tag.getParamLength()) / 2 + 1;
+            MR::convertUTF16ToASCII(name.room(length), tag.getInText().getParamPtr(0), length);
+        }
         MR::startSystemSE(name.c_str());
         mPlayedSounds |= static_cast< u8 >(1 << mSoundIndex);
     }
@@ -501,7 +540,7 @@ CustomTagProcessor::Operation CustomTagProcessor::exeSoundGroup(Ui::Rect* rect, 
     return OPERATION_NO_CHAR_SPACE;
 }
 
-CustomTagProcessor::Operation CustomTagProcessor::exePictureGroup(Ui::Rect* rect, const MessageEditorMessageTag& tag, ContextType* context) {
+CustomTagProcessor::Operation CustomTagProcessor::exePictureGroup(Ui::Rect* rect, const MessageTagView& tag, ContextType* context) {
     Ui::TextWriterBase< char16_t > writer = *context->writer;
     writer.SetFont(*MR::getPictureFont());
     // The text writer reads one character past the length it is given (its loop's next read precedes the bound
@@ -534,7 +573,7 @@ CustomTagProcessor::Operation CustomTagProcessor::exePictureGroup(Ui::Rect* rect
     return OPERATION_DEFAULT;
 }
 
-CustomTagProcessor::Operation CustomTagProcessor::exeFontSizeGroup(Ui::Rect* rect, const MessageEditorMessageTag& tag, ContextType* context) {
+CustomTagProcessor::Operation CustomTagProcessor::exeFontSizeGroup(Ui::Rect* rect, const MessageTagView& tag, ContextType* context) {
     if (rect != nullptr) {
         return OPERATION_NO_CHAR_SPACE;
     }
@@ -556,7 +595,7 @@ CustomTagProcessor::Operation CustomTagProcessor::exeFontSizeGroup(Ui::Rect* rec
     return OPERATION_NO_CHAR_SPACE;
 }
 
-CustomTagProcessor::Operation CustomTagProcessor::exeSystemGroup(Ui::Rect* rect, const MessageEditorMessageTag& tag, ContextType* context) {
+CustomTagProcessor::Operation CustomTagProcessor::exeSystemGroup(Ui::Rect* rect, const MessageTagView& tag, ContextType* context) {
     switch (tag.getTag()) {
     case 0:
         return exeSystemGroupColor(rect, tag.getParam8(0), context);
@@ -567,16 +606,17 @@ CustomTagProcessor::Operation CustomTagProcessor::exeSystemGroup(Ui::Rect* rect,
     return OPERATION_NO_CHAR_SPACE;
 }
 
-CustomTagProcessor::Operation CustomTagProcessor::exeLocalizeGroup(Ui::Rect* rect, const MessageEditorMessageTag& tag, ContextType* context) {
+CustomTagProcessor::Operation CustomTagProcessor::exeLocalizeGroup(Ui::Rect* rect, const MessageTagView& tag, ContextType* context) {
     MR::Text16 string;
-    ReplaceTagProcessor::exeLocalizeGroup(string.room(ReplaceTagProcessor::getLocalizeGroupRoom(tag)), tag);
+    ReplaceTagProcessor::exeLocalizeTag(string.room(ReplaceTagProcessor::getLocalizeTagRoom(tag.getTag(), tag.getParam8(0))), tag.getTag(),
+                                        tag.getParam8(0));
     writeString(rect, string.c_str(), context);
     return OPERATION_DEFAULT;
 }
 
-CustomTagProcessor::Operation CustomTagProcessor::exeNumberGroup(Ui::Rect* rect, const MessageEditorMessageTag& tag, ContextType* context) {
+CustomTagProcessor::Operation CustomTagProcessor::exeNumberGroup(Ui::Rect* rect, const MessageTagView& tag, ContextType* context) {
     char16_t string[16];  // an s32 is at most 11 characters, "-2147483648", with the terminator
-    s32 number = readBytes< s32 >(tag.getParamPtr(0));
+    s32 number = tag.getNumber();
     switch (tag.getTag()) {
     case 5:
         MR::formatText(string, ARRAY_SIZEU(string), u"%02d", number);
@@ -602,8 +642,14 @@ CustomTagProcessor::Operation CustomTagProcessor::exeNumberGroup(Ui::Rect* rect,
     return OPERATION_DEFAULT;
 }
 
-CustomTagProcessor::Operation CustomTagProcessor::exeStringGroup(Ui::Rect* rect, const MessageEditorMessageTag& tag, ContextType* context) {
-    writeString(rect, tag.getParamString(), context);
+CustomTagProcessor::Operation CustomTagProcessor::exeStringGroup(Ui::Rect* rect, const MessageTagView& tag, ContextType* context) {
+    if (!tag.isRuns()) {
+        writeString(rect, tag.getInText().getParamString(), context);
+        return OPERATION_DEFAULT;
+    }
+    // A record whose string is not set yet is no text, as a token naming none.
+    MR::Text16 string;
+    writeString(rect, tag.getString(string) != 0 ? string.c_str() : nullptr, context);
     return OPERATION_DEFAULT;
 }
 
@@ -633,7 +679,7 @@ CustomTagProcessor::Operation CustomTagProcessor::exeSystemGroupColor(Ui::Rect* 
     return OPERATION_NO_CHAR_SPACE;
 }
 
-CustomTagProcessor::Operation CustomTagProcessor::exeSystemGroupRuby(Ui::Rect* rect, const MessageEditorMessageTag& tag, ContextType* context) {
+CustomTagProcessor::Operation CustomTagProcessor::exeSystemGroupRuby(Ui::Rect* rect, const MessageTagView& tag, ContextType* context) {
     if (MR::getLanguage() != LanguageId_JpJapanese) {
         return OPERATION_NO_CHAR_SPACE;
     }
@@ -644,16 +690,35 @@ CustomTagProcessor::Operation CustomTagProcessor::exeSystemGroupRuby(Ui::Rect* r
     }
 
     s32 baseLength = tag.getParam8(0);
-    const char16_t* rubyText = tag.getParamPtr(1);
     s32 rubyLength = (tag.getParamLength() - 2) / sizeof(char16_t);
     MR::Text16 rubyString;
-    char16_t* const ruby = rubyString.room(static_cast< u32 >(rubyLength) + 1);
-    MR::copyMemory(ruby, rubyText, rubyLength * sizeof(char16_t));
-    ruby[rubyLength] = u'\0';
     MR::Text16 baseString;
     char16_t* const base = baseString.room(static_cast< u32 >(baseLength) + 1);
-    MR::copyMemory(base, context->str + tag.getTagLength() / 2, baseLength * sizeof(char16_t));
+    if (tag.isRuns()) {
+        // The reading is the record's string; the base is the characters that follow the tag, up to its count and
+        // never past a tag or the text's end (P-215).
+        rubyLength = static_cast< s32 >(tag.getString(rubyString));
+        TextRunReader reader(*context->runs, TextRunReader::end(*context->runs));
+        reader.Set(context->runPos);
+        s32 units = 0;
+        u16 code = 0;
+        const MessageTagRecord* pNextTag = nullptr;
+        while (units < baseLength && reader.Next(&code, &pNextTag) == TextRunReader::Item_Char) {
+            base[units++] = static_cast< char16_t >(code);
+        }
+        baseLength = units;
+    } else {
+        // The reading's units are big-endian from the parameters' byte 1 (after the base's count), as the console read
+        // them: each the low byte of one parameter unit and the high byte of the next (P-373).
+        char16_t* const rubyUnits = rubyString.room(static_cast< u32 >(rubyLength) + 1);
+        for (s32 i = 0; i < rubyLength; i++) {
+            rubyUnits[i] = static_cast< char16_t >(tag.getParam8(1 + 2 * i) << 8 | tag.getParam8(2 + 2 * i));
+        }
+        rubyUnits[rubyLength] = u'\0';
+        MR::copyMemory(base, context->str + tag.getInText().getTagLength() / 2, baseLength * sizeof(char16_t));
+    }
     base[baseLength] = u'\0';
+    const char16_t* const ruby = rubyString.c_str();
     Ui::TextWriterBase< char16_t >* writer = context->writer;
     writer->GetDrawFlag();
     writer->GetCharSpace();
@@ -696,36 +761,36 @@ CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroupWait(Ui::Rect* 
     return OPERATION_NO_CHAR_SPACE;
 }
 
-CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroupOffset(Ui::Rect* /*rect*/, const MessageEditorMessageTag& tag,
+CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroupOffset(Ui::Rect* /*rect*/, const MessageTagView& tag,
                                                                         ContextType* context) {
     Ui::TextWriterBase< char16_t >* writer = context->writer;
-    const char16_t* string = context->str + tag.getSkipLength();
     Ui::Rect bounds;
     if (mTextBox->GetTextPositionV() == 0) {
-        writer->CalcStringRect(&bounds, string, MR::getStringLengthWithMessageTag(string));
+        calcRestRect(*writer, &bounds, tag, context);
         writer->MoveCursorY((mTextBox->GetDrawSize().height - bounds.GetHeight()) / 2.0f);
     }
 
     return OPERATION_NO_CHAR_SPACE;
 }
 
-CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroupCenter(Ui::Rect* /*rect*/, const MessageEditorMessageTag& tag,
+CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroupCenter(Ui::Rect* /*rect*/, const MessageTagView& tag,
                                                                         ContextType* context) {
     Ui::TextWriterBase< char16_t > writer = *context->writer;
-    const char16_t* string = context->str + tag.getSkipLength();
     Ui::Rect bounds;
-    writer.CalcStringRect(&bounds, string, MR::getStringLengthWithMessageTag(string));
+    calcRestRect(writer, &bounds, tag, context);
     f32 offset = (mTextBox->GetDrawSize().width - bounds.GetWidth()) / 2.0f;
     context->writer->MoveCursorX(offset);
     context->xOrigin += offset;
     return OPERATION_NO_CHAR_SPACE;
 }
 
-CustomTagProcessor::Operation CustomTagProcessor::exeFontGroup(Ui::Rect* rect, const MessageEditorMessageTag& tag, ContextType* context) {
+CustomTagProcessor::Operation CustomTagProcessor::exeFontGroup(Ui::Rect* rect, const MessageTagView& tag, ContextType* context) {
     Ui::TextWriterBase< char16_t > writer = *context->writer;
     writer.SetFont(*MR::getNumberFont());
-    const char16_t* string = tag.getParamPtr(0);
-    s32 length = static_cast< s32 >(tag.getParamLength()) / 2;
+    // A record's string is the number font's text: all of its parameters.
+    MR::Text16 fontText;
+    const s32 length = tag.isRuns() ? static_cast< s32 >(tag.getString(fontText)) : static_cast< s32 >(tag.getParamLength()) / 2;
+    const char16_t* string = tag.isRuns() ? fontText.c_str() : tag.getInText().getParamPtr(0);
     f32 width = writer.CalcStringWidth(string, length) + writer.GetCharSpace();
     context->writer->MoveCursorX(width);
     if (rect) {

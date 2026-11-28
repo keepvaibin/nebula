@@ -237,9 +237,13 @@ namespace ReplaceTagProcessor {
     }
 
     u32 exeLocalizeGroup(char16_t* pDst, const MessageEditorMessageTag& rTag) {
-        switch (rTag.getTag()) {
+        return exeLocalizeTag(pDst, rTag.getTag(), rTag.getParam8(0));
+    }
+
+    u32 exeLocalizeTag(char16_t* pDst, int tag, u8 param) {
+        switch (tag) {
         case 0:
-            return exeLocalizeGroupPlayerName(pDst, rTag.getParam8(0));
+            return exeLocalizeGroupPlayerName(pDst, param);
         }
 
         return 0;
@@ -253,9 +257,13 @@ namespace ReplaceTagProcessor {
     }  // namespace
 
     u32 getLocalizeGroupRoom(const MessageEditorMessageTag& rTag) {
-        switch (rTag.getTag()) {
+        return getLocalizeTagRoom(rTag.getTag(), rTag.getParam8(0));
+    }
+
+    u32 getLocalizeTagRoom(int tag, u8 param) {
+        switch (tag) {
         case 0:
-            return static_cast< u32 >(MR::getStringLengthWithMessageTag(findPlayerName(rTag.getParam8(0)))) + 1;
+            return static_cast< u32 >(MR::getStringLengthWithMessageTag(findPlayerName(param))) + 1;
         }
 
         return 1;

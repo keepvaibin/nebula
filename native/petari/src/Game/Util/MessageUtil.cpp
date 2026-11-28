@@ -7,6 +7,7 @@
 #include "Game/Util/MessageTag.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/TextRuns.hpp"
 #include "Game/Util/ByteView.hpp"
 
 namespace MR {
@@ -56,57 +57,86 @@ namespace MR {
                getStringLengthWithMessageTag(messageInfo.mMessage) != 0;
     }
 
-    const char16_t* getMessageLine(char16_t* pDst, u32 capacity, const char16_t* pMessage, u32 line) {
-        u32 currentLine = 0;
-
-        // No message (an id the text lacks) has no lines: the empty line.
-        if (pMessage == nullptr) {
-            pMessage = u"";
-        }
-
-        while (*pMessage != 0) {
-            if (currentLine == line) {
-                break;
+    namespace {
+        // Where line `line` of a message's first page begins (its end when the page has fewer lines); a null message (an id
+        // the text lacks) has no lines: the empty line.
+        const char16_t* findMessageLine(const char16_t* pMessage, u32 line) {
+            if (pMessage == nullptr) {
+                return u"";
             }
 
-            if (*pMessage == cMessageTagEscape) {
-                pMessage++;
-                MessageEditorMessageTag tag(pMessage);
-                pMessage += tag.getSkipLength();
-
-                if (tag.isGroupTagId(MessageTagGroup_Display, cMessageTagNextPage)) {
+            u32 currentLine = 0;
+            while (*pMessage != 0) {
+                if (currentLine == line) {
                     break;
                 }
-            } else {
-                if (*pMessage == u'\n') {
-                    currentLine++;
-                }
 
-                pMessage++;
+                if (*pMessage == cMessageTagEscape) {
+                    pMessage++;
+                    MessageEditorMessageTag tag(pMessage);
+                    pMessage += tag.getSkipLength();
+
+                    if (tag.isGroupTagId(MessageTagGroup_Display, cMessageTagNextPage)) {
+                        break;
+                    }
+                } else {
+                    if (*pMessage == u'\n') {
+                        currentLine++;
+                    }
+
+                    pMessage++;
+                }
             }
+            return pMessage;
         }
 
-        for (u32 count = 0; count < capacity; count++) {
+        // The units of the tag whose escape is at pTag, the escape included.
+        u32 tagUnits(const char16_t* pTag) {
+            return 1 + MessageEditorMessageTag(pTag + 1).getSkipLength();
+        }
+    }  // namespace
+
+    u32 getMessageLineLength(const char16_t* pMessage, u32 line) {
+        const char16_t* pAt = findMessageLine(pMessage, line);
+        u32 units = 0;
+        for (;;) {
+            if (*pAt == cMessageTagEscape) {
+                const u32 tag = tagUnits(pAt);
+                pAt += tag;
+                units += tag;
+            } else if (*pAt == u'\n' || *pAt == 0) {
+                return units;
+            } else {
+                pAt++;
+                units++;
+            }
+        }
+    }
+
+    const char16_t* getMessageLine(char16_t* pDst, u32 capacity, const char16_t* pMessage, u32 line) {
+        // No room: nothing is written, not even the terminator.
+        if (capacity == 0) {
+            return pDst;
+        }
+
+        pMessage = findMessageLine(pMessage, line);
+        // The line's characters and whole tags while they fit before the terminator; a tag that does not fit ends the copy.
+        u32 room = capacity - 1;
+        for (;;) {
             if (*pMessage == cMessageTagEscape) {
-                *pDst++ = *pMessage++;
-                MessageEditorMessageTag tag(pMessage);
-
-                for (s32 i = 0; i < static_cast< s32 >(tag.getSkipLength()); i++) {
-                    *pDst = *pMessage;
-                    pMessage++;
-                    pDst++;
+                const u32 tag = tagUnits(pMessage);
+                if (tag > room) {
+                    break;
                 }
-            }
-
-            if (*pMessage == u'\n' || *pMessage == 0) {
+                for (u32 i = 0; i < tag; i++) {
+                    *pDst++ = *pMessage++;
+                }
+                room -= tag;
+            } else if (*pMessage == u'\n' || *pMessage == 0 || room == 0) {
                 break;
-            }
-
-            *pDst = *pMessage;
-
-            if (count < capacity - 1) {
-                pDst++;
-                pMessage++;
+            } else {
+                *pDst++ = *pMessage++;
+                room--;
             }
         }
 
@@ -212,6 +242,31 @@ namespace MR {
         }
 
         return nullptr;
+    }
+
+    TextRunPos findRunsPageEnd(const TextRuns& rText, const TextRunPos& rFrom) {
+        for (TextRunPos pos = TextRunReader::normal(rText, rFrom); pos.mRun < rText.mRunNum; pos = TextRunReader::normal(rText, TextRunPos{pos.mRun + 1, 0, 0})) {
+            const MessageRun& rRun = rText.mRuns[pos.mRun];
+            if (rRun.mKind == MessageRunKind_Tag && rText.getTag(rRun).mGroup == MessageTagGroup_Display &&
+                rText.getTag(rRun).mTag == cMessageTagNextPage) {
+                return pos;
+            }
+        }
+        return TextRunReader::end(rText);
+    }
+
+    bool findRunsNextPage(const TextRuns& rText, const TextRunPos& rFrom, TextRunPos* pNext) {
+        const TextRunPos pageEnd = findRunsPageEnd(rText, rFrom);
+        if (pageEnd.mRun >= rText.mRunNum) {
+            return false;
+        }
+        TextRunReader reader(rText, TextRunReader::end(rText));
+        reader.Set(TextRunPos{pageEnd.mRun + 1, 0, 0});
+        const TextRunPos after = reader.GetPos();
+        u16 code = 0;
+        const MessageTagRecord* pTag = nullptr;
+        *pNext = reader.Next(&code, &pTag) == TextRunReader::Item_Char && code == u'\n' ? reader.GetPos() : after;
+        return true;
     }
 
     const char16_t* getGalaxyNameOnCurrentLanguage(const char* pGalaxyName) {

@@ -106,6 +106,7 @@ namespace {
 
 namespace Ui {
     CharWriter::LoadingTexture CharWriter::mLoadingTexture;
+    GlyphRecorder* CharWriter::sGlyphRecorder = nullptr;
 
     CharWriter::CharWriter() : mAlpha(255), mIsWidthFixed(false), mFixedWidth(0), mFont(NULL), mIsSilent(false) {
         mLoadingTexture.Reset();
@@ -248,6 +249,8 @@ namespace Ui {
 
         if (!mIsSilent) {
             PrintGlyph(mCursorPos.x + left, mCursorPos.y, mCursorPos.z, glyph);
+        } else if (sGlyphRecorder != nullptr) {
+            sGlyphRecorder->glyph(*this, code, mCursorPos.x + left, mCursorPos.y);
         }
 
         mCursorPos.x += width;

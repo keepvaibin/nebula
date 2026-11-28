@@ -54,18 +54,12 @@ namespace {
         {8500, 14, 3, 2},  {8900, 14, 3, 3},  {9400, 15, 3, 0},  {10200, 15, 3, 1}, {10300, 16, 2, 0}, {11100, 16, 2, 1}, {11200, 17, 1, 0},
         {12000, 17, 1, 1}, {12090, 18, 0, 0}, {12890, 18, 0, 1}, {12990, 19, 3, 0}, {13390, 19, 3, 1},
     };
-    // Line `line` of `pMessage` whole, in `rText`: it is read again into twice the room while the line fills it (a tag
-    // is copied past the room it is asked for, so some is left over).
+    // Line `line` of `pMessage` whole, in `rText`: measured, then copied into that room.
     const char16_t* getLine(MR::Text16& rText, const char16_t* pMessage, u32 line) {
-        u32 units = rText.capacity();
-        for (;;) {
-            char16_t* const pDst = rText.room(units + 128);
-            const char16_t* const pEnd = MR::getMessageLine(pDst, units, pMessage, line);
-            if (static_cast< u32 >(pEnd - pDst) + 1 < units) {
-                return pDst;
-            }
-            units *= 2;
-        }
+        const u32 units = MR::getMessageLineLength(pMessage, line) + 1;
+        char16_t* const pDst = rText.room(units);
+        MR::getMessageLine(pDst, units, pMessage, line);
+        return pDst;
     }
 
     const char* cStaffRollDemoName = "StaffRoll";

@@ -21,8 +21,10 @@ namespace MR {
     const char16_t* makeRaceBestTimeString(Text16& rDst, int raceId);
     const char16_t* makeRaceCurrentTimeString(Text16& rDst);
 
-    char16_t* addNumberFontTag(char16_t* pDst, int tag);
-    char16_t* addNumberFontTag(char16_t* pDst, const char16_t* pFmt, ...);
+    // A number font tag at pDst in at most room units with the terminator (the text cut to what fits there and in the tag's
+    // byte length; a room too small for the tag gets only the terminator, none when 0); returns the terminator.
+    char16_t* addNumberFontTag(char16_t* pDst, u32 room, int tag);
+    char16_t* addNumberFontTag(char16_t* pDst, u32 room, const char16_t* pFmt, ...);
     char16_t* addPictureFontCode(char16_t* pDst, int code);
     char16_t* addPictureFontTag(char16_t* pDst, int tag);
     // Returns the new terminator.
@@ -34,7 +36,7 @@ namespace MR {
     // At most num - 1 characters, always terminated.
     void copyString(char* pDst, const char* pSrc, u32 num);
     void copyString(char16_t* pDst, const char16_t* pSrc, u32 num);
-    // num counts the terminator; returns the characters written without it.
+    // num counts the terminator; returns the characters written without it (none, and no terminator, when num <= 0).
     int convertUTF16ToASCII(char* pDst, const char16_t* pSrc, s32 num);
 
     int strcasecmp(const char* pStr1, const char* pStr2);

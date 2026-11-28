@@ -143,17 +143,21 @@ namespace Ui {
 
         Rect textRect = GetTextDrawRect(&writer);
 
-        Color8 topCol = detail::MultipleAlpha(mTextColors[0], mGlbAlpha);
-        Color8 btmCol = detail::MultipleAlpha(mTextColors[1], mGlbAlpha);
-        writer.SetGradationMode(topCol != btmCol ? CharWriter::GRADMODE_V : CharWriter::GRADMODE_NONE);
-        writer.SetTextColor(topCol, btmCol);
-        Color8 minCol = GetColor(mpMaterial->GetStageColor(0));
-        Color8 maxCol = GetColor(mpMaterial->GetStageColor(1));
-        writer.SetColorMapping(minCol, maxCol);
-        writer.Setup();
+        SetupTextColors(&writer);
 
         writer.SetCursor(textRect.left, textRect.top);
         writer.Print(mTextBuf, mTextLen);
+    }
+
+    void TextBox::SetupTextColors(WideTextWriter* pWriter) const {
+        Color8 topCol = detail::MultipleAlpha(mTextColors[0], mGlbAlpha);
+        Color8 btmCol = detail::MultipleAlpha(mTextColors[1], mGlbAlpha);
+        pWriter->SetGradationMode(topCol != btmCol ? CharWriter::GRADMODE_V : CharWriter::GRADMODE_NONE);
+        pWriter->SetTextColor(topCol, btmCol);
+        Color8 minCol = GetColor(mpMaterial->GetStageColor(0));
+        Color8 maxCol = GetColor(mpMaterial->GetStageColor(1));
+        pWriter->SetColorMapping(minCol, maxCol);
+        pWriter->Setup();
     }
 
     void TextBox::PrintSilent() {
@@ -249,6 +253,19 @@ namespace Ui {
     const Rect TextBox::GetTextDrawRect(WideTextWriter* pWriter) const {
         Rect rect;
 
+        // A number stays on one line, however many digits a mod's counters reach.
+        bool isNumber = mTextLen > 0;
+        for (u32 i = 0; i < mTextLen && isNumber; i++) {
+            isNumber = mTextBuf[i] >= L'0' && mTextBuf[i] <= L'9';
+        }
+        SetupTextWriter(pWriter, isNumber);
+
+        pWriter->CalcStringRect(&rect, mTextBuf, mTextLen);
+
+        return PlaceTextRect(rect);
+    }
+
+    void TextBox::SetupTextWriter(WideTextWriter* pWriter, bool isNumber) const {
         pWriter->SetCursor(0.0f, 0.0f);
 
         pWriter->SetFont(*mpFont);
@@ -257,23 +274,17 @@ namespace Ui {
         pWriter->SetLineSpace(mLineSpace);
         pWriter->SetCharSpace(mCharSpace);
 
-        // A number stays on one line, however many digits a mod's counters reach.
-        bool isNumber = mTextLen > 0;
-        for (u32 i = 0; i < mTextLen && isNumber; i++) {
-            isNumber = mTextBuf[i] >= L'0' && mTextBuf[i] <= L'9';
-        }
         pWriter->SetWidthLimit(isNumber ? cWidthUnlimited : GetDrawSize().width);
         pWriter->SetDrawFlag(MakeDrawFlag());
 
         if (mpTagProcessor != NULL) {
             pWriter->SetTagProcessor(mpTagProcessor);
         }
+    }
 
-        pWriter->CalcStringRect(&rect, mTextBuf, mTextLen);
-
+    Rect TextBox::PlaceTextRect(Rect rect) const {
         const Vec2f base = GetVtxPos();
         rect.MoveTo(base.x + (GetDrawSize().width - rect.GetWidth()) * GetTextMagH(), base.y + (GetDrawSize().height - rect.GetHeight()) * GetTextMagV());
-
         return rect;
     }
 

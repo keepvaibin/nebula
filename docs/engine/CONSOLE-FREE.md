@@ -522,6 +522,16 @@ What P-202 and P-187 start from (read at 697535a86, 11-19; the form written befo
   the cook; a lone surrogate keeps its value; the strings cooked are a sound's name, the number font's text and a
   ruby's reading (the string tag's is set while playing). Every cook writes the runs back in the in-text form and
   compares them with the text (`runs_agree`); the game's reader (`MessageRunFile`) checks every index once at attach.
+- Landing 2 as made, its first part (G7.2a): the runs are walked beside the text, not yet drawn from. `TextRuns` and
+  `TextRunReader` (`native/petari/include/Game/Util/TextRuns.hpp`) read a message's runs in one canonical place, a code point past U+FFFF
+  given as two UTF-16 units until landing 4; `TextWriterBase` has a Runs twin of each function that walks text, and the
+  processors take a tag record (`ProcessRunTag`, `CalcRectRunTag`; the base processor skips them). `CustomTagProcessor`'s
+  group functions read both forms through one `MessageTagView`. A ruby's reading on the disc is a byte (the base's
+  count) and then big-endian units from byte 1: the game and G7.1's cook both read it wrongly (P-373), now as laid out.
+  The text-layout test (`MR::checkTextLayout`, `tests/engine/text-layout`, `-pal`, `-jp`) lays out every page of every
+  message and system message of every language of each disc both ways in the talk balloon's text box and compares
+  each glyph's character, font, place, scale and colours: 0 differ on RMGE01, RMGP01 and RMGJ01. The second part
+  (the text boxes hold runs; Replace and the arguments on runs; the sound tags as a list, P-201) follows.
 - Proof: the text-layout test (every message's glyph sequence and pen positions, old path against new, every
   language and region) identical through landings 1 to 4; the gate's pictures; a fuzz test of malformed tags against
   the cook's parser; the search's count after landing 5.

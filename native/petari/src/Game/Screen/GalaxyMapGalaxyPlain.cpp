@@ -40,7 +40,8 @@ void GalaxyMapGalaxyPlain::show(const char* pGalaxyName, const char* pPaneName) 
             pFontTagIter = MR::addPictureFontTag(pFontTagIter, 55);
             pFontTagIter = MR::addPictureFontTag(pFontTagIter, 64);
 
-            MR::addNumberFontTag(pFontTagIter, MR::getPowerStarNumSucceed(pGalaxyName));
+            MR::addNumberFontTag(pFontTagIter, mGalaxyName.capacity() - static_cast< u32 >(pFontTagIter - pDstGalaxyName),
+                                 MR::getPowerStarNumSucceed(pGalaxyName));
         }
     }
 

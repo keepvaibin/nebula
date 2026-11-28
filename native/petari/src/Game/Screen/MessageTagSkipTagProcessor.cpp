@@ -1,5 +1,7 @@
 #include "Game/Screen/MessageTagSkipTagProcessor.hpp"
 #include "Game/Util/Array.hpp"
+#include "Game/Util/ByteView.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include <string.h>
 
 namespace {
@@ -86,6 +88,62 @@ const char16_t* MessageEditorMessageTag::getParamString() const {
     u32 token;
     memcpy(&token, getParamPtr(0), sizeof(token));
     return findParamString(token);
+}
+
+s32 MessageTagView::getGroup() const {
+    return isRuns() ? mRecord->mGroup : mInText.getGroup();
+}
+
+int MessageTagView::getTag() const {
+    return isRuns() ? mRecord->mTag : mInText.getTag();
+}
+
+u8 MessageTagView::getParam8(int index) const {
+    if (!isRuns()) {
+        return mInText.getParam8(index);
+    }
+    const u32 unit = static_cast< u32 >(index) / 2;
+    if (index < 0 || unit >= mRecord->mParamNum) {
+        return 0;
+    }
+    const u16 value = mText->getParams(*mRecord)[unit];
+    return static_cast< u8 >((index & 1) ? value : value >> 8);
+}
+
+u16 MessageTagView::getParam16(int index) const {
+    if (!isRuns()) {
+        return mInText.getParam16(index);
+    }
+    return index >= 0 && static_cast< u32 >(index) < mRecord->mParamNum ? mText->getParams(*mRecord)[index] : 0;
+}
+
+s32 MessageTagView::getParamLength() const {
+    return isRuns() ? static_cast< s32 >(mRecord->mParamNum * sizeof(u16)) : mInText.getParamLength();
+}
+
+s32 MessageTagView::getNumber() const {
+    if (!isRuns()) {
+        return readBytes< s32 >(mInText.getParamPtr(0));
+    }
+    return mRecord->mParamNum >= 2 ? readBytes< s32 >(mText->getParams(*mRecord)) : 0;
+}
+
+u32 MessageTagView::getString(MR::Text16& rDst) const {
+    const u32 num = isRuns() ? mRecord->mStringNum : 0;
+    char16_t* const pDst = rDst.room(num * 2 + 1);
+    u32 units = 0;
+    for (u32 i = 0; i < num; i++) {
+        const char32_t code = mText->getString(*mRecord)[i];
+        if (code > 0xFFFF) {
+            const u32 bits = static_cast< u32 >(code) - 0x10000;
+            pDst[units++] = static_cast< char16_t >(0xD800 | ((bits >> 10) & 0x3FF));
+            pDst[units++] = static_cast< char16_t >(0xDC00 | (bits & 0x3FF));
+        } else {
+            pDst[units++] = static_cast< char16_t >(code);
+        }
+    }
+    pDst[units] = u'\0';
+    return units;
 }
 
 MessageTagSkipTagProcessor::MessageTagSkipTagProcessor() : Ui::TagProcessorBase< char16_t >() {

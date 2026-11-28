@@ -95,6 +95,20 @@ namespace Ui {
         void CalcStringRectImpl(Rect*, StreamType, int);
         f32 AdjustCursor(f32*, f32*, StreamType, int);
 
+        // The same over a text in runs, from rBegin to rEnd: each the twin of the function above it of the text of
+        // version 1 (whose tags are read in the text; G7.5 deletes those), line for line, the processor meeting each tag as
+        // its record (TagProcessorBase::ProcessRunTag).
+        f32 PrintRuns(const TextRuns& rText, const TextRunPos& rBegin, const TextRunPos& rEnd);
+        f32 PrintRunsImpl(const TextRuns& rText, const TextRunPos& rBegin, const TextRunPos& rEnd);
+        f32 CalcRunsWidth(const TextRuns& rText, const TextRunPos& rBegin, const TextRunPos& rEnd) const;
+        void CalcRunsRect(Rect* pRect, const TextRuns& rText, const TextRunPos& rBegin, const TextRunPos& rEnd) const;
+        void CalcRunsRectImpl(Rect* pRect, const TextRuns& rText, const TextRunPos& rBegin, const TextRunPos& rEnd);
+        f32 CalcRunsLineWidth(const TextRuns& rText, const TextRunPos& rBegin, const TextRunPos& rEnd);
+        bool CalcRunsLineRectImpl(Rect* pRect, const TextRuns& rText, TextRunPos* pPos, const TextRunPos& rEnd);
+        f32 CalcRunsWordWidth(TextRunReader reader) const;
+        bool IsRunsWordBreak(const TextRunReader& rReader, f32 lineWidth, bool bCharSpace) const;
+        f32 AdjustCursorRuns(f32* xOrigin, f32* yOrigin, const TextRuns& rText, const TextRunPos& rBegin, const TextRunPos& rEnd);
+
         bool IsDrawFlagSet(u32 mask, u32 flag) const {
             return (mDrawFlag & mask) == flag;
         }

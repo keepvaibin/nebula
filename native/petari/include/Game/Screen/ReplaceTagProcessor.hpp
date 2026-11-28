@@ -18,6 +18,9 @@ namespace ReplaceTagProcessor {
     u32 exeLocalizeGroup(char16_t* pDst, const MessageEditorMessageTag& rTag);
     // The code units exeLocalizeGroup writes for the tag, with the terminator.
     u32 getLocalizeGroupRoom(const MessageEditorMessageTag& rTag);
+    // The same of a localize tag by its number and its first parameter byte (a text in runs gives them from its record).
+    u32 exeLocalizeTag(char16_t* pDst, int tag, u8 param);
+    u32 getLocalizeTagRoom(int tag, u8 param);
     u32 exeLocalizeGroupPlayerName(char16_t* pDst, u8 form);
     u32 exeRaceTimeGroup(char16_t* pDst, const MessageEditorMessageTag& rTag);
     // The code units exeRaceTimeGroup writes for the tag, without the terminator.

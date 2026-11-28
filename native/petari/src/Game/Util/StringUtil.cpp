@@ -137,8 +137,8 @@ namespace MR {
         return replaceWhole(rDst, "System_Time001", 0, minute, second);
     }
 
-    char16_t* addNumberFontTag(char16_t* pDst, int tag) {
-        return MR::addNumberFontTag(pDst, u"%d", tag);
+    char16_t* addNumberFontTag(char16_t* pDst, u32 room, int tag) {
+        return MR::addNumberFontTag(pDst, room, u"%d", tag);
     }
 
     void removeExtensionString(FormattedName& rDst, const char* pPath) {
@@ -213,7 +213,19 @@ namespace MR {
         return &pDst[1];
     }
 
-    char16_t* addNumberFontTag(char16_t* pDst, const char16_t* pFmt, ...) {
+    char16_t* addNumberFontTag(char16_t* pDst, u32 room, const char16_t* pFmt, ...) {
+        // The escape, the header and the terminator; the text's units are what is left of the room, and no more than the
+        // tag's length (a byte: the header and the escape's unit counted) can hold.
+        const u32 cFixed = 1 + sizeof(TagHeader) / sizeof(char16_t) + 1;
+        const u32 cMostText = (0xFF - sizeof(TagHeader) - sizeof(char16_t)) / sizeof(char16_t);
+        if (room < cFixed) {
+            if (room != 0) {
+                *pDst = '\0';
+            }
+            return pDst;
+        }
+        const u32 textRoom = room - cFixed + 1 < cMostText + 1 ? room - cFixed + 1 : cMostText + 1;  // with the terminator
+
         *pDst++ = cMessageTagEscape;
         TagHeader* pTag = reinterpret_cast< TagHeader* >(pDst);
         pDst += sizeof(TagHeader) / sizeof(char16_t);
@@ -221,8 +233,11 @@ namespace MR {
         va_list args;
         va_start(args, pFmt);
 
-        int num = MR::formatTextV(pDst, 256, pFmt, args);
+        int num = MR::formatTextV(pDst, textRoom, pFmt, args);
         va_end(args);
+        if (num < 0) {
+            num = static_cast< int >(textRoom) - 1;  // cut: what fit
+        }
 
         pDst += num;
         pTag->mGroup = MessageTagGroup_Font;
@@ -251,7 +266,12 @@ namespace MR {
     }
 
     int convertUTF16ToASCII(char* pDst, const char16_t* pSrc, s32 num) {
-        u32 i;
+        // No room: nothing is written, not even the terminator.
+        if (num <= 0) {
+            return 0;
+        }
+
+        s32 i;
 
         for (i = 0; i < num - 1; pDst++, pSrc++, i++) {
             if (*pSrc == 0 || *pSrc > 0xFF) {

@@ -112,6 +112,16 @@ public:
     const char32_t* getString(const MessageTagRecord& rTag) const {
         return mCodes + rTag.mString;
     }
+    // The arrays the runs index (TextRuns.hpp makes a message's text in runs of them).
+    const char32_t* getCodes() const {
+        return mCodes;
+    }
+    const MessageTagRecord* getTags() const {
+        return mTags;
+    }
+    const u16* getParamUnits() const {
+        return mParams;
+    }
 
 private:
     const MessageRunsHeader* mHeader;
