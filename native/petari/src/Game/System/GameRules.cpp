@@ -1,4 +1,8 @@
 #include "Game/System/GameRules.hpp"
+#include "Game/System/GameDataConst.hpp"
+#include "Game/System/GameDataFunction.hpp"
+
+#include "Game/System/GameDataGalaxyStorage.hpp"
 
 namespace {
     const s32 cPlayerHealth = 88;
