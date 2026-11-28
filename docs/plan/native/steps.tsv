@@ -141,20 +141,21 @@ order	step	package	title	package_needs	card_file	state	commit
 140	G6.6	G6	Movie sound rate and volume (P-271, P-219's movie half)	S0.1	05-NATIVE-LANE-G.md	open	
 141	G6.8	G6	The audio device (P-037, P-071, P-072, P-286)	S0.1	05-NATIVE-LANE-G.md	open	
 142	G7.1	G7	Landing 1: `NMSG` version 2 beside version 1	S0.1	05-NATIVE-LANE-G.md	landed	75022c7a0
-143	G7.2	G7	Landing 2: the tag processors on runs (with P-201)	S0.1	05-NATIVE-LANE-G.md	open	
-144	G7.3	G7	Landing 3: the screens, the host and the mod surface on runs	S0.1	05-NATIVE-LANE-G.md	open	
-145	G7.4	G7	Landing 4: code points through the font (P-187)	S0.1	05-NATIVE-LANE-G.md	open	
-146	G7.5	G7	Landing 5: version 1 and the in-text format deleted	S0.1	05-NATIVE-LANE-G.md	open	
-147	G8.1	G8	The save as named, sized records with a version (P-205, P-232)	S0.1	05-NATIVE-LANE-G.md	open	
-148	G8.2	G8	Bounded waits on the game thread (P-272, P-235)	S0.1,G2a	05-NATIVE-LANE-G.md	open	
-149	G8.3	G8	Table fields by index, a resource's size by its handle (P-189, P-233)	S0.1	05-NATIVE-LANE-G.md	open	
-150	G8.4	G8	Limits that grow, names without 16-bit hashes (P-192, P-148, P-204)	S0.1	05-NATIVE-LANE-G.md	open	
-151	G9.1	G9	Movie cues fire when the movie's place crosses them (P-203)	G6	05-NATIVE-LANE-G.md	open	
-152	G9.2	G9	The staff roll placed from the music's position (P-206)	G6	05-NATIVE-LANE-G.md	open	
-153	G9.3	G9	The Mii library's own identity (P-268)	G6	05-NATIVE-LANE-G.md	open	
-154	G9.4	G9	Fixed counts in the 2D screens, and a picture size cap (P-208, P-211)	G6	05-NATIVE-LANE-G.md	open	
-155	G9.5	G9	The host's menus: stability (P-306)	G6	05-NATIVE-LANE-G.md	open	
-156	G2.9	G2	Landing 9: the default rate	G2b	05-NATIVE-LANE-G.md	open	
-157	Z.1	Z	Profiles taken again	everything	05-NATIVE-LANE-G.md	open	
-158	Z.2	Z	The end check	everything	05-NATIVE-LANE-G.md	open	
-159	Z.3	Z	The statement and the two builds	everything	05-NATIVE-LANE-G.md	open	
+143	G7.2	G7	Landing 2: the writer and the tag processors on runs, and the text-layout test	S0.1	05-NATIVE-LANE-G.md	open	
+144	G7.2b	G7	Landing 2b: text boxes hold runs (with P-201)	S0.1	05-NATIVE-LANE-G.md	open	
+145	G7.3	G7	Landing 3: the screens, the host and the mod surface on runs	S0.1	05-NATIVE-LANE-G.md	open	
+146	G7.4	G7	Landing 4: code points through the font (P-187)	S0.1	05-NATIVE-LANE-G.md	open	
+147	G7.5	G7	Landing 5: version 1 and the in-text format deleted	S0.1	05-NATIVE-LANE-G.md	open	
+148	G8.1	G8	The save as named, sized records with a version (P-205, P-232)	S0.1	05-NATIVE-LANE-G.md	open	
+149	G8.2	G8	Bounded waits on the game thread (P-272, P-235)	S0.1,G2a	05-NATIVE-LANE-G.md	open	
+150	G8.3	G8	Table fields by index, a resource's size by its handle (P-189, P-233)	S0.1	05-NATIVE-LANE-G.md	open	
+151	G8.4	G8	Limits that grow, names without 16-bit hashes (P-192, P-148, P-204)	S0.1	05-NATIVE-LANE-G.md	open	
+152	G9.1	G9	Movie cues fire when the movie's place crosses them (P-203)	G6	05-NATIVE-LANE-G.md	open	
+153	G9.2	G9	The staff roll placed from the music's position (P-206)	G6	05-NATIVE-LANE-G.md	open	
+154	G9.3	G9	The Mii library's own identity (P-268)	G6	05-NATIVE-LANE-G.md	open	
+155	G9.4	G9	Fixed counts in the 2D screens, and a picture size cap (P-208, P-211)	G6	05-NATIVE-LANE-G.md	open	
+156	G9.5	G9	The host's menus: stability (P-306)	G6	05-NATIVE-LANE-G.md	open	
+157	G2.9	G2	Landing 9: the default rate	G2b	05-NATIVE-LANE-G.md	open	
+158	Z.1	Z	Profiles taken again	everything	05-NATIVE-LANE-G.md	open	
+159	Z.2	Z	The end check	everything	05-NATIVE-LANE-G.md	open	
+160	Z.3	Z	The statement and the two builds	everything	05-NATIVE-LANE-G.md	open	

@@ -2,7 +2,7 @@
 
     python -X utf8 -I tools/gate/tests/plan_cards_test.py
 
-  The cards of steps 12 to 159 (the plan's own files, as they are):
+  The cards of steps 12 to 160 (the plan's own files, as they are):
     proofs_name_only_what_the_agent_can_use   every program, script and test a proof names is a file or a name on main, is not on AGENT.md's list
                                               `Programs you never run`, and every option written beside it is one it takes (where the source says);
                                               the findings that stand are listed in KNOWN_FINDINGS by step: a new one fails, and so does a listed one
@@ -25,7 +25,7 @@ sys.path.insert(0, str(TREE / "tools" / "verify"))
 import plan  # noqa: E402
 import proofs  # noqa: E402
 
-FIRST_STEP, LAST_STEP = 12, 159  # 138 until 11-24 (G2.3 became eight steps), 145 until 11-25 (package G10, ten steps), 155 until 11-26 (G10.2m), 156 until 11-27 (G10.4m), 157 until 11-27 (G10.5m), 158 until 11-28 (G10.9s)
+FIRST_STEP, LAST_STEP = 12, 160  # 138 until 11-24 (G2.3 became eight steps), 145 until 11-25 (package G10, ten steps), 155 until 11-26 (G10.2m), 156 until 11-27 (G10.4m), 157 until 11-27 (G10.5m), 158 until 11-28 (G10.9s), 159 until 11-28 (G7.2b)
 
 # What the test found in the cards when it was written (11-23), each a card that is to be mended; the cards are another helper's and the
 # planner's to change. A finding is the step and the text `proofs.problems` gives.
@@ -36,7 +36,7 @@ def agent_md():
     return (TREE / "docs" / "plan" / "native" / "AGENT.md").read_text(encoding="utf-8")
 
 
-def cards_12_to_159():
+def cards_12_to_160():
     steps = [s for s in plan.read_base(TREE) if FIRST_STEP <= int(s["order"]) <= LAST_STEP]
     return [(s, proofs.proof_of(plan.card_text(TREE, s))) for s in steps]
 
@@ -46,9 +46,9 @@ class RealCards(unittest.TestCase):
     def setUpClass(cls):
         cls.repo = proofs.Repo(TREE)
         cls.forbidden = proofs.forbidden_programs(agent_md())
-        cls.cards = cards_12_to_159()
+        cls.cards = cards_12_to_160()
 
-    def test_there_are_148_cards_and_each_has_a_proof(self):
+    def test_there_are_149_cards_and_each_has_a_proof(self):
         self.assertEqual(len(self.cards), LAST_STEP - FIRST_STEP + 1)
         self.assertEqual([s["step"] for s, proof in self.cards if not proof.strip()], [], "a card with no Proof item")
 

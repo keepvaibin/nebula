@@ -73,7 +73,8 @@ Step by step. The order and the reasons are in `docs/plan/native/02-NATIVE-OVERV
   - G6.8 The audio device (P-037, P-071, P-072, P-286)
 - **G7 Text**
   - G7.1 Landing 1: `NMSG` version 2 beside version 1
-  - G7.2 Landing 2: the tag processors on runs (with P-201)
+  - G7.2 Landing 2: the writer and the tag processors on runs, and the text-layout test
+  - G7.2b Landing 2b: text boxes hold runs (with P-201)
   - G7.3 Landing 3: the screens, the host and the mod surface on runs
   - G7.4 Landing 4: code points through the font (P-187)
   - G7.5 Landing 5: version 1 and the in-text format deleted
@@ -1457,7 +1458,7 @@ This package changes how the game holds text. Today a message is a run of 16-bit
 - **Needs first:** nothing in the skeleton. The one UTF-8 decoder (`MR::utf8ToText16`, P-209, with P-320's two other decoders moved onto it) is on main at 790626cb5.
 - **Rows:** 6 (P-202, P-215, P-237, P-275, P-187, P-201)
 
-The five steps are INV section 4's five landings. P-201 goes with landing 2, as the skeleton says. The mod surface's tag writer moves to the same builder in landing 3, because the old format cannot be deleted while it writes it. Line numbers are as cited at 241395b49 and (INV section 4's search) 697535a86.
+The six steps are INV section 4's five landings, with landing 2 in two parts since 11-28 (G7.2 and G7.2b: its writer found that the card did not fit one step, decisions G7.2#1 to #8). P-201 goes with landing 2, as the skeleton says, and closes in its second part, G7.2b. The mod surface's tag writer moves to the same builder in landing 3, because the old format cannot be deleted while it writes it. Line numbers are as cited at 241395b49 and (INV section 4's search) 697535a86.
 
 ### G7.1 Landing 1: `NMSG` version 2 beside version 1
 
@@ -1471,35 +1472,54 @@ The five steps are INV section 4's five landings. P-201 goes with landing 2, as 
   2. A fuzz test of malformed tags against the cook's parser (INV: part of the proof; the sources name no tool).
 - **For a player.** Nothing visible: nothing reads version 2 yet.
 
-### G7.2 Landing 2: the tag processors on runs (with P-201)
+### G7.2 Landing 2: the writer and the tag processors on runs, and the text-layout test
 
-- **What changes.** The tag processors read the in-text records by scanning for 0x1A. They now walk runs; each tag holds its own string; there is no token table and no byte arithmetic; nothing scans for 0x1A or reads a length from inside the text. Each fault is its own item (plan decision: a row closes when its last fault is done):
-  - P-202: a string parameter is a 4-byte token naming an entry in a table that only grows (`MessageTagSkipTagProcessor.cpp:5-31`), the records are parsed at `:40-77`, and `ReplaceTagProcessor` rewrites the records in place byte by byte (`ReplaceTagProcessor.cpp:49-72`, `:139-161`, `:239-321`).
-  - P-201: a message's sound tags are tracked in a u8 mask, so the ninth and later sound tags of a message play nothing (`CustomTagProcessor.cpp:483-499`, `mSoundIndex >= 8`); the mask or list is sized to the message's tags, as a field of the parsed message.
-  - P-215, the ruby tag: it copies its base text, up to 255 units by a byte of the tag, with no check against the text left (`CustomTagProcessor.cpp:644-654`, the copy at `:653`); with typed records the cause is gone. (`NebulaUi`'s half is G7.3.)
-  - P-237, the line copy of `MessageUtil` copies a tag's bytes without counting them against the room (`MessageUtil.cpp:89-113`, the tag loop at `:94-98`).
-  - P-237, `addNumberFontTag` assumes 256 units of room and cuts the tag's size past 255 (`StringUtil.cpp:215-233`, `:223`, `:229`).
-  - P-237, `convertUTF16ToASCII` bounds by `num - 1` against an unsigned count, so 0 writes without end (`StringUtil.cpp:252-266`).
-- **Where.** `native/petari/src/Game/Screen/CustomTagProcessor.cpp` (the 0x1A hits at `:408`, `:429`), `MessageTagSkipTagProcessor.cpp` (`:95`, `:103`), `ReplaceTagProcessor.cpp` (`:53`, `:87`, `:117`, `:158`, `:308`), `native/petari/include/Game/Ui/TagProcessorBase.hpp:37-38`, `native/petari/src/Game/Util/MessageUtil.cpp`, `StringUtil.cpp`.
-- **Rows.** P-201: whole. P-202: advances (processors). P-215: advances (the ruby copy). P-237: advances (the message helpers).
+- **What changes.** The text writer and the tag processors read the in-text records by scanning for 0x1A. They now also walk runs, beside the in-text path, and a test compares the two. This is the first part of INV's landing 2 (split on 11-28: the text boxes holding runs, with the sound tags, is G7.2b). Each fault is its own item (plan decision: a row closes when its last fault is done):
+  - the runs reader: the parsed message's runs (G7.1's `MessageRunFile`) read as text and tag records, bounded on the records;
+  - the writer's run functions and the processors' run entries: the text writer's print, measure and word-break functions get run forms beside the old ones, and the tag processors take a tag as a run record (`CustomTagProcessor` and `ReplaceTagProcessor`'s localize tag, through one view of a tag that reads either form);
+  - the glyph recorder and the text-layout test: a silent writer records every glyph and pen position from both paths, in three tests (text-layout, text-layout-pal, text-layout-jp), one for each disc;
+  - P-202: a string parameter is a 4-byte token naming an entry in a table that only grows (`MessageTagSkipTagProcessor.cpp:5-31`), the records are parsed at `:40-77` and `ReplaceTagProcessor` rewrites the records in place byte by byte (`ReplaceTagProcessor.cpp:49-72`, `:139-161`, `:239-321`): the processors' side is here, the boxes' side (Replace and the arguments) is G7.2b;
+  - P-215, the ruby tag: it copies its base text, up to 255 units by a byte of the tag, with no check against the text left (`CustomTagProcessor.cpp:644-654`, the copy at `:653`); on runs the ruby's base is bounded by the text left (`NebulaUi`'s half is G7.3);
+  - P-237, the line copy of `MessageUtil` copies a tag's bytes without counting them against the room (`MessageUtil.cpp:89-113`, the tag loop at `:94-98`);
+  - P-237, `addNumberFontTag` assumes 256 units of room and cuts the tag's size past 255 (`StringUtil.cpp:215-233`, `:223`, `:229`);
+  - P-237, `convertUTF16ToASCII` bounds by `num - 1` against an unsigned count, so 0 writes without end (`StringUtil.cpp:252-266`);
+  - P-373 (a new row, found by this step's own test): a Japanese ruby's reading (the small kana over a kanji) is read from the wrong bytes by the old path and by G7.1's cook; both read it as the disc lays it out, and the store version is raised to 44.
+- **Where.** `native/petari/src/Game/Screen/CustomTagProcessor.cpp` (the 0x1A hits at `:408`, `:429`), `MessageTagSkipTagProcessor.cpp` (`:95`, `:103`), `ReplaceTagProcessor.cpp` (`:53`, `:87`, `:117`, `:158`, `:308`), `native/petari/include/Game/Ui/TagProcessorBase.hpp:37-38`, `native/petari/src/Game/Ui/TextWriterBase.cpp`, `CharWriter.cpp`, `native/petari/include/Game/System/MessageHolder.hpp`, `native/petari/src/Game/Util/MessageUtil.cpp`, `StringUtil.cpp`, the test's call (new: `native/petari/src/Game/Screen/TextLayoutCheck.cpp`), the three tests under `tests/engine/`, and `crates/nebula-import/src/cook/message.rs` (the ruby's reading).
+- **Rows.** P-202: advances (the writer and the processors). P-215: advances (the ruby's base on runs). P-237: advances (the message helpers). P-373: whole (found and fixed in this step; its ledger row is the step's own).
 - **Needs first.** G7.1.
 - **Old path.** Version 1 and the in-text readers remain beside the run readers until G7.5.
 - **Proof.**
-  1. The text-layout test (every message's glyph sequence and pen positions, old path against new, every language and region) is identical.
+  1. The text-layout test (every message's glyph sequence and pen positions, old path against new, every language and region: the three tests) is identical.
+  2. The gate's pictures are unchanged.
+  3. The reading of a Japanese ruby is the disc's: the text-layout test of the Japanese disc reports no difference, and the cook's message tests read the fixture's ruby as the disc lays it out (P-373).
+- **For a player.** A Japanese player sees the right small kana over a kanji (P-373); nothing else is visible: nothing draws from runs yet.
+- **Read first.** INV's landing 2 is only "the tag processors on runs"; P-237's three message helpers are placed here because they copy or size tags (the row's placement note says P-237 closes with P-202, at G7.5). The card was split on 11-28 on its writer's decisions G7.2#1 to #8: every setter of a text box's text and the sound tags are G7.2b's.
+
+### G7.2b Landing 2b: text boxes hold runs (with P-201)
+
+- **What changes.** The text boxes store and draw runs. Replace and the message arguments build runs as typed values (the player's name, a race time, a picture, a number, a string) with no token table and no byte arithmetic; nothing scans for 0x1A or reads a length from inside the text. `setArgNumber`, `setArgString`, `initAlpha`, `reset` and `PrintSilent` work on runs. Each fault is its own item (plan decision: a row closes when its last fault is done):
+  - P-202, the boxes' side: a string argument is no longer a token into a table that only grows, and `ReplaceTagProcessor` no longer rewrites the records in place byte by byte: it composes runs;
+  - P-201: a message's sound tags are tracked in a u8 mask, so the ninth and later sound tags of a message play nothing (`CustomTagProcessor.cpp:483-499`, `mSoundIndex >= 8`); the sound tags become a list sized to the message's tags, as a field of the parsed message.
+- **Where.** `native/petari/src/Game/Ui/TextBox.cpp` and `native/petari/include/Game/Ui/TextBox.hpp`, `native/petari/src/Game/Screen/CustomTagProcessor.cpp` (the sound tags, `setArgNumber`, `setArgString`, `initAlpha`, `reset`), `ReplaceTagProcessor.cpp`, `MessageTagSkipTagProcessor.cpp` (the token table), `native/petari/src/Game/NPC/TalkTextFormer.cpp` (`PrintSilent`), `native/petari/include/Game/Util/LayoutUtil.hpp` (the box's string argument).
+- **Rows.** P-201: whole. P-202: advances (the text boxes and Replace).
+- **Needs first.** G7.2.
+- **Old path.** Version 1 and the in-text readers remain beside the run readers until G7.5, which deletes them.
+- **Proof.**
+  1. The text-layout test (the three tests of G7.2: old path against new, every language and region) is identical, with the boxes now built from runs.
   2. The gate's pictures are unchanged.
   3. A message with nine or more sound tags plays every one of them (the row's fault; the sources name no test).
 - **For a player.** Nothing visible with the disc's text; messages with more sound tags now play them all.
-- **Read first.** INV's landing 2 is only "the tag processors on runs"; P-237's three message helpers are placed here because they copy or size tags (the row's placement note says P-237 closes with P-202, at G7.5).
+- **Read first.** G7.2's hand-off sheet and decisions G7.2#1 to #8, and what G7.2 left (`native/petari/include/Game/Util/TextRuns.hpp` and the writer's run functions): this step moves the setters of a box's text onto them.
 
 ### G7.3 Landing 3: the screens, the host and the mod surface on runs
 
 - **What changes.** The remaining readers and writers of the in-text records move to runs: `NebulaUi` (its tag walk, `NebulaUi.cpp:131-139`; `wrapWords` steps over a tag by its claimed length and reads `pSource[end]` past the terminator before its clamp, `:154-160`: P-215), `NebulaSettingsMenu` (`:889-901`), `NebulaAchievementToast` (it writes the records, `:54-64`), `StaffRoll` (`:646-657`), `TitleSequenceProduct` (builds a record into a prompt, `:76-93`), and the mod surface's tag writer (`nebula_text_tags.h`, which writes the same records; its decoder is on the one decoder, P-320). The host's `message_utf8` skips a tag by the size in the next unit's high byte with no check against the string's end, so a tag whose size runs past the text reads up to the loop's 256 units beyond it (`host_main.cpp:2162-2168`, P-275); it reads the tags from the typed records. Nebula's own text (`NebulaText`) and added content build runs through the same builder, decoded by the one UTF-8 decoder (P-209, P-320).
 - **Where.** `native/petari/src/Game/Screen/NebulaUi.cpp`, `NebulaSettingsMenu.cpp`, `NebulaAchievementToast.cpp`, `StaffRoll.cpp`, `TitleSequenceProduct.cpp`; `native/include/nebula_text_tags.h`; `native/host/host_main.cpp`; `native/petari/src/Game/System/NebulaText.cpp` and `localization/NebulaText.tsv` (INV names `NebulaText.txt`: not found at 790626cb5).
 - **Rows.** P-202: advances (all readers). P-215: advances (`NebulaUi`'s `wrapWords`). P-275: advances (the host's skip).
-- **Needs first.** G7.2.
+- **Needs first.** G7.2b.
 - **Old path.** Version 1 and the in-text format remain, unread, until G7.5.
 - **Proof.**
-  1. The text-layout test identical (as G7.2).
+  1. The text-layout test identical (as G7.2 and G7.2b).
   2. The gate's pictures unchanged; the settings menu, the achievement toast, the staff roll and the title's prompt compared.
   3. The host's reading of a message with a tag whose size runs past the text stops at the text's end (the sources name no test; the row's fault).
 - **For a player.** Nothing visible.
@@ -1550,7 +1570,7 @@ The five steps are INV section 4's five landings. P-201 goes with landing 2, as 
 | Row | Today | After | Closes at |
 | --- | --- | --- | --- |
 | P-187 | Characters are 16-bit codes (the console font's range): the reader, the tag processors and the font's two 256-entry pages; a character past U+FFFF cannot be drawn; `%c`, the launcher text and font metrics are narrow too. | 32-bit code points through readers and tag processors; `NFNT` version 2 with a code table by range; a test draws a character past U+FFFF. | G7.4 |
-| P-201 | A message's sound tags are tracked in a u8 mask, so the ninth and later sound tags play nothing. | A mask or list sized to the message's tags, a field of the parsed message. | G7.2 |
+| P-201 | A message's sound tags are tracked in a u8 mask, so the ninth and later sound tags play nothing. | A mask or list sized to the message's tags, a field of the parsed message. | G7.2b |
 | P-202 | Message tags are the console's binary records inside the character stream, a 4-byte token for each string, rewritten in place byte by byte. | A message parsed once into text runs and typed tag records, each with its own string; no token table, no byte arithmetic; version 1 deleted. | G7.5 |
 | P-215 | A tag's claimed length is trusted: the ruby copy and `NebulaUi`'s `wrapWords` read past the text. | Both bounded by the text's length; the typed records remove the cause. | G7.5 |
 | P-237 | Shared helpers copy tags past their room, assume 256 units, write without end at 0, use an emitter unchecked, and more (touch ids as addresses, an unchecked divide level, an unchecked realloc). | Each bounded by its room and checked at its input; touch ids from a counter. | G7.5 |
