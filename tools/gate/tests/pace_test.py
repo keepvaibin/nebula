@@ -433,7 +433,7 @@ def main():
     # G10.4m: the rows of the stored baseline refuse by rate (BASELINE_REFUSES), and a device run prints what the screen showed.
     ft = pace.frametimeline
     check(sorted(pace.BASELINE_REFUSES) == ["120", "60"] and pace.BASELINE_REFUSES["60"] == ()
-          and pace.BASELINE_REFUSES["120"] == ("refreshes_mean", "jumps_per_minute")
+          and pace.BASELINE_REFUSES["120"] == ("refreshes_mean",)
           and all(row in ft.ROWS for rows in pace.BASELINE_REFUSES.values() for row in rows),
           "the shipped rows of the baseline: at 120 Hz the mean refreshes and the jumps, at 60 Hz none: %s" % (pace.BASELINE_REFUSES,))
     stored = {"method": "latency", "start": "step", "rates": {
@@ -452,6 +452,9 @@ def main():
     sleepy = device_rows(120, 0.1, 4.8, 1200.0, 450.0)
     check(sleepy[pace.BASELINE_ROW][1] == "FAIL" and "refusing: refreshes_mean, jumps_per_minute" in sleepy[pace.BASELINE_ROW][0],
           "the sleep's run at 120 Hz (mean refreshes 4.8, 450 jumps a minute): refused by those rows only: %s" % (sleepy[pace.BASELINE_ROW],))
+    noisy = device_rows(120, 0.1, 4.0, 420.0, 186.0)  # the clean tablet's 185.6 jumps a minute: beyond the bound 160, a report until G10.5
+    check(noisy[pace.BASELINE_ROW][1] == "recorded" and "a report: jumps_per_minute" in noisy[pace.BASELINE_ROW][0],
+          "a clean 120 Hz run with 186 jumps a minute: a report, not refused: %s" % (noisy[pace.BASELINE_ROW],))
     sleepy60 = device_rows(60, 0.003, 3.1, 25.0, 6.0)
     check(sleepy60[pace.BASELINE_ROW][1] == "recorded" and "a report: late_share, refreshes_mean, events_per_minute, jumps_per_minute" in sleepy60[pace.BASELINE_ROW][0],
           "the same run at 60 Hz: beyond its bounds and a report, nothing refused: %s" % (sleepy60[pace.BASELINE_ROW],))

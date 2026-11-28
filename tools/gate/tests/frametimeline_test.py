@@ -47,6 +47,7 @@ sys.stdout.write((trace.parent / name).read_text(encoding="utf-8"))
 
 failures = []
 results = []
+GROSS_SHIPPED = dict(getattr(pace, "BASELINE_GROSS", {}))
 REFUSES_SHIPPED = dict(getattr(pace, "BASELINE_REFUSES", {}))  # what pace.py ships with; the test sets it for its own blocks and puts it back
 
 
@@ -542,8 +543,10 @@ def main():
         # As shipped (G10.4m): at 120 Hz the mean refreshes and the jumps refuse, at 60 Hz no row does (the clean runs spread wider than
         # the plant's effect there); a row beyond its bound at 60 Hz is said, as a report, and refuses nothing.
         check(set(REFUSES_SHIPPED) == {"60", "120"} and all(row in ft.ROWS for rows in REFUSES_SHIPPED.values() for row in rows)
-              and REFUSES_SHIPPED["60"] == () and REFUSES_SHIPPED["120"] == ("refreshes_mean", "jumps_per_minute"),
+              and REFUSES_SHIPPED["60"] == () and REFUSES_SHIPPED["120"] == ("refreshes_mean",)
+              and pace.BASELINE_GROSS == {"120": {"jumps_per_minute": 284.0}, "60": {"jumps_per_minute": 56.0}},
               "the shipped rows are rows of the baseline, by rate: %s" % (REFUSES_SHIPPED,))
+        pace.BASELINE_GROSS = {}  # these 12-frame cases make thousands of jumps a minute: the gross guard has its own cases below
         for name, case, says in (("same", "right", ""), ("late", "sleep", "a report: late_share"), ("mode change", "mode", "a report: late_share"),
                                  ("deep", "depth", "a report: three_refresh_share"), ("unnamed", "unknown", "a report: late_share")):
             work = device_work("report-" + name, case)
@@ -572,7 +575,18 @@ def main():
         said = {m: (v, verdict) for m, v, _t, verdict in rows}
         check(said[pace.BASELINE_ROW][1] == "recorded" and "a report: events_per_minute" in said[pace.BASELINE_ROW][0],
               "at 120 Hz the events beyond their bound are a report where the row is not shipped: %s" % (said[pace.BASELINE_ROW],))
+        # As shipped the jumps a minute are a report until G10.5 and refuse only a gross break (twice the highest clean run on record, 2 x 142):
+        # 190 a minute beyond the bound 120 is said; 300 refuses.
         pace.BASELINE_REFUSES = REFUSES_SHIPPED
+        pace.BASELINE_GROSS = GROSS_SHIPPED
+        for jumps, want, says in ((190.0, "recorded", "a report: jumps_per_minute"), (300.0, "FAIL", "refusing: jumps_per_minute")):
+            rows = pace.frametimeline_rows({"frametimeline": dict(hot, shown={"pairs": 9, "repeated": 1, "skipped": 0, "shifted": 0,
+                                                                             "events_per_minute": 340.0, "jumps_per_minute": jumps}),
+                                            "present_timing": None}, cold, "base.json")
+            said = {m: (v, verdict) for m, v, _t, verdict in rows}
+            check(said[pace.BASELINE_ROW][1] == want and says in said[pace.BASELINE_ROW][0],
+                  "as shipped at 120 Hz, %s jumps a minute: %s: %s" % (jumps, want, said[pace.BASELINE_ROW]))
+        pace.BASELINE_GROSS = GROSS_SHIPPED
         # A run the baseline could not judge (another method) is the tool's, never a pass.
         other = dict(json.loads(stored.read_text(encoding="utf-8")), method="frametimeline")
         stored.write_text(json.dumps(other), encoding="utf-8")
