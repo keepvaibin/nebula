@@ -42,118 +42,119 @@ order	step	package	title	package_needs	card_file	state	commit
 41	G10.4	G10	The performance hint's target, by A/B	S0.2	05-NATIVE-LANE-G.md	landed	c08a9b8cd
 42	G10.4m	G10	G10.3's tablet proofs, how the late share is classified, the baseline rows, the hint's target by A/B	S0.2	05-NATIVE-LANE-G.md	landed	12ec266de
 43	G10.5	G10	The depth rule from ready time, stepping back down by trying	S0.2	05-NATIVE-LANE-G.md	open	
-44	G10.5m	G10	The tablet's display stall, traced to a named cause	S0.2	05-NATIVE-LANE-G.md	open	
-45	G10.6	G10	The arbiter acts before a miss: ready-time percentile and thermal forecast	S0.2	05-NATIVE-LANE-G.md	open	
-46	G10.7	G10	Image count and queue bound, where G10.2 shows buffer stuffing	S0.2	05-NATIVE-LANE-G.md	open	
-47	G10.8	G10	The frame-rate vote at 60 Hz	S0.2	05-NATIVE-LANE-G.md	open	
-48	G10.9	G10	Game Mode, sustained performance, and the weak-device heat tests	S0.2	05-NATIVE-LANE-G.md	open	
-49	G10.10	G10	Pacing invisible on every device	S0.2	05-NATIVE-LANE-G.md	open	
-50	G1.1	G1	The record: the device's own motion, a pointer in the picture's terms, one fixed space for speed	S0.2	05-NATIVE-LANE-G.md	open	
-51	G1.2	G1	Connection, language, rumble and battery, behaviour by input	S0.2	05-NATIVE-LANE-G.md	open	
-52	G1.3	G1	Sticks: one radial dead zone, the Nunchuk's centre	S0.2	05-NATIVE-LANE-G.md	open	
-53	G1.4	G1	Presses latched between reads	S0.2	05-NATIVE-LANE-G.md	open	
-54	G1.5	G1	Windows: the controller worker and the pointer buttons; the parts of P-244 left	S0.2	05-NATIVE-LANE-G.md	open	
-55	G2.6	G2	Landing 6: the pointer and the menu cursor at the picture's moment	S0.2,G1	05-NATIVE-LANE-G.md	open	
-56	G2.7	G2	Landing 7: every camera cut and warp stated; `camera_epoch` read by the host	S0.2,G1	05-NATIVE-LANE-G.md	open	
-57	R3.1	R3	The cook writes `CBLK` and `CROW`; a load-time check proves them	R2,S0.3	04-NATIVE-LANE-R.md	open	
-58	R3.2	R3	The engine; group "plain unlit"; P-173	R2,S0.3	04-NATIVE-LANE-R.md	open	
-59	R3.3	R3	Group "plain lit"	R2,S0.3	04-NATIVE-LANE-R.md	open	
-60	R3.4	R3	Group "alpha-tested"	R2,S0.3	04-NATIVE-LANE-R.md	open	
-61	R3.5	R3	Group "blended"	R2,S0.3	04-NATIVE-LANE-R.md	open	
-62	R3.6	R3	Group "water and indirect"	R2,S0.3	04-NATIVE-LANE-R.md	open	
-63	R3.7	R3	Group "billboard materials"	R2,S0.3	04-NATIVE-LANE-R.md	open	
-64	R3.8	R3	The replacing passes (P-309)	R2,S0.3	04-NATIVE-LANE-R.md	open	
-65	R3.9	R3	Shader forms: the cooked programs (P-303, P-304)	R2,S0.3	04-NATIVE-LANE-R.md	open	
-66	R3.10	R3	Shader forms: the 19 hand-written programs (P-299)	R2,S0.3	04-NATIVE-LANE-R.md	open	
-67	R3.11	R3	Sources take the clips' floats as given	R2,S0.3	04-NATIVE-LANE-R.md	open	
-68	R3.12	R3	Direct3D 11: P-060 and P-064 measured again; P-297's first part	R2,S0.3	04-NATIVE-LANE-R.md	open	
-69	R3.13	R3	The last landing: the old path is deleted	R2,S0.3	04-NATIVE-LANE-R.md	open	
-70	R4.0	R4	The frame	R3	04-NATIVE-LANE-R.md	open	
-71	R4.1	R4	Quads, then fans	R3	04-NATIVE-LANE-R.md	open	
-72	R4.2	R4	Strips	R3	04-NATIVE-LANE-R.md	open	
-73	R4.3	R4	Shadows	R3	04-NATIVE-LANE-R.md	open	
-74	R4.4	R4	Particles	R3	04-NATIVE-LANE-R.md	open	
-75	R4.5	R4	Widened lines and points	R3	04-NATIVE-LANE-R.md	open	
-76	R4.6	R4	2-D gauges and glows	R3	04-NATIVE-LANE-R.md	open	
-77	R4.7	R4	The seven mod draw-service sites	R3	04-NATIVE-LANE-R.md	open	
-78	R4.8	R4	Draw lists	R3	04-NATIVE-LANE-R.md	open	
-79	R4.9	R4	The last landing	R3	04-NATIVE-LANE-R.md	open	
-80	R4v.1	R4v	A view is one record	R4	04-NATIVE-LANE-R.md	open	
-81	R4v.2	R4v	Translucent draws are ordered per view at the picture's camera (done in R7.2)	R4	04-NATIVE-LANE-R.md	open	
-82	R5.1	R5	The game writes a block's joints once a step; the list's joints uploaded once; the shared compute pass; group "one joint"	R4v	04-NATIVE-LANE-R.md	open	
-83	R5.2	R5	Many rigid joints	R4v	04-NATIVE-LANE-R.md	open	
-84	R5.3	R5	Weighted (skinned) blocks	R4v	04-NATIVE-LANE-R.md	open	
-85	R5.4	R5	Billboard and calc mode 1	R4v	04-NATIVE-LANE-R.md	open	
-86	R5.5	R5	Calc mode 2	R4v	04-NATIVE-LANE-R.md	open	
-87	R5.6	R5	Eye-space blocks; fog per view (P-239's fog part); the sky follows each view (P-156's sky line)	R4v	04-NATIVE-LANE-R.md	open	
-88	R5.7	R5	Culling by a bound over both steps; ring runs through an instance row (P-046); P-255's skeleton part	R4v	04-NATIVE-LANE-R.md	open	
-89	R5.8	R5	The last landing: the CPU compose is deleted	R4v	04-NATIVE-LANE-R.md	open	
-90	R6.1	R6	The actors' lights	R5	04-NATIVE-LANE-R.md	open	
-91	R6.2	R6	Point lights	R5	04-NATIVE-LANE-R.md	open	
-92	R6.3	R6	The player's light	R5	04-NATIVE-LANE-R.md	open	
-93	R6.4	R6	The map's lights	R5	04-NATIVE-LANE-R.md	open	
-94	R6.5	R6	The game half, replay identical: an actor tests its own area first (P-152); a shadow keeps its drop (P-140)	R5	04-NATIVE-LANE-R.md	open	
-95	R6.6	R6	P-190: the normal map final at the cook, found once at load, lit per pixel from the light table	R5	04-NATIVE-LANE-R.md	open	
-96	R6.7	R6	The last landing: the numbered places and `MaterialAmbient` are deleted	R5	04-NATIVE-LANE-R.md	open	
-97	G3.1	G3	The pool and the fork-and-join call; the run lists made safe	S0.2,R6	05-NATIVE-LANE-G.md	open	
-98	G3.2	G3	Visibility's judge	S0.2,R6	05-NATIVE-LANE-G.md	open	
-99	G3.3	G3	Collision queries with caller buffers; shadows on workers	S0.2,R6	05-NATIVE-LANE-G.md	open	
-100	G3.4	G3	Animation without callbacks	S0.2,R6	05-NATIVE-LANE-G.md	open	
-101	G3.5	G3	Particles without callbacks	S0.2,R6	05-NATIVE-LANE-G.md	open	
-102	G3.6	G3	The frame list's recorders	S0.2,R6	05-NATIVE-LANE-G.md	open	
-103	G3.7	G3	Loads read ahead; the stage load on the load worker	S0.2,R6	05-NATIVE-LANE-G.md	open	
-104	G4.0	G4	Take the step-speed commits already written	G3	05-NATIVE-LANE-G.md	open	
-105	G4.1	G4	Collision	G3	05-NATIVE-LANE-G.md	open	
-106	G4.2	G4	Gravity, sensors, the judge	G3	05-NATIVE-LANE-G.md	open	
-107	G4.3	G4	Arenas, pools, emitters	G3	05-NATIVE-LANE-G.md	open	
-108	G4.4	G4	Small walks	G3	05-NATIVE-LANE-G.md	open	
-109	G5.1	G5	Landing 1: the "seen" judge on the reference volume	G4,R4	05-NATIVE-LANE-G.md	open	
-110	G5.2	G5	Landing 2: running split from the judge	G4,R4	05-NATIVE-LANE-G.md	open	
-111	G5.3	G5	Landing 3: drawing culled per picture	G4,R4	05-NATIVE-LANE-G.md	open	
-112	G5.4	G5	Landing 4: the actors' own skips	G4,R4	05-NATIVE-LANE-G.md	open	
-113	G5.5	G5	Landing 5: the measure and the choice	G4,R4	05-NATIVE-LANE-G.md	open	
-114	R7.1	R7	Landing 1: each pass states its reads and writes; the recorded-list fixtures	R6	04-NATIVE-LANE-R.md	open	
-115	R7.2	R7	Landing 2: the planner; the mirror's own target; the capture's late answer; translucent order per view	R6	04-NATIVE-LANE-R.md	open	
-116	R7.3	R7	Landing 3: instances, loads and stores, resolves, transient attachments; clears as load actions; copies read through a swizzle	R6	04-NATIVE-LANE-R.md	open	
-117	R7.4	R7	Landing 4: barriers from the plan; each backend's set trade deleted	R6	04-NATIVE-LANE-R.md	open	
-118	R7.5	R7	Landing 5: one instance under parallel recording	R6	04-NATIVE-LANE-R.md	open	
-119	R7.6	R7	Landing 6: the after-scene instance; the cover's single draw; the phone's bloom setting	R6	04-NATIVE-LANE-R.md	open	
-120	R7.7	R7	Landing 7: targets beside the old at a size change; upscalers and frame generation made ahead; the game no longer waits for the queue at a window change	R6	04-NATIVE-LANE-R.md	open	
-121	R7.8	R7	Renderer stability left after landings 1 to 7	R6	04-NATIVE-LANE-R.md	open	
-122	G2.8	G2	Landing 8: the cost of a picture	G2a,R5,R7	05-NATIVE-LANE-G.md	open	
-123	R8.1	R8	P-300: passes read the depth target by name; masks in a target of their own	R7	04-NATIVE-LANE-R.md	open	
-124	R8.2	R8	P-198: depth of field reads depth at full precision and weighs the blur from the two distances	R7	04-NATIVE-LANE-R.md	open	
-125	R8.3	R8	P-213: image-effect constants as floats written once a step	R7	04-NATIVE-LANE-R.md	open	
-126	R8.4	R8	P-185 and P-301: the blur's vertical factor from the frame's aspect; the Gaussian's taps capped	R7	04-NATIVE-LANE-R.md	open	
-127	R8.5	R8	P-207: the underwater warp as a share of the picture	R7	04-NATIVE-LANE-R.md	open	
-128	R8.6	R8	P-289: the glow draws into its own target and the composite only adds; HDR bloom from the real brightness	R7	04-NATIVE-LANE-R.md	open	
-129	R9.1	R9	P-291: each texture cooked in the forms devices sample	S0.1	04-NATIVE-LANE-R.md	open	
-130	R9.2	R9	P-292: the movie file gets a frame table in its header	S0.1	04-NATIVE-LANE-R.md	open	
-131	R10.1	R10	The layout file's next version, cooked beside the old	S0.1	04-NATIVE-LANE-R.md	open	
-132	R10.2	R10	The readers move to the new version; the old version is deleted	S0.1	04-NATIVE-LANE-R.md	open	
-133	R10.3	R10	P-199, P-200, P-210: the dummy image by name, language marks sized to the pane, the A button's pictures by name	S0.1	04-NATIVE-LANE-R.md	open	
-134	R10.4	R10	P-197: square layout units; the 0.75 code and Nebula's own undoing of it go	S0.1	04-NATIVE-LANE-R.md	open	
-135	G6.1	G6	Sound sequences in host order (P-186)	S0.1	05-NATIVE-LANE-G.md	open	
-136	G6.3	G6	Sound lookups by map (P-223)	S0.1	05-NATIVE-LANE-G.md	open	
-137	G6.4	G6	Checked sound data and handles (P-224, P-227, P-228)	S0.1	05-NATIVE-LANE-G.md	open	
-138	G6.5	G6	Streams read ahead; a stream's end by the step clock (P-225, P-226)	S0.1	05-NATIVE-LANE-G.md	open	
-139	G6.6	G6	Movie sound rate and volume (P-271, P-219's movie half)	S0.1	05-NATIVE-LANE-G.md	open	
-140	G6.8	G6	The audio device (P-037, P-071, P-072, P-286)	S0.1	05-NATIVE-LANE-G.md	open	
-141	G7.1	G7	Landing 1: `NMSG` version 2 beside version 1	S0.1	05-NATIVE-LANE-G.md	open	
-142	G7.2	G7	Landing 2: the tag processors on runs (with P-201)	S0.1	05-NATIVE-LANE-G.md	open	
-143	G7.3	G7	Landing 3: the screens, the host and the mod surface on runs	S0.1	05-NATIVE-LANE-G.md	open	
-144	G7.4	G7	Landing 4: code points through the font (P-187)	S0.1	05-NATIVE-LANE-G.md	open	
-145	G7.5	G7	Landing 5: version 1 and the in-text format deleted	S0.1	05-NATIVE-LANE-G.md	open	
-146	G8.1	G8	The save as named, sized records with a version (P-205, P-232)	S0.1	05-NATIVE-LANE-G.md	open	
-147	G8.2	G8	Bounded waits on the game thread (P-272, P-235)	S0.1,G2a	05-NATIVE-LANE-G.md	open	
-148	G8.3	G8	Table fields by index, a resource's size by its handle (P-189, P-233)	S0.1	05-NATIVE-LANE-G.md	open	
-149	G8.4	G8	Limits that grow, names without 16-bit hashes (P-192, P-148, P-204)	S0.1	05-NATIVE-LANE-G.md	open	
-150	G9.1	G9	Movie cues fire when the movie's place crosses them (P-203)	G6	05-NATIVE-LANE-G.md	open	
-151	G9.2	G9	The staff roll placed from the music's position (P-206)	G6	05-NATIVE-LANE-G.md	open	
-152	G9.3	G9	The Mii library's own identity (P-268)	G6	05-NATIVE-LANE-G.md	open	
-153	G9.4	G9	Fixed counts in the 2D screens, and a picture size cap (P-208, P-211)	G6	05-NATIVE-LANE-G.md	open	
-154	G9.5	G9	The host's menus: stability (P-306)	G6	05-NATIVE-LANE-G.md	open	
-155	G2.9	G2	Landing 9: the default rate	G2b	05-NATIVE-LANE-G.md	open	
-156	Z.1	Z	Profiles taken again	everything	05-NATIVE-LANE-G.md	open	
-157	Z.2	Z	The end check	everything	05-NATIVE-LANE-G.md	open	
-158	Z.3	Z	The statement and the two builds	everything	05-NATIVE-LANE-G.md	open	
+44	G10.6	G10	The arbiter acts before a miss: ready-time percentile and thermal forecast	S0.2	05-NATIVE-LANE-G.md	open	
+45	G10.7	G10	Image count and queue bound, where G10.2 shows buffer stuffing	S0.2	05-NATIVE-LANE-G.md	open	
+46	G10.8	G10	The frame-rate vote at 60 Hz	S0.2	05-NATIVE-LANE-G.md	open	
+47	G10.9	G10	Game Mode, sustained performance, and the weak-device heat tests	S0.2	05-NATIVE-LANE-G.md	open	
+48	G10.9s	G10	The Swappy variant, Android only, behind a switch	S0.2	05-NATIVE-LANE-G.md	open	
+49	G10.5m	G10	The tablet session for G10.5 to G10.9s: the display stall traced to a named cause, and the Swappy A/B	S0.2	05-NATIVE-LANE-G.md	open	
+50	G10.10	G10	Pacing invisible on every device	S0.2	05-NATIVE-LANE-G.md	open	
+51	G1.1	G1	The record: the device's own motion, a pointer in the picture's terms, one fixed space for speed	S0.2	05-NATIVE-LANE-G.md	open	
+52	G1.2	G1	Connection, language, rumble and battery, behaviour by input	S0.2	05-NATIVE-LANE-G.md	open	
+53	G1.3	G1	Sticks: one radial dead zone, the Nunchuk's centre	S0.2	05-NATIVE-LANE-G.md	open	
+54	G1.4	G1	Presses latched between reads	S0.2	05-NATIVE-LANE-G.md	open	
+55	G1.5	G1	Windows: the controller worker and the pointer buttons; the parts of P-244 left	S0.2	05-NATIVE-LANE-G.md	open	
+56	G2.6	G2	Landing 6: the pointer and the menu cursor at the picture's moment	S0.2,G1	05-NATIVE-LANE-G.md	open	
+57	G2.7	G2	Landing 7: every camera cut and warp stated; `camera_epoch` read by the host	S0.2,G1	05-NATIVE-LANE-G.md	open	
+58	R3.1	R3	The cook writes `CBLK` and `CROW`; a load-time check proves them	R2,S0.3	04-NATIVE-LANE-R.md	open	
+59	R3.2	R3	The engine; group "plain unlit"; P-173	R2,S0.3	04-NATIVE-LANE-R.md	open	
+60	R3.3	R3	Group "plain lit"	R2,S0.3	04-NATIVE-LANE-R.md	open	
+61	R3.4	R3	Group "alpha-tested"	R2,S0.3	04-NATIVE-LANE-R.md	open	
+62	R3.5	R3	Group "blended"	R2,S0.3	04-NATIVE-LANE-R.md	open	
+63	R3.6	R3	Group "water and indirect"	R2,S0.3	04-NATIVE-LANE-R.md	open	
+64	R3.7	R3	Group "billboard materials"	R2,S0.3	04-NATIVE-LANE-R.md	open	
+65	R3.8	R3	The replacing passes (P-309)	R2,S0.3	04-NATIVE-LANE-R.md	open	
+66	R3.9	R3	Shader forms: the cooked programs (P-303, P-304)	R2,S0.3	04-NATIVE-LANE-R.md	open	
+67	R3.10	R3	Shader forms: the 19 hand-written programs (P-299)	R2,S0.3	04-NATIVE-LANE-R.md	open	
+68	R3.11	R3	Sources take the clips' floats as given	R2,S0.3	04-NATIVE-LANE-R.md	open	
+69	R3.12	R3	Direct3D 11: P-060 and P-064 measured again; P-297's first part	R2,S0.3	04-NATIVE-LANE-R.md	open	
+70	R3.13	R3	The last landing: the old path is deleted	R2,S0.3	04-NATIVE-LANE-R.md	open	
+71	R4.0	R4	The frame	R3	04-NATIVE-LANE-R.md	open	
+72	R4.1	R4	Quads, then fans	R3	04-NATIVE-LANE-R.md	open	
+73	R4.2	R4	Strips	R3	04-NATIVE-LANE-R.md	open	
+74	R4.3	R4	Shadows	R3	04-NATIVE-LANE-R.md	open	
+75	R4.4	R4	Particles	R3	04-NATIVE-LANE-R.md	open	
+76	R4.5	R4	Widened lines and points	R3	04-NATIVE-LANE-R.md	open	
+77	R4.6	R4	2-D gauges and glows	R3	04-NATIVE-LANE-R.md	open	
+78	R4.7	R4	The seven mod draw-service sites	R3	04-NATIVE-LANE-R.md	open	
+79	R4.8	R4	Draw lists	R3	04-NATIVE-LANE-R.md	open	
+80	R4.9	R4	The last landing	R3	04-NATIVE-LANE-R.md	open	
+81	R4v.1	R4v	A view is one record	R4	04-NATIVE-LANE-R.md	open	
+82	R4v.2	R4v	Translucent draws are ordered per view at the picture's camera (done in R7.2)	R4	04-NATIVE-LANE-R.md	open	
+83	R5.1	R5	The game writes a block's joints once a step; the list's joints uploaded once; the shared compute pass; group "one joint"	R4v	04-NATIVE-LANE-R.md	open	
+84	R5.2	R5	Many rigid joints	R4v	04-NATIVE-LANE-R.md	open	
+85	R5.3	R5	Weighted (skinned) blocks	R4v	04-NATIVE-LANE-R.md	open	
+86	R5.4	R5	Billboard and calc mode 1	R4v	04-NATIVE-LANE-R.md	open	
+87	R5.5	R5	Calc mode 2	R4v	04-NATIVE-LANE-R.md	open	
+88	R5.6	R5	Eye-space blocks; fog per view (P-239's fog part); the sky follows each view (P-156's sky line)	R4v	04-NATIVE-LANE-R.md	open	
+89	R5.7	R5	Culling by a bound over both steps; ring runs through an instance row (P-046); P-255's skeleton part	R4v	04-NATIVE-LANE-R.md	open	
+90	R5.8	R5	The last landing: the CPU compose is deleted	R4v	04-NATIVE-LANE-R.md	open	
+91	R6.1	R6	The actors' lights	R5	04-NATIVE-LANE-R.md	open	
+92	R6.2	R6	Point lights	R5	04-NATIVE-LANE-R.md	open	
+93	R6.3	R6	The player's light	R5	04-NATIVE-LANE-R.md	open	
+94	R6.4	R6	The map's lights	R5	04-NATIVE-LANE-R.md	open	
+95	R6.5	R6	The game half, replay identical: an actor tests its own area first (P-152); a shadow keeps its drop (P-140)	R5	04-NATIVE-LANE-R.md	open	
+96	R6.6	R6	P-190: the normal map final at the cook, found once at load, lit per pixel from the light table	R5	04-NATIVE-LANE-R.md	open	
+97	R6.7	R6	The last landing: the numbered places and `MaterialAmbient` are deleted	R5	04-NATIVE-LANE-R.md	open	
+98	G3.1	G3	The pool and the fork-and-join call; the run lists made safe	S0.2,R6	05-NATIVE-LANE-G.md	open	
+99	G3.2	G3	Visibility's judge	S0.2,R6	05-NATIVE-LANE-G.md	open	
+100	G3.3	G3	Collision queries with caller buffers; shadows on workers	S0.2,R6	05-NATIVE-LANE-G.md	open	
+101	G3.4	G3	Animation without callbacks	S0.2,R6	05-NATIVE-LANE-G.md	open	
+102	G3.5	G3	Particles without callbacks	S0.2,R6	05-NATIVE-LANE-G.md	open	
+103	G3.6	G3	The frame list's recorders	S0.2,R6	05-NATIVE-LANE-G.md	open	
+104	G3.7	G3	Loads read ahead; the stage load on the load worker	S0.2,R6	05-NATIVE-LANE-G.md	open	
+105	G4.0	G4	Take the step-speed commits already written	G3	05-NATIVE-LANE-G.md	open	
+106	G4.1	G4	Collision	G3	05-NATIVE-LANE-G.md	open	
+107	G4.2	G4	Gravity, sensors, the judge	G3	05-NATIVE-LANE-G.md	open	
+108	G4.3	G4	Arenas, pools, emitters	G3	05-NATIVE-LANE-G.md	open	
+109	G4.4	G4	Small walks	G3	05-NATIVE-LANE-G.md	open	
+110	G5.1	G5	Landing 1: the "seen" judge on the reference volume	G4,R4	05-NATIVE-LANE-G.md	open	
+111	G5.2	G5	Landing 2: running split from the judge	G4,R4	05-NATIVE-LANE-G.md	open	
+112	G5.3	G5	Landing 3: drawing culled per picture	G4,R4	05-NATIVE-LANE-G.md	open	
+113	G5.4	G5	Landing 4: the actors' own skips	G4,R4	05-NATIVE-LANE-G.md	open	
+114	G5.5	G5	Landing 5: the measure and the choice	G4,R4	05-NATIVE-LANE-G.md	open	
+115	R7.1	R7	Landing 1: each pass states its reads and writes; the recorded-list fixtures	R6	04-NATIVE-LANE-R.md	open	
+116	R7.2	R7	Landing 2: the planner; the mirror's own target; the capture's late answer; translucent order per view	R6	04-NATIVE-LANE-R.md	open	
+117	R7.3	R7	Landing 3: instances, loads and stores, resolves, transient attachments; clears as load actions; copies read through a swizzle	R6	04-NATIVE-LANE-R.md	open	
+118	R7.4	R7	Landing 4: barriers from the plan; each backend's set trade deleted	R6	04-NATIVE-LANE-R.md	open	
+119	R7.5	R7	Landing 5: one instance under parallel recording	R6	04-NATIVE-LANE-R.md	open	
+120	R7.6	R7	Landing 6: the after-scene instance; the cover's single draw; the phone's bloom setting	R6	04-NATIVE-LANE-R.md	open	
+121	R7.7	R7	Landing 7: targets beside the old at a size change; upscalers and frame generation made ahead; the game no longer waits for the queue at a window change	R6	04-NATIVE-LANE-R.md	open	
+122	R7.8	R7	Renderer stability left after landings 1 to 7	R6	04-NATIVE-LANE-R.md	open	
+123	G2.8	G2	Landing 8: the cost of a picture	G2a,R5,R7	05-NATIVE-LANE-G.md	open	
+124	R8.1	R8	P-300: passes read the depth target by name; masks in a target of their own	R7	04-NATIVE-LANE-R.md	open	
+125	R8.2	R8	P-198: depth of field reads depth at full precision and weighs the blur from the two distances	R7	04-NATIVE-LANE-R.md	open	
+126	R8.3	R8	P-213: image-effect constants as floats written once a step	R7	04-NATIVE-LANE-R.md	open	
+127	R8.4	R8	P-185 and P-301: the blur's vertical factor from the frame's aspect; the Gaussian's taps capped	R7	04-NATIVE-LANE-R.md	open	
+128	R8.5	R8	P-207: the underwater warp as a share of the picture	R7	04-NATIVE-LANE-R.md	open	
+129	R8.6	R8	P-289: the glow draws into its own target and the composite only adds; HDR bloom from the real brightness	R7	04-NATIVE-LANE-R.md	open	
+130	R9.1	R9	P-291: each texture cooked in the forms devices sample	S0.1	04-NATIVE-LANE-R.md	open	
+131	R9.2	R9	P-292: the movie file gets a frame table in its header	S0.1	04-NATIVE-LANE-R.md	open	
+132	R10.1	R10	The layout file's next version, cooked beside the old	S0.1	04-NATIVE-LANE-R.md	open	
+133	R10.2	R10	The readers move to the new version; the old version is deleted	S0.1	04-NATIVE-LANE-R.md	open	
+134	R10.3	R10	P-199, P-200, P-210: the dummy image by name, language marks sized to the pane, the A button's pictures by name	S0.1	04-NATIVE-LANE-R.md	open	
+135	R10.4	R10	P-197: square layout units; the 0.75 code and Nebula's own undoing of it go	S0.1	04-NATIVE-LANE-R.md	open	
+136	G6.1	G6	Sound sequences in host order (P-186)	S0.1	05-NATIVE-LANE-G.md	open	
+137	G6.3	G6	Sound lookups by map (P-223)	S0.1	05-NATIVE-LANE-G.md	open	
+138	G6.4	G6	Checked sound data and handles (P-224, P-227, P-228)	S0.1	05-NATIVE-LANE-G.md	open	
+139	G6.5	G6	Streams read ahead; a stream's end by the step clock (P-225, P-226)	S0.1	05-NATIVE-LANE-G.md	open	
+140	G6.6	G6	Movie sound rate and volume (P-271, P-219's movie half)	S0.1	05-NATIVE-LANE-G.md	open	
+141	G6.8	G6	The audio device (P-037, P-071, P-072, P-286)	S0.1	05-NATIVE-LANE-G.md	open	
+142	G7.1	G7	Landing 1: `NMSG` version 2 beside version 1	S0.1	05-NATIVE-LANE-G.md	open	
+143	G7.2	G7	Landing 2: the tag processors on runs (with P-201)	S0.1	05-NATIVE-LANE-G.md	open	
+144	G7.3	G7	Landing 3: the screens, the host and the mod surface on runs	S0.1	05-NATIVE-LANE-G.md	open	
+145	G7.4	G7	Landing 4: code points through the font (P-187)	S0.1	05-NATIVE-LANE-G.md	open	
+146	G7.5	G7	Landing 5: version 1 and the in-text format deleted	S0.1	05-NATIVE-LANE-G.md	open	
+147	G8.1	G8	The save as named, sized records with a version (P-205, P-232)	S0.1	05-NATIVE-LANE-G.md	open	
+148	G8.2	G8	Bounded waits on the game thread (P-272, P-235)	S0.1,G2a	05-NATIVE-LANE-G.md	open	
+149	G8.3	G8	Table fields by index, a resource's size by its handle (P-189, P-233)	S0.1	05-NATIVE-LANE-G.md	open	
+150	G8.4	G8	Limits that grow, names without 16-bit hashes (P-192, P-148, P-204)	S0.1	05-NATIVE-LANE-G.md	open	
+151	G9.1	G9	Movie cues fire when the movie's place crosses them (P-203)	G6	05-NATIVE-LANE-G.md	open	
+152	G9.2	G9	The staff roll placed from the music's position (P-206)	G6	05-NATIVE-LANE-G.md	open	
+153	G9.3	G9	The Mii library's own identity (P-268)	G6	05-NATIVE-LANE-G.md	open	
+154	G9.4	G9	Fixed counts in the 2D screens, and a picture size cap (P-208, P-211)	G6	05-NATIVE-LANE-G.md	open	
+155	G9.5	G9	The host's menus: stability (P-306)	G6	05-NATIVE-LANE-G.md	open	
+156	G2.9	G2	Landing 9: the default rate	G2b	05-NATIVE-LANE-G.md	open	
+157	Z.1	Z	Profiles taken again	everything	05-NATIVE-LANE-G.md	open	
+158	Z.2	Z	The end check	everything	05-NATIVE-LANE-G.md	open	
+159	Z.3	Z	The statement and the two builds	everything	05-NATIVE-LANE-G.md	open	
