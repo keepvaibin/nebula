@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-28 04:28. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-28 04:33. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 42 of 159 (26%).
 
@@ -8,6 +8,7 @@ Now: in work: small plan landing (G10.6 needs G10.5, G10.5m after G10.9, Swappy 
 
 In work now:
 - G10.5 The depth rule from ready time, stepping back down by trying (agent 1)
+- G7.2 Landing 2: the tag processors on runs (with P-201) (agent 2)
 
 ## Packages
 
@@ -170,7 +171,7 @@ Nothing waits for the owner.
 | M-014 | closed | - | plan.py fill rule: the writer may write later steps whose package needs are met while the next step in order waits on a device measurement or its own landing | 0 | 73 | 1fbef91c9 |
 | M-015 | closed | - | gate: quarantine: a new refusing row or check is report only until it has passed on main 5 times | 0 | 133 | 5fbb024aa |
 
-## Decisions (175)
+## Decisions (183)
 
 - 2026-11-23 S0.2.1: LoadSlice: 32 items a frame; an item is a phase of GameScene::initAfterScenarioChosen, the player, one placement made whole, one piece of FileSelector::initStep, or one Star Bit of the reserve (because the card asks for a fixed count of work and names no count; the count is a constant in one place, no player sees which frame of the load an item falls in, and the load worker (G3.7) replaces the slices)
 - 2026-11-23 S0.2.1: Drawing's random stream (MR::getDrawRandom) is seeded with the same seed as the game's stream, in setRandomSeedFromStageName and setFixedRandomSeed (because a fixed seed keeps the cosmetic numbers the same in every run of a replay and needs no new setting; the draw stream runs through the same sequence as the game's but is advanced only by drawing, so neither changes the other)
@@ -347,6 +348,14 @@ Nothing waits for the owner.
 - 2026-11-28 G7.1: Proof 2 is a seeded random test in cargo test (200000 texts heavy in tag starts, lengths and surrogates) with the parse's rule written plainly as its oracle (because INV names no fuzz tool; a fixed seed makes it repeatable in the landing's Rust tests)
 - 2026-11-28 G7.1: Store version 43 (because the cooked message file changes form and the game now refuses a message file without whole runs, so an older game.pak must set up again)
 - 2026-11-28 G7.1: The game's run reader MessageRunFile is header only and checks every offset, count and index once at attach; MessageData panics when it fails; the cook's fixture bytes are a file native_message_runs_tests reads (because the getters then need no check; the shared fixture ties the game's layout to the cook's (a Rust test keeps the file equal to the cook's bytes))
+- 2026-11-28 G7.2: G7.2 is split: G7.2a (the writer and tag processors walk runs beside the text, the text-layout test, P-215 on runs, P-237's three message helpers, P-373) is this commit; G7.2b (text boxes hold runs, Replace and the arguments on runs, the sound tags as a list sized to the message, P-201 and proof 3) follows (because the boxes holding runs changes every setter of a box's text (Replace, setArgNumber, setArgString, initAlpha, reset, PrintSilent) and the draw at once; proof 1 needs both paths side by side first, and the user's order said to stop at the whole part and name the split)
+- 2026-11-28 G7.2: A code point past U+FFFF is handed to the writer and processors as two UTF-16 units until G7.4 (because the font and the processors' 16-bit code are G7.4's (P-187); this keeps the layout of version 1 glyph for glyph)
+- 2026-11-28 G7.2: The base tag processor skips a run tag (OPERATION_DEFAULT); only CustomTagProcessor knows tag groups (because the version-1 base processor sees a tag only as its escape code and draws nothing for it)
+- 2026-11-28 G7.2: CustomTagProcessor's group functions take one MessageTagView of an in-text tag or a run record, each written once (because two copies of every group function would drift; the view reads parameters bounded on records)
+- 2026-11-28 G7.2: The text-layout test is an engine test per disc calling MR::checkTextLayout: a silent writer records each glyph (CharWriter::sGlyphRecorder) from both paths in the talk balloon's text box, built from its layout without a LayoutManager (because proof 1 compares glyphs and pen positions on the disc's own text of every language; a LayoutManager's text boxes reach RaceManager through Replace, which the harness refuses to call without)
+- 2026-11-28 G7.2: On runs the ruby's base is at most its count of characters from the tag, stopping at a tag or the page's end; a string record with no units is no text (because P-215: a tag's claimed length is not trusted; a string tag not yet set names no token on the old path either)
+- 2026-11-28 G7.2: A ruby's reading is read as the disc lays it out (a count byte, then big-endian units from byte 1) by both the game's old path and the cook, and the store version is raised to 44 (because the text-layout test found both wrong on RMGJ01 (P-373); a game.pak cooked with G7.1's reading must be set up again)
+- 2026-11-28 G7.2: MR::getMessageLine copies a tag whole or not at all within its room and StaffRoll measures the line first (getMessageLineLength); addNumberFontTag takes its room (because P-237: a copy bounded by its room cannot be told from a cut line, so the caller sizes the room from the line)
 
 ## Checks changed during the run (99)
 
