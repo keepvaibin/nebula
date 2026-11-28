@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-28 03:45. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-28 03:58. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 41 of 159 (26%).
 
@@ -137,6 +137,7 @@ In work now:
 - G10.7 Image count and queue bound, where G10.2 shows buffer stuffing: proof 1 (G10.5m): images-min and queue-two against the build without them, 3 runs of 5 minutes at 60 and at 120 Hz each: Buffer Stuffing (trace method) and the refreshes-from-step distribution; a variant is kept only if it lowers the depth or stuffing without raising lates (agent 1, 2026-11-28 03:45)
 - G10.7 Image count and queue bound, where G10.2 shows buffer stuffing: proof 3 (G10.5m): the planted queue-past run is refused by the rows (more lates) in the same session (agent 1, 2026-11-28 03:45)
 - G10.7 Image count and queue bound, where G10.2 shows buffer stuffing: proof 4 (G10.5m and the PC speed run): the game step's and the walk's time before and after on the PC and the tablet, never slower (agent 1, 2026-11-28 03:45)
+- G10.8 The frame-rate vote at 60 Hz: proof 1 (G10.5m): vote-default and vote-always against the build without them, 3 runs of 5 minutes at 60 Hz on the 120 Hz tablet: no ModeChange in progress frame after the first 2 s, [display] refresh-hz at 60, first-window lates not more; the losing vote is deleted (Old path) (agent 1, 2026-11-28 03:58)
 
 ## Waiting for the owner
 
@@ -344,7 +345,7 @@ Nothing waits for the owner.
 - 2026-11-28 G10.5: The pace check's strict rules are new rows beside the live ones, born in quarantine: 'display lead in play, covered flag', 'loads, no miss or jump', 'against the stored baseline, both rates' (jumps a minute held to 0 at 120 and 60 Hz, the mean refreshes by their bound) and the recorded 'present depth'; the live rows 'display lead in play', 'loads' and 'against the stored baseline' keep M-012's one change, M-013's gross break and BASELINE_GROSS until the new rows have 5 passes on main; the switch LOADS is gone; pace/tablet refuses by the held baseline row once it is live; plant runs name the new rows with --live-row (because M-015 landed after the card was written: a row changed to judge more is given a new name beside the old one, the old one keeps refusing and the new one starts at 0 of 5, and section 18 names exactly these G10.5 rows; removing the stopgaps in the live rows would make them refuse untried figures from the first landing, the chance refusals M-015 exists to stop; the removal of the old rows and their stopgaps is owed to the step after the new rows go live)
 - 2026-11-28 G10.7: G10.7 runs, as variants behind diagnostics values for G10.5m's A/B: images-min (FIFO asks minImageCount, not minImageCount + 1), queue-two (a present waits while PresentSlots::kQueueBound = 2 presents before it still wait for the display, by their asked slots against Choreographer's next refresh) and the planted fault queue-past (the same bound by the past timings, 5 or more pictures late); kFramesInFlight stays 2; the diagnostics bits are 64 wide (G10.6 to G10.9s need 9 more names than the 5 bits left) (because the card's condition for a decision alone is a measured zero, and there is none: tests/pace/tablet-base.json (5 runs at 120 and at 60 Hz), tests/pace/recorded/rate-60-80s and all 102 kept G10.4m runs (D:/NebulaWork/build/Nebula-native/g104m/runs) read SurfaceFlinger's --latency (method latency, app_rows 0), which carries no jank flags, so buffer_stuffing is 0 by construction; the system's own jank dump of the same runs counts Buffer Stuffing frames, layer not named, in 30 of 52 runs at 120 Hz (38 at most) and 12 of 48 at 60 Hz (15 at most), and 4 in rate-60-80s; G10.5m reads the game's layer by the trace method (FrameTimeline's app rows) first, and if that is 0 at both rates the three variants are deleted with this card's Old path (corrects #1: 102 runs, not 70, and the counts by rate))
 
-## Checks changed during the run (111)
+## Checks changed during the run (113)
 
 - 2026-11-22 S0.1.3 tools/verify/console_census.py: the open group gx_sections counts the four section names GXMT, GXTG, GXTM and GXWP with a ceiling of 31, and the closed group fifo excludes only those four whole words (allowed by docs/engine/FRAME-MODEL.md section 2.9)
 - 2026-11-22 U-unattended tools/gate/main_push_guard.py: the guard also refuses a push of a branch named plant/... (allowed by docs/plan/native/TOOL-MEND-PLANTS.md, how a plant is kept from ever landing)
@@ -457,6 +458,8 @@ Nothing waits for the owner.
 - 2026-11-28 G10.6 runtime/src/render/present_slots_tests.cpp: new case only: check_ready_tight (the share of pictures whose need passes three quarters of the room, read at each window end) (allowed by docs/plan/native/05-NATIVE-LANE-G.md, G10.6 (the ready-time input))
 - 2026-11-28 G10.7 runtime/src/launch_args_tests.cpp: "every diagnostic has a name" now ends at kDiagnoseQueuePast (bit 29); the helpers and the every-name sum hold 64-bit values; new cases: images-min, queue-two and queue-past alone and together, off by default, the bits 64 wide where they are kept (allowed by docs/plan/native/05-NATIVE-LANE-G.md, G10.7 (each variant behind a diagnostics value); decisions.tsv G10.7#2)
 - 2026-11-28 G10.7 runtime/src/render/present_slots_tests.cpp: new case only: check_queue (the next refresh on a grid; a game ahead of the display fills the queue without the bound and is held to kQueueBound with it; 60 on 120 Hz at two refreshes never waits) (allowed by docs/plan/native/05-NATIVE-LANE-G.md, G10.7 (the queue held to two pictures))
+- 2026-11-28 G10.8 runtime/src/launch_args_tests.cpp: "every diagnostic has a name" now ends at kDiagnoseVoteLate (bit 32); new cases: vote-default, vote-always and vote-late, alone and beside a name, the bit past 32 kept whole, off by default (allowed by docs/plan/native/05-NATIVE-LANE-G.md, G10.8 (each vote variant behind a diagnostics switch; the planted late vote))
+- 2026-11-28 G10.8 runtime/src/render/render_config_tests.cpp: new case only: even_first_frame_rate (the default 60 kept on fixed displays of a whole number of refreshes a step, the display's own rate on fixed 144, 165, 75, 50, 90, 100, 61 and 170 Hz, kept on a variable or unknown display and for every rate a player set) (allowed by docs/plan/native/05-NATIVE-LANE-G.md, G10.8 (brief AD: the default picture rate is even on every device))
 
 ## Tool faults
 
