@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-27 22:12. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-27 22:13. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 41 of 158 (26%).
 
-Now: in work: writer G10.5-G10.9 + Swappy; mender M-014 (fill rule) in parallel
+Now: G10.5 written; M-014 (fill rule) running; Swappy download waits for the owner's yes
 
 In work now:
 - G10.5 The depth rule from ready time, stepping back down by trying (agent 1)
@@ -153,7 +153,7 @@ Nothing waits for the owner.
 | M-011 | closed | - | pace/tablet baseline rows refuse on the stored baseline's own spread at 120 Hz: report only until G10.4m classifies them | 0 | 75 | f18e39975 |
 | M-012 | closed | - | pace/pc: one lead change per run, up or down, is 'lead moved' until G10.5 (no covered flag on the [display-lead] line yet) | 0 | 49 | 105ba5de0 |
 | M-013 | closed | - | pace/pc and pace/tablet loads row: report only until G10.5, with a gross-break guard | 0 | 58 | 94deca863 |
-| M-014 | open | - | plan.py fill rule: the writer may write later steps whose package needs are met while the next step in order waits on a device measurement or its own landing | 0 | 8 | - |
+| M-014 | open | - | plan.py fill rule: the writer may write later steps whose package needs are met while the next step in order waits on a device measurement or its own landing | 0 | 9 | - |
 
 ## Decisions (172)
 
