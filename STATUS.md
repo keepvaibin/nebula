@@ -132,6 +132,7 @@ In work now:
 - G10.6 The arbiter acts before a miss: ready-time percentile and thermal forecast: proof 2 (G10.5m): the tablet with --diagnostics gpu-ramp, 3 runs at 120 Hz and 3 at 60 Hz: G10.2's trace shows the first resolution step before the first App Deadline Missed; the same runs with gpu-ramp,arbiter-late step only after the first miss and are refused (agent 1, 2026-11-28 03:32)
 - G10.6 The arbiter acts before a miss: ready-time percentile and thermal forecast: proof 3, tablet half (G10.5m): adb shell cmd thermalservice override-status with rising states: the forecast acts before headroom 0.9 and the [arbiter] trace line names Warming (the simulated half is test_arbiter_warming) (agent 1, 2026-11-28 03:32)
 - G10.6 The arbiter acts before a miss: ready-time percentile and thermal forecast: proof 4 (G10.5m): at the floor resolution with gpu-ramp past what the device holds, the run reports target missed with its cause and the log has no rate vote (agent 1, 2026-11-28 03:33)
+- G10.6 The arbiter acts before a miss: ready-time percentile and thermal forecast: proof 5 (G10.5m and the PC speed run): the game step's and the walk's time before and after on the PC and the tablet, never slower; the A/B of arbiter-late decides whether its switch is deleted (Old path) (agent 1, 2026-11-28 03:33)
 
 ## Waiting for the owner
 
