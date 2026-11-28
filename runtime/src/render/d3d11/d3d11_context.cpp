@@ -1229,6 +1229,86 @@ void Context::bind_buffer_window(unsigned stages, UINT slot, ID3D11Buffer* sourc
     bind_scratch(stages, slot, scratch);
 }
 
+void Context::verify_against_shadow(Buffer* buffer, BufferUse use, std::uint64_t offset, std::uint64_t bytes, const char* label) {
+    static const bool enabled = GetEnvironmentVariableA("NEBULA_D3D11_VERIFY", nullptr, 0u) != 0u;
+    if (!enabled || buffer == nullptr || buffer->shadow == nullptr || offset >= buffer->size) {
+        return;
+    }
+    struct Tally {
+        std::uint64_t checked = 0u, bad = 0u;
+    };
+    static std::vector<std::pair<std::string, Tally>> tallies;
+    Tally* tally = nullptr;
+    for (auto& [name, found] : tallies) {
+        if (name == label) {
+            tally = &found;
+        }
+    }
+    if (tally == nullptr) {
+        tallies.emplace_back(label, Tally{});
+        tally = &tallies.back().second;
+    }
+    if (tally->checked >= 400u) {
+        return;  // enough of each kind
+    }
+    ID3D11Buffer* const gpu = buffer->bound(use);
+    bytes = std::min<std::uint64_t>({bytes, buffer->size - offset, 4096u});
+    if (gpu == nullptr || bytes == 0u) {
+        return;
+    }
+    static ComPtr<ID3D11Buffer> staging;
+    if (staging == nullptr) {
+        D3D11_BUFFER_DESC desc{};
+        desc.ByteWidth = 4096u;
+        desc.Usage = D3D11_USAGE_STAGING;
+        desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+        if (FAILED(device_->CreateBuffer(&desc, nullptr, &staging))) {
+            return;
+        }
+    }
+    const D3D11_BOX box{static_cast<UINT>(offset), 0u, 0u, static_cast<UINT>(offset + bytes), 1u, 1u};
+    immediate_->CopySubresourceRegion(staging.Get(), 0u, 0u, 0u, 0u, gpu, 0u, &box);
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    if (FAILED(immediate_->Map(staging.Get(), 0u, D3D11_MAP_READ, 0u, &mapped))) {
+        return;
+    }
+    const auto* video = static_cast<const std::uint8_t*>(mapped.pData);
+    const std::uint8_t* system = buffer->shadow + offset;
+    std::uint64_t first_difference = bytes;
+    std::uint64_t different = 0u;
+    for (std::uint64_t i = 0; i < bytes; ++i) {
+        if (video[i] != system[i]) {
+            first_difference = std::min(first_difference, i);
+            ++different;
+        }
+    }
+    ++tally->checked;
+    if (different != 0u) {
+        ++tally->bad;
+        static int said = 0;
+        if (said++ < 24) {
+            std::cout << "[verify] " << label << " offset " << offset << " of " << buffer->size << ": " << different << " of " << bytes
+                      << " bytes differ, first at +" << first_difference << " video=";
+            for (std::uint64_t i = first_difference; i < std::min<std::uint64_t>(first_difference + 8u, bytes); ++i) {
+                char hex[4];
+                std::snprintf(hex, sizeof(hex), "%02x", video[i]);
+                std::cout << hex;
+            }
+            std::cout << " system=";
+            for (std::uint64_t i = first_difference; i < std::min<std::uint64_t>(first_difference + 8u, bytes); ++i) {
+                char hex[4];
+                std::snprintf(hex, sizeof(hex), "%02x", system[i]);
+                std::cout << hex;
+            }
+            std::cout << '\n';
+        }
+    }
+    immediate_->Unmap(staging.Get(), 0u);
+    if (tally->checked % 100u == 0u) {
+        std::cout << "[verify] " << label << ": " << tally->bad << " of " << tally->checked << " checks differed\n";
+    }
+}
+
 std::uint64_t Context::register_address(Buffer* buffer) {
     std::lock_guard guard(address_mutex_);
     std::uint32_t id = 0u;

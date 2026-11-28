@@ -229,6 +229,10 @@ public:
 
     // Counts the constant bindings above make (the renderer prints them now and then): bindings made, and those that fell
     // back to an empty slot because a buffer or its Map was missing.
+    // Diagnostic (NEBULA_D3D11_VERIFY=1): reads back `bytes` (at most 4 KB) of the video-memory copy of `buffer` for `use`
+    // at `offset` and compares them with the upload memory's own bytes; says what differs. Slow (it waits for the GPU).
+    void verify_against_shadow(Buffer* buffer, BufferUse use, std::uint64_t offset, std::uint64_t bytes, const char* label);
+
     struct Diagnostics {
         std::uint64_t places = 0u, place_failures = 0u, windows = 0u, window_failures = 0u;
         std::uint64_t draws = 0u, flushes = 0u;                          // draws issued, flushes that held any

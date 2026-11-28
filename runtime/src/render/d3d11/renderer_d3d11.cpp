@@ -915,6 +915,7 @@ void RendererD3D11::bind_constants(unsigned slot, gpu::Address address, bool ver
     if (count == 0u) {
         buffer = nullptr;
     }
+    d3d11::Context::get().verify_against_shadow(at.buffer, d3d11::BufferUse::Constants, at.offset, std::uint64_t{count} * 16u, "view constants");
     // Direct3D 11.0 has no binding at an offset: the window is copied into the slot's own constant buffer.
     d3d11::Context::get().bind_buffer_window((vertex ? d3d11::kVertexConstants : 0u) | (pixel ? d3d11::kPixelConstants : 0u), slot,
                                              buffer, first, count);
@@ -926,6 +927,7 @@ void RendererD3D11::bind_rows(gpu::Address rows, gpu::Address instances) {
     for (unsigned i = 0; i < 2u; ++i) {
         const d3d11::Context::BufferOffset at = d3d11::Context::get().resolve(addresses[i]);
         views[i] = at.buffer != nullptr ? at.buffer->rows_view(at.offset) : nullptr;
+        d3d11::Context::get().verify_against_shadow(at.buffer, d3d11::BufferUse::Rows, at.offset, 4096u, i == 0u ? "rows t16" : "instances t17");
     }
     // t16 the composed rows, t17 the instance table: read by both stages (lights in the pixel stage).
     context()->VSSetShaderResources(16u, 2u, views);
@@ -981,6 +983,8 @@ void RendererD3D11::flush_draws() {
             for (unsigned i = 0; i < 2u; ++i) {
                 const d3d11::Context::BufferOffset at = device.resolve(op.a[i]);
                 const UINT count = at.buffer != nullptr ? constants_in(at.buffer->size, at.offset) : 0u;
+                device.verify_against_shadow(at.buffer, d3d11::BufferUse::Constants, at.offset, std::uint64_t{std::min(count, 32u)} * 16u,
+                                             i == 0u ? "material b1" : "material b2");
                 device.bind_buffer_window(d3d11::kVertexConstants | d3d11::kPixelConstants, 1u + i,
                                           count != 0u ? at.buffer->bound(d3d11::BufferUse::Constants) : nullptr,
                                           static_cast<UINT>(at.offset / 16u), count);
