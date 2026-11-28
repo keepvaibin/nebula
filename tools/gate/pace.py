@@ -4,6 +4,7 @@
               [--device SERIAL [--device-lock PATH] [--apk APK --pak PAK]] [--lock D:/NebulaWork/plan/measure.lock]
               [--lock-wait MINUTES] [--quiet-minutes MINUTES] [--paks ...] [--diagnostics NAMES] [--history FILE] [--again]
               [--method auto|frametimeline|latency] [--start step|vsync] [--trace-processor PATH] [--baseline FILE]
+              [--quarantine FILE] [--live-row NAME ...]
       Takes the measurement lock (waiting --lock-wait minutes for it); with --quiet-minutes, waits for a quiet machine before
       each PC run (tools/measure/quiet.py: no compiler, build tool or other copy of the game), and a machine still busy after
       that wait plays nothing more: WORK/pace-run.json names what kept it busy, as measure.py leaves a run that was not quiet unmeasured
@@ -24,9 +25,13 @@
       --baseline (whose method and start then hold) the run against the stored figures of its rate. Each run's header prints the
       game's [platform] lines (what the platform offers the pacing, G10.3); a device run missing one of PLATFORM_KINDS fails the
       row "what the platform offers".
-  pace.py keep WORK --history FILE --commit SHA
+  pace.py keep WORK --history FILE --commit SHA [--quarantine FILE]
       Adds each run's figures of WORK/pace.json to FILE, the readings of main that the load row is judged against (the
-      gate keeps them after main moved).
+      gate keeps them after main moved). With --quarantine, the passes of the quarantined rows go to that counters file.
+
+A row whose name tools/gate/quarantine-live.tsv does not list, and whose counters line has fewer than 5 passes, is quarantined
+(tools/gate/quarantine.py): it is shown with the verdict `quarantined: report only (n of 5 passes on main)` and refuses nothing,
+whatever it says; --live-row NAME (a plant run's) makes a row live in that run. Digest names a quarantined row that would have failed.
 
 The game writes a [pace] line every ten seconds of steps (runtime/include/galaxy/pacing_recorder.h). A run's measured
 windows are those written after the harness's "frame 0" line (the test in its stage) except the first after it, which
@@ -84,6 +89,7 @@ import time
 TREE = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import frametimeline  # noqa: E402
+import quarantine  # noqa: E402
 
 STEP_MS = 1000.0 / 60.0
 PACE = re.compile(r"\[pace\] (.*)$")
@@ -540,15 +546,17 @@ def read_history(path):
     return out
 
 
-def reading_of(method="auto", start="step", processor="", baseline=""):
+def reading_of(method="auto", start="step", processor="", baseline="", counters="", live_rows=()):
     """How the device runs' frame timelines are read (frametimeline.read) and judged: a stored baseline (pace/tablet's
-    tests/pace/tablet-base.json) names its method and start, which then hold whatever was asked."""
+    tests/pace/tablet-base.json) names its method and start, which then hold whatever was asked. Which rows are new, so quarantined
+    (quarantine.py): the counters file `counters` and the rows `live_rows` that count as live in this run (a plant run's)."""
     base = None
     if baseline:
         base = json.loads(pathlib.Path(baseline).read_text(encoding="utf-8"))
         method, start = base["method"], base["start"]
     return {"method": method, "start": start, "processor": processor, "base": base,
-            "base_name": pathlib.Path(baseline).name if baseline else ""}
+            "base_name": pathlib.Path(baseline).name if baseline else "",
+            "quarantine": quarantine.Quarantine(counters, live_rows)}
 
 
 def read_runs(work, history=None, reading=None):
@@ -578,6 +586,7 @@ def read_runs(work, history=None, reading=None):
                                                       figures.get("refresh_ms") or None)
             run["present_timing"] = present_timing_of(text)
         run["rows"] = judge(run, history, reading["base"], reading["base_name"])
+        run["rows"], run["quarantine"] = quarantine.apply_rows(run["rows"], reading["quarantine"])
         runs.append(run)
     return runs
 
@@ -598,6 +607,9 @@ def digest(work, history_path=None, reading=None):
         for measure, value, target, verdict in run["rows"]:
             print("  %-34s %-46s %-50s %s" % (measure, value, target, verdict))
             failed |= verdict == "FAIL"
+            said = run["quarantine"].get(measure)
+            if said and said["verdict"] == "FAIL":
+                print("    quarantined row %s would have failed and refuses nothing" % measure)
     first = work / FIRST
     if first.is_dir():
         for run in read_runs(first, read_history(history_path), reading):
@@ -609,9 +621,13 @@ def digest(work, history_path=None, reading=None):
     return 1 if failed else 0
 
 
-def keep(work, history_path, commit):
-    """Each run's figures of WORK/pace.json added to the history (HISTORY_COLUMNS)."""
+def keep(work, history_path, commit, counters=""):
+    """Each run's figures of WORK/pace.json added to the history (HISTORY_COLUMNS); with `counters`, the passes of the quarantined rows
+    (quarantine.keep: one pass for this main commit where every run of the row passed)."""
     runs = json.loads((pathlib.Path(work) / "pace.json").read_text(encoding="utf-8"))
+    if counters:
+        for line in quarantine.keep(counters, "row", quarantine.outcomes_of_runs(runs), commit[:9]):
+            print("pace.py: quarantine: " + line)
     path = pathlib.Path(history_path)
     new = not path.is_file()
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -736,7 +752,7 @@ def run(args):
     harness_calls(args.suite)  # a suite the harness cannot read stops here, before the lock and before any wait
     work.mkdir(parents=True, exist_ok=True)
     reading = reading_of(getattr(args, "method", "auto"), getattr(args, "start", "step"), getattr(args, "trace_processor", ""),
-                         getattr(args, "baseline", ""))  # a baseline that cannot be read stops pace.py before the lock
+                         getattr(args, "baseline", ""), getattr(args, "quarantine", ""), getattr(args, "live_row", ()))  # a baseline that cannot be read stops pace.py before the lock
     take_lock(args.lock, "pace.py %s" % work, args.lock_wait)
     codes, busy = {}, {}
     history = read_history(args.history)
@@ -803,10 +819,14 @@ def parser():
     r.add_argument("--paks", default=os.environ.get("LUMA_TEST_PAKS", ""))
     r.add_argument("--diagnostics", default="", help="the game's --diagnostics for every run (pace-fault: the planted stutter)")
     r.add_argument("--history", default="", help="main's readings the load row is judged against (pace.py keep writes them)")
+    r.add_argument("--quarantine", default="", help="the counters file of the new rows (quarantine.py)")
+    r.add_argument("--live-row", action="append", default=[], help="a row that is live in this run whatever its count (a plant run's)")
     r.add_argument("--again", action="store_true", help="a renderer with a FAIL row is played once more; the second decides")
     d = sub.add_parser("digest")
     d.add_argument("work")
     d.add_argument("--history", default="")
+    d.add_argument("--quarantine", default="")
+    d.add_argument("--live-row", action="append", default=[])
     for q in (r, d):
         # A device run's frame timeline (frametimeline.py): how it is read, and the stored baseline it is judged against.
         q.add_argument("--method", choices=frametimeline.METHODS, default="auto",
@@ -821,6 +841,7 @@ def parser():
     k.add_argument("work")
     k.add_argument("--history", required=True)
     k.add_argument("--commit", required=True)
+    k.add_argument("--quarantine", default="", help="the counters file of the new rows (quarantine.py)")
     return p
 
 
@@ -832,8 +853,9 @@ def main():
             p.error("--apk needs --device and --pak")
         sys.exit(run(args))
     if args.command == "keep":
-        sys.exit(keep(args.work, args.history, args.commit))
-    sys.exit(digest(args.work, args.history, reading_of(args.method, args.start, args.trace_processor, args.baseline)))
+        sys.exit(keep(args.work, args.history, args.commit, args.quarantine))
+    sys.exit(digest(args.work, args.history, reading_of(args.method, args.start, args.trace_processor, args.baseline,
+                                                        args.quarantine, args.live_row)))
 
 
 if __name__ == "__main__":

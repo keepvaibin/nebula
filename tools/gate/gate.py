@@ -139,6 +139,7 @@ import long_parts  # noqa: E402
 import machine  # noqa: E402
 import noprompt  # noqa: E402
 import pace as pace_tool  # noqa: E402
+import quarantine  # noqa: E402
 import pictures as picture_tool  # noqa: E402
 import replays_rates  # noqa: E402
 import replays_software  # noqa: E402
@@ -351,7 +352,7 @@ class Gate:
     """One run: its checks' results. A dry run (dry=True) runs no check: it learns the level's check names and what
     each needs, for --only."""
 
-    def __init__(self, args, dry=False, known=None, planned=None, selected=None):
+    def __init__(self, args, dry=False, known=None, planned=None, selected=None, quarantined=None):
         self.args = args
         self.level = args.mode
         self.dry = dry
@@ -396,6 +397,9 @@ class Gate:
         self.measure_pending = []     # the landing's measures' pending files (measure.py --pending): kept when main moves
         self.measure_faulted = set()  # the checks that already left a line in tool-faults.tsv in this run
         self.pace_work = []           # (check, work folder) of the landing's pace checks: kept when main moves (keep_pace)
+        # Which checks are new, so quarantined (quarantine.py): the counters file of the gate's work folder, and the names a plant run makes live.
+        # run_checks passes the real one (quarantine_of); a Gate made without it holds nothing back.
+        self.quarantine = quarantined or quarantine.Quarantine.inert()
         self.speed = {}               # the speed checks' outcome for the move (judged, owed, rebase), by check name
         self.tablet_screen = None     # the tablet's screen size (width, height) as the tablet's lane read it at its start, or None
         self.tablet_screen_read = threading.Event()   # set once the tablet's lane has read (or failed to read) it
@@ -512,12 +516,14 @@ class Gate:
             self.needs.setdefault(name, set()).update(needs)
         return self.selected is None or name in self.selected
 
-    def record(self, name, state, seconds, detail, log=None, records=None, pending=False):
+    def record(self, name, state, seconds, detail, log=None, records=None, pending=False, quarantine=None):
         row = {"check": name, "state": state, "passed": state not in NOT_PASSED, "seconds": seconds, "detail": detail,
                "log": str(log) if log is not None and pathlib.Path(log).exists() else None,
                "records": default_records(state, detail) if records is None else records}
         if pending:
             row["pending"] = True
+        if quarantine is not None:
+            row["quarantine"] = quarantine
         with self.lock:
             self.rows().append(row)
             print("%-34s %-7s %7.1f s  %s" % (name, "again" if pending else LABELS.get(state, state), seconds, detail),
@@ -565,9 +571,18 @@ class Gate:
             state, detail = "fail", "it runs, so its line in planned.tsv must go; " + detail
             records = [kinds.record("-", "fail", detail)]
         pending = (cases is not None and cases.source is not None and any(kinds.needs_second_run(r) for r in records))
+        # A new check is report only: a failure of the change's (kind fail) is said and refuses nothing until it has passed on main
+        # quarantine.NEEDED times. A fault of the tool, the machine's or a check that was owed is judged as before.
+        passes = None if name in self.planned else self.quarantine.passes("check", name)
+        held = None
+        if passes is not None:
+            held = {"passes": passes, "needed": quarantine.NEEDED, "ran": state}
+            detail = "%s%s" % (quarantine.VERDICT % (passes, quarantine.NEEDED), ("; it failed: " + detail) if state == "fail" else (": " + detail))
+            if state == "fail":
+                state, records, pending, cases = "pass", [], False, None
         if pending:
             self.cases[name] = cases
-        self.record(name, state, round(time.time() - t0, 1), detail, log, records, pending=pending)
+        self.record(name, state, round(time.time() - t0, 1), detail, log, records, pending=pending, quarantine=held)
         return state not in NOT_PASSED
 
     def missing(self, name, why, needs=()):
@@ -1873,6 +1888,9 @@ def measure_pc(g):
 # beyond the bound of in every plant run, at 60 Hz none; the others are a report, M-011): with a stored file pace/tablet refuses what
 # pace_tablet_reading names below (a baseline that cannot judge a run is the tool's), and `--pace-fault` is refused by pace/pc, and by
 # pace/tablet at 120 Hz (the mean refreshes from a step to the screen; the jumps the present times show only as a gross break, above 284 a minute), not at 60 Hz.
+# A row or a check that is new is report only until it has passed on main 5 times (tools/gate/quarantine.py, `--live-row`, section 18 of
+# docs/plan/04-GATE-AND-MAIN.md): the two pace checks hand pace.py the counters file and the rows a plant run makes live, and after a move
+# keep_pace and keep_quarantine write the passes.
 PACE = HERE / "pace.py"
 PACE_PC_CHECK = "pace/pc"
 PACE_TABLET_CHECK = "pace/tablet"
@@ -1894,6 +1912,28 @@ PACE_TABLET_MINUTES = 15
 
 def pace_fault_args(g):
     return ["--diagnostics", "pace-fault"] if getattr(g.args, "pace_fault", False) else []
+
+
+QUARANTINE_FILE = "quarantine.tsv"   # in the gate's work folder: the passes of the new rows and checks (quarantine.py), kept after a move
+
+
+def quarantine_file(args):
+    """The counters file of the new rows and checks; "" where the run has no work folder."""
+    work = getattr(args, "work", None)
+    return str(pathlib.Path(work) / QUARANTINE_FILE) if work else ""
+
+
+def quarantine_of(args):
+    """What is new in this run (quarantine.Quarantine): the counters file of the gate's work folder, the names a plant run makes live."""
+    return quarantine.Quarantine(quarantine_file(args), getattr(args, "live_row", None) or ())
+
+
+def pace_quarantine_args(args):
+    """pace.py's options for the new rows: the counters file, and the rows a plant run makes live."""
+    out = ["--quarantine", quarantine_file(args)] if quarantine_file(args) else []
+    for name in getattr(args, "live_row", None) or ():
+        out += ["--live-row", name]
+    return out
 
 
 def pace_reading(work, code, renderers, refusing=None):
@@ -1936,6 +1976,9 @@ def pace_reading(work, code, renderers, refusing=None):
                 kinds_seen.append("fail")
             if named:
                 text += " (recorded, not refused: %s)" % "; ".join(named)
+            report = ["%s %s" % (m, v) for m, v, _, verdict in rows if verdict.startswith("quarantined") and (r.get("quarantine") or {}).get(m, {}).get("verdict") == "FAIL"]
+            if report:
+                text += " (quarantined, would have failed, refused nothing: %s)" % "; ".join(report)
             parts.append(text + (", " + loads[0] if loads and not bad else ""))
     # A failure of the change's comes first; then the tool's; then the machine's.
     kind = next((k for k in ("fail", "tool", "env") if k in kinds_seen), "fail")
@@ -1949,7 +1992,7 @@ def pace_pc_command(g, work):
     return [sys.executable, "-X", "utf8", "-I", str(PACE), "run", "--bin", str(g.bin), "--work", str(work),
             "--suite", str(PACE_PC_SUITE), "--renderers", ",".join(PACE_RENDERERS), "--again",
             "--history", str(pathlib.Path(g.args.work) / PACE_HISTORY), "--lock-wait", "%g" % PACE_LOCK_WAIT,
-            "--quiet-minutes", "%g" % PACE_QUIET_MINUTES, "--paks", g.paks_text()] + pace_fault_args(g)
+            "--quiet-minutes", "%g" % PACE_QUIET_MINUTES, "--paks", g.paks_text()] + pace_fault_args(g) + pace_quarantine_args(g.args)
 
 
 def pace_tablet_command(g, work, apk):
@@ -1959,7 +2002,7 @@ def pace_tablet_command(g, work, apk):
             "--device-wait", "%g" % g.args.tablet_wait, "--apk", str(apk), "--pak", g.pak or g.args.pak,
             "--history", str(pathlib.Path(g.args.work) / PACE_HISTORY), "--lock-wait", "%g" % PACE_LOCK_WAIT,
             "--paks", g.paks_text(), "--trace-processor", PACE_TRACE_PROCESSOR] + (
-            ["--baseline", str(PACE_TABLET_BASE)] if PACE_TABLET_BASE.is_file() else []) + pace_fault_args(g)
+            ["--baseline", str(PACE_TABLET_BASE)] if PACE_TABLET_BASE.is_file() else []) + pace_fault_args(g) + pace_quarantine_args(g.args)
 
 
 def pace_step(g):
@@ -2045,7 +2088,8 @@ def keep_pace(g, landed, args):
             continue
         try:
             done = subprocess.run([sys.executable, "-X", "utf8", "-I", str(PACE), "keep", str(work), "--history",
-                                   str(pathlib.Path(args.work) / PACE_HISTORY), "--commit", landed],
+                                   str(pathlib.Path(args.work) / PACE_HISTORY), "--commit", landed,
+                                   "--quarantine", quarantine_file(args)],
                                   capture_output=True, text=True, timeout=120)
             code, said = done.returncode, kinds.first_line((done.stdout or "") + (done.stderr or ""))
         except (OSError, subprocess.TimeoutExpired) as error:
@@ -2054,6 +2098,23 @@ def keep_pace(g, landed, args):
         if code != 0:
             g.measure_faulted.discard("pace/keep")
             measure_fault(g, "pace/keep", "TOOL", "the pace readings were not kept (exit %d): %s" % (code, said))
+
+
+def keep_quarantine(g, landed, args):
+    """After main moved: each check of the landing that was quarantined and passed gets one pass for this main commit (quarantine.keep: a
+    commit counted already gives none; a failure counts for nothing). The pace rows were kept by keep_pace. A fault here changes nothing
+    about the landing: one printed line and one line in tool-faults.tsv."""
+    outcomes = {r["check"]: r["state"] == "pass" and r["quarantine"]["ran"] == "pass"
+                for r in g.results if r.get("quarantine") and r["state"] in ("pass", "fail")}
+    if not outcomes or not quarantine_file(args):
+        return
+    try:
+        for line in quarantine.keep(quarantine_file(args), "check", outcomes, landed[:9]):
+            print("gate.py: quarantine: " + line, flush=True)
+    except OSError as error:
+        print("gate.py: the quarantine counters were not kept: %s: %s" % (type(error).__name__, error), flush=True)
+        g.measure_faulted.discard("quarantine/keep")
+        measure_fault(g, "quarantine/keep", "TOOL", "the quarantine counters were not kept: %s: %s" % (type(error).__name__, error))
 
 
 def tablet_gap_lines(live):
@@ -4532,7 +4593,7 @@ def run_checks(args, known=None, planned=None, selected=None, dry=False):
     side by side (section 7), each renderer's engine tests and tours in a lane of their own, each other disc's tour,
     the mod tests per renderer, the Android build with the tablet; then what compares their runs. A dry run returns the
     Gate (its names and needs) without running any."""
-    g = Gate(args, dry=dry, known=known, planned=planned, selected=selected)
+    g = Gate(args, dry=dry, known=known, planned=planned, selected=selected, quarantined=quarantine_of(args))
     level = args.mode
     if not dry and run_starts_game(selected):
         soak = 1 if level in ("long", "final") and (selected is None or "soak" in selected) else 0
@@ -4798,6 +4859,9 @@ def parser(land=False):
     p.add_argument("--covers", default="", help="what the run answers for (commits, packages), for the board")
     p.add_argument("--soak-minutes", type=int, default=int(os.environ.get("NEBULA_GATE_SOAK_MINUTES", "120")),
                    help="the long run: the soak's minutes on each renderer")
+    p.add_argument("--live-row", action="append", default=[],
+                   help="a check or pace row that is live in this run whatever its passes on main (a plant run's: the new row it plants "
+                        "a fault in is refused); main's counters are never touched by a run that does not move main")
     p.add_argument("--pace-fault", action="store_true",
                    help="pace/pc and pace/tablet play with the planted stutter (--diagnostics pace-fault): they must fail (their proof)")
     p.add_argument("--serial", action="store_true",
@@ -5140,6 +5204,7 @@ def run_main(argv, left):
                     print("gate.py: the move was not written to history.tsv (%s: %s)" % (type(e).__name__, e), file=sys.stderr)
                 keep_measures(g, args)
                 keep_pace(g, landed, args)
+                keep_quarantine(g, landed, args)
                 rebase_tablet_after_gap(g, args)
                 keep_speed(g, landed, args)
                 summary = "passed, %s, main moved to %s" % (

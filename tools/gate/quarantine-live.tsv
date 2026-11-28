@@ -1,0 +1,126 @@
+# The checks and rows that refuse from their first landing: every one on main when quarantine.py landed (M-015, 2026-11-27).
+# A name of kind `check` (gate.py) or `row` (pace.py) that is not here is new: report only until it has passed on main 5 times
+# (docs/plan/04-GATE-AND-MAIN.md, "Quarantine of new rows"). `*` in a name matches any text. A removed line of this file is on the strictness list.
+kind	name
+check	android/tablet
+check	build/android
+check	build/windows
+check	build/windows-asan
+check	build/windows-coverage
+check	coverage
+check	data/RMGE01
+check	data/RMGJ01
+check	data/RMGP01
+check	description/self
+check	engine/d3d11
+check	engine/d3d12
+check	engine/vulkan
+check	github
+check	harness/self
+check	import/collision/RMGE01
+check	import/collision/RMGJ01
+check	import/collision/RMGP01
+check	lumalink
+check	machine/tablet
+check	measure/route
+check	measure/short
+check	measure/step/pc
+check	measure/step/tablet
+check	mods
+check	mods-asan/d3d12
+check	mods/d3d11
+check	mods/d3d12
+check	mods/vulkan
+check	pace/pc
+check	pace/tablet
+check	pictures/declared
+check	pictures/engine/d3d11
+check	pictures/engine/d3d12
+check	pictures/engine/vulkan
+check	pictures/tablet
+check	pictures/tour-RMGJ01/d3d11
+check	pictures/tour-RMGJ01/d3d12
+check	pictures/tour-RMGJ01/vulkan
+check	pictures/tour-RMGP01/d3d11
+check	pictures/tour-RMGP01/d3d12
+check	pictures/tour-RMGP01/vulkan
+check	pictures/tour/d3d11
+check	pictures/tour/d3d12
+check	pictures/tour/vulkan
+check	replays/d3d11
+check	replays/d3d12
+check	replays/rates
+check	replays/software
+check	replays/tablet
+check	replays/vulkan
+check	repo/audit
+check	repo/code
+check	repo/scripts
+check	repo/settings
+check	repo/strictness
+check	repo/text
+check	rust
+check	soak
+check	soak/long
+check	speed/anchor
+check	start/d3d11
+check	start/d3d12
+check	start/vulkan
+check	stress/engine/d3d11
+check	stress/engine/d3d12
+check	stress/engine/vulkan
+check	stress/tour/d3d11/1
+check	stress/tour/d3d11/2
+check	stress/tour/d3d11/3
+check	stress/tour/d3d11/4
+check	stress/tour/d3d12/1
+check	stress/tour/d3d12/2
+check	stress/tour/d3d12/3
+check	stress/tour/d3d12/4
+check	stress/tour/vulkan/1
+check	stress/tour/vulkan/2
+check	stress/tour/vulkan/3
+check	stress/tour/vulkan/4
+check	tablet/prepare
+check	tablet/remove
+check	tour-RMGJ01/d3d11
+check	tour-RMGJ01/d3d12
+check	tour-RMGJ01/vulkan
+check	tour-RMGP01/d3d11
+check	tour-RMGP01/d3d12
+check	tour-RMGP01/vulkan
+check	tour-asan/d3d12
+check	tour/d3d11
+check	tour/d3d12
+check	tour/tablet
+check	tour/tablet-pc
+check	tour/vulkan
+check	unit/game
+check	unit/game-asan
+check	unit/windows
+check	validate/d3d11
+check	validate/d3d12
+check	validate/vulkan
+row	all
+row	game speed
+row	even pictures
+row	jumps
+row	display lead in play
+row	animation error
+row	delay, in-between pictures *
+row	long step
+row	tablet at 120 Hz
+row	tablet at 60 Hz
+row	pictures shown, from the start
+row	loads
+row	in-between picture's render work
+row	what the platform offers
+row	frame timeline
+row	frame start to scan-out
+row	misses by cause
+row	miss: *
+row	buffer stuffing
+row	what the screen showed
+row	misses by the game's lines
+row	composed by the GPU
+row	against the stored baseline

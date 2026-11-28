@@ -20,6 +20,7 @@ tools/verify/console_census.py	any	*	the skip list, the closed groups, the ceili
 tools/verify/cast_check.py	any	*	its reviewed exceptions decide which pointer casts it accepts
 tools/verify/byte_order_check.py	any	*	its reviewed exceptions decide which byte-order uses it accepts
 tools/measure/band.py	any	*	the band rule, the floors and the judged figures decide when a speed figure is worse
+tools/gate/quarantine-live.tsv	removed	*	a removed line makes a pacing row or a gate check new, so it is report only until it has passed 5 times
 tools/gate/main_push_guard.py	any	*	it is the rule that main moves only through a landing
 tools/gate/strictness.py	any	*	it is this check
 tools/gate/strictness.tsv	removed	*	a removed or changed line takes a place out of this check

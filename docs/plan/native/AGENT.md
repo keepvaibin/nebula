@@ -444,6 +444,12 @@ lists every file and line the document names that does not exist. `PLAN land` ru
 `.md`, `.txt` and `.rst` file and on your commit messages before it hands the branch to the gate, so make it
 pass first.
 
+**A new row or check is quarantined.** A pacing row or a gate check that is new (its name is not in `tools/gate/quarantine-live.tsv`)
+shows `quarantined: report only (n of 5 passes on main)` and refuses nothing until it has passed on 5 landings that moved main; a
+line of that kind in a landing's output is no failure, and a failure it would have had is printed beside it. A step that adds a row or
+a check gives it a name of its own (a stricter version of a row is a new name beside the old one), and its plant run names it with
+`--live-row` (`docs/plan/04-GATE-AND-MAIN.md` section 18).
+
 **Programs you never run.** These start the game or hold the machine, outside your commands. The landing runs what it needs
 of them, and a card's proof that names one is met by the landing's check of the same name, or by the nearest form of
 your own commands (say which, with `PLAN decide`):
