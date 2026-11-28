@@ -1,6 +1,6 @@
 # Nebula native plan: status
 
-Written 2026-11-28 03:32. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-28 03:33. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 41 of 159 (26%).
 
@@ -131,6 +131,7 @@ In work now:
 - G10.5 The depth rule from ready time, stepping back down by trying: once 'display lead in play, covered flag', 'loads, no miss or jump' and 'against the stored baseline, both rates' have 5 passes on main: remove the old rows 'display lead in play', 'loads', 'against the stored baseline' with M-012's rule, LOAD_GROSS, LOAD_SEEN and BASELINE_GROSS (docs/plan/04-GATE-AND-MAIN.md section 18: the renamed rows into tools/gate/quarantine-live.tsv in the same landing, a strictness line) (agent 1, 2026-11-28 03:02)
 - G10.6 The arbiter acts before a miss: ready-time percentile and thermal forecast: proof 2 (G10.5m): the tablet with --diagnostics gpu-ramp, 3 runs at 120 Hz and 3 at 60 Hz: G10.2's trace shows the first resolution step before the first App Deadline Missed; the same runs with gpu-ramp,arbiter-late step only after the first miss and are refused (agent 1, 2026-11-28 03:32)
 - G10.6 The arbiter acts before a miss: ready-time percentile and thermal forecast: proof 3, tablet half (G10.5m): adb shell cmd thermalservice override-status with rising states: the forecast acts before headroom 0.9 and the [arbiter] trace line names Warming (the simulated half is test_arbiter_warming) (agent 1, 2026-11-28 03:32)
+- G10.6 The arbiter acts before a miss: ready-time percentile and thermal forecast: proof 4 (G10.5m): at the floor resolution with gpu-ramp past what the device holds, the run reports target missed with its cause and the log has no rate vote (agent 1, 2026-11-28 03:33)
 
 ## Waiting for the owner
 
