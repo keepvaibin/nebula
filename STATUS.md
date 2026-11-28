@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-28 01:31. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-28 01:34. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 41 of 158 (26%).
 
-Now: M-015 closed (main 5fbb024aa); in work: writer resumed for G10.6-G10.9 and the Swappy variant
+Now: in work: small plan landing (G10.6 needs G10.5, G10.5m after G10.9, Swappy step)
 
 In work now:
 - G10.5 The depth rule from ready time, stepping back down by trying (agent 1)
