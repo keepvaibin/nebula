@@ -47,12 +47,18 @@ def write_run(work, jumps=0):
     (folder / "test.json").write_text(json.dumps({"name": "match", "settings": []}), encoding="utf-8")
 
 
+def real_new_rows():
+    """The rows of pace.py that a step added after the live file was made (they are born in quarantine): G10.5's four (a PC run has
+    only the first two)."""
+    return (pace.COVERED_LEAD_ROW, pace.HELD_LOADS_ROW, pace.HELD_BASELINE_ROW, pace.DEPTH_ROW)
+
+
 def with_new_row(verdict):
     """pace.judge as it is, and one more row of a name no one has listed."""
     real = pace.judge
 
-    def judge(run, base=None, base_name=""):
-        return real(run, base, base_name) + [(NEW_ROW, "a value", "a target", verdict)]
+    def judge(run, history=None, base=None, base_name=""):
+        return real(run, history, base, base_name) + [(NEW_ROW, "a value", "a target", verdict)]
     return judge
 
 
@@ -130,7 +136,8 @@ class Counting(unittest.TestCase):
             self.assertIn("quarantined: report only (0 of 5 passes on main)", out.getvalue())
             self.assertIn("quarantined row %s would have failed" % NEW_ROW, out.getvalue())
             rows = json.loads((self.t / "work" / "pace.json").read_text(encoding="utf-8"))[0]
-            self.assertEqual(rows["quarantine"], {NEW_ROW: {"passes": 0, "verdict": "FAIL"}})
+            self.assertEqual(rows["quarantine"][NEW_ROW], {"passes": 0, "verdict": "FAIL"})
+            self.assertLessEqual(set(rows["quarantine"]) - {NEW_ROW}, set(real_new_rows()), "beside it only the rows pace.py adds since M-015")
             self.assertEqual({r[0]: r[3] for r in rows["rows"]}[NEW_ROW], "quarantined: report only (0 of 5 passes on main)")
             with quiet():
                 live = pace.digest(self.t / "work", None, pace.reading_of(counters=str(self.counters), live_rows=[NEW_ROW]))
@@ -152,7 +159,9 @@ class Counting(unittest.TestCase):
         self.assertEqual(code, 1, out.getvalue())
         rows = {r[0]: r[3] for r in json.loads((self.t / "work" / "pace.json").read_text(encoding="utf-8"))[0]["rows"]}
         self.assertEqual(rows["jumps"], "FAIL")
-        self.assertNotIn("quarantine", out.getvalue())
+        said = [line for line in out.getvalue().splitlines() if "quarantine" in line]
+        self.assertTrue(all(any(name in line for name in real_new_rows()) for line in said),
+                        "only the rows pace.py adds since M-015 are quarantined: %s" % said)
 
     def test_pace_keep_counts_a_pass_once(self):
         saved = pace.judge

@@ -45,6 +45,12 @@ def verdicts(work):
             for r in json.loads((work / "pace.json").read_text(encoding="utf-8"))}
 
 
+def judged(work):
+    """verdicts, with a quarantined row's own verdict (what it would have said live) in place of its report-only verdict."""
+    return {r["run"].split("\\")[0].split("/")[0]: {m: (r.get("quarantine") or {}).get(m, {}).get("verdict", v) for m, _, _, v in r["rows"]}
+            for r in json.loads((work / "pace.json").read_text(encoding="utf-8"))}
+
+
 def main():
     failures = []
 
@@ -89,10 +95,12 @@ def main():
         code = pace.digest(work)
         v = verdicts(work)
         check(code == 1, "a FAIL among the runs: exit 1")
-        check(all(x == "pass" for k, x in v["good"].items() if not k.startswith("in-between") and k not in ("loads", "animation error")),
-              "good: every row passes")
+        check(all(x == "pass" for k, x in judged(work)["good"].items() if not k.startswith("in-between") and k not in ("loads", "animation error")),
+              "good: every row passes (a quarantined row by its own verdict)")
+        check(all(v["good"][k].startswith("quarantined: report only") for k in (pace.COVERED_LEAD_ROW, pace.HELD_LOADS_ROW)),
+              "good: G10.5's new rows are quarantined")
         check(v["good"]["animation error"] == "recorded", "good: the animation error is a report")
-        check(v["good"]["loads"] == "pass", "no miss and no jump in the load windows: the loads pass")
+        check(v["good"]["loads"] == "recorded", "no reading of main's: the loads are recorded, not judged")
         check(v["missed"]["even pictures"] == "FAIL", "a missed refresh fails even pictures")
         check(v["smeared"]["animation error"] == "recorded" and v["smeared"]["jumps"] == "pass",
               "97% within 1 ms is reported (brief AD: the old figure refuses nothing); the jumps judge")
@@ -127,9 +135,9 @@ def main():
         check(len(jumped) == 1 and any("4.20 ms" in value for m, value, _, _ in jumped[0]["rows"] if m == "jumps"),
               "the largest change in ms")
 
-    # The loads (the load windows: the boot's before frame 0 and the first after it): any of the game's missed refreshes or any jump
-    # fails (G10.5, brief AD bar 1: the whole run; M-013's report against main's readings ended with it). The history pace.py keep
-    # writes is main's record and judges nothing. A first run kept beside the deciding one (--again) is not read.
+    # The loads (the windows before play): the live row a report (M-013), refused only above twice the most of the readings of the
+    # renderer; kept by pace.py keep; G10.5's row beside it, HELD_LOADS_ROW, fails any miss or jump and is quarantined until it has
+    # passed on main 5 times (M-015). A first run kept beside the deciding one (--again) is not read.
     with tempfile.TemporaryDirectory() as tmp:
         root = pathlib.Path(tmp)
         zero = "extension: harness: frame 0 is game frame 900"
@@ -138,12 +146,28 @@ def main():
         main_work = root / "main"
         write_run(main_work, "pace-match-30", boot, settings)
         history = root / "pace-history.tsv"
-        check(pace.digest(main_work, str(history)) == 1, "main's run with load misses: a FAIL")
-        check(verdicts(main_work)["pace-match-30"]["loads"] == "FAIL", "5 game misses and 2 jumps in the load windows: FAIL")
+        check(pace.digest(main_work, str(history)) == 0, "main's run: no FAIL with no history")
         check(pace.keep(main_work, str(history), "0123456789abc") == 0 and history.is_file(), "keep writes the history")
         kept = pace.read_history(str(history))
         check(kept == {"pace-match-30/d3d12": [{"commit": "012345678", "load_missed": 5.0, "load_jumps": 2.0}]},
               "the history holds main's load figures by run: %r" % kept)
+        same, worse = root / "same", root / "worse"
+        write_run(same, "pace-match-30", boot, settings)
+        write_run(worse, "pace-match-30", [line(missed=7, jumps=2), zero, line(missed=1), line(), line()], settings)
+        write_run(worse / pace.FIRST, "pace-match-30", [zero, line(), line(jumps=9), line()], settings)
+        pace.digest(same, str(history))
+        pace.digest(worse, str(history))
+        check(verdicts(same)["pace-match-30"]["loads"] == "recorded", "as many load misses and jumps as main: recorded")
+        check(verdicts(worse)["pace-match-30"]["loads"] == "recorded", "8 load misses against main's 5: recorded, a report")
+        check(len(json.loads((worse / "pace.json").read_text(encoding="utf-8"))) == 1, "the first run (WORK/first) is not read")
+        held = pace.HELD_LOADS_ROW
+        check(judged(same)["pace-match-30"][held] == "FAIL", "G10.5's loads row: any load miss fails")
+        check(verdicts(same)["pace-match-30"][held].startswith("quarantined: report only (0 of 5"),
+              "G10.5's loads row is born in quarantine: %s" % verdicts(same)["pace-match-30"][held])
+        live = root / "live"
+        write_run(live, "pace-match-30", boot, settings)
+        check(pace.digest(live, str(history), pace.reading_of(live_rows=(held,))) == 1 and verdicts(live)["pace-match-30"][held] == "FAIL",
+              "with --live-row (a plant run) the held loads row refuses the load misses")
         cases = {
             "clean": [line(), zero, line(), line(), line()],
             "system": [line(missed=3, system=3), zero, line(), line(), line()],
@@ -152,55 +176,95 @@ def main():
             "after-zero": [line(), zero, line(jumps=1, jump_max=1500.0), line(), line()],
             "old": [old_line(), zero, line(), line(), line()],
         }
-        same = root / "same"
+        some = root / "some"
         for name, lines in cases.items():
-            write_run(same, name, lines, settings)
-        write_run(same / pace.FIRST, "clean", [zero, line(), line(jumps=9), line()], settings)
-        pace.digest(same, str(history))
-        v = verdicts(same)
-        check(v["clean"]["loads"] == "pass", "no miss and no jump in the loads: pass, whatever main's history holds")
-        check(v["system"]["loads"] == "pass", "three misses all the system's: pass (bar 1's own split)")
-        check(v["one-miss"]["loads"] == "FAIL", "one game miss in a load window: FAIL")
-        check(v["one-jump"]["loads"] == "FAIL", "one jump in a load window: FAIL")
-        check(v["after-zero"]["loads"] == "FAIL", "a jump in the first window after frame 0 (a load's, the stage's start): FAIL")
-        check(v["old"]["loads"] == "FAIL", "a load window whose line carries no jumps cannot pass")
-        check(len(json.loads((same / "pace.json").read_text(encoding="utf-8"))) == len(cases), "the first run (WORK/first) is not read")
-        check(not hasattr(pace, "LOADS") and not hasattr(pace, "LOAD_GROSS") and not hasattr(pace, "LOAD_SEEN"),
-              "M-013's switch, gross break and seen figures are gone")
+            write_run(some, name, lines, settings)
+        pace.digest(some, str(history))
+        v = judged(some)
+        check(v["clean"][held] == "pass" and v["system"][held] == "pass", "no game miss and no jump in the loads: pass (the system's misses beside)")
+        check(v["one-miss"][held] == "FAIL" and v["one-jump"][held] == "FAIL", "one game miss or one jump in a load window: FAIL")
+        check(v["after-zero"][held] == "FAIL", "a jump in the first window after frame 0 (a load's, the stage's start): FAIL")
+        check(v["old"][held] == "FAIL", "a load window whose line carries no jumps cannot pass")
+
+    # The loads row is a report until G10.5 (M-013, the planner's order of 11-27): it prints "recorded" and refuses only a gross break,
+    # a count above twice the most of the renderer's readings since G10.1 landed, misses and jumps separately. The real figures:
+    # Vulkan's load windows gave 6, 11, 24, 27 missed on identical code (G10.3 6, G10.1 11, G10.2 24, G10.4 27), Direct3D 12's 44 to 47.
+    with tempfile.TemporaryDirectory() as tmp:
+        root = pathlib.Path(tmp)
+        zero = "extension: harness: frame 0 is game frame 900"
+        settings = ["GALAXY_MAX_FPS=0", "GALAXY_VSYNC_INTERVAL=1"]
+        history = root / "pace-history.tsv"
+        check(pace.LOAD_GROSS == 2, "the gross break is twice the most")
+
+        def keep_history(run, readings):
+            rows = ["\t".join(pace.HISTORY_COLUMNS)] + ["\t".join(["2026-11-26 12:19:08", "7ca0d4e54", run, str(m), str(j), "2", "0", "0", "0"])
+                                                      for m, j in readings]
+            history.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+        def loads_of(n, missed, jumps, readings, renderer="d3d12", seen=False):
+            keep_history("pace-match-30/" + renderer, readings)
+            work = root / ("run%d" % n)
+            folder = work / "pace-match-30" / renderer
+            folder.mkdir(parents=True)
+            (folder / "run.log").write_text("\n".join([line(missed=missed, jumps=jumps), zero, line(), line(), line()]) + "\n", encoding="utf-8")
+            (folder / "test.json").write_text(json.dumps({"name": "pace-match-30", "settings": settings}), encoding="utf-8")
+            saved = dict(pace.LOAD_SEEN)
+            try:
+                if not seen:
+                    pace.LOAD_SEEN.clear()
+                code = pace.digest(work, str(history))
+            finally:
+                pace.LOAD_SEEN.clear()
+                pace.LOAD_SEEN.update(saved)
+            check(code == (1 if any(v == "FAIL" for v in verdicts(work)["pace-match-30"].values()) else 0),
+                  "digest's exit status follows the FAIL rows")
+            return verdicts(work)["pace-match-30"]["loads"]
+
+        vk = [(6, 46), (11, 46), (24, 44), (27, 44)]
+        check(loads_of(1, 54, 44, vk, "vulkan") == "recorded", "Vulkan, readings 6, 11, 24, 27: 54 missed (twice the most) is recorded")
+        check(loads_of(2, 55, 44, vk, "vulkan") == "FAIL", "Vulkan: 55 missed, above twice the most: FAIL")
+        check(loads_of(3, 22, 44, [(11, 46)], "vulkan") == "recorded" and loads_of(19, 23, 44, [(11, 46)], "vulkan") == "FAIL",
+              "one reading of 11: 22 missed is recorded, 23 FAIL")
+        check(loads_of(4, 27, 92, vk, "vulkan") == "recorded", "Vulkan: 92 jumps (twice the most, 46) is recorded")
+        check(loads_of(5, 27, 93, vk, "vulkan") == "FAIL", "Vulkan: 93 jumps, above twice the most: FAIL")
+        dx = [(44, 162), (46, 169), (47, 159)]
+        check(loads_of(6, 94, 162, dx) == "recorded", "Direct3D 12, readings 44, 46, 47: 94 missed is recorded")
+        check(loads_of(7, 95, 162, dx) == "FAIL", "Direct3D 12: 95 missed: FAIL")
+        check(loads_of(8, 45, 338, dx) == "recorded" and loads_of(9, 45, 339, dx) == "FAIL", "Direct3D 12: 338 jumps recorded, 339 FAIL")
+        check(loads_of(10, 5000, 5000, [], "d3d12") == "recorded", "no readings of the renderer: recorded, never refused")
+        check(loads_of(11, 5000, 5000, [(3, 10)], "metal") == "FAIL", "a renderer's own readings count: 3 missed, 10 jumps: 5000 FAIL")
+        check(loads_of(12, 30, 20, [(3, 10)], "metal") == "FAIL" and loads_of(13, 6, 20, [(3, 10)], "metal") == "recorded",
+              "metal: 30 missed above 6 fails, 6 missed and 20 jumps (twice the most) is recorded")
+        check(loads_of(14, 54, 44, [(6, 46)], "vulkan", seen=True) == "recorded" and loads_of(15, 55, 44, [(6, 46)], "vulkan", seen=True) == "FAIL",
+              "the most seen before the history (LOAD_SEEN: Vulkan 27) counts when the history holds less")
+        check(pace.LOAD_SEEN == {"vulkan": (27, 46), "d3d12": (47, 172)}, "LOAD_SEEN holds the most seen since G10.1: %r" % pace.LOAD_SEEN)
+        check(loads_of(16, 94, 344, [(44, 162)], seen=True) == "recorded" and loads_of(17, 95, 344, [(44, 162)], seen=True) == "FAIL"
+              and loads_of(18, 94, 345, [(44, 162)], seen=True) == "FAIL", "Direct3D 12 with the seen most (47 missed, 172 jumps): 94 and 344 pass, above FAIL")
 
     # The display lead in play (M-009, brief AD): a change of the lead in play is itself a jump. The real logs of G10.2's landing
     # (gate run 20261126-153832): Direct3D 12 stepped the lead 1->2 in the first play and 2->1 in the second, 88.55% and 89.94% of
     # the animation within 1 ms, delay p99 23.22 and 23.40 ms against 22.52. The old figure no longer refuses; the lead does.
-    # G10.5: the line's covered flag says whose a change is (1: a closed wipe or a scene loading, a load's; 0: play's); in play one
-    # step up is filed "lead moved" only where its window shows LEAD_MISSES of the game's missed refreshes, every other change fails
-    # (M-012's one change either way, a stopgap until the flag, is gone). A line without the flag (a build before G10.5) is a load's
-    # between the wipe closing and the scene ready.
     with tempfile.TemporaryDirectory() as tmp:
         work = pathlib.Path(tmp)
         zero = "extension: harness: frame 0 is game frame 900"
         settings = ["GALAXY_MAX_FPS=0", "GALAXY_VSYNC_INTERVAL=1"]
-        up, down = "[display-lead] 1->2 refreshes at qpc 1 covered=0", "[display-lead] 2->1 refreshes at qpc 2 covered=0"
-        old_up, old_down = "[display-lead] 1->2 refreshes at qpc 1", "[display-lead] 2->1 refreshes at qpc 2"
+        up, down = "[display-lead] 1->2 refreshes at qpc 1", "[display-lead] 2->1 refreshes at qpc 2"
         smeared = line(within=0.8855, delay=23220.0, generated=1800, refresh=4.167)
-        missed2 = line(missed=2, on_time=1198, within=0.8855, delay=23220.0, generated=1800, refresh=4.167)
         plain = line(generated=1800, refresh=4.167, delay=20000.0)
         wipe, destroyed, ready = ("context: star pointer mode -1 held under the wipe", "game: scene: [destroy Scene: Game]",
                                   "game: scene: [scene ready]")
         cases = {
             "still": [zero, plain, plain, plain],
             "up": [zero, plain, up, smeared, plain],
-            "up-missed2": [zero, plain, up, missed2, plain],
-            "twice": [zero, plain, up, down, missed2, plain],
-            "twiceup": [zero, plain, up, "[display-lead] 2->3 refreshes at qpc 3 covered=0", missed2, plain],
+            "twice": [zero, plain, up, down, smeared, plain],
+            "twiceup": [zero, plain, up, "[display-lead] 2->3 refreshes at qpc 3", smeared, plain],
             "down": [zero, plain, down, smeared, plain],
-            "down-missed2": [zero, plain, down, missed2, plain],
-            "realdown": [zero, plain, "[display-lead] 2->1 refreshes at qpc 11247074565219 covered=1", smeared, plain],
-            "covered-up": [zero, plain, "[display-lead] 2->3 refreshes at qpc 4 covered=1", smeared, plain],
-            "flag-in-load": [zero, plain, wipe, destroyed, down, ready, plain, plain],
-            "old-down": [zero, plain, old_down, smeared, plain],
+            "downup": [zero, plain, down, up, smeared, plain],
+            "twodown": [zero, plain, down, "[display-lead] 3->2 refreshes at qpc 3", smeared, plain],
+            "realdown": [zero, plain, "[display-lead] 2->1 refreshes at qpc 11247074565219", smeared, plain],
             "boot": [up, plain, zero, plain, plain, plain],
-            "load": [zero, plain, wipe, destroyed, old_up, old_down, ready, plain, plain],
-            "afterload": [zero, plain, wipe, destroyed, ready, old_up, missed2, plain],
+            "load": [zero, plain, wipe, destroyed, up, down, ready, plain, plain],
+            "afterload": [zero, plain, wipe, destroyed, ready, up, smeared, plain],
         }
         for name, lines in cases.items():
             write_run(work, name, lines, settings)
@@ -208,17 +272,16 @@ def main():
         v = verdicts(work)
         lead = "display lead in play"
         check(v["still"].get(lead) == "pass", "no lead line: pass")
-        check(v["up"].get(lead) == "FAIL", "a step up in play with no misses in its window: FAIL: %s" % v["up"].get(lead))
-        check(v["up-missed2"].get(lead) == "lead moved", "a step up in a window of two missed refreshes: filed 'lead moved'")
+        check(v["up"].get(lead) == "lead moved", "one step up in play: filed 'lead moved', refused nothing: %s" % v["up"].get(lead))
         check(v["twice"].get(lead) == "FAIL", "a step up and a step down in play: FAIL")
         check(v["twiceup"].get(lead) == "FAIL", "two steps up in play: FAIL")
-        check(v["down"].get(lead) == "FAIL" and v["down-missed2"].get(lead) == "FAIL", "a step down in play fails, misses or none")
-        check(v["realdown"].get(lead) == "pass", "the real Vulkan line (2->1) with covered=1 is a load's: %s" % v["realdown"].get(lead))
-        check(v["covered-up"].get(lead) == "pass", "a step up with covered=1 is a load's, outside the load lines too")
-        check(v["flag-in-load"].get(lead) == "FAIL", "covered=0 between the wipe and the scene ready is play's: the flag decides")
-        check(v["old-down"].get(lead) == "FAIL", "a line without the flag in play, a step down: FAIL")
+        # M-012: until G10.5 (no covered flag on the line yet) ONE lead change in a run, up or down, is filed "lead moved"; two fail.
+        check(v["down"].get(lead) == "lead moved", "one step down in play: filed 'lead moved', refused nothing: %s" % v["down"].get(lead))
+        check(v["realdown"].get(lead) == "lead moved", "the real Vulkan line of 20261126-233516 (2->1): filed 'lead moved': %s" % v["realdown"].get(lead))
+        check(v["downup"].get(lead) == "FAIL", "a step down and a step up in play: FAIL")
+        check(v["twodown"].get(lead) == "FAIL", "two steps down in play: FAIL")
         check(v["boot"].get(lead) == "pass", "a lead line before frame 0 (the boot) is not play's")
-        check(v["load"].get(lead) == "pass", "lines without the flag between the wipe closing and the scene ready are a load's")
+        check(v["load"].get(lead) == "pass", "lead changes between the wipe closing and the scene ready are a load's")
         check(v["afterload"].get(lead) == "lead moved", "a step after the scene ready is play's")
         for name in ("up", "twice", "down"):
             check(v[name]["animation error"] == "recorded" and v[name]["delay, in-between pictures on"] == "recorded",
@@ -227,22 +290,49 @@ def main():
         # What stays refused: a delay over its bound with the lead still, a missed refresh, a jump, beside a moved lead.
         write_run(work, "slow-still", [zero, plain, line(delay=40000.0, generated=1800, refresh=4.167), plain], settings)
         write_run(work, "up-missed", [zero, plain, up, line(missed=1, on_time=1197, generated=1800, refresh=4.167), plain], settings)
-        write_run(work, "up-jumped", [zero, plain, up, line(missed=2, on_time=1198, jumps=2, jump_max=3000.0, generated=1800,
-                                                            refresh=4.167), plain], settings)
+        write_run(work, "up-jumped", [zero, plain, up, line(jumps=2, jump_max=3000.0, generated=1800, refresh=4.167), plain], settings)
         pace.digest(work)
         v = verdicts(work)
         check(v["slow-still"]["delay, in-between pictures on"] == "FAIL", "a delay over its bound with the lead still: FAIL")
-        check(v["up-missed"]["even pictures"] == "FAIL" and v["up-missed"].get(lead) == "FAIL",
-              "one missed refresh: bar 1 refuses, and a step up after one miss is not the repeated misses' step")
-        check(v["up-jumped"]["jumps"] == "FAIL" and v["up-jumped"].get(lead) == "lead moved", "bar 2 still refuses beside a moved lead")
+        check(v["up-missed"]["even pictures"] == "FAIL" and v["up-missed"].get(lead) == "lead moved", "bar 1 still refuses beside a moved lead")
+        check(v["up-jumped"]["jumps"] == "FAIL", "bar 2 still refuses beside a moved lead")
         runs = json.loads((work / "pace.json").read_text(encoding="utf-8"))
         got = {r["run_key"]: r.get("leads") for r in runs}
-        check(got["up-missed2/d3d12"] == [{"before": 1, "after": 2, "load": False, "misses": 2.0}],
-              "the lead and its window's misses are kept: %r" % got["up-missed2/d3d12"])
+        check(got["up/d3d12"] == [{"before": 1, "after": 2, "load": False, "misses": 0.0}], "the lead and its window's misses are kept: %r" % got["up/d3d12"])
         check(got["load/d3d12"] == [{"before": 1, "after": 2, "load": True, "misses": 0.0}, {"before": 2, "after": 1, "load": True, "misses": 0.0}],
               "leads in a load are kept, marked: %r" % got["load/d3d12"])
-        check(got["realdown/d3d12"][0]["load"] is True and got["flag-in-load/d3d12"][0]["load"] is False, "the flag marks the lead's owner")
-        check(pace.LEAD_MISSES == 2, "the step up waits for two missed refreshes in its window")
+        # G10.5's row beside it, COVERED_LEAD_ROW (born in quarantine, M-015): a step up counts only after repeated misses in its window;
+        # every other change in play fails; the line's covered flag says whose a change is (1: a load's, 0: play's), and a line
+        # without it is a load's between the wipe closing and the scene ready. The live row reads the lines as before.
+        missed2 = line(missed=2, on_time=1198, generated=1800, refresh=4.167)
+        write_run(work, "none-missed", [zero, plain, up, missed2, plain], settings)
+        flagged = {
+            "up0": [zero, plain, "[display-lead] 1->2 refreshes at qpc 1 covered=0", missed2, plain],
+            "down0": [zero, plain, "[display-lead] 2->1 refreshes at qpc 2 covered=0", missed2, plain],
+            "realdown1": [zero, plain, "[display-lead] 2->1 refreshes at qpc 11247074565219 covered=1", smeared, plain],
+            "up1": [zero, plain, "[display-lead] 2->3 refreshes at qpc 4 covered=1", smeared, plain],
+            "flag-in-load": [zero, plain, wipe, destroyed, "[display-lead] 2->1 refreshes at qpc 5 covered=0", ready, plain, plain],
+        }
+        for name, lines in flagged.items():
+            write_run(work, name, lines, settings)
+        pace.digest(work)
+        v, said = judged(work), verdicts(work)
+        covered = pace.COVERED_LEAD_ROW
+        check(said["up"].get(covered, "").startswith("quarantined: report only (0 of 5"), "the covered lead row is born in quarantine")
+        check(v["up"].get(covered) == "FAIL", "covered row: a step up with no misses fails")
+        check(v["none-missed"].get(covered) == "lead moved", "covered row: a step up in a window of two missed refreshes is reported")
+        check(v["twice"].get(covered) == "FAIL" and v["down"].get(covered) == "FAIL" and v["still"].get(covered) == "pass",
+              "covered row: steps down and a second step fail")
+        check(v["load"].get(covered) == "pass" and v["boot"].get(covered) == "pass", "covered row: lines without the flag in a load or the boot")
+        check(v["up0"].get(covered) == "lead moved" and v["down0"].get(covered) == "FAIL", "covered=0: play's, judged")
+        check(v["realdown1"].get(covered) == "pass" and v["up1"].get(covered) == "pass",
+              "covered=1: a load's, outside the load lines too (the real Vulkan 2->1 line with the flag)")
+        check(v["flag-in-load"].get(covered) == "FAIL" and v["flag-in-load"].get(lead) == "pass",
+              "covered=0 between the wipe and the scene ready: play's for the covered row, a load's for the live row")
+        check(v["realdown1"].get(lead) == "lead moved", "the live row reads the flagged line as before: one change filed")
+        runs = json.loads((work / "pace.json").read_text(encoding="utf-8"))
+        got = {r["run_key"]: r.get("covered_leads") for r in runs}
+        check(got["realdown1/d3d12"][0]["load"] is True and got["flag-in-load/d3d12"][0]["load"] is False, "the flag marks the lead's owner")
 
     # What the platform offers (G10.3): a device run prints the game's [platform] lines in its header and holds one line of each kind
     # with a value, the frame timeline's at the run's own rate; a line missing, a "not supported" with no reason, or a frame timeline
@@ -386,18 +476,15 @@ def main():
     finally:
         pace.subprocess, pace.machine_quiet = saved
 
-    # G10.5: the rows of the stored baseline refuse by rate (BASELINE_REFUSES): at 120 and 60 Hz the mean refreshes from a step to
-    # the screen and the jumps a minute, the jumps held to 0 (BASELINE_HELD, brief AD bar 2) whatever the stored bound; G10.4m's gross
-    # break of the jumps (BASELINE_GROSS) is gone. A device run prints what the screen showed and the renderer's depth report.
+    # G10.4m: the rows of the stored baseline refuse by rate (BASELINE_REFUSES), and a device run prints what the screen showed.
     ft = pace.frametimeline
-    check(pace.BASELINE_REFUSES == {"120": ("refreshes_mean", "jumps_per_minute"), "60": ("refreshes_mean", "jumps_per_minute")}
+    check(sorted(pace.BASELINE_REFUSES) == ["120", "60"] and pace.BASELINE_REFUSES["60"] == ()
+          and pace.BASELINE_REFUSES["120"] == ("refreshes_mean",)
           and all(row in ft.ROWS for rows in pace.BASELINE_REFUSES.values() for row in rows),
-          "the shipped rows of the baseline: at both rates the mean refreshes and the jumps: %s" % (pace.BASELINE_REFUSES,))
-    check(pace.BASELINE_HELD == {"jumps_per_minute": 0.0} and not hasattr(pace, "BASELINE_GROSS"),
-          "the jumps a minute held to 0; no gross break: %s" % (pace.BASELINE_HELD,))
+          "the shipped rows of the baseline: at 120 Hz the mean refreshes and the jumps, at 60 Hz none: %s" % (pace.BASELINE_REFUSES,))
     stored = {"method": "latency", "start": "step", "rates": {
         "120": {"bounds": {"late_share": 0.2, "refreshes_mean": 4.2, "jumps_per_minute": 160.0, "events_per_minute": 557.0}},
-        "60": {"bounds": {"late_share": 0.0, "refreshes_mean": 3.07, "jumps_per_minute": 28.0, "events_per_minute": 5.3}}}}
+        "60": {"bounds": {"late_share": 0.0, "refreshes_mean": 3.07, "jumps_per_minute": 0.0, "events_per_minute": 5.3}}}}
 
     def device_rows(hz, late, mean, events, jumps):
         report = {"method": "latency", "start": "step", "refresh_ms": 1000.0 / hz, "frames": 100, "refresh_frames": 100, "misses": 0,
@@ -405,26 +492,44 @@ def main():
                   "late_share": late, "three_refresh_share": 0.9, "unnamed_share": late, "refreshes_mean": mean, "notes": [],
                   "shown": {"pairs": 90, "repeated": 5, "skipped": 1, "shifted": 0, "events_per_minute": events, "jumps_per_minute": jumps}}
         return {m: (v, verdict) for m, v, _t, verdict in pace.frametimeline_rows({"frametimeline": report, "present_timing": None}, stored, "base.json")}
-    clean = device_rows(120, 0.1, 4.0, 300.0, 0.0)
+    clean = device_rows(120, 0.1, 4.0, 300.0, 100.0)
     check(clean[pace.BASELINE_ROW][1] == "pass" and pace.SCREEN_ROW in clean and clean[pace.SCREEN_ROW][1] == "recorded",
-          "a clean 120 Hz run, no jump: the baseline row passes, the screen row is printed: %s" % (clean[pace.BASELINE_ROW],))
+          "a clean 120 Hz run: the baseline row passes, the screen row is printed: %s" % (clean[pace.BASELINE_ROW],))
     sleepy = device_rows(120, 0.1, 4.8, 1200.0, 450.0)
     check(sleepy[pace.BASELINE_ROW][1] == "FAIL" and "refusing: refreshes_mean, jumps_per_minute" in sleepy[pace.BASELINE_ROW][0],
-          "the sleep's run at 120 Hz (mean refreshes 4.8, 450 jumps a minute): refused by those rows: %s" % (sleepy[pace.BASELINE_ROW],))
-    one = device_rows(120, 0.1, 4.0, 300.0, 0.5)  # one jump in a two-minute run, under the stored bound of 160
-    check(one[pace.BASELINE_ROW][1] == "FAIL" and "refusing: jumps_per_minute" in one[pace.BASELINE_ROW][0] and "(bound 0.0)" in one[pace.BASELINE_ROW][0],
-          "one jump in a run at 120 Hz is refused against the held 0, not the stored 160: %s" % (one[pace.BASELINE_ROW],))
+          "the sleep's run at 120 Hz (mean refreshes 4.8, 450 jumps a minute): refused by those rows only: %s" % (sleepy[pace.BASELINE_ROW],))
+    noisy = device_rows(120, 0.1, 4.0, 420.0, 186.0)  # the clean tablet's 185.6 jumps a minute: beyond the bound 160, a report until G10.5
+    check(noisy[pace.BASELINE_ROW][1] == "recorded" and "a report: jumps_per_minute" in noisy[pace.BASELINE_ROW][0],
+          "a clean 120 Hz run with 186 jumps a minute: a report, not refused: %s" % (noisy[pace.BASELINE_ROW],))
+    sleepy60 = device_rows(60, 0.003, 3.1, 25.0, 6.0)
+    check(sleepy60[pace.BASELINE_ROW][1] == "recorded" and "a report: late_share, refreshes_mean, events_per_minute, jumps_per_minute" in sleepy60[pace.BASELINE_ROW][0],
+          "the same run at 60 Hz: beyond its bounds and a report, nothing refused: %s" % (sleepy60[pace.BASELINE_ROW],))
+
+    # G10.5's row beside it, HELD_BASELINE_ROW (born in quarantine, M-015; the live row above and BASELINE_GROSS stay until it is live):
+    # at 120 and 60 Hz the mean refreshes refuse by their bound and the jumps a minute are held to 0 (BASELINE_HELD, brief AD bar 2)
+    # whatever the stored bound. It refuses the planted sleep at 60 Hz (by the jumps) and the depth plant (by the mean refreshes).
+    held = pace.HELD_BASELINE_ROW
+    check(pace.HELD_BASELINE_REFUSES == {"120": ("refreshes_mean", "jumps_per_minute"), "60": ("refreshes_mean", "jumps_per_minute")}
+          and all(row in ft.ROWS for rows in pace.HELD_BASELINE_REFUSES.values() for row in rows) and pace.BASELINE_HELD == {"jumps_per_minute": 0.0},
+          "the held row: the mean refreshes and the jumps at both rates, the jumps held to 0: %s" % (pace.HELD_BASELINE_REFUSES,))
+    check(clean[held][1] == "FAIL" and "refusing: jumps_per_minute" in clean[held][0],
+          "the clean 120 Hz run with 100 jumps a minute: within the stored 160, refused by the held 0: %s" % (clean[held],))
+    still = device_rows(120, 0.1, 4.0, 300.0, 0.0)
+    check(still[held][1] == "pass" and still[pace.BASELINE_ROW][1] == "pass", "a 120 Hz run with no jump: both rows pass: %s" % (still[held],))
+    one = device_rows(120, 0.1, 4.0, 300.0, 0.5)  # one jump in a two-minute run
+    check(one[held][1] == "FAIL" and "(bound 0.0)" in one[held][0] and one[pace.BASELINE_ROW][1] == "pass",
+          "one jump in a run at 120 Hz: refused by the held 0, passed by the live row's stored 160: %s" % (one[held],))
+    check(sleepy60[held][1] == "FAIL" and "refusing: refreshes_mean, jumps_per_minute" in sleepy60[held][0]
+          and "late_share" not in sleepy60[held][0].split("refusing:")[1],
+          "the sleep's run at 60 Hz: refused by the held row (the late share beyond its bound refuses nothing): %s" % (sleepy60[held],))
     depth60 = device_rows(60, 0.0, 3.6, 5.0, 0.0)  # the depth plant: every picture a refresh later
-    check(depth60[pace.BASELINE_ROW][1] == "FAIL" and "refusing: refreshes_mean" in depth60[pace.BASELINE_ROW][0],
-          "a run at 60 Hz one refresh deeper (mean 3.6 against 3.07): refused by the mean refreshes: %s" % (depth60[pace.BASELINE_ROW],))
-    sleepy60 = device_rows(60, 0.003, 3.0, 25.0, 6.0)
-    check(sleepy60[pace.BASELINE_ROW][1] == "FAIL" and "refusing: jumps_per_minute" in sleepy60[pace.BASELINE_ROW][0]
-          and "late_share" not in sleepy60[pace.BASELINE_ROW][0].split("refusing:")[1],
-          "the sleep's run at 60 Hz (6 jumps a minute): refused by the jumps; the late share beyond its bound refuses nothing: %s" % (
-              sleepy60[pace.BASELINE_ROW],))
+    check(depth60[held][1] == "FAIL" and "refusing: refreshes_mean" in depth60[held][0] and depth60[pace.BASELINE_ROW][1] == "recorded",
+          "a run at 60 Hz one refresh deeper (mean 3.6 against 3.07): refused by the held row, a report in the live one: %s" % (depth60[held],))
     late60 = device_rows(60, 0.003, 3.0, 25.0, 0.0)
-    check(late60[pace.BASELINE_ROW][1] == "recorded" and "a report: late_share, events_per_minute" in late60[pace.BASELINE_ROW][0],
-          "at 60 Hz the late share and the events beyond their bounds, no jump: a report: %s" % (late60[pace.BASELINE_ROW],))
+    check(late60[held][1] == "recorded" and "a report: late_share, events_per_minute" in late60[held][0],
+          "at 60 Hz the late share and the events beyond their bounds, no jump: a report: %s" % (late60[held],))
+    gross = device_rows(120, 0.1, 4.0, 420.0, 300.0)
+    check(gross[pace.BASELINE_ROW][1] == "FAIL" and gross[held][1] == "FAIL", "300 jumps a minute: both rows refuse")
     # The renderer's depth report (renderer_vk.cpp, G10.5): summed after frame 0 and recorded.
     depth_log = "\n".join(["[present-timing] 120 frames: x; depth: steps in play 0, late after a mode change or stage load 3, seconds above two steps 0.0",
                            "extension: harness: frame 0 is game frame 900",
