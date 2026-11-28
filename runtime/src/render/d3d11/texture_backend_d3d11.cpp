@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <iostream>
 #include <new>
 #include <vector>
 
@@ -30,6 +31,7 @@ void TextureBackend::shutdown() {
 }
 
 void TextureBackend::write_view(std::uint32_t index, d3d11::Texture* texture, unsigned) {
+    ++d3d11::Context::get().diag.views_written;
     ensure_view(index);
     views_[index] = texture != nullptr ? texture->view.Get() : nullptr;
 }
@@ -41,6 +43,7 @@ void TextureBackend::ensure_view(std::uint32_t index) {
 }
 
 void TextureBackend::release_view(std::uint32_t index) {
+    ++d3d11::Context::get().diag.views_released;
     if (index < views_.size()) {
         views_[index] = nullptr;
     }
@@ -89,6 +92,16 @@ TextureBackend::MadeTexture TextureBackend::make_texture(std::uint32_t width, st
         return made;
     }
     texture->widened = format == TexelFormat::R8 ? 1u : format == TexelFormat::Rg8 ? 2u : 0u;
+    {
+        d3d11::Context::Diagnostics& diagnostics = d3d11::Context::get().diag;
+        ++diagnostics.textures_made;
+        diagnostics.textures_filled += fills ? 1u : 0u;
+        static int said = 0;
+        if (said++ < 80) {
+            std::cout << "[tex] made " << width << 'x' << height << " levels=" << levels << (format == TexelFormat::Bc1 ? " bc1" : " rgba8")
+                      << (texture->widened != 0u ? " widened" : "") << (fills ? " filled" : " empty") << '\n';
+        }
+    }
     made.allocation_bytes = texture->allocation_bytes;
     made.texture = std::move(texture);
     made.filled = fills;

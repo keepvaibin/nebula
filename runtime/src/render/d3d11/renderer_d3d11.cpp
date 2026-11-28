@@ -1062,7 +1062,9 @@ void RendererD3D11::flush_draws() {
             const auto ms = [&](std::uint64_t ticks) { return static_cast<double>(ticks) * 1000.0 / static_cast<double>(frequency.QuadPart); };
             std::cout << "[draws] flush " << flushes << ": " << drawn << " draws (" << total << " in all), places " << d.places << " (failed "
                       << d.place_failures << "), windows " << d.windows << " (failed " << d.window_failures << "), uploads " << d.uploads
-                      << " (" << d.upload_bytes / 1024u << " KB), constants path " << device.caps().path << " (offset binds " << d.offset_binds
+                      << " (" << d.upload_bytes / 1024u << " KB), textures made " << d.textures_made << " (filled " << d.textures_filled
+                      << "), views written " << d.views_written << " released " << d.views_released << ", table slots " << d.table_slots
+                      << " (missed " << d.table_missed << "), constants path " << device.caps().path << " (offset binds " << d.offset_binds
                       << "); ms in uploads " << ms(d.upload_ticks) << ", binds " << ms(d.bind_ticks)
                       << ", present " << ms(d.present_ticks) << "; upload_written: lock " << ms(d.lock_ticks) << ", GetWriteWatch "
                       << ms(d.watch_ticks) << " over " << d.buffers_watched << " buffers (" << d.bytes_watched / (1024u * 1024u)
@@ -1205,6 +1207,12 @@ void RendererD3D11::write_table(d3d11::BoundTable& table, const TextureHandle* h
     for (unsigned m = 0; m < d3d11::kBoundTableSlots; ++m) {
         const bool bound = m < count && handles[m].resource != nullptr;
         table.items[m] = bound ? backend.view_at(handles[m].srv_index) : backend.null_view();
+        if (bound) {
+            // A slot that names a texture but whose view is not registered (yet) reads the null texture: black.
+            d3d11::Context::Diagnostics& diagnostics = d3d11::Context::get().diag;
+            ++diagnostics.table_slots;
+            diagnostics.table_missed += table.items[m] == static_cast<void*>(backend.null_view()) ? 1u : 0u;
+        }
     }
     table.count = d3d11::kBoundTableSlots;
 }
