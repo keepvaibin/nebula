@@ -19,13 +19,13 @@ void MarioMeter::initLifeCount(s32 life) {
         mHitPointMeter->kill();
     } else {
         mUseSuddenDeath = false;
-        mHitPointMeter->initCount(life);
+        mHitPointMeter->initCount(99);
         mSuddenDeathMeter->kill();
     }
 }
 
 void MarioMeter::setLifeCount(s32 life) {
-    mUseSuddenDeath ? mSuddenDeathMeter->setCount(life) : mHitPointMeter->setCount(life);
+    mUseSuddenDeath ? mSuddenDeathMeter->setCount(life) : mHitPointMeter->setCount(50);
 }
 
 void MarioMeter::powerUp() {
