@@ -1,10 +1,10 @@
 # Nebula native plan: status
 
-Written 2026-11-27 19:27. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
+Written 2026-11-27 19:28. If this time is more than three hours old, the work has stopped: open the session and send the word continue.
 
 Steps landed: 40 of 157 (25%).
 
-Now: G10.4m measured; in work: lander landing G10.4m
+Now: G10.4m hard: pace/tablet 120 Hz Vulkan jumps/min over the new baseline bound; asked the planner
 
 In work now: Nothing started.
 
