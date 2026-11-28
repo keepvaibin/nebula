@@ -408,12 +408,13 @@ Nothing waits for the owner.
 
 ## Tool faults
 
-16 tool faults recorded.
+17 tool faults recorded.
 
 The last 20:
 
 | When | Step | Test | What happened | What the agent could not do |
 | --- | --- | --- | --- | --- |
+| 2026-11-27 17:01 | - | (by hand) | G10.4m, 11-27: frametimeline.py's --latency reads (the capture's loop in tools/gate/frametimeline.py Capture, 128 frames each, every second at 120 Hz) lose pictures when the PC is busy: with an Android build running beside, 3 runs read 41% to 57% of the pictures the game counted (clean 87% to 97%), so the rows read gaps as seams and the figure of such a run is not the build's; G10.4m plays a run again when frames/displayed is under 0.85 at 120 Hz or 0.78 at 60 Hz (g104m_check.py) and does not change the loop | - |
 | 2026-11-27 17:01 | - | (by hand) | G10.4m, 11-27: --diagnostics pace-depth (present_slots.cpp PresentDepth::place) no longer deepens the tablet's queue: in 4 five-minute runs (pd120_1 and 2, pd60_1 and 2, D:/NebulaWork/build/Nebula-native/g104m/runs) the mean of the time a picture asks for minus when it was ready is 2.63 to 2.68 refreshes at 120 Hz (clean 2.48 to 2.66) and 1.63 to 1.77 at 60 Hz (clean 1.66 to 1.80), so no row of pace/tablet can see the plant; G10.2m's proof 4 (60 Hz three or more refreshes 97.2% against 93.5%) came from an 80 s run whose clean figure moves 81% to 94% between 5 minute runs; the plant's code is outside G10.4m's card and was not changed | - |
 | 2026-11-27 06:24 | G10.4 | pace/pc | d3d12: not played, the machine was not quiet: still busy after 30 minutes: NebulaD11.exe (pid 37240), NebulaD11.exe (pid 3700), Nebula.exe (pid 2876), Nebula.exe (pid 52412), NebulaVk.exe (pid 40128), NebulaVk.exe (pid 60984); vulkan: not p | - |
 | 2026-11-27 06:24 | - | pace/pc | the pace check was not judged: d3d12: not played, the machine was not quiet: still busy after 30 minutes: NebulaD11.exe (pid 37240), NebulaD11.exe (pid 3700), Nebula.exe (pid 2876), Nebula.exe (pid 52412), NebulaVk.exe (pid 40128), NebulaVk.exe (pid 60984); vulkan: not played, the machine was not quiet: still busy after 30 minutes: NebulaD11.exe (pid 37240), NebulaD11.exe (pid 3700), Nebula.exe (pid 2876), Nebula.exe (pid 52412), NebulaVk.exe (pid 40128), NebulaVk.exe (pid 60984) | - |
