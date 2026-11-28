@@ -818,3 +818,43 @@ step whose sheet is missing or has an empty heading. The published progress page
 branch on GitHub first (raw.githubusercontent.com, its address made from origin's by `live_data_url` in `tools/plan/plan.py`), which `plan.py`
 pushes with STATUS.md after each change, and falls back to the copy published beside it, saying which one it shows. Self-tests:
 `tools/gate/tests/plan_stack_test.py`, `tools/gate/tests/plan_fill_test.py` and `tools/gate/tests/plan_page_test.py`.
+
+## 18. Quarantine of new rows and checks (mend M-015)
+
+The planner's order of 11-27 (the owner's plan, section B3): a row of the pacing check or a check of the gate that is new refuses
+nothing until it has passed on main 5 times. Before this, every new pacing row and check refused from its first landing, before
+anyone knew its noise, and each chance refusal cost a landing of about 45 minutes and a mend (G10.1 to G10.4m: M-008, M-009,
+M-011, M-012, M-013). The rule is in `tools/gate/quarantine.py` and is the same for the two kinds of name:
+
+- **What is new.** A name is live when a line of `tools/gate/quarantine-live.tsv` names it (kind `row` for a row of
+  `tools/gate/pace.py`, `check` for a check of `tools/gate/gate.py`; `*` in a name matches any text) or when its line in the
+  counters file has 5 passes. Every other name is quarantined. The live file holds every row and every check on main when this
+  landed: nothing that refused before is quarantined. A check that `planned.tsv` lists is not in it (it is a new check when it is
+  built). A row changed to judge more is given a new name beside the old one (the old one keeps refusing, the new one is
+  quarantined). A name that only renames a live row is added to the live file in the same landing that removes the old line, and
+  that removal is on the strictness list (`tools/gate/strictness.tsv` names the file: a removed line takes a name out of the live
+  set). No other name is added to the live file: the way to refusing is 5 passes, or `--live-row` in a plant run. A live file that cannot be read makes every name live.
+- **What a quarantined name does.** It runs and is judged as before and its result is shown. A row's verdict reads
+  `quarantined: report only (n of 5 passes on main)`, and `pace.py digest` prints a line under it when it would have failed; the
+  check `pace/pc` or `pace/tablet` names it in its detail ("quarantined, would have failed, refused nothing") and passes. A check
+  of the gate that fails (the kind `fail`, the change's) passes with the detail `quarantined: report only (n of 5 passes on main);
+  it failed: <what it said>`, its records are empty, and the row in `result.json` carries `quarantine` (`passes`, `needed`, `ran`).
+  A fault of the tool, the machine's (`tool`, `env`), a check that is owed and a planned check that runs are judged as before: a
+  quarantine is for a result of the change's.
+- **What counts as a pass.** Only a landing that moved main. After the move, `gate.py` calls `keep_quarantine` (checks) and
+  `pace.py keep --quarantine` (rows, through `keep_pace`); a name that passed in that landing, every run of it passing, gets one
+  pass for that main commit, and a commit counted already gives none, so a landing that is run again counts once. A failure of a
+  quarantined name counts for nothing and takes nothing away. A plant run, a tool's self-test and a run that moved nothing never
+  write the counters. The counters are `quarantine.tsv` in the gate's work folder (next to `pace-history.tsv`): kind, name, the
+  time first seen, the passes and the main commits that gave them; a name is written there at its first landing with 0 passes. A
+  counters file that cannot be written is one line in `tool-faults.tsv` and changes nothing about the landing.
+- **A plant run.** `gate.py --live-row NAME` (repeated for each name; `pace.py run` and `digest` take the same option, and the gate
+  hands its own on) makes the named row or check live in that run, whatever its count: a planted fault in a new row is then
+  refused on the plant branch, and the counters are not touched because nothing moved. The plant of the step or mend that adds a row
+  is still owed (`docs/plan/native/TOOL-MEND-PLANTS.md`, recipe 12 shows the way); the first landing of the row passes while the row
+  is quarantined, and the plant shows that it refuses once it is live.
+- **Rows to be quarantined.** G10.5 adds the lead row with the covered flag, the jumps at 0 and the refreshes of the tablet's
+  baseline at the rate where they refuse again: each under a name that is not in the live file, so each starts at 0 of 5.
+
+Self-test: `tools/gate/tests/quarantine_test.py` (a new name, 4 passes, the 5th, a retry of one commit, an existing row at once, a
+failure that counts nothing, a plant run with the name live, the commands).
