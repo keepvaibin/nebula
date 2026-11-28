@@ -125,6 +125,7 @@ In work now:
 - G10.5 The depth rule from ready time, stepping back down by trying: proof 4: the game step's time and the walk's on the PC and the tablet before and after: never slower (the quick tour's pictures on d3d12, d3d11, vulkan: 24 of 24 the same, done) (agent 1, 2026-11-27 22:11)
 - G10.5 The depth rule from ready time, stepping back down by trying: proof 5 through the real tool: recipe 10b, pace/pc clean on Direct3D 12 and Vulkan passes, the planted lead stepping in play refused (pace_test.py's cases done) (agent 1, 2026-11-27 22:11)
 - G10.5 The depth rule from ready time, stepping back down by trying: proof 6: 5 runs of 5 min at 120 Hz and 5 at 60 Hz of the clean build on the tablet make 0 jumps a minute in play; remake tests/pace/tablet-base.json from them if its figures change; the clean build passes pace/tablet at both rates (agent 1, 2026-11-27 22:11)
+- G10.5 The depth rule from ready time, stepping back down by trying: proof 7: recipe 11 at 120 and 60 Hz: pace-fault and pace-depth each refused by pace/tablet in at least 3 plant runs per plant and rate, the clean build passing at least 5 clean runs per rate in the same session; the depth plant's mean of asked less ready rises beyond the clean range (agent 1, 2026-11-27 22:11)
 
 ## Waiting for the owner
 
