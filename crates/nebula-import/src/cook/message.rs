@@ -786,22 +786,21 @@ mod tests {
     }
 
     /// The game's run reader (MessageHolder.hpp MessageRunFile) reads this file in native/tests/message_runs_tests.cpp:
-    /// the fixture's cooked bytes, as that test includes them. NEBULA_WRITE_FIXTURE=1 writes the file again.
+    /// the fixture's cooked bytes, as that test includes them. When they differ, the test prints the file as it must be.
     #[test]
     fn the_game_reads_the_runs_the_cook_writes() {
         let bytes = fixture().to_bytes().unwrap();
-        let mut text = String::from("// The cook's NMSG of crates/nebula-import cook/message.rs tests::fixture (the test the_game_reads_the_runs_the_cook_writes\n// writes it, NEBULA_WRITE_FIXTURE=1).\n");
+        let mut text = String::from("// The cook's NMSG of crates/nebula-import cook/message.rs tests::fixture (the test the_game_reads_the_runs_the_cook_writes\n// prints it when it differs).\n");
         for line in bytes.chunks(16) {
             let words: Vec<String> = line.iter().map(|b| format!("0x{b:02x},")).collect();
             text.push_str(&words.join(" "));
             text.push('\n');
         }
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../native/tests/message_runs_fixture.inc");
-        if std::env::var_os("NEBULA_WRITE_FIXTURE").is_some() {
-            std::fs::write(&path, &text).unwrap();
+        let file = include_str!("../../../../native/tests/message_runs_fixture.inc").replace('\r', "");
+        if file != text {
+            println!("{text}");
         }
-        let file = std::fs::read_to_string(&path).unwrap().replace('\r', "");
-        assert!(file == text, "{} is not the cook's: NEBULA_WRITE_FIXTURE=1 writes it", path.display());
+        assert!(file == text, "native/tests/message_runs_fixture.inc is not the cook's: the test printed it as it must be");
     }
 
     /// The parse's rule, written plainly: a message is well formed when it reaches its 0 and each tag on the way is
