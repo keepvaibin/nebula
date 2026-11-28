@@ -8,8 +8,7 @@
 // The hint session (HintSession, G10.4) over a recording stand-in for Android's calls, on every platform: it is told once
 // per cycle (two times a step where a picture's slot is half the step), not once per step; it holds every frame thread,
 // a later one through setThreads; it never calls setPreferPowerEfficiency; its target is the share of the cycle (100 per
-// cent the whole slot, 80 four fifths of it); a spike is told at a load; the graphics-pipeline variant is made from a
-// creation config with the window bound, and only where the system has it.
+// cent the whole slot, 80 four fifths of it); a spike is told at a load.
 #include "galaxy/perf_hint.h"
 
 #include <atomic>
@@ -108,7 +107,6 @@ bool thread_work_case() {
 // What the stand-in for Android's calls was asked, one test at a time.
 struct Record {
     int created = 0;                 // createSession
-    int created_from_config = 0;     // createSessionUsingConfig
     int closed = 0;
     std::vector<std::int32_t> tids;  // the threads the session holds now
     std::int64_t target_ns = 0;      // its target now
@@ -119,13 +117,9 @@ struct Record {
     int spikes = 0;
     bool spike_cpu = false;
     bool spike_gpu = false;
-    std::vector<void*> surfaces;  // the windows the session is bound to now
-    bool config_pipeline = false;
-    bool pipeline_supported = true;
 };
 Record g_record;
 int g_session_object = 0;
-int g_config_object = 0;
 int g_duration_object = 0;
 std::int64_t g_duration_cpu = 0;
 
@@ -173,41 +167,8 @@ int fake_spike(void*, bool cpu, bool gpu, const char*) {
     g_record.spike_gpu = gpu;
     return 0;
 }
-bool fake_supported(std::int32_t feature) {
-    return feature != galaxy::host::kHintFeatureGraphicsPipeline || g_record.pipeline_supported;
-}
-int fake_max_pipeline_threads(void*) {
-    return 8;
-}
-void* fake_config_create() {
-    return &g_config_object;
-}
-void fake_config_release(void*) {}
-void fake_config_tids(void*, const std::int32_t* tids, std::size_t size) {
-    g_record.tids.assign(tids, tids + size);
-}
-void fake_config_target(void*, std::int64_t target_ns) {
-    g_record.target_ns = target_ns;
-}
-void fake_config_pipeline(void*, bool enabled) {
-    g_record.config_pipeline = enabled;
-}
-void fake_config_surfaces(void*, void* const* windows, std::size_t size, void* const*, std::size_t) {
-    g_record.surfaces.assign(windows, windows + size);
-}
-int fake_create_from_config(void*, void*, void** out) {
-    ++g_record.created_from_config;
-    *out = &g_session_object;
-    return 0;
-}
-int fake_set_surfaces(void*, void* const* windows, std::size_t size, void* const*, std::size_t) {
-    g_record.surfaces.assign(windows, windows + size);
-    return 0;
-}
-
-// Android 16's calls, as the tablet has them (setThreads, the newest report, the spike; the creation config only where
-// `config` is asked).
-galaxy::host::HintCalls fake_calls(bool config) {
+// Android 16's calls, as the tablet has them (setThreads, the newest report, the spike).
+galaxy::host::HintCalls fake_calls() {
     static int manager = 0;
     galaxy::host::HintCalls calls;
     calls.manager = &manager;
@@ -225,18 +186,6 @@ galaxy::host::HintCalls fake_calls(bool config) {
     calls.duration_gpu = fake_duration_set;
     calls.report2 = fake_report2;
     calls.notify_spike = fake_spike;
-    calls.feature_supported = fake_supported;
-    if (config) {
-        calls.max_pipeline_threads = fake_max_pipeline_threads;
-        calls.config_create = fake_config_create;
-        calls.config_release = fake_config_release;
-        calls.config_tids = fake_config_tids;
-        calls.config_target = fake_config_target;
-        calls.config_graphics_pipeline = fake_config_pipeline;
-        calls.config_surfaces = fake_config_surfaces;
-        calls.create_from_config = fake_create_from_config;
-        calls.set_surfaces = fake_set_surfaces;
-    }
     return calls;
 }
 
@@ -245,12 +194,12 @@ constexpr std::int64_t kSlot120 = 8'333'333;  // a picture's slot at 120 Hz
 constexpr std::int64_t kSlot240 = 4'166'666;  // at 240 Hz
 constexpr std::int64_t kMs = 1'000'000;
 
-// `steps` game steps from 0: each ends with a step's work of 4 ms and the cycle's of 2 ms, and between the ends the frame
-// threads mark every millisecond, a cycle closed by a mark telling 1 ms of work.
+// `steps` game steps from 0: each ends with the cycle's work of 2 ms, and between the ends the frame threads mark every
+// millisecond, a cycle closed by a mark telling 1 ms of work.
 void play(galaxy::host::HintSession& session, int steps, std::int64_t slot_ns) {
     for (int step = 0; step < steps; ++step) {
         const std::int64_t begins = step * kStep;
-        session.step_ends(begins, 4 * kMs, 2 * kMs, slot_ns, 0);
+        session.step_ends(begins, 2 * kMs, slot_ns, 0);
         for (std::int64_t at = begins + kMs; at < begins + kStep; at += kMs) {
             if (session.cycle_due(at)) {
                 session.cycle_ends(at, kMs, 0);
@@ -263,10 +212,10 @@ bool session_cases() {
     using galaxy::host::HintSession;
     bool ok = true;
 
-    // Once per cycle: at 120 Hz the slot is half the step, so 10 steps are 20 reports (the old rule's 10 fails this).
+    // Once per cycle: at 120 Hz the slot is half the step, so 10 steps are 20 reports (one a step fails this).
     {
         g_record = {};
-        HintSession session(fake_calls(false), {}, kStep);
+        HintSession session(fake_calls(), {}, kStep);
         session.add_thread(101);
         session.add_thread(102);
         play(session, 10, kSlot120);
@@ -292,23 +241,10 @@ bool session_cases() {
         ok &= expect(g_record.prefer_power_efficiency == 0, "setPreferPowerEfficiency is never called");
     }
 
-    // The old rule (--diagnostics hint-per-step, G10.4m's planted fault): once per step, the step's work over its slots.
-    {
-        g_record = {};
-        HintSession session(fake_calls(false), {100u, true, false}, kStep);
-        session.add_thread(101);
-        session.add_thread(102);
-        play(session, 10, kSlot120);
-        ok &= expect(g_record.reports == 10, "hint-per-step: one report per game step");
-        ok &= expect(!g_record.works.empty() && g_record.works[0] == 4 * kMs * kSlot120 / kStep,
-                     "hint-per-step: the step's work scaled to a slot, as before G10.4");
-        ok &= expect(g_record.prefer_power_efficiency == 0, "hint-per-step: setPreferPowerEfficiency is never called");
-    }
-
     // The share: 80 per cent is four fifths of the slot; a share changed by the frame's target is told, not a new session.
     {
         g_record = {};
-        HintSession session(fake_calls(false), {80u, false, false}, kStep);
+        HintSession session(fake_calls(), {80u}, kStep);
         session.add_thread(101);
         play(session, 1, kSlot120);
         ok &= expect(g_record.target_ns == kSlot120 * 4 / 5 && session.cycle_ns() == kSlot120,
@@ -321,7 +257,7 @@ bool session_cases() {
     // At 60 Hz (no slot under the step) one report a step; at 240 Hz four.
     {
         g_record = {};
-        HintSession session(fake_calls(false), {}, kStep);
+        HintSession session(fake_calls(), {}, kStep);
         session.add_thread(101);
         play(session, 6, 0);
         ok &= expect(g_record.reports == 6 && g_record.target_ns == kStep, "60 Hz: the step is the cycle");
@@ -330,7 +266,7 @@ bool session_cases() {
         ok &= expect(g_record.reports == 20, "240 Hz: four reports a step");
         // A mark late past three slots' ends closes them as one cycle.
         g_record.reports = 0;
-        session.step_ends(100 * kStep, kMs, kMs, kSlot240, 0);
+        session.step_ends(100 * kStep, kMs, kSlot240, 0);
         ok &= expect(session.cycle_due(100 * kStep + 15 * kMs), "a slot's end has passed");
         session.cycle_ends(100 * kStep + 15 * kMs, kMs, 0);
         ok &= expect(!session.cycle_due(100 * kStep + 16 * kMs) && g_record.reports == 2,
@@ -340,7 +276,7 @@ bool session_cases() {
     // A system without setThreads: the session is made again with every thread.
     {
         g_record = {};
-        galaxy::host::HintCalls calls = fake_calls(false);
+        galaxy::host::HintCalls calls = fake_calls();
         calls.set_threads = nullptr;
         HintSession session(calls, {}, kStep);
         session.add_thread(101);
@@ -349,50 +285,6 @@ bool session_cases() {
         play(session, 1, 0);
         ok &= expect(g_record.created == 2 && g_record.closed == 1 && g_record.tids == std::vector<std::int32_t>{101, 102},
                      "no setThreads: a new session of every thread");
-    }
-
-    // The graphics-pipeline variant (--diagnostics hint-pipeline): from a creation config, the window bound.
-    {
-        int window = 0;
-        int window2 = 0;
-        g_record = {};
-        HintSession session(fake_calls(true), {100u, false, true}, kStep);
-        session.add_thread(101);
-        session.add_thread(102);
-        session.set_surface(&window);
-        play(session, 2, kSlot120);
-        ok &= expect(g_record.created_from_config == 1 && g_record.created == 0 && session.pipeline() &&
-                         g_record.config_pipeline && g_record.target_ns == kSlot120,
-                     "hint-pipeline: a graphics-pipeline session from a creation config");
-        ok &= expect(g_record.surfaces == std::vector<void*>{&window}, "hint-pipeline: the window is bound");
-        session.set_surface(&window2);
-        ok &= expect(g_record.surfaces == std::vector<void*>{&window2}, "hint-pipeline: a new window is bound again");
-        ok &= expect(g_record.reports == 4 && g_record.prefer_power_efficiency == 0,
-                     "hint-pipeline: once per cycle, never power efficiency");
-    }
-    {
-        g_record = {};
-        g_record.pipeline_supported = false;
-        HintSession session(fake_calls(true), {100u, false, true}, kStep);
-        session.add_thread(101);
-        play(session, 1, 0);
-        ok &= expect(g_record.created == 1 && g_record.created_from_config == 0 && !session.pipeline(),
-                     "hint-pipeline where the system does not support it: a plain session");
-    }
-    {
-        g_record = {};
-        HintSession session(fake_calls(false), {100u, false, true}, kStep);
-        session.add_thread(101);
-        play(session, 1, 0);
-        ok &= expect(g_record.created == 1 && !session.pipeline(), "hint-pipeline without the creation config: a plain session");
-    }
-    {
-        g_record = {};
-        HintSession session(fake_calls(true), {}, kStep);
-        session.add_thread(101);
-        play(session, 1, 0);
-        ok &= expect(g_record.created == 1 && g_record.created_from_config == 0 && g_record.surfaces.empty(),
-                     "without hint-pipeline: the plain session, no window bound");
     }
 
     // The target's share by the rule itself.

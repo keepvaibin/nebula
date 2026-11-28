@@ -59,13 +59,13 @@ The gate's two checks (tools/gate/gate.py):
                Direct3D 12 and Vulkan, --again, the loads a report that refuses a gross break against the gate's pace-history.tsv; a FAIL row refuses.
   pace/tablet  an extra check by name (docs/plan/native/step-checks.tsv): tests/pace/tablet.json (rate-60, rate-120) on the
                tablet, under the tablet's lock and the measurement lock. Until tests/pace/tablet-base.json is stored (G10.2m,
-               from frametimeline.py baseline), it records its rows and refuses nothing. With it stored, the late share,
-               three-refresh share and unnamed share (the frame timeline's rows) of a run are set against the most a run of
-               the baseline had at that rate (the row "against the stored baseline"); the row is a report (BASELINE_REFUSES
-               False, M-011): the most of three runs is no bound for a fourth, the late share at 120 Hz varies from 8.7% to
-               14.6% between clean runs (brief AD: the share figures are a report, the bars refuse). A baseline that cannot
-               judge a run (another method, no frames) is still the tool's fault. The step that classifies the shares (G10.4m)
-               sets BASELINE_REFUSES, or replaces the row.
+               from frametimeline.py baseline), it records its rows and refuses nothing. With it stored, each row of the frame
+               timeline's report (frametimeline.ROWS: the late, three-refresh and unnamed shares, the mean refreshes from a
+               step to the screen, and the repeated, skipped and shifted pictures and jumps a minute that the present times
+               show) is set against the bound of its rate, the median of the baseline's runs plus their range (the row "against
+               the stored baseline"). A row refuses only where BASELINE_REFUSES names it for the rate (G10.4m: the rows that the
+               planted 20 ms sleep lay beyond the bound of in every plant run); another row beyond its bound is said and refuses
+               nothing. A baseline that cannot judge a run (another method, no frames) is still the tool's fault.
                G10.3 adds a second row, "what the platform offers": a device run whose log lacks a line of what the platform
                offers (PLATFORM_KINDS) is refused by it, which pace/tablet refuses by.
 """
@@ -118,11 +118,17 @@ FIRST = "first"
 LOCK_HELD = 3
 # The exit status when a renderer was not played because the machine stayed busy (the machine's too).
 NOT_QUIET = 3
-# A device run's row against a stored baseline (frametimeline.judge). A share above the stored most is a FAIL of this row only when
-# BASELINE_REFUSES is set (pace/tablet refuses by it); until the step that classifies the shares (G10.4m) it is a report: "recorded",
-# the shares above the most named (M-011; brief AD: the shares are a report, bars 1 and 2 refuse; the planner's order of 11-26).
+# A device run's row against a stored baseline (frametimeline.judge): a row of the report beyond the bound of its rate (the median of
+# the baseline's runs plus their range) is a FAIL of this row only where BASELINE_REFUSES names it; any other is "recorded" with the rows
+# named (M-011 made the shares a report; G10.4m sets the rows that refuse, from the plant runs; brief AD: the bars refuse).
 BASELINE_ROW = "against the stored baseline"
-BASELINE_REFUSES = False
+# Which rows of the baseline refuse, by the display's rate (G10.4m; frametimeline.ROWS: a row is its figure of the run's report). The
+# bound of a row is the median of the baseline's runs plus their range (max - min). A row refuses only where the planted 20 ms sleep
+# lay beyond its bound in every plant run and no clean run of the same build was beyond it (decisions G10.4m): at 120 Hz the mean
+# refreshes from a step to the screen and the jumps the present times show; at 60 Hz none, because the clean runs spread wider than the
+# sleep's effect there (a hiccup of one run is as large). The other rows are a report: a figure beyond its bound said, nothing refused.
+BASELINE_REFUSES = {"120": ("refreshes_mean", "jumps_per_minute"), "60": ()}
+SCREEN_ROW = "what the screen showed"
 # What the platform offers the pacing (G10.3): the game's `[platform] <kind>: <value>` lines (perf_hint.cpp, display_clock.cpp,
 # host_window_sdl.cpp, renderer_vk.cpp), printed in each run's header. A device run must hold one line of each PLATFORM_KINDS with a
 # value ("not supported (<why>)" is one), the frame timeline's at the run's own rate; one missing is a FAIL of PLATFORM_ROW, which
@@ -401,6 +407,11 @@ def frametimeline_rows(run, base=None, base_name=""):
             else:
                 rows.append(("miss: %s" % cause, share_text(n, frames), "named (%s)" % how, "recorded"))
         rows.append(("buffer stuffing", share_text(report["buffer_stuffing"], frames), "counted, not a miss", "recorded"))
+    shown = report.get("shown")
+    if shown:
+        rows.append((SCREEN_ROW, "%d pairs of pictures: %d repeated, %d skipped, %d shifted; %.1f events and %.1f jumps a minute" % (
+            shown["pairs"], shown["repeated"], shown["skipped"], shown["shifted"], shown["events_per_minute"] or 0.0,
+            shown["jumps_per_minute"] or 0.0), "from the present times SurfaceFlinger recorded, beside the late share", "recorded"))
     game = run.get("present_timing")
     if game is not None:
         rows.append(("misses by the game's lines", "%d late of %d: %d available late, %d delayed late" % (game[1], game[0], game[2], game[3]),
@@ -411,11 +422,16 @@ def frametimeline_rows(run, base=None, base_name=""):
             "-" if report["latched_unsignaled"] is None else "%d" % report["latched_unsignaled"]), "recorded", "recorded"))
     if base is not None:
         verdict, text = frametimeline.judge(report, base)
-        target = "no share above the most of a run in %s" % base_name
-        if verdict in ("pass", "FAIL") and not BASELINE_REFUSES:
-            target = "report only: the shares against the most of a run in %s" % base_name
-            text += "; above the stored most" if verdict == "FAIL" else ""
-            verdict = "recorded"
+        target = "no row beyond its bound (the median of the runs in %s plus their range)" % base_name
+        if verdict == "FAIL":
+            beyond = frametimeline.rows_beyond(report, base)
+            refusing = [row for row, _figure, _bound in beyond if row in BASELINE_REFUSES.get(frametimeline.rate_of(report), ())]
+            if refusing:
+                text += "; beyond the bound and refusing: " + ", ".join(refusing)
+            else:
+                target = "report only at this rate: the rows beyond their bounds in %s refuse nothing" % base_name
+                text += "; beyond the bound, a report: " + ", ".join(row for row, _f, _b in beyond)
+                verdict = "recorded"
         rows.append((BASELINE_ROW, text or "-", target, verdict))
     return rows
 

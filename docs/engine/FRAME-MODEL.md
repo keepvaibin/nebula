@@ -1862,20 +1862,21 @@ at the picture's moment; every platform does the same or says on screen why not.
      (`calibrate_first_start`): with the default of 60 it picks the internal height the device holds. Read first,
      answered: the heat input is Android's `AThermal_getThermalHeadroom`, read once a second off the frame threads;
      Apple, Linux and Windows give none to the arbiter (0, never hot). The tablet and PC measures are owed.
-   - Done at G10.4 (the hint's target, code for G10.4m's A/B; `perf_hint.h` `HintSession`): the session is told each
+   - Done at G10.4 and G10.4m (the hint's target; `perf_hint.h` `HintSession`): the session is told each
      cycle's work once, where the cycle is the slot when it is shorter than the step, else the step: the step's end
      closes one, and the first frame thread's mark after each further slot's end in the step closes another (two a step
      at 120 Hz, four at 240; a mark late past several slot ends closes them as one). A cycle's work is the busier frame
-     thread's busy wall time in it, unscaled. The target is a share of the cycle, `--diagnostics hint-share=N` (10 to
-     100; 100, the whole slot as before, stays the default until G10.4m chooses by A/B: Google's pages give no margin,
-     PPSSPP uses half a frame). The session holds every frame thread; a thread added later joins through `setThreads`
-     (API 34), else the session is made again with every thread (G3.1's workers join this way once they exist). A stage
-     load (the game names another stage) and a scene start are told as `notifyWorkloadSpike` (API 36, CPU and GPU).
-     `setPreferPowerEfficiency` is never called. Two variants for the A/B, each behind its own diagnostics value:
-     `hint-per-step`, the one report a step of before (the step's work scaled to a slot; G10.4m's planted fault), and
-     `hint-pipeline`, a graphics-pipeline session from `ASessionCreationConfig` with the game's window bound (its
-     total the CPU and GPU time added), made only where the system has the calls and `isFeatureSupported` does not say
-     no, else the plain session with a `[perf]` line saying why. G10.4m deletes the losing variants.
+     thread's busy wall time in it, unscaled. The target is a share of the cycle, `--diagnostics hint-share-N` (10 to
+     100). The default is 100, the whole slot: G10.4m's A/B on the tablet (five runs of five minutes each of 100, 90, 80
+     and 67 per cent at 120 and at 60 Hz, alternated in one session) found no share that beat 100 by more than the
+     larger range of the runs, and no share that moved the CPU clocks, the GPU clock or the heat beyond the range of the
+     baseline's; Google's pages give no margin and the tablet does not need one (decisions G10.4m). The session holds
+     every frame thread; a thread added later joins through `setThreads` (API 34), else the session is made again
+     with every thread (G3.1's workers join this way once they exist). A stage load (the game names another stage) and a
+     scene start are told as `notifyWorkloadSpike` (API 36, CPU and GPU). `setPreferPowerEfficiency` is never called.
+     G10.4m deleted the two variants of the A/B: the one report a step of before (worse in the median at both rates,
+     inside the range of the runs) and the graphics-pipeline session (the tablet's `isFeatureSupported` answers no for
+     it; the calls exist on Android 16 and the answer, not the call, decides).
 6. Fresh input (6.5). The pointer and the menu's cursor are drawn from the newest device sample at the picture's
    moment; the game's logic keeps its per-step value. A mod's free-look camera: the host applies the newest look
    rotation to the picture's view through one call; LumaKit's mark for it waits for the mods' work (parked 11-18).

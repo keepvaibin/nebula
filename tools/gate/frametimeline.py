@@ -47,9 +47,19 @@ method and which start hold for this game is not decided here: G10.2m's first tr
 baseline names both.
 
 THE BASELINE (`frametimeline.py baseline RUN_FOLDER... --out FILE`): the reports of several runs by the display's rate (60, 120):
-rows 1 to 4 summed, the frames of each cause, the shares (late, three refreshes or more, unnamed) of the runs together and the
-largest of one run. tests/pace/tablet-base.json is such a file (G10.2m stores it); judge() refuses a run whose share is above the
-largest share a baseline run had at its rate.
+rows 1 to 4 summed, the frames of each cause, the shares (late, three refreshes or more, unnamed) of the runs together, each run's
+rows (ROWS: those shares, the mean refreshes from the step to the screen, and what the screen showed, below) and the bound of each
+row, the median of the runs plus their range (max - min; G10.4m's range rule). tests/pace/tablet-base.json is such a file;
+judge() says FAIL when a row of a run is beyond the bound of its rate (rows_beyond names them) and pace.py decides which rows refuse.
+
+WHAT THE SCREEN SHOWED (G10.4m; shown_events, pair_verdict, classify_late, episodes, `frametimeline.py classify`): FrameTimeline's labels
+name a cause, not what a player saw. From the present times SurfaceFlinger recorded (desired and actual, the --latency reads) each pair
+of pictures shown one after the other is "repeated" (the screen held the first two refreshes or more), "skipped" (the game's moment
+moved on more than the screen's), "shifted" (another change of shown minus asked over 1 ms) or "on time". At 120 Hz about nine of ten
+pictures the label calls late were shown on time in this sense (one refresh after the time first asked for, in step), so the A/B row is
+the pairs that were not (events a minute) and the late share is a report. The rule of the A/B (ab_wins, power_raises, ab_choice): a
+variant wins only when its median beats the baseline's by more than the larger of the two ranges, and a power measure counts as
+raised only when its median is above the baseline's by more than the baseline's own range.
 """
 import argparse
 import csv
@@ -86,6 +96,8 @@ PRECEDENCE = ("ModeChange in progress", "App Deadline Missed", "SurfaceFlinger C
 UNKNOWN_SHARE = 0.0005               # Unknown fails above 0.05 % of the frames
 BINS = ("1 or less", "2", "3", "4 or more")
 SHARES = ("late_share", "three_refresh_share", "unnamed_share")
+# The rows a stored baseline holds for each rate (G10.4m): the shares above and what the screen showed (shown_events).
+ROWS = SHARES + ("refreshes_mean", "events_per_minute", "jumps_per_minute")
 # The game's timeline (runtime/include/galaxy/frame_timeline.h): its events and header.
 WALK_BEGIN, STEP_WAIT_END = 29, 32
 FRAME_ZERO = re.compile(r"harness: frame 0 is game frame (\d+)")
@@ -94,7 +106,7 @@ SETTLE_SECONDS = 60                  # how long the capture waits for Perfetto t
 SETTLED = 3                          # reads of the trace's size, half a second apart, that must agree
 NEVER = 1 << 62                      # --latency's "pending" (INT64_MAX) and anything past it
 BOOTTIME, MONOTONIC = 6, 3           # Perfetto's builtin clock ids (clock_snapshot)
-FORMAT = 1
+FORMAT = 2         # 2 (G10.4m): the baseline holds each run's rows and their bounds; a report is read the same in both
 
 # The trace processor's queries, one result each (run_processor). Whole rows: what a column is called is read from the table, so a
 # trace processor with more or fewer columns is read the same way.
@@ -362,6 +374,7 @@ def report_of(tables, latency_text, jank_text, starts, method="auto", start="ste
     if start == "step" and not starts_here:
         notes.append("row 1 not measured: the run's timeline has no step moments (--diagnostics timeline)")
     gpu, unsignaled = [], []
+    refresh_sum = 0.0
     for f in frames:
         miss, cause, stuffing = cause_of(f["flags"], f["late"])
         out["misses"] += 1 if miss else 0
@@ -379,12 +392,162 @@ def report_of(tables, latency_text, jank_text, starts, method="auto", start="ste
             continue
         out["refreshes"][bin_of(round((f["present"] - begin) / period))] += 1
         out["refresh_frames"] += 1
+        refresh_sum += (f["present"] - begin) / period
+    out["refreshes_mean"] = round(refresh_sum / out["refresh_frames"], 4) if out["refresh_frames"] else None
     if gpu:
         out["gpu_composition"], out["gpu_frames"] = sum(gpu), len(gpu)
     if unsignaled:
         out["latched_unsignaled"] = sum(unsignaled)
     out.update(shares(out))
+    out["shown"] = shown_events(frames_lat, period) if frames_lat and period else None
     return out
+
+
+# ---------------------------------------------------------------------------------------------------------------------------
+# What the screen showed (G10.4m): from the present times SurfaceFlinger recorded, not from the labels of FrameTimeline
+
+SEAM_REFRESHES = 8   # a gap between two shown pictures of more than this many refreshes is a load's or a pause's seam, not a picture's
+JUMP_NS = 1_000_000  # brief AD bar 2: the change of (shown moment - game moment) between two pictures within 1 ms
+VERDICTS = ("repeated", "skipped", "shifted", "on time")
+
+
+def pair_verdict(before, now, period):
+    """What the screen showed between two pictures shown one after the other (--latency frames: desired = the game moment the picture
+    was asked for, present = when it was shown): None across a seam or where a time is missing; "repeated" when the screen held the
+    picture before for two refreshes or more; "skipped" when the game's moment moved on more than the screen's did (a picture
+    between them was never shown); "shifted" when (shown - asked) changed by over 1 ms in any other way; else "on time": one new
+    picture a refresh, as asked, whatever its distance from the time first asked for."""
+    if before.get("desired") is None or now.get("desired") is None or not period:
+        return None
+    held = now["present"] - before["present"]
+    asked = now["desired"] - before["desired"]
+    if held <= 0 or held > SEAM_REFRESHES * period or abs(asked) > SEAM_REFRESHES * period:
+        return None
+    if round(held / period) >= 2:
+        return "repeated"
+    if asked - held > JUMP_NS:
+        return "skipped"
+    if abs(asked - held) > JUMP_NS:
+        return "shifted"
+    return "on time"
+
+
+def shown_events(frames, period):
+    """The screen's events of a run, from its --latency frames in the order shown: the pairs of pictures shown one after the other
+    by verdict (pair_verdict), the pairs whose (shown - asked) changed by over 1 ms (`jumps`, bar 2; a repeat can be one), the
+    pairs across a seam, `events` = repeated + skipped + shifted (bar 1's repeated or skipped pictures and the other jumps, each pair
+    once) and the figure the A/B judges: events a minute of the pictures judged."""
+    counts = {v: 0 for v in VERDICTS}
+    jumps = seams = 0
+    covered = 0.0
+    for a, b in zip(frames, frames[1:]):
+        verdict = pair_verdict(a, b, period)
+        if verdict is None:
+            seams += 1
+            continue
+        counts[verdict] += 1
+        covered += b["present"] - a["present"]
+        if abs((b["desired"] - a["desired"]) - (b["present"] - a["present"])) > JUMP_NS:
+            jumps += 1
+    events = counts["repeated"] + counts["skipped"] + counts["shifted"]
+    minutes = covered / 6e10
+    return {"pairs": sum(counts.values()), "seams": seams, "repeated": counts["repeated"], "skipped": counts["skipped"],
+            "shifted": counts["shifted"], "on_time": counts["on time"], "jumps": jumps, "events": events,
+            "minutes": round(minutes, 3), "events_per_minute": round(events / minutes, 3) if minutes else None,
+            "jumps_per_minute": round(jumps / minutes, 3) if minutes else None}
+
+
+def classify_late(frames, period):
+    """One verdict for each frame the latency method flags late (shown more than a refresh after the time it asked for): the pair's
+    verdict (pair_verdict) with the figures it rests on, in refreshes: [{index, present_ns, late, held, asked, verdict}]. A frame
+    that is the run's first or follows a seam has the verdict "seam"."""
+    rows = []
+    for i, f in enumerate(frames):
+        if f.get("desired") is None or f["present"] - f["desired"] <= period:
+            continue
+        verdict = pair_verdict(frames[i - 1], f, period) if i else None
+        before = frames[i - 1] if i else None
+        rows.append({"index": i, "present_ns": f["present"], "late": round((f["present"] - f["desired"]) / period, 3),
+                     "held": round((f["present"] - before["present"]) / period, 3) if before else None,
+                     "asked": round((f["desired"] - before["desired"]) / period, 3) if before and before.get("desired") else None,
+                     "verdict": verdict or "seam"})
+    return rows
+
+
+def episodes(frames, period):
+    """The runs of consecutive late frames (classify_late's flags) with what closed each: the verdict of the pair that follows the
+    run's last frame (a late run ends where the screen skips to the game's moment again), [{frames, opened, closed}]."""
+    out, i, n = [], 0, len(frames)
+    late = [f.get("desired") is not None and f["present"] - f["desired"] > period for f in frames]
+    while i < n:
+        if not late[i]:
+            i += 1
+            continue
+        j = i
+        while j + 1 < n and late[j + 1]:
+            j += 1
+        opened = pair_verdict(frames[i - 1], frames[i], period) if i else None
+        closed = pair_verdict(frames[j], frames[j + 1], period) if j + 1 < n else None
+        out.append({"frames": j - i + 1, "opened": opened or "seam", "closed": closed or "seam"})
+        i = j + 1
+    return out
+
+
+# ---------------------------------------------------------------------------------------------------------------------------
+# The A/B rule and the power rule (G10.4m)
+
+
+def spread(values):
+    return max(values) - min(values)
+
+
+def median(values):
+    return statistics.median(values)
+
+
+def ab_wins(baseline_values, variant_values, lower_is_better=True):
+    """True when a variant beats the baseline on the A/B row: its median is better than the baseline's by MORE than the larger of
+    the two ranges (max - min). A tie, or a win inside the range, is no win: the baseline stays. At least 2 runs of each (a range
+    of one run is 0); the card asks for 5."""
+    if len(baseline_values) < 2 or len(variant_values) < 2:
+        raise ValueError("the A/B rule needs at least 2 runs of each (the card: 5)")
+    margin = max(spread(baseline_values), spread(variant_values))
+    gain = median(baseline_values) - median(variant_values)
+    return (gain if lower_is_better else -gain) > margin
+
+
+def power_raises(baseline_values, variant_values):
+    """True when a variant raises a power measure (a heat slope or forecast, a CPU or GPU clock: a higher value costs more) by MORE
+    than the baseline's own range: its median above the baseline's by more than max - min of the baseline's runs."""
+    if len(baseline_values) < 2 or len(variant_values) < 2:
+        raise ValueError("the power rule needs at least 2 runs of each (the card: 5)")
+    return median(variant_values) - median(baseline_values) > spread(baseline_values)
+
+
+def ab_choice(baseline, variants, measures):
+    """The chosen variant of an A/B at one rate. baseline: {"row": [values], "power": {measure: [values]}}; variants: {name: the
+    same}; measures: the power measures to hold. Returns (name, or None for the baseline, {name: {wins, raises, gain, margin}}).
+    A candidate wins on the row (ab_wins) and raises no measure (power_raises). Of the candidates the best has the lowest median
+    row; those it does not beat by more than the larger range (a tie) are weighed by their power: the one whose measures, each
+    over the baseline's median, add up to the least is kept (a tie never costs power). No candidate: the baseline stays."""
+    detail, candidates = {}, []
+    for name, v in variants.items():
+        wins = ab_wins(baseline["row"], v["row"])
+        raised = [m for m in measures if m in v["power"] and m in baseline["power"]
+                  and power_raises(baseline["power"][m], v["power"][m])]
+        detail[name] = {"wins": wins, "raises": raised, "gain": median(baseline["row"]) - median(v["row"]),
+                        "margin": max(spread(baseline["row"]), spread(v["row"]))}
+        if wins and not raised:
+            candidates.append(name)
+    if not candidates:
+        return None, detail
+    best = min(candidates, key=lambda n: (median(variants[n]["row"]), n))
+    tied = [n for n in candidates if n == best or not ab_wins(variants[n]["row"], variants[best]["row"])]
+
+    def cost(name):
+        return sum(median(variants[name]["power"][m]) / median(baseline["power"][m]) for m in measures
+                   if m in variants[name]["power"] and m in baseline["power"] and median(baseline["power"][m]))
+    return min(tied, key=lambda n: (cost(n), median(variants[n]["row"]), n)), detail
 
 
 def shares(report):
@@ -438,9 +601,25 @@ def rate_of(report):
     return str(int(round(1000.0 / report["refresh_ms"]))) if report.get("refresh_ms") else None
 
 
+def row_values(report):
+    """A report's rows (ROWS) as figures: None where it has none."""
+    shown = report.get("shown") or {}
+    values = {row: report.get(row) for row in SHARES + ("refreshes_mean",)}
+    for row in ("events_per_minute", "jumps_per_minute"):
+        values[row] = shown.get(row)
+    return values
+
+
+def bound_of(values):
+    """The bound a baseline sets for a row: the median of its runs plus their range (max - min), the range rule of G10.4m (d): a run
+    is no worse than the baseline until it is beyond what the baseline's own runs spread over."""
+    return median(values) + spread(values)
+
+
 def baseline(reports, made=None):
     """The baseline of several runs' reports (one method and one start): by rate, rows 1 to 4 summed, the frames of each cause, the
-    shares of the runs together and the largest share of one run ("most", what judge() holds a run to)."""
+    shares of the runs together, each run's rows (`runs_rows`) and the bound of each row (`bounds`: the median of the runs plus their
+    range, what judge() holds a run to), and the largest share of one run ("most", kept as before)."""
     methods = {(r["method"], r["start"]) for r in reports}
     if len(methods) != 1:
         raise ValueError("the reports were read by more than one method and start: %s" % sorted(methods))
@@ -452,7 +631,8 @@ def baseline(reports, made=None):
             raise ValueError("a report with no refresh: no rate to file it under")
         total = rates.setdefault(key, {"runs": 0, "frames": 0, "refresh_frames": 0, "refreshes": {b: 0 for b in BINS},
                                        "causes": {c: 0 for c in CAUSES}, "misses": 0, "buffer_stuffing": 0, "gpu_composition": 0,
-                                       "gpu_frames": 0, "latched_unsignaled": None, "most": {s: 0.0 for s in SHARES}})
+                                       "gpu_frames": 0, "latched_unsignaled": None, "most": {s: 0.0 for s in SHARES},
+                                       "runs_rows": []})
         total["runs"] += 1
         for k in ("frames", "refresh_frames", "misses", "buffer_stuffing", "gpu_frames"):
             total[k] += r[k]
@@ -466,14 +646,39 @@ def baseline(reports, made=None):
         for s in SHARES:
             if r.get(s) is not None:
                 total["most"][s] = max(total["most"][s], r[s])
+        total["runs_rows"].append(row_values(r))
     for total in rates.values():
         total.update(shares(total))
+        total["bounds"] = {}
+        for row in ROWS:
+            values = [v[row] for v in total["runs_rows"] if v.get(row) is not None]
+            if len(values) >= 2:
+                total["bounds"][row] = bound_of(values)
     return {"format": FORMAT, "method": method, "start": start, "made": made or datetime.date.today().isoformat(), "rates": rates}
 
 
+def bound_for(stored, row):
+    """The bound of a row in a stored rate's figures: its `bounds` (format 2), else the largest share of one run (format 1)."""
+    if row in stored.get("bounds", {}):
+        return stored["bounds"][row]
+    return stored.get("most", {}).get(row)
+
+
+def rows_beyond(report, base):
+    """The rows of a report that are beyond the stored bounds of its rate, [(row, figure, bound)]; [] when the baseline has no figure
+    for the rate or the report was read another way."""
+    stored = base.get("rates", {}).get(rate_of(report))
+    if stored is None or (report.get("method"), report.get("start")) != (base.get("method"), base.get("start")):
+        return []
+    values = row_values(report)
+    return [(row, values[row], bound_for(stored, row)) for row in ROWS
+            if values.get(row) is not None and bound_for(stored, row) is not None and values[row] > bound_for(stored, row) + 1e-12]
+
+
 def judge(report, base):
-    """(verdict, text) of a run's report against a stored baseline: FAIL when a share is above the largest a baseline run had at
-    its rate; recorded when the baseline has no figure for its rate; not measured when it was read another way or has no frames."""
+    """(verdict, text) of a run's report against a stored baseline: FAIL when a row (ROWS) is beyond the bound of its rate (bound_for:
+    the median of the baseline's runs plus their range); recorded when the baseline has no figure for its rate; not measured when it
+    was read another way or has no frames. Which rows refuse is pace.py's (BASELINE_REFUSES)."""
     key = rate_of(report)
     if (report.get("method"), report.get("start")) != (base.get("method"), base.get("start")):
         return "not measured: read by %s from %s, the baseline by %s from %s" % (
@@ -481,14 +686,22 @@ def judge(report, base):
     stored = base.get("rates", {}).get(key)
     if stored is None:
         return "recorded", "no stored figure at %s Hz" % key
-    parts, worse = [], []
-    for s in SHARES:
-        mine, most = report.get(s), stored["most"].get(s)
-        if mine is None:
-            return "not measured: no %s" % s.replace("_", " "), ""
-        parts.append("%s %.3f%% (stored most %.3f%%)" % (s.replace("_share", "").replace("_", " "), 100 * mine, 100 * most))
-        if mine > most + 1e-12:
-            worse.append(s)
+    values = row_values(report)
+    parts = []
+    for row in ROWS:
+        bound = bound_for(stored, row)
+        if bound is None:
+            continue
+        if values.get(row) is None:
+            if row in SHARES:
+                return "not measured: no %s" % row.replace("_", " "), ""
+            continue
+        if row in SHARES:
+            parts.append("%s %.3f%% (bound %.3f%%)" % (row.replace("_share", "").replace("_", " "), 100 * values[row], 100 * bound))
+        else:
+            parts.append("%s %.*f (bound %.*f)" % (row.replace("_", " "), 2 if row == "refreshes_mean" else 1, values[row],
+                                                  2 if row == "refreshes_mean" else 1, bound))
+    worse = rows_beyond(report, base)
     return ("FAIL" if worse else "pass"), "; ".join(parts)
 
 
@@ -651,6 +864,32 @@ class Capture:
 # ---------------------------------------------------------------------------------------------------------------------------
 
 
+def classify_runs(runs, out, first):
+    """The results file of the classification: for each run the counts of its late frames by verdict and of its episodes (a run of
+    late frames, what opened and closed it), then the first `first` late frames, each with its verdict."""
+    lines = ["# frametimeline.py classify: a late frame (shown more than a refresh after the time it asked for) is judged by the pair it "
+             "makes with the picture shown before it: held = refreshes between the two presents, asked = refreshes between the two "
+             "times asked for; repeated (held 2 or more), skipped (asked more than held by over 1 ms), shifted (the other jumps over "
+             "1 ms), on time (one picture a refresh as asked); seam (no picture before it, or a gap over %d refreshes)" % SEAM_REFRESHES,
+             "run\tlate\trepeated\tskipped\tshifted\ton time\tseam\tepisodes\topened by a repeat\tclosed by a skip"]
+    detail = ["run\tframe\tpresent_ns\tlate (refreshes)\theld\tasked\tverdict"]
+    for run in runs:
+        folder = pathlib.Path(run)
+        period, frames, _ = read_latency((folder / "sf-latency.txt").read_text(encoding="utf-8", errors="replace"))
+        rows = classify_late(frames, period)
+        counts = {v: sum(1 for r in rows if r["verdict"] == v) for v in VERDICTS + ("seam",)}
+        eps = episodes(frames, period)
+        name = folder.parts[folder.parts.index("runs") + 1] if "runs" in folder.parts else str(run)
+        lines.append("\t".join(str(x) for x in (name, len(rows), counts["repeated"], counts["skipped"], counts["shifted"], counts["on time"],
+                                                 counts["seam"], len(eps), sum(1 for e in eps if e["opened"] == "repeated"),
+                                                 sum(1 for e in eps if e["closed"] == "skipped"))))
+        for r in rows[:first]:
+            detail.append("\t".join(str(x) for x in (name, r["index"], r["present_ns"], r["late"], r["held"], r["asked"], r["verdict"])))
+    pathlib.Path(out).write_text("\n".join(lines + [""] + detail) + "\n", encoding="utf-8", newline="\n")
+    print("frametimeline.py: %d runs classified in %s" % (len(runs), out))
+    return 0
+
+
 def parser():
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = p.add_subparsers(dest="command", required=True)
@@ -660,6 +899,10 @@ def parser():
     r.add_argument("--start", choices=STARTS, default="step")
     r.add_argument("--trace-processor", default="", help="trace_processor_shell (else %s)" % PROCESSOR_ENV)
     r.add_argument("--refresh-ms", type=float, default=None, help="the display's refresh where the sources give none")
+    c = sub.add_parser("classify", help="one verdict for each late frame of runs' --latency reads (G10.4m, what the screen showed)")
+    c.add_argument("runs", nargs="+")
+    c.add_argument("--out", required=True, help="the results file (tab separated)")
+    c.add_argument("--first", type=int, default=50, help="how many late frames of each run get a line of their own (all are counted)")
     b = sub.add_parser("baseline", help="the baseline of several runs' frametimeline.json")
     b.add_argument("runs", nargs="+")
     b.add_argument("--out", required=True)
@@ -675,6 +918,8 @@ def main(argv=None):
             return 1
         print(json.dumps(report, indent=1))
         return 0
+    if args.command == "classify":
+        return classify_runs(args.runs, args.out, args.first)
     reports = []
     for run in args.runs:
         path = pathlib.Path(run) / REPORT if pathlib.Path(run).is_dir() else pathlib.Path(run)

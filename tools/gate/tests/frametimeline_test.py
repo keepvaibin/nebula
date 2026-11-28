@@ -47,7 +47,7 @@ sys.stdout.write((trace.parent / name).read_text(encoding="utf-8"))
 
 failures = []
 results = []
-REFUSES_SHIPPED = getattr(pace, "BASELINE_REFUSES", True)  # what pace.py ships with; the test sets it for its own blocks and puts it back
+REFUSES_SHIPPED = dict(getattr(pace, "BASELINE_REFUSES", {}))  # what pace.py ships with; the test sets it for its own blocks and puts it back
 
 
 def check(ok, what):
@@ -86,6 +86,83 @@ def report(folder, tables, method="auto", start="step"):
 
 def causes(r):
     return {c: n for c, n in r["causes"].items() if n}
+
+
+def shown_cases():
+    """G10.4m: what the screen showed, counted by hand from the present times (pair_verdict, shown_events, classify_late, episodes)."""
+    P = 8333333
+    frame = lambda present, desired: {"present": present, "desired": desired, "ready": present - 1}
+    ms2 = 2_000_000
+    frames = [frame(0, -P // 2),                      # 0
+              frame(P, P // 2),                       # 1 on time: one picture a refresh as asked
+              frame(2 * P, 3 * P // 2),               # 2 on time
+              frame(5 * P, 7 * P // 2),               # 3 the picture before held 3 refreshes: repeated; shown 1.5 refreshes after its time: late
+              frame(6 * P, 11 * P // 2),              # 4 the game's moment moved 2 refreshes, the screen's 1: skipped
+              frame(7 * P, 13 * P // 2 - ms2),        # 5 (shown - asked) changed by -2 ms, held 1 refresh: shifted
+              frame(8 * P, 15 * P // 2 - ms2),        # 6 on time again
+              frame(20 * P, 39 * P // 2)]             # 7 a gap of 12 refreshes: a seam
+    verdicts = [ft.pair_verdict(a, b, P) for a, b in zip(frames, frames[1:])]
+    check(verdicts == ["on time", "on time", "repeated", "skipped", "shifted", "on time", None], "pair verdicts: %s" % verdicts)
+    shown = ft.shown_events(frames, P)
+    check((shown["pairs"], shown["seams"], shown["repeated"], shown["skipped"], shown["shifted"], shown["on_time"], shown["jumps"],
+           shown["events"]) == (6, 1, 1, 1, 1, 3, 3, 3), "shown events counted by hand: %s" % shown)
+    late = ft.classify_late(frames, P)
+    check(len(late) == 1 and late[0]["index"] == 3 and late[0]["verdict"] == "repeated" and late[0]["held"] == 3.0 and late[0]["asked"] == 2.0,
+          "one late frame (3), repeated, held 3 asked 2: %s" % late)
+    check(ft.episodes(frames, P) == [{"frames": 1, "opened": "repeated", "closed": "skipped"}], "one episode, opened by a repeat, closed by a skip")
+    # A frame shown a refresh after its asked time at every refresh (a steady offset) is late in the label and on time on the screen.
+    steady = [frame(k * P, k * P - P // 2 - P) for k in range(6)]
+    kinds = [r["verdict"] for r in ft.classify_late(steady, P)]
+    check(kinds == ["seam"] + ["on time"] * 5 and ft.shown_events(steady, P)["events"] == 0,
+          "a steady offset: 6 late labels (the first has no pair before it), 5 on time, no event: %s" % kinds)
+    # The bound of a row from the baseline's runs: the median plus the range (G10.4m: 60 Hz clean runs 4.1, 3.9, 3.4, 4.5, 4.1 a minute).
+    check(abs(ft.bound_of([4.1, 3.9, 3.4, 4.5, 4.1]) - (4.1 + 1.1)) < 1e-9 and ft.bound_of([5.0, 5.0]) == 5.0,
+          "the bound of a row: the median 4.1 plus the range 1.1")
+    base = {"method": "latency", "start": "step", "rates": {"60": {"bounds": {"events_per_minute": 5.2, "jumps_per_minute": 0.0,
+                                                                             "late_share": 0.0}}}}
+    run = {"method": "latency", "start": "step", "refresh_ms": 16.6667, "late_share": 0.0, "shown": {"events_per_minute": 4.4,
+                                                                                                     "jumps_per_minute": 0.0}}
+    check(ft.judge(run, base)[0] == "pass" and ft.rows_beyond(run, base) == [], "a clean run at 60 Hz: no row beyond its bound")
+    sleepy = dict(run, late_share=0.002, shown={"events_per_minute": 25.4, "jumps_per_minute": 6.2})
+    check([row for row, _f, _b in ft.rows_beyond(sleepy, base)] == ["late_share", "events_per_minute", "jumps_per_minute"]
+          and ft.judge(sleepy, base)[0] == "FAIL", "the 20 ms sleep's run (events 25.4, jumps 6.2 a minute): three rows beyond their bounds")
+    check(ft.judge(dict(run, refresh_ms=8.3333), base)[0] == "recorded", "a rate the baseline has no figure for: recorded")
+    results.append("what the screen showed: %d pairs, %d repeated, %d skipped, %d shifted, %d jumps, 1 seam" % (
+        shown["pairs"], shown["repeated"], shown["skipped"], shown["shifted"], shown["jumps"]))
+
+
+def ab_cases():
+    """G10.4m: the A/B rule (a win only by more than the larger range), the power rule (a rise only by more than the baseline's range),
+    the choice among variants (a tie never costs power; the baseline stays when none wins), counted by hand."""
+    base = [10, 12, 14]                                  # median 12, range 4
+    check(ft.ab_wins(base, [4, 5, 6]), "median 5 against 12: gain 7 over the range 4: a win")
+    check(not ft.ab_wins(base, [9, 10, 11]), "median 10 against 12: gain 2 inside the range 4: not a win")
+    check(not ft.ab_wins(base, [8, 8, 8]), "gain exactly the range 4: not a win (more than)")
+    check(not ft.ab_wins([10, 10, 10], [2, 6, 10]), "gain 4 inside the variant's own range 8: not a win")
+    check(not ft.ab_wins(base, [12, 12, 12]) and not ft.ab_wins(base, [12, 13, 14]), "a tie or a worse variant: the baseline stays")
+    check(ft.ab_wins([5, 6, 7], [20, 21, 22], lower_is_better=False), "a row where more is better: median 21 against 6")
+    try:
+        ft.ab_wins([1], [2, 3])
+        check(False, "one baseline run: refused")
+    except ValueError:
+        pass
+    heat = [1.0, 1.1, 1.2]                               # median 1.1, range 0.2
+    check(ft.power_raises(heat, [1.3, 1.35, 1.4]), "median 1.35 over 1.1: a rise of 0.25 over the range 0.2")
+    check(not ft.power_raises(heat, [1.25, 1.3, 1.35]), "median 1.3: a rise of exactly 0.2: allowed")
+    check(not ft.power_raises(heat, [0.5, 0.6, 0.7]), "a fall is never a rise")
+    baseline = {"row": base, "power": {"gpu": [300, 310, 320], "cpu": [1000, 1010, 1020]}}
+    variants = {"hint-share-80": {"row": [4, 5, 6], "power": {"gpu": [320, 325, 330], "cpu": [1000, 1020, 1030]}},
+                "hint-share-90": {"row": [9, 10, 11], "power": {"gpu": [300, 305, 310], "cpu": [1000, 1005, 1010]}},
+                "hint-share-67": {"row": [3, 4, 5], "power": {"gpu": [360, 370, 380], "cpu": [1000, 1010, 1020]}}}
+    choice, detail = ft.ab_choice(baseline, variants, ("gpu", "cpu"))
+    check(choice == "hint-share-80" and detail["hint-share-90"]["wins"] is False and detail["hint-share-67"]["wins"]
+          and detail["hint-share-67"]["raises"] == ["gpu"], "80 wins inside the power bound, 90 is no win, 67 wins and raises the GPU clock: %s" % (detail,))
+    check(ft.ab_choice(baseline, {"hint-share-90": variants["hint-share-90"], "hint-share-67": variants["hint-share-67"]}, ("gpu", "cpu"))[0] is None,
+          "no candidate (one no win, one a rise): the baseline stays")
+    tie = dict(variants)
+    tie["hint-share-85"] = {"row": [4, 5, 6], "power": {"gpu": [300, 305, 310], "cpu": [1000, 1005, 1010]}}
+    check(ft.ab_choice(baseline, tie, ("gpu", "cpu"))[0] == "hint-share-85", "two variants tie on the row: the one with less power is kept")
+    results.append("A/B rule and power rule: wins only beyond the larger range, a rise only beyond the baseline's range, chosen %s" % choice)
 
 
 def main():
@@ -381,7 +458,10 @@ def main():
         except ValueError:
             pass
         check(ft.judge(synthetic(60, 4800, 2, 0, 0), back)[0] == "pass", "the stored figures: pass")
-        check(ft.judge(synthetic(60, 4800, 3, 0, 0), back)[0] == "FAIL", "a worse late share: refused")
+        # The bound of a row is the median of the runs plus their range (G10.4m): the late counts 0, 2, 1 of 4800 give 1 + 2 = 3.
+        check(ft.judge(synthetic(60, 4800, 3, 0, 0), back)[0] == "pass" and back["rates"]["60"]["bounds"]["late_share"] == 3 / 4800,
+              "a late share at the median plus the range: pass")
+        check(ft.judge(synthetic(60, 4800, 4, 0, 0), back)[0] == "FAIL", "a worse late share: refused")
         check(ft.judge(synthetic(120, 9600, 6, 1, 0), back)[0] == "FAIL", "a worse three-refresh share: refused")
         check(ft.judge(synthetic(60, 4800, 1, 0, 1), back)[0] == "FAIL", "a worse unnamed share: refused")
         check(ft.judge(synthetic(144, 11520, 0, 0, 0), back)[0] == "recorded", "a rate the baseline has no figure for: recorded")
@@ -432,9 +512,10 @@ def main():
         reports = [json.loads((plain / "runs/pace/pace-rate-60/vulkan" / ft.REPORT).read_text(encoding="utf-8"))] * 3
         stored.write_text(json.dumps(ft.baseline(reports)), encoding="utf-8")
         reading = pace.reading_of(baseline=str(stored))
-        # The switch of M-011: the row against the stored baseline refuses only when pace.BASELINE_REFUSES is set (G10.4m sets it); this
-        # first block judges with it set, the block after it with the shipped value.
-        pace.BASELINE_REFUSES = True
+        # The switch of M-011, by rate and row since G10.4m: a row beyond its bound refuses only where pace.BASELINE_REFUSES names it. This
+        # first block judges with every row refusing, the block after it with the shipped rows.
+        every_row = tuple(ft.ROWS)
+        pace.BASELINE_REFUSES = {"60": every_row, "120": every_row}
         for name, case, want in (("same", "right", True), ("late", "sleep", False), ("mode change", "mode", False),
                                  ("deep", "depth", False), ("unnamed", "unknown", False)):
             work = device_work("stored-" + name, case)
@@ -458,18 +539,40 @@ def main():
         check(any(m == "miss: Unknown" and v == "FAIL" for m, _x, _t, v in said) and any(m == pace.BASELINE_ROW and v == "FAIL" for m, _x, _t, v in said),
               "the unknown case: its Unknown row FAIL and the baseline row FAIL")
         pace.BASELINE_REFUSES = REFUSES_SHIPPED
-        # As shipped (M-011, brief AD): the late, three-refresh and unnamed shares against the stored most are a report. The runs that the
-        # block above refused are recorded: the row says "recorded" and names the shares above the most, pace/tablet passes them.
-        check(REFUSES_SHIPPED is False, "the shares against the stored baseline are a report as shipped")
-        for name, case, above in (("same", "right", False), ("late", "sleep", True), ("mode change", "mode", True),
-                                  ("deep", "depth", True), ("unnamed", "unknown", True)):
+        # As shipped (G10.4m): at 120 Hz the mean refreshes and the jumps refuse, at 60 Hz no row does (the clean runs spread wider than
+        # the plant's effect there); a row beyond its bound at 60 Hz is said, as a report, and refuses nothing.
+        check(set(REFUSES_SHIPPED) == {"60", "120"} and all(row in ft.ROWS for rows in REFUSES_SHIPPED.values() for row in rows)
+              and REFUSES_SHIPPED["60"] == () and REFUSES_SHIPPED["120"] == ("refreshes_mean", "jumps_per_minute"),
+              "the shipped rows are rows of the baseline, by rate: %s" % (REFUSES_SHIPPED,))
+        for name, case, says in (("same", "right", ""), ("late", "sleep", "a report: late_share"), ("mode change", "mode", "a report: late_share"),
+                                 ("deep", "depth", "a report: three_refresh_share"), ("unnamed", "unknown", "a report: late_share")):
             work = device_work("report-" + name, case)
             code = pace.digest(work, None, reading)
             passed, detail, _t, kind = gate.pace_tablet_reading(work, code, stored=True)
             row = {m: (v, verdict) for m, v, _x, verdict in json.loads((work / "pace.json").read_text(encoding="utf-8"))[0]["rows"]}[pace.BASELINE_ROW]
-            check(passed and row[1] == "recorded" and ("above the stored most" in row[0]) == above,
-                  "pace/tablet with a stored baseline, report only, %s: %s (%s, %s; row %s)" % (name, "pass" if passed else "refused", kind, detail, row))
-            results.append("pace/tablet against the stored baseline as a report, %s: %s" % (name, row[0]))
+            check(passed and says in row[0] and row[1] == ("pass" if name == "same" else "recorded"),
+                  "pace/tablet with a stored baseline, as shipped (60 Hz: a report), %s: %s (%s, %s; row %s)" % (name, "pass" if passed else "refused", kind, detail, row))
+            results.append("pace/tablet against the stored baseline as shipped at 60 Hz, %s: %s" % (name, row[0]))
+        # At 120 Hz the same case is refused where its rows are among the shipped ones: the same run as the 120 Hz's, a jump beyond the bound.
+        pace.BASELINE_REFUSES = {"60": (), "120": ("jumps_per_minute",)}
+        hot = dict(json.loads((plain / "runs/pace/pace-rate-60/vulkan" / ft.REPORT).read_text(encoding="utf-8")), refresh_ms=8.3333)
+        cold = ft.baseline([dict(hot, shown={"events_per_minute": 300.0, "jumps_per_minute": 90.0}),
+                            dict(hot, shown={"events_per_minute": 330.0, "jumps_per_minute": 100.0}),
+                            dict(hot, shown={"events_per_minute": 360.0, "jumps_per_minute": 110.0})])
+        check(cold["rates"]["120"]["bounds"]["jumps_per_minute"] == 120.0, "the 120 Hz bound of the jumps: the median 100 plus the range 20")
+        rows = pace.frametimeline_rows({"frametimeline": dict(hot, shown={"pairs": 9, "repeated": 1, "skipped": 0, "shifted": 0,
+                                                                         "events_per_minute": 340.0, "jumps_per_minute": 190.0}),
+                                        "present_timing": None}, cold, "base.json")
+        said = {m: (v, verdict) for m, v, _t, verdict in rows}
+        check(said[pace.BASELINE_ROW][1] == "FAIL" and "refusing: jumps_per_minute" in said[pace.BASELINE_ROW][0],
+              "at 120 Hz a run with 190 jumps a minute against the bound 120 is refused by that row: %s" % (said[pace.BASELINE_ROW],))
+        rows = pace.frametimeline_rows({"frametimeline": dict(hot, shown={"pairs": 9, "repeated": 1, "skipped": 0, "shifted": 0,
+                                                                         "events_per_minute": 900.0, "jumps_per_minute": 110.0}),
+                                        "present_timing": None}, cold, "base.json")
+        said = {m: (v, verdict) for m, v, _t, verdict in rows}
+        check(said[pace.BASELINE_ROW][1] == "recorded" and "a report: events_per_minute" in said[pace.BASELINE_ROW][0],
+              "at 120 Hz the events beyond their bound are a report where the row is not shipped: %s" % (said[pace.BASELINE_ROW],))
+        pace.BASELINE_REFUSES = REFUSES_SHIPPED
         # A run the baseline could not judge (another method) is the tool's, never a pass.
         other = dict(json.loads(stored.read_text(encoding="utf-8")), method="frametimeline")
         stored.write_text(json.dumps(other), encoding="utf-8")
@@ -492,6 +595,9 @@ def main():
             check(args.baseline == str(stored) and args.trace_processor == gate.PACE_TRACE_PROCESSOR, "a stored file: --baseline it")
         finally:
             gate.PACE_TABLET_BASE = saved
+
+    shown_cases()
+    ab_cases()
 
     for r in results:
         print("  " + r)

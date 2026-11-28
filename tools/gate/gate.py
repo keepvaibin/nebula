@@ -1869,9 +1869,10 @@ def measure_pc(g):
 # stores tests/pace/tablet-base.json, then refused only by the row against it (pace.BASELINE_ROW) and by the row of what the
 # platform offers (pace.PLATFORM_ROW, G10.3: a line of the game's report of the platform missing).
 # `--pace-fault` plays both with the planted stutter (--diagnostics pace-fault): the checks must then fail, their own proof.
-# Until the step that classifies the shares (G10.4m) sets pace.BASELINE_REFUSES, the row against the stored baseline is a report (M-011): with
-# a stored file pace/tablet refuses only what pace_tablet_reading names below (a baseline that cannot judge a run is the tool's), and
-# `--pace-fault` is then refused by pace/pc alone: pace/tablet's rows show the stutter (jumps, late share) and refuse nothing for it.
+# The row against the stored baseline refuses by rate and row (pace.BASELINE_REFUSES, G10.4m: at 120 Hz the rows the planted 20 ms sleep lay
+# beyond the bound of in every plant run, at 60 Hz none; the others are a report, M-011): with a stored file pace/tablet refuses what
+# pace_tablet_reading names below (a baseline that cannot judge a run is the tool's), and `--pace-fault` is refused by pace/pc, and by
+# pace/tablet at 120 Hz (the mean refreshes from a step to the screen and the jumps the present times show), not at 60 Hz.
 PACE = HERE / "pace.py"
 PACE_PC_CHECK = "pace/pc"
 PACE_TABLET_CHECK = "pace/tablet"

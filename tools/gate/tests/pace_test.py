@@ -430,6 +430,32 @@ def main():
     finally:
         pace.subprocess, pace.machine_quiet = saved
 
+    # G10.4m: the rows of the stored baseline refuse by rate (BASELINE_REFUSES), and a device run prints what the screen showed.
+    ft = pace.frametimeline
+    check(sorted(pace.BASELINE_REFUSES) == ["120", "60"] and pace.BASELINE_REFUSES["60"] == ()
+          and pace.BASELINE_REFUSES["120"] == ("refreshes_mean", "jumps_per_minute")
+          and all(row in ft.ROWS for rows in pace.BASELINE_REFUSES.values() for row in rows),
+          "the shipped rows of the baseline: at 120 Hz the mean refreshes and the jumps, at 60 Hz none: %s" % (pace.BASELINE_REFUSES,))
+    stored = {"method": "latency", "start": "step", "rates": {
+        "120": {"bounds": {"late_share": 0.2, "refreshes_mean": 4.2, "jumps_per_minute": 160.0, "events_per_minute": 557.0}},
+        "60": {"bounds": {"late_share": 0.0, "refreshes_mean": 3.07, "jumps_per_minute": 0.0, "events_per_minute": 5.3}}}}
+
+    def device_rows(hz, late, mean, events, jumps):
+        report = {"method": "latency", "start": "step", "refresh_ms": 1000.0 / hz, "frames": 100, "refresh_frames": 100, "misses": 0,
+                  "refreshes": {b: 0 for b in ft.BINS}, "causes": {c: 0 for c in ft.CAUSES}, "buffer_stuffing": 0, "gpu_frames": 0,
+                  "late_share": late, "three_refresh_share": 0.9, "unnamed_share": late, "refreshes_mean": mean, "notes": [],
+                  "shown": {"pairs": 90, "repeated": 5, "skipped": 1, "shifted": 0, "events_per_minute": events, "jumps_per_minute": jumps}}
+        return {m: (v, verdict) for m, v, _t, verdict in pace.frametimeline_rows({"frametimeline": report, "present_timing": None}, stored, "base.json")}
+    clean = device_rows(120, 0.1, 4.0, 300.0, 100.0)
+    check(clean[pace.BASELINE_ROW][1] == "pass" and pace.SCREEN_ROW in clean and clean[pace.SCREEN_ROW][1] == "recorded",
+          "a clean 120 Hz run: the baseline row passes, the screen row is printed: %s" % (clean[pace.BASELINE_ROW],))
+    sleepy = device_rows(120, 0.1, 4.8, 1200.0, 450.0)
+    check(sleepy[pace.BASELINE_ROW][1] == "FAIL" and "refusing: refreshes_mean, jumps_per_minute" in sleepy[pace.BASELINE_ROW][0],
+          "the sleep's run at 120 Hz (mean refreshes 4.8, 450 jumps a minute): refused by those rows only: %s" % (sleepy[pace.BASELINE_ROW],))
+    sleepy60 = device_rows(60, 0.003, 3.1, 25.0, 6.0)
+    check(sleepy60[pace.BASELINE_ROW][1] == "recorded" and "a report: late_share, refreshes_mean, events_per_minute, jumps_per_minute" in sleepy60[pace.BASELINE_ROW][0],
+          "the same run at 60 Hz: beyond its bounds and a report, nothing refused: %s" % (sleepy60[pace.BASELINE_ROW],))
+
     if failures:
         print("pace_test.py: FAILED:\n  " + "\n  ".join(failures))
         return 1
