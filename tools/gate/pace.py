@@ -63,9 +63,9 @@ The gate's two checks (tools/gate/gate.py):
                timeline's report (frametimeline.ROWS: the late, three-refresh and unnamed shares, the mean refreshes from a
                step to the screen, and the repeated, skipped and shifted pictures and jumps a minute that the present times
                show) is set against the bound of its rate, the median of the baseline's runs plus their range (the row "against
-               the stored baseline"). A row refuses only where BASELINE_REFUSES names it for the rate (G10.4m: the rows that the
-               planted 20 ms sleep lay beyond the bound of in every plant run); another row beyond its bound is said and refuses
-               nothing. A baseline that cannot judge a run (another method, no frames) is still the tool's fault.
+               the stored baseline"). A row refuses only where BASELINE_REFUSES names it for the rate (G10.4m: at 120 Hz the mean
+               refreshes from a step to the screen); another row beyond its bound is said and refuses nothing, except that the
+               jumps a minute refuse a gross break, a figure above BASELINE_GROSS (twice the highest clean run on record), until G10.5. A baseline that cannot judge a run (another method, no frames) is still the tool's fault.
                G10.3 adds a second row, "what the platform offers": a device run whose log lacks a line of what the platform
                offers (PLATFORM_KINDS) is refused by it, which pace/tablet refuses by.
 """
@@ -125,9 +125,14 @@ BASELINE_ROW = "against the stored baseline"
 # Which rows of the baseline refuse, by the display's rate (G10.4m; frametimeline.ROWS: a row is its figure of the run's report). The
 # bound of a row is the median of the baseline's runs plus their range (max - min). A row refuses only where the planted 20 ms sleep
 # lay beyond its bound in every plant run and no clean run of the same build was beyond it (decisions G10.4m): at 120 Hz the mean
-# refreshes from a step to the screen and the jumps the present times show; at 60 Hz none, because the clean runs spread wider than the
-# sleep's effect there (a hiccup of one run is as large). The other rows are a report: a figure beyond its bound said, nothing refused.
-BASELINE_REFUSES = {"120": ("refreshes_mean", "jumps_per_minute"), "60": ()}
+# refreshes from a step to the screen (bar 1's depth); at 60 Hz none, because the clean runs spread wider than the sleep's effect there
+# (a hiccup of one run is as large). The other rows are a report: a figure beyond its bound said, nothing refused.
+# The jumps a minute are a report until G10.5 (the planner's order of 11-27 after the first landing of G10.4m: the clean tablet at 120 Hz
+# makes 60 to 142 jumps a minute and a late share of 17 to 21%, the fault G10.5 to G10.9 exist to remove, not a bound to tune around);
+# they refuse only a gross break, BASELINE_GROSS: a figure above twice the highest clean run on record at the rate (120 Hz: 2 x 142
+# = 284 a minute; 60 Hz: 2 x 28 = 56). G10.5 removes BASELINE_GROSS and the jumps refuse again by their bound.
+BASELINE_REFUSES = {"120": ("refreshes_mean",), "60": ()}
+BASELINE_GROSS = {"120": {"jumps_per_minute": 284.0}, "60": {"jumps_per_minute": 56.0}}
 SCREEN_ROW = "what the screen showed"
 # What the platform offers the pacing (G10.3): the game's `[platform] <kind>: <value>` lines (perf_hint.cpp, display_clock.cpp,
 # host_window_sdl.cpp, renderer_vk.cpp), printed in each run's header. A device run must hold one line of each PLATFORM_KINDS with a
@@ -425,7 +430,9 @@ def frametimeline_rows(run, base=None, base_name=""):
         target = "no row beyond its bound (the median of the runs in %s plus their range)" % base_name
         if verdict == "FAIL":
             beyond = frametimeline.rows_beyond(report, base)
-            refusing = [row for row, _figure, _bound in beyond if row in BASELINE_REFUSES.get(frametimeline.rate_of(report), ())]
+            rate = frametimeline.rate_of(report)
+            refusing = [row for row, _figure, _bound in beyond if row in BASELINE_REFUSES.get(rate, ())]
+            refusing += [row for row, figure, _bound in beyond if row not in refusing and figure > BASELINE_GROSS.get(rate, {}).get(row, float("inf"))]
             if refusing:
                 text += "; beyond the bound and refusing: " + ", ".join(refusing)
             else:
